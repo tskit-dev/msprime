@@ -39,7 +39,7 @@ test_simple_cases(void)
     for (n = 1; n < 100; n++) {
         s = 0;
         t.max_index = n;
-        fenwick_alloc(&t);
+        assert(fenwick_alloc(&t) == 0);
         for (j = 1; j <= n; j++) {
             fenwick_increment(&t, j, j);
             s += j;
@@ -54,7 +54,7 @@ test_simple_cases(void)
             assert(fenwick_get_value(&t, j) == j);
 
         }
-        fenwick_free(&t);
+        assert(fenwick_free(&t) == 0);
     }
 }
 
