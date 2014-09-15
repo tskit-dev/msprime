@@ -27,7 +27,7 @@
 #include <gsl/gsl_statistics_int.h>
 
 #include "util.h"
-#include "bit.h"
+#include "fenwick.h"
 #include "msprime.h"
 
 static int
@@ -152,9 +152,9 @@ msp_alloc(msp_t *self)
         seg->index = j + 1;
     }
     self->segment_heap_top = (int) n - 1;
-    self->links = xmalloc(sizeof(bit_t));
+    self->links = xmalloc(sizeof(fenwick_t));
     self->links->max_index = n;
-    bit_alloc(self->links);
+    fenwick_alloc(self->links);
     n = self->max_trees;
     self->node_mapping_mem = xmalloc(n * sizeof(node_mapping_t));
     self->next_node_mapping = 0;
@@ -181,7 +181,7 @@ msp_free(msp_t *self)
         u = v;
     }
     gsl_rng_free(self->rng);
-    bit_free(self->links);
+    fenwick_free(self->links);
     free(self->links);
     free(self->population);
     free(self->breakpoints);
@@ -252,7 +252,7 @@ msp_free_segment(msp_t *self, segment_t *node)
     self->segment_heap_top++;
     assert(self->segment_heap_top < (int) self->max_segments);
     self->segment_heap[self->segment_heap_top] = node;
-    bit_set_value(self->links, node->index, 0);
+    fenwick_set_value(self->links, node->index, 0);
 }
 
 
@@ -476,14 +476,14 @@ msp_verify(msp_t *self)
             } else {
                 s = u->right - u->left;
             }
-            ss = bit_get_value(self->links, u->index);
+            ss = fenwick_get_value(self->links, u->index);
             total_links += ss;
             assert(s == ss);
             u = u->next;
         }
         node = node->next;
     }
-    assert(total_links == bit_get_total(self->links));
+    assert(total_links == fenwick_get_total(self->links));
     assert(total_segments == self->max_segments - self->segment_heap_top - 1);
     total_avl_nodes = avl_count(self->population)
             + avl_count(self->breakpoints);
@@ -516,7 +516,7 @@ msp_print_state(msp_t *self)
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
-    printf("num_links = %lld\n", bit_get_total(self->links));
+    printf("num_links = %lld\n", fenwick_get_total(self->links));
     printf("population = %d\n", avl_count(self->population));
     node = self->population->head;
     while (node != NULL) {
@@ -534,7 +534,7 @@ msp_print_state(msp_t *self)
     printf("Fenwick tree\n");
     for (j = 1; j <= self->max_segments; j++) {
         u = msp_get_segment(self, j);
-        v = bit_get_value(self->links, j);
+        v = fenwick_get_value(self->links, j);
         if (v != 0) {
             printf("\t%lld\tl=%d r=%d v=%d prev=%p next=%p\n", v, u->left,
                     u->right, u->value, u->prev, u->next);
@@ -623,27 +623,27 @@ msp_recombination_event(msp_t *self)
     unsigned int j;
     node_mapping_t search;
     segment_t *x, *y, *z;
-    long long num_links = bit_get_total(self->links);
+    long long num_links = fenwick_get_total(self->links);
 
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
     l = 1 + (long long) (gsl_rng_uniform(self->rng) * num_links);
     assert(l > 0 && l <= num_links);
-    j = bit_find(self->links, l);
-    t = bit_get_cumulative_sum(self->links, j);
+    j = fenwick_find(self->links, l);
+    t = fenwick_get_cumulative_sum(self->links, j);
     gap = t - l;
     y = msp_get_segment(self, j);
     x = y->prev;
     k = y->right - gap - 1;
     if (y->left <= k) {
         z = msp_alloc_segment(self, k + 1, y->right, y->value, NULL, y->next);
-        bit_increment(self->links, z->index, z->right - k - 1);
+        fenwick_increment(self->links, z->index, z->right - k - 1);
         if (y->next != NULL) {
             y->next->prev = z;
         }
         y->next = NULL;
         y->right = k;
-        bit_increment(self->links, y->index, k - z->right);
+        fenwick_increment(self->links, y->index, k - z->right);
         search.left = k + 1;
         if (avl_search(self->breakpoints, &search) == NULL) {
             msp_copy_breakpoint(self, k + 1);
@@ -653,7 +653,7 @@ msp_recombination_event(msp_t *self)
         y->prev = NULL;
         t = x->right;
         t -= y->left;
-        bit_increment(self->links, y->index, t);
+        fenwick_increment(self->links, y->index, t);
         z = y;
         y = x;
         self->num_trapped_re_events++;
@@ -762,7 +762,7 @@ msp_coancestry_event(msp_t *self)
             }
             alpha->prev = z;
             z = alpha;
-            bit_set_value(self->links, alpha->index, alpha->right - l);
+            fenwick_set_value(self->links, alpha->index, alpha->right - l);
         }
     }
 }
@@ -787,7 +787,7 @@ msp_initialise(msp_t *self)
     for (j = 1; j <= self->sample_size; j++) {
         u = msp_alloc_segment(self, 1, self->num_loci, j, NULL, NULL);
         msp_insert_individual(self, u);
-        bit_increment(self->links, u->index, self->num_loci - 1);
+        fenwick_increment(self->links, u->index, self->num_loci - 1);
     }
     msp_insert_breakpoint(self, 1, self->sample_size + 1);
     msp_insert_breakpoint(self, self->num_loci + 1, 0);
@@ -818,14 +818,14 @@ msp_print_detailed_stats(msp_t *self)
         for (u = (segment_t *) node->item; u != NULL; u = u->next) {
             num_segments++;
             mean_segment_length += u->right - u->left;
-            mean_subtended_links += bit_get_value(self->links, u->index);
+            mean_subtended_links += fenwick_get_value(self->links, u->index);
         }
     }
     mean_segment_length /= num_segments;
     mean_subtended_links /= num_segments;
 
     printf("%d\t%llu\t%d\t%d\t%d\t%f\t%f\t%d\n", avl_count(self->population),
-            bit_get_total(self->links), self->num_re_events, self->num_ca_events,
+            fenwick_get_total(self->links), self->num_re_events, self->num_ca_events,
             num_segments, mean_segment_length, mean_subtended_links,
             self->num_trapped_re_events);
 }
@@ -851,7 +851,7 @@ msp_simulate(msp_t *self)
             self->max_population_size = n;
         }
         //msp_print_detailed_stats(self);
-        num_links = bit_get_total(self->links);
+        num_links = fenwick_get_total(self->links);
         lambda_r = num_links * self->recombination_rate;
         t_r = DBL_MAX;
         if (lambda_r != 0.0) {

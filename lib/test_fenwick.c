@@ -25,7 +25,7 @@
 #endif
 
 #include "util.h"
-#include "bit.h"
+#include "fenwick.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -33,28 +33,28 @@
 static void
 test_simple_cases(void)
 {
-    bit_t t;
+    fenwick_t t;
     unsigned int n, j;
     long s;
     for (n = 1; n < 100; n++) {
         s = 0;
         t.max_index = n;
-        bit_alloc(&t);
+        fenwick_alloc(&t);
         for (j = 1; j <= n; j++) {
-            bit_increment(&t, j, j);
+            fenwick_increment(&t, j, j);
             s += j;
-            assert(bit_get_value(&t, j) == j);
-            assert(bit_get_cumulative_sum(&t, j) == s);
-            assert(bit_get_total(&t) == s);
-            assert(bit_find(&t, s) == j);
-            bit_set_value(&t, j, 0);
-            assert(bit_get_value(&t, j) == 0);
-            assert(bit_get_cumulative_sum(&t, j) == s - j);
-            bit_set_value(&t, j, j);
-            assert(bit_get_value(&t, j) == j);
+            assert(fenwick_get_value(&t, j) == j);
+            assert(fenwick_get_cumulative_sum(&t, j) == s);
+            assert(fenwick_get_total(&t) == s);
+            assert(fenwick_find(&t, s) == j);
+            fenwick_set_value(&t, j, 0);
+            assert(fenwick_get_value(&t, j) == 0);
+            assert(fenwick_get_cumulative_sum(&t, j) == s - j);
+            fenwick_set_value(&t, j, j);
+            assert(fenwick_get_value(&t, j) == j);
 
         }
-        bit_free(&t);
+        fenwick_free(&t);
     }
 }
 

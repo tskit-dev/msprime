@@ -25,7 +25,7 @@
 #include <avl.h>
 #include <gsl/gsl_rng.h>
 
-#include "bit.h"
+#include "fenwick.h"
 
 #define TREEFILE_MAGIC 0x2fd8652f
 #define POP_MODEL_CONSTANT 0
@@ -93,7 +93,7 @@ typedef struct {
     gsl_rng *rng;
     avl_tree_t *population;
     avl_tree_t *breakpoints;
-    bit_t *links;
+    fenwick_t *links;
     FILE *coalescence_record_file;
     int replicate_number;
     /* memory heaps */

@@ -28,12 +28,12 @@
 #include <assert.h>
 
 #include "util.h"
-#include "bit.h"
+#include "fenwick.h"
 
 
 
 void
-bit_alloc(bit_t *self)
+fenwick_alloc(fenwick_t *self)
 {
     unsigned int u = self->max_index;
     while (u != 0) {
@@ -44,21 +44,21 @@ bit_alloc(bit_t *self)
     self->values = xcalloc((1 + self->max_index), sizeof(long long));
 }
 
-void bit_free(bit_t *self)
+void fenwick_free(fenwick_t *self)
 {
     free(self->tree);
     free(self->values);
 }
 
 long long
-bit_get_total(bit_t *self)
+fenwick_get_total(fenwick_t *self)
 {
-    long long ret = bit_get_cumulative_sum(self, self->max_index);
+    long long ret = fenwick_get_cumulative_sum(self, self->max_index);
     return ret;
 }
 
 void
-bit_increment(bit_t *self, unsigned int index, long long value)
+fenwick_increment(fenwick_t *self, unsigned int index, long long value)
 {
     unsigned int j = index;
     assert(0 < index && index <= self->max_index);
@@ -70,13 +70,13 @@ bit_increment(bit_t *self, unsigned int index, long long value)
 }
 
 void
-bit_set_value(bit_t *self, unsigned int index, long long value)
+fenwick_set_value(fenwick_t *self, unsigned int index, long long value)
 {
     long long v = value - self->values[index];
-    bit_increment(self, index, v);
+    fenwick_increment(self, index, v);
 }
 
-long long bit_get_cumulative_sum(bit_t *self, unsigned int index)
+long long fenwick_get_cumulative_sum(fenwick_t *self, unsigned int index)
 {
     long long ret = 0;
     unsigned int j = index;
@@ -89,7 +89,7 @@ long long bit_get_cumulative_sum(bit_t *self, unsigned int index)
 
 }
 
-long long bit_get_value(bit_t *self, unsigned int index)
+long long fenwick_get_value(fenwick_t *self, unsigned int index)
 {
     assert(0 < index && index <= self->max_index);
     return self->values[index];
@@ -110,7 +110,7 @@ long long bit_get_value(bit_t *self, unsigned int index)
 
 
 unsigned int
-bit_find(bit_t *self, long long sum)
+fenwick_find(fenwick_t *self, long long sum)
 {
     unsigned int j = 0;
     unsigned int k;
