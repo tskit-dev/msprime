@@ -17,24 +17,24 @@
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef __BIT_H__
-#define __BIT_H__
+#ifndef __FENWICK_H__
+#define __FENWICK_H__
 
-typedef struct bit_t_t {
+typedef struct {
     unsigned int max_index;
     unsigned int log_max_index;
     long long *tree;
     long long *values;
-} bit_t;
+} fenwick_t;
 
 
-void bit_alloc(bit_t *);
-void bit_free(bit_t *);
-long long bit_get_total(bit_t *);
-void bit_increment(bit_t *, unsigned int, long long);
-void bit_set_value(bit_t *, unsigned int, long long);
-long long bit_get_cumulative_sum(bit_t *, unsigned int);
-long long bit_get_value(bit_t *, unsigned int);
-unsigned int bit_find(bit_t *, long long);
+void fenwick_alloc(fenwick_t *);
+void fenwick_free(fenwick_t *);
+long long fenwick_get_total(fenwick_t *);
+void fenwick_increment(fenwick_t *, unsigned int, long long);
+void fenwick_set_value(fenwick_t *, unsigned int, long long);
+long long fenwick_get_cumulative_sum(fenwick_t *, unsigned int);
+long long fenwick_get_value(fenwick_t *, unsigned int);
+unsigned int fenwick_find(fenwick_t *, long long);
 
-#endif /*__BIT_H__*/
+#endif /*__FENWICK_H__*/
