@@ -1,20 +1,23 @@
 /*
-** Copyright (C) 2008 Jerome Kelleher <jerome.kelleher@ed.ac.uk>
-**  
-** This program is free software; you can redistribute it and/or modify
+** Copyright (C) 2014 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+**
+** This file is part of msprime.
+**
+** msprime is free software: you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License as published by
-** the Free Software Foundation; either version 2 of the License, or
+** the Free Software Foundation, either version 3 of the License, or
 ** (at your option) any later version.
-** 
-** This program is distributed in the hope that it will be useful,
+**
+** msprime is distributed in the hope that it will be useful,
 ** but WITHOUT ANY WARRANTY; without even the implied warranty of
 ** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ** GNU General Public License for more details.
-** 
+**
 ** You should have received a copy of the GNU General Public License
-** along with this program; if not, write to the Free Software 
-** Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+
 /*
  * Collection of miscellaneous functions shared throughout source.
  */
@@ -64,21 +67,21 @@ xrealloc(void *ptr, size_t size)
 }
 
 /*
- * Parses the specified string into a double and assigns the value into 
- * the specified pointer. Returns EINVAL if the string cannot be 
- * converted to double or if min <= x <= max does not hold; returns 0 if 
+ * Parses the specified string into a double and assigns the value into
+ * the specified pointer. Returns EINVAL if the string cannot be
+ * converted to double or if min <= x <= max does not hold; returns 0 if
  * the value is converted successfully.
  */
-int 
-parse_double(const char *str, double *value, const double min, 
+int
+parse_double(const char *str, double *value, const double min,
         const double max)
 {
     int ret = 0;
     double x;
-    char *tail; 
+    char *tail;
     x = strtod(str, &tail);
     if (tail[0] != '\0') {
-        ret = EINVAL; 
+        ret = EINVAL;
     } else if (min > x || max < x) {
         ret = EINVAL;
     } else {
@@ -88,21 +91,21 @@ parse_double(const char *str, double *value, const double min,
 }
 
 /*
- * Parses the specified string into a long and assigns the value into 
- * the specified pointer. Returns EINVAL if the string cannot be 
- * converted to double or if min <= x <= max does not hold; returns 0 if 
+ * Parses the specified string into a long and assigns the value into
+ * the specified pointer. Returns EINVAL if the string cannot be
+ * converted to double or if min <= x <= max does not hold; returns 0 if
  * the value is converted successfully.
  */
-int 
-parse_long(const char *str, long *value, const long min, 
+int
+parse_long(const char *str, long *value, const long min,
         const long max)
 {
     int ret = 0;
     long x;
-    char *tail; 
+    char *tail;
     x = strtol(str, &tail, 10);
     if (tail[0] != '\0') {
-        ret = EINVAL; 
+        ret = EINVAL;
     } else if (min > x || max < x) {
         ret = EINVAL;
     } else {
@@ -111,7 +114,7 @@ parse_long(const char *str, long *value, const long min,
     return ret;
 }
 
-void 
+void
 fatal_error(const char *msg, ...)
 {
     va_list argp;
