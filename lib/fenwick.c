@@ -25,29 +25,52 @@
 #endif
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 
-#include "util.h"
+#include "err.h"
 #include "fenwick.h"
 
-
-
-void
+int
 fenwick_alloc(fenwick_t *self)
 {
+    int ret = -1;
     unsigned int u = self->max_index;
     while (u != 0) {
         self->log_max_index = u;
         u -= (u & -u);
     }
-    self->tree = xcalloc((1 + self->max_index), sizeof(long long));
-    self->values = xcalloc((1 + self->max_index), sizeof(long long));
+    self->tree = NULL;
+    self->values = NULL;
+    self->tree = calloc((1 + self->max_index), sizeof(long long));
+    if (self->tree == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    self->values = calloc((1 + self->max_index), sizeof(long long));
+    if (self->values == NULL) {
+        free(self->tree);
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
 }
 
-void fenwick_free(fenwick_t *self)
+int
+fenwick_free(fenwick_t *self)
 {
+    int ret = -1;
+    if (self->tree == NULL || self->values == NULL) {
+        ret = MSP_ERR_BAD_FREE;
+        goto out;
+    }
     free(self->tree);
     free(self->values);
+    ret = 0;
+out:
+    return ret;
 }
 
 long long

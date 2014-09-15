@@ -16,25 +16,11 @@
 ** You should have received a copy of the GNU General Public License
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
+#ifndef __ERR_H__
+#define __ERR_H__
 
-#ifndef __FENWICK_H__
-#define __FENWICK_H__
+#define MSP_ERR_GENERIC -1
+#define MSP_ERR_NO_MEMORY -2
+#define MSP_ERR_BAD_FREE -3
 
-typedef struct {
-    unsigned int max_index;
-    unsigned int log_max_index;
-    long long *tree;
-    long long *values;
-} fenwick_t;
-
-
-int fenwick_alloc(fenwick_t *);
-int fenwick_free(fenwick_t *);
-long long fenwick_get_total(fenwick_t *);
-void fenwick_increment(fenwick_t *, unsigned int, long long);
-void fenwick_set_value(fenwick_t *, unsigned int, long long);
-long long fenwick_get_cumulative_sum(fenwick_t *, unsigned int);
-long long fenwick_get_value(fenwick_t *, unsigned int);
-unsigned int fenwick_find(fenwick_t *, long long);
-
-#endif /*__FENWICK_H__*/
+#endif /*__ERR_H__*/
