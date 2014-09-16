@@ -148,23 +148,40 @@ msp_read_config(msp_t *self, const char *filename)
 static void
 run_simulate(char *conf_file, long seed, long num_replicates)
 {
+    int ret = -1;
     long j;
-    msp_t *self = xmalloc(sizeof(msp_t));
+    msp_t *self = calloc(1, sizeof(msp_t));
 
+    if (self == NULL) {
+        goto out;
+    }
     self->random_seed = seed;
-    /* Add default population model; TODO this is error prone*/
-    self->population_models = NULL;
-    msp_add_constant_population_model(self, -1.0, 1.0);
+    ret = msp_add_constant_population_model(self, -1.0, 1.0);
+    if (ret != 0) {
+        goto out;
+    }
     msp_read_config(self, conf_file);
-    msp_alloc(self);
+    ret = msp_alloc(self);
+    if (ret != 0) {
+        goto out;
+    }
     printf("t\tnum_trees\tre_events\tca_events\tcoalescence_records\tmax_segments"
             "\tmax_population_size\n");
     for (j = 0; j < num_replicates; j++) {
-        msp_simulate(self);
+        ret = msp_simulate(self);
+        if (ret != 0) {
+            goto out;
+        }
         msp_reset(self);
     }
-    msp_free(self);
-    free(self);
+out:
+    if (self != NULL) {
+        msp_free(self);
+        free(self);
+    }
+    if (ret != 0) {
+        printf("error occured:%d\n", ret);
+    }
 }
 
 /*

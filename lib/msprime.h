@@ -110,11 +110,11 @@ typedef struct {
 } msp_t;
 
 
-void msp_add_constant_population_model(msp_t *self, double time, double size);
-void msp_add_exponential_population_model(msp_t *self, double time, double alpha);
-void msp_alloc(msp_t *self);
-void msp_free(msp_t *self);
-void msp_simulate(msp_t *self);
-void msp_reset(msp_t *self);
+int msp_add_constant_population_model(msp_t *self, double time, double size);
+int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
+int msp_alloc(msp_t *self);
+int msp_free(msp_t *self);
+int msp_simulate(msp_t *self);
+int msp_reset(msp_t *self);
 
 #endif /*__BIT_H__*/

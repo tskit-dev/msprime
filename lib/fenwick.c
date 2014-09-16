@@ -49,7 +49,6 @@ fenwick_alloc(fenwick_t *self)
     }
     self->values = calloc((1 + self->max_index), sizeof(long long));
     if (self->values == NULL) {
-        free(self->tree);
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -62,14 +61,13 @@ int
 fenwick_free(fenwick_t *self)
 {
     int ret = -1;
-    if (self->tree == NULL || self->values == NULL) {
-        ret = MSP_ERR_BAD_FREE;
-        goto out;
+    if (self->tree != NULL) {
+        free(self->tree);
     }
-    free(self->tree);
-    free(self->values);
+    if (self->values != NULL) {
+        free(self->values);
+    }
     ret = 0;
-out:
     return ret;
 }
 
