@@ -27,6 +27,8 @@
 #include <gsl/gsl_statistics_int.h>
 
 #include "util.h"
+
+#include "err.h"
 #include "fenwick.h"
 #include "msprime.h"
 
@@ -86,92 +88,156 @@ exponential_population_model_get_waiting_time(population_model_t *self,
     return ret;
 }
 
-static void
+static int
 msp_add_population_model(msp_t *self, population_model_t *model)
 {
+    int ret = -1;
     population_model_t *m = self->population_models;
     if (m == NULL) {
         self->population_models = model;
     } else {
+        // TODO check for sortedness
         while (m->next != NULL) {
             m = m->next;
         }
         m->next = model;
     }
     model->next = NULL;
+    ret = 0;
+
+    return ret;
 }
 
-void
+int
 msp_add_constant_population_model(msp_t *self, double time, double size)
 {
-    population_model_t *model = xmalloc(sizeof(population_model_t));
+    int ret = -1;
+    population_model_t *model = malloc(sizeof(population_model_t));
+
+    // TODO check for model specific restrictions.
+    if (model == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     model->start_time = time;
     model->param = size;
     model->type = POP_MODEL_CONSTANT;
     model->get_size = constant_population_model_get_size;
     model->get_waiting_time = constant_population_model_get_waiting_time;
-    msp_add_population_model(self, model);
+    ret = msp_add_population_model(self, model);
+    if (ret != 0) {
+        free(model);
+    }
+out:
+    return ret;
 }
 
-void
+int
 msp_add_exponential_population_model(msp_t *self, double time, double alpha)
 {
-    population_model_t *model = xmalloc(sizeof(population_model_t));
+    int ret = -1;
+    population_model_t *model = malloc(sizeof(population_model_t));
+
+    // TODO check for model specific restrictions.
+    if (model == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     model->start_time = time;
     model->param = alpha;
     model->type = POP_MODEL_EXPONENTIAL;
     model->get_size = exponential_population_model_get_size;
     model->get_waiting_time = exponential_population_model_get_waiting_time;
-    msp_add_population_model(self, model);
+    ret = msp_add_population_model(self, model);
+    if (ret != 0) {
+        free(model);
+    }
+out:
+    return ret;
 }
 
-void
+int
 msp_alloc(msp_t *self)
 {
-    int n, j;
+    int ret = -1;
+    int err, n, j;
     avl_node_t *node;
     segment_t *seg;
 
+    /* turn off GSL error handler so we don't abort on memory error */
+    gsl_set_error_handler_off();
     self->rng = gsl_rng_alloc(gsl_rng_default);
+    if (self->rng == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     gsl_rng_set(self->rng, self->random_seed);
     /* Allocate the memory heaps */
     n = self->max_avl_nodes;
-    self->avl_node_mem = xmalloc(n * sizeof(avl_node_t));
-    self->avl_node_heap = xmalloc(n * sizeof(avl_node_t *));
+    self->avl_node_mem = malloc(n * sizeof(avl_node_t));
+    self->avl_node_heap = malloc(n * sizeof(avl_node_t *));
+    if (self->avl_node_mem == NULL || self->avl_node_heap == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     for (j = 0; j < n; j++) {
         node = &self->avl_node_mem[j];
         self->avl_node_heap[j] = node;
     }
     self->avl_node_heap_top = (int) n - 1;
     n = self->max_segments;
-    self->segment_mem = xmalloc(n * sizeof(segment_t));
-    self->segment_heap = xmalloc(n * sizeof(segment_t *));
+    self->segment_mem = malloc(n * sizeof(segment_t));
+    self->segment_heap = malloc(n * sizeof(segment_t *));
+    if (self->segment_mem == NULL || self->segment_heap == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     for (j = 0; j < n; j++) {
         seg = &self->segment_mem[j];
         self->segment_heap[j] = seg;
         seg->index = j + 1;
     }
     self->segment_heap_top = (int) n - 1;
-    self->links = xmalloc(sizeof(fenwick_t));
+    self->links = calloc(1, sizeof(fenwick_t));
+    if (self->links == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     self->links->max_index = n;
-    fenwick_alloc(self->links);
+    err = fenwick_alloc(self->links);
+    if (err != 0) {
+        ret = err;
+        goto out;
+    }
     n = self->max_trees;
-    self->node_mapping_mem = xmalloc(n * sizeof(node_mapping_t));
+    self->node_mapping_mem = malloc(n * sizeof(node_mapping_t));
     self->next_node_mapping = 0;
     n = self->max_coalescence_records;
-    self->coalescence_records = xmalloc(n * sizeof(coalescence_record_t));
+    self->coalescence_records = malloc(n * sizeof(coalescence_record_t));
     self->next_coalescence_record = 0;
+    if (self->node_mapping_mem == NULL || self->coalescence_records == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     /* set up the AVL trees */
-    self->population = xmalloc(sizeof(avl_tree_t));
+    self->population = malloc(sizeof(avl_tree_t));
+    self->breakpoints = malloc(sizeof(avl_tree_t));
+    if (self->population == NULL || self->breakpoints == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     avl_init_tree(self->population, cmp_individual, NULL);
-    self->breakpoints = xmalloc(sizeof(avl_tree_t));
     avl_init_tree(self->breakpoints, cmp_node_mapping, NULL);
     self->replicate_number = 0;
+    ret = 0;
+out:
+    return ret;
 }
 
-void
+int
 msp_free(msp_t *self)
 {
+    int ret = -1;
     population_model_t *u, *v;
 
     u = self->population_models;
@@ -180,18 +246,42 @@ msp_free(msp_t *self)
         free(u);
         u = v;
     }
-    gsl_rng_free(self->rng);
-    fenwick_free(self->links);
-    free(self->links);
-    free(self->population);
-    free(self->breakpoints);
-    free(self->node_mapping_mem);
-    free(self->avl_node_mem);
-    free(self->avl_node_heap);
-    free(self->segment_mem);
-    free(self->segment_heap);
-    free(self->coalescence_records);
-    free(self->coalescence_record_file_pattern);
+    if (self->rng != NULL) {
+        gsl_rng_free(self->rng);
+    }
+    if (self->links != NULL) {
+        fenwick_free(self->links);
+        free(self->links);
+    }
+    if (self->population != NULL) {
+        free(self->population);
+    }
+    if (self->breakpoints != NULL) {
+        free(self->breakpoints);
+    }
+    if (self->node_mapping_mem != NULL) {
+        free(self->node_mapping_mem);
+    }
+    if (self->avl_node_mem != NULL) {
+        free(self->avl_node_mem);
+    }
+    if (self->avl_node_heap != NULL) {
+        free(self->avl_node_heap);
+    }
+    if (self->segment_mem != NULL) {
+        free(self->segment_mem);
+    }
+    if (self->segment_heap != NULL) {
+        free(self->segment_heap);
+    }
+    if (self->coalescence_records != NULL) {
+        free(self->coalescence_records);
+    }
+    if (self->coalescence_record_file_pattern != NULL) {
+        free(self->coalescence_record_file_pattern);
+    }
+    ret = 0;
+    return ret;
 }
 
 static avl_node_t *
@@ -312,11 +402,13 @@ msp_write_coalescence_record_file_footer(msp_t *self)
     }
 }
 
-static void
+static int
 msp_open_coalescence_record_file(msp_t *self)
 {
     size_t len;
     FILE *f;
+
+    // TODO error checking
     self->coalescence_record_file = NULL;
     if (strlen(self->coalescence_record_file_pattern) > 0) {
         len = snprintf(NULL, 0, self->coalescence_record_file_pattern,
@@ -332,6 +424,7 @@ msp_open_coalescence_record_file(msp_t *self)
         self->coalescence_record_file = f;
         msp_write_coalescence_record_file_header(self);
     }
+    return 0;
 }
 
 static void
@@ -352,9 +445,10 @@ msp_close_coalescence_record_file(msp_t *self)
  * Reset the state of the simulator so that it is ready to compute another
  * replicate.
  */
-void
+int
 msp_reset(msp_t *self)
 {
+    int ret = -1;
     avl_node_t *node;
     /* Free the breakpoints */
     for (node = self->breakpoints->head; node != NULL; node = node->next) {
@@ -367,17 +461,22 @@ msp_reset(msp_t *self)
     assert(self->avl_node_heap_top == self->max_avl_nodes - 1);
     assert(self->segment_heap_top == self->max_segments - 1);
 
+    ret = 0;
+    return ret;
+
 }
 
-static inline void
+static inline int
 msp_insert_individual(msp_t *self, segment_t *u)
 {
     avl_node_t *node;
+    // TODO error checking
     assert(u != NULL);
     node = msp_alloc_avl_node(self);
     avl_init_node(node, u);
     node = avl_insert_node(self->population, node);
     assert(node != NULL);
+    return 0;
 }
 
 /*
@@ -494,16 +593,6 @@ msp_verify(msp_t *self)
 }
 
 void
-msp_print_stats(msp_t *self)
-{
-    int num_trees = avl_count(self->breakpoints) - 1;
-    printf("%f\t%d\t%u\t%u\t%u\t%u\t%u\n", self->time, num_trees,
-            self->num_re_events, self->num_ca_events,
-            self->num_coalescence_records, self->max_used_segments,
-            self->max_population_size);
-}
-
-void
 msp_print_state(msp_t *self)
 {
     avl_node_t *node;
@@ -558,12 +647,13 @@ msp_print_state(msp_t *self)
  * Inserts a new breakpoint at the specified locus left, mapping to the
  * specified tree node v.
  */
-static void
+static int
 msp_insert_breakpoint(msp_t *self, unsigned int left, int v)
 {
     avl_node_t *node = msp_alloc_avl_node(self);
     node_mapping_t *m;
 
+    /* TODO ERROR checking plus expansion */
     if (self->next_node_mapping == self->max_trees) {
         fatal_error("out of node_mappings");
     }
@@ -574,6 +664,7 @@ msp_insert_breakpoint(msp_t *self, unsigned int left, int v)
     avl_init_node(node, m);
     node = avl_insert_node(self->breakpoints, node);
     assert(node != NULL);
+    return 0;
 }
 
 /*
@@ -616,7 +707,7 @@ msp_record_coalescence(msp_t *self, unsigned int left, unsigned int right,
     self->num_coalescence_records++;
 }
 
-static void
+static int
 msp_recombination_event(msp_t *self)
 {
     long long l, t, gap, k;
@@ -624,6 +715,8 @@ msp_recombination_event(msp_t *self)
     node_mapping_t search;
     segment_t *x, *y, *z;
     long long num_links = fenwick_get_total(self->links);
+
+    // TODO error checking
 
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
@@ -659,9 +752,10 @@ msp_recombination_event(msp_t *self)
         self->num_trapped_re_events++;
     }
     msp_insert_individual(self, z);
+    return 0;
 }
 
-static void
+static int
 msp_coancestry_event(msp_t *self)
 {
     int eta;
@@ -670,6 +764,7 @@ msp_coancestry_event(msp_t *self)
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
 
+    // TODO error checking
     self->num_ca_events++;
     /* Choose u and v */
     n = avl_count(self->population);
@@ -765,16 +860,18 @@ msp_coancestry_event(msp_t *self)
             fenwick_set_value(self->links, alpha->index, alpha->right - l);
         }
     }
+    return 0;
 }
 
 
 /*
  * Sets up the initial population and trees.
  */
-static void
+static int
 msp_initialise(msp_t *self)
 {
     int j;
+    int ret = 0;
     segment_t *u;
 
     /* zero the counters */
@@ -786,71 +883,63 @@ msp_initialise(msp_t *self)
     self->max_population_size = 0;
     for (j = 1; j <= self->sample_size; j++) {
         u = msp_alloc_segment(self, 1, self->num_loci, j, NULL, NULL);
-        msp_insert_individual(self, u);
+        if (u == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        ret = msp_insert_individual(self, u);
+        if (ret != 0) {
+            goto out;
+        }
         fenwick_increment(self->links, u->index, self->num_loci - 1);
     }
-    msp_insert_breakpoint(self, 1, self->sample_size + 1);
-    msp_insert_breakpoint(self, self->num_loci + 1, 0);
+    ret = msp_insert_breakpoint(self, 1, self->sample_size + 1);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_insert_breakpoint(self, self->num_loci + 1, 0);
+    if (ret != 0) {
+        goto out;
+    }
     self->time = 0.0;
-    msp_open_coalescence_record_file(self);
+    ret = msp_open_coalescence_record_file(self);
+out:
+    return ret;
 }
 
-static void
+static int
 msp_finalise(msp_t *self)
 {
+    // TODO error checking
     msp_flush_coalescence_records(self);
     if (self->coalescence_record_file != NULL) {
         msp_write_coalescence_record_file_footer(self);
         msp_close_coalescence_record_file(self);
     }
+    return 0;
 }
 
-void
-msp_print_detailed_stats(msp_t *self)
-{
-    unsigned int num_segments = 0;
-    double mean_segment_length = 0.0;
-    double mean_subtended_links = 0.0;
-    avl_node_t *node;
-    segment_t *u;
-
-    for (node = self->population->head; node != NULL; node = node->next) {
-        for (u = (segment_t *) node->item; u != NULL; u = u->next) {
-            num_segments++;
-            mean_segment_length += u->right - u->left;
-            mean_subtended_links += fenwick_get_value(self->links, u->index);
-        }
-    }
-    mean_segment_length /= num_segments;
-    mean_subtended_links /= num_segments;
-
-    printf("%d\t%llu\t%d\t%d\t%d\t%f\t%f\t%d\n", avl_count(self->population),
-            fenwick_get_total(self->links), self->num_re_events, self->num_ca_events,
-            num_segments, mean_segment_length, mean_subtended_links,
-            self->num_trapped_re_events);
-}
-
-void
+int
 msp_simulate(msp_t *self)
 {
+    int ret = -1;
     double lambda_c, lambda_r, t_c, t_r, t_wait, pop_size;
     long long num_links;
     unsigned int n = self->sample_size;
-    void (*event_method)(msp_t *);
+    int (*event_method)(msp_t *);
     population_model_t *pop_model = self->population_models;
 
     /* insert the sentinel population model */
-    msp_add_constant_population_model(self, DBL_MAX, 0.0);
+    ret = msp_add_constant_population_model(self, DBL_MAX, 0.0);
+    if (ret != 0) {
+        goto out;
+    }
     assert(pop_model != NULL);
-    msp_initialise(self);
+    ret = msp_initialise(self);
+    if (ret != 0) {
+        goto out;
+    }
     while (n > 1) {
-        if (self->verbosity >= 2) {
-            msp_print_state(self);
-        }
-        if (n > self->max_population_size) {
-            self->max_population_size = n;
-        }
-        //msp_print_detailed_stats(self);
         num_links = fenwick_get_total(self->links);
         lambda_r = num_links * self->recombination_rate;
         t_r = DBL_MAX;
@@ -868,6 +957,7 @@ msp_simulate(msp_t *self)
             t_wait = t_c;
             event_method = msp_coancestry_event;
         }
+        // TODO check for infinite waiting time
         if (self->time + t_wait >= pop_model->next->start_time) {
             pop_size = pop_model->get_size(pop_model, self->time);
             pop_model = pop_model->next;
@@ -876,14 +966,16 @@ msp_simulate(msp_t *self)
             assert(pop_model->next != NULL);
         } else {
             self->time += t_wait;
-            event_method(self);
+            ret = event_method(self);
+            if (ret != 0) {
+                goto out;
+            }
             n = avl_count(self->population);
         }
     }
-    if (self->verbosity >= 1) {
-        msp_print_state(self);
-    }
-    msp_finalise(self);
+    ret = msp_finalise(self);
+out:
+    return ret;
 }
 
 
