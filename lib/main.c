@@ -20,12 +20,48 @@
 #include <string.h>
 #include <assert.h>
 #include <limits.h>
+#include <stdarg.h>
 
 #include <libconfig.h>
 
 #include "msprime.h"
 
-#include "util.h"
+void
+fatal_error(const char *msg, ...)
+{
+    va_list argp;
+    fprintf(stderr, "sms:");
+    va_start(argp, msg);
+    vfprintf(stderr, msg, argp);
+    va_end(argp);
+    fprintf(stderr, "\n");
+    exit(EXIT_FAILURE);
+}
+
+/*
+ * Parses the specified string into a long and assigns the value into
+ * the specified pointer. Returns EINVAL if the string cannot be
+ * converted to double or if min <= x <= max does not hold; returns 0 if
+ * the value is converted successfully.
+ */
+int
+parse_long(const char *str, long *value, const long min,
+        const long max)
+{
+    int ret = 0;
+    long x;
+    char *tail;
+    x = strtol(str, &tail, 10);
+    if (tail[0] != '\0') {
+        ret = EINVAL;
+    } else if (min > x || max < x) {
+        ret = EINVAL;
+    } else {
+        *value = x;
+    }
+    return ret;
+}
+
 
 static void
 msp_read_population_models(msp_t *self, config_t *config)
@@ -87,8 +123,11 @@ msp_read_config(msp_t *self, const char *filename)
     int tmp;
     size_t s;
     const char *str;
-    config_t *config = xmalloc(sizeof(config_t));
+    config_t *config = malloc(sizeof(config_t));
 
+    if (config == NULL) {
+        fatal_error("no memory");
+    }
     config_init(config);
     err = config_read_file(config, filename);
     if (err == CONFIG_FALSE) {
@@ -125,7 +164,10 @@ msp_read_config(msp_t *self, const char *filename)
         fatal_error("coalescence_record_file is a required parameter");
     }
     s = strlen(str);
-    self->coalescence_record_filename = xmalloc(s + 1);
+    self->coalescence_record_filename = malloc(s + 1);
+    if (self->coalescence_record_filename == NULL) {
+        fatal_error("no memory");
+    }
     strcpy(self->coalescence_record_filename, str);
     msp_read_population_models(self, config);
     config_destroy(config);
@@ -163,7 +205,7 @@ out:
         free(self);
     }
     if (ret != 0) {
-        printf("error occured:%d\n", ret);
+        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
     }
 }
 

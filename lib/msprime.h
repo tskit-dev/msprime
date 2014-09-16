@@ -123,4 +123,5 @@ int tree_viewer_get_tree(tree_viewer_t *self, int j, int *breakpoint, int **pi,
         float **tau);
 int tree_viewer_free(tree_viewer_t *self);
 
+char * msp_strerror(int err);
 #endif /*__BIT_H__*/
