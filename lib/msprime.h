@@ -27,7 +27,6 @@
 
 #include "fenwick.h"
 
-#define TREEFILE_MAGIC 0x2fd8652f
 #define POP_MODEL_CONSTANT 0
 #define POP_MODEL_EXPONENTIAL 1
 
@@ -68,8 +67,6 @@ typedef struct population_model_t_t {
 
 typedef struct {
     /* input parameters */
-    int verbosity;
-    int approx;
     int sample_size;
     int num_loci;
     double recombination_rate;
@@ -77,8 +74,6 @@ typedef struct {
     int max_avl_nodes;
     int max_segments;
     int max_trees;
-    int max_coalescence_records;
-    char *coalescence_record_file_pattern;
     char *coalescence_record_filename;
     population_model_t *population_models;
     /* Counters for statistics */
@@ -95,7 +90,6 @@ typedef struct {
     avl_tree_t *breakpoints;
     fenwick_t *links;
     FILE *coalescence_record_file;
-    int replicate_number;
     /* memory heaps */
     avl_node_t **avl_node_heap;
     int avl_node_heap_top;
@@ -103,8 +97,6 @@ typedef struct {
     segment_t **segment_heap;
     int segment_heap_top;
     segment_t *segment_mem;
-    coalescence_record_t *coalescence_records;
-    unsigned int next_coalescence_record;
     node_mapping_t *node_mapping_mem;
     unsigned int next_node_mapping;
 } msp_t;
@@ -115,6 +107,6 @@ int msp_add_exponential_population_model(msp_t *self, double time, double alpha)
 int msp_alloc(msp_t *self);
 int msp_free(msp_t *self);
 int msp_simulate(msp_t *self);
-int msp_reset(msp_t *self);
+void msp_print_state(msp_t *self);
 
 #endif /*__BIT_H__*/

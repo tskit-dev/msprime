@@ -96,14 +96,6 @@ msp_read_config(msp_t *self, const char *filename)
                 config_error_text(config), config_error_line(config),
                 filename);
     }
-    if (config_lookup_int(config, "verbosity", &tmp) == CONFIG_FALSE) {
-        fatal_error("verbosity is a required parameter");
-    }
-    self->verbosity = tmp;
-    if (config_lookup_int(config, "approx", &tmp) == CONFIG_FALSE) {
-        fatal_error("approx is a required parameter");
-    }
-    self->approx = tmp;
     if (config_lookup_int(config, "sample_size", &tmp) == CONFIG_FALSE) {
         fatal_error("sample_size is a required parameter");
     }
@@ -124,11 +116,6 @@ msp_read_config(msp_t *self, const char *filename)
         fatal_error("max_trees is a required parameter");
     }
     self->max_trees = tmp;
-    if (config_lookup_int(config, "max_coalescence_records", &tmp)
-            == CONFIG_FALSE) {
-        fatal_error("max_coalescence_records is a required parameter");
-    }
-    self->max_coalescence_records = tmp;
     if (config_lookup_float(config, "recombination_rate",
             &self->recombination_rate) == CONFIG_FALSE) {
         fatal_error("recombination_rate is a required parameter");
@@ -138,18 +125,17 @@ msp_read_config(msp_t *self, const char *filename)
         fatal_error("coalescence_record_file is a required parameter");
     }
     s = strlen(str);
-    self->coalescence_record_file_pattern = xmalloc(s + 1);
-    strcpy(self->coalescence_record_file_pattern, str);
+    self->coalescence_record_filename = xmalloc(s + 1);
+    strcpy(self->coalescence_record_filename, str);
     msp_read_population_models(self, config);
     config_destroy(config);
     free(config);
 }
 
 static void
-run_simulate(char *conf_file, long seed, long num_replicates)
+run_simulate(char *conf_file, long seed)
 {
     int ret = -1;
-    long j;
     msp_t *self = calloc(1, sizeof(msp_t));
 
     if (self == NULL) {
@@ -165,17 +151,14 @@ run_simulate(char *conf_file, long seed, long num_replicates)
     if (ret != 0) {
         goto out;
     }
-    printf("t\tnum_trees\tre_events\tca_events\tcoalescence_records\tmax_segments"
-            "\tmax_population_size\n");
-    for (j = 0; j < num_replicates; j++) {
-        ret = msp_simulate(self);
-        if (ret != 0) {
-            goto out;
-        }
-        msp_reset(self);
+    ret = msp_simulate(self);
+    if (ret != 0) {
+        goto out;
     }
+    msp_print_state(self);
 out:
     if (self != NULL) {
+        free(self->coalescence_record_filename);
         msp_free(self);
         free(self);
     }
@@ -184,116 +167,17 @@ out:
     }
 }
 
-/*
- * Tree file reader. This is a very simple reader for the tree files that
- * inputs the binary format and writes out the trees to stdout in
- * oriented forest form.
- */
-
-static void
-run_process(char *tree_file)
-{
-    size_t file_size, ret;
-    coalescence_record_t *coalescence_records, *cr;
-    unsigned int header[2], sample_size, num_loci, j, k;
-    int *pi;
-    float *tau;
-    FILE *f = fopen(tree_file, "r");
-    if (f == NULL) {
-        fatal_error("cannot open %s: %s", tree_file, strerror(errno));
-    }
-    /* read the header */
-    ret = fread(header, sizeof(header), 1, f);
-    if (ret != 1) {
-        fatal_error("error reading %s: %s", tree_file, strerror(errno));
-    }
-    if (header[0] != TREEFILE_MAGIC) {
-        fatal_error("error reading %s: magic number mismatchs", tree_file);
-    }
-    sample_size = header[1];
-    /* allocate the tree */
-    pi = xmalloc(2 * sample_size * sizeof(int));
-    tau = xmalloc(2 * sample_size * sizeof(float));
-    /* Allocate the coalescence records. */
-    fseek(f, 0, SEEK_END);
-    file_size = ftell(f);
-    file_size -= sizeof(header);
-    coalescence_records = xmalloc(file_size);
-    fseek(f, sizeof(header), SEEK_SET);
-    ret = fread(coalescence_records, 1, file_size, f);
-    if (ret != file_size) {
-        fatal_error("error reading %s: %s", tree_file, strerror(errno));
-    }
-    num_loci = 0;
-    for (cr = coalescence_records; cr->left != 0; cr++) {
-        if (cr->right > num_loci) {
-            num_loci = cr->right;
-        }
-    }
-    /* Now go through each locus and print out the corresponding tree.
-     * A more sophisticated implementation would only write out trees
-     * at the breakpoints, which can be easily found by getting the
-     * unique left values among the coalescence records
-     */
-    for (j = 1; j <= num_loci; j++) {
-        memset(pi, 0, 2 * sample_size * sizeof(int));
-        memset(tau, 0, 2 * sample_size * sizeof(float));
-        for (cr = coalescence_records; cr->left != 0; cr++) {
-            if (cr->left <= j && j <= cr->right) {
-                pi[cr->children[0]] = cr->parent;
-                pi[cr->children[1]] = cr->parent;
-                tau[cr->parent] = cr->time;
-            }
-        }
-        printf("%d\t", j);
-        for (k = 1; k < 2 * sample_size; k++) {
-            printf(" %3d", pi[k]);
-        }
-        printf(" :: ");
-        for (k = 1; k < 2 * sample_size; k++) {
-            printf(" %.3f", tau[k]);
-        }
-        printf("\n");
-    }
-
-    if (fclose(f) != 0) {
-        fatal_error("cannot close %s: %s", tree_file, strerror(errno));
-    }
-    free(pi);
-    free(tau);
-    free(coalescence_records);
-}
-
-
 
 int
 main(int argc, char** argv)
 {
-    char *cmd;
-    long num_replicates, seed;
-    if (argc < 2) {
-        fatal_error("usage: %s simulate|process [ARGS]", argv[0]);
+    long seed;
+    if (argc != 3) {
+        fatal_error("usage: %s CONFIG_FILE SEED", argv[0]);
     }
-    cmd = argv[1];
-    if (strcmp("simulate", cmd) == 0) {
-        if (argc != 5) {
-            fatal_error("usage: %s simulate CONFIG_FILE SEED NUM_REPS", argv[0]);
-        }
-        if (parse_long(argv[3], &seed, 0, LONG_MAX) != 0) {
-            fatal_error("cannot parse seed '%s'", argv[3]);
-        }
-        if (parse_long(argv[4], &num_replicates, 0, LONG_MAX) != 0) {
-            fatal_error("cannot parse replicates '%s'", argv[4]);
-        }
-        run_simulate(argv[2], seed, num_replicates);
-    } else if (strcmp("process", cmd) == 0) {
-        if (argc != 3) {
-            fatal_error("usage: %s process TREE_FILE", argv[0]);
-        }
-        run_process(argv[2]);
-    } else {
-        fatal_error("unrecognised command '%s'", cmd);
+    if (parse_long(argv[2], &seed, 0, LONG_MAX) != 0) {
+        fatal_error("cannot parse seed '%s'", argv[3]);
     }
-
+    run_simulate(argv[1], seed);
     return EXIT_SUCCESS;
 }
