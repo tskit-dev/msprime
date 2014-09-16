@@ -1,8 +1,8 @@
 CFLAGS=-Wall -g -O3
 #CFLAGS=-Wall -g -O3 -march=native 
 LDFLAGS=-lgsl -lgslcblas -lconfig
-SRC=msprime.c util.c util.h fenwick.c fenwick.h msprime.h err.h main.c
-COMPILED=msprime.c util.c fenwick.c main.c avl.c
+SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c
+COMPILED=msprime.c fenwick.c main.c avl.c
 
 all: main test_fenwick
 
@@ -10,7 +10,7 @@ main: ${SRC}
 	gcc ${CFLAGS} -o main ${COMPILED} ${LDFLAGS}
 	
 test_fenwick: fenwick.c fenwick.h test_fenwick.c
-	gcc ${CFLAGS} -o test_fenwick test_fenwick.c fenwick.c util.c ${LDFLAGS}
+	gcc ${CFLAGS} -o test_fenwick test_fenwick.c fenwick.c ${LDFLAGS}
 	
 tags:
 	etags *.c *.h 

@@ -26,8 +26,6 @@
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics_int.h>
 
-#include "util.h"
-
 #include "err.h"
 #include "fenwick.h"
 #include "msprime.h"
@@ -284,7 +282,7 @@ msp_alloc_avl_node(msp_t *self)
     avl_node_t *node = self->avl_node_heap[self->avl_node_heap_top];
     self->avl_node_heap_top--;
     if (self->avl_node_heap_top < 0) {
-        fatal_error("out of avl nodes");
+        node = NULL;
     }
     return node;
 }
@@ -305,7 +303,8 @@ msp_alloc_segment(msp_t *self, int left, int right, int value, segment_t *prev,
     unsigned int num_segments;
     self->segment_heap_top--;
     if (self->segment_heap_top < 0) {
-        fatal_error("out of segments");
+        seg = NULL;
+        goto out;
     }
     seg->prev = prev;
     seg->next = next;
@@ -316,6 +315,7 @@ msp_alloc_segment(msp_t *self, int left, int right, int value, segment_t *prev,
     if (num_segments > self->max_used_segments) {
         self->max_used_segments = num_segments;
     }
+out:
     return seg;
 }
 
@@ -342,29 +342,35 @@ msp_free_segment(msp_t *self, segment_t *node)
 static int
 msp_open_coalescence_record_file(msp_t *self)
 {
-    FILE *f;
-    // TODO error checking
-    f = fopen(self->coalescence_record_filename, "w+");
+    int ret = 0;
+    FILE *f = fopen(self->coalescence_record_filename, "w+");
     if (f == NULL) {
-        fatal_error("cannot open %s: %s",
-                self->coalescence_record_filename, strerror(errno));
+        ret = MSP_ERR_IO;
+        goto out;
     }
     self->coalescence_record_file = f;
-    return 0;
+out:
+    return ret;
 }
 
 
 static inline int
 msp_insert_individual(msp_t *self, segment_t *u)
 {
+    int ret = 0;
     avl_node_t *node;
-    // TODO error checking
+
     assert(u != NULL);
     node = msp_alloc_avl_node(self);
+    if (node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     avl_init_node(node, u);
     node = avl_insert_node(self->population, node);
     assert(node != NULL);
-    return 0;
+out:
+    return ret;
 }
 
 static void
@@ -536,12 +542,17 @@ out:
 static int
 msp_insert_breakpoint(msp_t *self, unsigned int left, int v)
 {
+    int ret = 0;
     avl_node_t *node = msp_alloc_avl_node(self);
     node_mapping_t *m;
 
-    /* TODO ERROR checking plus expansion */
+    if (node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     if (self->next_node_mapping == self->max_trees) {
-        fatal_error("out of node_mappings");
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
     }
     m = &self->node_mapping_mem[self->next_node_mapping];
     self->next_node_mapping++;
@@ -550,18 +561,21 @@ msp_insert_breakpoint(msp_t *self, unsigned int left, int v)
     avl_init_node(node, m);
     node = avl_insert_node(self->breakpoints, node);
     assert(node != NULL);
-    return 0;
+out:
+    return ret;
 }
 
 /*
  * Inserts a new breakpoint at the specified locus, and copies it's
  * node mapping from the containing breakpoint.
  */
-static void
+static int
 msp_copy_breakpoint(msp_t *self, unsigned int k)
 {
+    int ret;
     node_mapping_t search, *nm;
     avl_node_t *node;
+
     search.left = k;
     avl_search_closest(self->breakpoints, &search, &node);
     assert(node != NULL);
@@ -571,7 +585,8 @@ msp_copy_breakpoint(msp_t *self, unsigned int k)
         assert(node != NULL);
         nm = (node_mapping_t *) node->item;
     }
-    msp_insert_breakpoint(self, k, nm->value);
+    ret = msp_insert_breakpoint(self, k, nm->value);
+    return ret;
 }
 
 static int
@@ -590,10 +605,10 @@ msp_record_coalescence(msp_t *self, unsigned int left, unsigned int right,
     self->num_coalescence_records++;
     ret = fwrite(&r, sizeof(r), 1, self->coalescence_record_file);
     if (ret != 1) {
-        /* TODO fix */
-        fatal_error("error writing to %s: %s",
-                self->coalescence_record_filename, strerror(errno));
+        ret = MSP_ERR_IO;
+        goto out;
     }
+out:
     return ret;
 
 }
@@ -601,6 +616,7 @@ msp_record_coalescence(msp_t *self, unsigned int left, unsigned int right,
 static int
 msp_recombination_event(msp_t *self)
 {
+    int ret = 0;
     long long l, t, gap, k;
     unsigned int j;
     node_mapping_t search;
@@ -621,6 +637,10 @@ msp_recombination_event(msp_t *self)
     k = y->right - gap - 1;
     if (y->left <= k) {
         z = msp_alloc_segment(self, k + 1, y->right, y->value, NULL, y->next);
+        if (z == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
         fenwick_increment(self->links, z->index, z->right - k - 1);
         if (y->next != NULL) {
             y->next->prev = z;
@@ -630,7 +650,10 @@ msp_recombination_event(msp_t *self)
         fenwick_increment(self->links, y->index, k - z->right);
         search.left = k + 1;
         if (avl_search(self->breakpoints, &search) == NULL) {
-            msp_copy_breakpoint(self, k + 1);
+            ret = msp_copy_breakpoint(self, k + 1);
+            if (ret != 0) {
+                goto out;
+            }
         }
     } else {
         x->next = NULL;
@@ -643,12 +666,15 @@ msp_recombination_event(msp_t *self)
         self->num_trapped_re_events++;
     }
     msp_insert_individual(self, z);
-    return 0;
+
+out:
+    return ret;
 }
 
 static int
 msp_coancestry_event(msp_t *self)
 {
+    int ret = 0;
     int eta;
     unsigned int j, n, l, r, r_max;
     avl_node_t *node;
@@ -696,6 +722,10 @@ msp_coancestry_event(msp_t *self)
             } else if (x->left != y->left) {
                 alpha = msp_alloc_segment(self, x->left, y->left - 1, x->value,
                         NULL, NULL);
+                if (alpha == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
                 x->left = y->left;
             } else {
                 l = x->left;
@@ -719,6 +749,10 @@ msp_coancestry_event(msp_t *self)
                 msp_record_coalescence(self, l, r, x->value, y->value, eta);
                 if (eta < 2 * self->sample_size - 1) {
                     alpha = msp_alloc_segment(self, l, r, eta, NULL, NULL);
+                    if (alpha == NULL) {
+                        ret = MSP_ERR_NO_MEMORY;
+                        goto out;
+                    }
                 }
                 if (x->right == r) {
                     beta = x;
@@ -749,7 +783,8 @@ msp_coancestry_event(msp_t *self)
             fenwick_set_value(self->links, alpha->index, alpha->right - l);
         }
     }
-    return 0;
+out:
+    return ret;
 }
 
 
@@ -959,4 +994,22 @@ tree_viewer_free(tree_viewer_t *self)
     }
     free(self);
     return 0;
+}
+
+char *
+msp_strerror(int err)
+{
+    char *ret = "Unknown error";
+    if (err == MSP_ERR_NO_MEMORY) {
+        ret = "Out of memory";
+    } else if (err == MSP_ERR_GENERIC) {
+        ret = "Generic error; please file a bug report";
+    } else if (err == MSP_ERR_IO) {
+        if (errno != 0) {
+            ret = strerror(errno);
+        } else {
+            ret = "Unspecified IO error";
+        }
+    }
+    return ret;
 }

@@ -24,10 +24,10 @@
 #include <config.h>
 #endif
 
-#include "util.h"
 #include "fenwick.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 
 static void
