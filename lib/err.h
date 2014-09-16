@@ -21,5 +21,6 @@
 
 #define MSP_ERR_GENERIC -1
 #define MSP_ERR_NO_MEMORY -2
+#define MSP_ERR_IO -3
 
 #endif /*__ERR_H__*/
