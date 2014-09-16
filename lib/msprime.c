@@ -212,10 +212,7 @@ msp_alloc(msp_t *self)
     n = self->max_trees;
     self->node_mapping_mem = malloc(n * sizeof(node_mapping_t));
     self->next_node_mapping = 0;
-    n = self->max_coalescence_records;
-    self->coalescence_records = malloc(n * sizeof(coalescence_record_t));
-    self->next_coalescence_record = 0;
-    if (self->node_mapping_mem == NULL || self->coalescence_records == NULL) {
+    if (self->node_mapping_mem == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -228,7 +225,6 @@ msp_alloc(msp_t *self)
     }
     avl_init_tree(self->population, cmp_individual, NULL);
     avl_init_tree(self->breakpoints, cmp_node_mapping, NULL);
-    self->replicate_number = 0;
     ret = 0;
 out:
     return ret;
@@ -273,12 +269,6 @@ msp_free(msp_t *self)
     }
     if (self->segment_heap != NULL) {
         free(self->segment_heap);
-    }
-    if (self->coalescence_records != NULL) {
-        free(self->coalescence_records);
-    }
-    if (self->coalescence_record_file_pattern != NULL) {
-        free(self->coalescence_record_file_pattern);
     }
     ret = 0;
     return ret;
@@ -345,85 +335,17 @@ msp_free_segment(msp_t *self, segment_t *node)
     fenwick_set_value(self->links, node->index, 0);
 }
 
-
-static void
-msp_flush_coalescence_records(msp_t *self)
-{
-    size_t ret;
-    if (self->coalescence_record_file != NULL) {
-        ret = fwrite(self->coalescence_records, sizeof(coalescence_record_t),
-                self->next_coalescence_record, self->coalescence_record_file);
-        if (ret != self->next_coalescence_record) {
-            fatal_error("error writing to %s: %s",
-                    self->coalescence_record_filename, strerror(errno));
-        }
-    }
-    self->next_coalescence_record = 0;
-}
-
-/*
- * Write a simple header including a magic number to check and
- * the sample size so we can reconstruct the trees.
- */
-static void
-msp_write_coalescence_record_file_header(msp_t *self)
-{
-    FILE *f = self->coalescence_record_file;
-    unsigned int header[2];
-    size_t ret;
-
-    assert(f != NULL);
-    header[0] = TREEFILE_MAGIC;
-    header[1] = self->sample_size;
-    ret = fwrite(header, sizeof(header), 1, self->coalescence_record_file);
-    if (ret != 1) {
-        fatal_error("error writing to %s: %s",
-                self->coalescence_record_filename, strerror(errno));
-    }
-}
-
-/*
- * Write the file footer, which is a zero sentinel to signal
- * the end of the stream of coalescence records.
- */
-static void
-msp_write_coalescence_record_file_footer(msp_t *self)
-{
-    size_t ret;
-    coalescence_record_t sentinel;
-    FILE *f = self->coalescence_record_file;
-
-    assert(f != NULL);
-    memset(&sentinel, 0, sizeof(sentinel));
-    ret = fwrite(&sentinel, sizeof(coalescence_record_t), 1, f);
-    if (ret != 1) {
-        fatal_error("error writing to %s: %s",
-                self->coalescence_record_filename, strerror(errno));
-    }
-}
-
 static int
 msp_open_coalescence_record_file(msp_t *self)
 {
-    size_t len;
     FILE *f;
-
     // TODO error checking
-    self->coalescence_record_file = NULL;
-    if (strlen(self->coalescence_record_file_pattern) > 0) {
-        len = snprintf(NULL, 0, self->coalescence_record_file_pattern,
-                self->replicate_number);
-        self->coalescence_record_filename = xmalloc(len + 1);
-        snprintf(self->coalescence_record_filename, len + 1,
-                self->coalescence_record_file_pattern, self->replicate_number);
-        f = fopen(self->coalescence_record_filename, "w");
-        if (f == NULL) {
-            fatal_error("cannot open %s: %s",
-                    self->coalescence_record_filename, strerror(errno));
-        }
-        self->coalescence_record_file = f;
-        msp_write_coalescence_record_file_header(self);
+    f = fopen(self->coalescence_record_filename, "w");
+    if (f == NULL) {
+        fatal_error("cannot open %s: %s",
+                self->coalescence_record_filename, strerror(errno));
     }
+    self->coalescence_record_file = f;
     return 0;
 }
 
@@ -436,35 +358,8 @@ msp_close_coalescence_record_file(msp_t *self)
         fatal_error("cannot close %s: %s",
                 self->coalescence_record_filename, strerror(errno));
     }
-    free(self->coalescence_record_filename);
 }
 
-
-
-/*
- * Reset the state of the simulator so that it is ready to compute another
- * replicate.
- */
-int
-msp_reset(msp_t *self)
-{
-    int ret = -1;
-    avl_node_t *node;
-    /* Free the breakpoints */
-    for (node = self->breakpoints->head; node != NULL; node = node->next) {
-        msp_free_avl_node(self, node);
-    }
-    avl_clear_tree(self->breakpoints);
-    self->next_coalescence_record = 0;
-    self->replicate_number++;
-    /* check for leaks */
-    assert(self->avl_node_heap_top == self->max_avl_nodes - 1);
-    assert(self->segment_heap_top == self->max_segments - 1);
-
-    ret = 0;
-    return ret;
-
-}
 
 static inline int
 msp_insert_individual(msp_t *self, segment_t *u)
@@ -477,26 +372,6 @@ msp_insert_individual(msp_t *self, segment_t *u)
     node = avl_insert_node(self->population, node);
     assert(node != NULL);
     return 0;
-}
-
-/*
- * Returns the tree for the specified locus
- */
-static void
-msp_get_tree(msp_t *self, unsigned int locus, int *pi, float *tau)
-{
-    unsigned int j;
-    coalescence_record_t *cr;
-    memset(pi, 0, 2 * self->sample_size * sizeof(int));
-    memset(tau, 0, 2 * self->sample_size * sizeof(float));
-    for (j = 0; j < self->next_coalescence_record; j++) {
-        cr = &self->coalescence_records[j];
-        if (cr->left <= locus && locus <= cr->right) {
-            pi[cr->children[0]] = cr->parent;
-            pi[cr->children[1]] = cr->parent;
-            tau[cr->parent] = cr->time;
-        }
-    }
 }
 
 static void
@@ -523,38 +398,15 @@ msp_print_segment_chain(msp_t *self, segment_t *head)
     printf("\n");
 }
 
-/*
- * Prints out the tree that intersects with the specified locus.
- */
-static void
-msp_print_tree(msp_t *self, unsigned int l)
-{
-    unsigned int j;
-    int *pi = xmalloc(2 * self->sample_size * sizeof(int));
-    float *tau = xmalloc(2 * self->sample_size * sizeof(float));
-    msp_get_tree(self, l, pi, tau);
-    printf("\t%4d:", l);
-    for (j = 0; j < 2 * self->sample_size; j++) {
-        printf("%3d ", pi[j]);
-    }
-    printf("|");
-    for (j = 0; j < 2 * self->sample_size; j++) {
-        printf("%.3f ", tau[j]);
-    }
-    printf("\n");
-    free(pi);
-    free(tau);
-}
 
 static void
 msp_verify(msp_t *self)
 {
-    int j;
     long long s, ss, total_links;
     unsigned int total_segments = 0;
     unsigned int total_avl_nodes = 0;
-    int *pi = xmalloc(2 * self->sample_size * sizeof(int));
-    float *tau = xmalloc(2 * self->sample_size * sizeof(float));
+    //int *pi = xmalloc(2 * self->sample_size * sizeof(int));
+    //float *tau = xmalloc(2 * self->sample_size * sizeof(float));
     avl_node_t *node;
     segment_t *u;
 
@@ -566,10 +418,12 @@ msp_verify(msp_t *self)
         while (u != NULL) {
             total_segments++;
             assert(u->left <= u->right);
+            /*
             for (j = u->left; j <= u->right; j++) {
                 msp_get_tree(self, j, pi, tau);
                 assert(pi[u->value] == 0);
             }
+            */
             if (u->prev != NULL) {
                 s = u->right - u->prev->right;
             } else {
@@ -588,8 +442,10 @@ msp_verify(msp_t *self)
             + avl_count(self->breakpoints);
     assert(total_avl_nodes == self->max_avl_nodes -
             self->avl_node_heap_top - 1);
+    /*
     free(pi);
     free(tau);
+    */
 }
 
 void
@@ -597,7 +453,7 @@ msp_print_state(msp_t *self)
 {
     avl_node_t *node;
     node_mapping_t *nm;
-    coalescence_record_t *cr;
+    //coalescence_record_t *cr;
     segment_t *u;
     long long v;
     unsigned int j;
@@ -614,11 +470,11 @@ msp_print_state(msp_t *self)
         msp_print_segment_chain(self, u);
         node = node->next;
     }
-    printf("trees = %d\n", avl_count(self->breakpoints));
+    printf("breakpoints = %d\n", avl_count(self->breakpoints));
     /* Skip the last tree as it's not real */
     for (node = self->breakpoints->head; node->next != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
-        msp_print_tree(self, nm->left);
+        printf("%d\n", nm->left);
     }
     printf("Fenwick tree\n");
     for (j = 1; j <= self->max_segments; j++) {
@@ -634,12 +490,14 @@ msp_print_state(msp_t *self)
         nm = (node_mapping_t *) node->item;
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
-    printf("Coalescence records = %d\n", self->next_coalescence_record);
+    printf("Coalescence records = %d\n", self->num_coalescence_records);
+    /*
     for (j = 0; j < self->next_coalescence_record; j++) {
         cr = &self->coalescence_records[j];
         printf("\t(%d, %d) -- (%d, %d)->%d @ %f\n", cr->left, cr->right,
                 cr->children[0], cr->children[1], cr->parent, cr->time);
     }
+    */
     msp_verify(self);
 }
 
@@ -688,23 +546,28 @@ msp_copy_breakpoint(msp_t *self, unsigned int k)
     msp_insert_breakpoint(self, k, nm->value);
 }
 
-static void
+static int
 msp_record_coalescence(msp_t *self, unsigned int left, unsigned int right,
         int child1, int child2, int parent)
 {
-    coalescence_record_t *r = NULL;
-    if (self->next_coalescence_record == self->max_coalescence_records) {
-        msp_flush_coalescence_records(self);
-    }
-    r = &self->coalescence_records[self->next_coalescence_record];
-    self->next_coalescence_record++;
-    r->left = left;
-    r->right = right;
-    r->children[0] = child1;
-    r->children[1] = child2;
-    r->parent = parent;
-    r->time = self->time;
+    int ret = 0;
+    coalescence_record_t r;
+
+    r.left = left;
+    r.right = right;
+    r.children[0] = child1;
+    r.children[1] = child2;
+    r.parent = parent;
+    r.time = self->time;
     self->num_coalescence_records++;
+    ret = fwrite(&r, sizeof(r), 1, self->coalescence_record_file);
+    if (ret != 1) {
+        /* TODO fix */
+        fatal_error("error writing to %s: %s",
+                self->coalescence_record_filename, strerror(errno));
+    }
+    return ret;
+
 }
 
 static int
@@ -851,9 +714,7 @@ msp_coancestry_event(msp_t *self)
                 msp_insert_individual(self, alpha);
             } else {
                 z->next = alpha;
-                if (self->approx == 0) {
-                    l = z->right;
-                }
+                l = z->right;
             }
             alpha->prev = z;
             z = alpha;
@@ -911,11 +772,8 @@ static int
 msp_finalise(msp_t *self)
 {
     // TODO error checking
-    msp_flush_coalescence_records(self);
-    if (self->coalescence_record_file != NULL) {
-        msp_write_coalescence_record_file_footer(self);
-        msp_close_coalescence_record_file(self);
-    }
+    // Also, do we actually want to close this?
+    msp_close_coalescence_record_file(self);
     return 0;
 }
 
