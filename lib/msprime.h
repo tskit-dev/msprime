@@ -101,12 +101,26 @@ typedef struct {
     unsigned int next_node_mapping;
 } msp_t;
 
+typedef struct {
+    int sample_size;
+    int num_loci;
+    int num_trees;
+    int *breakpoints;
+    int *pi;
+    float *tau;
+    FILE *coalescence_record_file;
+} tree_viewer_t;
 
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
 int msp_alloc(msp_t *self);
 int msp_free(msp_t *self);
 int msp_simulate(msp_t *self);
-void msp_print_state(msp_t *self);
+int msp_print_state(msp_t *self);
+tree_viewer_t * msp_get_tree_viewer(msp_t *self);
+int tree_viewer_init(tree_viewer_t *self);
+int tree_viewer_get_tree(tree_viewer_t *self, int j, int *breakpoint, int **pi,
+        float **tau);
+int tree_viewer_free(tree_viewer_t *self);
 
 #endif /*__BIT_H__*/

@@ -270,6 +270,10 @@ msp_free(msp_t *self)
     if (self->segment_heap != NULL) {
         free(self->segment_heap);
     }
+    if (self->coalescence_record_file != NULL) {
+        // TODO check for errors here?
+        fclose(self->coalescence_record_file);
+    }
     ret = 0;
     return ret;
 }
@@ -340,24 +344,13 @@ msp_open_coalescence_record_file(msp_t *self)
 {
     FILE *f;
     // TODO error checking
-    f = fopen(self->coalescence_record_filename, "w");
+    f = fopen(self->coalescence_record_filename, "w+");
     if (f == NULL) {
         fatal_error("cannot open %s: %s",
                 self->coalescence_record_filename, strerror(errno));
     }
     self->coalescence_record_file = f;
     return 0;
-}
-
-static void
-msp_close_coalescence_record_file(msp_t *self)
-{
-    FILE *f = self->coalescence_record_file;
-    assert(f != NULL);
-    if (fclose(f) != 0) {
-        fatal_error("cannot close %s: %s",
-                self->coalescence_record_filename, strerror(errno));
-    }
 }
 
 
@@ -448,16 +441,29 @@ msp_verify(msp_t *self)
     */
 }
 
-void
+int
 msp_print_state(msp_t *self)
 {
+    int ret = 0;
     avl_node_t *node;
     node_mapping_t *nm;
-    //coalescence_record_t *cr;
     segment_t *u;
     long long v;
-    unsigned int j;
+    int j, k, bp;
+    int *pi;
+    float *tau;
+    coalescence_record_t cr;
+    FILE *f = self->coalescence_record_file;
+    tree_viewer_t *tv = msp_get_tree_viewer(self);
 
+    if (tv == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = tree_viewer_init(tv);
+    if (ret != 0) {
+        goto out;
+    }
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
@@ -470,11 +476,22 @@ msp_print_state(msp_t *self)
         msp_print_segment_chain(self, u);
         node = node->next;
     }
-    printf("breakpoints = %d\n", avl_count(self->breakpoints));
-    /* Skip the last tree as it's not real */
-    for (node = self->breakpoints->head; node->next != NULL; node = node->next) {
-        nm = (node_mapping_t *) node->item;
-        printf("%d\n", nm->left);
+    printf("trees = %d\n", tv->num_trees);
+    bp = 0;
+    pi = NULL;
+    tau = NULL;
+    for (j = 0; j < tv->num_trees; j++) {
+        ret = tree_viewer_get_tree(tv, j, &bp, &pi, &tau);
+        printf("\t%4d:", bp);
+        for (k = 0; k < 2 * self->sample_size; k++) {
+            printf("%3d ", pi[k]);
+        }
+        printf("|");
+        for (k = 0; k < 2 * self->sample_size; k++) {
+            printf("%.3f ", tau[k]);
+        }
+        printf("\n");
+
     }
     printf("Fenwick tree\n");
     for (j = 1; j <= self->max_segments; j++) {
@@ -491,14 +508,25 @@ msp_print_state(msp_t *self)
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
     printf("Coalescence records = %d\n", self->num_coalescence_records);
-    /*
-    for (j = 0; j < self->next_coalescence_record; j++) {
-        cr = &self->coalescence_records[j];
-        printf("\t(%d, %d) -- (%d, %d)->%d @ %f\n", cr->left, cr->right,
-                cr->children[0], cr->children[1], cr->parent, cr->time);
+    /* seek to the start of file and read all records */
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        ret = MSP_ERR_IO;
+        goto out;
     }
-    */
+    while ((ret = fread(&cr, sizeof(cr), 1, f)) == 1) {
+        printf("\t(%d, %d) -- (%d, %d)->%d @ %f\n", cr.left, cr.right,
+                cr.children[0], cr.children[1], cr.parent, cr.time);
+    }
+    if (!feof(f)) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
     msp_verify(self);
+out:
+    if (tv != NULL) {
+        tree_viewer_free(tv);
+    }
+    return ret;
 }
 
 /*
@@ -768,15 +796,6 @@ out:
     return ret;
 }
 
-static int
-msp_finalise(msp_t *self)
-{
-    // TODO error checking
-    // Also, do we actually want to close this?
-    msp_close_coalescence_record_file(self);
-    return 0;
-}
-
 int
 msp_simulate(msp_t *self)
 {
@@ -798,6 +817,7 @@ msp_simulate(msp_t *self)
         goto out;
     }
     while (n > 1) {
+        msp_print_state(self);
         num_links = fenwick_get_total(self->links);
         lambda_r = num_links * self->recombination_rate;
         t_r = DBL_MAX;
@@ -831,9 +851,112 @@ msp_simulate(msp_t *self)
             n = avl_count(self->population);
         }
     }
-    ret = msp_finalise(self);
 out:
     return ret;
 }
 
 
+tree_viewer_t *
+msp_get_tree_viewer(msp_t *self)
+{
+    int j = 0;
+    avl_node_t *node;
+    node_mapping_t *nm;
+    tree_viewer_t *tv = malloc(sizeof(tree_viewer_t));
+
+    if (tv == NULL) {
+        goto out;
+    }
+    tv->sample_size = self->sample_size;
+    tv->coalescence_record_file = self->coalescence_record_file;
+    /* Skip the last tree as it's not real */
+    tv->num_trees = avl_count(self->breakpoints) - 1;
+    tv->breakpoints = malloc(tv->num_trees * sizeof(int));
+    if (tv->breakpoints == NULL) {
+        tree_viewer_free(tv);
+        tv = NULL;
+        goto out;
+    }
+    for (node = self->breakpoints->head; node->next != NULL; node = node->next) {
+        nm = (node_mapping_t *) node->item;
+        tv->breakpoints[j] = nm->left;
+        j++;
+    }
+    tv->pi = calloc(2 * tv->sample_size * tv->num_trees, sizeof(int));
+    if (tv->pi == NULL) {
+        tree_viewer_free(tv);
+        tv = NULL;
+        goto out;
+    }
+    tv->tau = calloc(2 * tv->sample_size * tv->num_trees, sizeof(float));
+    if (tv->tau == NULL) {
+        tree_viewer_free(tv);
+        tv = NULL;
+    }
+out:
+    return tv;
+}
+
+int
+tree_viewer_init(tree_viewer_t *self)
+{
+    int ret = -1;
+    FILE *f = self->coalescence_record_file;
+    coalescence_record_t cr;
+    int j, l;
+    int *pi;
+    float *tau;
+
+    /* seek to the start of file and read all records */
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    while ((ret = fread(&cr, sizeof(cr), 1, f)) == 1) {
+        /* this is very inefficient - should be using binary search */
+        for (j = 0; j < self->num_trees; j++) {
+            l = self->breakpoints[j];
+            if (cr.left <= l && l <= cr.right) {
+                pi = self->pi + j * 2 * self->sample_size;
+                tau = self->tau + j * 2 * self->sample_size;
+                pi[cr.children[0]] = cr.parent;
+                pi[cr.children[1]] = cr.parent;
+                tau[cr.parent] = cr.time;
+            }
+        }
+    }
+    if (!feof(f)) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+int
+tree_viewer_get_tree(tree_viewer_t *self, int j, int *breakpoint, int **pi,
+        float **tau)
+{
+    int ret = 0;
+    *pi = self->pi + j * 2 * self->sample_size;
+    *tau = self->tau + j * 2 * self->sample_size;
+    *breakpoint = self->breakpoints[j];
+    return ret;
+}
+
+int
+tree_viewer_free(tree_viewer_t *self)
+{
+    if (self->breakpoints != NULL) {
+        free(self->breakpoints);
+    }
+    if (self->pi != NULL) {
+        free(self->pi);
+    }
+    if (self->tau != NULL) {
+        free(self->tau);
+    }
+    free(self);
+    return 0;
+}
