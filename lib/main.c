@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <float.h>
 
 #include <libconfig.h>
 
@@ -193,10 +194,16 @@ run_simulate(char *conf_file, long seed)
     if (ret != 0) {
         goto out;
     }
-    ret = msp_simulate(self);
+    ret = msp_initialise(self);
     if (ret != 0) {
         goto out;
     }
+    do {
+        ret = msp_run(self, DBL_MAX, 1);
+        if (ret < 0) {
+            goto out;
+        }
+    } while (ret > 0);
     msp_print_state(self);
 out:
     if (self != NULL) {

@@ -20,13 +20,13 @@
 #include <string.h>
 #include <assert.h>
 
-#include <avl.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics_int.h>
 
 #include "err.h"
+#include "avl.h"
 #include "fenwick.h"
 #include "msprime.h"
 
@@ -215,13 +215,13 @@ msp_alloc(msp_t *self)
         goto out;
     }
     /* set up the AVL trees */
-    self->population = malloc(sizeof(avl_tree_t));
+    self->ancestral_population = malloc(sizeof(avl_tree_t));
     self->breakpoints = malloc(sizeof(avl_tree_t));
-    if (self->population == NULL || self->breakpoints == NULL) {
+    if (self->ancestral_population == NULL || self->breakpoints == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    avl_init_tree(self->population, cmp_individual, NULL);
+    avl_init_tree(self->ancestral_population, cmp_individual, NULL);
     avl_init_tree(self->breakpoints, cmp_node_mapping, NULL);
     ret = 0;
 out:
@@ -247,8 +247,8 @@ msp_free(msp_t *self)
         fenwick_free(self->links);
         free(self->links);
     }
-    if (self->population != NULL) {
-        free(self->population);
+    if (self->ancestral_population != NULL) {
+        free(self->ancestral_population);
     }
     if (self->breakpoints != NULL) {
         free(self->breakpoints);
@@ -367,7 +367,7 @@ msp_insert_individual(msp_t *self, segment_t *u)
         goto out;
     }
     avl_init_node(node, u);
-    node = avl_insert_node(self->population, node);
+    node = avl_insert_node(self->ancestral_population, node);
     assert(node != NULL);
 out:
     return ret;
@@ -404,13 +404,11 @@ msp_verify(msp_t *self)
     long long s, ss, total_links;
     unsigned int total_segments = 0;
     unsigned int total_avl_nodes = 0;
-    //int *pi = xmalloc(2 * self->sample_size * sizeof(int));
-    //float *tau = xmalloc(2 * self->sample_size * sizeof(float));
     avl_node_t *node;
     segment_t *u;
 
     total_links = 0;
-    node = self->population->head;
+    node = self->ancestral_population->head;
     while (node != NULL) {
         u = (segment_t *) node->item;
         assert(u->prev == NULL);
@@ -437,14 +435,10 @@ msp_verify(msp_t *self)
     }
     assert(total_links == fenwick_get_total(self->links));
     assert(total_segments == self->max_segments - self->segment_heap_top - 1);
-    total_avl_nodes = avl_count(self->population)
+    total_avl_nodes = avl_count(self->ancestral_population)
             + avl_count(self->breakpoints);
     assert(total_avl_nodes == self->max_avl_nodes -
             self->avl_node_heap_top - 1);
-    /*
-    free(pi);
-    free(tau);
-    */
 }
 
 int
@@ -474,8 +468,9 @@ msp_print_state(msp_t *self)
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
     printf("num_links = %lld\n", fenwick_get_total(self->links));
-    printf("population = %d\n", avl_count(self->population));
-    node = self->population->head;
+    printf("population = %d\n", avl_count(self->ancestral_population));
+    printf("time = %f\n", self->time);
+    node = self->ancestral_population->head;
     while (node != NULL) {
         u = (segment_t *) node->item;
         printf("\t");
@@ -679,18 +674,18 @@ msp_coancestry_event(msp_t *self)
 
     self->num_ca_events++;
     /* Choose x and y */
-    n = avl_count(self->population);
+    n = avl_count(self->ancestral_population);
     j = gsl_rng_uniform_int(self->rng, n);
-    node = avl_at(self->population, j);
+    node = avl_at(self->ancestral_population, j);
     assert(node != NULL);
     x = (segment_t *) node->item;
-    avl_unlink_node(self->population, node);
+    avl_unlink_node(self->ancestral_population, node);
     msp_free_avl_node(self, node);
     j = gsl_rng_uniform_int(self->rng, n - 1);
-    node = avl_at(self->population, j);
+    node = avl_at(self->ancestral_population, j);
     assert(node != NULL);
     y = (segment_t *) node->item;
-    avl_unlink_node(self->population, node);
+    avl_unlink_node(self->ancestral_population, node);
     msp_free_avl_node(self, node);
 
     /* update num_links and get ready for loop */
@@ -795,7 +790,7 @@ out:
 /*
  * Sets up the initial population and trees.
  */
-static int WARN_UNUSED
+int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
     int j;
@@ -829,34 +824,34 @@ msp_initialise(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    self->time = 0.0;
-    ret = msp_open_coalescence_record_file(self);
-out:
-    return ret;
-}
-
-int
-msp_simulate(msp_t *self)
-{
-    int ret = -1;
-    double lambda_c, lambda_r, t_c, t_r, t_wait, pop_size;
-    long long num_links;
-    unsigned int n = self->sample_size;
-    int (*event_method)(msp_t *);
-    population_model_t *pop_model = self->population_models;
-
     /* insert the sentinel population model */
     ret = msp_add_constant_population_model(self, DBL_MAX, 0.0);
     if (ret != 0) {
         goto out;
     }
-    assert(pop_model != NULL);
-    ret = msp_initialise(self);
+    self->current_population_model = self->population_models;
+    self->time = 0.0;
+    ret = msp_open_coalescence_record_file(self);
     if (ret != 0) {
         goto out;
     }
-    while (n > 1) {
-        msp_print_state(self);
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+msp_run(msp_t *self, double max_time, unsigned long max_events)
+{
+    int ret = -1;
+    double lambda_c, lambda_r, t_c, t_r, t_wait, pop_size;
+    long long num_links;
+    unsigned int n = avl_count(self->ancestral_population);
+    int (*event_method)(msp_t *);
+    population_model_t *pop_model = self->current_population_model;
+    unsigned long events = 0;
+
+    while (n > 1 && self->time < max_time && events < max_events) {
+        events++;
         num_links = fenwick_get_total(self->links);
         lambda_r = num_links * self->recombination_rate;
         t_r = DBL_MAX;
@@ -880,6 +875,7 @@ msp_simulate(msp_t *self)
             pop_model = pop_model->next;
             pop_model->initial_size = pop_size;
             self->time = pop_model->start_time;
+            self->current_population_model = pop_model;
             assert(pop_model->next != NULL);
         } else {
             self->time += t_wait;
@@ -887,9 +883,12 @@ msp_simulate(msp_t *self)
             if (ret != 0) {
                 goto out;
             }
-            n = avl_count(self->population);
+            n = avl_count(self->ancestral_population);
         }
     }
+    // TODO we probably want a different protocol to indicate if max_time
+    // has been exceeded or max_events.
+    ret = n;
 out:
     return ret;
 }
@@ -952,7 +951,7 @@ tree_viewer_init(tree_viewer_t *self)
         goto out;
     }
     while ((ret = fread(&cr, sizeof(cr), 1, f)) == 1) {
-        /* this is very inefficient - should be using binary search */
+        /* TODO this is very inefficient - should be using binary search */
         for (j = 0; j < self->num_trees; j++) {
             l = self->breakpoints[j];
             if (cr.left <= l && l <= cr.right) {
