@@ -86,7 +86,7 @@ exponential_population_model_get_waiting_time(population_model_t *self,
     return ret;
 }
 
-static int
+static int WARN_UNUSED
 msp_add_population_model(msp_t *self, population_model_t *model)
 {
     int ret = -1;
@@ -276,7 +276,7 @@ msp_free(msp_t *self)
     return ret;
 }
 
-static avl_node_t *
+static avl_node_t * WARN_UNUSED
 msp_alloc_avl_node(msp_t *self)
 {
     avl_node_t *node = self->avl_node_heap[self->avl_node_heap_top];
@@ -295,7 +295,7 @@ msp_free_avl_node(msp_t *self, avl_node_t *node)
     self->avl_node_heap[self->avl_node_heap_top] = node;
 }
 
-static segment_t *
+static segment_t * WARN_UNUSED
 msp_alloc_segment(msp_t *self, int left, int right, int value, segment_t *prev,
         segment_t *next)
 {
@@ -339,7 +339,7 @@ msp_free_segment(msp_t *self, segment_t *node)
     fenwick_set_value(self->links, node->index, 0);
 }
 
-static int
+static int WARN_UNUSED
 msp_open_coalescence_record_file(msp_t *self)
 {
     int ret = 0;
@@ -354,7 +354,7 @@ out:
 }
 
 
-static inline int
+static inline int WARN_UNUSED
 msp_insert_individual(msp_t *self, segment_t *u)
 {
     int ret = 0;
@@ -539,7 +539,7 @@ out:
  * Inserts a new breakpoint at the specified locus left, mapping to the
  * specified tree node v.
  */
-static int
+static int WARN_UNUSED
 msp_insert_breakpoint(msp_t *self, unsigned int left, int v)
 {
     int ret = 0;
@@ -569,7 +569,7 @@ out:
  * Inserts a new breakpoint at the specified locus, and copies it's
  * node mapping from the containing breakpoint.
  */
-static int
+static int WARN_UNUSED
 msp_copy_breakpoint(msp_t *self, unsigned int k)
 {
     int ret;
@@ -589,7 +589,7 @@ msp_copy_breakpoint(msp_t *self, unsigned int k)
     return ret;
 }
 
-static int
+static int WARN_UNUSED
 msp_record_coalescence(msp_t *self, unsigned int left, unsigned int right,
         int child1, int child2, int parent)
 {
@@ -603,8 +603,7 @@ msp_record_coalescence(msp_t *self, unsigned int left, unsigned int right,
     r.parent = parent;
     r.time = self->time;
     self->num_coalescence_records++;
-    ret = fwrite(&r, sizeof(r), 1, self->coalescence_record_file);
-    if (ret != 1) {
+    if (fwrite(&r, sizeof(r), 1, self->coalescence_record_file) != 1) {
         ret = MSP_ERR_IO;
         goto out;
     }
@@ -613,7 +612,7 @@ out:
 
 }
 
-static int
+static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
 {
     int ret = 0;
@@ -622,8 +621,6 @@ msp_recombination_event(msp_t *self)
     node_mapping_t search;
     segment_t *x, *y, *z;
     long long num_links = fenwick_get_total(self->links);
-
-    // TODO error checking
 
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
@@ -665,13 +662,12 @@ msp_recombination_event(msp_t *self)
         y = x;
         self->num_trapped_re_events++;
     }
-    msp_insert_individual(self, z);
-
+    ret = msp_insert_individual(self, z);
 out:
     return ret;
 }
 
-static int
+static int WARN_UNUSED
 msp_coancestry_event(msp_t *self)
 {
     int ret = 0;
@@ -681,17 +677,18 @@ msp_coancestry_event(msp_t *self)
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
 
-    // TODO error checking
     self->num_ca_events++;
-    /* Choose u and v */
+    /* Choose x and y */
     n = avl_count(self->population);
     j = gsl_rng_uniform_int(self->rng, n);
     node = avl_at(self->population, j);
+    assert(node != NULL);
     x = (segment_t *) node->item;
     avl_unlink_node(self->population, node);
     msp_free_avl_node(self, node);
     j = gsl_rng_uniform_int(self->rng, n - 1);
     node = avl_at(self->population, j);
+    assert(node != NULL);
     y = (segment_t *) node->item;
     avl_unlink_node(self->population, node);
     msp_free_avl_node(self, node);
@@ -746,7 +743,11 @@ msp_coancestry_event(msp_t *self)
                     r = nm->left;
                 }
                 r--;
-                msp_record_coalescence(self, l, r, x->value, y->value, eta);
+                ret = msp_record_coalescence(self, l, r, x->value, y->value,
+                        eta);
+                if (ret != 0) {
+                    goto out;
+                }
                 if (eta < 2 * self->sample_size - 1) {
                     alpha = msp_alloc_segment(self, l, r, eta, NULL, NULL);
                     if (alpha == NULL) {
@@ -773,7 +774,10 @@ msp_coancestry_event(msp_t *self)
         if (alpha != NULL) {
             l = alpha->left;
             if (z == NULL) {
-                msp_insert_individual(self, alpha);
+                ret = msp_insert_individual(self, alpha);
+                if (ret != 0) {
+                    goto out;
+                }
             } else {
                 z->next = alpha;
                 l = z->right;
@@ -791,7 +795,7 @@ out:
 /*
  * Sets up the initial population and trees.
  */
-static int
+static int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
     int j;
