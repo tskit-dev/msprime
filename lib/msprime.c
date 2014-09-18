@@ -343,7 +343,7 @@ static int WARN_UNUSED
 msp_open_coalescence_record_file(msp_t *self)
 {
     int ret = 0;
-    FILE *f = fopen(self->coalescence_record_filename, "w+");
+    FILE *f = fopen(self->coalescence_record_filename, "w");
     if (f == NULL) {
         ret = MSP_ERR_IO;
         goto out;
@@ -886,6 +886,10 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             n = avl_count(self->ancestral_population);
         }
     }
+    if (fflush(self->coalescence_record_file) != 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
     // TODO we probably want a different protocol to indicate if max_time
     // has been exceeded or max_events.
     ret = n;
@@ -900,13 +904,19 @@ msp_get_tree_viewer(msp_t *self)
     int j = 0;
     avl_node_t *node;
     node_mapping_t *nm;
-    tree_viewer_t *tv = malloc(sizeof(tree_viewer_t));
+    tree_viewer_t *tv = calloc(1, sizeof(tree_viewer_t));
 
     if (tv == NULL) {
         goto out;
     }
     tv->sample_size = self->sample_size;
-    tv->coalescence_record_file = self->coalescence_record_file;
+    tv->coalescence_record_filename = malloc(1 +
+            strlen(self->coalescence_record_filename));
+    if (tv->coalescence_record_filename == NULL) {
+        tree_viewer_free(tv);
+        goto out;
+    }
+    strcpy(tv->coalescence_record_filename, self->coalescence_record_filename);
     /* Skip the last tree as it's not real */
     tv->num_trees = avl_count(self->breakpoints) - 1;
     tv->breakpoints = malloc(tv->num_trees * sizeof(int));
@@ -939,12 +949,17 @@ int
 tree_viewer_init(tree_viewer_t *self)
 {
     int ret = -1;
-    FILE *f = self->coalescence_record_file;
-    coalescence_record_t cr;
+    FILE *f = NULL;
     int j, l;
     int *pi;
     float *tau;
+    coalescence_record_t cr;
 
+    f = fopen(self->coalescence_record_filename, "r");
+    if (f == NULL) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
     /* seek to the start of file and read all records */
     if (fseek(f, 0, SEEK_SET) != 0) {
         ret = MSP_ERR_IO;
@@ -969,6 +984,9 @@ tree_viewer_init(tree_viewer_t *self)
     }
     ret = 0;
 out:
+    if (f != NULL) {
+        fclose(f);
+    }
     return ret;
 }
 
@@ -995,6 +1013,11 @@ tree_viewer_free(tree_viewer_t *self)
     if (self->tau != NULL) {
         free(self->tau);
     }
+    if (self->coalescence_record_filename != NULL) {
+        free(self->coalescence_record_filename);
+    }
+    // TODO standardise this protocol; we should always free self in these
+    // destructors or never.
     free(self);
     return 0;
 }

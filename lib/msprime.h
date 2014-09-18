@@ -110,7 +110,7 @@ typedef struct {
     int *breakpoints;
     int *pi;
     float *tau;
-    FILE *coalescence_record_file;
+    char *coalescence_record_filename;
 } tree_viewer_t;
 
 int msp_add_constant_population_model(msp_t *self, double time, double size);
@@ -120,6 +120,7 @@ int msp_free(msp_t *self);
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
+
 tree_viewer_t * msp_get_tree_viewer(msp_t *self);
 int tree_viewer_init(tree_viewer_t *self);
 int tree_viewer_get_tree(tree_viewer_t *self, int j, int *breakpoint, int **pi,
