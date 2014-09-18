@@ -75,7 +75,9 @@ typedef struct {
     int max_segments;
     int max_trees;
     char *coalescence_record_filename;
+    /* population models */
     population_model_t *population_models;
+    population_model_t *current_population_model;
     /* Counters for statistics */
     unsigned int num_re_events;
     unsigned int num_ca_events;
@@ -86,7 +88,7 @@ typedef struct {
     /* state */
     float time;
     gsl_rng *rng;
-    avl_tree_t *population;
+    avl_tree_t *ancestral_population;
     avl_tree_t *breakpoints;
     fenwick_t *links;
     FILE *coalescence_record_file;
@@ -115,7 +117,8 @@ int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
 int msp_alloc(msp_t *self);
 int msp_free(msp_t *self);
-int msp_simulate(msp_t *self);
+int msp_initialise(msp_t *self);
+int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
 tree_viewer_t * msp_get_tree_viewer(msp_t *self);
 int tree_viewer_init(tree_viewer_t *self);

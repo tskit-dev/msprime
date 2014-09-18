@@ -31,7 +31,7 @@
 #include "err.h"
 #include "fenwick.h"
 
-int
+int WARN_UNUSED
 fenwick_alloc(fenwick_t *self)
 {
     int ret = -1;
