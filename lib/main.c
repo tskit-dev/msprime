@@ -199,7 +199,7 @@ run_simulate(char *conf_file, long seed)
         goto out;
     }
     do {
-        ret = msp_run(self, DBL_MAX, 1);
+        ret = msp_run(self, DBL_MAX, ULONG_MAX);
         if (ret < 0) {
             goto out;
         }
