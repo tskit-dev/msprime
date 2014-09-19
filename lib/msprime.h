@@ -72,7 +72,7 @@ typedef struct memory_block_t_t {
 
 typedef struct {
     size_t element_size;
-    size_t increment_size;
+    size_t block_size; /* number of elements in a block */
     size_t top;
     size_t size;
     void **heap;
@@ -86,10 +86,10 @@ typedef struct {
     double recombination_rate;
     long random_seed;
     char *coalescence_record_filename;
-    int max_avl_nodes;
+    size_t avl_node_block_size;
+    size_t node_mapping_block_size;
+    /* old */
     int max_segments;
-    int max_trees;
-
     /* population models */
     population_model_t *population_models;
     population_model_t *current_population_model;
@@ -110,6 +110,11 @@ typedef struct {
     /* memory management */
     object_heap_t avl_node_heap;
 
+    /* node mappings are never freed so simpler requirements */
+    memory_block_t *node_mapping_blocks;
+    memory_block_t *current_node_mapping_block;
+    size_t next_node_mapping;
+
     /* old memory heaps */
     /*
     avl_node_t **avl_node_heap;
@@ -119,8 +124,6 @@ typedef struct {
     segment_t **segment_heap;
     int segment_heap_top;
     segment_t *segment_mem;
-    node_mapping_t *node_mapping_mem;
-    unsigned int next_node_mapping;
 } msp_t;
 
 typedef struct {

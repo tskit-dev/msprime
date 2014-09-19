@@ -144,18 +144,19 @@ msp_read_config(msp_t *self, const char *filename)
         fatal_error("num_loci is a required parameter");
     }
     self->num_loci = tmp;
-    if (config_lookup_int(config, "max_avl_nodes", &tmp) == CONFIG_FALSE) {
-        fatal_error("max_avl_nodes is a required parameter");
+    if (config_lookup_int(config, "avl_node_block_size", &tmp) == CONFIG_FALSE) {
+        fatal_error("avl_node_block_size is a required parameter");
     }
-    self->max_avl_nodes = tmp;
+    self->avl_node_block_size = tmp;
     if (config_lookup_int(config, "max_segments", &tmp) == CONFIG_FALSE) {
         fatal_error("max_segments is a required parameter");
     }
     self->max_segments = tmp;
-    if (config_lookup_int(config, "max_trees", &tmp) == CONFIG_FALSE) {
-        fatal_error("max_trees is a required parameter");
+    if (config_lookup_int(config, "node_mapping_block_size", &tmp)
+            == CONFIG_FALSE) {
+        fatal_error("node_mapping_block_size is a required parameter");
     }
-    self->max_trees = tmp;
+    self->node_mapping_block_size = tmp;
     if (config_lookup_float(config, "recombination_rate",
             &self->recombination_rate) == CONFIG_FALSE) {
         fatal_error("recombination_rate is a required parameter");
@@ -204,7 +205,10 @@ run_simulate(char *conf_file, long seed)
             goto out;
         }
     } while (ret > 0);
-    msp_print_state(self);
+    ret = msp_print_state(self);
+    if (ret != 0) {
+        goto out;
+    }
 out:
     if (self != NULL) {
         free(self->coalescence_record_filename);
