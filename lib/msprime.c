@@ -66,7 +66,7 @@ object_heap_print_state(object_heap_t *self)
     printf("object heap %p::\n", self);
     printf("\tsize = %d\n", (int) self->size);
     printf("\ttop = %d\n", (int) self->top);
-    printf("\tincrement_size = %d\n", (int) self->increment_size);
+    printf("\tblock_size = %d\n", (int) self->block_size);
     printf("\tnum_blocks = %d\n", num_blocks);
 }
 
@@ -75,10 +75,10 @@ object_heap_add_block(object_heap_t *self, memory_block_t *block)
 {
     size_t j;
 
-    for (j = 0; j < self->increment_size; j++) {
+    for (j = 0; j < self->block_size; j++) {
         self->heap[j] = block->mem + j * self->element_size;
     }
-    self->top = self->increment_size;
+    self->top = self->block_size;
 }
 
 static int WARN_UNUSED
@@ -98,7 +98,7 @@ object_heap_expand(object_heap_t *self)
     }
     prev->next = mb;
     mb->next = NULL;
-    mb->mem = malloc(self->increment_size * self->element_size);
+    mb->mem = malloc(self->block_size * self->element_size);
     if (mb->mem == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -109,7 +109,7 @@ object_heap_expand(object_heap_t *self)
      */
     free(self->heap);
     self->heap = NULL;
-    self->size += self->increment_size;
+    self->size += self->block_size;
     self->heap = malloc(self->size * sizeof(void **));
     if (self->heap == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -121,7 +121,7 @@ out:
     return ret;
 }
 
-static void * WARN_UNUSED
+static inline void * WARN_UNUSED
 object_heap_alloc_object(object_heap_t *self)
 {
     void *ret = NULL;
@@ -137,7 +137,7 @@ out:
     return ret;
 }
 
-static void
+static inline void
 object_heap_free_object(object_heap_t *self, void *obj)
 {
     assert(self->top < self->size);
@@ -145,16 +145,14 @@ object_heap_free_object(object_heap_t *self, void *obj)
     self->top++;
 }
 
-
-
 static int WARN_UNUSED
-object_heap_init(object_heap_t *self, size_t element_size, size_t increment_size)
+object_heap_init(object_heap_t *self, size_t element_size, size_t block_size)
 {
     int ret = -1;
 
     memset(self, 0, sizeof(object_heap_t));
-    self->increment_size = increment_size;
-    self->size = increment_size;
+    self->block_size = block_size;
+    self->size = block_size;
     self->element_size = element_size;
     self->heap = malloc(self->size * sizeof(void **));
     self->mem_blocks = malloc(sizeof(memory_block_t));
@@ -300,6 +298,27 @@ out:
     return ret;
 }
 
+static memory_block_t *
+msp_alloc_node_mapping_block(msp_t *self)
+{
+    memory_block_t *ret = NULL;
+    memory_block_t *mb;
+
+    mb = malloc(sizeof(memory_block_t));
+    if (mb == NULL) {
+        goto out;
+    }
+    mb->next = NULL;
+    mb->mem = malloc(self->node_mapping_block_size * sizeof(node_mapping_t));
+    if (mb->mem == NULL) {
+        free(mb);
+        goto out;
+    }
+    ret = mb;
+out:
+    return ret;
+}
+
 int
 msp_alloc(msp_t *self)
 {
@@ -316,27 +335,20 @@ msp_alloc(msp_t *self)
     }
     gsl_rng_set(self->rng, self->random_seed);
     /* Allocate the memory heaps */
-    ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t), self->max_avl_nodes);
+    ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t),
+           self->avl_node_block_size);
     if (ret != 0) {
         goto out;
     }
-    /*
-    n = self->max_avl_nodes;
-    self->avl_node_mem = malloc(n * sizeof(avl_node_t));
-    self->avl_node_heap = malloc(n * sizeof(avl_node_t *));
-    if (self->avl_node_mem == NULL || self->avl_node_heap == NULL) {
+    /* set up the node mapping allocator */
+    self->current_node_mapping_block = msp_alloc_node_mapping_block(self);
+    if (self->current_node_mapping_block == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    for (j = 0; j < n; j++) {
-        node = &self->avl_node_mem[j];
-        self->avl_node_heap[j] = node;
-    }
-    self->avl_node_heap_top = (int) n - 1;
-    self->avl_node_heap_top = 0;
-    self->avl_node_heap_size = 0;
-    self->avl_node_mem = NULL;
-    */
+    self->node_mapping_blocks = self->current_node_mapping_block;
+    self->next_node_mapping = 0;
+
 
     /* old memory management */
     n = self->max_segments;
@@ -363,13 +375,6 @@ msp_alloc(msp_t *self)
         ret = err;
         goto out;
     }
-    n = self->max_trees;
-    self->node_mapping_mem = malloc(n * sizeof(node_mapping_t));
-    self->next_node_mapping = 0;
-    if (self->node_mapping_mem == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     /* set up the AVL trees */
     self->ancestral_population = malloc(sizeof(avl_tree_t));
     self->breakpoints = malloc(sizeof(avl_tree_t));
@@ -389,6 +394,7 @@ msp_free(msp_t *self)
 {
     int ret = -1;
     population_model_t *u, *v;
+    memory_block_t *mb, *prev;
 
     u = self->population_models;
     while (u != NULL) {
@@ -409,11 +415,20 @@ msp_free(msp_t *self)
     if (self->breakpoints != NULL) {
         free(self->breakpoints);
     }
+    /*
     if (self->node_mapping_mem != NULL) {
         free(self->node_mapping_mem);
     }
+    */
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
+    mb = self->node_mapping_blocks;
+    while (mb != NULL) {
+        prev = mb;
+        mb = mb->next;
+        free(prev->mem);
+        free(prev);
+    }
 
     /*
     if (self->avl_node_mem != NULL) {
@@ -438,17 +453,39 @@ msp_free(msp_t *self)
 }
 
 
-static avl_node_t * WARN_UNUSED
+static inline avl_node_t * WARN_UNUSED
 msp_alloc_avl_node(msp_t *self)
 {
     return (avl_node_t *) object_heap_alloc_object(&self->avl_node_heap);
 }
 
-static void
+static inline void
 msp_free_avl_node(msp_t *self, avl_node_t *node)
 {
     object_heap_free_object(&self->avl_node_heap, node);
 }
+
+static inline node_mapping_t *
+msp_alloc_node_mapping(msp_t *self)
+{
+    node_mapping_t *ret = NULL;
+    memory_block_t *mb = self->current_node_mapping_block;
+
+    if (self->next_node_mapping == self->node_mapping_block_size) {
+        mb = msp_alloc_node_mapping_block(self);
+        if (mb == NULL) {
+            goto out;
+        }
+        self->current_node_mapping_block->next = mb;
+        self->current_node_mapping_block = mb;
+        self->next_node_mapping = 0;
+    }
+    ret = mb->mem + self->next_node_mapping * sizeof(node_mapping_t);
+    self->next_node_mapping++;
+out:
+    return ret;
+}
+
 
 static segment_t * WARN_UNUSED
 msp_alloc_segment(msp_t *self, int left, int right, int value, segment_t *prev,
@@ -606,13 +643,18 @@ msp_print_state(msp_t *self)
     node_mapping_t *nm;
     segment_t *u;
     long long v;
-    int j, k, bp;
+    int j, k, bp, num_blocks;
     int *pi;
     float *tau;
     coalescence_record_t cr;
-    FILE *f = self->coalescence_record_file;
+    memory_block_t *mb;
+    FILE *f = fopen(self->coalescence_record_filename, "r");
     tree_viewer_t *tv = msp_get_tree_viewer(self);
 
+    if (f == NULL) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
     if (tv == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -679,8 +721,25 @@ msp_print_state(msp_t *self)
         ret = MSP_ERR_IO;
         goto out;
     }
+    printf("Memory heaps\n");
+    printf("avl_node_heap:");
+    object_heap_print_state(&self->avl_node_heap);
+
+    mb = self->node_mapping_blocks;
+    num_blocks = 0;
+    while (mb != NULL) {
+        mb = mb->next;
+        num_blocks++;
+    }
+    printf("node_mapping stack:\n");
+    printf("\tblock size = %d\n", (int) self->node_mapping_block_size);
+    printf("\tnext = %d\n", (int) self->next_node_mapping);
+    printf("\tnum_blocks = %d\n", num_blocks);
     msp_verify(self);
 out:
+    if (f != NULL) {
+        fclose(f);
+    }
     if (tv != NULL) {
         tree_viewer_free(tv);
     }
@@ -696,18 +755,12 @@ msp_insert_breakpoint(msp_t *self, unsigned int left, int v)
 {
     int ret = 0;
     avl_node_t *node = msp_alloc_avl_node(self);
-    node_mapping_t *m;
+    node_mapping_t *m = msp_alloc_node_mapping(self);
 
-    if (node == NULL) {
+    if (node == NULL || m == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    if (self->next_node_mapping == self->max_trees) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    m = &self->node_mapping_mem[self->next_node_mapping];
-    self->next_node_mapping++;
     m->left = left;
     m->value = v;
     avl_init_node(node, m);
