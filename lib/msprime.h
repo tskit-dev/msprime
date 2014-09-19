@@ -65,16 +65,31 @@ typedef struct population_model_t_t {
     struct population_model_t_t *next;
 } population_model_t;
 
+typedef struct memory_block_t_t {
+    void *mem;
+    struct memory_block_t_t *next;
+} memory_block_t;
+
+typedef struct {
+    size_t element_size;
+    size_t increment_size;
+    size_t top;
+    size_t size;
+    void **heap;
+    memory_block_t *mem_blocks;
+} object_heap_t;
+
 typedef struct {
     /* input parameters */
     int sample_size;
     int num_loci;
     double recombination_rate;
     long random_seed;
+    char *coalescence_record_filename;
     int max_avl_nodes;
     int max_segments;
     int max_trees;
-    char *coalescence_record_filename;
+
     /* population models */
     population_model_t *population_models;
     population_model_t *current_population_model;
@@ -92,10 +107,15 @@ typedef struct {
     avl_tree_t *breakpoints;
     fenwick_t *links;
     FILE *coalescence_record_file;
-    /* memory heaps */
+    /* memory management */
+    object_heap_t avl_node_heap;
+
+    /* old memory heaps */
+    /*
     avl_node_t **avl_node_heap;
     int avl_node_heap_top;
     avl_node_t *avl_node_mem;
+    */
     segment_t **segment_heap;
     int segment_heap_top;
     segment_t *segment_mem;
