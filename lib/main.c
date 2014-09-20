@@ -148,10 +148,10 @@ msp_read_config(msp_t *self, const char *filename)
         fatal_error("avl_node_block_size is a required parameter");
     }
     self->avl_node_block_size = tmp;
-    if (config_lookup_int(config, "max_segments", &tmp) == CONFIG_FALSE) {
-        fatal_error("max_segments is a required parameter");
+    if (config_lookup_int(config, "segment_block_size", &tmp) == CONFIG_FALSE) {
+        fatal_error("segment_block_size is a required parameter");
     }
-    self->max_segments = tmp;
+    self->segment_block_size = tmp;
     if (config_lookup_int(config, "node_mapping_block_size", &tmp)
             == CONFIG_FALSE) {
         fatal_error("node_mapping_block_size is a required parameter");
@@ -204,11 +204,10 @@ run_simulate(char *conf_file, long seed)
         if (ret < 0) {
             goto out;
         }
+        if (msp_print_state(self) != 0) {
+            goto out;
+        }
     } while (ret > 0);
-    ret = msp_print_state(self);
-    if (ret != 0) {
-        goto out;
-    }
 out:
     if (self != NULL) {
         free(self->coalescence_record_filename);

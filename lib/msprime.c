@@ -55,7 +55,6 @@ segment_init(void **obj, size_t index)
 {
     segment_t *seg = (segment_t *) obj;
     seg->index = index + 1;
-    printf("set seg %p to %d\n", seg, (int) index + 1);
 }
 
 /* memory heap manager */
@@ -159,19 +158,21 @@ object_heap_get_object(object_heap_t *self, size_t index)
     return ret;
 }
 
+static inline int WARN_UNUSED
+object_heap_empty(object_heap_t *self)
+{
+    return self->top == 0;
+}
+
 static inline void * WARN_UNUSED
 object_heap_alloc_object(object_heap_t *self)
 {
     void *ret = NULL;
 
-    if (self->top == 0) {
-        if (object_heap_expand(self) != 0) {
-            goto out;
-        }
+    if (self->top > 0) {
+        self->top--;
+        ret = self->heap[self->top];
     }
-    self->top--;
-    ret = self->heap[self->top];
-out:
     return ret;
 }
 
@@ -364,8 +365,10 @@ int
 msp_alloc(msp_t *self)
 {
     int ret = -1;
-    int err, n;
-    //segment_t *seg;
+    /* TODO add arguments for the essential parameters and then zero the
+     * memory to make sure we don't do something silly when we try to
+     * free embedded objects
+     */
 
     /* turn off GSL error handler so we don't abort on memory error */
     gsl_set_error_handler_off();
@@ -391,36 +394,12 @@ msp_alloc(msp_t *self)
     self->next_node_mapping = 0;
 
     ret = object_heap_init(&self->segment_heap, sizeof(segment_t),
-           self->max_segments, segment_init);
+           self->segment_block_size, segment_init);
     if (ret != 0) {
         goto out;
     }
-
-    /* old memory management */
-    n = self->max_segments;
-    /*
-    self->segment_mem = malloc(n * sizeof(segment_t));
-    self->segment_heap = malloc(n * sizeof(segment_t *));
-    if (self->segment_mem == NULL || self->segment_heap == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    for (j = 0; j < n; j++) {
-        seg = &self->segment_mem[j];
-        self->segment_heap[j] = seg;
-        seg->index = j + 1;
-    }
-    self->segment_heap_top = (int) n - 1;
-    */
-    self->links = calloc(1, sizeof(fenwick_t));
-    if (self->links == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->links->max_index = n;
-    err = fenwick_alloc(self->links);
-    if (err != 0) {
-        ret = err;
+    ret = fenwick_alloc(&self->links, self->segment_block_size);
+    if (ret != 0) {
         goto out;
     }
     /* set up the AVL trees */
@@ -453,10 +432,6 @@ msp_free(msp_t *self)
     if (self->rng != NULL) {
         gsl_rng_free(self->rng);
     }
-    if (self->links != NULL) {
-        fenwick_free(self->links);
-        free(self->links);
-    }
     if (self->ancestral_population != NULL) {
         free(self->ancestral_population);
     }
@@ -473,6 +448,7 @@ msp_free(msp_t *self)
         free(prev->mem);
         free(prev);
     }
+    fenwick_free(&self->links);
 
     /* old */
 
@@ -496,7 +472,16 @@ msp_free(msp_t *self)
 static inline avl_node_t * WARN_UNUSED
 msp_alloc_avl_node(msp_t *self)
 {
-    return (avl_node_t *) object_heap_alloc_object(&self->avl_node_heap);
+    avl_node_t *ret = NULL;
+
+    if (object_heap_empty(&self->avl_node_heap)) {
+        if (object_heap_expand(&self->avl_node_heap) != 0) {
+            goto out;
+        }
+    }
+    ret = (avl_node_t *) object_heap_alloc_object(&self->avl_node_heap);
+out:
+    return ret;
 }
 
 static inline void
@@ -531,16 +516,17 @@ static segment_t * WARN_UNUSED
 msp_alloc_segment(msp_t *self, int left, int right, int value, segment_t *prev,
         segment_t *next)
 {
-    /*
-    segment_t *seg = self->segment_heap[self->segment_heap_top];
-    self->segment_heap_top--;
-    if (self->segment_heap_top < 0) {
-        seg = NULL;
-        goto out;
+    segment_t *seg = NULL;
+
+    if (object_heap_empty(&self->segment_heap)) {
+        if (object_heap_expand(&self->segment_heap) != 0) {
+            goto out;
+        }
+        if (fenwick_expand(&self->links, self->segment_block_size) != 0) {
+            goto out;
+        }
     }
-    */
-    segment_t *seg = (segment_t *) object_heap_alloc_object(
-            &self->segment_heap);
+    seg = (segment_t *) object_heap_alloc_object(&self->segment_heap);
     if (seg == NULL) {
         goto out;
     }
@@ -559,10 +545,9 @@ out:
 static segment_t *
 msp_get_segment(msp_t *self, unsigned int index)
 {
-    //segment_t *u = &self->segment_mem[index - 1];
     segment_t *u = object_heap_get_object(&self->segment_heap, index - 1);
+
     assert(u != NULL);
-    printf("looking for %d, got %d %p\n", index, u->index, u);
     assert(u->index == index);
     return u;
 }
@@ -576,7 +561,7 @@ msp_free_segment(msp_t *self, segment_t *node)
     self->segment_heap[self->segment_heap_top] = node;
     */
     object_heap_free_object(&self->segment_heap, node);
-    fenwick_set_value(self->links, node->index, 0);
+    fenwick_set_value(&self->links, node->index, 0);
 }
 
 static int WARN_UNUSED
@@ -666,14 +651,14 @@ msp_verify(msp_t *self)
             } else {
                 s = u->right - u->left;
             }
-            ss = fenwick_get_value(self->links, u->index);
+            ss = fenwick_get_value(&self->links, u->index);
             total_links += ss;
             assert(s == ss);
             u = u->next;
         }
         node = node->next;
     }
-    assert(total_links == fenwick_get_total(self->links));
+    assert(total_links == fenwick_get_total(&self->links));
     /*
     assert(total_segments == self->max_segments - self->segment_heap_top - 1);
     total_avl_nodes = avl_count(self->ancestral_population)
@@ -714,7 +699,7 @@ msp_print_state(msp_t *self)
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
-    printf("num_links = %lld\n", fenwick_get_total(self->links));
+    printf("num_links = %lld\n", fenwick_get_total(&self->links));
     printf("population = %d\n", avl_count(self->ancestral_population));
     printf("time = %f\n", self->time);
     node = self->ancestral_population->head;
@@ -742,9 +727,9 @@ msp_print_state(msp_t *self)
 
     }
     printf("Fenwick tree\n");
-    for (j = 1; j <= self->max_segments; j++) {
+    for (j = 1; j <= fenwick_get_size(&self->links); j++) {
         u = msp_get_segment(self, j);
-        v = fenwick_get_value(self->links, j);
+        v = fenwick_get_value(&self->links, j);
         if (v != 0) {
             printf("\t%lld\tl=%d r=%d v=%d prev=%p next=%p\n", v, u->left,
                     u->right, u->value, u->prev, u->next);
@@ -875,14 +860,14 @@ msp_recombination_event(msp_t *self)
     unsigned int j;
     node_mapping_t search;
     segment_t *x, *y, *z;
-    long long num_links = fenwick_get_total(self->links);
+    long long num_links = fenwick_get_total(&self->links);
 
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
     l = 1 + (long long) (gsl_rng_uniform(self->rng) * num_links);
     assert(l > 0 && l <= num_links);
-    j = fenwick_find(self->links, l);
-    t = fenwick_get_cumulative_sum(self->links, j);
+    j = fenwick_find(&self->links, l);
+    t = fenwick_get_cumulative_sum(&self->links, j);
     gap = t - l;
     y = msp_get_segment(self, j);
     x = y->prev;
@@ -893,13 +878,13 @@ msp_recombination_event(msp_t *self)
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        fenwick_increment(self->links, z->index, z->right - k - 1);
+        fenwick_increment(&self->links, z->index, z->right - k - 1);
         if (y->next != NULL) {
             y->next->prev = z;
         }
         y->next = NULL;
         y->right = k;
-        fenwick_increment(self->links, y->index, k - z->right);
+        fenwick_increment(&self->links, y->index, k - z->right);
         search.left = k + 1;
         if (avl_search(self->breakpoints, &search) == NULL) {
             ret = msp_copy_breakpoint(self, k + 1);
@@ -912,7 +897,7 @@ msp_recombination_event(msp_t *self)
         y->prev = NULL;
         t = x->right;
         t -= y->left;
-        fenwick_increment(self->links, y->index, t);
+        fenwick_increment(&self->links, y->index, t);
         z = y;
         y = x;
         self->num_trapped_re_events++;
@@ -1039,7 +1024,7 @@ msp_coancestry_event(msp_t *self)
             }
             alpha->prev = z;
             z = alpha;
-            fenwick_set_value(self->links, alpha->index, alpha->right - l);
+            fenwick_set_value(&self->links, alpha->index, alpha->right - l);
         }
     }
 out:
@@ -1072,7 +1057,7 @@ msp_initialise(msp_t *self)
         if (ret != 0) {
             goto out;
         }
-        fenwick_increment(self->links, u->index, self->num_loci - 1);
+        fenwick_increment(&self->links, u->index, self->num_loci - 1);
     }
     ret = msp_insert_breakpoint(self, 1, self->sample_size + 1);
     if (ret != 0) {
@@ -1110,7 +1095,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
 
     while (n > 1 && self->time < max_time && events < max_events) {
         events++;
-        num_links = fenwick_get_total(self->links);
+        num_links = fenwick_get_total(&self->links);
         lambda_r = num_links * self->recombination_rate;
         t_r = DBL_MAX;
         if (lambda_r != 0.0) {

@@ -31,29 +31,74 @@
 #include "err.h"
 #include "fenwick.h"
 
-int WARN_UNUSED
-fenwick_alloc(fenwick_t *self)
+static void
+fenwick_set_log_size(fenwick_t *self)
 {
-    int ret = -1;
-    unsigned int u = self->max_index;
+    size_t u = self->size;
+
     while (u != 0) {
-        self->log_max_index = u;
+        self->log_size = u;
         u -= (u & -u);
     }
+}
+
+static int WARN_UNUSED
+fenwick_alloc_buffers(fenwick_t *self)
+{
+    int ret = -1;
+
     self->tree = NULL;
     self->values = NULL;
-    self->tree = calloc((1 + self->max_index), sizeof(long long));
+    self->tree = calloc((1 + self->size), sizeof(int64_t));
     if (self->tree == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    self->values = calloc((1 + self->max_index), sizeof(long long));
+    self->values = calloc((1 + self->size), sizeof(int64_t));
     if (self->values == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    fenwick_set_log_size(self);
     ret = 0;
 out:
+    return ret;
+}
+
+int WARN_UNUSED
+fenwick_alloc(fenwick_t *self, size_t initial_size)
+{
+    self->size = initial_size;
+    return fenwick_alloc_buffers(self);
+}
+
+int WARN_UNUSED
+fenwick_expand(fenwick_t *self, size_t increment)
+{
+    int ret = -1;
+    size_t j;
+    int64_t *values = self->values;
+    size_t old_size = self->size;
+
+    if (self->tree == NULL || self->values == NULL) {
+        goto out;
+    }
+    self->size += increment;
+    free(self->tree);
+    ret = fenwick_alloc_buffers(self);
+    if (ret != 0) {
+        goto out;
+    }
+    /* now insert all of the values into the new tree. There is probably a
+     * better way to do this...
+     */
+    for (j = 1; j <= old_size; j++) {
+        fenwick_set_value(self, j, values[j]);
+    }
+out:
+    if (values != NULL) {
+        free(values);
+    }
     return ret;
 }
 
@@ -61,85 +106,85 @@ int
 fenwick_free(fenwick_t *self)
 {
     int ret = -1;
+
     if (self->tree != NULL) {
         free(self->tree);
+        self->tree = NULL;
     }
     if (self->values != NULL) {
         free(self->values);
+        self->values = NULL;
     }
     ret = 0;
     return ret;
 }
 
-long long
+size_t
+fenwick_get_size(fenwick_t *self)
+{
+    return self->size;
+}
+
+int64_t
 fenwick_get_total(fenwick_t *self)
 {
-    long long ret = fenwick_get_cumulative_sum(self, self->max_index);
-    return ret;
+    return fenwick_get_cumulative_sum(self, self->size);
 }
 
 void
-fenwick_increment(fenwick_t *self, unsigned int index, long long value)
+fenwick_increment(fenwick_t *self, size_t index, int64_t value)
 {
-    unsigned int j = index;
-    assert(0 < index && index <= self->max_index);
+    size_t j = index;
+
+    assert(0 < index && index <= self->size);
     self->values[index] += value;
-    while (j <= self->max_index) {
+    while (j <= self->size) {
         self->tree[j] += value;
         j += (j & -j);
     }
 }
 
 void
-fenwick_set_value(fenwick_t *self, unsigned int index, long long value)
+fenwick_set_value(fenwick_t *self, size_t index, int64_t value)
 {
-    long long v = value - self->values[index];
+    int64_t v = value - self->values[index];
+
     fenwick_increment(self, index, v);
 }
 
-long long fenwick_get_cumulative_sum(fenwick_t *self, unsigned int index)
+int64_t
+fenwick_get_cumulative_sum(fenwick_t *self, size_t index)
 {
-    long long ret = 0;
-    unsigned int j = index;
-    assert(0 < index && index <= self->max_index);
+    int64_t ret = 0;
+    size_t j = index;
+
+    assert(0 < index && index <= self->size);
     while (j > 0) {
         ret += self->tree[j];
         j -= (j & -j);
     }
     return ret;
-
 }
 
-long long fenwick_get_value(fenwick_t *self, unsigned int index)
+int64_t
+fenwick_get_value(fenwick_t *self, size_t index)
 {
-    assert(0 < index && index <= self->max_index);
+    assert(0 < index && index <= self->size);
     return self->values[index];
-    /*
-    long long ret = 0;
-    unsigned int j = index;
-    unsigned int p = j & (j - 1);
-    assert(0 < index && index <= self->max_index);
-    ret = self->tree[j];
-    j--;
-    while (p != j) {
-        ret -= self->tree[j];
-        j = j & (j - 1);
-    }
-    return ret;
-    */
 }
 
 
-unsigned int
-fenwick_find(fenwick_t *self, long long sum)
+size_t
+fenwick_find(fenwick_t *self, int64_t sum)
 {
-    unsigned int j = 0;
-    unsigned int k;
-    long long s = sum;
-    unsigned int half = self->log_max_index;
+    size_t j = 0;
+    size_t k;
+    int64_t s = sum;
+    size_t half = self->log_size;
+
     while (half > 0) {
         /* Skip non-existent entries */
-        while (j + half > self->max_index) {
+        while (j + half > self->size) {
             half >>= 1;
         }
         k = j + half;
@@ -151,6 +196,3 @@ fenwick_find(fenwick_t *self, long long sum)
     }
     return j + 1;
 }
-
-
-

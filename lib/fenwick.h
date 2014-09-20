@@ -20,21 +20,26 @@
 #ifndef __FENWICK_H__
 #define __FENWICK_H__
 
+#include <stdlib.h>
+#include <inttypes.h>
+
 typedef struct {
-    unsigned int max_index;
-    unsigned int log_max_index;
-    long long *tree;
-    long long *values;
+    size_t size;
+    size_t log_size;
+    int64_t *tree;
+    int64_t *values;
 } fenwick_t;
 
 
-int fenwick_alloc(fenwick_t *);
+int fenwick_alloc(fenwick_t *, size_t);
+int fenwick_expand(fenwick_t *, size_t);
 int fenwick_free(fenwick_t *);
-long long fenwick_get_total(fenwick_t *);
-void fenwick_increment(fenwick_t *, unsigned int, long long);
-void fenwick_set_value(fenwick_t *, unsigned int, long long);
-long long fenwick_get_cumulative_sum(fenwick_t *, unsigned int);
-long long fenwick_get_value(fenwick_t *, unsigned int);
-unsigned int fenwick_find(fenwick_t *, long long);
+int64_t fenwick_get_total(fenwick_t *);
+void fenwick_increment(fenwick_t *, size_t, int64_t);
+void fenwick_set_value(fenwick_t *, size_t, int64_t);
+int64_t fenwick_get_cumulative_sum(fenwick_t *, size_t);
+int64_t fenwick_get_value(fenwick_t *, size_t);
+size_t fenwick_find(fenwick_t *, int64_t);
+size_t fenwick_get_size(fenwick_t *);
 
 #endif /*__FENWICK_H__*/
