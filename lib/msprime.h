@@ -90,8 +90,7 @@ typedef struct {
     char *coalescence_record_filename;
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
-    /* old */
-    int max_segments;
+    size_t segment_block_size;
     /* population models */
     population_model_t *population_models;
     population_model_t *current_population_model;
@@ -103,9 +102,12 @@ typedef struct {
     /* state */
     float time;
     gsl_rng *rng;
+    /* TODO remove the pointers here to be more consistent with other 
+     * fields?
+     */
     avl_tree_t *ancestral_population;
     avl_tree_t *breakpoints;
-    fenwick_t *links;
+    fenwick_t links;
     FILE *coalescence_record_file;
     /* memory management */
     object_heap_t avl_node_heap;

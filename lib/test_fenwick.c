@@ -38,8 +38,7 @@ test_simple_cases(void)
     long s;
     for (n = 1; n < 100; n++) {
         s = 0;
-        t.max_index = n;
-        assert(fenwick_alloc(&t) == 0);
+        assert(fenwick_alloc(&t, n) == 0);
         for (j = 1; j <= n; j++) {
             fenwick_increment(&t, j, j);
             s += j;
