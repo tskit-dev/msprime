@@ -71,12 +71,14 @@ typedef struct memory_block_t_t {
 } memory_block_t;
 
 typedef struct {
-    size_t element_size;
-    size_t block_size; /* number of elements in a block */
+    size_t object_size;
+    size_t block_size; /* number of objects in a block */
     size_t top;
     size_t size;
     void **heap;
+    size_t num_blocks;
     memory_block_t *mem_blocks;
+    void (*init_object)(void **obj, size_t index);
 } object_heap_t;
 
 typedef struct {
@@ -98,8 +100,6 @@ typedef struct {
     unsigned int num_ca_events;
     unsigned int num_trapped_re_events;
     unsigned int num_coalescence_records;
-    unsigned int max_used_segments;
-    unsigned int max_population_size;
     /* state */
     float time;
     gsl_rng *rng;
@@ -109,7 +109,7 @@ typedef struct {
     FILE *coalescence_record_file;
     /* memory management */
     object_heap_t avl_node_heap;
-
+    object_heap_t segment_heap;
     /* node mappings are never freed so simpler requirements */
     memory_block_t *node_mapping_blocks;
     memory_block_t *current_node_mapping_block;
@@ -120,10 +120,10 @@ typedef struct {
     avl_node_t **avl_node_heap;
     int avl_node_heap_top;
     avl_node_t *avl_node_mem;
-    */
     segment_t **segment_heap;
     int segment_heap_top;
     segment_t *segment_mem;
+    */
 } msp_t;
 
 typedef struct {
