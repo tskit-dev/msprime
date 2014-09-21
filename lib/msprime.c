@@ -62,29 +62,20 @@ segment_init(void **obj, size_t index)
 void
 object_heap_print_state(object_heap_t *self)
 {
-    memory_block_t *mb;
-    int num_blocks = 0;
-
-    mb = self->mem_blocks;
-    while (mb != NULL) {
-        mb = mb->next;
-        num_blocks++;
-    }
-    assert(self->num_blocks == num_blocks);
     printf("object heap %p::\n", self);
     printf("\tsize = %d\n", (int) self->size);
     printf("\ttop = %d\n", (int) self->top);
     printf("\tblock_size = %d\n", (int) self->block_size);
-    printf("\tnum_blocks = %d\n", num_blocks);
+    printf("\tnum_blocks = %d\n", (int) self->num_blocks);
 }
 
 static void
-object_heap_add_block(object_heap_t *self, memory_block_t *block)
+object_heap_add_block(object_heap_t *self, void *mem_block)
 {
     size_t j, index;
 
     for (j = 0; j < self->block_size; j++) {
-        self->heap[j] = block->mem + j * self->object_size;
+        self->heap[j] = mem_block + j * self->object_size;
         if (self->init_object != NULL) {
             index = j + (self->num_blocks - 1) * self->block_size;
             self->init_object(self->heap[j], index);
@@ -97,24 +88,20 @@ static int WARN_UNUSED
 object_heap_expand(object_heap_t *self)
 {
     int ret = -1;
-    memory_block_t *mb = malloc(sizeof(memory_block_t));
-    memory_block_t *prev;
+    void *p;
 
-    if (mb == NULL) {
+    p = realloc(self->mem_blocks, (self->num_blocks + 1) * sizeof(void *));
+    if (p == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    prev = self->mem_blocks;
-    while (prev->next != NULL) {
-        prev = prev->next;
-    }
-    prev->next = mb;
-    mb->next = NULL;
-    mb->mem = malloc(self->block_size * self->object_size);
-    if (mb->mem == NULL) {
+    self->mem_blocks = p;
+    p = malloc(self->block_size * self->object_size);
+    if (p == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    self->mem_blocks[self->num_blocks] = p;
     self->num_blocks++;
     /* Now we increase the size of the heap. Since it is currently empty,
      * we avoid the copying cost of realloc and free before making a new
@@ -128,7 +115,7 @@ object_heap_expand(object_heap_t *self)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    object_heap_add_block(self, mb);
+    object_heap_add_block(self, p);
     ret = 0;
 out:
     return ret;
@@ -141,20 +128,13 @@ static inline void * WARN_UNUSED
 object_heap_get_object(object_heap_t *self, size_t index)
 {
     void *ret = NULL;
-    size_t block, obj, j;
-    memory_block_t *mb = self->mem_blocks;
+    size_t block, obj;
 
     block = index / self->block_size;
     obj = index % self->block_size;
-    j = 0;
-    while (j < block && mb != NULL) {
-        j++;
-        mb = mb->next;
+    if (block < self->num_blocks && obj < self->block_size) {
+        ret = self->mem_blocks[block] + obj * self->object_size;
     }
-    if (j == block) {
-        ret = mb->mem + obj * self->object_size;
-    }
-
     return ret;
 }
 
@@ -197,19 +177,18 @@ object_heap_init(object_heap_t *self, size_t object_size, size_t block_size,
     self->init_object = init_object;
     self->num_blocks = 1;
     self->heap = malloc(self->size * sizeof(void **));
-    self->mem_blocks = malloc(sizeof(memory_block_t));
+    self->mem_blocks = malloc(sizeof(void *));
     if (self->heap == NULL || self->mem_blocks == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    self->mem_blocks->mem = malloc(self->size * self->object_size);
-    if (self->mem_blocks->mem == NULL) {
+    self->mem_blocks[0] = malloc(self->size * self->object_size);
+    if (self->mem_blocks[0] == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     self->top = 0;
-    self->mem_blocks->next = NULL;
-    object_heap_add_block(self, self->mem_blocks);
+    object_heap_add_block(self, self->mem_blocks[0]);
     ret = 0;
 out:
     return ret;
@@ -218,16 +197,15 @@ out:
 static void
 object_heap_free(object_heap_t *self)
 {
-    memory_block_t *mb = self->mem_blocks;
-    memory_block_t *tmp;
+    size_t j;
 
-    while (mb != NULL) {
-        tmp = mb;
-        if (mb->mem != NULL) {
-            free(mb->mem);
+    if (self->mem_blocks != NULL) {
+        for (j = 0; j < self->num_blocks; j++) {
+            if (self->mem_blocks[j] != NULL) {
+                free(self->mem_blocks[j]);
+            }
         }
-        mb = mb->next;
-        free(tmp);
+        free(self->mem_blocks);
     }
     if (self->heap != NULL) {
         free(self->heap);
@@ -343,7 +321,8 @@ out:
 static size_t
 msp_get_avl_node_mem_increment(msp_t *self)
 {
-    return self->avl_node_block_size * (sizeof(avl_node_t) + sizeof(void *));
+    return sizeof(void *) + self->avl_node_block_size
+            * (sizeof(avl_node_t) + sizeof(void *));
 }
 
 static size_t
@@ -351,32 +330,37 @@ msp_get_segment_mem_increment(msp_t *self)
 {
     /* we have a segment, a pointer to it and an entry in the Fenwick tree */
     size_t s = sizeof(segment_t) + sizeof(void *) + 2 * sizeof(int64_t);
-    return self->segment_block_size * s;
+    return sizeof(void *) + self->segment_block_size * s;
 }
 
 static size_t
 msp_get_node_mapping_mem_increment(msp_t *self)
 {
-    return self->node_mapping_block_size * sizeof(node_mapping_t);
+    return sizeof(void *) + self->node_mapping_block_size
+            * sizeof(node_mapping_t);
 }
 
-static memory_block_t *
-msp_alloc_node_mapping_block(msp_t *self)
+static int WARN_UNUSED
+msp_add_node_mapping_block(msp_t *self)
 {
-    memory_block_t *ret = NULL;
-    memory_block_t *mb;
+    int ret = -1;
+    void *p = realloc(self->node_mapping_blocks,
+            (self->num_node_mapping_blocks + 1) * sizeof(void *));
 
-    mb = malloc(sizeof(memory_block_t));
-    if (mb == NULL) {
+    if (p == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    mb->next = NULL;
-    mb->mem = malloc(self->node_mapping_block_size * sizeof(node_mapping_t));
-    if (mb->mem == NULL) {
-        free(mb);
+    self->node_mapping_blocks = p;
+    p = malloc(self->node_mapping_block_size * sizeof(node_mapping_t));
+    if (p == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = mb;
+    self->node_mapping_blocks[self->num_node_mapping_blocks] = p;
+    self->num_node_mapping_blocks++;
+    self->next_node_mapping = 0;
+    ret = 0;
 out:
     return ret;
 }
@@ -412,14 +396,20 @@ msp_alloc(msp_t *self)
         goto out;
     }
     /* set up the node mapping allocator */
-    self->current_node_mapping_block = msp_alloc_node_mapping_block(self);
-    if (self->current_node_mapping_block == NULL) {
+    self->node_mapping_blocks = malloc(sizeof(void *));
+    if (self->node_mapping_blocks == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    self->node_mapping_blocks = self->current_node_mapping_block;
+    self->num_node_mapping_blocks = 1;
+    self->node_mapping_blocks[0] = malloc(self->node_mapping_block_size
+            * sizeof(node_mapping_t));
+    if (self->node_mapping_blocks[0] == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     self->next_node_mapping = 0;
-
+    /* allocate the segments and Fenwick tree */
     ret = object_heap_init(&self->segment_heap, sizeof(segment_t),
            self->segment_block_size, segment_init);
     if (ret != 0) {
@@ -441,8 +431,8 @@ int
 msp_free(msp_t *self)
 {
     int ret = -1;
+    size_t j;
     population_model_t *u, *v;
-    memory_block_t *mb, *prev;
 
     u = self->population_models;
     while (u != NULL) {
@@ -456,15 +446,15 @@ msp_free(msp_t *self)
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->segment_heap);
-    mb = self->node_mapping_blocks;
-    while (mb != NULL) {
-        prev = mb;
-        mb = mb->next;
-        free(prev->mem);
-        free(prev);
-    }
     fenwick_free(&self->links);
-
+    if (self->node_mapping_blocks != NULL) {
+        for (j = 0; j < self->num_node_mapping_blocks; j++) {
+            if (self->node_mapping_blocks[j] != NULL) {
+                free(self->node_mapping_blocks[j]);
+            }
+        }
+        free(self->node_mapping_blocks);
+    }
     if (self->coalescence_record_file != NULL) {
         // TODO check for errors here?
         fclose(self->coalescence_record_file);
@@ -503,22 +493,19 @@ static inline node_mapping_t *
 msp_alloc_node_mapping(msp_t *self)
 {
     node_mapping_t *ret = NULL;
-    memory_block_t *mb = self->current_node_mapping_block;
+    void *p;
 
     if (self->next_node_mapping == self->node_mapping_block_size) {
         self->used_memory += msp_get_node_mapping_mem_increment(self);
         if (self->used_memory > self->max_memory) {
             goto out;
         }
-        mb = msp_alloc_node_mapping_block(self);
-        if (mb == NULL) {
+        if (msp_add_node_mapping_block(self) != 0) {
             goto out;
         }
-        self->current_node_mapping_block->next = mb;
-        self->current_node_mapping_block = mb;
-        self->next_node_mapping = 0;
     }
-    ret = mb->mem + self->next_node_mapping * sizeof(node_mapping_t);
+    p = self->node_mapping_blocks[self->num_node_mapping_blocks - 1];
+    ret = p + self->next_node_mapping * sizeof(node_mapping_t);
     self->next_node_mapping++;
 out:
     return ret;
@@ -572,11 +559,6 @@ msp_get_segment(msp_t *self, unsigned int index)
 static void
 msp_free_segment(msp_t *self, segment_t *node)
 {
-    /*
-    self->segment_heap_top++;
-    assert(self->segment_heap_top < (int) self->max_segments);
-    self->segment_heap[self->segment_heap_top] = node;
-    */
     object_heap_free_object(&self->segment_heap, node);
     fenwick_set_value(&self->links, node->index, 0);
 }
@@ -693,11 +675,10 @@ msp_print_state(msp_t *self)
     node_mapping_t *nm;
     segment_t *u;
     long long v;
-    int j, k, bp, num_blocks;
+    int j, k, bp;
     int *pi;
     float *tau;
     coalescence_record_t cr;
-    memory_block_t *mb;
     FILE *f = fopen(self->coalescence_record_filename, "r");
     tree_viewer_t *tv = msp_get_tree_viewer(self);
 
@@ -778,17 +759,10 @@ msp_print_state(msp_t *self)
     object_heap_print_state(&self->avl_node_heap);
     printf("segment_heap:");
     object_heap_print_state(&self->segment_heap);
-
-    mb = self->node_mapping_blocks;
-    num_blocks = 0;
-    while (mb != NULL) {
-        mb = mb->next;
-        num_blocks++;
-    }
     printf("node_mapping stack:\n");
     printf("\tblock size = %d\n", (int) self->node_mapping_block_size);
     printf("\tnext = %d\n", (int) self->next_node_mapping);
-    printf("\tnum_blocks = %d\n", num_blocks);
+    printf("\tnum_blocks = %d\n",  (int) self->num_node_mapping_blocks);
     msp_verify(self);
 out:
     if (f != NULL) {

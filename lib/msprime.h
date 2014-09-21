@@ -65,19 +65,14 @@ typedef struct population_model_t_t {
     struct population_model_t_t *next;
 } population_model_t;
 
-typedef struct memory_block_t_t {
-    void *mem;
-    struct memory_block_t_t *next;
-} memory_block_t;
-
 typedef struct {
     size_t object_size;
     size_t block_size; /* number of objects in a block */
     size_t top;
     size_t size;
-    void **heap;
     size_t num_blocks;
-    memory_block_t *mem_blocks;
+    void **heap;
+    void **mem_blocks;
     void (*init_object)(void **obj, size_t index);
 } object_heap_t;
 
@@ -112,9 +107,9 @@ typedef struct {
     /* memory management */
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
-    /* node mappings are never freed so simpler requirements */
-    memory_block_t *node_mapping_blocks;
-    memory_block_t *current_node_mapping_block;
+    /* node mappings are never freed, so simpler requirements */
+    void **node_mapping_blocks;
+    size_t num_node_mapping_blocks;
     size_t next_node_mapping;
 } msp_t;
 
@@ -143,4 +138,4 @@ int tree_viewer_get_tree(tree_viewer_t *self, int j, int *breakpoint, int **pi,
 int tree_viewer_free(tree_viewer_t *self);
 
 char * msp_strerror(int err);
-#endif /*__BIT_H__*/
+#endif /*__MSPRIME_H__*/
