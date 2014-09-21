@@ -88,9 +88,11 @@ typedef struct {
     double recombination_rate;
     long random_seed;
     char *coalescence_record_filename;
+    /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
     size_t segment_block_size;
+    size_t max_memory;
     /* population models */
     population_model_t *population_models;
     population_model_t *current_population_model;
@@ -100,13 +102,11 @@ typedef struct {
     unsigned int num_trapped_re_events;
     unsigned int num_coalescence_records;
     /* state */
+    size_t used_memory;
     float time;
     gsl_rng *rng;
-    /* TODO remove the pointers here to be more consistent with other 
-     * fields?
-     */
-    avl_tree_t *ancestral_population;
-    avl_tree_t *breakpoints;
+    avl_tree_t ancestral_population;
+    avl_tree_t breakpoints;
     fenwick_t links;
     FILE *coalescence_record_file;
     /* memory management */
@@ -116,16 +116,6 @@ typedef struct {
     memory_block_t *node_mapping_blocks;
     memory_block_t *current_node_mapping_block;
     size_t next_node_mapping;
-
-    /* old memory heaps */
-    /*
-    avl_node_t **avl_node_heap;
-    int avl_node_heap_top;
-    avl_node_t *avl_node_mem;
-    segment_t **segment_heap;
-    int segment_heap_top;
-    segment_t *segment_mem;
-    */
 } msp_t;
 
 typedef struct {

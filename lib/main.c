@@ -65,7 +65,7 @@ parse_long(const char *str, long *value, const long min,
 
 
 static void
-msp_read_population_models(msp_t *self, config_t *config)
+read_population_models(msp_t *msp, config_t *config)
 {
     int j;
     const char *type;
@@ -108,9 +108,9 @@ msp_read_population_models(msp_t *self, config_t *config)
         }
         type = config_setting_get_string(t);
         if (strcmp(type, "constant") == 0) {
-            msp_add_constant_population_model(self, time, param);
+            msp_add_constant_population_model(msp, time, param);
         } else if (strcmp(type, "exponential") == 0) {
-            msp_add_exponential_population_model(self, time, param);
+            msp_add_exponential_population_model(msp, time, param);
         } else {
             fatal_error("unknown population_model type '%s'", type);
         }
@@ -118,7 +118,7 @@ msp_read_population_models(msp_t *self, config_t *config)
 }
 
 static void
-msp_read_config(msp_t *self, const char *filename)
+read_config(msp_t *msp, const char *filename)
 {
     int err;
     int tmp;
@@ -139,26 +139,31 @@ msp_read_config(msp_t *self, const char *filename)
     if (config_lookup_int(config, "sample_size", &tmp) == CONFIG_FALSE) {
         fatal_error("sample_size is a required parameter");
     }
-    self->sample_size = tmp;
+    msp->sample_size = tmp;
     if (config_lookup_int(config, "num_loci", &tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
-    self->num_loci = tmp;
+    msp->num_loci = tmp;
     if (config_lookup_int(config, "avl_node_block_size", &tmp) == CONFIG_FALSE) {
         fatal_error("avl_node_block_size is a required parameter");
     }
-    self->avl_node_block_size = tmp;
+    msp->avl_node_block_size = tmp;
     if (config_lookup_int(config, "segment_block_size", &tmp) == CONFIG_FALSE) {
         fatal_error("segment_block_size is a required parameter");
     }
-    self->segment_block_size = tmp;
+    msp->segment_block_size = tmp;
     if (config_lookup_int(config, "node_mapping_block_size", &tmp)
             == CONFIG_FALSE) {
         fatal_error("node_mapping_block_size is a required parameter");
     }
-    self->node_mapping_block_size = tmp;
+    msp->node_mapping_block_size = tmp;
+    if (config_lookup_int(config, "max_memory", &tmp)
+            == CONFIG_FALSE) {
+        fatal_error("max_memory is a required parameter");
+    }
+    msp->max_memory = tmp * 1024 * 1024;
     if (config_lookup_float(config, "recombination_rate",
-            &self->recombination_rate) == CONFIG_FALSE) {
+            &msp->recombination_rate) == CONFIG_FALSE) {
         fatal_error("recombination_rate is a required parameter");
     }
     if (config_lookup_string(config, "coalescence_record_file", &str)
@@ -166,12 +171,12 @@ msp_read_config(msp_t *self, const char *filename)
         fatal_error("coalescence_record_file is a required parameter");
     }
     s = strlen(str);
-    self->coalescence_record_filename = malloc(s + 1);
-    if (self->coalescence_record_filename == NULL) {
+    msp->coalescence_record_filename = malloc(s + 1);
+    if (msp->coalescence_record_filename == NULL) {
         fatal_error("no memory");
     }
-    strcpy(self->coalescence_record_filename, str);
-    msp_read_population_models(self, config);
+    strcpy(msp->coalescence_record_filename, str);
+    read_population_models(msp, config);
     config_destroy(config);
     free(config);
 }
@@ -180,39 +185,39 @@ static void
 run_simulate(char *conf_file, long seed)
 {
     int ret = -1;
-    msp_t *self = calloc(1, sizeof(msp_t));
+    msp_t *msp = calloc(1, sizeof(msp_t));
 
-    if (self == NULL) {
+    if (msp == NULL) {
         goto out;
     }
-    self->random_seed = seed;
-    ret = msp_add_constant_population_model(self, -1.0, 1.0);
+    msp->random_seed = seed;
+    ret = msp_add_constant_population_model(msp, -1.0, 1.0);
     if (ret != 0) {
         goto out;
     }
-    msp_read_config(self, conf_file);
-    ret = msp_alloc(self);
+    read_config(msp, conf_file);
+    ret = msp_alloc(msp);
     if (ret != 0) {
         goto out;
     }
-    ret = msp_initialise(self);
+    ret = msp_initialise(msp);
     if (ret != 0) {
         goto out;
     }
     do {
-        ret = msp_run(self, DBL_MAX, ULONG_MAX);
+        ret = msp_run(msp, DBL_MAX, ULONG_MAX);
         if (ret < 0) {
             goto out;
         }
-        if (msp_print_state(self) != 0) {
+        if (msp_print_state(msp) != 0) {
             goto out;
         }
     } while (ret > 0);
 out:
-    if (self != NULL) {
-        free(self->coalescence_record_filename);
-        msp_free(self);
-        free(self);
+    if (msp != NULL) {
+        free(msp->coalescence_record_filename);
+        msp_free(msp);
+        free(msp);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));

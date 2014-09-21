@@ -340,6 +340,26 @@ out:
     return ret;
 }
 
+static size_t
+msp_get_avl_node_mem_increment(msp_t *self)
+{
+    return self->avl_node_block_size * (sizeof(avl_node_t) + sizeof(void *));
+}
+
+static size_t
+msp_get_segment_mem_increment(msp_t *self)
+{
+    /* we have a segment, a pointer to it and an entry in the Fenwick tree */
+    size_t s = sizeof(segment_t) + sizeof(void *) + 2 * sizeof(int64_t);
+    return self->segment_block_size * s;
+}
+
+static size_t
+msp_get_node_mapping_mem_increment(msp_t *self)
+{
+    return self->node_mapping_block_size * sizeof(node_mapping_t);
+}
+
 static memory_block_t *
 msp_alloc_node_mapping_block(msp_t *self)
 {
@@ -378,6 +398,13 @@ msp_alloc(msp_t *self)
         goto out;
     }
     gsl_rng_set(self->rng, self->random_seed);
+    self->used_memory = msp_get_avl_node_mem_increment(self) +
+        msp_get_segment_mem_increment(self) +
+        msp_get_node_mapping_mem_increment(self);
+    if (self->used_memory > self->max_memory) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     /* Allocate the memory heaps */
     ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t),
            self->avl_node_block_size, NULL);
@@ -403,14 +430,8 @@ msp_alloc(msp_t *self)
         goto out;
     }
     /* set up the AVL trees */
-    self->ancestral_population = malloc(sizeof(avl_tree_t));
-    self->breakpoints = malloc(sizeof(avl_tree_t));
-    if (self->ancestral_population == NULL || self->breakpoints == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    avl_init_tree(self->ancestral_population, cmp_individual, NULL);
-    avl_init_tree(self->breakpoints, cmp_node_mapping, NULL);
+    avl_init_tree(&self->ancestral_population, cmp_individual, NULL);
+    avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
     ret = 0;
 out:
     return ret;
@@ -432,12 +453,6 @@ msp_free(msp_t *self)
     if (self->rng != NULL) {
         gsl_rng_free(self->rng);
     }
-    if (self->ancestral_population != NULL) {
-        free(self->ancestral_population);
-    }
-    if (self->breakpoints != NULL) {
-        free(self->breakpoints);
-    }
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->segment_heap);
@@ -450,16 +465,6 @@ msp_free(msp_t *self)
     }
     fenwick_free(&self->links);
 
-    /* old */
-
-    /*
-    if (self->segment_mem != NULL) {
-        free(self->segment_mem);
-    }
-    if (self->segment_heap != NULL) {
-        free(self->segment_heap);
-    }
-    */
     if (self->coalescence_record_file != NULL) {
         // TODO check for errors here?
         fclose(self->coalescence_record_file);
@@ -475,6 +480,10 @@ msp_alloc_avl_node(msp_t *self)
     avl_node_t *ret = NULL;
 
     if (object_heap_empty(&self->avl_node_heap)) {
+        self->used_memory += msp_get_avl_node_mem_increment(self);
+        if (self->used_memory > self->max_memory) {
+            goto out;
+        }
         if (object_heap_expand(&self->avl_node_heap) != 0) {
             goto out;
         }
@@ -497,6 +506,10 @@ msp_alloc_node_mapping(msp_t *self)
     memory_block_t *mb = self->current_node_mapping_block;
 
     if (self->next_node_mapping == self->node_mapping_block_size) {
+        self->used_memory += msp_get_node_mapping_mem_increment(self);
+        if (self->used_memory > self->max_memory) {
+            goto out;
+        }
         mb = msp_alloc_node_mapping_block(self);
         if (mb == NULL) {
             goto out;
@@ -519,6 +532,10 @@ msp_alloc_segment(msp_t *self, int left, int right, int value, segment_t *prev,
     segment_t *seg = NULL;
 
     if (object_heap_empty(&self->segment_heap)) {
+        self->used_memory += msp_get_segment_mem_increment(self);
+        if (self->used_memory > self->max_memory) {
+            goto out;
+        }
         if (object_heap_expand(&self->segment_heap) != 0) {
             goto out;
         }
@@ -592,7 +609,7 @@ msp_insert_individual(msp_t *self, segment_t *u)
         goto out;
     }
     avl_init_node(node, u);
-    node = avl_insert_node(self->ancestral_population, node);
+    node = avl_insert_node(&self->ancestral_population, node);
     assert(node != NULL);
 out:
     return ret;
@@ -633,7 +650,7 @@ msp_verify(msp_t *self)
     segment_t *u;
 
     total_links = 0;
-    node = self->ancestral_population->head;
+    node = (&self->ancestral_population)->head;
     while (node != NULL) {
         u = (segment_t *) node->item;
         assert(u->prev == NULL);
@@ -661,8 +678,8 @@ msp_verify(msp_t *self)
     assert(total_links == fenwick_get_total(&self->links));
     /*
     assert(total_segments == self->max_segments - self->segment_heap_top - 1);
-    total_avl_nodes = avl_count(self->ancestral_population)
-            + avl_count(self->breakpoints);
+    total_avl_nodes = avl_count(&self->ancestral_population)
+            + avl_count(&self->breakpoints);
     assert(total_avl_nodes == self->max_avl_nodes -
             self->avl_node_heap_top - 1);
     */
@@ -696,13 +713,15 @@ msp_print_state(msp_t *self)
     if (ret != 0) {
         goto out;
     }
+    printf("used_memory = %f MiB\n", self->used_memory / (1024.0 * 1024.0));
+    printf("max_memory  = %f MiB\n", self->max_memory / (1024.0 * 1024.0));
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
     printf("num_links = %lld\n", fenwick_get_total(&self->links));
-    printf("population = %d\n", avl_count(self->ancestral_population));
+    printf("population = %d\n", avl_count(&self->ancestral_population));
     printf("time = %f\n", self->time);
-    node = self->ancestral_population->head;
+    node = (&self->ancestral_population)->head;
     while (node != NULL) {
         u = (segment_t *) node->item;
         printf("\t");
@@ -735,8 +754,8 @@ msp_print_state(msp_t *self)
                     u->right, u->value, u->prev, u->next);
         }
     }
-    printf("Breakpoints = %d\n", avl_count(self->breakpoints));
-    for (node = self->breakpoints->head; node != NULL; node = node->next) {
+    printf("Breakpoints = %d\n", avl_count(&self->breakpoints));
+    for (node = (&self->breakpoints)->head; node != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
@@ -799,7 +818,7 @@ msp_insert_breakpoint(msp_t *self, unsigned int left, int v)
     m->left = left;
     m->value = v;
     avl_init_node(node, m);
-    node = avl_insert_node(self->breakpoints, node);
+    node = avl_insert_node(&self->breakpoints, node);
     assert(node != NULL);
 out:
     return ret;
@@ -817,7 +836,7 @@ msp_copy_breakpoint(msp_t *self, unsigned int k)
     avl_node_t *node;
 
     search.left = k;
-    avl_search_closest(self->breakpoints, &search, &node);
+    avl_search_closest(&self->breakpoints, &search, &node);
     assert(node != NULL);
     nm = (node_mapping_t *) node->item;
     if (nm->left > k) {
@@ -886,7 +905,7 @@ msp_recombination_event(msp_t *self)
         y->right = k;
         fenwick_increment(&self->links, y->index, k - z->right);
         search.left = k + 1;
-        if (avl_search(self->breakpoints, &search) == NULL) {
+        if (avl_search(&self->breakpoints, &search) == NULL) {
             ret = msp_copy_breakpoint(self, k + 1);
             if (ret != 0) {
                 goto out;
@@ -919,18 +938,18 @@ msp_coancestry_event(msp_t *self)
 
     self->num_ca_events++;
     /* Choose x and y */
-    n = avl_count(self->ancestral_population);
+    n = avl_count(&self->ancestral_population);
     j = gsl_rng_uniform_int(self->rng, n);
-    node = avl_at(self->ancestral_population, j);
+    node = avl_at(&self->ancestral_population, j);
     assert(node != NULL);
     x = (segment_t *) node->item;
-    avl_unlink_node(self->ancestral_population, node);
+    avl_unlink_node(&self->ancestral_population, node);
     msp_free_avl_node(self, node);
     j = gsl_rng_uniform_int(self->rng, n - 1);
-    node = avl_at(self->ancestral_population, j);
+    node = avl_at(&self->ancestral_population, j);
     assert(node != NULL);
     y = (segment_t *) node->item;
-    avl_unlink_node(self->ancestral_population, node);
+    avl_unlink_node(&self->ancestral_population, node);
     msp_free_avl_node(self, node);
 
     /* update num_links and get ready for loop */
@@ -967,7 +986,7 @@ msp_coancestry_event(msp_t *self)
             } else {
                 l = x->left;
                 search.left = l;
-                node = avl_search(self->breakpoints, &search);
+                node = avl_search(&self->breakpoints, &search);
                 assert(node != NULL);
                 nm = (node_mapping_t *) node->item;
                 eta = nm->value;
@@ -1088,7 +1107,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     int ret = -1;
     double lambda_c, lambda_r, t_c, t_r, t_wait, pop_size;
     long long num_links;
-    unsigned int n = avl_count(self->ancestral_population);
+    unsigned int n = avl_count(&self->ancestral_population);
     int (*event_method)(msp_t *);
     population_model_t *pop_model = self->current_population_model;
     unsigned long events = 0;
@@ -1126,7 +1145,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             if (ret != 0) {
                 goto out;
             }
-            n = avl_count(self->ancestral_population);
+            n = avl_count(&self->ancestral_population);
         }
     }
     if (fflush(self->coalescence_record_file) != 0) {
@@ -1161,14 +1180,14 @@ msp_get_tree_viewer(msp_t *self)
     }
     strcpy(tv->coalescence_record_filename, self->coalescence_record_filename);
     /* Skip the last tree as it's not real */
-    tv->num_trees = avl_count(self->breakpoints) - 1;
+    tv->num_trees = avl_count(&self->breakpoints) - 1;
     tv->breakpoints = malloc(tv->num_trees * sizeof(int));
     if (tv->breakpoints == NULL) {
         tree_viewer_free(tv);
         tv = NULL;
         goto out;
     }
-    for (node = self->breakpoints->head; node->next != NULL; node = node->next) {
+    for (node = (&self->breakpoints)->head; node->next != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
         tv->breakpoints[j] = nm->left;
         j++;
