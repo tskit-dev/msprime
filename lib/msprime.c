@@ -662,6 +662,7 @@ msp_verify(msp_t *self)
             ss = fenwick_get_value(&self->links, u->index);
             total_links += ss;
             assert(s == ss);
+            ss = s; /* just to keep compiler happy - see below also */
             u = u->next;
         }
         node = node->next;
@@ -673,6 +674,11 @@ msp_verify(msp_t *self)
             + avl_count(&self->breakpoints);
     assert(total_avl_nodes == object_heap_get_num_allocated(
                 &self->avl_node_heap));
+    if (total_avl_nodes == total_segments) {
+        /* do nothing - this is just to keep the compiler happy when
+         * asserts are turned off.
+         */
+    }
 }
 
 int
