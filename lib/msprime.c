@@ -59,6 +59,12 @@ segment_init(void **obj, size_t index)
 
 /* memory heap manager */
 
+static size_t
+object_heap_get_num_allocated(object_heap_t *self)
+{
+    return self->size - self->top;
+}
+
 void
 object_heap_print_state(object_heap_t *self)
 {
@@ -67,6 +73,8 @@ object_heap_print_state(object_heap_t *self)
     printf("\ttop = %d\n", (int) self->top);
     printf("\tblock_size = %d\n", (int) self->block_size);
     printf("\tnum_blocks = %d\n", (int) self->num_blocks);
+    printf("\ttotal allocated = %d\n",
+            (int) object_heap_get_num_allocated(self));
 }
 
 static void
@@ -626,8 +634,8 @@ static void
 msp_verify(msp_t *self)
 {
     long long s, ss, total_links;
-    unsigned int total_segments = 0;
-    //unsigned int total_avl_nodes = 0;
+    size_t total_segments = 0;
+    size_t total_avl_nodes = 0;
     avl_node_t *node;
     segment_t *u;
 
@@ -640,6 +648,7 @@ msp_verify(msp_t *self)
             total_segments++;
             assert(u->left <= u->right);
             /*
+             TODO add back in checking for tree integrity
             for (j = u->left; j <= u->right; j++) {
                 msp_get_tree(self, j, pi, tau);
                 assert(pi[u->value] == 0);
@@ -658,13 +667,12 @@ msp_verify(msp_t *self)
         node = node->next;
     }
     assert(total_links == fenwick_get_total(&self->links));
-    /*
-    assert(total_segments == self->max_segments - self->segment_heap_top - 1);
+    assert(total_segments == object_heap_get_num_allocated(
+                &self->segment_heap));
     total_avl_nodes = avl_count(&self->ancestral_population)
             + avl_count(&self->breakpoints);
-    assert(total_avl_nodes == self->max_avl_nodes -
-            self->avl_node_heap_top - 1);
-    */
+    assert(total_avl_nodes == object_heap_get_num_allocated(
+                &self->avl_node_heap));
 }
 
 int
@@ -699,7 +707,7 @@ msp_print_state(msp_t *self)
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
-    printf("num_links = %lld\n", fenwick_get_total(&self->links));
+    printf("num_links = %ld\n", fenwick_get_total(&self->links));
     printf("population = %d\n", avl_count(&self->ancestral_population));
     printf("time = %f\n", self->time);
     node = (&self->ancestral_population)->head;
