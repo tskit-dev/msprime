@@ -2,7 +2,7 @@ import re
 import sys
 from ez_setup import use_setuptools
 use_setuptools()
-from setuptools import setup
+from setuptools import setup, Extension
 
 
 # Following the recommendations of PEP 396 we parse the version number
@@ -30,6 +30,10 @@ v = sys.version_info[:2]
 if v < (2, 7) or v == (3, 0) or v == (3, 1):
     requirements.append("argparse")
 
+msprime_ext = Extension("_msprime",
+    ["_msprimemodule.c", "lib/msprime.c", "lib/fenwick.c"]
+)
+
 setup(
     name="msprime",
     version=msprime_version,
@@ -43,4 +47,5 @@ setup(
         ]
     },
     install_requires=requirements,
+    ext_modules = [msprime_ext],
 )
