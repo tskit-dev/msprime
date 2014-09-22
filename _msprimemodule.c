@@ -20,7 +20,7 @@
 #include <Python.h>
 #include <structmember.h>
 
-#include "lib/msprime.h"
+#include "msprime.h"
 
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
@@ -259,43 +259,42 @@ static int
 Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
-#if 0
     int sim_ret;
-    static char *kwlist[] = {"sample", "event_classes", "num_loci",
-            "num_parents", "max_population_size", "max_occupancy",
-            "dimension", "simulate_pedigree", "random_seed", "torus_diameter",
-            "pixel_size", "recombination_probability", NULL};
-    PyObject *sample, *events;
-    sim_t *sim = PyMem_Malloc(sizeof(sim_t));
+    /*
+    static char *kwlist[] = {"sample_size", "coalescence_record_filename",
+        "num_loci", "random_seed", "recombination_rate",
+        "population_models", "max_memory", "avl_node_block_size",
+        "segment_block_size", "node_mapping_block_size", NULL};
+    */
+    //PyObject *sample, *population_models;
+    msp_t *sim = PyMem_Malloc(sizeof(msp_t));
     self->sim = sim;
     if (self->sim == NULL) {
         goto out;
     }
-    memset(self->sim, 0, sizeof(sim_t));
+    memset(self->sim, 0, sizeof(msp_t));
+    sim->sample_size = 2;
     sim->num_loci = 1;
-    sim->num_parents = 2;
-    sim->torus_diameter = 1000;
-    sim->pixel_size = 2;
-    sim->recombination_probability = 0.5;
     sim->random_seed = 1;
-    sim->max_population_size = 1000;
-    sim->max_occupancy = 10;
-    sim->dimension = 2;
-    sim->simulate_pedigree = 0;
-    sim->max_time = DBL_MAX;
+    sim->recombination_rate = 0.5;
+    sim->max_memory = 10 * 1024 * 1024;
+    sim->avl_node_block_size = 10;
+    sim->segment_block_size = 10;
+    sim->node_mapping_block_size = 10;
+    sim->coalescence_record_filename = NULL;
+
+#if 0
+
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIIIkddd", kwlist,
             &PyList_Type, &sample,
-            &PyList_Type, &events,
+            &PyList_Type, &population_models,
             &sim->num_loci, &sim->num_parents, &sim->max_population_size,
             &sim->max_occupancy, &sim->dimension, &sim->simulate_pedigree,
             &sim->random_seed, &sim->torus_diameter, &sim->pixel_size,
             &sim->recombination_probability)) {
         goto out;
     }
-    if (Simulator_parse_sample(self, sample) != 0) {
-        goto out;
-    }
-    if (Simulator_parse_events(self, events) != 0) {
+    if (Simulator_parse_population_models(self, population_models) != 0) {
         goto out;
     }
     if (Simulator_check_input(self) != 0) {
@@ -312,8 +311,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = 0;
-out:
 #endif
+out:
     return ret;
 }
 

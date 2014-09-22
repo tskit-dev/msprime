@@ -30,9 +30,12 @@ v = sys.version_info[:2]
 if v < (2, 7) or v == (3, 0) or v == (3, 1):
     requirements.append("argparse")
 
-msprime_ext = Extension("_msprime",
-    ["_msprimemodule.c", "lib/msprime.c", "lib/fenwick.c"]
-)
+d = "lib/"
+_msprime_module = Extension('_msprime',
+    sources = ["_msprimemodule.c", d + "msprime.c", d + "fenwick.c",
+            d + "avl.c"],
+    libraries = ["gsl", "gslcblas"],
+    include_dirs = [d])
 
 setup(
     name="msprime",
@@ -47,5 +50,5 @@ setup(
         ]
     },
     install_requires=requirements,
-    ext_modules = [msprime_ext],
+    ext_modules = [_msprime_module],
 )
