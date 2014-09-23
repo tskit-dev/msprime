@@ -19,12 +19,14 @@
 
 #include <Python.h>
 #include <structmember.h>
+#include <float.h>
 
 #include "msprime.h"
 
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
 #endif
+#define PY_SSIZE_T_CLEAN
 
 #define MODULE_DOC \
 "Low level interface for msprime"
@@ -34,16 +36,18 @@ static PyObject *MsprimeLibraryError;
 
 typedef struct {
     PyObject_HEAD
+    char *coalescence_record_filename;
     msp_t *sim;
 } Simulator;
 
 
-#if 0
 static void
 handle_library_error(int err)
 {
     PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
 }
+
+#if 0
 
 static void
 handle_input_error(const char *err)
@@ -125,7 +129,6 @@ out:
  * Simulator
  *===================================================================
  */
-#if 0
 static int
 Simulator_check_sim(Simulator *self)
 {
@@ -137,6 +140,7 @@ Simulator_check_sim(Simulator *self)
     return ret;
 }
 
+#if 0
 static int
 Simulator_parse_events(Simulator *self, PyObject *py_events)
 {
@@ -166,6 +170,10 @@ Simulator_dealloc(Simulator* self)
         msp_free(self->sim);
         PyMem_Free(self->sim);
         self->sim = NULL;
+    }
+    if (self->coalescence_record_filename != NULL) {
+        PyMem_Free(self->coalescence_record_filename);
+        self->coalescence_record_filename = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -260,14 +268,17 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int sim_ret;
-    /*
-    static char *kwlist[] = {"sample_size", "coalescence_record_filename",
-        "num_loci", "random_seed", "recombination_rate",
+    static char *kwlist[] = {"sample_size", "random_seed",
+        "coalescence_record_filename",
+        "num_loci", "recombination_rate",
         "population_models", "max_memory", "avl_node_block_size",
         "segment_block_size", "node_mapping_block_size", NULL};
-    */
-    //PyObject *sample, *population_models;
+    PyObject *population_models;
     msp_t *sim = PyMem_Malloc(sizeof(msp_t));
+    char *cr_filename;
+    Py_ssize_t cr_filename_len;
+
+    self->coalescence_record_filename = NULL;
     self->sim = sim;
     if (self->sim == NULL) {
         goto out;
@@ -282,35 +293,50 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sim->segment_block_size = 10;
     sim->node_mapping_block_size = 10;
     sim->coalescence_record_filename = NULL;
-
-#if 0
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|IIIIIIkddd", kwlist,
-            &PyList_Type, &sample,
-            &PyList_Type, &population_models,
-            &sim->num_loci, &sim->num_parents, &sim->max_population_size,
-            &sim->max_occupancy, &sim->dimension, &sim->simulate_pedigree,
-            &sim->random_seed, &sim->torus_diameter, &sim->pixel_size,
-            &sim->recombination_probability)) {
+    /* TODO verify these types are compatible! */
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Ils#|IdO!nnnn", kwlist,
+            &sim->sample_size, &sim->random_seed, &cr_filename,
+            &cr_filename_len,
+            &sim->num_loci, &sim->recombination_rate,
+            &PyList_Type, &population_models, &sim->max_memory,
+            &sim->avl_node_block_size, &sim->segment_block_size,
+            &sim->node_mapping_block_size)) {
         goto out;
     }
+    self->coalescence_record_filename = PyMem_Malloc(cr_filename_len + 1);
+    if (self->coalescence_record_filename == NULL) {
+        goto out;
+    }
+    strcpy(self->coalescence_record_filename, cr_filename);
+    sim->coalescence_record_filename = self->coalescence_record_filename;
+
+    /* TODO this is very nasty and must be moved into the msprime
+     * code when the refactoring is done.
+     */
+    sim_ret = msp_add_constant_population_model(sim, -1.0, 1.0);
+    if (sim_ret != 0) {
+        handle_library_error(sim_ret);
+        goto out;
+    }
+    /* TODO parse the population models and verify the input parameters */
+    sim_ret = msp_alloc(self->sim);
+    if (sim_ret != 0) {
+        handle_library_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_initialise(self->sim);
+    if (sim_ret != 0) {
+        handle_library_error(sim_ret);
+        goto out;
+    }
+    ret = 0;
+#if 0
     if (Simulator_parse_population_models(self, population_models) != 0) {
         goto out;
     }
     if (Simulator_check_input(self) != 0) {
         goto out;
     }
-    sim_ret = sim_alloc(self->sim);
-    if (sim_ret != 0) {
-        handle_library_error(sim_ret);
-        goto out;
-    }
-    sim_ret = sim_initialise(self->sim);
-    if (sim_ret != 0) {
-        handle_library_error(sim_ret);
-        goto out;
-    }
-    ret = 0;
 #endif
 out:
     return ret;
@@ -321,7 +347,6 @@ static PyMemberDef Simulator_members[] = {
 };
 
 
-#if 0
 
 static PyObject *
 Simulator_get_num_loci(Simulator  *self)
@@ -331,66 +356,6 @@ Simulator_get_num_loci(Simulator  *self)
         goto out;
     }
     ret = Py_BuildValue("I", self->sim->num_loci);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_num_parents(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->sim->num_parents);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_dimension(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->sim->dimension);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_simulate_pedigree(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->sim->simulate_pedigree);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_max_population_size(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->sim->max_population_size);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_max_occupancy(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->sim->max_occupancy);
 out:
     return ret;
 }
@@ -408,30 +373,6 @@ out:
 }
 
 static PyObject *
-Simulator_get_torus_diameter(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d", self->sim->torus_diameter);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_pixel_size(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d", self->sim->pixel_size);
-out:
-    return ret;
-}
-
-static PyObject *
 Simulator_get_time(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -443,32 +384,19 @@ out:
     return ret;
 }
 
-
 static PyObject *
-Simulator_get_num_reproduction_events(Simulator  *self)
+Simulator_get_recombination_rate(Simulator *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("K",
-            (unsigned long long) self->sim->num_reproduction_events);
+    ret = Py_BuildValue("d", self->sim->recombination_rate);
 out:
     return ret;
 }
 
-static PyObject *
-Simulator_get_recombination_probability(Simulator *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d", self->sim->recombination_probability);
-out:
-    return ret;
-}
-
+#if 0
 static PyObject *
 Simulator_get_event_classes(Simulator *self)
 {
@@ -684,6 +612,7 @@ out:
 
     return ret;
 }
+#endif
 
 static PyObject *
 Simulator_run(Simulator *self, PyObject *args)
@@ -699,9 +628,10 @@ Simulator_run(Simulator *self, PyObject *args)
         goto out;
     }
     not_done = 1;
-    self->sim->max_time = max_time;
     while (not_done) {
-        status = sim_simulate(self->sim, chunk);
+        Py_BEGIN_ALLOW_THREADS
+        status = msp_run(self->sim, max_time, chunk);
+        Py_END_ALLOW_THREADS
         if (status < 0) {
             handle_library_error(status);
             goto out;
@@ -718,48 +648,28 @@ out:
     return ret;
 }
 
-#endif
 static PyMethodDef Simulator_methods[] = {
-#if 0
     {"get_num_loci", (PyCFunction) Simulator_get_num_loci, METH_NOARGS,
             "Returns the number of loci" },
-    {"get_num_parents", (PyCFunction) Simulator_get_num_parents, METH_NOARGS,
-            "Returns the number of parents" },
-    {"get_dimension", (PyCFunction) Simulator_get_dimension, METH_NOARGS,
-            "Returns the dimension of the simulation." },
-    {"get_simulate_pedigree", (PyCFunction) Simulator_get_simulate_pedigree, METH_NOARGS,
-            "Returns 1 if we are simulating the pedigree; 0 otherwise." },
-    {"get_max_population_size", (PyCFunction) Simulator_get_max_population_size,
-            METH_NOARGS,
-            "Returns the maximum size of the ancestral population"},
-    {"get_max_occupancy", (PyCFunction) Simulator_get_max_occupancy,
-            METH_NOARGS,
-            "Returns the maximum occupancy of a single pixel"},
     {"get_random_seed", (PyCFunction) Simulator_get_random_seed, METH_NOARGS,
             "Returns the random seed" },
-    {"get_torus_diameter", (PyCFunction) Simulator_get_torus_diameter,
-            METH_NOARGS, "Returns the torus diameter" },
-    {"get_pixel_size", (PyCFunction) Simulator_get_pixel_size, METH_NOARGS,
-            "Returns the size of a pixel" },
     {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS,
             "Returns the current simulation time" },
-    {"get_num_reproduction_events",
-            (PyCFunction) Simulator_get_num_reproduction_events, METH_NOARGS,
-            "Returns the number of reproduction events up to this point." },
-    {"get_recombination_probability",
-            (PyCFunction) Simulator_get_recombination_probability, METH_NOARGS,
-            "Returns the probability of recombination between adjacent loci" },
+    {"get_recombination_rate",
+            (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
+            "Returns the rate of recombination between adjacent loci" },
+#if 0
     {"get_event_classes", (PyCFunction) Simulator_get_event_classes, METH_NOARGS,
             "Returns the event classes" },
     {"get_population", (PyCFunction) Simulator_get_population, METH_NOARGS,
             "Returns the state of the ancestral population" },
     {"get_history", (PyCFunction) Simulator_get_history, METH_NOARGS,
             "Returns the history of the sample as a tuple (pi, tau)" },
+#endif
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\
             if the required stopping conditions have been met and False \
             otherwise." },
-#endif
     {NULL}  /* Sentinel */
 };
 
