@@ -27,31 +27,36 @@
 
 #include "fenwick.h"
 
+#define MSP_TREE_FILE_MAGIC 0xa52cd4a4 
+#define MSP_TREE_FILE_VERSION 1
+#define MSP_TREE_FILE_HEADER_SIZE 36
+#define MSP_NUM_CR_ELEMENTS 6
+
 #define POP_MODEL_CONSTANT 0
 #define POP_MODEL_EXPONENTIAL 1
 
 /* 2^32 * 32 bytes gives a maximum of 128 GiB of segments */
 typedef struct segment_t_t {
-    unsigned int left;
-    unsigned int right;
-    unsigned int value;
-    unsigned int index;
+    uint32_t left;
+    uint32_t right;
+    uint32_t index;
+    int32_t value;
     struct segment_t_t *prev;
     struct segment_t_t *next;
 } segment_t;
 
 /* int based oriented forests gives a maximum sample size of ~10^9 */
 typedef struct {
-    unsigned int left;
-    unsigned int right;
-    int children[2];
-    int parent;
+    uint32_t left;
+    uint32_t right;
+    int32_t children[2];
+    int32_t parent;
     float time;
 } coalescence_record_t;
 
 typedef struct {
-    unsigned int left; /* TODO CHANGE THIS - not a good name! */
-    int value;
+    uint32_t left; /* TODO CHANGE THIS - not a good name! */
+    int32_t value;
 } node_mapping_t;
 
 typedef struct population_model_t_t {
@@ -82,7 +87,7 @@ typedef struct {
     int num_loci;
     double recombination_rate;
     long random_seed;
-    char *coalescence_record_filename;
+    char *tree_file_name;
     /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
@@ -92,10 +97,10 @@ typedef struct {
     population_model_t *population_models;
     population_model_t *current_population_model;
     /* Counters for statistics */
-    unsigned int num_re_events;
-    unsigned int num_ca_events;
-    unsigned int num_trapped_re_events;
-    unsigned int num_coalescence_records;
+    uint32_t num_re_events;
+    uint32_t num_ca_events;
+    uint32_t num_trapped_re_events;
+    uint32_t num_coalescence_records;
     /* state */
     size_t used_memory;
     float time;
@@ -103,7 +108,7 @@ typedef struct {
     avl_tree_t ancestral_population;
     avl_tree_t breakpoints;
     fenwick_t links;
-    FILE *coalescence_record_file;
+    FILE *tree_file;
     /* memory management */
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
@@ -114,14 +119,18 @@ typedef struct {
 } msp_t;
 
 typedef struct {
-    int sample_size;
-    int num_loci;
-    int num_trees;
-    int *breakpoints;
-    int *pi;
+    uint32_t sample_size;
+    uint32_t num_loci;
+    uint32_t num_trees;
+    uint32_t *breakpoints;
+    int32_t *pi;
     float *tau;
-    char *coalescence_record_filename;
-} tree_viewer_t;
+    char *tree_file_name;
+    FILE *tree_file;
+    size_t coalescence_record_offset;
+    size_t breakpoints_offset;
+    size_t metadata_offset;
+} tree_reader_t;
 
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
@@ -129,13 +138,14 @@ int msp_alloc(msp_t *self);
 int msp_free(msp_t *self);
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
+int msp_finalise_tree_file(msp_t *self);
 int msp_print_state(msp_t *self);
 
-tree_viewer_t * msp_get_tree_viewer(msp_t *self);
-int tree_viewer_init(tree_viewer_t *self);
-int tree_viewer_get_tree(tree_viewer_t *self, int j, int *breakpoint, int **pi,
-        float **tau);
-int tree_viewer_free(tree_viewer_t *self);
+int tree_reader_alloc(tree_reader_t *self, char *tree_file_name);
+int tree_reader_init(tree_reader_t *self);
+int tree_reader_get_tree(tree_reader_t *self, uint32_t j, uint32_t *breakpoint, 
+        int32_t **pi, float **tau);
+int tree_reader_free(tree_reader_t *self);
 
 char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/
