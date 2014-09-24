@@ -126,6 +126,7 @@ typedef struct {
     int32_t *pi;
     float *tau;
     char *tree_file_name;
+    char *metadata;
     FILE *tree_file;
     size_t coalescence_record_offset;
     size_t breakpoints_offset;
