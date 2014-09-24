@@ -182,7 +182,7 @@ read_config(msp_t *msp, const char *filename)
 }
 
 static void
-run_simulate(char *conf_file, long seed)
+run_simulate(char *conf_file, long seed, unsigned long output_events)
 {
     int ret = -1;
     int result;
@@ -206,17 +206,21 @@ run_simulate(char *conf_file, long seed)
         goto out;
     }
     do {
-        result = msp_run(msp, DBL_MAX, ULONG_MAX);
+        result = msp_run(msp, DBL_MAX, output_events);
         if (result < 0) {
             ret = result;
+            printf("error in run\n");
             goto out;
         }
         ret = msp_finalise_tree_file(msp);
         if (ret != 0) {
+            printf("error in finalise\n");
             goto out;
         }
+        printf("STATE\n");
         ret = msp_print_state(msp);
         if (ret != 0) {
+            printf("error in print state\n");
             goto out;
         }
     } while (result > 0);
@@ -236,12 +240,18 @@ int
 main(int argc, char** argv)
 {
     long seed;
-    if (argc != 3) {
-        fatal_error("usage: %s CONFIG_FILE SEED", argv[0]);
+    long output_events = LONG_MAX;
+    if (argc < 3) {
+        fatal_error("usage: %s CONFIG_FILE SEED <OUTPUT_EVENTS>", argv[0]);
     }
     if (parse_long(argv[2], &seed, 0, LONG_MAX) != 0) {
         fatal_error("cannot parse seed '%s'", argv[3]);
     }
-    run_simulate(argv[1], seed);
+    if (argc >= 4) {
+        if (parse_long(argv[3], &output_events, 0, LONG_MAX) != 0) {
+            fatal_error("cannot parse seed '%s'", argv[3]);
+        }
+    }
+    run_simulate(argv[1], seed, output_events);
     return EXIT_SUCCESS;
 }

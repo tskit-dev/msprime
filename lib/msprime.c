@@ -1230,7 +1230,7 @@ out:
 int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
-    int ret = -1;
+    int ret = 0;
     double lambda_c, lambda_r, t_c, t_r, t_wait, pop_size;
     long long num_links;
     uint32_t n = avl_count(&self->ancestral_population);
