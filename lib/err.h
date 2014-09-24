@@ -33,5 +33,7 @@
 #define MSP_ERR_GENERIC -1
 #define MSP_ERR_NO_MEMORY -2
 #define MSP_ERR_IO -3
+#define MSP_ERR_FILE_FORMAT -4
+#define MSP_ERR_FILE_VERSION -5
 
 #endif /*__ERR_H__*/
