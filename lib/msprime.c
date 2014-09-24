@@ -38,6 +38,10 @@ msp_strerror(int err)
         ret = "Out of memory";
     } else if (err == MSP_ERR_GENERIC) {
         ret = "Generic error; please file a bug report";
+    } else if (err == MSP_ERR_FILE_FORMAT) {
+        ret = "File format error";
+    } else if (err == MSP_ERR_FILE_VERSION) {
+        ret = "Unsupported file format version";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -645,6 +649,32 @@ out:
     return ret;
 }
 
+/* Writes all relevent metadata to the tree file in JSON format
+ */
+static int WARN_UNUSED
+msp_write_tree_file_metadata(msp_t *self)
+{
+    int ret = -1;
+    const char *fmt = "{"
+        "sample_size=%d,"
+        "num_loci=%lld,"
+        "random_seed=%ld,"
+        "recombination_rate=%f,"
+        "tree_file_name=\"%s\""
+        "}";
+    ret = fprintf(self->tree_file, fmt,
+        self->sample_size,
+        (long long) self->num_loci,
+        self->random_seed,
+        self->recombination_rate,
+        self->tree_file_name
+    );
+    if (ret < 0) {
+        ret = MSP_ERR_IO;
+    }
+    return ret;
+}
+
 /* Updates the file header so that different sections can be found
  * and then writes a footer.
  */
@@ -670,7 +700,10 @@ msp_finalise_tree_file(msp_t *self)
         }
     }
     metadata_offset = ftell(f);
-    /* TODO write the metadata */
+    ret = msp_write_tree_file_metadata(self);
+    if (ret < 0) {
+        goto out;
+    }
     /* now we can write the header */
     h32[0] = MSP_TREE_FILE_MAGIC;
     h32[1] = MSP_TREE_FILE_VERSION;
@@ -816,18 +849,8 @@ msp_print_state(msp_t *self)
     uint32_t j, k, bp;
     int32_t *pi;
     float *tau;
-    /* coalescence_record_t cr; */
-    /* FILE *f = fopen(self->tree_file_name, "r"); */
     tree_reader_t tr;
 
-/*     if (f == NULL) { */
-/*         ret = MSP_ERR_IO; */
-/*         goto out; */
-/*     } */
-/*     if (tv == NULL) { */
-/*         ret = MSP_ERR_NO_MEMORY; */
-/*         goto out; */
-/*     } */
     ret = tree_reader_alloc(&tr, self->tree_file_name);
     if (ret != 0) {
         goto out;
@@ -884,21 +907,6 @@ msp_print_state(msp_t *self)
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
     printf("Coalescence records = %d\n", self->num_coalescence_records);
-    /* seek to the start of file and read all records */
-    /*
-    if (fseek(f, 0, SEEK_SET) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    while ((ret = fread(&cr, sizeof(cr), 1, f)) == 1) {
-        printf("\t(%d, %d) -- (%d, %d)->%d @ %f\n", cr.left, cr.right,
-                cr.children[0], cr.children[1], cr.parent, cr.time);
-    }
-    if (!feof(f)) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    */
     printf("Memory heaps\n");
     printf("avl_node_heap:");
     object_heap_print_state(&self->avl_node_heap);
@@ -1281,6 +1289,7 @@ int WARN_UNUSED
 tree_reader_alloc(tree_reader_t *self, char *tree_file_name)
 {
     int ret = -1;
+    size_t metadata_size;
     uint32_t h32[3];
     uint64_t h64[3];
 
@@ -1334,6 +1343,27 @@ tree_reader_alloc(tree_reader_t *self, char *tree_file_name)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    /* now read in the metadata */
+    if (fseek(self->tree_file, 0, SEEK_END) != 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    metadata_size = ftell(self->tree_file) - self->metadata_offset;
+    self->metadata = malloc(metadata_size + 1);
+    if (self->metadata == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    if (fseek(self->tree_file, self->metadata_offset, SEEK_SET) != 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    if (fread(self->metadata, metadata_size, 1, self->tree_file) != 1) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    /* NULL terminate the string */
+    self->metadata[metadata_size] = '\0';
     ret = 0;
 out:
     return ret;
@@ -1416,6 +1446,9 @@ tree_reader_free(tree_reader_t *self)
     }
     if (self->tree_file_name != NULL) {
         free(self->tree_file_name);
+    }
+    if (self->metadata != NULL) {
+        free(self->metadata);
     }
     if (self->tree_file != NULL) {
         fclose(self->tree_file);
