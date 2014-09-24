@@ -209,18 +209,15 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
         result = msp_run(msp, DBL_MAX, output_events);
         if (result < 0) {
             ret = result;
-            printf("error in run\n");
             goto out;
         }
         ret = msp_finalise_tree_file(msp);
         if (ret != 0) {
-            printf("error in finalise\n");
             goto out;
         }
         printf("STATE\n");
         ret = msp_print_state(msp);
         if (ret != 0) {
-            printf("error in print state\n");
             goto out;
         }
     } while (result > 0);

@@ -656,11 +656,11 @@ msp_write_tree_file_metadata(msp_t *self)
 {
     int ret = -1;
     const char *fmt = "{"
-        "sample_size=%d,"
-        "num_loci=%lld,"
-        "random_seed=%ld,"
-        "recombination_rate=%f,"
-        "tree_file_name=\"%s\""
+        "\"sample_size\":%d,"
+        "\"num_loci\":%lld,"
+        "\"random_seed\":%ld,"
+        "\"recombination_rate\":%f,"
+        "\"tree_file_name\":\"%s\""
         "}";
     ret = fprintf(self->tree_file, fmt,
         self->sample_size,
