@@ -166,25 +166,26 @@ read_config(msp_t *msp, const char *filename)
             &msp->recombination_rate) == CONFIG_FALSE) {
         fatal_error("recombination_rate is a required parameter");
     }
-    if (config_lookup_string(config, "coalescence_record_file", &str)
+    if (config_lookup_string(config, "tree_file", &str)
             == CONFIG_FALSE) {
-        fatal_error("coalescence_record_file is a required parameter");
+        fatal_error("tree_file is a required parameter");
     }
     s = strlen(str);
-    msp->coalescence_record_filename = malloc(s + 1);
-    if (msp->coalescence_record_filename == NULL) {
+    msp->tree_file_name = malloc(s + 1);
+    if (msp->tree_file_name == NULL) {
         fatal_error("no memory");
     }
-    strcpy(msp->coalescence_record_filename, str);
+    strcpy(msp->tree_file_name, str);
     read_population_models(msp, config);
     config_destroy(config);
     free(config);
 }
 
 static void
-run_simulate(char *conf_file, long seed)
+run_simulate(char *conf_file, long seed, unsigned long output_events)
 {
     int ret = -1;
+    int result;
     msp_t *msp = calloc(1, sizeof(msp_t));
 
     if (msp == NULL) {
@@ -205,17 +206,27 @@ run_simulate(char *conf_file, long seed)
         goto out;
     }
     do {
-        ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-        if (ret < 0) {
+        result = msp_run(msp, DBL_MAX, output_events);
+        if (result < 0) {
+            ret = result;
+            printf("error in run\n");
             goto out;
         }
-        if (msp_print_state(msp) != 0) {
+        ret = msp_finalise_tree_file(msp);
+        if (ret != 0) {
+            printf("error in finalise\n");
             goto out;
         }
-    } while (ret > 0);
+        printf("STATE\n");
+        ret = msp_print_state(msp);
+        if (ret != 0) {
+            printf("error in print state\n");
+            goto out;
+        }
+    } while (result > 0);
 out:
     if (msp != NULL) {
-        free(msp->coalescence_record_filename);
+        free(msp->tree_file_name);
         msp_free(msp);
         free(msp);
     }
@@ -229,12 +240,18 @@ int
 main(int argc, char** argv)
 {
     long seed;
-    if (argc != 3) {
-        fatal_error("usage: %s CONFIG_FILE SEED", argv[0]);
+    long output_events = LONG_MAX;
+    if (argc < 3) {
+        fatal_error("usage: %s CONFIG_FILE SEED <OUTPUT_EVENTS>", argv[0]);
     }
     if (parse_long(argv[2], &seed, 0, LONG_MAX) != 0) {
         fatal_error("cannot parse seed '%s'", argv[3]);
     }
-    run_simulate(argv[1], seed);
+    if (argc >= 4) {
+        if (parse_long(argv[3], &output_events, 0, LONG_MAX) != 0) {
+            fatal_error("cannot parse seed '%s'", argv[3]);
+        }
+    }
+    run_simulate(argv[1], seed, output_events);
     return EXIT_SUCCESS;
 }
