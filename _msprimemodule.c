@@ -367,6 +367,19 @@ out:
 }
 
 static PyObject *
+Simulator_get_sample_size(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->sim->sample_size);
+out:
+    return ret;
+}
+
+
+static PyObject *
 Simulator_get_random_seed(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -386,6 +399,18 @@ Simulator_get_time(Simulator  *self)
         goto out;
     }
     ret = Py_BuildValue("d", self->sim->time);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_tree_file(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("s", self->sim->tree_file_name);
 out:
     return ret;
 }
@@ -624,8 +649,8 @@ static PyObject *
 Simulator_run(Simulator *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    int status, not_done;
-    uint64_t chunk = 8192;
+    int status, not_done, coalesced;
+    uint64_t chunk = 1024;
     double max_time = DBL_MAX;
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -642,18 +667,19 @@ Simulator_run(Simulator *self, PyObject *args)
             handle_library_error(status);
             goto out;
         }
-        not_done = status != 0;
+        not_done = status == 1;
         if (PyErr_CheckSignals() < 0) {
             goto out;
         }
     }
+    coalesced = status == 0;
     status = msp_finalise_tree_file(self->sim);
     if (status < 0) {
         handle_library_error(status);
         goto out;
     }
     /* return True if complete coalescence has occured */
-    ret = self->sim->time < max_time ? Py_True : Py_False;
+    ret = coalesced ? Py_True : Py_False;
     Py_INCREF(ret);
 out:
     return ret;
@@ -662,10 +688,14 @@ out:
 static PyMethodDef Simulator_methods[] = {
     {"get_num_loci", (PyCFunction) Simulator_get_num_loci, METH_NOARGS,
             "Returns the number of loci" },
+    {"get_sample_size", (PyCFunction) Simulator_get_sample_size, METH_NOARGS,
+            "Returns the sample size" },
     {"get_random_seed", (PyCFunction) Simulator_get_random_seed, METH_NOARGS,
             "Returns the random seed" },
     {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS,
             "Returns the current simulation time" },
+    {"get_tree_file", (PyCFunction) Simulator_get_tree_file, METH_NOARGS,
+            "Returns the name of the tree file." },
     {"get_recombination_rate",
             (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
             "Returns the rate of recombination between adjacent loci" },
@@ -679,8 +709,7 @@ static PyMethodDef Simulator_methods[] = {
 #endif
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\
-            if the required stopping conditions have been met and False \
-            otherwise." },
+            if sample has coalesced and False otherwise." },
     {NULL}  /* Sentinel */
 };
 
