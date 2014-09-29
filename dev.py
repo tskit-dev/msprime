@@ -19,6 +19,9 @@ def print_sim(sim):
     print("num_ancestors = ", sim.get_num_ancestors())
     for segs in sim.get_ancestors():
         print(segs)
+    print("population models = ")
+    for model in sim.get_population_models():
+        print(model)
     # print("X = ", sim.get_X())
     # print("X = ", sim.get_X())
     # print("X = ", sim.get_X())
@@ -28,10 +31,13 @@ def main():
     j = 0
     if True:
         j += 1
+        models = [{"type":_msprime.POP_MODEL_CONSTANT, "time":0.3, "size":0.2},
+                {"type":_msprime.POP_MODEL_EXPONENTIAL, "time":0.5, "alpha":5}]
         sim = _msprime.Simulator(sample_size=4, random_seed=j,
                 tree_file_name=treefile,
                 num_loci=100, recombination_rate=0.1,
-                max_memory=1024**3, segment_block_size=10**6)
+                max_memory=1024**3, segment_block_size=10**6,
+                population_models=models)
         before = time.time()
         print(sim.run(0.5))
         duration = time.time() - before
