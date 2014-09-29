@@ -16,7 +16,9 @@ def print_sim(sim):
     print("random_seed = ", sim.get_random_seed())
     print("time = ", sim.get_time())
     print("tree_file = ", sim.get_tree_file())
-    # print("X = ", sim.get_X())
+    print("num_ancestors = ", sim.get_num_ancestors())
+    for segs in sim.get_ancestors():
+        print(segs)
     # print("X = ", sim.get_X())
     # print("X = ", sim.get_X())
     # print("X = ", sim.get_X())
@@ -45,7 +47,7 @@ def main():
         print(tr.get_num_trees())
         print(tr.get_metadata())
         s = json.loads(tr.get_metadata())
-        print(s)
+        # print(s)
         before = time.time()
         for j in range(tr.get_num_trees()):
             breakpoint, pi, tau = tr.get_tree(j)
@@ -53,6 +55,7 @@ def main():
         duration = time.time() - before
         print("tree loop Ran in", duration)
         print(sim.run())
+        print_sim(sim)
 
 
 

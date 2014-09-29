@@ -133,14 +133,16 @@ typedef struct {
     size_t metadata_offset;
 } tree_reader_t;
 
+int msp_alloc(msp_t *self);
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
-int msp_alloc(msp_t *self);
-int msp_free(msp_t *self);
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
+size_t msp_get_num_ancestors(msp_t *self);
+int msp_get_ancestors(msp_t *self, segment_t **);
 int msp_finalise_tree_file(msp_t *self);
 int msp_print_state(msp_t *self);
+int msp_free(msp_t *self);
 
 int tree_reader_alloc(tree_reader_t *self, char *tree_file_name);
 int tree_reader_init(tree_reader_t *self);
