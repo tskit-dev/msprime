@@ -188,6 +188,30 @@ Simulator_check_input(Simulator *self)
         handle_input_error("must have 0 <= recombination_rate <= 1");
         goto out;
     }
+    if (sim->sample_size < 2) {
+        handle_input_error("sample_size must be > 1");
+        goto out;
+    }
+    if (sim->max_memory == 0) {
+        handle_input_error("max_memory must be > 0");
+        goto out;
+    }
+    if (sim->avl_node_block_size == 0) {
+        handle_input_error("avl_node_block_size must be > 0");
+        goto out;
+    }
+    if (sim->segment_block_size == 0) {
+        handle_input_error("segment_block_size must be > 0");
+        goto out;
+    }
+    if (sim->node_mapping_block_size == 0) {
+        handle_input_error("node_mapping_block_size must be > 0");
+        goto out;
+    }
+    if (strlen(sim->tree_file_name) == 0) {
+        handle_input_error("Cannot use empty string as filename");
+        goto out;
+    }
     /* TODO more checks! */
     ret = 0;
 out:
@@ -200,11 +224,10 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int sim_ret;
     static char *kwlist[] = {"sample_size", "random_seed",
-        "tree_file_name",
-        "num_loci", "recombination_rate",
+        "tree_file_name", "num_loci", "recombination_rate",
         "population_models", "max_memory", "avl_node_block_size",
         "segment_block_size", "node_mapping_block_size", NULL};
-    PyObject *population_models;
+    PyObject *population_models = NULL;
     msp_t *sim = PyMem_Malloc(sizeof(msp_t));
     char *cr_filename;
     Py_ssize_t cr_filename_len;
@@ -249,8 +272,10 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_library_error(sim_ret);
         goto out;
     }
-    if (Simulator_parse_population_models(self, population_models) != 0) {
-        goto out;
+    if (population_models != NULL) {
+        if (Simulator_parse_population_models(self, population_models) != 0) {
+            goto out;
+        }
     }
     if (Simulator_check_input(self) != 0) {
         goto out;
@@ -260,6 +285,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_library_error(sim_ret);
         goto out;
     }
+    msp_print_state(self->sim);
     sim_ret = msp_initialise(self->sim);
     if (sim_ret != 0) {
         handle_library_error(sim_ret);
