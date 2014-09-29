@@ -8,6 +8,7 @@ from __future__ import division
 import json
 import time
 import _msprime
+import msprime
 
 def print_sim(sim):
     print("sample_size = ", sim.get_sample_size())
@@ -26,7 +27,7 @@ def print_sim(sim):
     # print("X = ", sim.get_X())
     # print("X = ", sim.get_X())
 
-def main():
+def ll_main():
     treefile = "tmp__NOBACKUP__/tmp2.dat"
     j = 0
     if True:
@@ -69,7 +70,10 @@ def main():
     # for length, pi, tau in tv:
     #     print(length, pi, tau)
 
+def hl_main():
+    sim = msprime.TreeSimulator(4)
+    sim.run()
 
 
 if __name__ == "__main__":
-    main()
+    hl_main()
