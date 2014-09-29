@@ -378,7 +378,6 @@ out:
     return ret;
 }
 
-
 static PyObject *
 Simulator_get_random_seed(Simulator  *self)
 {
@@ -427,6 +426,99 @@ out:
     return ret;
 }
 
+static PyObject *
+Simulator_get_num_ancestors(Simulator *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", msp_get_num_ancestors(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_individual_to_python(Simulator *self, segment_t *ind)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *t = NULL;
+    size_t num_segments, j;
+    segment_t *u;
+
+    num_segments = 0;
+    u = ind;
+    while (u != NULL) {
+        num_segments++;
+        u = u->next;
+    }
+    l = PyList_New(num_segments);
+    if (l == NULL) {
+        goto out;
+    }
+    u = ind;
+    j = 0;
+    while (u != NULL) {
+        t = Py_BuildValue("(I,I,i)", u->left, u->right, u->value);
+        if (t == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, t);
+        j++;
+        u = u->next;
+    }
+    ret = l;
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_ancestors(Simulator *self)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_ind = NULL;
+    segment_t **ancestors = NULL;
+    size_t num_ancestors, j;
+    int err;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    num_ancestors = msp_get_num_ancestors(self->sim);
+    ancestors = PyMem_Malloc(num_ancestors * sizeof(segment_t **));
+    if (ancestors == NULL) {
+        goto out;
+    }
+    err = msp_get_ancestors(self->sim, ancestors);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    l = PyList_New(num_ancestors);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_ancestors; j++) {
+        py_ind = Simulator_individual_to_python(self, ancestors[j]);
+        if (py_ind == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_ind);
+    }
+    ret = l;
+out:
+    if (ancestors != NULL) {
+        PyMem_Free(ancestors);
+    }
+    return ret;
+}
+
+
+
 #if 0
 static PyObject *
 Simulator_get_event_classes(Simulator *self)
@@ -463,186 +555,6 @@ out:
 }
 
 
-
-static PyObject *
-Simulator_individual_to_python(Simulator *self, individual_t *ind)
-{
-    PyObject *ret = NULL;
-    PyObject *key, *value;
-    int status;
-    double *x = ind->location;
-    avl_node_t *node;
-    int_map_value_t *imv;
-    PyObject *ancestry = NULL;
-    PyObject *loc = NULL;
-    if (self->sim->dimension == 1) {
-        loc = Py_BuildValue("d", x[0]);
-    } else {
-        loc = Py_BuildValue("(d,d)", x[0], x[1]);
-    }
-    if (loc == NULL) {
-        goto out;
-    }
-    if (self->sim->simulate_pedigree == 1) {
-        ret = loc;
-    } else {
-        ancestry = PyDict_New();
-        if (ancestry == NULL) {
-            goto out;
-        }
-        for (node = ind->ancestry.head; node != NULL; node = node->next) {
-            imv = (int_map_value_t *) node->item;
-            key = Py_BuildValue("I", imv->key);
-            if (key == NULL) {
-                goto out;
-            }
-            value = Py_BuildValue("I", imv->value);
-            if (value == NULL) {
-                Py_DECREF(key);
-                goto out;
-            }
-            status = PyDict_SetItem(ancestry, key, value);
-            Py_DECREF(key);
-            Py_DECREF(value);
-            if (status != 0) {
-                goto out;
-            }
-        }
-        ret = PyTuple_Pack(2, loc, ancestry);
-        if (ret == NULL) {
-            goto out;
-        }
-    }
-out:
-    if (self->sim->simulate_pedigree == 0) {
-        Py_XDECREF(loc);
-        Py_XDECREF(ancestry);
-    }
-    return ret;
-}
-
-static PyObject *
-Simulator_get_population(Simulator  *self)
-{
-    int err;
-    unsigned int j;
-    PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *py_ind = NULL;
-    avl_tree_t *pop = NULL;
-    avl_node_t *node;
-    uint64_t id;
-    uintptr_t int_ptr;
-    individual_t *ind;
-
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    pop = PyMem_Malloc(sizeof(avl_tree_t));
-    if (pop == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = sim_get_population(self->sim, pop);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    l = PyList_New(avl_count(pop));
-    if (l == NULL) {
-        goto out;
-    }
-    j = 0;
-    for (node = pop->head; node != NULL; node = node->next) {
-        id = *((uint64_t *) node->item);
-        int_ptr = (uintptr_t) id;
-        ind = (individual_t *) int_ptr;
-        py_ind = Simulator_individual_to_python(self, ind);
-        if (py_ind == NULL) {
-            goto out;
-        }
-        if (PyList_SetItem(l, j, py_ind) != 0) {
-            Py_DECREF(py_ind);
-            goto out;
-        }
-        j++;
-    }
-    ret = l;
-    l = NULL;
-out:
-    if (pop != NULL) {
-        sim_free_population(self->sim, pop);
-        PyMem_Free(pop);
-    }
-    Py_XDECREF(l);
-    return ret;
-}
-
-
-static PyObject *
-Simulator_get_history(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    PyObject *pi = NULL;
-    PyObject *tau = NULL;
-    PyObject *pi_locus, *tau_locus;
-    unsigned int j, l, n;
-    int err;
-    sim_t *sim = self->sim;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    if (self->sim->simulate_pedigree == 1) {
-        PyErr_SetString(PyExc_NotImplementedError,
-                "Cannot get history for pedigree simulation");
-        goto out;
-    }
-
-    pi = PyList_New(sim->num_loci);
-    if (pi == NULL) {
-        goto out;
-    }
-    tau = PyList_New(sim->num_loci);
-    if (tau == NULL) {
-        goto out;
-    }
-    n = 2 * sim->sample_size;
-    for (l = 0; l < sim->num_loci; l++) {
-        pi_locus = PyList_New(n);
-        if (pi_locus == NULL) {
-            goto out;
-        }
-        err = PyList_SetItem(pi, l, pi_locus);
-        if (err < 0) {
-            goto out;
-        }
-        tau_locus = PyList_New(n);
-        if (tau_locus == NULL) {
-            goto out;
-        }
-        err = PyList_SetItem(tau, l, tau_locus);
-        if (err < 0) {
-            goto out;
-        }
-        for (j = 0; j < n; j++) {
-            err = PyList_SetItem(pi_locus, j, PyLong_FromLong(sim->pi[l][j]));
-            if (err < 0) {
-                goto out;
-            }
-            err = PyList_SetItem(tau_locus, j,
-                    PyFloat_FromDouble(sim->tau[l][j]));
-            if (err < 0) {
-                goto out;
-            }
-        }
-    }
-    ret = Py_BuildValue("(O, O)", pi, tau);
-out:
-    Py_XDECREF(pi);
-    Py_XDECREF(tau);
-
-    return ret;
-}
 #endif
 
 static PyObject *
@@ -699,13 +611,13 @@ static PyMethodDef Simulator_methods[] = {
     {"get_recombination_rate",
             (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
             "Returns the rate of recombination between adjacent loci" },
+    {"get_num_ancestors", (PyCFunction) Simulator_get_num_ancestors, METH_NOARGS,
+            "Returns the number of ancestors" },
+    {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
+            "Returns the ancestors" },
 #if 0
     {"get_event_classes", (PyCFunction) Simulator_get_event_classes, METH_NOARGS,
             "Returns the event classes" },
-    {"get_population", (PyCFunction) Simulator_get_population, METH_NOARGS,
-            "Returns the state of the ancestral population" },
-    {"get_history", (PyCFunction) Simulator_get_history, METH_NOARGS,
-            "Returns the history of the sample as a tuple (pi, tau)" },
 #endif
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\

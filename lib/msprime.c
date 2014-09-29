@@ -850,7 +850,17 @@ msp_print_state(msp_t *self)
     int32_t *pi;
     float *tau;
     tree_reader_t tr;
+    segment_t **ancestors = malloc(msp_get_num_ancestors(self)
+            * sizeof(segment_t **));
 
+    if (ancestors == NULL && msp_get_num_ancestors(self) != 0) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = msp_get_ancestors(self, ancestors);
+    if (ret != 0) {
+        goto out;
+    }
     ret = tree_reader_alloc(&tr, self->tree_file_name);
     if (ret != 0) {
         goto out;
@@ -867,12 +877,9 @@ msp_print_state(msp_t *self)
     printf("num_links = %ld\n", fenwick_get_total(&self->links));
     printf("population = %d\n", avl_count(&self->ancestral_population));
     printf("time = %f\n", self->time);
-    node = (&self->ancestral_population)->head;
-    while (node != NULL) {
-        u = (segment_t *) node->item;
+    for (j = 0; j < msp_get_num_ancestors(self); j++) {
         printf("\t");
-        msp_print_segment_chain(self, u);
-        node = node->next;
+        msp_print_segment_chain(self, ancestors[j]);
     }
     assert(avl_count(&self->breakpoints) == tr.num_trees + 1);
     printf("trees = %d\n", tr.num_trees);
@@ -920,6 +927,9 @@ msp_print_state(msp_t *self)
     ret = 0;
 out:
     tree_reader_free(&tr);
+    if (ancestors != NULL) {
+        free(ancestors);
+    }
     return ret;
 }
 
@@ -1284,6 +1294,30 @@ out:
     return ret;
 }
 
+size_t
+msp_get_num_ancestors(msp_t *self)
+{
+    return avl_count(&self->ancestral_population);
+}
+
+int
+msp_get_ancestors(msp_t *self, segment_t **ancestors)
+{
+    int ret = -1;
+    avl_node_t *node;
+    size_t j = 0;
+
+    for (node = (&self->ancestral_population)->head; node != NULL; node = node->next) {
+        ancestors[j] = (segment_t *) node->item;
+        j++;
+    }
+    ret = 0;
+    return ret;
+}
+
+/*
+ * Tree reader
+ */
 
 int WARN_UNUSED
 tree_reader_alloc(tree_reader_t *self, char *tree_file_name)
