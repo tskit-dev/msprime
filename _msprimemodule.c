@@ -45,14 +45,11 @@ typedef struct {
     tree_reader_t *tree_reader;
 } TreeReader;
 
-
-
 static void
 handle_library_error(int err)
 {
     PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
 }
-
 
 static void
 handle_input_error(const char *err)
@@ -60,7 +57,6 @@ handle_input_error(const char *err)
     PyErr_SetString(MsprimeInputError, err);
 }
 
-#if 0
 /*
  * Retrieves a number value with the specified key from the specified
  * dictionary.
@@ -86,55 +82,11 @@ out:
     return ret;
 }
 
-
-
-static int
-msprime_parse_event_classes(PyObject *py_events, event_class_t *events)
-{
-    int ret = -1;
-    int j, size;
-    double rate, u, r;
-    PyObject *item, *value;
-    size = PyList_Size(py_events);
-    if (size == 0) {
-        PyErr_SetString(MsprimeInputError, "must have > 0 events");
-        goto out;
-    }
-    for (j = 0; j < size; j++) {
-        item = PyList_GetItem(py_events, j);
-        if (!PyDict_Check(item)) {
-            PyErr_SetString(MsprimeInputError, "not a dictionary");
-            goto out;
-        }
-        value = get_dict_number(item, "rate");
-        if (value == NULL) {
-            goto out;
-        }
-        rate = PyFloat_AsDouble(value);
-        value = get_dict_number(item, "r");
-        if (value == NULL) {
-            goto out;
-        }
-        r = PyFloat_AsDouble(value);
-        value = get_dict_number(item, "u");
-        if (value == NULL) {
-            goto out;
-        }
-        u = PyFloat_AsDouble(value);
-        events[j].rate = rate;
-        events[j].r = r;
-        events[j].u = u;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-#endif
-
 /*===================================================================
  * Simulator
  *===================================================================
  */
+
 static int
 Simulator_check_sim(Simulator *self)
 {
@@ -146,28 +98,63 @@ Simulator_check_sim(Simulator *self)
     return ret;
 }
 
-#if 0
 static int
-Simulator_parse_events(Simulator *self, PyObject *py_events)
+Simulator_parse_population_models(Simulator *self, PyObject *py_pop_models)
 {
     int ret = -1;
-    int size;
-    size = PyList_Size(py_events);
-    if (size == 0) {
-        PyErr_SetString(MsprimeInputError, "must have > 0 events");
+    Py_ssize_t j;
+    double time, size, alpha;
+    long type;
+    int err;
+    PyObject *item, *value;
+
+    if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    self->sim->num_event_classes = size;
-    self->sim->event_classes = PyMem_Malloc(size * sizeof(event_class_t));
-    if (self->sim->event_classes == NULL) {
-        ret = ERR_ALLOC_FAILED;
-        goto out;
+    for (j = 0; j < PyList_Size(py_pop_models); j++) {
+        item = PyList_GetItem(py_pop_models, j);
+        if (!PyDict_Check(item)) {
+            PyErr_SetString(MsprimeInputError, "not a dictionary");
+            goto out;
+        }
+        value = get_dict_number(item, "time");
+        if (value == NULL) {
+            goto out;
+        }
+        time = PyFloat_AsDouble(value);
+        value = get_dict_number(item, "type");
+        if (value == NULL) {
+            goto out;
+        }
+        type = PyLong_AsLong(value);
+        if (type == POP_MODEL_CONSTANT) {
+            value = get_dict_number(item, "size");
+            if (value == NULL) {
+                goto out;
+            }
+            size = PyFloat_AsDouble(value);
+            err = msp_add_constant_population_model(self->sim, time, size);
+        } else if (type == POP_MODEL_EXPONENTIAL) {
+            value = get_dict_number(item, "alpha");
+            if (value == NULL) {
+                goto out;
+            }
+            alpha = PyFloat_AsDouble(value);
+            err = msp_add_constant_population_model(self->sim, time, alpha);
+        } else {
+            PyErr_SetString(MsprimeInputError,
+                    "Invalid population model type");
+            goto out;
+        }
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
-    ret = msprime_parse_event_classes(py_events, self->sim->event_classes);
+    ret = 0;
 out:
     return ret;
 }
-#endif
 
 static void
 Simulator_dealloc(Simulator* self)
@@ -184,90 +171,28 @@ Simulator_dealloc(Simulator* self)
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-#if 0
 static int
 Simulator_check_input(Simulator *self)
 {
     int ret = -1;
-    unsigned int j;
-    sim_t *sim = self->sim;
-    event_class_t *e;
+    msp_t *sim = self->sim;
+
     if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    if (sim->dimension < 1 || sim->dimension > 2) {
-        handle_input_error("dimension must be 1 or 2");
-        goto out;
-    }
-    if (sim->dimension == 1 && sim->pixel_size != 2.0) {
-        handle_input_error("pixel size must be 2.0 in 1D");
-        goto out;
-    }
-    if (sim->simulate_pedigree < 0 || sim->simulate_pedigree > 1) {
-        handle_input_error("simulate_pedigree must be 0 or 1");
-        goto out;
-    }
-    if (sim->simulate_pedigree == 1 && sim->num_loci != 1) {
-        handle_input_error("m must be 1 for pedigree simulation");
-        goto out;
-    }
-    if (sim->torus_diameter <= 0.0) {
-        handle_input_error("must have torus_edge > 0");
         goto out;
     }
     if (sim->num_loci == 0) {
         handle_input_error("must have num_loci > 0");
         goto out;
     }
-    if (sim->num_parents == 0) {
-        handle_input_error("must have num_parents > 0");
+    if (sim->recombination_rate < 0 || sim->recombination_rate > 1) {
+        handle_input_error("must have 0 <= recombination_rate <= 1");
         goto out;
     }
-    if (sim->max_population_size == 0) {
-        handle_input_error("must have max_population_size > 0");
-        goto out;
-    }
-    if (sim->max_occupancy == 0) {
-        handle_input_error("must have max_occupancy > 0");
-        goto out;
-    }
-    if (sim->recombination_probability < 0 ||
-            sim->recombination_probability > 1) {
-        handle_input_error("must have 0 <= recombination_probability <= 1");
-        goto out;
-    }
-    if (sim->pixel_size <= 0 || sim->pixel_size > sim->torus_diameter / 4) {
-        handle_input_error("must have 0 < pixel_size <= L/4 ");
-        goto out;
-    }
-    if (fmod(sim->torus_diameter, sim->pixel_size) != 0.0) {
-        handle_input_error("L/s must be an integer");
-        goto out;
-    }
-    if (sim->num_event_classes == 0) {
-        handle_input_error("at least one event class required");
-        goto out;
-    }
-    for (j = 0; j < sim->num_event_classes; j++) {
-        e = &sim->event_classes[j];
-        if (e->r <= 0.0 || e->r > sim->torus_diameter / 4.0) {
-            handle_input_error("must have 0 < r < L / 4");
-            goto out;
-        }
-        if (e->u <= 0.0 || e->u >= 1.0) {
-            handle_input_error("must have 0 < u < 1");
-            goto out;
-        }
-        if (e->rate <= 0.0) {
-            handle_input_error("must have 0 < rate < 1");
-            goto out;
-        }
-    }
+    /* TODO more checks! */
     ret = 0;
 out:
     return ret;
 }
-#endif
 
 static int
 Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
@@ -324,7 +249,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_library_error(sim_ret);
         goto out;
     }
-    /* TODO parse the population models and verify the input parameters */
+    if (Simulator_parse_population_models(self, population_models) != 0) {
+        goto out;
+    }
+    if (Simulator_check_input(self) != 0) {
+        goto out;
+    }
     sim_ret = msp_alloc(self->sim);
     if (sim_ret != 0) {
         handle_library_error(sim_ret);
@@ -336,14 +266,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = 0;
-#if 0
-    if (Simulator_parse_population_models(self, population_models) != 0) {
-        goto out;
-    }
-    if (Simulator_check_input(self) != 0) {
-        goto out;
-    }
-#endif
 out:
     return ret;
 }
@@ -516,36 +438,48 @@ out:
     }
     return ret;
 }
-
-
-
-#if 0
 static PyObject *
-Simulator_get_event_classes(Simulator *self)
+Simulator_get_population_models(Simulator *self)
 {
     PyObject *ret = NULL;
     PyObject *l = NULL;
     PyObject *d = NULL;
-    unsigned int j;
-    event_class_t *e;
+    population_model_t *m;
+    const char *param_name;
+    size_t j = 0;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    l = PyList_New(self->sim->num_event_classes);
+    /* TODO this is poor API, need to abstract this somehow. */
+    m = self->sim->population_models;
+    while (m != NULL) {
+        j++;
+        m = m ->next;
+    }
+    l = PyList_New(j);
     if (l == NULL) {
         goto out;
     }
-    for (j = 0; j < self->sim->num_event_classes; j++) {
-        e = &self->sim->event_classes[j];
-        d = Py_BuildValue("{s:d,s:d,s:d}", "r", e->r, "u", e->u,
-                "rate", e->rate);
+    m = self->sim->population_models;
+    j = 0;
+    while (m != NULL) {
+        if (m->type == POP_MODEL_CONSTANT) {
+            param_name = "size";
+        } else if (m->type == POP_MODEL_EXPONENTIAL) {
+            param_name = "alpha";
+        } else {
+            PyErr_SetString(PyExc_SystemError, "Unexpected pop model");
+            goto out;
+        }
+        d = Py_BuildValue("{s:I,s:d,s:d}", "type", m->type, "time",
+                m->start_time, param_name, m->param);
         if (d == NULL) {
             goto out;
         }
-        if (PyList_SetItem(l, j, d) != 0) {
-            goto out;
-        }
+        PyList_SET_ITEM(l, j, d);
+        j++;
+        m = m ->next;
     }
     ret = l;
     l = NULL;
@@ -553,9 +487,6 @@ out:
     Py_XDECREF(l);
     return ret;
 }
-
-
-#endif
 
 static PyObject *
 Simulator_run(Simulator *self, PyObject *args)
@@ -615,10 +546,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the number of ancestors" },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
-#if 0
-    {"get_event_classes", (PyCFunction) Simulator_get_event_classes, METH_NOARGS,
-            "Returns the event classes" },
-#endif
+    {"get_population_models", (PyCFunction) Simulator_get_population_models,
+            METH_VARARGS, "Returns the population models"},
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\
             if sample has coalesced and False otherwise." },
@@ -940,6 +869,10 @@ init_msprime(void)
             NULL);
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
+
+    PyModule_AddIntConstant(module, "POP_MODEL_CONSTANT", POP_MODEL_CONSTANT);
+    PyModule_AddIntConstant(module, "POP_MODEL_EXPONENTIAL",
+            POP_MODEL_EXPONENTIAL);
 
 #if PY_MAJOR_VERSION >= 3
     return module;
