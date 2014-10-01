@@ -5,6 +5,7 @@ Simple client code for development purposes.
 from __future__ import print_function
 from __future__ import division
 
+import random
 import json
 import time
 import _msprime
@@ -64,15 +65,16 @@ def ll_main():
         print(sim.run())
         print_sim(sim)
 
-
-
     # tv = _msprime.TreeViewer(treefile)
     # for length, pi, tau in tv:
     #     print(length, pi, tau)
 
 def hl_main():
-    sim = msprime.TreeSimulator(4)
-    sim.run()
+    random.seed(1)
+    pi, tau = msprime.simulate_tree(4)
+    # print(pi, tau)
+    for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
+        print(l, pi, tau)
 
 
 if __name__ == "__main__":
