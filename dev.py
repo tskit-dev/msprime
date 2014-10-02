@@ -31,23 +31,25 @@ def print_sim(sim):
 def ll_main():
     treefile = "tmp__NOBACKUP__/tmp2.dat"
     j = 0
-    if True:
+    while True:
         j += 1
         models = [{"type":_msprime.POP_MODEL_CONSTANT, "time":0.3, "size":0.2},
                 {"type":_msprime.POP_MODEL_EXPONENTIAL, "time":0.5, "alpha":5}]
-        sim = _msprime.Simulator(sample_size=4, random_seed=j,
+        sim = _msprime.Simulator(sample_size=400, random_seed=j,
                 tree_file_name=treefile,
-                num_loci=100, recombination_rate=0.1,
+                num_loci=1000, recombination_rate=0.1,
                 max_memory=1024**3, segment_block_size=10**6,
                 population_models=models)
         before = time.time()
-        print(sim.run(0.5))
+        print(sim.run())
+        #print(sim.run(0.5))
         duration = time.time() - before
         print("Ran in", duration)
         print_sim(sim)
 
         before = time.time()
-        tr = _msprime.TreeReader(treefile)
+        tr = _msprime.TreeFile(treefile)
+        tr.sort()
         duration = time.time() - before
         print("create tree_reader Ran in", duration)
         print(tr.get_num_loci())
@@ -57,25 +59,32 @@ def ll_main():
         s = json.loads(tr.get_metadata())
         # print(s)
         before = time.time()
-        for j in range(tr.get_num_trees()):
-            breakpoint, pi, tau = tr.get_tree(j)
-            #print(j, breakpoint)
-        duration = time.time() - before
-        print("tree loop Ran in", duration)
-        print(sim.run())
-        print_sim(sim)
+        j = 0
+        for r in tr:
+            j += 1
+        print(j)
+
+        # for j in range(tr.get_num_trees()):
+        #     breakpoint, pi, tau = tr.get_tree(j)
+        #     #print(j, breakpoint)
+        # duration = time.time() - before
+        # print("tree loop Ran in", duration)
+        # print(sim.run())
+        # print_sim(sim)
 
     # tv = _msprime.TreeViewer(treefile)
     # for length, pi, tau in tv:
     #     print(length, pi, tau)
 
 def hl_main():
+
     random.seed(1)
     pi, tau = msprime.simulate_tree(4)
-    # print(pi, tau)
+    print(pi, tau)
     for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
         print(l, pi, tau)
 
 
 if __name__ == "__main__":
-    hl_main()
+    #hl_main()
+    ll_main()

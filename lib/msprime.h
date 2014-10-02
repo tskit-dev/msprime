@@ -149,7 +149,6 @@ int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);
 
 int tree_file_alloc(tree_file_t *self, char *tree_file_name);
-int tree_file_init(tree_file_t *self);
 int tree_file_sort(tree_file_t *self);
 int tree_file_record_iter_init(tree_file_t *self);
 int tree_file_record_iter_next(tree_file_t *self, coalescence_record_t *r);
