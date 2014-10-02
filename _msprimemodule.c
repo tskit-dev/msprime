@@ -42,8 +42,9 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
-    tree_reader_t *tree_reader;
-} TreeReader;
+    tree_file_t *tree_file;
+    int iter_state;
+} TreeFile;
 
 static void
 handle_library_error(int err)
@@ -285,7 +286,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_library_error(sim_ret);
         goto out;
     }
-    msp_print_state(self->sim);
     sim_ret = msp_initialise(self->sim);
     if (sim_ret != 0) {
         handle_library_error(sim_ret);
@@ -621,15 +621,15 @@ static PyTypeObject SimulatorType = {
 };
 
 /*===================================================================
- * TreeReader
+ * TreeFile
  *===================================================================
  */
 static int
-TreeReader_check_tree_reader(TreeReader *self)
+TreeFile_check_tree_file(TreeFile *self)
 {
     int ret = 0;
-    if (self->tree_reader == NULL) {
-        PyErr_SetString(PyExc_SystemError, "tree_reader not initialised");
+    if (self->tree_file == NULL) {
+        PyErr_SetString(PyExc_SystemError, "tree_file not initialised");
         ret = -1;
     }
     return ret;
@@ -637,38 +637,35 @@ TreeReader_check_tree_reader(TreeReader *self)
 
 
 static void
-TreeReader_dealloc(TreeReader* self)
+TreeFile_dealloc(TreeFile* self)
 {
-    if (self->tree_reader != NULL) {
-        tree_reader_free(self->tree_reader);
-        PyMem_Free(self->tree_reader);
-        self->tree_reader = NULL;
+    if (self->tree_file != NULL) {
+        tree_file_free(self->tree_file);
+        PyMem_Free(self->tree_file);
+        self->tree_file = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static int
-TreeReader_init(TreeReader *self, PyObject *args, PyObject *kwds)
+TreeFile_init(TreeFile *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int tr_ret;
     static char *kwlist[] = {"tree_file_name", NULL};
     char *tree_file_name;
-    tree_reader_t *tree_reader = PyMem_Malloc(sizeof(tree_reader_t));
-    self->tree_reader = tree_reader;
-    if (self->tree_reader == NULL) {
+    tree_file_t *tree_file = PyMem_Malloc(sizeof(tree_file_t));
+
+    self->iter_state = 0;
+    self->tree_file = tree_file;
+    if (self->tree_file == NULL) {
         goto out;
     }
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
                 &tree_file_name)) {
         goto out;
     }
-    tr_ret = tree_reader_alloc(self->tree_reader, tree_file_name);
-    if (tr_ret != 0) {
-        handle_library_error(tr_ret);
-        goto out;
-    }
-    tr_ret = tree_reader_init(self->tree_reader);
+    tr_ret = tree_file_alloc(self->tree_file, tree_file_name);
     if (tr_ret != 0) {
         handle_library_error(tr_ret);
         goto out;
@@ -678,62 +675,113 @@ out:
     return ret;
 }
 
-static PyMemberDef TreeReader_members[] = {
+static PyMemberDef TreeFile_members[] = {
     {NULL}  /* Sentinel */
 };
 
 static PyObject *
-TreeReader_get_num_loci(TreeReader *self)
+TreeFile_get_num_loci(TreeFile *self)
 {
     PyObject *ret = NULL;
-    if (TreeReader_check_tree_reader(self) != 0) {
+    if (TreeFile_check_tree_file(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", self->tree_reader->num_loci);
+    ret = Py_BuildValue("I", self->tree_file->num_loci);
 out:
     return ret;
 }
 
 static PyObject *
-TreeReader_get_sample_size(TreeReader *self)
+TreeFile_get_sample_size(TreeFile *self)
 {
     PyObject *ret = NULL;
-    if (TreeReader_check_tree_reader(self) != 0) {
+    if (TreeFile_check_tree_file(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", self->tree_reader->sample_size);
-out:
-    return ret;
-}
-
-
-static PyObject *
-TreeReader_get_num_trees(TreeReader *self)
-{
-    PyObject *ret = NULL;
-    if (TreeReader_check_tree_reader(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->tree_reader->num_trees);
+    ret = Py_BuildValue("I", self->tree_file->sample_size);
 out:
     return ret;
 }
 
 
 static PyObject *
-TreeReader_get_metadata(TreeReader *self)
+TreeFile_get_num_trees(TreeFile *self)
 {
     PyObject *ret = NULL;
-    if (TreeReader_check_tree_reader(self) != 0) {
+    if (TreeFile_check_tree_file(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("s", self->tree_reader->metadata);
+    ret = Py_BuildValue("I", self->tree_file->num_trees);
+out:
+    return ret;
+}
+
+
+static PyObject *
+TreeFile_get_metadata(TreeFile *self)
+{
+    PyObject *ret = NULL;
+    if (TreeFile_check_tree_file(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("s", self->tree_file->metadata);
 out:
     return ret;
 }
 
 static PyObject *
-TreeReader_get_tree(TreeReader *self, PyObject *args)
+TreeFile_sort(TreeFile *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (TreeFile_check_tree_file(self) != 0) {
+        goto out;
+    }
+    err = tree_file_sort(self->tree_file);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_None;
+    Py_INCREF(ret);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeFile_next(TreeFile *self)
+{
+    PyObject *ret = NULL;
+    coalescence_record_t cr;
+    int v;
+
+    if (self->iter_state == 0) {
+        tree_file_record_iter_init(self->tree_file);
+        self->iter_state = 1;
+    }
+    if (self->iter_state == 1) {
+        v = tree_file_record_iter_next(self->tree_file, &cr);
+        if (v < 0) {
+            handle_library_error(v);
+            goto out;
+        }
+        if (v == 0) {
+            /* last record has been read, iteration is done */
+            self->iter_state = 2;
+        }
+        ret = Py_BuildValue("iiiiid", cr.left, cr.right, cr.children[0],
+                cr.children[1], cr.parent, cr.time);
+    }
+out:
+    return ret;
+}
+
+
+
+#if 0
+static PyObject *
+TreeFile_get_tree(TreeFile *self, PyObject *args)
 {
     PyObject *ret = NULL;
     PyObject *py_pi = NULL;
@@ -744,22 +792,22 @@ TreeReader_get_tree(TreeReader *self, PyObject *args)
     int32_t *pi;
     float *tau;
 
-    if (TreeReader_check_tree_reader(self) != 0) {
+    if (TreeFile_check_tree_file(self) != 0) {
         goto out;
     }
     if (!PyArg_ParseTuple(args, "I", &j)) {
         goto out;
     }
-    if (j >= self->tree_reader->num_trees) {
+    if (j >= self->tree_file->num_trees) {
         handle_input_error("tree out of bounds");
         goto out;
     }
-    err = tree_reader_get_tree(self->tree_reader, (uint32_t) j, &l, &pi, &tau);
+    err = tree_file_get_tree(self->tree_file, (uint32_t) j, &l, &pi, &tau);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    n = 2 * self->tree_reader->sample_size;
+    n = 2 * self->tree_file->sample_size;
     py_pi = PyList_New(n);
     if (py_pi == NULL) {
         goto out;
@@ -785,28 +833,31 @@ out:
     return ret;
 }
 
+#endif
 
 
-static PyMethodDef TreeReader_methods[] = {
-    {"get_num_loci", (PyCFunction) TreeReader_get_num_loci, METH_NOARGS,
+static PyMethodDef TreeFile_methods[] = {
+    {"get_num_loci", (PyCFunction) TreeFile_get_num_loci, METH_NOARGS,
             "Returns the number of loci"},
-    {"get_sample_size", (PyCFunction) TreeReader_get_sample_size, METH_NOARGS,
+    {"get_sample_size", (PyCFunction) TreeFile_get_sample_size, METH_NOARGS,
             "Returns the sample size"},
-    {"get_num_trees", (PyCFunction) TreeReader_get_num_trees, METH_NOARGS,
+    {"get_num_trees", (PyCFunction) TreeFile_get_num_trees, METH_NOARGS,
             "Returns the number of trees"},
-    {"get_metadata", (PyCFunction) TreeReader_get_metadata, METH_NOARGS,
+    {"get_metadata", (PyCFunction) TreeFile_get_metadata, METH_NOARGS,
             "Returns the simulation metadata"},
-    {"get_tree", (PyCFunction) TreeReader_get_tree, METH_VARARGS,
-            "Returns the tree corresponding to the jth breakpoint."},
+    {"sort", (PyCFunction) TreeFile_sort, METH_NOARGS,
+            "Sorts the coalescence records in the file."},
+    /* {"get_tree", (PyCFunction) TreeFile_get_tree, METH_VARARGS, */
+    /*         "Returns the tree corresponding to the jth breakpoint."}, */
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject TreeReaderType = {
+static PyTypeObject TreeFileType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.TreeReader",             /* tp_name */
-    sizeof(TreeReader),             /* tp_basicsize */
+    "_msprime.TreeFile",             /* tp_name */
+    sizeof(TreeFile),             /* tp_basicsize */
     0,                         /* tp_itemsize */
-    (destructor)TreeReader_dealloc, /* tp_dealloc */
+    (destructor)TreeFile_dealloc, /* tp_dealloc */
     0,                         /* tp_print */
     0,                         /* tp_getattr */
     0,                         /* tp_setattr */
@@ -822,22 +873,22 @@ static PyTypeObject TreeReaderType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "TreeReader objects",           /* tp_doc */
+    "TreeFile objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
-    0,                     /* tp_iter */
-    0,                     /* tp_iternext */
-    TreeReader_methods,             /* tp_methods */
-    TreeReader_members,             /* tp_members */
+    PyObject_SelfIter,            /* tp_iter */
+    (iternextfunc) TreeFile_next, /* tp_iternext */
+    TreeFile_methods,             /* tp_methods */
+    TreeFile_members,             /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    (initproc)TreeReader_init,      /* tp_init */
+    (initproc)TreeFile_init,      /* tp_init */
 };
 
 /* Initialisation code supports Python 2.x and 3.x. The framework uses the
@@ -882,12 +933,12 @@ init_msprime(void)
     }
     Py_INCREF(&SimulatorType);
     PyModule_AddObject(module, "Simulator", (PyObject *) &SimulatorType);
-    TreeReaderType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&TreeReaderType) < 0) {
+    TreeFileType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&TreeFileType) < 0) {
         INITERROR;
     }
-    Py_INCREF(&TreeReaderType);
-    PyModule_AddObject(module, "TreeReader", (PyObject *) &TreeReaderType);
+    Py_INCREF(&TreeFileType);
+    PyModule_AddObject(module, "TreeFile", (PyObject *) &TreeFileType);
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);

@@ -1320,7 +1320,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
     // TODO we probably want a different protocol to indicate if max_time
     // has been exceeded or max_events.
-    ret = n;
+    ret = n == 0 ? 0 : 1;
 out:
     return ret;
 }
