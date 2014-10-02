@@ -29,7 +29,7 @@
 
 #define MSP_TREE_FILE_MAGIC 0xa52cd4a4 
 #define MSP_TREE_FILE_VERSION 1
-#define MSP_TREE_FILE_HEADER_SIZE 36
+#define MSP_TREE_FILE_HEADER_SIZE 40
 #define MSP_NUM_CR_ELEMENTS 6
 
 #define POP_MODEL_CONSTANT 0
@@ -122,15 +122,19 @@ typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     uint32_t num_trees;
-    uint32_t *breakpoints;
-    int32_t *pi;
-    float *tau;
     char *tree_file_name;
     char *metadata;
     FILE *tree_file;
     size_t coalescence_record_offset;
     size_t breakpoints_offset;
     size_t metadata_offset;
+} tree_file_t;
+
+typedef struct {
+    tree_file_t *tree_file;
+    uint32_t *breakpoints;
+    int32_t *pi;
+    float *tau;
 } tree_reader_t;
 
 int msp_alloc(msp_t *self);
@@ -144,7 +148,15 @@ int msp_finalise_tree_file(msp_t *self);
 int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);
 
-int tree_reader_alloc(tree_reader_t *self, char *tree_file_name);
+int tree_file_alloc(tree_file_t *self, char *tree_file_name);
+int tree_file_init(tree_file_t *self);
+int tree_file_sort(tree_file_t *self);
+int tree_file_record_iter_init(tree_file_t *self);
+int tree_file_record_iter_next(tree_file_t *self, coalescence_record_t *r);
+int tree_file_get_breakpoints(tree_file_t *self, uint32_t *breakpoints);
+int tree_file_free(tree_file_t *self);
+
+int tree_reader_alloc(tree_reader_t *self, tree_file_t *tf);
 int tree_reader_init(tree_reader_t *self);
 int tree_reader_get_tree(tree_reader_t *self, uint32_t j, uint32_t *breakpoint, 
         int32_t **pi, float **tau);
