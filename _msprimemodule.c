@@ -264,7 +264,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     strcpy(self->tree_file_name, cr_filename);
     sim->tree_file_name = self->tree_file_name;
-
     /* TODO this is very nasty and must be moved into the msprime
      * code when the refactoring is done.
      */
@@ -382,6 +381,30 @@ Simulator_get_num_ancestors(Simulator *self)
         goto out;
     }
     ret = Py_BuildValue("I", msp_get_num_ancestors(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_num_coancestry_events(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->sim->num_ca_events);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_num_recombination_events(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->sim->num_re_events);
 out:
     return ret;
 }
@@ -570,6 +593,12 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the rate of recombination between adjacent loci" },
     {"get_num_ancestors", (PyCFunction) Simulator_get_num_ancestors, METH_NOARGS,
             "Returns the number of ancestors" },
+    {"get_num_coancestry_events",
+            (PyCFunction) Simulator_get_num_coancestry_events, METH_NOARGS,
+            "Returns the number of coancestry_events" },
+    {"get_num_recombination_events",
+            (PyCFunction) Simulator_get_num_recombination_events, METH_NOARGS,
+            "Returns the number of recombination_events" },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
     {"get_population_models", (PyCFunction) Simulator_get_population_models,
