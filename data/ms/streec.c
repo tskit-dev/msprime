@@ -93,9 +93,6 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 #ifdef SUMMARY_STATS
     unsigned int recombination_events = 0;
     unsigned int coancestry_events = 0;
-    unsigned int max_population_size = 0;
-    double max_mean_num_segments = 0.0;
-    double mean_num_segments;
 #endif
 
 	nsam = cp->nsam;
@@ -397,24 +394,12 @@ segtre_mig(struct c_params *cp, int *pnsegs )
             printf("ERROR!\n");
             exit(1);
         }
-        if (nchrom > max_population_size) {
-            max_population_size = nchrom;
-        }
-        mean_num_segments = 0.0;
-        for (j = 0; j < nchrom; j++) {
-            mean_num_segments += chrom[j].nseg;
-        }
-        mean_num_segments /= nchrom;
-        if (mean_num_segments > max_mean_num_segments) {
-            max_mean_num_segments = mean_num_segments;
-        }
 #endif
 
 }
 #ifdef SUMMARY_STATS
     /* print out the events */
-    printf("%f\t%d\t%d\t%d\t%d\t%f\n", t, nsegs, recombination_events, coancestry_events,
-            max_population_size, max_mean_num_segments);
+    printf("%f\t%d\t%d\n", t, nsegs, recombination_events, coancestry_events);
 #endif
 	*pnsegs = nsegs ;
 	free(config);
