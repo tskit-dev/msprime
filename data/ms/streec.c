@@ -399,7 +399,7 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 }
 #ifdef SUMMARY_STATS
     /* print out the events */
-    printf("%f\t%d\t%d\n", t, nsegs, recombination_events, coancestry_events);
+    printf("%f\t%d\t%d\t%d\n", t, nsegs, recombination_events, coancestry_events);
 #endif
 	*pnsegs = nsegs ;
 	free(config);
