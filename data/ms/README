@@ -1,0 +1,9 @@
+
+This directory contains a copy of Hudson's ms that has been modified to 
+make it easier to obtain statistics about algorithm behaviour. This 
+is not a supported version, and should not be used for real simulations.
+Please download the official source at 
+
+http://home.uchicago.edu/rhudson1/source/mksamples.html
+
+
