@@ -154,10 +154,11 @@ class TreeSimulator(object):
         Runs the simulation until complete coalescence has occured or until
         the (optional) max_time.
         """
+        models = [m.get_ll_model() for m in self._population_models]
         assert self._ll_sim == None
         self._set_environment_defaults()
         self._ll_sim = _msprime.Simulator(sample_size=self._sample_size,
-                num_loci=self._num_loci,
+                num_loci=self._num_loci, population_models=models,
                 recombination_rate=self._recombination_rate,
                 random_seed=self._random_seed,
                 tree_file_name=self._tree_file_name,
@@ -206,6 +207,41 @@ class TreeFile(object):
             tau[p] = t
         yield self.get_num_loci() - l, pi, tau
 
+
+class PopulationModel(object):
+    """
+    Superclass of simulation population models.
+    """
+    def __init__(self, start_time):
+        self.start_time = start_time
+
+    def get_ll_model(self):
+        """
+        Returns the low-level model corresponding to this population
+        model.
+        """
+        return self.__dict__
+
+class ConstantPopulationModel(PopulationModel):
+    """
+    Class representing a constant-size population model. The size of this
+    is expressed relative to the size of the population at sampling time.
+    """
+    def __init__(self, start_time, size):
+        super(ConstantPopulationModel, self).__init__(start_time)
+        self.size = size
+        self.type = _msprime.POP_MODEL_CONSTANT
+
+
+class ExponentialPopulationModel(PopulationModel):
+    """
+    Class representing an exponentially growing or shrinking population.
+    TODO document model.
+    """
+    def __init__(self, start_time, alpha):
+        super(ExponentialPopulationModel, self).__init__(start_time)
+        self.alpha = alpha
+        self.type = _msprime.POP_MODEL_EXPONENTIAL
 
 
 

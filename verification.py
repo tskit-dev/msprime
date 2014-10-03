@@ -9,6 +9,7 @@ import os
 import random
 import tempfile
 import subprocess
+
 import pandas as pd
 import statsmodels.api as sm
 import matplotlib
@@ -25,57 +26,64 @@ def get_scaled_recombination_rate(Ne, m, r):
     """
     return 4 * Ne * (m - 1) * r
 
-class MsSimulator(object):
+class Simulator(object):
     """
-    Class representing Hudson's ms simulator. Takes care of running the
-    simulations and collating results.
+    Superclass of coalescent simulator objects.
     """
-    def __init__(self, n, m, Ne, r):
+    def __init__(self, n, m, Ne, r, models=[]):
         self.sample_size = n
         self.recombination_rate = r
         self.num_loci = m
         self.effective_population_size = Ne
-        self.executable = "./data/ms/ms_summary_stats"
-        self.population_models = []
-        if not os.path.exists(self.executable):
+        self.population_models = models
+
+class MsSimulator(Simulator):
+    """
+    Class representing Hudson's ms simulator. Takes care of running the
+    simulations and collating results.
+    """
+    def run(self, replicates):
+        executable = "./data/ms/ms_summary_stats"
+        if not os.path.exists(executable):
             raise ValueError("ms executable does not exist. "
                     + "go to data/ms directory and type make")
-
-    def run(self, replicates):
         rho = get_scaled_recombination_rate(self.effective_population_size,
                 self.num_loci, self.recombination_rate)
-        args = [self.executable, str(self.sample_size), str(replicates), "-T",
+        args = [executable, str(self.sample_size), str(replicates), "-T",
                 "-r", str(rho), str(self.num_loci)]
-        # md = {POP_MODEL_CONSTANT: "-eN", POP_MODEL_EXP: "-eG"}
-        for time, model, param in self.population_models:
-            mstr = md[model]
-            args.extend([mstr, str(time), str(param)])
+        for model in self.population_models:
+            if isinstance(model, msprime.ConstantPopulationModel):
+                v = ["-eN", str(model.start_time), str(model.size)]
+            elif isinstance(model, msprime.ExponentialPopulationModel):
+                v = ["-eG", str(model.start_time), str(model.alpha)]
+            else:
+                raise ValueError("unknown population model")
+            args.extend(v)
         with tempfile.TemporaryFile() as f:
-            # print(args)
+            print(args)
             subprocess.call(args, stdout=f)
             f.seek(0)
             df = pd.read_table(f)
         return df
 
-class MsprimeSimulator(object):
-
-    def __init__(self, n, m, Ne, r):
-        self.sample_size = n
-        self.recombination_rate = r
-        self.num_loci = m
-        self.effective_population_size = Ne
-
+class MsprimeSimulator(Simulator):
+    """
+    Class to simlify running the msprime simulator and getting summary
+    stats over many replicates.
+    """
     def run(self, replicates):
         num_trees = [0 for j in range(replicates)]
         time = [0 for j in range(replicates)]
         ca_events = [0 for j in range(replicates)]
         re_events = [0 for j in range(replicates)]
-        for j in range(replicates):
-            with tempfile.NamedTemporaryFile() as f:
+        with tempfile.NamedTemporaryFile() as f:
+            for j in range(replicates):
                 sim = msprime.TreeSimulator(self.sample_size, f.name)
                 sim.set_recombination_rate(4 * self.effective_population_size
                         * self.recombination_rate)
                 sim.set_num_loci(self.num_loci)
+                for m in self.population_models:
+                    sim.add_population_model(m)
                 sim.run()
                 tf = msprime.TreeFile(f.name)
                 num_trees[j] = tf.get_num_trees()
@@ -92,9 +100,9 @@ def run_verify(n, m, Ne, r, models, num_replicates, output_prefix):
     Runs ms and msprime on the specified parameters and outputs qqplots
     with the specified prefix.
     """
-    ms = MsSimulator(n, m, r, Ne)
+    ms = MsSimulator(n, m, r, Ne, models)
     df_ms = ms.run(num_replicates)
-    msp = MsprimeSimulator(n, m, r, Ne)
+    msp = MsprimeSimulator(n, m, r, Ne, models)
     df_msp = msp.run(num_replicates)
     for stat in ["t", "num_trees", "re_events", "ca_events"]:
         v1 = df_ms[stat]
@@ -105,6 +113,30 @@ def run_verify(n, m, Ne, r, models, num_replicates, output_prefix):
         pyplot.savefig(f, dpi=72)
         pyplot.clf()
 
+def verify_random(k):
+
+    random.seed(k)
+    for j in range(k):
+        n = random.randint(1, 100)
+        m = random.randint(1, 10000)
+        Ne = random.uniform(100, 1e4)
+        r = random.uniform(1e-9, 1e-6)
+        num_replicates = 1000
+        output_prefix = "tmp__NOBACKUP__/random_{0}".format(j)
+        models = []
+        t = 0
+        for j in range(random.randint(0, 10)):
+            t += random.uniform(0, 0.3)
+            p = random.uniform(0.1, 2.0)
+            if random.random() < 0.5:
+                mod = msprime.ConstantPopulationModel(t, p)
+            else:
+                mod = msprime.ExponentialPopulationModel(t, p)
+            models.append(mod)
+            print(mod.get_ll_model())
+        print("running for", n, m, Ne, r, 4 * Ne * r)
+        run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+        break
 
 def main():
     # default to humanish recombination rates and population sizes.
@@ -113,9 +145,16 @@ def main():
     Ne = 1e4
     r = 1e-8
     num_replicates = 1000
-    models = []
-    output_prefix = "verification__NOBACKUP__/simple"
-    run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+    # num_replicates = 1
+    models = [
+            msprime.ConstantPopulationModel(0.1, 2.0),
+            msprime.ConstantPopulationModel(0.4, 0.5),
+            msprime.ExponentialPopulationModel(0.5, 1.0)]
+    output_prefix = "tmp__NOBACKUP__/simple"
+    # run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+    # TODO definite problem here using random parameters.
+    # - don't change until this has been  fixed.
+    verify_random(100)
 
 if __name__ == "__main__":
     main()

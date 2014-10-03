@@ -337,7 +337,7 @@ msp_add_population_model(msp_t *self, population_model_t *model)
 }
 
 int
-msp_add_constant_population_model(msp_t *self, double time, double size)
+msp_add_constant_population_model(msp_t *self, double start_time, double size)
 {
     int ret = -1;
     population_model_t *model = malloc(sizeof(population_model_t));
@@ -347,7 +347,7 @@ msp_add_constant_population_model(msp_t *self, double time, double size)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    model->start_time = time;
+    model->start_time = start_time;
     model->param = size;
     model->type = POP_MODEL_CONSTANT;
     model->get_size = constant_population_model_get_size;
@@ -361,7 +361,7 @@ out:
 }
 
 int
-msp_add_exponential_population_model(msp_t *self, double time, double alpha)
+msp_add_exponential_population_model(msp_t *self, double start_time, double alpha)
 {
     int ret = -1;
     population_model_t *model = malloc(sizeof(population_model_t));
@@ -371,7 +371,7 @@ msp_add_exponential_population_model(msp_t *self, double time, double alpha)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    model->start_time = time;
+    model->start_time = start_time;
     model->param = alpha;
     model->type = POP_MODEL_EXPONENTIAL;
     model->get_size = exponential_population_model_get_size;

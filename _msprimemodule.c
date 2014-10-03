@@ -104,7 +104,7 @@ Simulator_parse_population_models(Simulator *self, PyObject *py_pop_models)
 {
     int ret = -1;
     Py_ssize_t j;
-    double time, size, alpha;
+    double start_time, size, alpha;
     long type;
     int err;
     PyObject *item, *value;
@@ -118,11 +118,11 @@ Simulator_parse_population_models(Simulator *self, PyObject *py_pop_models)
             PyErr_SetString(MsprimeInputError, "not a dictionary");
             goto out;
         }
-        value = get_dict_number(item, "time");
+        value = get_dict_number(item, "start_time");
         if (value == NULL) {
             goto out;
         }
-        time = PyFloat_AsDouble(value);
+        start_time = PyFloat_AsDouble(value);
         value = get_dict_number(item, "type");
         if (value == NULL) {
             goto out;
@@ -134,14 +134,14 @@ Simulator_parse_population_models(Simulator *self, PyObject *py_pop_models)
                 goto out;
             }
             size = PyFloat_AsDouble(value);
-            err = msp_add_constant_population_model(self->sim, time, size);
+            err = msp_add_constant_population_model(self->sim, start_time, size);
         } else if (type == POP_MODEL_EXPONENTIAL) {
             value = get_dict_number(item, "alpha");
             if (value == NULL) {
                 goto out;
             }
             alpha = PyFloat_AsDouble(value);
-            err = msp_add_constant_population_model(self->sim, time, alpha);
+            err = msp_add_exponential_population_model(self->sim, start_time, alpha);
         } else {
             PyErr_SetString(MsprimeInputError,
                     "Invalid population model type");
