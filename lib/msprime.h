@@ -22,9 +22,9 @@
 
 #include <stdio.h>
 
-#include <avl.h>
 #include <gsl/gsl_rng.h>
 
+#include "avl.h"
 #include "fenwick.h"
 
 #define MSP_TREE_FILE_MAGIC 0xa52cd4a4 
