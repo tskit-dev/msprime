@@ -28,6 +28,8 @@ import random
 import tempfile
 
 import _msprime
+from _msprime import InputError
+from _msprime import LibraryError
 
 __version__ = '1.0.0a1'
 
@@ -167,9 +169,10 @@ class TreeSimulator(object):
                 avl_node_block_size=self._avl_node_block_size,
                 node_mapping_block_size=self._node_mapping_block_size)
         if max_time == None:
-            self._ll_sim.run()
+            ret = self._ll_sim.run()
         else:
-            self._ll_sim.run(max_time)
+            ret = self._ll_sim.run(max_time)
+        return ret
 
 class TreeFile(object):
     """
@@ -177,6 +180,9 @@ class TreeFile(object):
     """
     def __init__(self, tree_file_name):
         self._ll_tree_file = _msprime.TreeFile(tree_file_name)
+
+    def issorted(self):
+        return self._ll_tree_file.issorted()
 
     def sort(self):
         self._ll_tree_file.sort()
@@ -205,7 +211,7 @@ class TreeFile(object):
             pi[c1] = p
             pi[c2] = p
             tau[p] = t
-        yield self.get_num_loci() - l, pi, tau
+        yield self.get_num_loci() - l + 1, pi, tau
 
 
 class PopulationModel(object):
