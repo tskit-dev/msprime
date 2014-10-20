@@ -410,6 +410,19 @@ out:
 }
 
 static PyObject *
+Simulator_get_num_trees(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", self->sim->num_trees);
+out:
+    return ret;
+}
+
+
+static PyObject *
 Simulator_individual_to_python(Simulator *self, segment_t *ind)
 {
     PyObject *ret = NULL;
@@ -599,6 +612,8 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_recombination_events",
             (PyCFunction) Simulator_get_num_recombination_events, METH_NOARGS,
             "Returns the number of recombination_events" },
+    {"get_num_trees", (PyCFunction) Simulator_get_num_trees, METH_NOARGS,
+            "Returns the number of trees" },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
     {"get_population_models", (PyCFunction) Simulator_get_population_models,
