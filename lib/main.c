@@ -187,6 +187,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     int ret = -1;
     int result;
     msp_t *msp = calloc(1, sizeof(msp_t));
+    tree_file_t tf;
 
     if (msp == NULL) {
         goto out;
@@ -211,16 +212,43 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
             ret = result;
             goto out;
         }
-        ret = msp_finalise_tree_file(msp);
-        if (ret != 0) {
-            goto out;
-        }
         printf("STATE\n");
         ret = msp_print_state(msp);
         if (ret != 0) {
             goto out;
         }
     } while (result > 0);
+    /*
+     * TODO sort is currently broken
+    ret = tree_file_open(&tf, msp->tree_file_name, 'w');
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_file_sort(&tf);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_file_close(&tf);
+    if (ret != 0) {
+        goto out;
+    }
+    */
+    ret = tree_file_open(&tf, msp->tree_file_name, 'r');
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_file_print_state(&tf);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_file_print_records(&tf);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_file_close(&tf);
+    if (ret != 0) {
+        goto out;
+    }
 out:
     if (msp != NULL) {
         free(msp->tree_file_name);

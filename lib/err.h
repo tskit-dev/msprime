@@ -35,5 +35,6 @@
 #define MSP_ERR_IO -3
 #define MSP_ERR_FILE_FORMAT -4
 #define MSP_ERR_FILE_VERSION -5
+#define MSP_ERR_BAD_MODE -6
 
 #endif /*__ERR_H__*/
