@@ -29,8 +29,8 @@
 
 #define MSP_TREE_FILE_MAGIC 0xa52cd4a4 
 #define MSP_TREE_FILE_VERSION 1
-#define MSP_TREE_FILE_HEADER_SIZE 40
-#define MSP_NUM_CR_ELEMENTS 6
+#define MSP_TREE_FILE_HEADER_SIZE 28
+#define MSP_NUM_CR_ELEMENTS 5
 
 #define POP_MODEL_CONSTANT 0
 #define POP_MODEL_EXPONENTIAL 1
@@ -48,7 +48,6 @@ typedef struct segment_t_t {
 /* int based oriented forests gives a maximum sample size of ~10^9 */
 typedef struct {
     uint32_t left;
-    uint32_t right;
     int32_t children[2];
     int32_t parent;
     float time;
@@ -82,6 +81,18 @@ typedef struct {
 } object_heap_t;
 
 typedef struct {
+    char *filename;
+    char mode;
+    FILE *file;
+    uint32_t sample_size;
+    uint32_t num_loci;
+    uint32_t flags;
+    char *metadata;
+    size_t coalescence_record_offset;
+    size_t metadata_offset;
+} tree_file_t;
+
+typedef struct {
     /* input parameters */
     int sample_size;
     int num_loci;
@@ -108,7 +119,7 @@ typedef struct {
     avl_tree_t ancestral_population;
     avl_tree_t breakpoints;
     fenwick_t links;
-    FILE *tree_file;
+    tree_file_t tree_file;
     /* memory management */
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
@@ -118,25 +129,6 @@ typedef struct {
     size_t next_node_mapping;
 } msp_t;
 
-typedef struct {
-    uint32_t sample_size;
-    uint32_t num_loci;
-    uint32_t num_trees;
-    char *tree_file_name;
-    char *metadata;
-    FILE *tree_file;
-    size_t coalescence_record_offset;
-    size_t breakpoints_offset;
-    size_t metadata_offset;
-} tree_file_t;
-
-typedef struct {
-    tree_file_t *tree_file;
-    uint32_t *breakpoints;
-    int32_t *pi;
-    float *tau;
-} tree_reader_t;
-
 int msp_alloc(msp_t *self);
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
@@ -144,22 +136,20 @@ int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 size_t msp_get_num_ancestors(msp_t *self);
 int msp_get_ancestors(msp_t *self, segment_t **);
-int msp_finalise_tree_file(msp_t *self);
 int msp_print_state(msp_t *self);
+int msp_write_metadata(msp_t *self, FILE *f);
 int msp_free(msp_t *self);
 
-int tree_file_alloc(tree_file_t *self, char *tree_file_name);
+int tree_file_open(tree_file_t *self, char *tree_file_name, char mode);
+int tree_file_set_sample_size(tree_file_t *self, uint32_t sample_size);
+int tree_file_set_num_loci(tree_file_t *self, uint32_t num_loci);
+int tree_file_close(tree_file_t *self);
 int tree_file_sort(tree_file_t *self);
-int tree_file_record_iter_init(tree_file_t *self);
-int tree_file_record_iter_next(tree_file_t *self, coalescence_record_t *r);
-int tree_file_get_breakpoints(tree_file_t *self, uint32_t *breakpoints);
-int tree_file_free(tree_file_t *self);
-
-int tree_reader_alloc(tree_reader_t *self, tree_file_t *tf);
-int tree_reader_init(tree_reader_t *self);
-int tree_reader_get_tree(tree_reader_t *self, uint32_t j, uint32_t *breakpoint, 
-        int32_t **pi, float **tau);
-int tree_reader_free(tree_reader_t *self);
+int tree_file_finalise(tree_file_t *self, msp_t *msp);
+int tree_file_append_record(tree_file_t *self, coalescence_record_t *r);
+int tree_file_next_record(tree_file_t *self, coalescence_record_t *r);
+int tree_file_print_state(tree_file_t *self);
+int tree_file_print_records(tree_file_t *self);
 
 char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/

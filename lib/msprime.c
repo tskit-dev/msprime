@@ -42,6 +42,8 @@ msp_strerror(int err)
         ret = "File format error";
     } else if (err == MSP_ERR_FILE_VERSION) {
         ret = "Unsupported file format version";
+    } else if (err == MSP_ERR_BAD_MODE) {
+        ret = "Bad tree file mode";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -52,33 +54,7 @@ msp_strerror(int err)
     return ret;
 }
 
-static inline void
-decode_coalescence_record(uint32_t *record, coalescence_record_t *cr)
-{
-    union { float float_value; uint32_t uint_value; } conv;
 
-    cr->left = record[0];
-    cr->right = record[1];
-    cr->children[0] = (int32_t) record[2];
-    cr->children[1] = (int32_t) record[3];
-    cr->parent = (int32_t) record[4];
-    conv.uint_value = record[5];
-    cr->time = conv.float_value;
-}
-
-static inline void
-encode_coalescence_record(coalescence_record_t *cr, uint32_t *record)
-{
-    union { float float_value; uint32_t uint_value; } conv;
-
-    conv.float_value = cr->time;
-    record[0] = cr->left;
-    record[1] = cr->right;
-    record[2] = (uint32_t) cr->children[0];
-    record[3] = (uint32_t) cr->children[1];
-    record[4] = (uint32_t) cr->parent;
-    record[5] = conv.uint_value;
-}
 
 static int
 cmp_individual(const void *a, const void *b) {
@@ -91,13 +67,6 @@ static int
 cmp_node_mapping(const void *a, const void *b) {
     const node_mapping_t *ia = (const node_mapping_t *) a;
     const node_mapping_t *ib = (const node_mapping_t *) b;
-    return (ia->left > ib->left) - (ia->left < ib->left);
-}
-
-static int
-cmp_coalescence_record(const void *a, const void *b) {
-    const coalescence_record_t *ia = (const coalescence_record_t *) a;
-    const coalescence_record_t *ib = (const coalescence_record_t *) b;
     return (ia->left > ib->left) - (ia->left < ib->left);
 }
 
@@ -521,11 +490,7 @@ msp_free(msp_t *self)
         }
         free(self->node_mapping_blocks);
     }
-    if (self->tree_file != NULL) {
-        // TODO check for errors here?
-        fclose(self->tree_file);
-    }
-    ret = 0;
+    ret = tree_file_close(&self->tree_file);
     return ret;
 }
 
@@ -629,129 +594,6 @@ msp_free_segment(msp_t *self, segment_t *node)
     fenwick_set_value(&self->links, node->index, 0);
 }
 
-static int WARN_UNUSED
-msp_open_tree_file(msp_t *self)
-{
-    int ret = 0;
-    FILE *f = fopen(self->tree_file_name, "w");
-    char *header = calloc(1, MSP_TREE_FILE_HEADER_SIZE);
-
-    self->tree_file = f;
-    if (f == NULL) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (header == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    /* write a temporary header */
-    if (fwrite(header, MSP_TREE_FILE_HEADER_SIZE, 1, f) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-out:
-    if (header != NULL) {
-        free(header);
-    }
-    return ret;
-}
-
-/* Writes all relevent metadata to the tree file in JSON format
- */
-static int WARN_UNUSED
-msp_write_tree_file_metadata(msp_t *self)
-{
-    int ret = -1;
-    const char *fmt = "{"
-        "\"sample_size\":%d,"
-        "\"num_loci\":%lld,"
-        "\"random_seed\":%ld,"
-        "\"recombination_rate\":%f,"
-        "\"tree_file_name\":\"%s\""
-        "}";
-    ret = fprintf(self->tree_file, fmt,
-        self->sample_size,
-        (long long) self->num_loci,
-        self->random_seed,
-        self->recombination_rate,
-        self->tree_file_name
-    );
-    if (ret < 0) {
-        ret = MSP_ERR_IO;
-    }
-    return ret;
-}
-
-/* Updates the file header so that different sections can be found
- * and then writes a footer.
- */
-int WARN_UNUSED
-msp_finalise_tree_file(msp_t *self)
-{
-    int ret = -1;
-    FILE *f = self->tree_file;
-    size_t breakpoints_offset, metadata_offset;
-    uint32_t h32[4];
-    uint64_t h64[3];
-    avl_node_t *node;
-    node_mapping_t *nm;
-
-    assert(f != NULL);
-    breakpoints_offset = ftell(f);
-    /* write the breakpoints */
-    for (node = (&self->breakpoints)->head; node != NULL; node = node->next) {
-        nm = (node_mapping_t *) node->item;
-        if (fwrite(&nm->left, sizeof(nm->left), 1, f) != 1) {
-            ret = MSP_ERR_IO;
-            goto out;
-        }
-    }
-    metadata_offset = ftell(f);
-    ret = msp_write_tree_file_metadata(self);
-    if (ret < 0) {
-        goto out;
-    }
-    /* now we can write the header */
-    h32[0] = MSP_TREE_FILE_MAGIC;
-    h32[1] = MSP_TREE_FILE_VERSION;
-    h32[2] = self->sample_size;
-    h32[3] = self->num_loci;
-    h64[0] = MSP_TREE_FILE_HEADER_SIZE;
-    h64[1] = breakpoints_offset;
-    h64[2] = metadata_offset;
-    assert((sizeof(h32) + sizeof(h64)) == MSP_TREE_FILE_HEADER_SIZE);
-    if (fseek(f, 0, SEEK_SET) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (fwrite(h32, sizeof(h32), 1, f) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (fwrite(h64, sizeof(h64), 1, f) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    /* now we flush this, so that anyone looking at this file will
-     * see the correct header and contents.
-     */
-    if (fflush(self->tree_file) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    /* we then seek back to where we were originally so
-     * we can continue writing records if simulation continues.
-     */
-    if (fseek(f, breakpoints_offset, SEEK_SET) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
 static inline int WARN_UNUSED
 msp_insert_individual(msp_t *self, segment_t *u)
 {
@@ -847,6 +689,33 @@ msp_verify(msp_t *self)
     }
 }
 
+/* Writes all metadata to the specified file in JSON format
+ */
+int WARN_UNUSED
+msp_write_metadata(msp_t *self, FILE *f)
+{
+    int ret = -1;
+    const char *fmt = "{"
+        "\"sample_size\":%d,"
+        "\"num_loci\":%lld,"
+        "\"random_seed\":%ld,"
+        "\"recombination_rate\":%f,"
+        "\"tree_file_name\":\"%s\""
+        "}";
+    ret = fprintf(f, fmt,
+        self->sample_size,
+        (long long) self->num_loci,
+        self->random_seed,
+        self->recombination_rate,
+        self->tree_file_name
+    );
+    if (ret < 0) {
+        ret = MSP_ERR_IO;
+    }
+    return ret;
+}
+
+
 int
 msp_print_state(msp_t *self)
 {
@@ -855,12 +724,7 @@ msp_print_state(msp_t *self)
     node_mapping_t *nm;
     segment_t *u;
     long long v;
-    uint32_t j, k, bp;
-    int32_t *pi;
-    float *tau;
-    tree_file_t tf;
-    tree_reader_t tr;
-    coalescence_record_t cr;
+    uint32_t j;
     segment_t **ancestors = malloc(msp_get_num_ancestors(self)
             * sizeof(segment_t **));
 
@@ -872,51 +736,17 @@ msp_print_state(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_file_alloc(&tf, self->tree_file_name);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_file_sort(&tf);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_reader_alloc(&tr, &tf);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_reader_init(&tr);
-    if (ret != 0) {
-        goto out;
-    }
     printf("used_memory = %f MiB\n", self->used_memory / (1024.0 * 1024.0));
     printf("max_memory  = %f MiB\n", self->max_memory / (1024.0 * 1024.0));
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
-    printf("num_links = %ld\n", fenwick_get_total(&self->links));
+    printf("num_links = %ld\n", (long) fenwick_get_total(&self->links));
     printf("population = %d\n", avl_count(&self->ancestral_population));
     printf("time = %f\n", self->time);
     for (j = 0; j < msp_get_num_ancestors(self); j++) {
         printf("\t");
         msp_print_segment_chain(self, ancestors[j]);
-    }
-    assert(avl_count(&self->breakpoints) == tf.num_trees + 1);
-    printf("trees = %d\n", tf.num_trees);
-    bp = 0;
-    pi = NULL;
-    tau = NULL;
-    for (j = 0; j < tf.num_trees; j++) {
-        ret = tree_reader_get_tree(&tr, j, &bp, &pi, &tau);
-        printf("\t%4d:", bp);
-        for (k = 0; k < 2 * self->sample_size; k++) {
-            printf("%3d ", pi[k]);
-        }
-        printf("|");
-        for (k = 0; k < 2 * self->sample_size; k++) {
-            printf("%.3f ", tau[k]);
-        }
-        printf("\n");
-
     }
     printf("Fenwick tree\n");
     for (j = 1; j <= fenwick_get_size(&self->links); j++) {
@@ -933,17 +763,6 @@ msp_print_state(msp_t *self)
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
     printf("Coalescence records = %d\n", self->num_coalescence_records);
-    ret = tree_file_record_iter_init(&tf);
-    if (ret != 0) {
-        goto out;
-    }
-    while ((ret = tree_file_record_iter_next(&tf, &cr)) == 1) {
-        printf("\t%d\t%d\t: %d %d %d %f\n", cr.left, cr.right, cr.children[0],
-                cr.children[1], cr.parent, cr.time);
-    }
-    if (ret != 0) {
-        goto out;
-    }
     printf("Memory heaps\n");
     printf("avl_node_heap:");
     object_heap_print_state(&self->avl_node_heap);
@@ -954,10 +773,8 @@ msp_print_state(msp_t *self)
     printf("\tnext = %d\n", (int) self->next_node_mapping);
     printf("\tnum_blocks = %d\n",  (int) self->num_node_mapping_blocks);
     msp_verify(self);
-    ret = 0;
+    ret = tree_file_print_state(&self->tree_file);
 out:
-    tree_file_free(&tf);
-    tree_reader_free(&tr);
     if (ancestors != NULL) {
         free(ancestors);
     }
@@ -1017,23 +834,18 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         int32_t child1, int32_t child2, int32_t parent)
 {
     int ret = 0;
-    uint32_t record[MSP_NUM_CR_ELEMENTS];
     coalescence_record_t cr;
 
     cr.time = self->time;
     cr.left = left;
-    cr.right = right;
+    /* right is not recorded as we only support complete simulations for now
+     * and this value is not required derive the marginal trees.
+     */
     cr.children[0] = child1;
     cr.children[1] = child2;
     cr.parent = parent;
-    encode_coalescence_record(&cr, record);
-    assert(self->tree_file != NULL);
     self->num_coalescence_records++;
-    if (fwrite(&record, sizeof(record), 1, self->tree_file) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-out:
+    ret = tree_file_append_record(&self->tree_file, &cr);
     return ret;
 
 }
@@ -1260,7 +1072,15 @@ msp_initialise(msp_t *self)
     }
     self->current_population_model = self->population_models;
     self->time = 0.0;
-    ret = msp_open_tree_file(self);
+    ret = tree_file_open(&self->tree_file, self->tree_file_name, 'w');
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_file_set_sample_size(&self->tree_file, self->sample_size);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_file_set_num_loci(&self->tree_file, self->num_loci);
     if (ret != 0) {
         goto out;
     }
@@ -1320,7 +1140,10 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
     // TODO we probably want a different protocol to indicate if max_time
     // has been exceeded or max_events.
-    ret = n == 0 ? 0 : 1;
+    ret = 1;
+    if (n == 0) {
+        ret = tree_file_finalise(&self->tree_file, self);
+    }
 out:
     return ret;
 }
@@ -1344,283 +1167,5 @@ msp_get_ancestors(msp_t *self, segment_t **ancestors)
     }
     ret = 0;
     return ret;
-}
-
-/*
- * Tree File
- */
-
-int WARN_UNUSED
-tree_file_alloc(tree_file_t *self, char *tree_file_name)
-{
-    int ret = -1;
-    size_t metadata_size;
-    uint32_t h32[4];
-    uint64_t h64[3];
-
-    memset(self, 0, sizeof(tree_file_t));
-    self->tree_file_name = malloc(1 + strlen(tree_file_name));
-    if (self->tree_file_name == NULL) {
-        goto out;
-    }
-    strcpy(self->tree_file_name, tree_file_name);
-    self->tree_file = fopen(self->tree_file_name, "r+");
-    if (self->tree_file == NULL) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    /* read the header and get the basic information that we need */
-    if (fread(h32, sizeof(h32), 1, self->tree_file) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (fread(h64, sizeof(h64), 1, self->tree_file) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (h32[0] != MSP_TREE_FILE_MAGIC) {
-        ret = MSP_ERR_FILE_FORMAT;
-        goto out;
-    }
-    if (h32[1] != MSP_TREE_FILE_VERSION) {
-        ret = MSP_ERR_FILE_VERSION;
-        goto out;
-    }
-    self->sample_size = h32[2];
-    self->num_loci = h32[3];
-    self->coalescence_record_offset = h64[0];
-    self->breakpoints_offset = h64[1];
-    self->metadata_offset = h64[2];
-    assert(self->coalescence_record_offset == ftell(self->tree_file));
-    self->num_trees = (self->metadata_offset - self->breakpoints_offset)
-        / sizeof(uint32_t) - 1;
-    /* now read in the metadata */
-    if (fseek(self->tree_file, 0, SEEK_END) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    metadata_size = ftell(self->tree_file) - self->metadata_offset;
-    self->metadata = malloc(metadata_size + 1);
-    if (self->metadata == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (fseek(self->tree_file, self->metadata_offset, SEEK_SET) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (fread(self->metadata, metadata_size, 1, self->tree_file) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    /* NULL terminate the string */
-    self->metadata[metadata_size] = '\0';
-    ret = 0;
-out:
-    return ret;
-}
-
-int WARN_UNUSED
-tree_file_sort(tree_file_t *self)
-{
-    int ret = -1;
-    FILE *f = self->tree_file;
-    coalescence_record_t *buff = NULL;
-    size_t size = self->breakpoints_offset - self->coalescence_record_offset;
-    size_t num_records = size / sizeof(coalescence_record_t);
-
-    buff = malloc(size);
-    if (buff == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (fseek(f, self->coalescence_record_offset, SEEK_SET) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (fread(buff, size, 1, f) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    /* sort the records and write the results back */
-    qsort(buff, num_records, sizeof(coalescence_record_t),
-            cmp_coalescence_record);
-    if (fseek(f, self->coalescence_record_offset, SEEK_SET) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (fwrite(buff, size, 1, f) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    ret = 0;
-out:
-    if (buff != NULL) {
-        free(buff);
-    }
-    return ret;
-}
-
-int WARN_UNUSED
-tree_file_get_breakpoints(tree_file_t *self, uint32_t *breakpoints)
-{
-    int ret = -1;
-    FILE *f = self->tree_file;
-
-    assert(f != NULL);
-    if (fseek(f, self->breakpoints_offset, SEEK_SET) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (fread(breakpoints,
-                sizeof(uint32_t) * (self->num_trees + 1), 1, f) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-int WARN_UNUSED
-tree_file_record_iter_init(tree_file_t *self)
-{
-    int ret = -1;
-    FILE *f = self->tree_file;
-
-    if (fseek(f, self->coalescence_record_offset, SEEK_SET) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-int WARN_UNUSED
-tree_file_record_iter_next(tree_file_t *self, coalescence_record_t *r)
-{
-    int ret = -1;
-    FILE *f = self->tree_file;
-    uint32_t record[MSP_NUM_CR_ELEMENTS];
-
-    if (fread(record, sizeof(record), 1, f) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    decode_coalescence_record(record, r);
-    ret = ftell(f) == self->breakpoints_offset ? 0 : 1;
-out:
-    return ret;
-}
-
-int
-tree_file_free(tree_file_t *self)
-{
-    if (self->tree_file_name != NULL) {
-        free(self->tree_file_name);
-    }
-    if (self->metadata != NULL) {
-        free(self->metadata);
-    }
-    if (self->tree_file != NULL) {
-        fclose(self->tree_file);
-    }
-    return 0;
-}
-
-
-/*
- * Tree reader
- */
-
-int WARN_UNUSED
-tree_reader_alloc(tree_reader_t *self, tree_file_t *tf)
-{
-    int ret = -1;
-    uint32_t n = tf->sample_size;
-    uint32_t t = tf->num_trees;
-
-    memset(self, 0, sizeof(tree_reader_t));
-    self->tree_file = tf;
-    self->breakpoints = calloc(self->tree_file->num_trees + 1,
-            sizeof(uint32_t));
-    if (self->breakpoints == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->pi = calloc(2 * n * t, sizeof(int32_t));
-    if (self->pi == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->tau = calloc(2 * n * t, sizeof(float));
-    if (self->tau == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-int
-tree_reader_init(tree_reader_t *self)
-{
-    int ret = -1;
-    uint32_t k, l;
-    int *pi;
-    float *tau;
-    coalescence_record_t cr;
-
-    ret = tree_file_get_breakpoints(self->tree_file, self->breakpoints);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_file_record_iter_init(self->tree_file);
-    if (ret != 0) {
-        goto out;
-    }
-    while ((ret = tree_file_record_iter_next(self->tree_file, &cr)) == 1) {
-        /* TODO this is very inefficient - should be using binary search */
-        for (k = 0; k < self->tree_file->num_trees; k++) {
-            l = self->breakpoints[k];
-            if (cr.left <= l && l <= cr.right) {
-                pi = self->pi + k * 2 * self->tree_file->sample_size;
-                tau = self->tau + k * 2 * self->tree_file->sample_size;
-                pi[cr.children[0]] = cr.parent;
-                pi[cr.children[1]] = cr.parent;
-                tau[cr.parent] = cr.time;
-            }
-        }
-    }
-out:
-    return ret;
-}
-
-int
-tree_reader_get_tree(tree_reader_t *self, uint32_t j, uint32_t *breakpoint,
-        int32_t **pi, float **tau)
-{
-    int ret = 0;
-    *pi = self->pi + j * 2 * self->tree_file->sample_size;
-    *tau = self->tau + j * 2 * self->tree_file->sample_size;
-    *breakpoint = self->breakpoints[j];
-    return ret;
-}
-
-int
-tree_reader_free(tree_reader_t *self)
-{
-    if (self->breakpoints != NULL) {
-        free(self->breakpoints);
-    }
-    if (self->pi != NULL) {
-        free(self->pi);
-    }
-    if (self->tau != NULL) {
-        free(self->tau);
-    }
-    return 0;
 }
 
