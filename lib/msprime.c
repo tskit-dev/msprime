@@ -1172,6 +1172,12 @@ msp_get_num_ancestors(msp_t *self)
     return avl_count(&self->ancestral_population);
 }
 
+size_t
+msp_get_num_trees(msp_t *self)
+{
+    return avl_count(&self->breakpoints) - 1;
+}
+
 int
 msp_get_ancestors(msp_t *self, segment_t **ancestors)
 {
