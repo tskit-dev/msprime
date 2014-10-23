@@ -85,15 +85,16 @@ def hl_main():
         print(l, pi, tau)
 
 def large_sim():
-    n = int(1e5)
-    m = int(20 * 1e6)
+    n = 10**5
+    m = 20 * 10**6
     Ne = 1e4
     r = 1e-8
     treefile = "tmp__NOBACKUP__/large_tree.dat"
     ts = msprime.TreeSimulator(n, treefile)
     ts.set_num_loci(m)
+    ts.set_scaled_recombination_rate(4 * Ne * r)
     ts.set_max_memory("200G")
-    ts.set_segment_block_size(int(1e8))
+    # ts.set_segment_block_size(int(1e8))
     try:
         ts.run()
     except KeyboardInterrupt:
