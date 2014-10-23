@@ -85,6 +85,30 @@ def hl_main():
         print(l, pi, tau)
 
 
+def memory_test():
+    while True:
+        n = random.randint(2, 100)
+        m = random.randint(10, 1000)
+        r = random.random()
+        treefile = "tmp__NOBACKUP__/treefile.dat"
+        # TODO add some different n and m values here.
+        ts = msprime.TreeSimulator(n, treefile)
+        # todo verify all the setters.
+        # self.assertEqual(ts.get_sample_size(), n)
+        ts.set_recombination_rate(r)
+        ts.set_num_loci(m)
+        ts.run()
+        tf = msprime.TreeFile(treefile, 'u')
+        assert not tf.issorted()
+        tf.sort()
+        assert tf.issorted()
+        tf.close()
+        tf = msprime.TreeFile(treefile)
+        l = [t for t in tf]
+
+
+
 if __name__ == "__main__":
     #hl_main()
-    ll_main()
+    # ll_main()
+    memory_test()

@@ -474,13 +474,13 @@ tree_file_print_records(tree_file_t *self)
 }
 
 int
-tree_file_is_complete(tree_file_t *self)
+tree_file_iscomplete(tree_file_t *self)
 {
     return self->flags & MSP_FLAGS_COMPLETE;
 }
 
 int
-tree_file_is_sorted(tree_file_t *self)
+tree_file_issorted(tree_file_t *self)
 {
     return self->flags & MSP_FLAGS_SORTED;
 }

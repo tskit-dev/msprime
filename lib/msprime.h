@@ -145,8 +145,8 @@ int tree_file_append_record(tree_file_t *self, coalescence_record_t *r);
 int tree_file_next_record(tree_file_t *self, coalescence_record_t *r);
 int tree_file_print_state(tree_file_t *self);
 int tree_file_print_records(tree_file_t *self);
-int tree_file_is_complete(tree_file_t *self);
-int tree_file_is_sorted(tree_file_t *self);
+int tree_file_iscomplete(tree_file_t *self);
+int tree_file_issorted(tree_file_t *self);
 
 char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/
