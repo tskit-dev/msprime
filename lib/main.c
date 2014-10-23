@@ -218,9 +218,8 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
             goto out;
         }
     } while (result > 0);
-    /*
-     * TODO sort is currently broken
-    ret = tree_file_open(&tf, msp->tree_file_name, 'w');
+    /* sort the file */
+    ret = tree_file_open(&tf, msp->tree_file_name, 'u');
     if (ret != 0) {
         goto out;
     }
@@ -232,7 +231,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    */
+    /* now print the records */
     ret = tree_file_open(&tf, msp->tree_file_name, 'r');
     if (ret != 0) {
         goto out;

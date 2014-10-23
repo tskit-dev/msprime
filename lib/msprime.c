@@ -711,10 +711,12 @@ msp_write_metadata(msp_t *self, FILE *f)
     );
     if (ret < 0) {
         ret = MSP_ERR_IO;
+        goto out;
     }
+    ret = 0;
+out:
     return ret;
 }
-
 
 int
 msp_print_state(msp_t *self)
