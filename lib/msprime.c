@@ -54,8 +54,6 @@ msp_strerror(int err)
     return ret;
 }
 
-
-
 static int
 cmp_individual(const void *a, const void *b) {
     const segment_t *ia = (const segment_t *) a;
@@ -400,6 +398,24 @@ out:
     return ret;
 }
 
+size_t
+msp_get_num_avl_node_blocks(msp_t *self)
+{
+    return self->avl_node_heap.num_blocks;
+}
+
+size_t
+msp_get_num_node_mapping_blocks(msp_t *self)
+{
+    return self->num_node_mapping_blocks;
+}
+
+size_t
+msp_get_num_segment_blocks(msp_t *self)
+{
+    return self->segment_heap.num_blocks;
+}
+
 int
 msp_alloc(msp_t *self)
 {
@@ -706,7 +722,7 @@ msp_write_metadata(msp_t *self, FILE *f)
         self->sample_size,
         (long long) self->num_loci,
         self->random_seed,
-        self->recombination_rate,
+        self->scaled_recombination_rate,
         self->tree_file_name
     );
     if (ret < 0) {
@@ -1104,7 +1120,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     while (n > 1 && self->time < max_time && events < max_events) {
         events++;
         num_links = fenwick_get_total(&self->links);
-        lambda_r = num_links * self->recombination_rate;
+        lambda_r = num_links * self->scaled_recombination_rate;
         t_r = DBL_MAX;
         if (lambda_r != 0.0) {
             t_r = gsl_ran_exponential(self->rng, 1.0 / lambda_r);

@@ -84,6 +84,24 @@ def hl_main():
     for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
         print(l, pi, tau)
 
+def large_sim():
+    n = int(1e5)
+    m = int(20 * 1e6)
+    Ne = 1e4
+    r = 1e-8
+    treefile = "tmp__NOBACKUP__/large_tree.dat"
+    ts = msprime.TreeSimulator(n, treefile)
+    ts.set_num_loci(m)
+    ts.set_max_memory("200G")
+    ts.set_segment_block_size(int(1e8))
+    try:
+        ts.run()
+    except KeyboardInterrupt:
+        pass
+    print("num_avl_node_blocks = ", ts.get_num_avl_node_blocks())
+    print("num_node_mapping_blocks = ", ts.get_num_node_mapping_blocks())
+    print("num_segment_blocks = ", ts.get_num_segment_blocks())
+
 
 def memory_test():
     while True:
@@ -111,4 +129,5 @@ def memory_test():
 if __name__ == "__main__":
     #hl_main()
     # ll_main()
-    memory_test()
+    # memory_test()
+    large_sim()

@@ -163,7 +163,7 @@ read_config(msp_t *msp, const char *filename)
     }
     msp->max_memory = tmp * 1024 * 1024;
     if (config_lookup_float(config, "recombination_rate",
-            &msp->recombination_rate) == CONFIG_FALSE) {
+            &msp->scaled_recombination_rate) == CONFIG_FALSE) {
         fatal_error("recombination_rate is a required parameter");
     }
     if (config_lookup_string(config, "tree_file", &str)
@@ -258,7 +258,6 @@ out:
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));
     }
 }
-
 
 int
 main(int argc, char** argv)

@@ -185,8 +185,8 @@ Simulator_check_input(Simulator *self)
         handle_input_error("must have num_loci > 0");
         goto out;
     }
-    if (sim->recombination_rate < 0 || sim->recombination_rate > 1) {
-        handle_input_error("must have 0 <= recombination_rate <= 1");
+    if (sim->scaled_recombination_rate < 0) {
+        handle_input_error("must have 0 <= recombination_rate");
         goto out;
     }
     if (sim->sample_size < 2) {
@@ -225,7 +225,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int sim_ret;
     static char *kwlist[] = {"sample_size", "random_seed",
-        "tree_file_name", "num_loci", "recombination_rate",
+        "tree_file_name", "num_loci", "scaled_recombination_rate",
         "population_models", "max_memory", "avl_node_block_size",
         "segment_block_size", "node_mapping_block_size", NULL};
     PyObject *population_models = NULL;
@@ -242,7 +242,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sim->sample_size = 2;
     sim->num_loci = 1;
     sim->random_seed = 1;
-    sim->recombination_rate = 0.5;
+    sim->scaled_recombination_rate = 1.0;
     sim->max_memory = 10 * 1024 * 1024;
     sim->avl_node_block_size = 10;
     sim->segment_block_size = 10;
@@ -252,7 +252,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "Ils#|IdO!nnnn", kwlist,
             &sim->sample_size, &sim->random_seed, &cr_filename,
             &cr_filename_len,
-            &sim->num_loci, &sim->recombination_rate,
+            &sim->num_loci, &sim->scaled_recombination_rate,
             &PyList_Type, &population_models, &sim->max_memory,
             &sim->avl_node_block_size, &sim->segment_block_size,
             &sim->node_mapping_block_size)) {
@@ -368,7 +368,7 @@ Simulator_get_recombination_rate(Simulator *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sim->recombination_rate);
+    ret = Py_BuildValue("d", self->sim->scaled_recombination_rate);
 out:
     return ret;
 }
@@ -408,6 +408,43 @@ Simulator_get_num_recombination_events(Simulator  *self)
 out:
     return ret;
 }
+
+static PyObject *
+Simulator_get_num_avl_node_blocks(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", msp_get_num_avl_node_blocks(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_num_node_mapping_blocks(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", msp_get_num_node_mapping_blocks(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_num_segment_blocks(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", msp_get_num_segment_blocks(self->sim));
+out:
+    return ret;
+}
+
 
 /* static PyObject * */
 /* Simulator_get_num_trees(Simulator  *self) */
@@ -611,6 +648,15 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_recombination_events",
             (PyCFunction) Simulator_get_num_recombination_events, METH_NOARGS,
             "Returns the number of recombination_events" },
+    {"get_num_avl_node_blocks",
+            (PyCFunction) Simulator_get_num_avl_node_blocks, METH_NOARGS,
+            "Returns the number of avl_node memory blocks"},
+    {"get_num_node_mapping_blocks",
+            (PyCFunction) Simulator_get_num_node_mapping_blocks, METH_NOARGS,
+            "Returns the number of node_mapping memory blocks"},
+    {"get_num_segment_blocks",
+            (PyCFunction) Simulator_get_num_segment_blocks, METH_NOARGS,
+            "Returns the number of segment memory blocks"},
     /* {"get_num_trees", (PyCFunction) Simulator_get_num_trees, METH_NOARGS, */
     /*         "Returns the number of trees" }, */
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
