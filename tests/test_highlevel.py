@@ -89,7 +89,7 @@ class TestMultiLocusSimulation(MsprimeTestCase):
         for m in range(1, 10):
             self.verify_trees(n, m, msprime.simulate_trees(n, m, r))
         m = 100
-        for r in [0.001, 0.01, 0.1, 1.0]:
+        for r in [0.001, 0.01]:
             self.verify_trees(n, m, msprime.simulate_trees(n, m, r))
 
     def test_error_cases(self):
@@ -120,7 +120,7 @@ class TestTreeSimulator(MsprimeTestCase):
         ts = msprime.TreeSimulator(n, self._treefile)
         # todo verify all the setters.
         # self.assertEqual(ts.get_sample_size(), n)
-        ts.set_recombination_rate(r)
+        ts.set_scaled_recombination_rate(r)
         ts.set_num_loci(m)
         self.assertTrue(ts.run())
         tf = msprime.TreeFile(self._treefile, 'u')

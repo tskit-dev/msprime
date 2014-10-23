@@ -30,8 +30,13 @@ import _msprime
 from _msprime import InputError
 from _msprime import LibraryError
 
+def harmonic_number(n):
+    """
+    Returns the nth Harmonic number.
+    """
+    return sum(1 / k for k in range(1, n + 1))
 
-def simulate_trees(sample_size, num_loci, recombination_rate,
+def simulate_trees(sample_size, num_loci, scaled_recombination_rate,
         population_models=[], max_memory="10M"):
     """
     Simulates the coalescent with recombination under the specified model
@@ -42,7 +47,7 @@ def simulate_trees(sample_size, num_loci, recombination_rate,
     try:
         sim = TreeSimulator(sample_size, tf)
         sim.set_num_loci(num_loci)
-        sim.set_recombination_rate(recombination_rate)
+        sim.set_scaled_recombination_rate(scaled_recombination_rate)
         sim.set_max_memory(max_memory)
         for m in population_models:
             sim.add_population_model(m)
@@ -76,7 +81,7 @@ class TreeSimulator(object):
     def __init__(self, sample_size, tree_file_name):
         self._sample_size = sample_size
         self._tree_file_name = tree_file_name
-        self._recombination_rate = 0.5
+        self._scaled_recombination_rate = 1.0
         self._num_loci = 1
         self._population_models = []
         self._random_seed = None
@@ -92,6 +97,15 @@ class TreeSimulator(object):
     def get_time(self):
         return self._ll_sim.get_time()
 
+    def get_num_avl_node_blocks(self):
+        return self._ll_sim.get_num_avl_node_blocks()
+
+    def get_num_node_mapping_blocks(self):
+        return self._ll_sim.get_num_node_mapping_blocks()
+
+    def get_num_segment_blocks(self):
+        return self._ll_sim.get_num_segment_blocks()
+
     def get_num_coancestry_events(self):
         return self._ll_sim.get_num_coancestry_events()
 
@@ -104,8 +118,11 @@ class TreeSimulator(object):
     def set_num_loci(self, num_loci):
         self._num_loci = num_loci
 
-    def set_recombination_rate(self, recombination_rate):
-        self._recombination_rate = recombination_rate
+    def set_scaled_recombination_rate(self, scaled_recombination_rate):
+        self._scaled_recombination_rate = scaled_recombination_rate
+
+    def set_effective_population_size(self, effective_population_size):
+        self._effective_population_size = effective_population_size
 
     def set_random_seed(self, random_seed):
         self._random_seed = random_seed
@@ -139,18 +156,25 @@ class TreeSimulator(object):
         """
         Sets sensible default values for the memory usage parameters.
         """
-        if self._max_memory is None:
-            self._max_memory = 10 * 1024 * 1024 # Very small by default.
-        # TODO use the estimates to set these depending on the other parameter
-        # values.
+        # Set the block sizes using our estimates.
+        n = self._sample_size
+        m = self._num_loci
+        rho = 4 * self._scaled_recombination_rate * (m - 1)
+        num_trees = min(m // 2, rho * harmonic_number(n - 1))
+        b = 10 # Baseline maximum
+        num_trees = max(b, int(num_trees))
+        num_avl_nodes = max(b, 4 * n + num_trees)
+        num_segments = max(b, int(0.0125 * n  * rho))
         if self._avl_node_block_size is None:
-            self._avl_node_block_size = 1024
+            self._avl_node_block_size = num_avl_nodes
         if self._segment_block_size is None:
-            self._segment_block_size = 1024
+            self._segment_block_size = num_segments
         if self._node_mapping_block_size is None:
-            self._node_mapping_block_size = 1024
+            self._node_mapping_block_size = num_trees
         if self._random_seed is None:
             self._random_seed = random.randint(0, 2**31 - 1)
+        if self._max_memory is None:
+            self._max_memory = 10 * 1024 * 1024 # 10MiB by default
 
     def run(self):
         """
@@ -161,7 +185,7 @@ class TreeSimulator(object):
         self._set_environment_defaults()
         self._ll_sim = _msprime.Simulator(sample_size=self._sample_size,
                 num_loci=self._num_loci, population_models=models,
-                recombination_rate=self._recombination_rate,
+                scaled_recombination_rate=self._scaled_recombination_rate,
                 random_seed=self._random_seed,
                 tree_file_name=self._tree_file_name,
                 max_memory=self._max_memory,

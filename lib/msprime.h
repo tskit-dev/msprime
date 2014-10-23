@@ -91,7 +91,7 @@ typedef struct {
     /* input parameters */
     int sample_size;
     int num_loci;
-    double recombination_rate;
+    double scaled_recombination_rate;
     long random_seed;
     char *tree_file_name;
     /* allocation block sizes */
@@ -134,6 +134,9 @@ int msp_get_ancestors(msp_t *self, segment_t **);
 int msp_print_state(msp_t *self);
 int msp_write_metadata(msp_t *self, FILE *f);
 int msp_free(msp_t *self);
+size_t msp_get_num_avl_node_blocks(msp_t *self);
+size_t msp_get_num_node_mapping_blocks(msp_t *self);
+size_t msp_get_num_segment_blocks(msp_t *self);
 
 int tree_file_open(tree_file_t *self, char *tree_file_name, char mode);
 int tree_file_set_sample_size(tree_file_t *self, uint32_t sample_size);
