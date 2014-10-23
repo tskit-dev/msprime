@@ -23,6 +23,15 @@
 #include "err.h"
 #include "msprime.h"
 
+#define MSP_TREE_FILE_MAGIC 0xa52cd4a4
+#define MSP_TREE_FILE_VERSION 1
+#define MSP_TREE_FILE_HEADER_SIZE 28
+#define MSP_NUM_CR_ELEMENTS 5
+
+#define MSP_FLAGS_COMPLETE 1
+#define MSP_FLAGS_SORTED 2
+
+
 static int
 cmp_coalescence_record(const void *a, const void *b) {
     const coalescence_record_t *ia = (const coalescence_record_t *) a;
@@ -71,8 +80,17 @@ tree_file_check_write_mode(tree_file_t *self)
     return self->mode == 'w';
 }
 
+static inline int WARN_UNUSED
+tree_file_check_update_mode(tree_file_t *self)
+{
+    return self->mode == 'u';
+}
+
+/*
+ * Reads the header and metadata information from this file.
+ */
 static int WARN_UNUSED
-tree_file_open_read_mode(tree_file_t *self)
+tree_file_read_info(tree_file_t *self)
 {
     int ret = -1;
     size_t metadata_size;
@@ -80,11 +98,6 @@ tree_file_open_read_mode(tree_file_t *self)
     uint64_t h64[1];
 
     assert((sizeof(h32) + sizeof(h64)) == MSP_TREE_FILE_HEADER_SIZE);
-    self->file = fopen(self->filename, "r");
-    if (self->file == NULL) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
     /* read the header and get the basic information that we need */
     if (fread(h32, sizeof(h32), 1, self->file) != 1) {
         ret = MSP_ERR_IO;
@@ -104,6 +117,7 @@ tree_file_open_read_mode(tree_file_t *self)
     }
     self->sample_size = h32[2];
     self->num_loci = h32[3];
+    self->flags = h32[4];
     self->metadata_offset = h64[0];
     self->coalescence_record_offset = ftell(self->file);
     /* now read in the metadata */
@@ -127,6 +141,57 @@ tree_file_open_read_mode(tree_file_t *self)
     }
     /* NULL terminate the string */
     self->metadata[metadata_size] = '\0';
+    ret = 0;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+tree_file_write_header(tree_file_t *self)
+{
+    int ret = -1;
+    uint32_t h32[5];
+    uint64_t h64[1];
+
+    assert((sizeof(h32) + sizeof(h64)) == MSP_TREE_FILE_HEADER_SIZE);
+    h32[0] = MSP_TREE_FILE_MAGIC;
+    h32[1] = MSP_TREE_FILE_VERSION;
+    h32[2] = self->sample_size;
+    h32[3] = self->num_loci;
+    h32[4] = self->flags;
+    h64[0] = self->metadata_offset;
+    if (fseek(self->file, 0, SEEK_SET) != 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    if (fwrite(h32, sizeof(h32), 1, self->file) != 1) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    if (fwrite(h64, sizeof(h64), 1, self->file) != 1) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+
+}
+
+static int WARN_UNUSED
+tree_file_open_read_mode(tree_file_t *self)
+{
+    int ret = -1;
+
+    self->file = fopen(self->filename, "r");
+    if (self->file == NULL) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    ret = tree_file_read_info(self);
+    if (ret != 0) {
+        goto out;
+    }
     /* now, seek back to the start of the record section so we're ready
      * to start reading records.
      */
@@ -168,6 +233,26 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+tree_file_open_update_mode(tree_file_t *self)
+{
+    int ret = -1;
+
+    self->file = fopen(self->filename, "r+");
+    if (self->file == NULL) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    ret = tree_file_read_info(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+
 int
 tree_file_print_state(tree_file_t *self)
 {
@@ -199,6 +284,8 @@ tree_file_open(tree_file_t *self, char *filename, char mode)
         ret = tree_file_open_read_mode(self);
     } else if (mode == 'w') {
         ret = tree_file_open_write_mode(self);
+    } else if (mode == 'u') {
+        ret = tree_file_open_update_mode(self);
     } else {
         ret = MSP_ERR_BAD_MODE;
     }
@@ -220,8 +307,6 @@ tree_file_close(tree_file_t *self)
     }
     return 0;
 }
-
-/* Write mode operations */
 
 int WARN_UNUSED
 tree_file_set_sample_size(tree_file_t *self, uint32_t sample_size)
@@ -260,7 +345,7 @@ tree_file_sort(tree_file_t *self)
     size_t size = self->metadata_offset - self->coalescence_record_offset;
     size_t num_records = size / sizeof(coalescence_record_t);
 
-    if (!tree_file_check_write_mode(self)) {
+    if (!tree_file_check_update_mode(self)) {
         ret = MSP_ERR_BAD_MODE;
         goto out;
     }
@@ -273,15 +358,10 @@ tree_file_sort(tree_file_t *self)
         ret = MSP_ERR_IO;
         goto out;
     }
-    /* FIXME this is failing here because we've not got the file opened
-     * in the right mode or something. This probably breaks the nice
-     * read/write mode model introduced above. Oh well.
-     */
     if (fread(buff, size, 1, f) != 1) {
         ret = MSP_ERR_IO;
         goto out;
     }
-    printf("sort\n");
     /* sort the records and write the results back */
     qsort(buff, num_records, sizeof(coalescence_record_t),
             cmp_coalescence_record);
@@ -293,7 +373,9 @@ tree_file_sort(tree_file_t *self)
         ret = MSP_ERR_IO;
         goto out;
     }
-    ret = 0;
+    /* set the sorted flag and write the header back */
+    self->flags |= MSP_FLAGS_SORTED;
+    ret = tree_file_write_header(self);
 out:
     if (buff != NULL) {
         free(buff);
@@ -309,37 +391,19 @@ tree_file_finalise(tree_file_t *self, msp_t *msp)
 {
     int ret = -1;
     FILE *f = self->file;
-    size_t metadata_offset;
-    uint32_t h32[5];
-    uint64_t h64[1];
 
     if (!tree_file_check_write_mode(self)) {
         ret = MSP_ERR_BAD_MODE;
         goto out;
     }
-    metadata_offset = ftell(f);
+    self->metadata_offset = ftell(f);
     ret = msp_write_metadata(msp, f);
-    if (ret < 0) {
+    if (ret != 0) {
         goto out;
     }
-    /* now we can write the header */
-    h32[0] = MSP_TREE_FILE_MAGIC;
-    h32[1] = MSP_TREE_FILE_VERSION;
-    h32[2] = self->sample_size;
-    h32[3] = self->num_loci;
-    h32[4] = self->flags;
-    h64[0] = metadata_offset;
-    assert((sizeof(h32) + sizeof(h64)) == MSP_TREE_FILE_HEADER_SIZE);
-    if (fseek(f, 0, SEEK_SET) != 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (fwrite(h32, sizeof(h32), 1, f) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    if (fwrite(h64, sizeof(h64), 1, f) != 1) {
-        ret = MSP_ERR_IO;
+    self->flags |= MSP_FLAGS_COMPLETE;
+    ret = tree_file_write_header(self);
+    if (ret != 0) {
         goto out;
     }
     /* now we flush this, so that anyone looking at this file will
@@ -375,8 +439,6 @@ out:
     return ret;
 }
 
-/* Read mode operations */
-
 int WARN_UNUSED
 tree_file_next_record(tree_file_t *self, coalescence_record_t *r)
 {
@@ -405,11 +467,20 @@ tree_file_print_records(tree_file_t *self)
     coalescence_record_t cr;
 
     while ((ret = tree_file_next_record(self, &cr)) == 1) {
-        printf("%d\t(%d, %d)->%d@%f\n", cr.left, cr.children[0],
+        printf("%d\t(%d, %d)->%d @ %f\n", cr.left, cr.children[0],
                 cr.children[1], cr.parent, cr.time);
     }
     return ret;
 }
 
+int
+tree_file_is_complete(tree_file_t *self)
+{
+    return self->flags & MSP_FLAGS_COMPLETE;
+}
 
-
+int
+tree_file_is_sorted(tree_file_t *self)
+{
+    return self->flags & MSP_FLAGS_SORTED;
+}
