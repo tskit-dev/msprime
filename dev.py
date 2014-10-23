@@ -103,6 +103,24 @@ def large_sim():
     print("num_node_mapping_blocks = ", ts.get_num_node_mapping_blocks())
     print("num_segment_blocks = ", ts.get_num_segment_blocks())
 
+def sort_tree(f):
+    tf = msprime.TreeFile(f, 'u')
+    print(tf.issorted())
+    tf.sort()
+
+def print_tree(f):
+    tf = msprime.TreeFile(f)
+    print(tf.issorted())
+    print(tf.get_metadata())
+    j = 0
+    t = 0
+    for l, pi, tau in tf:
+        j += 1
+        t += l
+        # print(l, pi, tau)
+    print(j)
+    print(l)
+
 
 def memory_test():
     while True:
@@ -131,4 +149,6 @@ if __name__ == "__main__":
     #hl_main()
     # ll_main()
     # memory_test()
-    large_sim()
+    # large_sim()
+    # sort_tree("tmp__NOBACKUP__/large_tree.dat")
+    print_tree("tmp__NOBACKUP__/large_tree.dat")
