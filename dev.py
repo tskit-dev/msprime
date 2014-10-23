@@ -119,7 +119,7 @@ def print_tree(f):
         t += l
         # print(l, pi, tau)
     print(j)
-    print(l)
+    print(t)
 
 
 def memory_test():
