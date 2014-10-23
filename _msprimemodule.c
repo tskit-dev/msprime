@@ -409,17 +409,17 @@ out:
     return ret;
 }
 
-static PyObject *
-Simulator_get_num_trees(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->sim->num_trees);
-out:
-    return ret;
-}
+/* static PyObject * */
+/* Simulator_get_num_trees(Simulator  *self) */
+/* { */
+/*     PyObject *ret = NULL; */
+/*     if (Simulator_check_sim(self) != 0) { */
+/*         goto out; */
+/*     } */
+/*     ret = Py_BuildValue("I", self->sim->num_trees); */
+/* out: */
+/*     return ret; */
+/* } */
 
 
 static PyObject *
@@ -578,7 +578,6 @@ Simulator_run(Simulator *self, PyObject *args)
         }
     }
     coalesced = status == 0;
-    status = msp_finalise_tree_file(self->sim);
     if (status < 0) {
         handle_library_error(status);
         goto out;
@@ -612,8 +611,8 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_recombination_events",
             (PyCFunction) Simulator_get_num_recombination_events, METH_NOARGS,
             "Returns the number of recombination_events" },
-    {"get_num_trees", (PyCFunction) Simulator_get_num_trees, METH_NOARGS,
-            "Returns the number of trees" },
+    /* {"get_num_trees", (PyCFunction) Simulator_get_num_trees, METH_NOARGS, */
+    /*         "Returns the number of trees" }, */
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
     {"get_population_models", (PyCFunction) Simulator_get_population_models,
@@ -684,7 +683,7 @@ static void
 TreeFile_dealloc(TreeFile* self)
 {
     if (self->tree_file != NULL) {
-        tree_file_free(self->tree_file);
+        tree_file_close(self->tree_file);
         PyMem_Free(self->tree_file);
         self->tree_file = NULL;
     }
@@ -696,20 +695,21 @@ TreeFile_init(TreeFile *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int tr_ret;
-    static char *kwlist[] = {"tree_file_name", NULL};
+    static char *kwlist[] = {"tree_file_name", "mode", NULL};
     char *tree_file_name;
-    tree_file_t *tree_file = PyMem_Malloc(sizeof(tree_file_t));
+    char mode = 'r';
 
     self->iter_state = 0;
-    self->tree_file = tree_file;
+    self->tree_file = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|c", kwlist,
+                &tree_file_name, &mode)) {
+        goto out;
+    }
+    self->tree_file = PyMem_Malloc(sizeof(tree_file_t));
     if (self->tree_file == NULL) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
-                &tree_file_name)) {
-        goto out;
-    }
-    tr_ret = tree_file_alloc(self->tree_file, tree_file_name);
+    tr_ret = tree_file_open(self->tree_file, tree_file_name, mode);
     if (tr_ret != 0) {
         handle_library_error(tr_ret);
         goto out;
@@ -747,20 +747,6 @@ out:
     return ret;
 }
 
-
-static PyObject *
-TreeFile_get_num_trees(TreeFile *self)
-{
-    PyObject *ret = NULL;
-    if (TreeFile_check_tree_file(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->tree_file->num_trees);
-out:
-    return ret;
-}
-
-
 static PyObject *
 TreeFile_get_metadata(TreeFile *self)
 {
@@ -772,6 +758,31 @@ TreeFile_get_metadata(TreeFile *self)
 out:
     return ret;
 }
+
+static PyObject *
+TreeFile_iscomplete(TreeFile *self)
+{
+    PyObject *ret = NULL;
+    if (TreeFile_check_tree_file(self) != 0) {
+        goto out;
+    }
+    ret = PyBool_FromLong((long) tree_file_iscomplete(self->tree_file));
+out:
+    return ret;
+}
+
+static PyObject *
+TreeFile_issorted(TreeFile *self)
+{
+    PyObject *ret = NULL;
+    if (TreeFile_check_tree_file(self) != 0) {
+        goto out;
+    }
+    ret = PyBool_FromLong((long) tree_file_issorted(self->tree_file));
+out:
+    return ret;
+}
+
 
 static PyObject *
 TreeFile_sort(TreeFile *self)
@@ -801,11 +812,10 @@ TreeFile_next(TreeFile *self)
     int v;
 
     if (self->iter_state == 0) {
-        tree_file_record_iter_init(self->tree_file);
         self->iter_state = 1;
     }
     if (self->iter_state == 1) {
-        v = tree_file_record_iter_next(self->tree_file, &cr);
+        v = tree_file_next_record(self->tree_file, &cr);
         if (v < 0) {
             handle_library_error(v);
             goto out;
@@ -814,7 +824,7 @@ TreeFile_next(TreeFile *self)
             /* last record has been read, iteration is done */
             self->iter_state = 2;
         }
-        ret = Py_BuildValue("iiiiid", cr.left, cr.right, cr.children[0],
+        ret = Py_BuildValue("iiiid", cr.left, cr.children[0],
                 cr.children[1], cr.parent, cr.time);
     }
 out:
@@ -885,14 +895,14 @@ static PyMethodDef TreeFile_methods[] = {
             "Returns the number of loci"},
     {"get_sample_size", (PyCFunction) TreeFile_get_sample_size, METH_NOARGS,
             "Returns the sample size"},
-    {"get_num_trees", (PyCFunction) TreeFile_get_num_trees, METH_NOARGS,
-            "Returns the number of trees"},
     {"get_metadata", (PyCFunction) TreeFile_get_metadata, METH_NOARGS,
             "Returns the simulation metadata"},
+    {"iscomplete", (PyCFunction) TreeFile_iscomplete, METH_NOARGS,
+            "Returns True if this file corresponds to a complete simulation."},
+    {"issorted", (PyCFunction) TreeFile_issorted, METH_NOARGS,
+            "Returns True if this file is sorted"},
     {"sort", (PyCFunction) TreeFile_sort, METH_NOARGS,
             "Sorts the coalescence records in the file."},
-    /* {"get_tree", (PyCFunction) TreeFile_get_tree, METH_VARARGS, */
-    /*         "Returns the tree corresponding to the jth breakpoint."}, */
     {NULL}  /* Sentinel */
 };
 

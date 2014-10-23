@@ -123,15 +123,14 @@ class TestTreeSimulator(MsprimeTestCase):
         ts.set_recombination_rate(r)
         ts.set_num_loci(m)
         self.assertTrue(ts.run())
-        tf = msprime.TreeFile(self._treefile)
-        # TODO create issorted in lower layers.
-        # self.assertFalse(tf.issorted())
+        tf = msprime.TreeFile(self._treefile, 'u')
+        self.assertFalse(tf.issorted())
         tf.sort()
-        # self.assertTrue(tf.issorted())
-        # TODO add acessors down at the C api level.
-        # self.assertEqual(tf.get_num_trees(), ts.get_num_trees())
+        self.assertTrue(tf.issorted())
+        tf.close()
+        tf = msprime.TreeFile(self._treefile)
         l = [t for t in tf]
         self.verify_trees(n, m, l)
-        self.assertEqual(len(l), tf.get_num_trees())
+        # self.assertEqual(len(l), sim.get_num_trees())
 
 
