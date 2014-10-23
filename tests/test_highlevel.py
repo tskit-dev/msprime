@@ -112,11 +112,10 @@ class TestTreeSimulator(MsprimeTestCase):
     def tearDown(self):
         os.unlink(self._treefile)
 
-    def test_full_simulation(self):
-        n = 10
-        m = 100
-        r = 0.1
-        # TODO add some different n and m values here.
+    def verify_simulation(self, n, m, r):
+        """
+        Verifies a simulation for the specified parameters.
+        """
         ts = msprime.TreeSimulator(n, self._treefile)
         # todo verify all the setters.
         # self.assertEqual(ts.get_sample_size(), n)
@@ -131,6 +130,12 @@ class TestTreeSimulator(MsprimeTestCase):
         tf = msprime.TreeFile(self._treefile)
         l = [t for t in tf]
         self.verify_trees(n, m, l)
-        # self.assertEqual(len(l), sim.get_num_trees())
+        self.assertEqual(len(l), ts.get_num_trees())
 
-
+    def test_random_parameters(self):
+        num_random_sims = 10
+        for j in range(num_random_sims):
+            n = random.randint(2, 100)
+            m = random.randint(10, 1000)
+            r = random.random()
+            self.verify_simulation(n, m, r)

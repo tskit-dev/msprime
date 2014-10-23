@@ -445,18 +445,17 @@ out:
     return ret;
 }
 
-
-/* static PyObject * */
-/* Simulator_get_num_trees(Simulator  *self) */
-/* { */
-/*     PyObject *ret = NULL; */
-/*     if (Simulator_check_sim(self) != 0) { */
-/*         goto out; */
-/*     } */
-/*     ret = Py_BuildValue("I", self->sim->num_trees); */
-/* out: */
-/*     return ret; */
-/* } */
+static PyObject *
+Simulator_get_num_trees(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", msp_get_num_trees(self->sim));
+out:
+    return ret;
+}
 
 
 static PyObject *
@@ -657,8 +656,8 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_segment_blocks",
             (PyCFunction) Simulator_get_num_segment_blocks, METH_NOARGS,
             "Returns the number of segment memory blocks"},
-    /* {"get_num_trees", (PyCFunction) Simulator_get_num_trees, METH_NOARGS, */
-    /*         "Returns the number of trees" }, */
+    {"get_num_trees", (PyCFunction) Simulator_get_num_trees, METH_NOARGS,
+            "Returns the number of trees" },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
     {"get_population_models", (PyCFunction) Simulator_get_population_models,
