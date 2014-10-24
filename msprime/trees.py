@@ -224,6 +224,7 @@ class TreeFile(object):
         return self._ll_tree_file.get_metadata()
 
     def __iter__(self):
+        assert self._ll_tree_file.issorted()
         n = 2 * self.get_sample_size()
         pi = [0 for j in range(n)]
         tau = [0 for j in range(n)]

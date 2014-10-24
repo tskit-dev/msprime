@@ -1057,6 +1057,10 @@ msprime_sort_tree_file(PyObject *self, PyObject *args)
         handle_library_error(tf_ret);
         goto out;
     }
+    if (tree_file_issorted(tf)) {
+        PyErr_SetString(PyExc_ValueError, "Tree file is already sorted");
+        goto out;
+    }
     tf_ret = tree_file_sort(tf);
     if (tf_ret != 0) {
         handle_library_error(tf_ret);
