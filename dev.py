@@ -132,23 +132,18 @@ def memory_test():
         ts = msprime.TreeSimulator(n, treefile)
         # todo verify all the setters.
         # self.assertEqual(ts.get_sample_size(), n)
-        ts.set_recombination_rate(r)
+        ts.set_scaled_recombination_rate(r)
         ts.set_num_loci(m)
         ts.run()
-        tf = msprime.TreeFile(treefile, 'u')
-        assert not tf.issorted()
-        tf.sort()
-        assert tf.issorted()
-        tf.close()
+        msprime.sort_tree_file(treefile)
         tf = msprime.TreeFile(treefile)
         l = [t for t in tf]
-
 
 
 if __name__ == "__main__":
     #hl_main()
     # ll_main()
-    # memory_test()
-    large_sim()
+    memory_test()
+    # large_sim()
     # sort_tree("tmp__NOBACKUP__/large_tree.dat")
     # print_tree("tmp__NOBACKUP__/large_tree.dat")

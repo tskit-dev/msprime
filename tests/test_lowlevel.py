@@ -217,6 +217,7 @@ class TestTreeFile(tests.MsprimeTestCase):
                     _msprime.sort_tree_file, f)
 
     def test_bad_formats(self):
+        # TODO add tests where we take a valid file and mangle it a bit.
         bad_contents = ["",
             "This is not a valid tree file",
         ]
