@@ -151,6 +151,7 @@ int tree_file_print_state(tree_file_t *self);
 int tree_file_print_records(tree_file_t *self);
 int tree_file_iscomplete(tree_file_t *self);
 int tree_file_issorted(tree_file_t *self);
+int tree_file_isopen(tree_file_t *self);
 
 char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/

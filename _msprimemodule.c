@@ -642,6 +642,7 @@ Simulator_run(Simulator *self, PyObject *args)
     int status, not_done, coalesced;
     uint64_t chunk = 1024;
     double max_time = DBL_MAX;
+
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
@@ -801,14 +802,14 @@ TreeFile_init(TreeFile *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int tr_ret;
-    static char *kwlist[] = {"tree_file_name", "mode", NULL};
+    static char *kwlist[] = {"tree_file_name", NULL};
     char *tree_file_name;
     char mode = 'r';
 
     self->iter_state = 0;
     self->tree_file = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|c", kwlist,
-                &tree_file_name, &mode)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
+                &tree_file_name)) {
         goto out;
     }
     self->tree_file = PyMem_Malloc(sizeof(tree_file_t));
@@ -885,27 +886,6 @@ TreeFile_issorted(TreeFile *self)
         goto out;
     }
     ret = PyBool_FromLong((long) tree_file_issorted(self->tree_file));
-out:
-    return ret;
-}
-
-
-static PyObject *
-TreeFile_sort(TreeFile *self)
-{
-    PyObject *ret = NULL;
-    int err;
-
-    if (TreeFile_check_tree_file(self) != 0) {
-        goto out;
-    }
-    err = tree_file_sort(self->tree_file);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_None;
-    Py_INCREF(ret);
 out:
     return ret;
 }
@@ -1007,8 +987,6 @@ static PyMethodDef TreeFile_methods[] = {
             "Returns True if this file corresponds to a complete simulation."},
     {"issorted", (PyCFunction) TreeFile_issorted, METH_NOARGS,
             "Returns True if this file is sorted"},
-    {"sort", (PyCFunction) TreeFile_sort, METH_NOARGS,
-            "Sorts the coalescence records in the file."},
     {NULL}  /* Sentinel */
 };
 
@@ -1051,6 +1029,64 @@ static PyTypeObject TreeFileType = {
     (initproc)TreeFile_init,      /* tp_init */
 };
 
+/*==========================================================
+ * Module level functions
+ *==========================================================
+ */
+
+PyDoc_STRVAR(msprime_sort_tree_file_doc,
+"Sorts the specified tree file..\n");
+
+static PyObject *
+msprime_sort_tree_file(PyObject *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    char *filename = NULL;
+    tree_file_t *tf = NULL;
+    int tf_ret;
+
+    if (!PyArg_ParseTuple(args, "s", &filename)) {
+        goto out;
+    }
+    tf = PyMem_Malloc(sizeof(tree_file_t));
+    if (tf == NULL) {
+        goto out;
+    }
+    tf_ret = tree_file_open(tf, filename, 'u');
+    if (tf_ret != 0) {
+        handle_library_error(tf_ret);
+        goto out;
+    }
+    tf_ret = tree_file_sort(tf);
+    if (tf_ret != 0) {
+        handle_library_error(tf_ret);
+        goto out;
+    }
+    tf_ret = tree_file_close(tf);
+    if (tf_ret != 0) {
+        handle_library_error(tf_ret);
+        goto out;
+    }
+    ret = Py_None;
+    Py_INCREF(Py_None);
+out:
+    if (tf != NULL) {
+        if (tree_file_isopen(tf)) {
+            /* we are already in an error condition, so ignore new errors */
+            tree_file_close(tf);
+        }
+        PyMem_Free(tf);
+    }
+    return ret;
+}
+
+static PyMethodDef msprime_methods[] = {
+    {"sort_tree_file", (PyCFunction) msprime_sort_tree_file, METH_VARARGS,
+        msprime_sort_tree_file_doc},
+    {NULL}        /* Sentinel */
+};
+
+
 /* Initialisation code supports Python 2.x and 3.x. The framework uses the
  * recommended structure from http://docs.python.org/howto/cporting.html.
  * I've ignored the point about storing state in globals, as the examples
@@ -1064,7 +1100,8 @@ static struct PyModuleDef msprimemodule = {
     "_msprime",   /* name of module */
     MODULE_DOC, /* module documentation, may be NULL */
     -1,
-    NULL, NULL, NULL, NULL, NULL
+    msprime_methods,
+    NULL, NULL, NULL, NULL
 };
 
 #define INITERROR return NULL
@@ -1082,7 +1119,7 @@ init_msprime(void)
 #if PY_MAJOR_VERSION >= 3
     PyObject *module = PyModule_Create(&msprimemodule);
 #else
-    PyObject *module = Py_InitModule3("_msprime", NULL, MODULE_DOC);
+    PyObject *module = Py_InitModule3("_msprime", msprime_methods, MODULE_DOC);
 #endif
     if (module == NULL) {
         INITERROR;

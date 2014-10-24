@@ -294,16 +294,25 @@ out:
 }
 
 int
+tree_file_isopen(tree_file_t *self)
+{
+    return self->filename != NULL;
+}
+
+int
 tree_file_close(tree_file_t *self)
 {
     if (self->filename != NULL) {
         free(self->filename);
+        self->filename = NULL;
     }
     if (self->metadata != NULL) {
         free(self->metadata);
+        self->metadata = NULL;
     }
     if (self->file != NULL) {
         fclose(self->file);
+        self->file = NULL;
     }
     return 0;
 }
