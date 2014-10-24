@@ -372,6 +372,10 @@ tree_file_sort(tree_file_t *self)
         goto out;
     }
     /* sort the records and write the results back */
+    /* TODO qsort appears to malloc a LOT of extra memory despite not
+     * being able to fail. So, we should look for an alternative
+     * here, as we are going to be sorting very large files.
+     */
     qsort(buff, num_records, sizeof(coalescence_record_t),
             cmp_coalescence_record);
     if (fseek(f, self->coalescence_record_offset, SEEK_SET) != 0) {
