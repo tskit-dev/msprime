@@ -104,6 +104,9 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertEqual(0, len(r2))
         # Sort the records
         _msprime.sort_tree_file(sim.get_tree_file_name())
+        # Verify we can't resort the file
+        self.assertRaises(ValueError, _msprime.sort_tree_file,
+                sim.get_tree_file_name())
         # Read back the records and verify
         tf = _msprime.TreeFile(sim.get_tree_file_name())
         self.verify_tree_file_information(sim, tf)
@@ -210,4 +213,19 @@ class TestTreeFile(tests.MsprimeTestCase):
         for f in files:
             self.assertRaises(_msprime.LibraryError, self.get_simulator, f)
             self.assertRaises(_msprime.LibraryError, _msprime.TreeFile, f)
+            self.assertRaises(_msprime.LibraryError,
+                    _msprime.sort_tree_file, f)
+
+    def test_bad_formats(self):
+        bad_contents = ["",
+            "This is not a valid tree file",
+        ]
+        for contents in bad_contents:
+            with open(self._treefile, "w") as f:
+                f.write(contents)
+            self.assertRaises(_msprime.LibraryError, _msprime.TreeFile,
+                    self._treefile)
+            self.assertRaises(_msprime.LibraryError, _msprime.sort_tree_file,
+                    self._treefile)
+
 
