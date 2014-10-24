@@ -103,23 +103,12 @@ class TestInterface(tests.MsprimeTestCase):
         r2 = [r for r in tf]
         self.assertEqual(0, len(r2))
         # Sort the records
-        tf = _msprime.TreeFile(sim.get_tree_file_name(), 'u')
+        _msprime.sort_tree_file(sim.get_tree_file_name())
+        # Read back the records and verify
+        tf = _msprime.TreeFile(sim.get_tree_file_name())
         self.verify_tree_file_information(sim, tf)
-        self.assertTrue(tf.iscomplete())
-        self.assertFalse(tf.issorted())
-        tf.sort()
         self.assertTrue(tf.iscomplete())
         self.assertTrue(tf.issorted())
-        # We cannot read the file in update mode
-        def f():
-            return [r for r in tf]
-        self.assertRaises(_msprime.LibraryError, f)
-        # Read back the records and verify
-        tf = _msprime.TreeFile(sim.get_tree_file_name(), 'r')
-        self.assertRaises(_msprime.LibraryError, tf.sort)
-        self.verify_tree_file_information(sim, tf)
-        self.assertTrue(tf.iscomplete())
-        self.assertFalse(tf.issorted())
         sorted_records = [r for r in tf]
         self.assertEqual(sorted_records, sorted(records, key=lambda r: r[0]))
         self.verify_trees(sim, sorted_records)
@@ -206,4 +195,19 @@ class TestInterface(tests.MsprimeTestCase):
         self.verify_simulation(3, 100, 0.0, [])
         self.verify_simulation(5, 10, 10.0, [])
         self.verify_simulation(10, 100, 1.0, [])
+
+class TestTreeFile(tests.MsprimeTestCase):
+    """
+    Test cases on the specifics of reading and writing tree files.
+    """
+    def get_simulator(self, filename):
+        sim = _msprime.Simulator(sample_size=10, tree_file_name=filename,
+                random_seed=1)
+        return sim
+
+    def test_file_errors(self):
+        files = ["/no_permissions", "dir/does/not/exist"]
+        for f in files:
+            self.assertRaises(_msprime.LibraryError, self.get_simulator, f)
+            self.assertRaises(_msprime.LibraryError, _msprime.TreeFile, f)
 

@@ -69,12 +69,7 @@ class TestTreeSimulator(tests.MsprimeTestCase):
         ts.set_scaled_recombination_rate(r)
         ts.set_num_loci(m)
         self.assertTrue(ts.run())
-        tf = msprime.TreeFile(self._treefile, 'u')
-        self.assertTrue(tf.iscomplete())
-        self.assertFalse(tf.issorted())
-        tf.sort()
-        self.assertTrue(tf.issorted())
-        tf.close()
+        msprime.sort_tree_file(self._treefile)
         tf = msprime.TreeFile(self._treefile)
         l = [t for t in tf]
         self.verify_trees(n, m, l)
