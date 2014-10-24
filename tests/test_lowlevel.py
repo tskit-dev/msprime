@@ -202,4 +202,8 @@ class TestInterface(tests.MsprimeTestCase):
             self.verify_random_paramters()
 
     def test_small_sims(self):
+        self.verify_simulation(3, 1, 0.0, [])
+        self.verify_simulation(3, 100, 0.0, [])
+        self.verify_simulation(5, 10, 10.0, [])
         self.verify_simulation(10, 100, 1.0, [])
+
