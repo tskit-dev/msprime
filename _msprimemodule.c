@@ -326,6 +326,19 @@ out:
 }
 
 static PyObject *
+Simulator_get_scaled_recombination_rate(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->sim->scaled_recombination_rate);
+out:
+    return ret;
+}
+
+
+static PyObject *
 Simulator_get_random_seed(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -333,6 +346,54 @@ Simulator_get_random_seed(Simulator  *self)
         goto out;
     }
     ret = Py_BuildValue("k", self->sim->random_seed);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_max_memory(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->max_memory);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_segment_block_size(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->segment_block_size);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_avl_node_block_size(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->avl_node_block_size);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_node_mapping_block_size(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->node_mapping_block_size);
 out:
     return ret;
 }
@@ -350,25 +411,13 @@ out:
 }
 
 static PyObject *
-Simulator_get_tree_file(Simulator  *self)
+Simulator_get_tree_file_name(Simulator  *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
     ret = Py_BuildValue("s", self->sim->tree_file_name);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_recombination_rate(Simulator *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d", self->sim->scaled_recombination_rate);
 out:
     return ret;
 }
@@ -630,15 +679,27 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the number of loci" },
     {"get_sample_size", (PyCFunction) Simulator_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
+    {"get_scaled_recombination_rate",
+            (PyCFunction) Simulator_get_scaled_recombination_rate, METH_NOARGS,
+            "Returns the scaled recombination rate." },
     {"get_random_seed", (PyCFunction) Simulator_get_random_seed, METH_NOARGS,
             "Returns the random seed" },
+    {"get_max_memory", (PyCFunction) Simulator_get_max_memory, METH_NOARGS,
+            "Returns the maximum memory used by the simulator" },
+    {"get_segment_block_size",
+            (PyCFunction) Simulator_get_segment_block_size, METH_NOARGS,
+            "Returns segment block size." },
+    {"get_avl_node_block_size",
+            (PyCFunction) Simulator_get_avl_node_block_size, METH_NOARGS,
+            "Returns avl_node block size" },
+    {"get_node_mapping_block_size",
+            (PyCFunction) Simulator_get_node_mapping_block_size, METH_NOARGS,
+            "Returns node_mapping block size" },
     {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS,
             "Returns the current simulation time" },
-    {"get_tree_file", (PyCFunction) Simulator_get_tree_file, METH_NOARGS,
+    {"get_tree_file_name",
+            (PyCFunction) Simulator_get_tree_file_name, METH_NOARGS,
             "Returns the name of the tree file." },
-    {"get_recombination_rate",
-            (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
-            "Returns the rate of recombination between adjacent loci" },
     {"get_num_ancestors", (PyCFunction) Simulator_get_num_ancestors, METH_NOARGS,
             "Returns the number of ancestors" },
     {"get_num_coancestry_events",

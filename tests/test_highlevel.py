@@ -7,56 +7,11 @@ from __future__ import division
 import os
 import random
 import unittest
-import tempfile
 
 import msprime
+import tests
 
-class MsprimeTestCase(unittest.TestCase):
-    """
-    Superclass of all tests msprime simulator test cases.
-    """
-    def verify_tree(self, n, pi, tau):
-        """
-        Verifies that the specified tree is a consistent coalescent history
-        for a sample of size n.
-        """
-        self.assertEqual(len(pi), 2 * n)
-        self.assertEqual(len(tau), 2 * n)
-        # leading value must be zero.
-        self.assertEqual(pi[0], 0)
-        self.assertEqual(tau[0], 0)
-        num_children = [0 for j in range(0, 2 * n)]
-        for j in range(1, 2 * n):
-            num_children[pi[j]] += 1
-        self.assertEqual(num_children[0], 1)
-        # nodes 1 to n are leaves.
-        for j in range(1, n + 1):
-            self.assertNotEqual(pi[j], 0)
-            self.assertEqual(tau[j], 0)
-            self.assertEqual(num_children[j], 0)
-        # All non-leaf nodes should be binary with non-zero times.
-        for j in range(n + 1, 2 * n):
-            self.assertEqual(num_children[j], 2)
-            self.assertGreater(tau[j], 0.0)
-        # times of non leaves should be distinct and increasing.
-        taup = [tau[j] for j in range(n + 1, 2 * n)]
-        self.assertEqual(len(set(taup)), len(taup))
-        self.assertEqual(taup, sorted(taup))
-
-
-    def verify_trees(self, n, m, trees):
-        """
-        Verifies that the specified set of trees is consistent with the specified
-        paramters.
-        """
-        s = 0
-        for l, pi, tau in trees:
-            self.verify_tree(n, pi, tau)
-            self.assertTrue(l > 0)
-            s += l
-        self.assertEqual(s, m)
-
-class TestSingleLocusSimulation(MsprimeTestCase):
+class TestSingleLocusSimulation(tests.MsprimeTestCase):
     """
     Tests on the single locus simulations.
     """
@@ -75,7 +30,7 @@ class TestSingleLocusSimulation(MsprimeTestCase):
             self.assertRaises(TypeError, msprime.simulate_tree, n)
 
 
-class TestMultiLocusSimulation(MsprimeTestCase):
+class TestMultiLocusSimulation(tests.MsprimeTestCase):
     """
     Tests on the single locus simulations.
     """
@@ -100,18 +55,10 @@ class TestMultiLocusSimulation(MsprimeTestCase):
         for n in ["", None, "2", 2.2, 1e5]:
             self.assertRaises(TypeError, f, n, 1, 1.0)
 
-class TestTreeSimulator(MsprimeTestCase):
+class TestTreeSimulator(tests.MsprimeTestCase):
     """
     Runs tests on the underlying TreeSimulator object.
     """
-    def setUp(self):
-        fd, tf = tempfile.mkstemp(prefix="msp_test_", suffix=".dat")
-        os.close(fd)
-        self._treefile = tf
-
-    def tearDown(self):
-        os.unlink(self._treefile)
-
     def verify_simulation(self, n, m, r):
         """
         Verifies a simulation for the specified parameters.
@@ -123,6 +70,7 @@ class TestTreeSimulator(MsprimeTestCase):
         ts.set_num_loci(m)
         self.assertTrue(ts.run())
         tf = msprime.TreeFile(self._treefile, 'u')
+        self.assertTrue(tf.iscomplete())
         self.assertFalse(tf.issorted())
         tf.sort()
         self.assertTrue(tf.issorted())
@@ -133,7 +81,7 @@ class TestTreeSimulator(MsprimeTestCase):
         self.assertEqual(len(l), ts.get_num_trees())
 
     def test_random_parameters(self):
-        num_random_sims = 10
+        num_random_sims = 1
         for j in range(num_random_sims):
             n = random.randint(2, 100)
             m = random.randint(10, 1000)
