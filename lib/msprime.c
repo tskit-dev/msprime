@@ -1156,10 +1156,12 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     if (ret != 0) {
         goto out;
     }
-    // TODO we probably want a different protocol to indicate if max_time
-    // has been exceeded or max_events.
-    ret = 1;
-    if (n == 0) {
+    if (n != 0) {
+        ret = 1;
+        if (self->time > max_time) {
+            ret = 2;
+        }
+    } else {
         ret = tree_file_finalise(&self->tree_file, self);
     }
 out:
