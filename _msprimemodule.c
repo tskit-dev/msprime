@@ -1152,6 +1152,11 @@ init_msprime(void)
     PyModule_AddIntConstant(module, "POP_MODEL_EXPONENTIAL",
             POP_MODEL_EXPONENTIAL);
 
+#ifdef WORDS_BIGENDIAN
+    PyErr_Format(PyExc_RuntimeError, "Big Endian systems not currently supported.");
+    INITERROR;
+#endif
+
 #if PY_MAJOR_VERSION >= 3
     return module;
 #endif
