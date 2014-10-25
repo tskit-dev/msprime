@@ -5,9 +5,11 @@ Simple client code for development purposes.
 from __future__ import print_function
 from __future__ import division
 
-import random
+import math
 import json
 import time
+import random
+
 import _msprime
 import msprime
 
@@ -85,20 +87,38 @@ def hl_main():
         print(l, pi, tau)
 
 def large_sim():
-    n = 10**5
+    n = 10**2
     m = 20 * 10**6
-    Ne = 1e4
     r = 1e-8
-    treefile = "tmp__NOBACKUP__/large_tree.dat"
+    # Calculate the models
+    N0 = 1e6
+    N1 = 2e4
+    N2 = 2e3
+    N3 = 2e4
+    g1 = 400
+    g2 = 2000
+    t1 = g1 / (4 * N0)
+    t2 = g2 / (4 * N0)
+    # Calculate the growth rates.
+    alpha1 = -math.log(N1 / N0) / t1
+    alpha2 = -math.log(N2 / N1) / (t2 - t1)
+    models = [
+            msprime.ExponentialPopulationModel(0, alpha1),
+            msprime.ExponentialPopulationModel(t1, alpha2),
+            msprime.ConstantPopulationModel(t2, N3 / N0),
+    ]
+    treefile = "tmp__NOBACKUP__/large_tree_models.dat"
     ts = msprime.TreeSimulator(n, treefile)
     ts.set_num_loci(m)
-    ts.set_scaled_recombination_rate(4 * Ne * r)
-    ts.set_max_memory("200G")
-    # ts.set_segment_block_size(int(1e8))
+    ts.set_scaled_recombination_rate(4 * N0 * r)
+    ts.set_max_memory("245G")
+    ts.set_segment_block_size(int(1e8))
     try:
         ts.run()
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        print("Died!", e)
     print("num_avl_node_blocks = ", ts.get_num_avl_node_blocks())
     print("num_node_mapping_blocks = ", ts.get_num_node_mapping_blocks())
     print("num_segment_blocks = ", ts.get_num_segment_blocks())
@@ -143,7 +163,7 @@ def memory_test():
 if __name__ == "__main__":
     #hl_main()
     # ll_main()
-    memory_test()
-    # large_sim()
+    # memory_test()
+    large_sim()
     # sort_tree("tmp__NOBACKUP__/large_tree.dat")
     # print_tree("tmp__NOBACKUP__/large_tree.dat")
