@@ -31,12 +31,16 @@
 #define MSP_FLAGS_COMPLETE 1
 #define MSP_FLAGS_SORTED 2
 
-
+/*
+ * Comparator for serialised coalescence records. Coalescence records
+ * are stored as MSP_NUM_CR_ELEMENTS contiguous 4 byte values. We sort
+ * by the first.
+ */
 static int
 cmp_coalescence_record(const void *a, const void *b) {
-    const coalescence_record_t *ia = (const coalescence_record_t *) a;
-    const coalescence_record_t *ib = (const coalescence_record_t *) b;
-    return (ia->left > ib->left) - (ia->left < ib->left);
+    const uint32_t *ia = (const uint32_t *) a;
+    const uint32_t *ib = (const uint32_t *) b;
+    return (ia[0] > ib[0]) - (ia[0] < ib[0]);
 }
 
 static inline void
@@ -350,9 +354,10 @@ tree_file_sort(tree_file_t *self)
 {
     int ret = -1;
     FILE *f = self->file;
-    coalescence_record_t *buff = NULL;
+    uint32_t *buff = NULL;
     size_t size = self->metadata_offset - self->coalescence_record_offset;
-    size_t num_records = size / sizeof(coalescence_record_t);
+    size_t record_size = sizeof(uint32_t) * MSP_NUM_CR_ELEMENTS;
+    size_t num_records = size / record_size;
 
     if (!tree_file_check_update_mode(self)) {
         ret = MSP_ERR_BAD_MODE;
@@ -376,8 +381,7 @@ tree_file_sort(tree_file_t *self)
      * being able to fail. So, we should look for an alternative
      * here, as we are going to be sorting very large files.
      */
-    qsort(buff, num_records, sizeof(coalescence_record_t),
-            cmp_coalescence_record);
+    qsort(buff, num_records, record_size, cmp_coalescence_record);
     if (fseek(f, self->coalescence_record_offset, SEEK_SET) != 0) {
         ret = MSP_ERR_IO;
         goto out;
