@@ -6,6 +6,7 @@ from __future__ import print_function
 from __future__ import division
 
 import os
+import math
 import random
 import tempfile
 import subprocess
@@ -79,14 +80,15 @@ class MsprimeSimulator(Simulator):
         with tempfile.NamedTemporaryFile() as f:
             for j in range(replicates):
                 sim = msprime.TreeSimulator(self.sample_size, f.name)
-                sim.set_recombination_rate(4 * self.effective_population_size
-                        * self.recombination_rate)
+                sim.set_scaled_recombination_rate(4
+                    * self.effective_population_size * self.recombination_rate)
                 sim.set_num_loci(self.num_loci)
+                sim.set_max_memory("1G")
                 for m in self.population_models:
                     sim.add_population_model(m)
                 sim.run()
+                num_trees[j] = sim.get_num_trees()
                 tf = msprime.TreeFile(f.name)
-                num_trees[j] = tf.get_num_trees()
                 time[j] = sim.get_time()
                 ca_events[j] = sim.get_num_coancestry_events()
                 re_events[j] = sim.get_num_recombination_events()
@@ -156,5 +158,40 @@ def main():
     # - don't change until this has been  fixed.
     verify_random(100)
 
+def verify_human_demographics():
+    """
+    Model: 1e6 now, increasing from 2e4 400 generations ago
+    (12kya), then 2e3 2000 generations ago (60kya) then 2e4 again fixed size
+    beyond that.
+    """
+    n = 100
+    m = 500000
+    r = 1e-8
+    num_replicates = 10000
+    # Calculate the models
+    N0 = 1e6
+    N1 = 2e4
+    N2 = 2e3
+    N3 = 2e4
+    g1 = 400
+    g2 = 2000
+    t1 = g1 / (4 * N0)
+    t2 = g2 / (4 * N0)
+    # Calculate the growth rates.
+    alpha1 = -math.log(N1 / N0) / t1
+    alpha2 = -math.log(N2 / N1) / (t2 - t1)
+    # print(t1, t2)
+    # print(alpha1, N0 * math.exp(- alpha1 * t1))
+    # print(alpha2, N1 * math.exp(- alpha2 * (t2 - t1)))
+    # num_replicates = 1
+    models = [
+            msprime.ExponentialPopulationModel(0, alpha1),
+            msprime.ExponentialPopulationModel(t1, alpha2),
+            msprime.ConstantPopulationModel(t2, N3 / N0),
+            ]
+    output_prefix = "tmp__NOBACKUP__/simple"
+    run_verify(n, m, N0, r, models, num_replicates, output_prefix)
+
 if __name__ == "__main__":
-    main()
+    # main()
+    verify_human_demographics()
