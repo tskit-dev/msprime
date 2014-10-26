@@ -87,7 +87,7 @@ def hl_main():
         print(l, pi, tau)
 
 def large_sim():
-    n = 10**2
+    n = 10**3
     m = 20 * 10**6
     r = 1e-8
     # Calculate the models

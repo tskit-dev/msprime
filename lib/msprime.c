@@ -80,6 +80,8 @@ segment_init(void **obj, size_t index)
 {
     segment_t *seg = (segment_t *) obj;
     seg->index = index + 1;
+    /* if seg->index is 0 we have overflowed */
+    assert(seg->index != 0);
 }
 
 /* memory heap manager */
