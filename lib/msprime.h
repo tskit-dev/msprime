@@ -30,7 +30,10 @@
 #define POP_MODEL_CONSTANT 0
 #define POP_MODEL_EXPONENTIAL 1
 
-/* 2^32 * 32 bytes gives a maximum of 128 GiB of segments */
+/* index: 2^32 * 32 bytes gives a maximum of 128 GiB of segments */
+/* TODO should we change index to a size_t? This will make running out
+ * of segment space irrelevant. However, we get an 8 byte penalty for 
+ * doing so, because of the struct alignment requirements. */
 typedef struct segment_t_t {
     uint32_t left;
     uint32_t right;
