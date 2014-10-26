@@ -61,6 +61,8 @@ class TestInterface(tests.MsprimeTestCase):
         m = sim.get_num_loci()
         pi = [0 for j in range(2 * n)]
         tau = [0.0 for j in range(2 * n)]
+        pi[0] = -1
+        tau[0] = -1
         last_l = 1
         for l, c1, c2, parent, t in sorted_records:
             if last_l != l:
