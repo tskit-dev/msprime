@@ -160,10 +160,23 @@ def memory_test():
         l = [t for t in tf]
 
 
+def example1():
+    pi, tau = msprime.simulate_tree(10)
+    print(pi, tau)
+    for l, pi, tau in msprime.simulate_trees(4, 20, 0.1):
+        print(l, ":", pi)
+    models = [
+        msprime.ConstantPopulationModel(0.5, 2.0),
+        msprime.ConstantPopulationModel(1.0, 0.5)
+    ]
+    pi, tau = msprime.simulate_tree(10, models)
+
+
 if __name__ == "__main__":
+    example1()
     #hl_main()
     # ll_main()
     # memory_test()
-    large_sim()
+    # large_sim()
     # sort_tree("tmp__NOBACKUP__/large_tree.dat")
     # print_tree("tmp__NOBACKUP__/large_tree.dat")
