@@ -228,6 +228,9 @@ class TreeFile(object):
         n = 2 * self.get_sample_size()
         pi = [0 for j in range(n)]
         tau = [0 for j in range(n)]
+        # Set the unused element to -1 following Knuth's convention.
+        pi[0] = -1
+        tau[0] = -1
         b = 1
         for l, c1, c2, p, t in self._ll_tree_file:
             if l != b:
