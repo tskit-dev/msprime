@@ -29,8 +29,8 @@ class MsprimeTestCase(unittest.TestCase):
         self.assertEqual(len(pi), 2 * n)
         self.assertEqual(len(tau), 2 * n)
         # leading value must be zero.
-        self.assertEqual(pi[0], 0)
-        self.assertEqual(tau[0], 0)
+        self.assertEqual(pi[0], -1)
+        self.assertEqual(tau[0], -1)
         num_children = [0 for j in range(0, 2 * n)]
         for j in range(1, 2 * n):
             num_children[pi[j]] += 1
