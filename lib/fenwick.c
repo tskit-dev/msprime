@@ -85,6 +85,10 @@ fenwick_expand(fenwick_t *self, size_t increment)
     }
     self->size += increment;
     free(self->tree);
+    /* we still need values until we have rebuilt the tree; we need to
+     * make sure we don't double free in an error condition though.
+     */
+    self->values = NULL;
     ret = fenwick_alloc_buffers(self);
     if (ret != 0) {
         goto out;
