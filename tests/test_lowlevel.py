@@ -21,7 +21,7 @@ class TestInterface(tests.MsprimeTestCase):
         for at least one event.
         """
         self.assertTrue(os.path.exists(sim.get_tree_file_name()))
-        self.assertGreater(sim.get_num_trees(), 0)
+        self.assertGreater(sim.get_num_breakpoints(), 0)
         self.assertGreater(sim.get_time(), 0.0)
         self.assertGreater(sim.get_num_ancestors(), 1)
         events = sim.get_num_coancestry_events()
@@ -72,7 +72,19 @@ class TestInterface(tests.MsprimeTestCase):
             pi[c2] = parent
             tau[parent] = t
         self.verify_tree(n, pi, tau)
+        self.verify_squashed_records(sorted_records)
 
+    def verify_squashed_records(self, sorted_records):
+        """
+        Checks to see if there were any unsquashed records in the specified
+        set of sorted records.
+        """
+        u = sorted_records[0]
+        for v in sorted_records[1:]:
+            # An unsquashed record would be two adjacent records with the
+            # same c1, c2, p and t values.
+            self.assertFalse(all(u[j] == v[j] for j in range(1, 5)))
+            u = v
 
     def verify_completed_simulation(self, sim):
         """
@@ -81,7 +93,7 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertEqual(sim.get_ancestors(), [])
         self.assertEqual(sim.get_num_ancestors(), 0)
         self.assertTrue(os.path.exists(sim.get_tree_file_name()))
-        self.assertGreater(sim.get_num_trees(), 0)
+        self.assertGreater(sim.get_num_breakpoints(), 0)
         self.assertGreater(sim.get_time(), 0.0)
         events = sim.get_num_coancestry_events()
         events += sim.get_num_recombination_events()
@@ -136,7 +148,7 @@ class TestInterface(tests.MsprimeTestCase):
                 avl_node_block_size=avl_node_block_size,
                 node_mapping_block_size=node_mapping_block_size)
         # Check initial state
-        self.assertEqual(1, sim.get_num_trees())
+        self.assertEqual(1, sim.get_num_breakpoints())
         self.assertEqual(0.0, sim.get_time())
         self.assertEqual(n, sim.get_num_ancestors())
         self.assertEqual(0, sim.get_num_coancestry_events())

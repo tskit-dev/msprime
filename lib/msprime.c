@@ -856,16 +856,11 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
     int ret = 0;
     coalescence_record_t *lcr = &self->last_coalesence_record;
 
-    /* printf("%d\t%d\t%d\t%d\t%d\t%f\n", left, right, child1, child2, parent, self->time); */
     if (lcr->time == self->time && lcr->right + 1 == left
             && lcr->children[0] == child1 && lcr->children[1] == child2
             && lcr->parent == parent) {
-        /* merge this record into the last */
+        /* squash this record into the last */
         lcr->right = right;
-        /* TODO verify this is working properly and reenable the final
-         * flush.
-         */
-        /* printf("squashing record\n"); */
     } else {
         /* Don't flush the first dummy record */
         if (lcr->left != 0) {
@@ -880,7 +875,6 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         lcr->parent = parent;
     }
     return ret;
-
 }
 
 static int WARN_UNUSED
@@ -1198,7 +1192,7 @@ msp_get_num_ancestors(msp_t *self)
 }
 
 size_t
-msp_get_num_trees(msp_t *self)
+msp_get_num_breakpoints(msp_t *self)
 {
     return avl_count(&self->breakpoints) - 1;
 }

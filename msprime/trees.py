@@ -90,8 +90,8 @@ class TreeSimulator(object):
         self._max_memory = None
         self._ll_sim = None
 
-    def get_num_trees(self):
-        return self._ll_sim.get_num_trees()
+    def get_num_breakpoints(self):
+        return self._ll_sim.get_num_breakpoints()
 
     def get_time(self):
         return self._ll_sim.get_time()

@@ -140,7 +140,7 @@ int msp_print_state(msp_t *self);
 int msp_write_metadata(msp_t *self, FILE *f);
 int msp_free(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
-size_t msp_get_num_trees(msp_t *self);
+size_t msp_get_num_breakpoints(msp_t *self);
 size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
