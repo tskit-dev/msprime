@@ -179,7 +179,6 @@ tree_file_write_header(tree_file_t *self)
     ret = 0;
 out:
     return ret;
-
 }
 
 static int WARN_UNUSED
@@ -213,17 +212,14 @@ tree_file_open_write_mode(tree_file_t *self)
 {
     int ret = -1;
     FILE *f = fopen(self->filename, "w");
-    char *header = calloc(1, MSP_TREE_FILE_HEADER_SIZE);
+    char header[MSP_TREE_FILE_HEADER_SIZE];
 
     self->file = f;
     if (f == NULL) {
         ret = MSP_ERR_IO;
         goto out;
     }
-    if (header == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
+    memset(header, 0, MSP_TREE_FILE_HEADER_SIZE);
     /* write a temporary header */
     if (fwrite(header, MSP_TREE_FILE_HEADER_SIZE, 1, f) != 1) {
         ret = MSP_ERR_IO;
@@ -231,9 +227,6 @@ tree_file_open_write_mode(tree_file_t *self)
     }
     ret = 0;
 out:
-    if (header != NULL) {
-        free(header);
-    }
     return ret;
 }
 
@@ -255,7 +248,6 @@ tree_file_open_update_mode(tree_file_t *self)
 out:
     return ret;
 }
-
 
 int
 tree_file_print_state(tree_file_t *self)
