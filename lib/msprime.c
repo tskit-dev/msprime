@@ -854,18 +854,31 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         int32_t child1, int32_t child2, int32_t parent)
 {
     int ret = 0;
-    coalescence_record_t cr;
+    coalescence_record_t *lcr = &self->last_coalesence_record;
 
-    cr.time = self->time;
-    cr.left = left;
-    /* right is not recorded as we only support complete simulations for now
-     * and this value is not required derive the marginal trees.
-     */
-    cr.children[0] = child1;
-    cr.children[1] = child2;
-    cr.parent = parent;
-    self->num_coalescence_records++;
-    ret = tree_file_append_record(&self->tree_file, &cr);
+    /* printf("%d\t%d\t%d\t%d\t%d\t%f\n", left, right, child1, child2, parent, self->time); */
+    if (lcr->time == self->time && lcr->right + 1 == left
+            && lcr->children[0] == child1 && lcr->children[1] == child2
+            && lcr->parent == parent) {
+        /* merge this record into the last */
+        lcr->right = right;
+        /* TODO verify this is working properly and reenable the final
+         * flush.
+         */
+        /* printf("squashing record\n"); */
+    } else {
+        /* Don't flush the first dummy record */
+        if (lcr->left != 0) {
+            ret = tree_file_append_record(&self->tree_file, lcr);
+            self->num_coalescence_records++;
+        }
+        lcr->left = left;
+        lcr->right = right;
+        lcr->time = self->time;
+        lcr->children[0] = child1;
+        lcr->children[1] = child2;
+        lcr->parent = parent;
+    }
     return ret;
 
 }
@@ -1104,6 +1117,7 @@ msp_initialise(msp_t *self)
     if (ret != 0) {
         goto out;
     }
+    memset(&self->last_coalesence_record, 0, sizeof(coalescence_record_t));
 out:
     return ret;
 }
@@ -1164,6 +1178,13 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             ret = 2;
         }
     } else {
+        /* we need to write a dummy record to flush the last
+         * coalescence record.
+         */
+        ret = msp_record_coalescence(self, 0, 0, 0, 0, 0);
+        if (ret != 0) {
+            goto out;
+        }
         ret = tree_file_finalise(&self->tree_file, self);
     }
 out:

@@ -49,6 +49,7 @@ decode_coalescence_record(uint32_t *record, coalescence_record_t *cr)
     union { float float_value; uint32_t uint_value; } conv;
 
     cr->left = record[0];
+    cr->right = 0; /* we do not store right for complete sims */
     cr->children[0] = (int32_t) record[1];
     cr->children[1] = (int32_t) record[2];
     cr->parent = (int32_t) record[3];

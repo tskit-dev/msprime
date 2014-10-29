@@ -73,7 +73,8 @@ class TestTreeSimulator(tests.MsprimeTestCase):
         tf = msprime.TreeFile(self._treefile)
         l = [t for t in tf]
         self.verify_trees(n, m, l)
-        self.assertEqual(len(l), ts.get_num_trees())
+        # TODO reenable this if we get rid of record squashing
+        # self.assertEqual(len(l), ts.get_num_trees())
 
     def test_random_parameters(self):
         num_random_sims = 1

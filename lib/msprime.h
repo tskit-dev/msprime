@@ -46,6 +46,7 @@ typedef struct segment_t_t {
 /* int based oriented forests gives a maximum sample size of ~10^9 */
 typedef struct {
     uint32_t left;
+    uint32_t right;
     int32_t children[2];
     int32_t parent;
     float time;
@@ -125,6 +126,8 @@ typedef struct {
     void **node_mapping_blocks;
     size_t num_node_mapping_blocks;
     size_t next_node_mapping;
+    /* last coalescence record to enable squashing of adjacent records */
+    coalescence_record_t last_coalesence_record;
 } msp_t;
 
 int msp_alloc(msp_t *self);
