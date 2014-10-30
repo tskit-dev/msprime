@@ -120,6 +120,12 @@ tree_file_read_info(tree_file_t *self)
         ret = MSP_ERR_FILE_VERSION;
         goto out;
     }
+    /* TODO sample size and num_loci should be removed here as they
+     * can be derived from the metadata. We should also add back in
+     * the coalescence record offset; this will allow us to add in
+     * extra fields to the header but old code would still be able
+     * to read the records.
+     */
     self->sample_size = h32[2];
     self->num_loci = h32[3];
     self->flags = h32[4];
