@@ -63,12 +63,12 @@ def simulate_trees(sample_size, num_loci, scaled_recombination_rate,
     finally:
         os.unlink(tf)
 
-def simulate_tree(sample_size, population_models=[]):
+def simulate_tree(sample_size, population_models=[], max_memory="10M"):
     """
     Simulates the coalescent at a single locus for the specified sample size
     under the specified list of population models.
     """
-    iterator = simulate_trees(sample_size, 1, 0, population_models)
+    iterator = simulate_trees(sample_size, 1, 0, population_models, max_memory)
     l, pi, tau = next(iterator)
     return pi, tau
 
