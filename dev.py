@@ -10,6 +10,9 @@ import json
 import time
 import random
 
+import numpy as np
+import numpy.random
+
 import _msprime
 import msprime
 
@@ -113,6 +116,7 @@ def large_sim():
     ts.set_scaled_recombination_rate(4 * N0 * r)
     ts.set_max_memory("245G")
     ts.set_segment_block_size(int(1e8))
+    try:
         ts.run()
     except KeyboardInterrupt:
         pass
@@ -170,9 +174,61 @@ def example1():
     ]
     pi, tau = msprime.simulate_tree(10, models)
 
+def isdescendent(u, v, pi):
+    """
+    Returns True if the node u is a descendent of the node v in the
+    specified oriented forest pi.
+    """
+    j = u
+    while j != v and j != 0:
+        j = pi[j]
+    return j == v
+
+def mutation_dev():
+    random.seed(1)
+    np.random.seed(1)
+    n = 4
+    m = 100
+    r = 0.1
+    mu = 2.0
+    treefile = "tmp__NOBACKUP__/treefile.dat"
+    ts = msprime.TreeSimulator(n, treefile)
+    ts.set_scaled_recombination_rate(r)
+    ts.set_num_loci(m)
+    ts.run()
+    msprime.sort_tree_file(treefile)
+    tf = msprime.TreeFile(treefile)
+    pi = [0 for j in range(2 * n)]
+    tau = [0 for j in range(2 * n)]
+    b = 1
+    sequences = ["" for j in range(n + 1)]
+    # This algorithm basically works, we just need to actually prove
+    # it. It'll all hang on the fact that records are sorted in time
+    # order, so that we never get the wrong time in between trees.
+    for l, c1, c2, p, t in tf.records():
+        print(l, c1, c2, p, t)
+        for c in [c1, c2]:
+            k = np.random.poisson(mu * (t - tau[c]))
+            if k > 0:
+                print(k, "mutations happened on ", c, "->", p)
+                for j in range(1, n + 1):
+                    v = str(int(isdescendent(j, c, pi)))
+                    sequences[j] += v
+
+        if l != b:
+            print("new tree:",  l - b, pi, tau)
+            b = l
+        pi[c1] = p
+        pi[c2] = p
+        tau[p] = t
+
+    for s in sequences:
+        print(s)
+
 
 if __name__ == "__main__":
-    example1()
+    mutation_dev()
+    # example1()
     #hl_main()
     # ll_main()
     # memory_test()
