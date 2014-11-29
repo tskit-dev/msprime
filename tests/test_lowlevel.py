@@ -64,10 +64,16 @@ class TestInterface(tests.MsprimeTestCase):
         pi[0] = -1
         tau[0] = -1
         last_l = 1
+        last_t = 0
         for l, c1, c2, parent, t in sorted_records:
             if last_l != l:
                 last_l = l
+                last_t = 0
                 self.verify_tree(n, pi, tau)
+            else:
+                last_t = t
+            # Ensure that records are sorted by time within a block
+            self.assertLessEqual(last_t, t)
             pi[c1] = parent
             pi[c2] = parent
             tau[parent] = t
