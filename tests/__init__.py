@@ -60,3 +60,19 @@ class MsprimeTestCase(unittest.TestCase):
             self.assertTrue(l > 0)
             s += l
         self.assertEqual(s, m)
+
+    def verify_haplotypes(self, n, haplotypes):
+        """
+        Verify that the specified set of haplotypes are consistent.
+        """
+        self.assertEqual(len(haplotypes), n)
+        for h in haplotypes:
+            self.assertEqual(len(h), len(haplotypes[0]))
+        # Examine each column; we must have a mixture of 0s and 1s
+        for k in range(len(haplotypes[0])):
+            zeros = 0
+            ones = 0
+            for j in range(n):
+                zeros += haplotypes[j][k] == '0'
+                ones += haplotypes[j][k] == '1'
+            self.assertEqual(zeros + ones, n)
