@@ -5,10 +5,13 @@ Simple client code for development purposes.
 from __future__ import print_function
 from __future__ import division
 
+import os
 import math
 import json
 import time
 import random
+import tempfile
+import subprocess
 
 import numpy as np
 import numpy.random
@@ -225,9 +228,77 @@ def mutation_dev():
     for s in sequences:
         print(s)
 
+def edit_visualisation():
+    """
+    Create some visualisation of the edit structure of the tree file.
+    """
+    random.seed(1)
+    np.random.seed(1)
+    n = 5
+    m = 10
+    r = 0.5
+    mu = 2.0
+    treefile = "tmp__NOBACKUP__/treefile.dat"
+    ts = msprime.TreeSimulator(n, treefile)
+    ts.set_scaled_recombination_rate(r)
+    ts.set_num_loci(m)
+    ts.run()
+    msprime.sort_tree_file(treefile)
+    tf = msprime.TreeFile(treefile)
+    max_time = 0
+    for l, pi, tau in tf:
+        max_time = max(max_time, *tau)
+    tf = msprime.TreeFile(treefile)
+    for j, (l, pi, tau) in enumerate(tf):
+        output_file = "tmp__NOBACKUP__/viz_{0}.pdf".format(j)
+        fd, filename = tempfile.mkstemp(".asy")
+        out = os.fdopen(fd, "w")
+        make_tree_visualisation(pi, tau, out, max_time)
+        out.close()
+        args = ["asy", filename, "-f", "pdf", "-o", output_file]
+        subprocess.check_call(args)
+        os.unlink(filename)
+    tf = msprime.TreeFile(treefile)
+    for r in tf.records():
+        print(r)
+
+def make_tree_visualisation(pi, tau, out, max_time):
+    print(pi, tau, max_time)
+    print("size(8cm, 0);", file=out)
+    print("defaultpen(fontsize(6pt));", file=out)
+    n = len(pi) // 2
+    nodes = {}
+    for j in range(1, n + 1):
+        x = (j, 0)
+        nodes[j] = x
+    for j in range(n + 1, 2 * n):
+        k = j - n
+        if j % 2 == 0:
+            x0 = j % n + 0.5 * k
+        else:
+            x0 = n - (j % n - 1) + 0.5 * k
+        x = (x0, k)
+        nodes[j] = x
+    for j, x in nodes.items():
+        s = 'dot({0});'.format(x)
+        l = "S" if j <= n else "NW"
+        print(s, file=out)
+        s = 'label("{0}, t={3:.3f}", {1}, {2});'.format(j, x, l, tau[j])
+        print(s, file=out)
+    m = [0 for j in range(2 * n)]
+    for j in range(1, n + 1):
+        u = j
+        while pi[u] != 0 and m[u] == 0:
+            m[u] = 1
+            x = nodes[u]
+            y = nodes[pi[u]]
+            s = 'draw({0}--{1});'.format(x, y)
+            print(s, file=out)
+            u = pi[u]
 
 if __name__ == "__main__":
-    mutation_dev()
+    edit_visualisation()
+    # mutation_dev()
     # example1()
     #hl_main()
     # ll_main()
