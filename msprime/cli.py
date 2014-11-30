@@ -22,10 +22,14 @@ Command line interfaces to the msprime library.
 from __future__ import division
 from __future__ import print_function
 
+import os
 import sys
 import struct
 import random
+import tempfile
 import argparse
+
+import msprime
 
 mscompat_description = """\
 An ms-compatible interface to the msprime library. Supports a
@@ -49,19 +53,63 @@ def get_seeds(random_seeds):
     seed = struct.unpack(">Q", struct.pack(">HHHH", 0, *seeds))[0]
     return seed, seeds
 
-def run_simulations(args):
+
+class SimulationRunner(object):
     """
-    Runs the simulations according to the specified arguments.
+    Class to run msprime simulation and output the results.
     """
-    # The first line of ms's output is the command line.
-    print(" ".join(sys.argv))
-    python_seed, ms_seeds = get_seeds(args.random_seeds)
-    print(python_seed)
-    random.seed(python_seed)
-    print(" ".join(str(s) for s in ms_seeds))
-    for j in range(args.num_replicates):
-        print()
-        print("\\\\")
+    def __init__(self, args):
+        self.tree_file_name = None
+        self.sample_size = args.sample_size
+        self.num_replicates = args.num_replicates
+        self.mutation_rate = args.mutation_rate
+        self.print_trees = args.trees
+        fd, tf = tempfile.mkstemp(prefix="mscompat_", suffix=".dat")
+        os.close(fd)
+        self.tree_file_name = tf
+        self.simulator = msprime.TreeSimulator(self.sample_size,
+                self.tree_file_name)
+        # Get the demography parameters
+        if args.growth_rate is not None:
+            m = msprime.ExponentialPopulationModel(0.0, args.growth_rate)
+            self.simulator.add_population_model(m)
+        for t, alpha in args.growth_event:
+            m = msprime.ExponentialPopulationModel(t, alpha)
+            self.simulator.add_population_model(m)
+        for t, x in args.size_event:
+            m = msprime.ConstantPopulationModel(t, x)
+            self.simulator.add_population_model(m)
+        # sort out the random seeds
+        python_seed, ms_seeds = get_seeds(args.random_seeds)
+        self.ms_random_seeds = ms_seeds
+        random.seed(python_seed)
+
+    def run(self):
+        """
+        Runs the simulations and writes the output to stdout
+        """
+        # The first line of ms's output is the command line.
+        print(" ".join(sys.argv))
+        print(" ".join(str(s) for s in self.ms_random_seeds))
+        for j in range(self.num_replicates):
+            self.simulator.set_random_seed(random.randint(0, 2**30))
+            self.simulator.run()
+            msprime.sort_tree_file(self.tree_file_name)
+            tf = msprime.TreeFile(self.tree_file_name)
+            print()
+            print("//")
+            if self.print_trees:
+                for l, pi, tau in tf.trees():
+                    ns = msprime.oriented_tree_to_newick(pi, tau)
+                    print(l, ns)
+            self.simulator.reset()
+
+    def cleanup(self):
+        """
+        Cleans up any files created during simulation.
+        """
+        if self.tree_file_name is not None:
+            os.unlink(self.tree_file_name)
 
 def positive_int(value):
     int_value = int(value)
@@ -85,11 +133,11 @@ def mscompat_main():
     group = parser.add_argument_group("Demography")
     group.add_argument("--growth-rate", "-G", metavar="alpha", type=float,
             help="Population growth rate alpha.")
-    group.add_argument("--growth-event", "-eG", nargs=2,
-            metavar=("t", "alpha"),
+    group.add_argument("--growth-event", "-eG", nargs=2, action="append",
+            type=float, default=[], metavar=("t", "alpha"),
             help="Set the growth rate to alpha at time t")
-    group.add_argument("--size-event", "-eN", nargs=2,
-            metavar=("t", "x"),
+    group.add_argument("--size-event", "-eN", nargs=2, action="append",
+            type=float, default=[], metavar=("t", "x"),
             help="Set the population size to x * N0 at time t")
     group = parser.add_argument_group("Miscellaneous")
     group.add_argument("--random-seeds", "-seeds", nargs=3, type=positive_int,
@@ -100,5 +148,11 @@ def mscompat_main():
     args = parser.parse_args()
     if args.mutation_rate is None and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
-
-    run_simulations(args)
+    sr = SimulationRunner(args)
+    try:
+        sr.run()
+    except Exception as e:
+        print("Error:", e, file=sys.stdout)
+        sys.exit(1)
+    finally:
+        sr.cleanup()
