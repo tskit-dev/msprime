@@ -25,5 +25,9 @@ class TestRandomSeeds(unittest.TestCase):
             self.assertEqual(ms_seeds, seeds)
             self.assertGreater(python_seed, 0)
             generated_seeds[tuple(seeds)] = python_seed
+            # Make sure it's deterministic
+            python_seed2, ms_seeds2 = cli.get_seeds(seeds)
+            self.assertEqual(ms_seeds, ms_seeds2)
+            self.assertEqual(python_seed, python_seed2)
         self.assertEqual(len(generated_seeds),
                 len(set(generated_seeds.keys())))
