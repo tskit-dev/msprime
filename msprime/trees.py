@@ -269,7 +269,7 @@ def isdescendent(u, v, pi):
     j = u
     while j != v and j != 0:
         j = pi[j]
-    print("isdescendent", u, v, pi, j == v)
+    # print("isdescendent", u, v, pi, j == v)
     return j == v
 
 
@@ -300,29 +300,34 @@ class HaplotypeGenerator(object):
         # This algorithm basically works, we just need to actually prove
         # it. It'll all hang on the fact that records are sorted in time
         # order, so that we never get the wrong time in between trees.
+        mutations = []
         for l, c1, c2, p, t in self._tree_file.records():
-            print(l, c1, c2, p, t)
-            if l != b:
-                print("new tree:",  l - b, pi, tau)
-                b = l
-            pi[c1] = p
-            pi[c2] = p
-            tau[p] = t
+            # print(l, c1, c2, p, t)
             for c in [c1, c2]:
                 k = np.random.poisson(mu * (t - tau[c]))
                 if k > 0:
-                    print(k, "mutations happened on ", c, "->", p)
+                    # print(k, "mutations happened on ", c, "->", p)
+                    mutations.append((c, k))
+            if l != b:
+                # print("new tree:",  l - b, pi, tau)
+                # print("applying mutations")
+                for c, k in mutations:
                     for mut in range(k):
                         for j in range(1, n + 1):
                             v = str(int(isdescendent(j, c, pi)))
                             sequences[j] += v
+                b = l
+                mutations = []
+            pi[c1] = p
+            pi[c2] = p
+            tau[p] = t
 
 
     def get_num_segregating_sites(self):
         return len(self._haplotypes[1])
 
     def get_haplotypes(self):
-        return self._haplotypes
+        return self._haplotypes[1:]
 
     def get_positions(self):
         return [0 for j in range(self.get_num_segregating_sites())]

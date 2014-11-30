@@ -121,9 +121,7 @@ class SimulationRunner(object):
                 print("segsites:", hg.get_num_segregating_sites())
                 P = hg.get_positions()
                 print("positions:", " ".join("{0:.3f}".format(p) for p in P))
-                # TODO should haplotypes return an offset list or should we
-                # skip the first element??
-                for h in hg.get_haplotypes()[1:]:
+                for h in hg.get_haplotypes():
                     print(h)
 
             self.simulator.reset()

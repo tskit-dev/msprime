@@ -1,5 +1,4 @@
-"""
-Test cases for the high level interface to msprime.
+""" Test cases for the high level interface to msprime.
 """
 from __future__ import print_function
 from __future__ import division
@@ -76,9 +75,37 @@ class TestTreeSimulator(tests.MsprimeTestCase):
         self.assertLessEqual(len(l), ts.get_num_breakpoints())
 
     def test_random_parameters(self):
-        num_random_sims = 1
+        num_random_sims = 10
         for j in range(num_random_sims):
             n = random.randint(2, 100)
             m = random.randint(10, 1000)
             r = random.random()
             self.verify_simulation(n, m, r)
+
+
+class TestHaplotypeGenerator(tests.MsprimeTestCase):
+    """
+    Tests the haplotype generation code.
+    """
+    def verify_simulation(self, n, m, r, theta):
+        """
+        Verifies a simulation for the specified parameters.
+        """
+        ts = msprime.TreeSimulator(n, self._treefile)
+        ts.set_scaled_recombination_rate(r)
+        ts.set_num_loci(m)
+        self.assertTrue(ts.run())
+        msprime.sort_tree_file(self._treefile)
+        hg = msprime.HaplotypeGenerator(self._treefile, theta)
+        self.verify_haplotypes(n, hg.get_haplotypes())
+
+    def test_random_parameters(self):
+        num_random_sims = 10
+        for j in range(num_random_sims):
+            n = random.randint(2, 100)
+            m = random.randint(10, 1000)
+            r = random.random()
+            theta = random.uniform(0, 2)
+            self.verify_simulation(n, m, r,theta)
+
+
