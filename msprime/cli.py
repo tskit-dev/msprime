@@ -33,8 +33,11 @@ import msprime
 
 mscompat_description = """\
 An ms-compatible interface to the msprime library. Supports a
-subset of the functionality available in ms.
-"""
+subset of the functionality available in ms."""
+mscompat_recombination_help="""\
+Recombination at rate rho=4*N0*r where r is the rate of recombination
+between the ends of the region being simulated; num_loci is the number
+of sites between which recombination can occur"""
 
 def get_seeds(random_seeds):
     """
@@ -61,6 +64,8 @@ class SimulationRunner(object):
     def __init__(self, args):
         self.tree_file_name = None
         self.sample_size = args.sample_size
+        self.num_loci = int(args.recombination[1])
+        self.rho = args.recombination[0]
         self.num_replicates = args.num_replicates
         self.mutation_rate = args.mutation_rate
         self.print_trees = args.trees
@@ -69,6 +74,11 @@ class SimulationRunner(object):
         self.tree_file_name = tf
         self.simulator = msprime.TreeSimulator(self.sample_size,
                 self.tree_file_name)
+        self.simulator.set_max_memory("100M")
+        self.simulator.set_num_loci(self.num_loci)
+        # We don't scale recombination rate by the size of the region.
+        r = self.rho / (self.num_loci - 1)
+        self.simulator.set_scaled_recombination_rate(r)
         # Get the demography parameters
         if args.growth_rate is not None:
             m = msprime.ExponentialPopulationModel(0.0, args.growth_rate)
@@ -101,7 +111,21 @@ class SimulationRunner(object):
             if self.print_trees:
                 for l, pi, tau in tf.trees():
                     ns = msprime.oriented_tree_to_newick(pi, tau)
-                    print(l, ns)
+                    if self.num_loci == 1:
+                        print(ns)
+                    else:
+                        print("[{0}]{1}".format(l, ns))
+            if self.mutation_rate is not None:
+                hg = msprime.HaplotypeGenerator(self.tree_file_name,
+                        self.mutation_rate)
+                print("segsites:", hg.get_num_segregating_sites())
+                P = hg.get_positions()
+                print("positions:", " ".join("{0:.3f}".format(p) for p in P))
+                # TODO should haplotypes return an offset list or should we
+                # skip the first element??
+                for h in hg.get_haplotypes()[1:]:
+                    print(h)
+
             self.simulator.reset()
 
     def cleanup(self):
@@ -129,6 +153,9 @@ def mscompat_main():
             help="Mutation rate theta=4*N0*mu")
     group.add_argument("--trees", "-T", action="store_true",
             help="Print out trees in Newick format")
+    group.add_argument("--recombination", "-r", type=float, nargs=2,
+            default=(0, 1), metavar=("rho", "num_loci"),
+            help=mscompat_recombination_help)
 
     group = parser.add_argument_group("Demography")
     group.add_argument("--growth-rate", "-G", metavar="alpha", type=float,
@@ -151,8 +178,5 @@ def mscompat_main():
     sr = SimulationRunner(args)
     try:
         sr.run()
-    except Exception as e:
-        print("Error:", e, file=sys.stdout)
-        sys.exit(1)
     finally:
         sr.cleanup()

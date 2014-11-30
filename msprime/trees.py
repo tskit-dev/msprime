@@ -254,6 +254,78 @@ class TreeFile(object):
     def records(self):
         return self._ll_tree_file
 
+# The haplotype generator is being done in Python for the time being.
+# This definitely needs to get moved down to C once the algorithm is
+# fully sorted out. We can lose these imports then.
+import numpy as np
+import numpy.random
+import json
+
+def isdescendent(u, v, pi):
+    """
+    Returns True if the node u is a descendent of the node v in the
+    specified oriented forest pi.
+    """
+    j = u
+    while j != v and j != 0:
+        j = pi[j]
+    print("isdescendent", u, v, pi, j == v)
+    return j == v
+
+
+class HaplotypeGenerator(object):
+    """
+    Class that takes a TreeFile and a recombination rate and builds a set
+    of haplotypes consistent with the underlying trees.
+    """
+    def __init__(self, tree_file_name, mutation_rate):
+        self._tree_file = TreeFile(tree_file_name)
+        self._mutation_rate = mutation_rate
+        self._num_segregating_sites = 0
+        self._sample_size = self._tree_file.get_sample_size()
+        self._haplotypes = ['' for j in range(self._sample_size + 1)]
+        self._positions = []
+        self._generate_haplotypes()
+
+    def _generate_haplotypes(self):
+        m = json.loads(self._tree_file.get_metadata())
+        seed = m["random_seed"]
+        np.random.seed(seed)
+        n = self._sample_size
+        pi = [0 for j in range(2 * n)]
+        tau = [0 for j in range(2 * n)]
+        b = 1
+        sequences = self._haplotypes
+        mu = self._mutation_rate
+        # This algorithm basically works, we just need to actually prove
+        # it. It'll all hang on the fact that records are sorted in time
+        # order, so that we never get the wrong time in between trees.
+        for l, c1, c2, p, t in self._tree_file.records():
+            print(l, c1, c2, p, t)
+            if l != b:
+                print("new tree:",  l - b, pi, tau)
+                b = l
+            pi[c1] = p
+            pi[c2] = p
+            tau[p] = t
+            for c in [c1, c2]:
+                k = np.random.poisson(mu * (t - tau[c]))
+                if k > 0:
+                    print(k, "mutations happened on ", c, "->", p)
+                    for mut in range(k):
+                        for j in range(1, n + 1):
+                            v = str(int(isdescendent(j, c, pi)))
+                            sequences[j] += v
+
+
+    def get_num_segregating_sites(self):
+        return len(self._haplotypes[1])
+
+    def get_haplotypes(self):
+        return self._haplotypes
+
+    def get_positions(self):
+        return [0 for j in range(self.get_num_segregating_sites())]
 
 class PopulationModel(object):
     """
@@ -295,5 +367,39 @@ def oriented_tree_to_newick(pi, tau):
     """
     Converts the specified oriented tree to an ms-compatible Newick tree.
     """
-    return "()"
+    # Build a top-down linked tree using a dict. Each node has a list
+    # of it's children
+    d = {}
+    n = len(pi) // 2
+    # We also want the branch lengths; time from a node back to its parent
+    b = {2 * n - 1: None}
+    for j in range(1, n + 1):
+        u = j
+        d[u] = None
+        not_done = True
+        while pi[u] != 0 and not_done:
+            # ms uses a fixed 3 digit precision; we can easily fix this.
+            b[u] = "{0:.3f}".format(tau[pi[u]] - tau[u])
+            if pi[u] in d:
+                # This is the second time we've seen this node
+                not_done = False
+            else:
+                d[pi[u]] = []
+            d[pi[u]].append(u)
+            u = pi[u]
+    return _build_newick(2 * n - 1, d, b)
 
+def _build_newick(node, tree, branch_lengths):
+    l = branch_lengths[node]
+    if tree[node] is not None:
+        c1, c2 = tree[node]
+        s1 = _build_newick(c1, tree, branch_lengths)
+        s2 = _build_newick(c2, tree, branch_lengths)
+        if l is None:
+            # The root node is treated differently
+            s = "({0},{1});".format(s1, s2)
+        else:
+            s = "({0},{1}):{2}".format(s1, s2, l)
+    else:
+        s = "{0}:{1}".format(node, l)
+    return s
