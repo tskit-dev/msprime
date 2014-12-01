@@ -77,8 +77,9 @@ class SimulationRunner(object):
         self.simulator.set_max_memory("100M")
         self.simulator.set_num_loci(self.num_loci)
         # We don't scale recombination rate by the size of the region.
-        r = self.rho / (self.num_loci - 1)
-        self.simulator.set_scaled_recombination_rate(r)
+        if self.num_loci > 1:
+            r = self.rho / (self.num_loci - 1)
+            self.simulator.set_scaled_recombination_rate(r)
         # Get the demography parameters
         if args.growth_rate is not None:
             m = msprime.ExponentialPopulationModel(0.0, args.growth_rate)

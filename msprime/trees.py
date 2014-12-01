@@ -272,6 +272,65 @@ def isdescendent(u, v, pi):
     # print("isdescendent", u, v, pi, j == v)
     return j == v
 
+def get_total_branch_length(pi, tau):
+    """
+    Returns the total branch length in the specified oriented tree.
+    """
+    m = [0 for j in pi]
+    n = len(pi) // 2
+    t = 0
+    for j in range(1, n + 1):
+        u = j
+        while pi[u] != 0 and m[u] == 0:
+            m[u] = 1
+            t += tau[pi[u]] - tau[u]
+    return t
+
+def choose_node(pi, tau):
+    """
+    Chooses a parent node from the specified forest with probablility proportional
+    to it's branch length.
+    """
+    b = [0 for j in pi]
+    n = len(pi) // 2
+    for j in range(1, n + 1):
+        u = j
+        # TODO we should be marking this so we don't retraverse upwards.
+        while pi[u] != 0:
+            b[u] = tau[pi[u]] - tau[u]
+            u = pi[u]
+    t = sum(b)
+    for j in range(len(b)):
+        b[j] /= t
+    j = probability_list_select(b, random.random())
+    return j
+
+def probability_list_select(probabilities, u):
+    """
+    This is a direct copy from C; change or remove!
+    """
+    n = len(probabilities)
+    ret = 0
+    if n == 0:
+        ret = -1
+    elif n == 1:
+        ret = 0
+    else:
+        x = -1
+        i = 0
+        lhs = 0.0
+        rhs = probabilities[0]
+        while x == -1:
+            if lhs <= u and  u < rhs:
+                x = i
+            else:
+                i += 1
+                lhs = rhs
+                assert i < n
+                rhs += probabilities[i]
+        ret = x
+    return ret
+
 
 class HaplotypeGenerator(object):
     """
@@ -288,39 +347,37 @@ class HaplotypeGenerator(object):
         self._generate_haplotypes()
 
     def _generate_haplotypes(self):
-        m = json.loads(self._tree_file.get_metadata())
-        seed = m["random_seed"]
+        metadata = json.loads(self._tree_file.get_metadata())
+        seed = metadata["random_seed"]
+        m = metadata["num_loci"]
         np.random.seed(seed)
         n = self._sample_size
-        pi = [0 for j in range(2 * n)]
-        tau = [0 for j in range(2 * n)]
-        b = 1
-        sequences = self._haplotypes
-        mu = self._mutation_rate
-        # This algorithm basically works, we just need to actually prove
-        # it. It'll all hang on the fact that records are sorted in time
-        # order, so that we never get the wrong time in between trees.
-        mutations = []
-        for l, c1, c2, p, t in self._tree_file.records():
-            # print(l, c1, c2, p, t)
-            for c in [c1, c2]:
-                k = np.random.poisson(mu * (t - tau[c]))
-                if k > 0:
-                    # print(k, "mutations happened on ", c, "->", p)
-                    mutations.append((c, k))
-            if l != b:
-                # print("new tree:",  l - b, pi, tau)
-                # print("applying mutations")
-                for c, k in mutations:
-                    for mut in range(k):
-                        for j in range(1, n + 1):
-                            v = str(int(isdescendent(j, c, pi)))
-                            sequences[j] += v
-                b = l
-                mutations = []
-            pi[c1] = p
-            pi[c2] = p
-            tau[p] = t
+        num_segregating_sites = 0
+        # This is a very crude implementation for testing. We'll really want to
+        # do this down in C. We generate the first tree, and choose a branches
+        # according to it's length as before. Now though, when we edit the tree
+        # we just change the weights on the affected branches and recalculate
+        # the sum. We _might_ be able to store this in a Fenwick tree which
+        # would make the process of (a) calculating the total branch length
+        # really fast and (b) finding a branch with a given probablity quite
+        # fast too. It should be equivalent to generate a uniformly distributed
+        # value in the range (0, total) and finding the closest value in the
+        # Fenwick tree as it is to use an accumulator in Knuth's algorithm.
+        #
+        # We should to a dirt-simple literal implementation in C first though
+        # using the standard components and see where the bottlenecks are.
+        for l, pi, tau in self._tree_file:
+            # TODO verify this scale is correct...
+            theta_seg = l * self._mutation_rate / m
+            total_branch_length = get_total_branch_length(pi, tau)
+            k = np.random.poisson(total_branch_length * theta_seg)
+            for j in range(k):
+                u = choose_node(pi, tau)
+                for v in range(1, n + 1):
+                    c = "0"
+                    if isdescendent(v, u, pi):
+                        c = "1"
+                    self._haplotypes[v] += c
 
 
     def get_num_segregating_sites(self):
