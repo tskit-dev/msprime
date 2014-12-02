@@ -92,6 +92,19 @@ typedef struct {
 } tree_file_t;
 
 typedef struct {
+    double mutation_rate;
+    long random_seed;
+    size_t max_haplotype_length;
+    size_t haplotype_length;
+    gsl_rng *rng;
+    char **haplotypes;
+    int *pi;
+    float *tau;
+    coalescence_record_t next_record;
+    tree_file_t *tree_file;
+} hapgen_t;
+
+typedef struct {
     /* input parameters */
     int sample_size;
     int num_loci;
@@ -158,6 +171,13 @@ int tree_file_print_records(tree_file_t *self);
 int tree_file_iscomplete(tree_file_t *self);
 int tree_file_issorted(tree_file_t *self);
 int tree_file_isopen(tree_file_t *self);
+
+int hapgen_alloc(hapgen_t *self, double mutation_rate, 
+        tree_file_t * tree_file, long random_seed, 
+        size_t max_haplotype_length);
+int hapgen_next(hapgen_t *self, uint32_t *length, char ***haplotypes, 
+        size_t *s, int** pi, float **tau);
+int hapgen_free(hapgen_t *self);
 
 char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/

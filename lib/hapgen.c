@@ -34,9 +34,10 @@ hapgen_alloc(hapgen_t *self, double mutation_rate, tree_file_t * tree_file,
 {
     int ret = -1;
     uint32_t j;
-    uint32_t N = 2 * tree_file->sample_size;
+    uint32_t N;
 
     memset(self, 0, sizeof(hapgen_t));
+    assert(tree_file != NULL);
     self->mutation_rate = mutation_rate;
     self->tree_file = tree_file;
     self->random_seed = random_seed;
@@ -47,6 +48,7 @@ hapgen_alloc(hapgen_t *self, double mutation_rate, tree_file_t * tree_file,
         goto out;
     }
     gsl_rng_set(self->rng, self->random_seed);
+    N  = 2 * tree_file->sample_size;
     self->pi = malloc(N * sizeof(int));
     self->tau = malloc(N * sizeof(float));
     if (self->pi == NULL || self->tau == NULL) {
@@ -153,10 +155,57 @@ out:
 
 
 int
-hapgen_run(hapgen_t *self)
+hapgen_next(hapgen_t *self, uint32_t *length, char ***haplotypes, size_t *s, int** pi,
+        float **tau)
 {
     int ret = -1;
-    hapgen_generate_haplotypes(self, 1);
+    int v = 1;
+    uint32_t l;
+    coalescence_record_t *cr = &self->next_record;
+    uint32_t b = cr->left;
+
+
+    /* TODO this is completely untested!! Put in an interface in main to exercise
+     * the code and see how it goes under valgrind.
+     */
+
+    /* We've not read any coalescence records yet, this the first call */
+    if (b == 0) {
+        v = tree_file_next_record(self->tree_file, cr);
+        if (v < 0) {
+            ret = v;
+            goto out;
+        }
+        b = cr->left;
+    }
+    while (cr->left == b && v == 1) {
+        self->pi[cr->children[0]] = cr->parent;
+        self->pi[cr->children[1]] = cr->parent;
+        self->tau[cr->parent] = cr->time;
+        v = tree_file_next_record(self->tree_file, cr);
+        if (v < 0) {
+            ret = v;
+            goto out;
+        }
+    }
+    if (v == 0) {
+        l = self->tree_file->num_loci - cr->left + 1;
+    } else {
+        l = cr->left - b;
+    }
+    ret = hapgen_generate_haplotypes(self, l);
+    if (ret < 0) {
+        goto out;
+    }
+    /* if we've read the last coalescence record then we're done; otherwise
+     * indicate that there are trees left, as per the protocol for records
+     */
+    ret = v;
+    *haplotypes = self->haplotypes;
+    *s = self->haplotype_length;
+    *pi = self->pi;
+    *tau = self->tau;
+out:
     return ret;
 }
 
