@@ -272,7 +272,7 @@ tree_file_print_state(tree_file_t *self)
 }
 
 int WARN_UNUSED
-tree_file_open(tree_file_t *self, char *filename, char mode)
+tree_file_open(tree_file_t *self, const char *filename, char mode)
 {
     int ret = -1;
 

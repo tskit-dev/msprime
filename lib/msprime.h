@@ -96,12 +96,14 @@ typedef struct {
     long random_seed;
     size_t max_haplotype_length;
     size_t haplotype_length;
+    uint32_t sample_size;
+    uint32_t num_loci;
     gsl_rng *rng;
     char **haplotypes;
+    char *haplotype_mem;
     int *pi;
     float *tau;
-    coalescence_record_t next_record;
-    tree_file_t *tree_file;
+    tree_file_t tree_file;
 } hapgen_t;
 
 typedef struct {
@@ -158,7 +160,7 @@ size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
 
-int tree_file_open(tree_file_t *self, char *tree_file_name, char mode);
+int tree_file_open(tree_file_t *self, const char *tree_file_name, char mode);
 int tree_file_set_sample_size(tree_file_t *self, uint32_t sample_size);
 int tree_file_set_num_loci(tree_file_t *self, uint32_t num_loci);
 int tree_file_close(tree_file_t *self);
@@ -173,10 +175,10 @@ int tree_file_issorted(tree_file_t *self);
 int tree_file_isopen(tree_file_t *self);
 
 int hapgen_alloc(hapgen_t *self, double mutation_rate, 
-        tree_file_t * tree_file, long random_seed, 
+        const char *tree_file_name, long random_seed, 
         size_t max_haplotype_length);
-int hapgen_next(hapgen_t *self, uint32_t *length, char ***haplotypes, 
-        size_t *s, int** pi, float **tau);
+int hapgen_generate(hapgen_t *self);
+int hapgen_get_haplotypes(hapgen_t *self, char ***haplotypes, size_t *s);
 int hapgen_free(hapgen_t *self);
 
 char * msp_strerror(int err);
