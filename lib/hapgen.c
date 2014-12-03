@@ -29,7 +29,7 @@
 
 
 int
-hapgen_alloc(hapgen_t *self, double mutation_rate, tree_file_t * tree_file,
+hapgen_alloc(hapgen_t *self, double mutation_rate, const char *tree_file_name,
         long random_seed, size_t max_haplotype_length)
 {
     int ret = -1;
@@ -37,9 +37,7 @@ hapgen_alloc(hapgen_t *self, double mutation_rate, tree_file_t * tree_file,
     uint32_t N;
 
     memset(self, 0, sizeof(hapgen_t));
-    assert(tree_file != NULL);
     self->mutation_rate = mutation_rate;
-    self->tree_file = tree_file;
     self->random_seed = random_seed;
     self->max_haplotype_length = max_haplotype_length;
     self->rng = gsl_rng_alloc(gsl_rng_default);
@@ -48,61 +46,68 @@ hapgen_alloc(hapgen_t *self, double mutation_rate, tree_file_t * tree_file,
         goto out;
     }
     gsl_rng_set(self->rng, self->random_seed);
-    N  = 2 * tree_file->sample_size;
-    self->pi = malloc(N * sizeof(int));
-    self->tau = malloc(N * sizeof(float));
+    ret = tree_file_open(&self->tree_file, tree_file_name, 'r');
+    if (ret != 0) {
+        goto out;
+    }
+    if (!tree_file_issorted(&self->tree_file)) {
+        ret = MSP_ERR_TREE_FILE_NOT_SORTED;
+        goto out;
+    }
+    N  = 2 * self->tree_file.sample_size;
+    self->pi = calloc(N, sizeof(int));
+    self->tau = calloc(N, sizeof(float));
     if (self->pi == NULL || self->tau == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     self->haplotypes = malloc(N * sizeof(char *));
-    if (self->haplotypes == NULL) {
+    self->haplotype_mem = malloc(N * self->max_haplotype_length);
+    if (self->haplotypes == NULL || self->haplotype_mem == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     for (j = 0; j < N; j++) {
-        /* TODO make one malloc of this and split it manually */
-        self->haplotypes[j] = malloc(self->max_haplotype_length);
-        if (self->haplotypes[j]== NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
+        self->haplotypes[j] = self->haplotype_mem
+            + j * self->max_haplotype_length;
     }
+    /* initialise all haplotypes to '0' */
+    memset(self->haplotype_mem, '0', N * self->max_haplotype_length);
+    self->sample_size = self->tree_file.sample_size;
+    self->num_loci = self->tree_file.num_loci;
+    ret = 0;
 out:
     return ret;
 }
 
 static int
-hapgen_generate_haplotypes(hapgen_t *self, uint32_t l)
+hapgen_process_tree(hapgen_t *self, uint32_t l)
 {
     int ret = -1;
     char *h, *hp;
-    int N = 2 * self->tree_file->sample_size;
+    int N = 2 * self->sample_size;
     int *child = calloc(N, sizeof(int));
     int *sib = calloc(N, sizeof(int));
     int *branch_mutations = malloc(N * sizeof(int));
     int *mutation_sites = malloc(N * sizeof(int));
-    int u, v, j, t, s, h_size, not_done;
+    int u, v, j, s, not_done;
     double mu = self->mutation_rate * l;
+    double t;
 
+    printf("processing tree len %d\n", l);
     /* Generate the mutations */
     s = 0;
     for (j = 1; j < N; j++) {
         t = self->tau[self->pi[j]] - self->tau[j];
+        printf("t = %f\n", t);
         branch_mutations[j] = gsl_ran_poisson(self->rng, mu * t);
         mutation_sites[j] = s;
         s += branch_mutations[j];
     }
-    if (s > self->max_haplotype_length) {
+    printf("%d new mutations\n", s);
+    if (s + self->haplotype_length > self->max_haplotype_length) {
         ret = MSP_ERR_TOO_MANY_SEG_SITES;
         goto out;
-    }
-    self->haplotype_length = s;
-    /* allocate the haplotypes */
-    h_size = s + 1;
-    for (j = 0; j < N; j++) {
-        memset(self->haplotypes[j], '0', h_size - 1);
-        self->haplotypes[j][h_size - 1] = '\0';
     }
     /* Now traverse the tree and apply these mutations */
     for (u = 1; u < N; u++) {
@@ -117,8 +122,8 @@ hapgen_generate_haplotypes(hapgen_t *self, uint32_t l)
             if (child[u] != 0) {
                 v = u;
                 u = child[u];
-                h = self->haplotypes[v];
-                hp = self->haplotypes[u];
+                h = self->haplotypes[v] + self->haplotype_length;
+                hp = self->haplotypes[u] + self->haplotype_length;
                 strncpy(hp, h, s + 1);
                 for (j = 0; j < branch_mutations[u]; j++) {
                     hp[mutation_sites[u] + j] = '1';
@@ -132,8 +137,8 @@ hapgen_generate_haplotypes(hapgen_t *self, uint32_t l)
             if (sib[u] != 0) {
                 u = sib[u];
                 v = self->pi[u];
-                h = self->haplotypes[v];
-                hp = self->haplotypes[u];
+                h = self->haplotypes[v] + self->haplotype_length;
+                hp = self->haplotypes[u] + self->haplotype_length;
                 strncpy(hp, h, s + 1);
                 for (j = 0; j < branch_mutations[u]; j++) {
                     hp[mutation_sites[u] + j] = '1';
@@ -149,69 +154,61 @@ hapgen_generate_haplotypes(hapgen_t *self, uint32_t l)
     free(sib);
     free(mutation_sites);
     free(branch_mutations);
+    self->haplotype_length += s;
+    ret = 0;
 out:
     return ret;
 }
 
 
 int
-hapgen_next(hapgen_t *self, uint32_t *length, char ***haplotypes, size_t *s, int** pi,
-        float **tau)
+hapgen_generate(hapgen_t *self)
 {
     int ret = -1;
-    int v = 1;
-    uint32_t l;
-    coalescence_record_t *cr = &self->next_record;
-    uint32_t b = cr->left;
+    uint32_t b, j;
+    coalescence_record_t cr;
 
-
-    /* TODO this is completely untested!! Put in an interface in main to exercise
-     * the code and see how it goes under valgrind.
-     */
-
-    /* We've not read any coalescence records yet, this the first call */
-    if (b == 0) {
-        v = tree_file_next_record(self->tree_file, cr);
-        if (v < 0) {
-            ret = v;
-            goto out;
+    b = 1;
+    while ((ret = tree_file_next_record(&self->tree_file, &cr)) == 1) {
+        if (cr.left != b) {
+            ret = hapgen_process_tree(self, cr.left - b);
+            if (ret < 0) {
+                goto out;
+            }
         }
-        b = cr->left;
+        self->pi[cr.children[0]] = cr.parent;
+        self->pi[cr.children[1]] = cr.parent;
+        self->tau[cr.parent] = cr.time;
     }
-    while (cr->left == b && v == 1) {
-        self->pi[cr->children[0]] = cr->parent;
-        self->pi[cr->children[1]] = cr->parent;
-        self->tau[cr->parent] = cr->time;
-        v = tree_file_next_record(self->tree_file, cr);
-        if (v < 0) {
-            ret = v;
-            goto out;
-        }
+    if (ret != 0) {
+        goto out;
     }
-    if (v == 0) {
-        l = self->tree_file->num_loci - cr->left + 1;
-    } else {
-        l = cr->left - b;
-    }
-    ret = hapgen_generate_haplotypes(self, l);
+    ret = hapgen_process_tree(self, self->num_loci - cr.left + 1);
     if (ret < 0) {
         goto out;
     }
-    /* if we've read the last coalescence record then we're done; otherwise
-     * indicate that there are trees left, as per the protocol for records
-     */
-    ret = v;
-    *haplotypes = self->haplotypes;
-    *s = self->haplotype_length;
-    *pi = self->pi;
-    *tau = self->tau;
+    /* now finish each haplotype with '\0' so it's a string */
+    for (j = 0; j < 2 * self->sample_size; j++) {
+        self->haplotypes[j][self->haplotype_length] = '\0';
+    }
 out:
     return ret;
+}
+
+int
+hapgen_get_haplotypes(hapgen_t *self, char ***haplotypes, size_t *s)
+{
+    *haplotypes = self->haplotypes;
+    *s = self->haplotype_length;
+    return 0;
 }
 
 int
 hapgen_free(hapgen_t *self)
 {
-
+    if (self->rng != NULL) {
+        gsl_rng_free(self->rng);
+    }
+    tree_file_close(&self->tree_file);
     return 0;
 }

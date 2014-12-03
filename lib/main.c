@@ -118,7 +118,7 @@ read_population_models(msp_t *msp, config_t *config)
 }
 
 static void
-read_config(msp_t *msp, const char *filename)
+read_config(msp_t *msp, const char *filename, double *mutation_rate)
 {
     int err;
     int tmp;
@@ -166,6 +166,10 @@ read_config(msp_t *msp, const char *filename)
             &msp->scaled_recombination_rate) == CONFIG_FALSE) {
         fatal_error("recombination_rate is a required parameter");
     }
+    if (config_lookup_float(config, "mutation_rate",
+            mutation_rate) == CONFIG_FALSE) {
+        fatal_error("mutation_rate is a required parameter");
+    }
     if (config_lookup_string(config, "tree_file", &str)
             == CONFIG_FALSE) {
         fatal_error("tree_file is a required parameter");
@@ -187,7 +191,12 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     int ret = -1;
     int result;
     msp_t *msp = calloc(1, sizeof(msp_t));
+    /* TEMP; we want to move all the parameters into a dedicated UI struct */
+    double mutation_rate;
     tree_file_t tf;
+    hapgen_t hapgen;
+    char **haplotypes;
+    uint32_t j, s;
 
     if (msp == NULL) {
         goto out;
@@ -197,7 +206,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    read_config(msp, conf_file);
+    read_config(msp, conf_file, &mutation_rate);
     ret = msp_alloc(msp);
     if (ret != 0) {
         goto out;
@@ -248,6 +257,26 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
+    /* make the haplotypes */
+    ret = hapgen_alloc(&hapgen, mutation_rate, msp->tree_file_name,
+            msp->random_seed, 1000);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = hapgen_generate(&hapgen);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = hapgen_get_haplotypes(&hapgen, &haplotypes, &s);
+    if (ret != 0) {
+        goto out;
+    }
+    printf("Segregating sites: %d\n", (int) s);
+    for (j = 0; j < msp->sample_size; j++) {
+        printf("%s\n", haplotypes[j]);
+    }
+
+
 out:
     if (msp != NULL) {
         free(msp->tree_file_name);
