@@ -98,12 +98,17 @@ typedef struct {
     size_t haplotype_length;
     uint32_t sample_size;
     uint32_t num_loci;
+    tree_file_t tree_file;
     gsl_rng *rng;
     char **haplotypes;
     char *haplotype_mem;
     int *pi;
     float *tau;
-    tree_file_t tree_file;
+    /* tree traversal memory */
+    int *child;
+    int *sib;
+    int *branch_mutations;
+    int *mutation_sites;
 } hapgen_t;
 
 typedef struct {

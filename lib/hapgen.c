@@ -57,7 +57,13 @@ hapgen_alloc(hapgen_t *self, double mutation_rate, const char *tree_file_name,
     N  = 2 * self->tree_file.sample_size;
     self->pi = calloc(N, sizeof(int));
     self->tau = calloc(N, sizeof(float));
-    if (self->pi == NULL || self->tau == NULL) {
+    self->child = malloc(N * sizeof(int));
+    self->sib = malloc(N * sizeof(int));
+    self->branch_mutations = malloc(N * sizeof(int));
+    self->mutation_sites = malloc(N * sizeof(int));
+    if (self->pi == NULL || self->tau == NULL || self->child == NULL
+            || self->sib == NULL || self->branch_mutations == NULL
+            || self->mutation_sites == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -80,24 +86,62 @@ out:
     return ret;
 }
 
+int
+hapgen_free(hapgen_t *self)
+{
+    if (self->rng != NULL) {
+        gsl_rng_free(self->rng);
+    }
+    if (self->pi != NULL) {
+        free(self->pi);
+    }
+    if (self->tau != NULL) {
+        free(self->tau);
+    }
+    if (self->child != NULL) {
+        free(self->child);
+    }
+    if (self->sib != NULL) {
+        free(self->sib);
+    }
+    if (self->branch_mutations != NULL) {
+        free(self->branch_mutations);
+    }
+    if (self->mutation_sites != NULL) {
+        free(self->mutation_sites);
+    }
+    if (self->haplotypes != NULL) {
+        free(self->haplotypes);
+    }
+    if (self->haplotype_mem != NULL) {
+        free(self->haplotype_mem);
+    }
+    tree_file_close(&self->tree_file);
+    return 0;
+}
 static int
 hapgen_process_tree(hapgen_t *self, uint32_t l)
 {
     int ret = -1;
     char *h, *hp;
     int N = 2 * self->sample_size;
-    int *child = calloc(N, sizeof(int));
-    int *sib = calloc(N, sizeof(int));
-    int *branch_mutations = malloc(N * sizeof(int));
-    int *mutation_sites = malloc(N * sizeof(int));
+    int *child = self->child;
+    int *sib = self->sib;
+    int *branch_mutations = self->branch_mutations;
+    int *mutation_sites = self->mutation_sites;
     int u, v, j, s, not_done;
     double mu = self->mutation_rate * l;
     double t;
 
     printf("processing tree len %d\n", l);
+    memset(child, 0, N * sizeof(int));
+    memset(sib, 0, N * sizeof(int));
+    memset(branch_mutations, 0, N * sizeof(int));
+    memset(mutation_sites, 0, N * sizeof(int));
     /* Generate the mutations */
     s = 0;
-    for (j = 1; j < N; j++) {
+    printf("tmrca = %f\n", self->tau[N - 1]);
+    for (j = 1; j < N - 1; j++) {
         t = self->tau[self->pi[j]] - self->tau[j];
         printf("t = %f\n", t);
         branch_mutations[j] = gsl_ran_poisson(self->rng, mu * t);
@@ -150,10 +194,6 @@ hapgen_process_tree(hapgen_t *self, uint32_t l)
             }
         }
     }
-    free(child);
-    free(sib);
-    free(mutation_sites);
-    free(branch_mutations);
     self->haplotype_length += s;
     ret = 0;
 out:
@@ -203,12 +243,4 @@ hapgen_get_haplotypes(hapgen_t *self, char ***haplotypes, size_t *s)
     return 0;
 }
 
-int
-hapgen_free(hapgen_t *self)
-{
-    if (self->rng != NULL) {
-        gsl_rng_free(self->rng);
-    }
-    tree_file_close(&self->tree_file);
-    return 0;
-}
+
