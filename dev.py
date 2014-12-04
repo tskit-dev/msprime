@@ -6,6 +6,7 @@ from __future__ import print_function
 from __future__ import division
 
 import os
+import sys
 import math
 import json
 import time
@@ -296,8 +297,15 @@ def make_tree_visualisation(pi, tau, out, max_time):
             print(s, file=out)
             u = pi[u]
 
+def print_tree_file(tree_file_name):
+    for l, pi, tau in msprime.TreeFile(tree_file_name):
+        print(l, pi, tau)
+    for r in msprime.TreeFile(tree_file_name).records():
+        print(r)
+
 if __name__ == "__main__":
-    edit_visualisation()
+    print_tree_file(sys.argv[1])
+    # edit_visualisation()
     # mutation_dev()
     # example1()
     #hl_main()

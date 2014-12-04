@@ -486,6 +486,10 @@ tree_file_print_records(tree_file_t *self)
         printf("%d\t(%d, %d)->%d @ %f\n", cr.left, cr.children[0],
                 cr.children[1], cr.parent, cr.time);
     }
+    if (ret == 0) {
+        printf("%d\t(%d, %d)->%d @ %f\n", cr.left, cr.children[0],
+                cr.children[1], cr.parent, cr.time);
+    }
     return ret;
 }
 

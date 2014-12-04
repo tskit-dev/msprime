@@ -54,7 +54,9 @@ hapgen_alloc(hapgen_t *self, double mutation_rate, const char *tree_file_name,
         ret = MSP_ERR_TREE_FILE_NOT_SORTED;
         goto out;
     }
-    N  = 2 * self->tree_file.sample_size;
+    self->sample_size = self->tree_file.sample_size;
+    self->num_loci = self->tree_file.num_loci;
+    N  = 2 * self->sample_size;
     self->pi = calloc(N, sizeof(int));
     self->tau = calloc(N, sizeof(float));
     self->child = malloc(N * sizeof(int));
@@ -79,8 +81,6 @@ hapgen_alloc(hapgen_t *self, double mutation_rate, const char *tree_file_name,
     }
     /* initialise all haplotypes to '0' */
     memset(self->haplotype_mem, '0', N * self->max_haplotype_length);
-    self->sample_size = self->tree_file.sample_size;
-    self->num_loci = self->tree_file.num_loci;
     ret = 0;
 out:
     return ret;
@@ -133,22 +133,32 @@ hapgen_process_tree(hapgen_t *self, uint32_t l)
     double mu = self->mutation_rate * l;
     double t;
 
-    printf("processing tree len %d\n", l);
+    printf("l = %d pi = ", l);
+    for (j = 0; j < N; j++) {
+        printf("%d ", self->pi[j]);
+    }
+    printf("\ttau = ");
+    for (j = 0; j < N; j++) {
+        printf("%f ", self->tau[j]);
+    }
+    printf("\n");
+
+
+    /* This method is can be probably be improved quite a lot for the
+     * sparse mutation case.
+     */
     memset(child, 0, N * sizeof(int));
     memset(sib, 0, N * sizeof(int));
     memset(branch_mutations, 0, N * sizeof(int));
     memset(mutation_sites, 0, N * sizeof(int));
     /* Generate the mutations */
     s = 0;
-    printf("tmrca = %f\n", self->tau[N - 1]);
     for (j = 1; j < N - 1; j++) {
         t = self->tau[self->pi[j]] - self->tau[j];
-        printf("t = %f\n", t);
         branch_mutations[j] = gsl_ran_poisson(self->rng, mu * t);
         mutation_sites[j] = s;
         s += branch_mutations[j];
     }
-    printf("%d new mutations\n", s);
     if (s + self->haplotype_length > self->max_haplotype_length) {
         ret = MSP_ERR_TOO_MANY_SEG_SITES;
         goto out;
@@ -208,13 +218,21 @@ hapgen_generate(hapgen_t *self)
     uint32_t b, j;
     coalescence_record_t cr;
 
+    /* TODO there is a subtle bug here where we're not returning the
+     * right number of trees. We need to change the protocol for the
+     * record iterator to return 0 when it has no more records, not
+     * when it has just returned the last one. This is making for a
+     * very confusing programming model.
+     */
     b = 1;
     while ((ret = tree_file_next_record(&self->tree_file, &cr)) == 1) {
+        printf("left = %d b = %d\n", cr.left, b);
         if (cr.left != b) {
             ret = hapgen_process_tree(self, cr.left - b);
             if (ret < 0) {
                 goto out;
             }
+            b = cr.left;
         }
         self->pi[cr.children[0]] = cr.parent;
         self->pi[cr.children[1]] = cr.parent;
@@ -223,6 +241,9 @@ hapgen_generate(hapgen_t *self)
     if (ret != 0) {
         goto out;
     }
+    self->pi[cr.children[0]] = cr.parent;
+    self->pi[cr.children[1]] = cr.parent;
+    self->tau[cr.parent] = cr.time;
     ret = hapgen_process_tree(self, self->num_loci - cr.left + 1);
     if (ret < 0) {
         goto out;
@@ -242,5 +263,3 @@ hapgen_get_haplotypes(hapgen_t *self, char ***haplotypes, size_t *s)
     *s = self->haplotype_length;
     return 0;
 }
-
-

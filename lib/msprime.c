@@ -44,6 +44,10 @@ msp_strerror(int err)
         ret = "Unsupported file format version";
     } else if (err == MSP_ERR_BAD_MODE) {
         ret = "Bad tree file mode";
+    } else if (err == MSP_ERR_TOO_MANY_SEG_SITES) {
+        ret = "Too many segregating sites";
+    } else if (err == MSP_ERR_TREE_FILE_NOT_SORTED) {
+        ret = "Tree file not sorted.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
