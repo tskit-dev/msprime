@@ -118,7 +118,8 @@ read_population_models(msp_t *msp, config_t *config)
 }
 
 static void
-read_config(msp_t *msp, const char *filename, double *mutation_rate)
+read_config(msp_t *msp, const char *filename, double *mutation_rate,
+        size_t *max_haplotype_length)
 {
     int err;
     int tmp;
@@ -162,6 +163,11 @@ read_config(msp_t *msp, const char *filename, double *mutation_rate)
         fatal_error("max_memory is a required parameter");
     }
     msp->max_memory = tmp * 1024 * 1024;
+    if (config_lookup_int(config, "max_haplotype_length", &tmp)
+            == CONFIG_FALSE) {
+        fatal_error("max_haplotype_length is a required parameter");
+    }
+    *max_haplotype_length = tmp;
     if (config_lookup_float(config, "recombination_rate",
             &msp->scaled_recombination_rate) == CONFIG_FALSE) {
         fatal_error("recombination_rate is a required parameter");
@@ -193,6 +199,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     msp_t *msp = calloc(1, sizeof(msp_t));
     /* TEMP; we want to move all the parameters into a dedicated UI struct */
     double mutation_rate;
+    size_t max_haplotype_length;
     tree_file_t tf;
     hapgen_t hapgen;
     char **haplotypes;
@@ -206,7 +213,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    read_config(msp, conf_file, &mutation_rate);
+    read_config(msp, conf_file, &mutation_rate, &max_haplotype_length);
     ret = msp_alloc(msp);
     if (ret != 0) {
         goto out;
@@ -259,7 +266,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     }
     /* make the haplotypes */
     ret = hapgen_alloc(&hapgen, mutation_rate, msp->tree_file_name,
-            msp->random_seed, 1000);
+            msp->random_seed, max_haplotype_length);
     if (ret != 0) {
         goto out;
     }
@@ -273,9 +280,9 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     }
     printf("Segregating sites: %d\n", (int) s);
     for (j = 0; j < msp->sample_size; j++) {
-        printf("%s\n", haplotypes[j]);
+        printf("%d: %s\n", strlen(haplotypes[j]), haplotypes[j]);
     }
-
+    hapgen_free(&hapgen);
 
 out:
     if (msp != NULL) {
