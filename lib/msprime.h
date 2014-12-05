@@ -96,6 +96,7 @@ typedef struct {
     long random_seed;
     size_t max_haplotype_length;
     size_t haplotype_length;
+    size_t num_trees;
     uint32_t sample_size;
     uint32_t num_loci;
     tree_file_t tree_file;

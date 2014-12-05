@@ -250,3 +250,76 @@ class TestTreeFile(tests.MsprimeTestCase):
                     self._treefile)
 
 
+class TestHaplotypeGenerator(tests.MsprimeTestCase):
+    """
+    Test cases for the haplotype generation class.
+    """
+    def get_simulator(self, sample_size=2, num_loci=1, recombination_rate=0.0):
+        sim = _msprime.Simulator(sample_size=sample_size, num_loci=num_loci,
+                scaled_recombination_rate=recombination_rate,
+                tree_file_name=self._treefile, random_seed=1)
+        return sim
+
+    def run_simulation(self):
+        sim = self.get_simulator()
+        sim.run()
+        _msprime.sort_tree_file(sim.get_tree_file_name())
+
+    def test_memory_errors(self):
+        self.run_simulation()
+        def f(mutation_rate=0.0, max_haplotype_length=100):
+            return _msprime.HaplotypeGenerator(self._treefile, mutation_rate, 1,
+                    max_haplotype_length)
+        self.assertRaises(_msprime.LibraryError, f, max_haplotype_length=0)
+        self.assertRaises(_msprime.LibraryError, f, 1000, 0)
+        self.assertRaises(_msprime.LibraryError, f, 1000, 1)
+        # This will be converted into an unsigned value, and should raise an
+        # out of memory error
+        self.assertRaises(_msprime.LibraryError, f, max_haplotype_length=-1)
+
+    def test_haplotypes(self):
+        def f(mutation_rate=1.0, max_haplotype_length=1000):
+            return _msprime.HaplotypeGenerator(self._treefile, mutation_rate, 1,
+                    max_haplotype_length)
+        for n in range(2, 10):
+            for m in [1, 5, 10]:
+                sim = self.get_simulator(n, m, 1.0)
+                sim.run()
+                self.assertRaises(_msprime.LibraryError, f)
+                _msprime.sort_tree_file(sim.get_tree_file_name())
+                hg = f(0)
+                self.assertEqual(hg.get_haplotype_length(), 0)
+                self.assertEqual(hg.get_sample_size(), n)
+                self.assertEqual(hg.get_num_loci(), m)
+                # These are not necessarily the same because of record merging
+                self.assertLessEqual(hg.get_num_trees(),
+                        sim.get_num_breakpoints())
+                self.assertGreater(hg.get_num_trees(), 0)
+                for mu in [0.1, 10.0]:
+                    hg = f(mu)
+                    haplotypes = hg.get_haplotypes()
+                    self.assertTrue(haplotypes[0] is None)
+                    for h in haplotypes[1:]:
+                        self.assertEqual(len(h), hg.get_haplotype_length())
+                        self.assertTrue(isinstance(h, bytes))
+                        # It's easier to work with str here for Python 3.
+                        h = h.decode()
+                        if len(h) > 0:
+                            chars = set(h)
+                            self.assertLess(len(chars), 3)
+                            if len(chars) == 1:
+                                self.assertTrue("0" in chars or "1" in chars)
+                            else:
+                                self.assertEqual(chars, set(["0", "1"]))
+
+    def test_bad_parameters(self):
+        self.run_simulation()
+        def f(tf=self._treefile, mutation_rate=0.0, random_seed=1, max_haplotype_length=100):
+            return _msprime.HaplotypeGenerator(tf, mutation_rate, random_seed,
+                    max_haplotype_length)
+        self.assertRaises(TypeError, f, None)
+        self.assertRaises(TypeError, f, mutation_rate="mut")
+        self.assertRaises(TypeError, f, random_seed="seed")
+        self.assertRaises(TypeError, f, max_haplotype_length="len")
+        self.assertRaises(_msprime.LibraryError, f, "")
+        self.assertRaises(_msprime.LibraryError, f, "/etc")

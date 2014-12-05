@@ -45,6 +45,12 @@ typedef struct {
     tree_file_t *tree_file;
 } TreeFile;
 
+typedef struct {
+    PyObject_HEAD
+    hapgen_t *hapgen;
+} HaplotypeGenerator;
+
+
 static void
 handle_library_error(int err)
 {
@@ -962,6 +968,220 @@ static PyTypeObject TreeFileType = {
     (initproc)TreeFile_init,      /* tp_init */
 };
 
+/*===================================================================
+ * HaplotypeGenerator
+ *===================================================================
+ */
+
+static int
+HaplotypeGenerator_check_hapgen(HaplotypeGenerator *self)
+{
+    int ret = 0;
+    if (self->hapgen == NULL) {
+        PyErr_SetString(PyExc_SystemError, "hapgen not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+
+static void
+HaplotypeGenerator_dealloc(HaplotypeGenerator* self)
+{
+    if (self->hapgen != NULL) {
+        hapgen_free(self->hapgen);
+        PyMem_Free(self->hapgen);
+        self->hapgen = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int hg_ret;
+    static char *kwlist[] = {"tree_file_name", "mutation_rate", "random_seed",
+        "max_haplotype_length", NULL};
+    char *tree_file_name;
+    Py_ssize_t max_haplotype_length;
+    long random_seed;
+    double mutation_rate;
+
+    self->hapgen = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sdln", kwlist,
+                &tree_file_name, &mutation_rate, &random_seed,
+                &max_haplotype_length)) {
+        goto out;
+    }
+    self->hapgen = PyMem_Malloc(sizeof(hapgen_t));
+    if (self->hapgen == NULL) {
+        goto out;
+    }
+    hg_ret = hapgen_alloc(self->hapgen, mutation_rate, tree_file_name,
+            random_seed, (size_t) max_haplotype_length);
+    if (hg_ret != 0) {
+        handle_library_error(hg_ret);
+        goto out;
+    }
+    hg_ret = hapgen_generate(self->hapgen);
+    if (hg_ret != 0) {
+        handle_library_error(hg_ret);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyMemberDef HaplotypeGenerator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyObject *
+HaplotypeGenerator_get_num_loci(HaplotypeGenerator *self)
+{
+    PyObject *ret = NULL;
+    if (HaplotypeGenerator_check_hapgen(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->hapgen->num_loci);
+out:
+    return ret;
+}
+
+static PyObject *
+HaplotypeGenerator_get_sample_size(HaplotypeGenerator *self)
+{
+    PyObject *ret = NULL;
+    if (HaplotypeGenerator_check_hapgen(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->hapgen->sample_size);
+out:
+    return ret;
+}
+
+static PyObject *
+HaplotypeGenerator_get_num_trees(HaplotypeGenerator *self)
+{
+    PyObject *ret = NULL;
+    if (HaplotypeGenerator_check_hapgen(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->hapgen->num_trees);
+out:
+    return ret;
+}
+
+static PyObject *
+HaplotypeGenerator_get_haplotype_length(HaplotypeGenerator *self)
+{
+    PyObject *ret = NULL;
+    if (HaplotypeGenerator_check_hapgen(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->hapgen->haplotype_length);
+out:
+    return ret;
+}
+
+static PyObject *
+HaplotypeGenerator_get_haplotypes(HaplotypeGenerator *self)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *h = NULL;
+    int hg_ret;
+    uint32_t n = self->hapgen->sample_size;
+    uint64_t j;
+    char **haplotypes;
+    size_t s;
+
+    if (HaplotypeGenerator_check_hapgen(self) != 0) {
+        goto out;
+    }
+    hg_ret = hapgen_get_haplotypes(self->hapgen, &haplotypes, &s);
+    if (hg_ret != 0) {
+        handle_library_error(hg_ret);
+        goto out;
+    }
+    l = PyList_New(n + 1);
+    if (l == NULL) {
+        goto out;
+    }
+    Py_INCREF(Py_None);
+    PyList_SET_ITEM(l, 0, Py_None);
+    for (j = 1; j <= n; j++) {
+        h = PyBytes_FromStringAndSize(haplotypes[j], s);
+        if (h == NULL) {
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, h);
+    }
+    ret = l;
+    l = NULL;
+out:
+    Py_XDECREF(l);
+    return ret;
+}
+
+
+static PyMethodDef HaplotypeGenerator_methods[] = {
+    {"get_num_loci", (PyCFunction) HaplotypeGenerator_get_num_loci, METH_NOARGS,
+            "Returns the number of loci"},
+    {"get_sample_size", (PyCFunction) HaplotypeGenerator_get_sample_size, METH_NOARGS,
+            "Returns the sample size"},
+    {"get_num_trees", (PyCFunction) HaplotypeGenerator_get_num_trees, METH_NOARGS,
+            "Returns the sample size"},
+    {"get_haplotype_length",
+            (PyCFunction) HaplotypeGenerator_get_haplotype_length, METH_NOARGS,
+            "Returns the number of segregating sites in the generated haplotypes."},
+    {"get_haplotypes", (PyCFunction) HaplotypeGenerator_get_haplotypes, METH_NOARGS,
+            "Returns the generated haplotypes."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject HaplotypeGeneratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.HaplotypeGenerator",             /* tp_name */
+    sizeof(HaplotypeGenerator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)HaplotypeGenerator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "HaplotypeGenerator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    HaplotypeGenerator_methods,             /* tp_methods */
+    HaplotypeGenerator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)HaplotypeGenerator_init,      /* tp_init */
+};
+
+
 /*==========================================================
  * Module level functions
  *==========================================================
@@ -1073,6 +1293,13 @@ init_msprime(void)
     }
     Py_INCREF(&TreeFileType);
     PyModule_AddObject(module, "TreeFile", (PyObject *) &TreeFileType);
+    HaplotypeGeneratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&HaplotypeGeneratorType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&HaplotypeGeneratorType);
+    PyModule_AddObject(module, "HaplotypeGenerator",
+            (PyObject *) &HaplotypeGeneratorType);
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);
