@@ -455,6 +455,9 @@ out:
     return ret;
 }
 
+/* Return 1 if a valid coalescence_record_t was read; 0 if we hit
+ * EOF and did not read a record; < 0 if an error occured.
+ */
 int WARN_UNUSED
 tree_file_next_record(tree_file_t *self, coalescence_record_t *r)
 {
@@ -466,12 +469,16 @@ tree_file_next_record(tree_file_t *self, coalescence_record_t *r)
         ret = MSP_ERR_BAD_MODE;
         goto out;
     }
-    if (fread(record, sizeof(record), 1, f) != 1) {
-        ret = MSP_ERR_IO;
-        goto out;
+    if (ftell(f) == self->metadata_offset) {
+        ret = 0;
+    } else {
+        if (fread(record, sizeof(record), 1, f) != 1) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+        decode_coalescence_record(record, r);
+        ret = 1;
     }
-    decode_coalescence_record(record, r);
-    ret = ftell(f) == self->metadata_offset ? 0 : 1;
 out:
     return ret;
 }
@@ -483,10 +490,6 @@ tree_file_print_records(tree_file_t *self)
     coalescence_record_t cr;
 
     while ((ret = tree_file_next_record(self, &cr)) == 1) {
-        printf("%d\t(%d, %d)->%d @ %f\n", cr.left, cr.children[0],
-                cr.children[1], cr.parent, cr.time);
-    }
-    if (ret == 0) {
         printf("%d\t(%d, %d)->%d @ %f\n", cr.left, cr.children[0],
                 cr.children[1], cr.parent, cr.time);
     }

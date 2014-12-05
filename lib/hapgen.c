@@ -218,15 +218,8 @@ hapgen_generate(hapgen_t *self)
     uint32_t b, j;
     coalescence_record_t cr;
 
-    /* TODO there is a subtle bug here where we're not returning the
-     * right number of trees. We need to change the protocol for the
-     * record iterator to return 0 when it has no more records, not
-     * when it has just returned the last one. This is making for a
-     * very confusing programming model.
-     */
     b = 1;
     while ((ret = tree_file_next_record(&self->tree_file, &cr)) == 1) {
-        printf("left = %d b = %d\n", cr.left, b);
         if (cr.left != b) {
             ret = hapgen_process_tree(self, cr.left - b);
             if (ret < 0) {
@@ -241,9 +234,6 @@ hapgen_generate(hapgen_t *self)
     if (ret != 0) {
         goto out;
     }
-    self->pi[cr.children[0]] = cr.parent;
-    self->pi[cr.children[1]] = cr.parent;
-    self->tau[cr.parent] = cr.time;
     ret = hapgen_process_tree(self, self->num_loci - cr.left + 1);
     if (ret < 0) {
         goto out;
