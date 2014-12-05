@@ -43,7 +43,6 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     tree_file_t *tree_file;
-    int iter_state;
 } TreeFile;
 
 static void
@@ -806,7 +805,6 @@ TreeFile_init(TreeFile *self, PyObject *args, PyObject *kwds)
     char *tree_file_name;
     char mode = 'r';
 
-    self->iter_state = 0;
     self->tree_file = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
                 &tree_file_name)) {
@@ -897,83 +895,18 @@ TreeFile_next(TreeFile *self)
     coalescence_record_t cr;
     int v;
 
-    if (self->iter_state == 0) {
-        self->iter_state = 1;
+    v = tree_file_next_record(self->tree_file, &cr);
+    if (v < 0) {
+        handle_library_error(v);
+        goto out;
     }
-    if (self->iter_state == 1) {
-        v = tree_file_next_record(self->tree_file, &cr);
-        if (v < 0) {
-            handle_library_error(v);
-            goto out;
-        }
-        if (v == 0) {
-            /* last record has been read, iteration is done */
-            self->iter_state = 2;
-        }
+    if (v == 1) {
         ret = Py_BuildValue("iiiid", cr.left, cr.children[0],
                 cr.children[1], cr.parent, cr.time);
     }
 out:
     return ret;
 }
-
-
-
-#if 0
-static PyObject *
-TreeFile_get_tree(TreeFile *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    PyObject *py_pi = NULL;
-    PyObject *py_tau = NULL;
-    int err;
-    unsigned int j, n;
-    uint32_t l;
-    int32_t *pi;
-    float *tau;
-
-    if (TreeFile_check_tree_file(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &j)) {
-        goto out;
-    }
-    if (j >= self->tree_file->num_trees) {
-        handle_input_error("tree out of bounds");
-        goto out;
-    }
-    err = tree_file_get_tree(self->tree_file, (uint32_t) j, &l, &pi, &tau);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    n = 2 * self->tree_file->sample_size;
-    py_pi = PyList_New(n);
-    if (py_pi == NULL) {
-        goto out;
-    }
-    py_tau = PyList_New(n);
-    if (py_tau == NULL) {
-        goto out;
-    }
-    for (j = 0; j < n; j++) {
-        err = PyList_SetItem(py_pi, j, PyLong_FromLong((long) pi[j]));
-        if (err < 0) {
-            goto out;
-        }
-        err = PyList_SetItem(py_tau, j, PyFloat_FromDouble((double) tau[j]));
-        if (err < 0) {
-            goto out;
-        }
-    }
-    ret = Py_BuildValue("(I, O, O)", (unsigned int) l, py_pi, py_tau);
-out:
-    Py_XDECREF(py_pi);
-    Py_XDECREF(py_tau);
-    return ret;
-}
-
-#endif
 
 
 static PyMethodDef TreeFile_methods[] = {

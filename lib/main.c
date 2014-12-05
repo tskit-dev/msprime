@@ -203,7 +203,8 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     tree_file_t tf;
     hapgen_t hapgen;
     char **haplotypes;
-    uint32_t j, s;
+    uint32_t j;
+    size_t s;
 
     if (msp == NULL) {
         goto out;
@@ -281,7 +282,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     }
     printf("Segregating sites: %d\n", (int) s);
     for (j = 1; j <= msp->sample_size; j++) {
-        printf("%d: %s\n", strlen(haplotypes[j]), haplotypes[j]);
+        printf("%d: %s\n", (int) strlen(haplotypes[j]), haplotypes[j]);
     }
     hapgen_free(&hapgen);
 out:
