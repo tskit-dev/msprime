@@ -130,19 +130,8 @@ hapgen_process_tree(hapgen_t *self, uint32_t l)
     int *branch_mutations = self->branch_mutations;
     int *mutation_sites = self->mutation_sites;
     int u, v, j, s, not_done;
-    double mu = self->mutation_rate * l;
+    double mu = (self->mutation_rate * l) / self->num_loci;
     double t;
-
-    printf("l = %d pi = ", l);
-    for (j = 0; j < N; j++) {
-        printf("%d ", self->pi[j]);
-    }
-    printf("\ttau = ");
-    for (j = 0; j < N; j++) {
-        printf("%f ", self->tau[j]);
-    }
-    printf("\n");
-
 
     /* This method is can be probably be improved quite a lot for the
      * sparse mutation case.
@@ -159,7 +148,7 @@ hapgen_process_tree(hapgen_t *self, uint32_t l)
         mutation_sites[j] = s;
         s += branch_mutations[j];
     }
-    if (s + self->haplotype_length > self->max_haplotype_length) {
+    if (s + self->haplotype_length >= self->max_haplotype_length) {
         ret = MSP_ERR_TOO_MANY_SEG_SITES;
         goto out;
     }
@@ -238,7 +227,7 @@ hapgen_generate(hapgen_t *self)
     if (ret < 0) {
         goto out;
     }
-    /* now finish each haplotype with '\0' so it's a string */
+    /* now finish each haplotype with '\0' so its a valid string */
     for (j = 0; j < 2 * self->sample_size; j++) {
         self->haplotypes[j][self->haplotype_length] = '\0';
     }

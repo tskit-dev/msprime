@@ -273,11 +273,11 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     }
     ret = hapgen_generate(&hapgen);
     if (ret != 0) {
+        hapgen_free(&hapgen);
         goto out;
     }
     ret = hapgen_get_haplotypes(&hapgen, &haplotypes, &s);
     if (ret != 0) {
-        hapgen_free(&hapgen);
         goto out;
     }
     printf("Segregating sites: %d\n", (int) s);
