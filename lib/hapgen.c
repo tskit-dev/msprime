@@ -133,6 +133,7 @@ hapgen_process_tree(hapgen_t *self, uint32_t l)
     double mu = (self->mutation_rate * l) / self->num_loci;
     double t;
 
+    self->num_trees++;
     /* This method is can be probably be improved quite a lot for the
      * sparse mutation case.
      */
@@ -208,6 +209,7 @@ hapgen_generate(hapgen_t *self)
     coalescence_record_t cr;
 
     b = 1;
+    self->num_trees = 0;
     while ((ret = tree_file_next_record(&self->tree_file, &cr)) == 1) {
         if (cr.left != b) {
             ret = hapgen_process_tree(self, cr.left - b);
