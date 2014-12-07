@@ -107,5 +107,3 @@ class TestHaplotypeGenerator(tests.MsprimeTestCase):
             r = random.random()
             theta = random.uniform(0, 2)
             self.verify_simulation(n, m, r,theta)
-
-

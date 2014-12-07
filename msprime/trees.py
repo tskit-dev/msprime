@@ -262,7 +262,7 @@ class HaplotypeGenerator(object):
     def __init__(self, tree_file_name, mutation_rate, random_seed=None):
         seed = random_seed
         if random_seed is None:
-            seed = random.randint(0, 2**32)
+            seed = random.randint(0, 2**31)
         self._ll_haplotype_generator = _msprime.HaplotypeGenerator(
                 tree_file_name, mutation_rate=mutation_rate,
                 random_seed=seed, max_haplotype_length=10000)
@@ -271,7 +271,11 @@ class HaplotypeGenerator(object):
         return self._ll_haplotype_generator.get_haplotype_length()
 
     def get_haplotypes(self):
-        return self._ll_haplotype_generator.get_haplotypes()[1:]
+        # TODO this is pretty inefficient; should we do this down in C
+        # or just offer a generator interface instead?
+        bytes_haplotypes = self._ll_haplotype_generator.get_haplotypes()
+        haps = [h.decode() for h in bytes_haplotypes[1:]]
+        return haps
 
     def get_positions(self):
         return [0 for j in range(self.get_num_segregating_sites())]
