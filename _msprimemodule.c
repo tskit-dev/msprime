@@ -241,6 +241,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->tree_file_name = NULL;
     self->sim = sim;
     if (self->sim == NULL) {
+        PyErr_NoMemory();
         goto out;
     }
     memset(self->sim, 0, sizeof(msp_t));
@@ -265,6 +266,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     self->tree_file_name = PyMem_Malloc(cr_filename_len + 1);
     if (self->tree_file_name == NULL) {
+        PyErr_NoMemory();
         goto out;
     }
     strcpy(self->tree_file_name, cr_filename);
@@ -564,6 +566,7 @@ Simulator_get_ancestors(Simulator *self)
     num_ancestors = msp_get_num_ancestors(self->sim);
     ancestors = PyMem_Malloc(num_ancestors * sizeof(segment_t **));
     if (ancestors == NULL) {
+        PyErr_NoMemory();
         goto out;
     }
     err = msp_get_ancestors(self->sim, ancestors);
@@ -818,6 +821,7 @@ TreeFile_init(TreeFile *self, PyObject *args, PyObject *kwds)
     }
     self->tree_file = PyMem_Malloc(sizeof(tree_file_t));
     if (self->tree_file == NULL) {
+        PyErr_NoMemory();
         goto out;
     }
     tr_ret = tree_file_open(self->tree_file, tree_file_name, mode);
@@ -1016,6 +1020,7 @@ HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds
     }
     self->hapgen = PyMem_Malloc(sizeof(hapgen_t));
     if (self->hapgen == NULL) {
+        PyErr_NoMemory();
         goto out;
     }
     hg_ret = hapgen_alloc(self->hapgen, mutation_rate, tree_file_name,
@@ -1203,6 +1208,7 @@ msprime_sort_tree_file(PyObject *self, PyObject *args)
     }
     tf = PyMem_Malloc(sizeof(tree_file_t));
     if (tf == NULL) {
+        PyErr_NoMemory();
         goto out;
     }
     tf_ret = tree_file_open(tf, filename, 'u');
