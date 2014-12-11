@@ -1,0 +1,4 @@
+include lib/*.h
+include README.txt
+include ez_setup.py
+include LICENSE

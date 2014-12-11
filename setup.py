@@ -1,7 +1,7 @@
 import re
 import sys
 from ez_setup import use_setuptools
-use_setuptools()
+use_setuptools(version="0.7")
 from setuptools import setup, Extension
 
 
@@ -47,6 +47,7 @@ setup(
     url="http://pypi.python.org/pypi/msprime",
     entry_points={
         'console_scripts': [
+            'mscompat=msprime.cli:mscompat_main',
         ]
     },
     install_requires=requirements,
