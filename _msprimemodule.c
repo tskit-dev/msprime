@@ -17,6 +17,8 @@
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#define PY_SSIZE_T_CLEAN
+
 #include <Python.h>
 #include <structmember.h>
 #include <float.h>
@@ -26,7 +28,6 @@
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
 #endif
-#define PY_SSIZE_T_CLEAN
 
 #define MODULE_DOC \
 "Low level interface for msprime"
@@ -234,42 +235,49 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "population_models", "max_memory", "avl_node_block_size",
         "segment_block_size", "node_mapping_block_size", NULL};
     PyObject *population_models = NULL;
+    /* parameter defaults */
+    unsigned int sample_size = 2;
+    unsigned int num_loci = 1;
+    long random_seed = 1;
+    double scaled_recombination_rate = 0.0;
+    Py_ssize_t max_memory = 10 * 1024 * 1024;
+    Py_ssize_t avl_node_block_size = 10;
+    Py_ssize_t segment_block_size = 10;
+    Py_ssize_t node_mapping_block_size = 10;
+    const char *tree_file_name;
+    Py_ssize_t tree_file_name_len;
     msp_t *sim = PyMem_Malloc(sizeof(msp_t));
-    char *cr_filename;
-    Py_ssize_t cr_filename_len;
 
-    self->tree_file_name = NULL;
     self->sim = sim;
+    self->tree_file_name = NULL;
     if (self->sim == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    memset(self->sim, 0, sizeof(msp_t));
-    sim->sample_size = 2;
-    sim->num_loci = 1;
-    sim->random_seed = 1;
-    sim->scaled_recombination_rate = 1.0;
-    sim->max_memory = 10 * 1024 * 1024;
-    sim->avl_node_block_size = 10;
-    sim->segment_block_size = 10;
-    sim->node_mapping_block_size = 10;
-    sim->tree_file_name = NULL;
-    /* TODO verify these types are compatible! */
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "Ils#|IdO!nnnn", kwlist,
-            &sim->sample_size, &sim->random_seed, &cr_filename,
-            &cr_filename_len,
-            &sim->num_loci, &sim->scaled_recombination_rate,
-            &PyList_Type, &population_models, &sim->max_memory,
-            &sim->avl_node_block_size, &sim->segment_block_size,
-            &sim->node_mapping_block_size)) {
+            &sample_size, &random_seed, &tree_file_name,
+            &tree_file_name_len,
+            &num_loci, &scaled_recombination_rate,
+            &PyList_Type, &population_models, &max_memory,
+            &avl_node_block_size, &segment_block_size,
+            &node_mapping_block_size)) {
         goto out;
     }
-    self->tree_file_name = PyMem_Malloc(cr_filename_len + 1);
+    memset(self->sim, 0, sizeof(msp_t));
+    sim->sample_size = (uint32_t) sample_size;
+    sim->num_loci = (uint32_t) num_loci;
+    sim->random_seed = random_seed;
+    sim->scaled_recombination_rate = scaled_recombination_rate;
+    sim->max_memory = (size_t) max_memory;
+    sim->avl_node_block_size = (size_t) avl_node_block_size;
+    sim->segment_block_size = (size_t) segment_block_size;
+    sim->node_mapping_block_size = (size_t) node_mapping_block_size;
+    self->tree_file_name = PyMem_Malloc(tree_file_name_len + 1);
     if (self->tree_file_name == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    strcpy(self->tree_file_name, cr_filename);
+    strcpy(self->tree_file_name, tree_file_name);
     sim->tree_file_name = self->tree_file_name;
     /* TODO this is very nasty and must be moved into the msprime
      * code when the refactoring is done.
