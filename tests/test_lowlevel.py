@@ -194,6 +194,8 @@ class TestInterface(tests.MsprimeTestCase):
         """
         Runs the specified simulation and verifies its state.
         """
+        # These tests don't work for n == 2
+        assert n > 2
         mb = 1024 * 1024
         random_seed = random.randint(0, 2**31)
         sim = _msprime.Simulator(sample_size=n, num_loci=m,
@@ -203,6 +205,7 @@ class TestInterface(tests.MsprimeTestCase):
                 avl_node_block_size=1000, node_mapping_block_size=1000)
         # Run the sim for a tiny amount of time and check.
         self.assertFalse(sim.run(1e-8))
+        # self.assertFalse(sim.run(1e-8))
         self.verify_running_simulation(sim)
         # Now run until coalescence
         self.assertTrue(sim.run())
@@ -218,6 +221,17 @@ class TestInterface(tests.MsprimeTestCase):
         self.verify_simulation(3, 100, 0.0, [])
         self.verify_simulation(5, 10, 10.0, [])
         self.verify_simulation(10, 100, 1.0, [])
+        const_model = _msprime.POP_MODEL_CONSTANT
+
+    def test_population_models(self):
+        exp_model = _msprime.POP_MODEL_EXPONENTIAL
+        m1 = {"alpha":0.0, "start_time":0.0, "type":exp_model}
+        m2 = {"alpha":1.0, "start_time":0.5, "type":exp_model}
+        # TODO add constant pop models here too.
+        for n in [5, 10, 100]:
+            self.verify_simulation(n, 1, 0.0, [m1])
+            self.verify_simulation(n, 1, 0.0, [m2])
+            self.verify_simulation(n, 1, 0.0, [m1, m2])
 
 class TestTreeFile(tests.MsprimeTestCase):
     """
