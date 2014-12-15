@@ -165,6 +165,7 @@ size_t msp_get_num_breakpoints(msp_t *self);
 size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
+size_t msp_get_used_memory(msp_t *self);
 
 int tree_file_open(tree_file_t *self, const char *tree_file_name, char mode);
 int tree_file_set_sample_size(tree_file_t *self, uint32_t sample_size);

@@ -24,6 +24,7 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertGreater(sim.get_num_breakpoints(), 0)
         self.assertGreater(sim.get_time(), 0.0)
         self.assertGreater(sim.get_num_ancestors(), 1)
+        self.assertGreater(sim.get_used_memory(), 0)
         events = sim.get_num_coancestry_events()
         events += sim.get_num_recombination_events()
         self.assertGreater(events, 0)
@@ -107,6 +108,7 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
+        self.assertGreater(sim.get_used_memory(), 0)
         # Open the tree file and get the records
         tf = _msprime.TreeFile(sim.get_tree_file_name())
         self.verify_tree_file_information(sim, tf)
