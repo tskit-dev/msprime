@@ -38,7 +38,7 @@ def harmonic_number(n):
     return sum(1 / k for k in range(1, n + 1))
 
 def simulate_trees(sample_size, num_loci, scaled_recombination_rate,
-        population_models=[], max_memory="10M"):
+        population_models=[], random_seed=None, max_memory="10M"):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns an iterator over the resulting trees.
@@ -49,6 +49,8 @@ def simulate_trees(sample_size, num_loci, scaled_recombination_rate,
         sim = TreeSimulator(sample_size, tf)
         sim.set_num_loci(num_loci)
         sim.set_scaled_recombination_rate(scaled_recombination_rate)
+        if random_seed is not None:
+            sim.set_random_seed(random_seed)
         sim.set_max_memory(max_memory)
         for m in population_models:
             sim.add_population_model(m)
@@ -63,12 +65,14 @@ def simulate_trees(sample_size, num_loci, scaled_recombination_rate,
     finally:
         os.unlink(tf)
 
-def simulate_tree(sample_size, population_models=[], max_memory="10M"):
+def simulate_tree(sample_size, population_models=[], random_seed=None,
+        max_memory="10M"):
     """
     Simulates the coalescent at a single locus for the specified sample size
     under the specified list of population models.
     """
-    iterator = simulate_trees(sample_size, 1, 0, population_models, max_memory)
+    iterator = simulate_trees(sample_size, 1, 0, population_models,
+            random_seed, max_memory)
     l, pi, tau = next(iterator)
     return pi, tau
 

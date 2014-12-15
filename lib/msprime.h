@@ -114,6 +114,7 @@ typedef struct {
 
 typedef struct {
     /* input parameters */
+    /* TODO change these to uint32_t and run compiler with paranoid typing */
     int sample_size;
     int num_loci;
     double scaled_recombination_rate;

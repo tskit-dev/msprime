@@ -28,6 +28,22 @@ class TestSingleLocusSimulation(tests.MsprimeTestCase):
         for n in ["", None, "2", 2.2, 1e5]:
             self.assertRaises(TypeError, msprime.simulate_tree, n)
 
+    def test_models(self):
+        # Exponential growth of 0 and constant model should be identical.
+        m1 = msprime.ExponentialPopulationModel(alpha=0.0, start_time=0.0)
+        m2 = msprime.ConstantPopulationModel(size=1.0, start_time=0.0)
+        for n in [2, 10, 100]:
+            # TODO this _should_ be the same as running with no population
+            # models, but it's not. need to investigate.
+            pi1, tau1 = msprime.simulate_tree(n, random_seed=1,
+                    population_models=[m1])
+            pi2, tau2 = msprime.simulate_tree(n, random_seed=1,
+                    population_models=[m2])
+            self.assertEqual(pi1, pi2)
+            self.assertEqual(tau1, tau2)
+        # TODO add more tests!
+
+
 
 class TestMultiLocusSimulation(tests.MsprimeTestCase):
     """

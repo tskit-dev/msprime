@@ -1,6 +1,6 @@
 CFLAGS=-Wall -g -O3
 #CFLAGS=-Wall -g -O3 -march=native 
-LDFLAGS=-lgsl -lgslcblas -lconfig
+LDFLAGS=-lgsl -lgslcblas -lconfig -lm
 SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c tree_file.c hapgen.c
 COMPILED=msprime.c fenwick.c main.c avl.c tree_file.c hapgen.c
 
