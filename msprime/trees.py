@@ -97,6 +97,9 @@ class TreeSimulator(object):
     def get_num_breakpoints(self):
         return self._ll_sim.get_num_breakpoints()
 
+    def get_used_memory(self):
+        return self._ll_sim.get_used_memory()
+
     def get_time(self):
         return self._ll_sim.get_time()
 
