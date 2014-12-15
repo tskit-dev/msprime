@@ -502,6 +502,19 @@ out:
 }
 
 static PyObject *
+Simulator_get_used_memory(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", msp_get_used_memory(self->sim));
+out:
+    return ret;
+}
+
+
+static PyObject *
 Simulator_get_num_breakpoints(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -728,6 +741,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the number of segment memory blocks"},
     {"get_num_breakpoints", (PyCFunction) Simulator_get_num_breakpoints,
             METH_NOARGS, "Returns the number of trees" },
+    {"get_used_memory", (PyCFunction) Simulator_get_used_memory,
+            METH_NOARGS, "Returns the approximate amount of memory used." },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
     {"get_population_models", (PyCFunction) Simulator_get_population_models,

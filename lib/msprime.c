@@ -422,6 +422,12 @@ msp_get_num_segment_blocks(msp_t *self)
     return self->segment_heap.num_blocks;
 }
 
+size_t
+msp_get_used_memory(msp_t *self)
+{
+    return self->used_memory;
+}
+
 int
 msp_alloc(msp_t *self)
 {
