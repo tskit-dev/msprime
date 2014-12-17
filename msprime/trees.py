@@ -267,6 +267,61 @@ class TreeFile(object):
     def records(self):
         return self._ll_tree_file
 
+    def newick_trees(self):
+        n = self.get_sample_size()
+        tau = [0 for j in range(2 * n)]
+        c = [None for j in range(2 * n)]
+        bl = [None for j in range(2 * n)]
+        b = 1
+        for l, c1, c2, p, t in self._ll_tree_file:
+            if l != b:
+                s = self._convert_newick(c, bl)
+                yield l - b, s
+                b = l
+            if c1 < c2:
+                c[p] = c1, c2
+            else:
+                c[p] = c2, c1
+            tau[p] = t
+            bl[c1] = "{0:.3f}".format(t - tau[c1])
+            bl[c2] = "{0:.3f}".format(t - tau[c2])
+        s = self._convert_newick(c, bl)
+        yield self.get_num_loci() - l + 1, s
+
+    def _convert_newick(self, c, branch_lengths):
+        """
+        Converts the specified top-down node mapping to a newick tree.
+        """
+        n = self.get_sample_size()
+        buff = StringIO()
+        stack = [2 * n - 1]
+        visited = [0 for j in range(2 * n)]
+        while len(stack) > 0:
+            u = stack.pop()
+            l = branch_lengths[u]
+            if c[u] is not None:
+                if visited[u] == 0:
+                    buff.write("(")
+                    stack.append(u)
+                    stack.append(c[u][0])
+                elif visited[u] == 1:
+                    buff.write(",")
+                    stack.append(u)
+                    stack.append(c[u][1])
+                else:
+                    buff.write(")")
+                    if l is None:
+                        buff.write(";")
+                    else:
+                        buff.write(":" + l)
+                visited[u] += 1
+            else:
+                buff.write("{0}:".format(u) + l)
+        s = buff.getvalue()
+        return buff.getvalue()
+
+
+
 class HaplotypeGenerator(object):
     """
     Class that takes a TreeFile and a recombination rate and builds a set
@@ -328,58 +383,5 @@ class ExponentialPopulationModel(PopulationModel):
         super(ExponentialPopulationModel, self).__init__(start_time)
         self.alpha = alpha
         self.type = _msprime.POP_MODEL_EXPONENTIAL
-
-
-def oriented_tree_to_newick(pi, tau):
-    """
-    Converts the specified oriented tree to an ms-compatible Newick tree.
-    """
-    # Build a top-down linked tree using a dict. Each node has a list
-    # of its children
-    d = {}
-    n = len(pi) // 2
-    # We also want the branch lengths; time from a node back to its parent
-    branch_lengths = {2 * n - 1: None}
-    for j in range(1, n + 1):
-        u = j
-        d[u] = None
-        not_done = True
-        while pi[u] != 0 and not_done:
-            # ms uses a fixed 3 digit precision; we can easily fix this.
-            branch_lengths[u] = "{0:.3f}".format(tau[pi[u]] - tau[u])
-            if pi[u] in d:
-                # This is the second time we've seen this node
-                not_done = False
-            else:
-                d[pi[u]] = []
-            d[pi[u]].append(u)
-            u = pi[u]
-    # Now traverse the tree to build the newick tree
-    buff = StringIO()
-    root = 2 * n - 1
-    stack = [root]
-    visited = [0 for j in range(2 * n)]
-    while len(stack) > 0:
-        u = stack.pop()
-        l = branch_lengths[u]
-        if d[u] is not None:
-            if visited[u] == 0:
-                buff.write("(")
-                stack.append(u)
-                stack.append(d[u][0])
-            elif visited[u] == 1:
-                buff.write(",")
-                stack.append(u)
-                stack.append(d[u][1])
-            else:
-                buff.write(")")
-                if l is None:
-                    buff.write(";")
-                else:
-                    buff.write(":{0}".format(l))
-            visited[u] += 1
-        else:
-            buff.write("{0}:{1}".format(u, l))
-    return buff.getvalue()
 
 

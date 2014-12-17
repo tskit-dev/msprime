@@ -10,7 +10,6 @@ import unittest
 import msprime
 import tests
 
-
 def oriented_tree_to_newick(pi, tau):
     """
     Converts the specified oriented tree to an ms-compatible Newick tree.
@@ -34,6 +33,9 @@ def oriented_tree_to_newick(pi, tau):
             else:
                 d[pi[u]] = []
             d[pi[u]].append(u)
+            # make sure the children are sorted so we can compare trees easily
+            if len(d[pi[u]]) == 2:
+                d[pi[u]] = sorted(d[pi[u]])
             u = pi[u]
     return _build_newick(2 * n - 1, d, b)
 
@@ -174,10 +176,28 @@ class TestNewickConversion(tests.MsprimeTestCase):
         """
         Verifies that the specified tree is converted to Newick correctly.
         """
-        for l, pi, tau in msprime.TreeFile(treefile):
-            s1 = oriented_tree_to_newick(pi, tau)
-            s2 = msprime.oriented_tree_to_newick(pi, tau)
-            self.assertEqual(s1, s2)
+        old_trees = [(l, oriented_tree_to_newick(pi, tau)) for l, pi, tau
+                in msprime.TreeFile(treefile).trees()]
+        new_trees = list(msprime.TreeFile(treefile).newick_trees())
+        self.assertEqual(new_trees, old_trees)
+
+    def test_simple_cases(self):
+        cases = [
+            (2, 1, 0),
+            (2, 10, 0.1),
+            (4, 10, 0.1),
+            (10, 10, 0.1),
+            (20, 1, 0),
+            (20, 10, 0.1),
+        ]
+        for n, m, r in cases:
+            ts = msprime.TreeSimulator(n, self._treefile)
+            ts.set_random_seed(1)
+            ts.set_scaled_recombination_rate(r)
+            ts.set_num_loci(m)
+            self.assertTrue(ts.run())
+            msprime.sort_tree_file(self._treefile)
+            self.verify_trees(self._treefile)
 
     def test_random_parameters(self):
         num_random_sims = 10

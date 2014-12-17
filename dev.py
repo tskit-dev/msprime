@@ -168,9 +168,17 @@ def memory_test():
 
 
 def example1():
-    for l, pi, tau in msprime.simulate_trees(5, 20, 0.1, random_seed=1):
-        print(l, ":", pi)
-        print(msprime.oriented_tree_to_newick(pi, tau))
+    treefile = "tmp__NOBACKUP__/treefile.dat"
+    # TODO add some different n and m values here.
+    ts = msprime.TreeSimulator(5, treefile)
+    ts.set_scaled_recombination_rate(0.1)
+    ts.set_num_loci(20)
+    ts.set_random_seed(10)
+    ts.run()
+    msprime.sort_tree_file(treefile)
+    tf = msprime.TreeFile(treefile)
+    for l, newick in tf.newick_trees():
+        print(l, ":", newick)
     # models = [
     #     msprime.ConstantPopulationModel(0.5, 2.0),
     #     msprime.ConstantPopulationModel(1.0, 0.5)

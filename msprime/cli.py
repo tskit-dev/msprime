@@ -110,8 +110,7 @@ class SimulationRunner(object):
             print()
             print("//")
             if self.print_trees:
-                for l, pi, tau in tf.trees():
-                    ns = msprime.oriented_tree_to_newick(pi, tau)
+                for l, ns in tf.newick_trees():
                     if self.num_loci == 1:
                         print(ns)
                     else:
