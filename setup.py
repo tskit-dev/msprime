@@ -1,8 +1,11 @@
 import re
 import sys
-from ez_setup import use_setuptools
-use_setuptools(version="0.7")
-from setuptools import setup, Extension
+try:
+    from setuptools import setup, Extension
+except ImportError:
+    from ez_setup import use_setuptools
+    use_setuptools()
+    from setuptools import setup, Extension
 
 
 # Following the recommendations of PEP 396 we parse the version number
