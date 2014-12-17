@@ -874,11 +874,18 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
     int ret = 0;
     coalescence_record_t *lcr = &self->last_coalesence_record;
 
+/* Disable record squashing for now - we get a reduction in the number
+ * of trees output from mscompat, which could be very confusing.
+ */
+#if 0
     if (lcr->time == self->time && lcr->right + 1 == left
             && lcr->children[0] == child1 && lcr->children[1] == child2
             && lcr->parent == parent) {
         /* squash this record into the last */
         lcr->right = right;
+#else
+    if (0) {
+#endif
     } else {
         /* Don't flush the first dummy record */
         if (lcr->left != 0) {

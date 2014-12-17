@@ -79,7 +79,8 @@ class TestInterface(tests.MsprimeTestCase):
             pi[c2] = parent
             tau[parent] = t
         self.verify_tree(n, pi, tau)
-        self.verify_squashed_records(sorted_records)
+        # TODO make record squashing optional and update this.
+        # self.verify_squashed_records(sorted_records)
 
     def verify_squashed_records(self, sorted_records):
         """
