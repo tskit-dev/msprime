@@ -58,6 +58,7 @@ class TestInterface(tests.MsprimeTestCase):
         Verifies that the specified set of sorted coalescence records
         corresponds to correct trees for the specified simulation.
         """
+
         n = sim.get_sample_size()
         m = sim.get_num_loci()
         pi = [0 for j in range(2 * n)]
@@ -66,11 +67,13 @@ class TestInterface(tests.MsprimeTestCase):
         tau[0] = -1
         last_l = 1
         last_t = 0
+        num_trees = 0
         for l, c1, c2, parent, t in sorted_records:
             if last_l != l:
                 last_l = l
                 last_t = 0
                 self.verify_tree(n, pi, tau)
+                num_trees += 1
             else:
                 last_t = t
             # Ensure that records are sorted by time within a block
@@ -79,8 +82,11 @@ class TestInterface(tests.MsprimeTestCase):
             pi[c2] = parent
             tau[parent] = t
         self.verify_tree(n, pi, tau)
+        num_trees += 1
         # TODO make record squashing optional and update this.
         # self.verify_squashed_records(sorted_records)
+        # This will fail when we have squashed records.
+        self.assertEqual(num_trees, sim.get_num_breakpoints())
 
     def verify_squashed_records(self, sorted_records):
         """
@@ -224,6 +230,7 @@ class TestInterface(tests.MsprimeTestCase):
         self.verify_simulation(3, 100, 0.0, [])
         self.verify_simulation(5, 10, 10.0, [])
         self.verify_simulation(10, 100, 1.0, [])
+        self.verify_simulation(100, 100, 0.1, [])
         const_model = _msprime.POP_MODEL_CONSTANT
 
     def test_population_models(self):
