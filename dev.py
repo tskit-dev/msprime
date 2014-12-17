@@ -168,15 +168,14 @@ def memory_test():
 
 
 def example1():
-    pi, tau = msprime.simulate_tree(10)
-    print(pi, tau)
-    for l, pi, tau in msprime.simulate_trees(4, 20, 0.1):
+    for l, pi, tau in msprime.simulate_trees(5, 20, 0.1, random_seed=1):
         print(l, ":", pi)
-    models = [
-        msprime.ConstantPopulationModel(0.5, 2.0),
-        msprime.ConstantPopulationModel(1.0, 0.5)
-    ]
-    pi, tau = msprime.simulate_tree(10, models)
+        print(msprime.oriented_tree_to_newick(pi, tau))
+    # models = [
+    #     msprime.ConstantPopulationModel(0.5, 2.0),
+    #     msprime.ConstantPopulationModel(1.0, 0.5)
+    # ]
+    # pi, tau = msprime.simulate_tree(10, models)
 
 def isdescendent(u, v, pi):
     """
@@ -304,10 +303,10 @@ def print_tree_file(tree_file_name):
         print(r)
 
 if __name__ == "__main__":
-    print_tree_file(sys.argv[1])
+    # print_tree_file(sys.argv[1])
     # edit_visualisation()
     # mutation_dev()
-    # example1()
+    example1()
     #hl_main()
     # ll_main()
     # memory_test()

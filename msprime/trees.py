@@ -19,12 +19,18 @@
 """
 Module responsible to generating and reading tree files.
 """
-from __future__ import print_function
 from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
 
 import os
 import random
 import tempfile
+
+try:
+    from io import StringIO
+except ImportError:
+    from cStringIO import StringIO
 
 import _msprime
 from _msprime import sort_tree_file
@@ -329,18 +335,18 @@ def oriented_tree_to_newick(pi, tau):
     Converts the specified oriented tree to an ms-compatible Newick tree.
     """
     # Build a top-down linked tree using a dict. Each node has a list
-    # of it's children
+    # of its children
     d = {}
     n = len(pi) // 2
     # We also want the branch lengths; time from a node back to its parent
-    b = {2 * n - 1: None}
+    branch_lengths = {2 * n - 1: None}
     for j in range(1, n + 1):
         u = j
         d[u] = None
         not_done = True
         while pi[u] != 0 and not_done:
             # ms uses a fixed 3 digit precision; we can easily fix this.
-            b[u] = "{0:.3f}".format(tau[pi[u]] - tau[u])
+            branch_lengths[u] = "{0:.3f}".format(tau[pi[u]] - tau[u])
             if pi[u] in d:
                 # This is the second time we've seen this node
                 not_done = False
@@ -348,19 +354,32 @@ def oriented_tree_to_newick(pi, tau):
                 d[pi[u]] = []
             d[pi[u]].append(u)
             u = pi[u]
-    return _build_newick(2 * n - 1, d, b)
-
-def _build_newick(node, tree, branch_lengths):
-    l = branch_lengths[node]
-    if tree[node] is not None:
-        c1, c2 = tree[node]
-        s1 = _build_newick(c1, tree, branch_lengths)
-        s2 = _build_newick(c2, tree, branch_lengths)
-        if l is None:
-            # The root node is treated differently
-            s = "({0},{1});".format(s1, s2)
+    # Now traverse the tree to build the newick tree
+    buff = StringIO()
+    root = 2 * n - 1
+    stack = [root]
+    visited = [0 for j in range(2 * n)]
+    while len(stack) > 0:
+        u = stack.pop()
+        l = branch_lengths[u]
+        if d[u] is not None:
+            if visited[u] == 0:
+                buff.write("(")
+                stack.append(u)
+                stack.append(d[u][0])
+            elif visited[u] == 1:
+                buff.write(",")
+                stack.append(u)
+                stack.append(d[u][1])
+            else:
+                buff.write(")")
+                if l is None:
+                    buff.write(";")
+                else:
+                    buff.write(":{0}".format(l))
+            visited[u] += 1
         else:
-            s = "({0},{1}):{2}".format(s1, s2, l)
-    else:
-        s = "{0}:{1}".format(node, l)
-    return s
+            buff.write("{0}:{1}".format(u, l))
+    return buff.getvalue()
+
+

@@ -10,6 +10,48 @@ import unittest
 import msprime
 import tests
 
+
+def oriented_tree_to_newick(pi, tau):
+    """
+    Converts the specified oriented tree to an ms-compatible Newick tree.
+    """
+    # Build a top-down linked tree using a dict. Each node has a list
+    # of its children
+    d = {}
+    n = len(pi) // 2
+    # We also want the branch lengths; time from a node back to its parent
+    b = {2 * n - 1: None}
+    for j in range(1, n + 1):
+        u = j
+        d[u] = None
+        not_done = True
+        while pi[u] != 0 and not_done:
+            # ms uses a fixed 3 digit precision; we can easily fix this.
+            b[u] = "{0:.3f}".format(tau[pi[u]] - tau[u])
+            if pi[u] in d:
+                # This is the second time we've seen this node
+                not_done = False
+            else:
+                d[pi[u]] = []
+            d[pi[u]].append(u)
+            u = pi[u]
+    return _build_newick(2 * n - 1, d, b)
+
+def _build_newick(node, tree, branch_lengths):
+    l = branch_lengths[node]
+    if tree[node] is not None:
+        c1, c2 = tree[node]
+        s1 = _build_newick(c1, tree, branch_lengths)
+        s2 = _build_newick(c2, tree, branch_lengths)
+        if l is None:
+            # The root node is treated differently
+            s = "({0},{1});".format(s1, s2)
+        else:
+            s = "({0},{1}):{2}".format(s1, s2, l)
+    else:
+        s = "{0}:{1}".format(node, l)
+    return s
+
 class TestSingleLocusSimulation(tests.MsprimeTestCase):
     """
     Tests on the single locus simulations.
@@ -123,3 +165,31 @@ class TestHaplotypeGenerator(tests.MsprimeTestCase):
             r = random.random()
             theta = random.uniform(0, 2)
             self.verify_simulation(n, m, r,theta)
+
+class TestNewickConversion(tests.MsprimeTestCase):
+    """
+    Test the newick tree generation code.
+    """
+    def verify_trees(self, treefile):
+        """
+        Verifies that the specified tree is converted to Newick correctly.
+        """
+        for l, pi, tau in msprime.TreeFile(treefile):
+            s1 = oriented_tree_to_newick(pi, tau)
+            s2 = msprime.oriented_tree_to_newick(pi, tau)
+            self.assertEqual(s1, s2)
+
+    def test_random_parameters(self):
+        num_random_sims = 10
+        for j in range(num_random_sims):
+            n = random.randint(2, 100)
+            m = random.randint(10, 1000)
+            r = random.random()
+            ts = msprime.TreeSimulator(n, self._treefile)
+            ts.set_scaled_recombination_rate(r)
+            ts.set_num_loci(m)
+            self.assertTrue(ts.run())
+            msprime.sort_tree_file(self._treefile)
+            self.verify_trees(self._treefile)
+
+
