@@ -40,12 +40,14 @@ newick_alloc(newick_t *self, const char *tree_file_name)
         goto out;
     }
     self->sample_size = self->tree_file.sample_size;
+    self->num_loci = self->tree_file.num_loci;
     N  = 2 * self->sample_size;
     self->tau = malloc(N * sizeof(float));
     self->branch_lengths = malloc(N * sizeof(float));
     self->children = malloc(N * sizeof(int *));
     self->visited = malloc(N * sizeof(int));
-    self->stack = malloc(self->sample_size * sizeof(int));
+    self->stack_size = self->sample_size;
+    self->stack = malloc(self->stack_size * sizeof(int));
     /* TODO fix this! should be function of n */
     self->output_buffer_size = 16 * 1024 * 1024;
     self->output_buffer = malloc(self->output_buffer_size);
@@ -60,11 +62,24 @@ newick_alloc(newick_t *self, const char *tree_file_name)
     /* Set the pointers for the child storage. We could save some memory
      * here by not keeping the null pointers for 1 to n.
      */
+    memset(self->children, 0, N * sizeof(int *));
+    memset(self->branch_lengths, 0, N * sizeof(float));
     p = self->children_mem;
-    for (j = self->sample_size; j < N; j++) {
+    for (j = self->sample_size + 1; j < N; j++) {
         self->children[j] = p;
         p += 2;
     }
+    self->breakpoint = 1;
+    self->num_trees = 0;
+    self->completed = 0;
+    /* start off the process by getting the first record */
+    ret = tree_file_next_record(&self->tree_file, &self->next_record);
+    if (ret < 0) {
+        goto out;
+    }
+    /* We must always have 1 record, so this is an error condition */
+    assert(ret == 1);
+    ret = 0;
 out:
     return ret;
 }
@@ -98,9 +113,147 @@ newick_free(newick_t *self)
     return 0;
 }
 
+/* Get the next tree from the treefile */
+static int newick_update_tree(newick_t *self, uint32_t *length)
+{
+    int ret = 0;
+    int tree_ret = 1;
+    int32_t c1, c2, p;
+
+    while (self->next_record.left == self->breakpoint && tree_ret == 1) {
+        printf("examining: %d\t(%d, %d)->%d @ %f\n",
+                self->next_record.left, self->next_record.children[0],
+                self->next_record.children[1], self->next_record.parent, self->next_record.time);
+        self->tau[self->next_record.parent] = self->next_record.time;
+        c1 = self->next_record.children[0];
+        c2 = self->next_record.children[1];
+        p = self->next_record.parent;
+        if (c1 < c2) {
+            self->children[p][0] = c1;
+            self->children[p][1] = c2;
+        } else {
+            self->children[p][1] = c1;
+            self->children[p][0] = c2;
+        }
+        self->branch_lengths[c1] = self->next_record.time - self->tau[c1];
+        self->branch_lengths[c2] = self->next_record.time - self->tau[c2];
+
+            /*
+            if c1 < c2:
+                c[p] = c1, c2
+            else:
+                c[p] = c2, c1
+            tau[p] = t
+            bl[c1] = "{0:.3f}".format(t - tau[c1])
+            bl[c2] = "{0:.3f}".format(t - tau[c2])
+            */
+
+        tree_ret = tree_file_next_record(&self->tree_file, &self->next_record);
+    }
+    if (tree_ret < 0) {
+        goto out;
+    }
+    self->num_trees++;
+    if (tree_ret == 1) {
+        *length = self->next_record.left - self->breakpoint;
+        self->breakpoint = self->next_record.left;
+    } else {
+        self->completed = 1;
+        *length = self->num_loci - self->breakpoint + 1;
+    }
+    ret = 1;
+out:
+    return ret;
+}
+
+/*
+ * Generates the newick string from the tree in memory
+ */
+static int
+newick_generate_string(newick_t *self)
+{
+    int ret = 0;
+    uint32_t u;
+    int32_t n = self->sample_size;
+    int32_t root = 2 * n - 1;
+    int **c = self->children;
+    float *branch_lengths = self->branch_lengths;
+    int *stack = self->stack;
+    int *visited = self->visited;
+    int stack_top = 0;
+
+    /*
+    printf("processing tree:\n");
+    for (j = 0; j < 2 * self->sample_size; j++) {
+        if (self->children[j] == NULL) {
+            printf("%d -> %p\n", j, self->children[j]);
+        } else {
+            printf("%d -> %d, %d\n", j, c[j][0], c[j][1]);
+        }
+    }
+    */
+    stack[0] = root;
+    stack_top = 0;
+    memset(visited, 0, 2 * n * sizeof(int32_t));
+    while (stack_top >= 0) {
+        u = stack[stack_top];
+        stack_top--;
+        if (c[u] == NULL) {
+            /* leaf node */
+            printf("%d:%.2f", u, branch_lengths[u]);
+        } else {
+            if (visited[u] == 0) {
+                printf("(");
+                stack_top++;
+                assert(stack_top < self->stack_size);
+                stack[stack_top] = u;
+                stack_top++;
+                assert(stack_top < self->stack_size);
+                stack[stack_top] = c[u][0];
+            } else if (visited[u] == 1) {
+                printf(",");
+                stack_top++;
+                assert(stack_top < self->stack_size);
+                stack[stack_top] = u;
+                stack_top++;
+                assert(stack_top < self->stack_size);
+                stack[stack_top] = c[u][1];
+            } else {
+                printf(")");
+                if (u == root) {
+                    printf(";");
+                } else {
+                    printf(":%.3f", branch_lengths[u]);
+                }
+            }
+            visited[u]++;
+        }
+    }
+    return ret;
+}
+
 int
 newick_next_tree(newick_t *self, uint32_t *l, char **tree)
 {
     int ret = -1;
+    int newick_ret;
+    char *tmp = "X";
+
+    if (self->completed) {
+        ret = 0;
+    } else {
+        ret = newick_update_tree(self, l);
+        if (ret < 0) {
+            goto out;
+        }
+        newick_ret = newick_generate_string(self);
+        if (newick_ret != 0) {
+            ret = newick_ret;
+            goto out;
+        }
+        printf("newick next tree ret = %d\n", ret);
+        *tree = tmp;
+    }
+out:
     return ret;
 }
