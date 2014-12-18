@@ -110,11 +110,12 @@ class SimulationRunner(object):
             print()
             print("//")
             if self.print_trees:
-                for l, ns in tf.newick_trees():
-                    if self.num_loci == 1:
-                        print(ns)
-                    else:
-                        print("[{0}]{1}".format(l, ns))
+                tf.write_ms_format()
+                # for l, ns in tf.newick_trees():
+                #     if self.num_loci == 1:
+                #         print(ns)
+                #     else:
+                #         print("[{0}]{1}".format(l, ns))
             if self.mutation_rate is not None:
                 hg = msprime.HaplotypeGenerator(self.tree_file_name,
                         self.mutation_rate)

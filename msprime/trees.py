@@ -272,6 +272,15 @@ class TreeFile(object):
         nc = _msprime.NewickConverter(self._file_name)
         return nc
 
+    def write_ms_format(self):
+        """
+        Writes the trees to stdout in ms format.
+        """
+        # TODO make this take a file obj and test it!
+        # Also need to make it handle single locus case properly.
+        nc = _msprime.NewickConverter(self._file_name)
+        nc.write_ms_format()
+
     def newick_trees_old(self):
         n = self.get_sample_size()
         tau = [0 for j in range(2 * n)]
