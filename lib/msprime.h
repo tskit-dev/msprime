@@ -114,15 +114,21 @@ typedef struct {
 
 typedef struct {
     uint32_t sample_size;
+    uint32_t num_loci;
     float *tau;
     float *branch_lengths;
     int **children;
     int *visited;
     int *stack;
+    size_t stack_size;
     char *output_buffer;
     size_t output_buffer_size;
     int *children_mem;
     tree_file_t tree_file;
+    uint32_t breakpoint;
+    size_t num_trees;
+    coalescence_record_t next_record;
+    int completed;
 } newick_t;
 
 

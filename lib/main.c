@@ -274,7 +274,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
         goto out;
     }
     while ((ret = newick_next_tree(&newick, &l, &newick_tree)) == 1) {
-        printf("%d\t%s", l, newick_tree);
+        printf("%d\t%s\n", l, newick_tree);
     }
     if (ret != 0) {
         goto out;
