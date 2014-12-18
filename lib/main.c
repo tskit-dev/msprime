@@ -204,9 +204,8 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     hapgen_t hapgen;
     newick_t newick;
     char **haplotypes;
-    char *newick_tree;
-    uint32_t j, l;
-    size_t s, str_len;
+    uint32_t j;
+    size_t s;
 
     if (msp == NULL) {
         goto out;
@@ -273,10 +272,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    while ((ret = newick_next_tree(&newick, &l, &newick_tree, &str_len)) == 1) {
-        printf("%d\t%s\n", l, newick_tree);
-        assert(strlen(newick_tree) == str_len);
-    }
+    ret = newick_output_ms_format(&newick, stdout);
     if (ret != 0) {
         goto out;
     }
