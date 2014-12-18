@@ -51,6 +51,11 @@ typedef struct {
     hapgen_t *hapgen;
 } HaplotypeGenerator;
 
+typedef struct {
+    PyObject_HEAD
+    newick_t *newick;
+} NewickConverter;
+
 
 static void
 handle_library_error(int err)
@@ -928,6 +933,10 @@ TreeFile_next(TreeFile *self)
     coalescence_record_t cr;
     int v;
 
+    if (TreeFile_check_tree_file(self) != 0) {
+        /* TODO raise an exception */
+        goto out;
+    }
     v = tree_file_next_record(self->tree_file, &cr);
     if (v < 0) {
         handle_library_error(v);
@@ -1209,6 +1218,162 @@ static PyTypeObject HaplotypeGeneratorType = {
     (initproc)HaplotypeGenerator_init,      /* tp_init */
 };
 
+/*===================================================================
+ * NewickConverter
+ *===================================================================
+ */
+
+static int
+NewickConverter_check_newick(NewickConverter *self)
+{
+    int ret = 0;
+    if (self->newick == NULL) {
+        PyErr_SetString(PyExc_SystemError, "newick not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+NewickConverter_dealloc(NewickConverter* self)
+{
+    if (self->newick != NULL) {
+        newick_free(self->newick);
+        PyMem_Free(self->newick);
+        self->newick = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int nw_ret;
+    static char *kwlist[] = {"tree_file_name", NULL};
+    char *tree_file_name;
+
+    self->newick = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
+                &tree_file_name)) {
+        goto out;
+    }
+    self->newick = PyMem_Malloc(sizeof(newick_t));
+    if (self->newick == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    nw_ret = newick_alloc(self->newick, tree_file_name);
+    if (nw_ret != 0) {
+        handle_library_error(nw_ret);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyMemberDef NewickConverter_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyObject *
+NewickConverter_get_num_loci(NewickConverter *self)
+{
+    PyObject *ret = NULL;
+    if (NewickConverter_check_newick(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->newick->num_loci);
+out:
+    return ret;
+}
+
+static PyObject *
+NewickConverter_get_sample_size(NewickConverter *self)
+{
+    PyObject *ret = NULL;
+    if (NewickConverter_check_newick(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->newick->sample_size);
+out:
+    return ret;
+}
+
+static PyObject *
+NewickConverter_next(NewickConverter *self)
+{
+    PyObject *ret = NULL;
+    uint32_t tree_length;
+    size_t str_length;
+    char *tree;
+    int v;
+
+    if (NewickConverter_check_newick(self) != 0) {
+        /* TODO raise an exception */
+        goto out;
+    }
+    v = newick_next_tree(self->newick, &tree_length, &tree, &str_length);
+    if (v < 0) {
+        handle_library_error(v);
+        goto out;
+    }
+    if (v == 1) {
+        ret = Py_BuildValue("(I,s#)", (unsigned int) tree_length,
+                tree, (int) str_length);
+    }
+out:
+    return ret;
+}
+
+
+static PyMethodDef NewickConverter_methods[] = {
+    {"get_num_loci", (PyCFunction) NewickConverter_get_num_loci, METH_NOARGS,
+            "Returns the number of loci"},
+    {"get_sample_size", (PyCFunction) NewickConverter_get_sample_size, METH_NOARGS,
+            "Returns the sample size"},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject NewickConverterType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.NewickConverter",             /* tp_name */
+    sizeof(NewickConverter),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)NewickConverter_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "NewickConverter objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,            /* tp_iter */
+    (iternextfunc) NewickConverter_next, /* tp_iternext */
+    NewickConverter_methods,             /* tp_methods */
+    NewickConverter_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)NewickConverter_init,      /* tp_init */
+};
 
 /*==========================================================
  * Module level functions
@@ -1329,6 +1494,13 @@ init_msprime(void)
     Py_INCREF(&HaplotypeGeneratorType);
     PyModule_AddObject(module, "HaplotypeGenerator",
             (PyObject *) &HaplotypeGeneratorType);
+    NewickConverterType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&NewickConverterType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&NewickConverterType);
+    PyModule_AddObject(module, "NewickConverter",
+            (PyObject *) &NewickConverterType);
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);

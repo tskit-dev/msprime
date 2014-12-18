@@ -347,3 +347,48 @@ class TestHaplotypeGenerator(tests.MsprimeTestCase):
         self.assertRaises(TypeError, f, max_haplotype_length="len")
         self.assertRaises(_msprime.LibraryError, f, "")
         self.assertRaises(_msprime.LibraryError, f, "/etc")
+
+class TestNewickConverter(tests.MsprimeTestCase):
+    """
+    Test cases for the Newick converter class.
+    """
+    def get_simulator(self, sample_size=2, num_loci=1, recombination_rate=0.0):
+        sim = _msprime.Simulator(sample_size=sample_size, num_loci=num_loci,
+                scaled_recombination_rate=recombination_rate,
+                tree_file_name=self._treefile, random_seed=1)
+        return sim
+
+    def verify_newick(self, sim, nc):
+        """
+        Verifies that the specified newick converter generates trees
+        that are consistent with the specified simulator.
+        """
+        num_trees = 0
+        total = 0
+        for l, tree in nc:
+            self.assertTrue(isinstance(tree, str))
+            num_trees += 1
+            total += l
+        # TODO this will break when we renable record squashing.
+        self.assertEqual(num_trees, sim.get_num_breakpoints())
+        self.assertEqual(total, sim.get_num_loci())
+
+
+    def run_simulation(self):
+        sim = self.get_simulator()
+        sim.run()
+        _msprime.sort_tree_file(sim.get_tree_file_name())
+
+    def test_newick(self):
+        def f():
+            return _msprime.NewickConverter(self._treefile)
+        for n in range(2, 10):
+            for m in [1, 5, 10]:
+                sim = self.get_simulator(n, m, 1.0)
+                sim.run()
+                self.assertRaises(_msprime.LibraryError, f)
+                _msprime.sort_tree_file(sim.get_tree_file_name())
+                nc = f()
+                self.assertEqual(nc.get_sample_size(), n)
+                self.assertEqual(nc.get_num_loci(), m)
+                self.verify_newick(sim, nc)
