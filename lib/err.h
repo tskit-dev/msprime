@@ -38,5 +38,6 @@
 #define MSP_ERR_BAD_MODE -6
 #define MSP_ERR_TOO_MANY_SEG_SITES -7
 #define MSP_ERR_TREE_FILE_NOT_SORTED -8
+#define MSP_ERR_NEWICK_OVERFLOW -9
 
 #endif /*__ERR_H__*/

@@ -48,6 +48,8 @@ msp_strerror(int err)
         ret = "Too many segregating sites";
     } else if (err == MSP_ERR_TREE_FILE_NOT_SORTED) {
         ret = "Tree file not sorted.";
+    } else if (err == MSP_ERR_NEWICK_OVERFLOW) {
+        ret = "Newick string generation overflow.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
