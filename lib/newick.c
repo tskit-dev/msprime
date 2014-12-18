@@ -189,6 +189,9 @@ newick_generate_string(newick_t *self, size_t *output_length)
         stack_top--;
         if (c[u] == NULL) {
             /* leaf node */
+            /* TODO these sprintfs are expensive; we should precompute
+             * these above and just write them straight in.
+             */
             r = snprintf(s + length, max_length - length, "%d:%.3f",
                     u, branch_lengths[u]);
             length += r;
@@ -292,8 +295,8 @@ newick_output_ms_format(newick_t *self, FILE *out)
             ret = MSP_ERR_IO;
             goto out;
         }
-        io_ret = fprintf(out, tree);
-        if (io_ret < 0) {
+        io_ret = fwrite(tree, str_len, 1, out);
+        if (io_ret != 1) {
             ret = MSP_ERR_IO;
             goto out;
         }
