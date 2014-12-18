@@ -192,9 +192,9 @@ newick_generate_string(newick_t *self, size_t *output_length)
             /* TODO these sprintfs are expensive; we should precompute
              * these above and just write them straight in.
              */
-            r = snprintf(s + length, max_length - length, "%d:%.3f",
-                    u, branch_lengths[u]);
-            length += r;
+            /* r = snprintf(s + length, max_length - length, "%d:%.3f", */
+            /*         u, branch_lengths[u]); */
+            /* length += r; */
             if (length >= max_length) {
                 ret = MSP_ERR_NEWICK_OVERFLOW;
                 goto out;
@@ -237,9 +237,9 @@ newick_generate_string(newick_t *self, size_t *output_length)
                     s[length] = ';';
                     length++;
                 } else {
-                    r = snprintf(s + length, max_length - length, ":%.3f",
-                            branch_lengths[u]);
-                    length += r;
+                    /* r = snprintf(s + length, max_length - length, ":%.3f", */
+                    /*         branch_lengths[u]); */
+                    /* length += r; */
                 }
                 if (length >= max_length) {
                     ret = MSP_ERR_NEWICK_OVERFLOW;
