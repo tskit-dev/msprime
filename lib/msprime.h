@@ -113,6 +113,12 @@ typedef struct {
 } hapgen_t;
 
 typedef struct {
+    uint32_t sample_size;
+    tree_file_t tree_file;
+} newick_t;
+
+
+typedef struct {
     /* input parameters */
     /* TODO change these to uint32_t and run compiler with paranoid typing */
     int sample_size;
@@ -188,6 +194,10 @@ int hapgen_alloc(hapgen_t *self, double mutation_rate,
 int hapgen_generate(hapgen_t *self);
 int hapgen_get_haplotypes(hapgen_t *self, char ***haplotypes, size_t *s);
 int hapgen_free(hapgen_t *self);
+
+int newick_alloc(newick_t *self, const char *tree_file_name);
+int newick_next_tree(newick_t *self);
+int newick_free(newick_t *self);
 
 char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/
