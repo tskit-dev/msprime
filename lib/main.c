@@ -202,8 +202,10 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     size_t max_haplotype_length;
     tree_file_t tf;
     hapgen_t hapgen;
+    newick_t newick;
     char **haplotypes;
-    uint32_t j;
+    char *newick_tree;
+    uint32_t j, l;
     size_t s;
 
     if (msp == NULL) {
@@ -265,6 +267,20 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
+    /* Print out the newick trees */
+    printf("Newick trees:\n");
+    ret = newick_alloc(&newick, msp->tree_file_name);
+    if (ret != 0) {
+        goto out;
+    }
+    while ((ret = newick_next_tree(&newick, &l, &newick_tree)) == 1) {
+        printf("%d\t%s", l, newick_tree);
+    }
+    if (ret != 0) {
+        goto out;
+    }
+    newick_free(&newick);
+
     /* make the haplotypes */
     ret = hapgen_alloc(&hapgen, mutation_rate, msp->tree_file_name,
             msp->random_seed, max_haplotype_length);

@@ -114,6 +114,14 @@ typedef struct {
 
 typedef struct {
     uint32_t sample_size;
+    float *tau;
+    float *branch_lengths;
+    int **children;
+    int *visited;
+    int *stack;
+    char *output_buffer;
+    size_t output_buffer_size;
+    int *children_mem;
     tree_file_t tree_file;
 } newick_t;
 
@@ -196,7 +204,7 @@ int hapgen_get_haplotypes(hapgen_t *self, char ***haplotypes, size_t *s);
 int hapgen_free(hapgen_t *self);
 
 int newick_alloc(newick_t *self, const char *tree_file_name);
-int newick_next_tree(newick_t *self);
+int newick_next_tree(newick_t *self, uint32_t *l, char **tree);
 int newick_free(newick_t *self);
 
 char * msp_strerror(int err);

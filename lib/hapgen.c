@@ -89,6 +89,7 @@ out:
 int
 hapgen_free(hapgen_t *self)
 {
+    /* TODO set all these to NULL to protect against double free. */
     if (self->rng != NULL) {
         gsl_rng_free(self->rng);
     }
