@@ -63,6 +63,7 @@ newick_alloc(newick_t *self, const char *tree_file_name)
      * here by not keeping the null pointers for 1 to n.
      */
     memset(self->children, 0, N * sizeof(int *));
+    memset(self->tau, 0, N * sizeof(float));
     memset(self->branch_lengths, 0, N * sizeof(float));
     p = self->children_mem;
     for (j = self->sample_size + 1; j < N; j++) {
@@ -121,9 +122,11 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
     int32_t c1, c2, p;
 
     while (self->next_record.left == self->breakpoint && tree_ret == 1) {
+        /*
         printf("examining: %d\t(%d, %d)->%d @ %f\n",
                 self->next_record.left, self->next_record.children[0],
                 self->next_record.children[1], self->next_record.parent, self->next_record.time);
+        */
         self->tau[self->next_record.parent] = self->next_record.time;
         c1 = self->next_record.children[0];
         c2 = self->next_record.children[1];
@@ -137,17 +140,6 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
         }
         self->branch_lengths[c1] = self->next_record.time - self->tau[c1];
         self->branch_lengths[c2] = self->next_record.time - self->tau[c2];
-
-            /*
-            if c1 < c2:
-                c[p] = c1, c2
-            else:
-                c[p] = c2, c1
-            tau[p] = t
-            bl[c1] = "{0:.3f}".format(t - tau[c1])
-            bl[c2] = "{0:.3f}".format(t - tau[c2])
-            */
-
         tree_ret = tree_file_next_record(&self->tree_file, &self->next_record);
     }
     if (tree_ret < 0) {
@@ -170,7 +162,7 @@ out:
  * Generates the newick string from the tree in memory
  */
 static int
-newick_generate_string(newick_t *self)
+newick_generate_string(newick_t *self, size_t *output_length)
 {
     int ret = 0;
     uint32_t u;
@@ -181,17 +173,14 @@ newick_generate_string(newick_t *self)
     int *stack = self->stack;
     int *visited = self->visited;
     int stack_top = 0;
+    char *s = self->output_buffer;
+    size_t max_length = self->output_buffer_size;
+    size_t length = 0;
+    size_t r;
 
-    /*
-    printf("processing tree:\n");
-    for (j = 0; j < 2 * self->sample_size; j++) {
-        if (self->children[j] == NULL) {
-            printf("%d -> %p\n", j, self->children[j]);
-        } else {
-            printf("%d -> %d, %d\n", j, c[j][0], c[j][1]);
-        }
-    }
-    */
+    /* TODO this needs test cases to make sure all the corner cases
+     * work properly!
+     */
     stack[0] = root;
     stack_top = 0;
     memset(visited, 0, 2 * n * sizeof(int32_t));
@@ -200,10 +189,21 @@ newick_generate_string(newick_t *self)
         stack_top--;
         if (c[u] == NULL) {
             /* leaf node */
-            printf("%d:%.2f", u, branch_lengths[u]);
+            r = snprintf(s + length, max_length - length, "%d:%.3f",
+                    u, branch_lengths[u]);
+            length += r;
+            if (length >= max_length) {
+                ret = MSP_ERR_NEWICK_OVERFLOW;
+                goto out;
+            }
         } else {
             if (visited[u] == 0) {
-                printf("(");
+                s[length] = '(';
+                length++;
+                if (length >= max_length) {
+                    ret = MSP_ERR_NEWICK_OVERFLOW;
+                    goto out;
+                }
                 stack_top++;
                 assert(stack_top < self->stack_size);
                 stack[stack_top] = u;
@@ -211,7 +211,12 @@ newick_generate_string(newick_t *self)
                 assert(stack_top < self->stack_size);
                 stack[stack_top] = c[u][0];
             } else if (visited[u] == 1) {
-                printf(",");
+                s[length] = ',';
+                length++;
+                if (length >= max_length) {
+                    ret = MSP_ERR_NEWICK_OVERFLOW;
+                    goto out;
+                }
                 stack_top++;
                 assert(stack_top < self->stack_size);
                 stack[stack_top] = u;
@@ -219,40 +224,54 @@ newick_generate_string(newick_t *self)
                 assert(stack_top < self->stack_size);
                 stack[stack_top] = c[u][1];
             } else {
-                printf(")");
+                s[length] = ')';
+                length++;
+                if (length >= max_length) {
+                    ret = MSP_ERR_NEWICK_OVERFLOW;
+                    goto out;
+                }
                 if (u == root) {
-                    printf(";");
+                    s[length] = ';';
+                    length++;
                 } else {
-                    printf(":%.3f", branch_lengths[u]);
+                    r = snprintf(s + length, max_length - length, ":%.3f",
+                            branch_lengths[u]);
+                    length += r;
+                }
+                if (length >= max_length) {
+                    ret = MSP_ERR_NEWICK_OVERFLOW;
+                    goto out;
                 }
             }
             visited[u]++;
         }
     }
+    s[length] = '\0';
+    *output_length = length;
+out:
     return ret;
 }
 
 int
-newick_next_tree(newick_t *self, uint32_t *l, char **tree)
+newick_next_tree(newick_t *self, uint32_t *tree_length, char **tree,
+        size_t *str_length)
 {
     int ret = -1;
     int newick_ret;
-    char *tmp = "X";
 
     if (self->completed) {
         ret = 0;
     } else {
-        ret = newick_update_tree(self, l);
+        ret = newick_update_tree(self, tree_length);
         if (ret < 0) {
             goto out;
         }
-        newick_ret = newick_generate_string(self);
+        newick_ret = newick_generate_string(self, str_length);
         if (newick_ret != 0) {
             ret = newick_ret;
             goto out;
         }
-        printf("newick next tree ret = %d\n", ret);
-        *tree = tmp;
+        *tree = self->output_buffer;
     }
 out:
     return ret;
