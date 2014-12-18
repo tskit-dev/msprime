@@ -74,7 +74,7 @@ class SimulationRunner(object):
         self.tree_file_name = tf
         self.simulator = msprime.TreeSimulator(self.sample_size,
                 self.tree_file_name)
-        self.simulator.set_max_memory("100M")
+        self.simulator.set_max_memory(args.max_memory)
         self.simulator.set_num_loci(self.num_loci)
         # We don't scale recombination rate by the size of the region.
         if self.num_loci > 1:
@@ -170,6 +170,8 @@ def mscompat_main():
             help="Random seeds (must be three integers)")
     group.add_argument("--precision", "-p", type=positive_int,
             help="Number of values after decimal place to print")
+    group.add_argument("--max-memory", "-M", default="100M",
+            help="Maximum memory used. Supports K,M and G suffixes")
     args = parser.parse_args()
     if args.mutation_rate is None and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
