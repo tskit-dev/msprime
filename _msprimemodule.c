@@ -1302,6 +1302,27 @@ out:
 }
 
 static PyObject *
+NewickConverter_write_ms_format(NewickConverter *self)
+{
+    PyObject *ret = NULL;
+    int lib_ret;
+
+    if (NewickConverter_check_newick(self) != 0) {
+        goto out;
+    }
+    lib_ret = newick_output_ms_format(self->newick, stdout);
+    if (lib_ret != 0) {
+        handle_library_error(lib_ret);
+        goto out;
+    }
+    Py_INCREF(Py_None);
+    ret = Py_None;
+out:
+    return ret;
+}
+
+
+static PyObject *
 NewickConverter_next(NewickConverter *self)
 {
     PyObject *ret = NULL;
@@ -1333,6 +1354,8 @@ static PyMethodDef NewickConverter_methods[] = {
             "Returns the number of loci"},
     {"get_sample_size", (PyCFunction) NewickConverter_get_sample_size, METH_NOARGS,
             "Returns the sample size"},
+    {"write_ms_format", (PyCFunction) NewickConverter_write_ms_format,
+            METH_NOARGS, "Writes the newick trees to stdout in ms format"},
     {NULL}  /* Sentinel */
 };
 
