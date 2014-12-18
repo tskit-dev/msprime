@@ -212,6 +212,7 @@ int hapgen_free(hapgen_t *self);
 int newick_alloc(newick_t *self, const char *tree_file_name);
 int newick_next_tree(newick_t *self, uint32_t *tree_length, char **tree,
         size_t *str_length);
+int newick_output_ms_format(newick_t *self, FILE *out);
 int newick_free(newick_t *self);
 
 char * msp_strerror(int err);

@@ -276,3 +276,34 @@ newick_next_tree(newick_t *self, uint32_t *tree_length, char **tree,
 out:
     return ret;
 }
+
+int
+newick_output_ms_format(newick_t *self, FILE *out)
+{
+    int ret = -1;
+    int io_ret;
+    char *tree = NULL;
+    uint32_t l;
+    size_t str_len;
+
+    while ((ret = newick_next_tree(self, &l, &tree, &str_len)) == 1) {
+        io_ret = fprintf(out, "[%d]", l);
+        if (io_ret < 0) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+        io_ret = fprintf(out, tree);
+        if (io_ret < 0) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+        io_ret = fprintf(out, "\n");
+        if (io_ret < 0) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
