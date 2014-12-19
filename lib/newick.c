@@ -220,7 +220,6 @@ newick_generate_string(newick_t *self, size_t *output_length)
     int *visited = self->visited;
     int stack_top = 0;
     char *s = self->output_buffer;
-    size_t max_length = self->output_buffer_size;
     size_t length = 0;
     size_t j;
     char sep;
@@ -240,33 +239,17 @@ newick_generate_string(newick_t *self, size_t *output_length)
             for (j = 0; self->leaf_labels[u][j] != '\0'; j++) {
                 s[length] = self->leaf_labels[u][j];
                 length++;
-                if (length >= max_length) {
-                    ret = MSP_ERR_NEWICK_OVERFLOW;
-                    goto out;
-                }
             }
             s[length] = ':';
             length++;
-            if (length >= max_length) {
-                ret = MSP_ERR_NEWICK_OVERFLOW;
-                goto out;
-            }
             for (j = 0; branch_lengths[u][j] != '\0'; j++) {
                 s[length] = branch_lengths[u][j];
                 length++;
-                if (length >= max_length) {
-                    ret = MSP_ERR_NEWICK_OVERFLOW;
-                    goto out;
-                }
             }
         } else {
             if (visited[u] == 0) {
                 s[length] = '(';
                 length++;
-                if (length >= max_length) {
-                    ret = MSP_ERR_NEWICK_OVERFLOW;
-                    goto out;
-                }
                 stack_top++;
                 assert(stack_top < self->stack_size);
                 stack[stack_top] = u;
@@ -276,10 +259,6 @@ newick_generate_string(newick_t *self, size_t *output_length)
             } else if (visited[u] == 1) {
                 s[length] = ',';
                 length++;
-                if (length >= max_length) {
-                    ret = MSP_ERR_NEWICK_OVERFLOW;
-                    goto out;
-                }
                 stack_top++;
                 assert(stack_top < self->stack_size);
                 stack[stack_top] = u;
@@ -289,25 +268,13 @@ newick_generate_string(newick_t *self, size_t *output_length)
             } else {
                 s[length] = ')';
                 length++;
-                if (length >= max_length) {
-                    ret = MSP_ERR_NEWICK_OVERFLOW;
-                    goto out;
-                }
                 sep = u == root ? ';' : ':';
                 s[length] = sep;
                 length++;
-                if (length >= max_length) {
-                    ret = MSP_ERR_NEWICK_OVERFLOW;
-                    goto out;
-                }
                 if (u != root) {
                     for (j = 0; branch_lengths[u][j] != '\0'; j++) {
                         s[length] = branch_lengths[u][j];
                         length++;
-                        if (length >= max_length) {
-                            ret = MSP_ERR_NEWICK_OVERFLOW;
-                            goto out;
-                        }
                     }
                 }
             }
@@ -316,7 +283,13 @@ newick_generate_string(newick_t *self, size_t *output_length)
     }
     s[length] = '\0';
     *output_length = length;
-out:
+    if (length >= self->output_buffer_size) {
+        /* This is a major bug if it happens! We might have written over
+         * arbitrary memory.
+         */
+        assert(1);
+        ret = MSP_ERR_NEWICK_OVERFLOW;
+    }
     return ret;
 }
 
