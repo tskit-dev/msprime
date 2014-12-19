@@ -29,8 +29,7 @@ newick_alloc(newick_t *self, const char *tree_file_name)
 {
     int ret = -1;
     size_t j, n, N, max_label_size;
-    int r;
-    int *pi;
+    int *pi, r;
     char *pc;
 
     memset(self, 0, sizeof(newick_t));
@@ -85,8 +84,11 @@ newick_alloc(newick_t *self, const char *tree_file_name)
     }
     pc = self->leaf_labels_mem;
     for (j = 1; j <= self->sample_size; j++) {
-        r = snprintf(pc, max_label_size, "%d", j);
-        assert(r < max_label_size);
+        r = snprintf(pc, max_label_size, "%d", (int) j);
+        if (r >= max_label_size) {
+            ret = MSP_ERR_NEWICK_OVERFLOW;
+            goto out;
+        }
         self->leaf_labels[j] = pc;
         pc += max_label_size;
     }
@@ -179,7 +181,10 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
             t = self->next_record.time - self->tau[c];
             r = snprintf(self->branch_lengths[c], self->max_branch_length_size,
                     "%.3f", t);
-            assert(r < self->max_branch_length_size);
+            if (r >= self->max_branch_length_size) {
+                ret = MSP_ERR_NEWICK_OVERFLOW;
+                goto out;
+            }
         }
         tree_ret = tree_file_next_record(&self->tree_file, &self->next_record);
     }
