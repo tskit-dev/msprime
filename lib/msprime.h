@@ -116,7 +116,6 @@ typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     float *tau;
-    float *branch_lengths;
     int **children;
     int *visited;
     int *stack;
@@ -129,6 +128,11 @@ typedef struct {
     size_t num_trees;
     coalescence_record_t next_record;
     int completed;
+    char **leaf_labels;
+    char *leaf_labels_mem;
+    char **branch_lengths;
+    char *branch_lengths_mem;
+    size_t max_branch_length_size;
 } newick_t;
 
 
