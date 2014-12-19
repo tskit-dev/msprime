@@ -16,6 +16,7 @@
 ** You should have received a copy of the GNU General Public License
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -27,8 +28,10 @@ int
 newick_alloc(newick_t *self, const char *tree_file_name)
 {
     int ret = -1;
-    size_t j, N;
-    int *p;
+    size_t j, n, N, max_label_size;
+    int r;
+    int *pi;
+    char *pc;
 
     memset(self, 0, sizeof(newick_t));
     ret = tree_file_open(&self->tree_file, tree_file_name, 'r');
@@ -41,21 +44,25 @@ newick_alloc(newick_t *self, const char *tree_file_name)
     }
     self->sample_size = self->tree_file.sample_size;
     self->num_loci = self->tree_file.num_loci;
-    N  = 2 * self->sample_size;
+    max_label_size = (size_t) log10(self->sample_size) + 2;
+    self->max_branch_length_size = 7; /* TODO make a function of precision */
+    N = 2 * self->sample_size;
+    n = self->sample_size;
+    self->output_buffer_size = 3 * n + 2 * n * self->max_branch_length_size
+        + n * max_label_size;
     self->tau = malloc(N * sizeof(float));
-    self->branch_lengths = malloc(N * sizeof(float));
+    self->branch_lengths = malloc(N * sizeof(char *));
+    self->branch_lengths_mem = malloc(N * self->max_branch_length_size);
     self->children = malloc(N * sizeof(int *));
     self->visited = malloc(N * sizeof(int));
     self->stack_size = self->sample_size;
     self->stack = malloc(self->stack_size * sizeof(int));
-    /* TODO fix this! should be function of n */
-    self->output_buffer_size = 16 * 1024 * 1024;
     self->output_buffer = malloc(self->output_buffer_size);
     self->children_mem = malloc(N * sizeof(int));
     if (self->tau == NULL || self->branch_lengths == NULL
-            || self->children == NULL || self->visited == NULL
-            || self->stack == NULL || self->output_buffer == NULL
-            || self->children_mem == NULL) {
+            || self->branch_lengths_mem == NULL || self->children == NULL
+            || self->visited == NULL || self->stack == NULL
+            || self->output_buffer == NULL || self->children_mem == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -64,11 +71,29 @@ newick_alloc(newick_t *self, const char *tree_file_name)
      */
     memset(self->children, 0, N * sizeof(int *));
     memset(self->tau, 0, N * sizeof(float));
-    memset(self->branch_lengths, 0, N * sizeof(float));
-    p = self->children_mem;
+    pi = self->children_mem;
     for (j = self->sample_size + 1; j < N; j++) {
-        self->children[j] = p;
-        p += 2;
+        self->children[j] = pi;
+        pi += 2;
+    }
+    /* Create the leaf labels */
+    self->leaf_labels = malloc((self->sample_size + 1) * sizeof(char *));
+    self->leaf_labels_mem = malloc(self->sample_size * max_label_size);
+    if (self->leaf_labels == NULL || self->leaf_labels_mem == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    pc = self->leaf_labels_mem;
+    for (j = 1; j <= self->sample_size; j++) {
+        r = snprintf(pc, max_label_size, "%d", j);
+        assert(r < max_label_size);
+        self->leaf_labels[j] = pc;
+        pc += max_label_size;
+    }
+    pc = self->branch_lengths_mem;
+    for (j = 0; j < N; j++) {
+        self->branch_lengths[j] = pc;
+        pc += self->max_branch_length_size;
     }
     self->breakpoint = 1;
     self->num_trees = 0;
@@ -95,6 +120,9 @@ newick_free(newick_t *self)
     if (self->branch_lengths != NULL) {
         free(self->branch_lengths);
     }
+    if (self->branch_lengths_mem != NULL) {
+        free(self->branch_lengths_mem);
+    }
     if (self->children != NULL) {
         free(self->children);
     }
@@ -110,6 +138,12 @@ newick_free(newick_t *self)
     if (self->children_mem != NULL) {
         free(self->children_mem);
     }
+    if (self->leaf_labels != NULL) {
+        free(self->leaf_labels);
+    }
+    if (self->leaf_labels_mem != NULL) {
+        free(self->leaf_labels_mem);
+    }
     tree_file_close(&self->tree_file);
     return 0;
 }
@@ -119,7 +153,9 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
 {
     int ret = 0;
     int tree_ret = 1;
-    int32_t c1, c2, p;
+    int r;
+    int32_t c1, c2, p, j, c;
+    float t;
 
     while (self->next_record.left == self->breakpoint && tree_ret == 1) {
         /*
@@ -138,8 +174,13 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
             self->children[p][1] = c1;
             self->children[p][0] = c2;
         }
-        self->branch_lengths[c1] = self->next_record.time - self->tau[c1];
-        self->branch_lengths[c2] = self->next_record.time - self->tau[c2];
+        for (j = 0; j < 2; j++) {
+            c = self->children[p][j];
+            t = self->next_record.time - self->tau[c];
+            r = snprintf(self->branch_lengths[c], self->max_branch_length_size,
+                    "%.3f", t);
+            assert(r < self->max_branch_length_size);
+        }
         tree_ret = tree_file_next_record(&self->tree_file, &self->next_record);
     }
     if (tree_ret < 0) {
@@ -169,14 +210,15 @@ newick_generate_string(newick_t *self, size_t *output_length)
     int32_t n = self->sample_size;
     int32_t root = 2 * n - 1;
     int **c = self->children;
-    float *branch_lengths = self->branch_lengths;
+    char **branch_lengths = self->branch_lengths;
     int *stack = self->stack;
     int *visited = self->visited;
     int stack_top = 0;
     char *s = self->output_buffer;
     size_t max_length = self->output_buffer_size;
     size_t length = 0;
-    size_t r;
+    size_t j;
+    char sep;
 
     /* TODO this needs test cases to make sure all the corner cases
      * work properly!
@@ -189,15 +231,28 @@ newick_generate_string(newick_t *self, size_t *output_length)
         stack_top--;
         if (c[u] == NULL) {
             /* leaf node */
-            /* TODO these sprintfs are expensive; we should precompute
-             * these above and just write them straight in.
-             */
-            /* r = snprintf(s + length, max_length - length, "%d:%.3f", */
-            /*         u, branch_lengths[u]); */
-            /* length += r; */
+            /* TODO we should abstract this stuff out to a function */
+            for (j = 0; self->leaf_labels[u][j] != '\0'; j++) {
+                s[length] = self->leaf_labels[u][j];
+                length++;
+                if (length >= max_length) {
+                    ret = MSP_ERR_NEWICK_OVERFLOW;
+                    goto out;
+                }
+            }
+            s[length] = ':';
+            length++;
             if (length >= max_length) {
                 ret = MSP_ERR_NEWICK_OVERFLOW;
                 goto out;
+            }
+            for (j = 0; branch_lengths[u][j] != '\0'; j++) {
+                s[length] = branch_lengths[u][j];
+                length++;
+                if (length >= max_length) {
+                    ret = MSP_ERR_NEWICK_OVERFLOW;
+                    goto out;
+                }
             }
         } else {
             if (visited[u] == 0) {
@@ -233,17 +288,22 @@ newick_generate_string(newick_t *self, size_t *output_length)
                     ret = MSP_ERR_NEWICK_OVERFLOW;
                     goto out;
                 }
-                if (u == root) {
-                    s[length] = ';';
-                    length++;
-                } else {
-                    /* r = snprintf(s + length, max_length - length, ":%.3f", */
-                    /*         branch_lengths[u]); */
-                    /* length += r; */
-                }
+                sep = u == root ? ';' : ':';
+                s[length] = sep;
+                length++;
                 if (length >= max_length) {
                     ret = MSP_ERR_NEWICK_OVERFLOW;
                     goto out;
+                }
+                if (u != root) {
+                    for (j = 0; branch_lengths[u][j] != '\0'; j++) {
+                        s[length] = branch_lengths[u][j];
+                        length++;
+                        if (length >= max_length) {
+                            ret = MSP_ERR_NEWICK_OVERFLOW;
+                            goto out;
+                        }
+                    }
                 }
             }
             visited[u]++;
@@ -286,7 +346,7 @@ newick_output_ms_format(newick_t *self, FILE *out)
     int ret = -1;
     int io_ret;
     char *tree = NULL;
-    uint32_t l;
+    uint32_t l = 0;
     size_t str_len;
 
     while ((ret = newick_next_tree(self, &l, &tree, &str_len)) == 1) {
