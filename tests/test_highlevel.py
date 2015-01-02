@@ -142,13 +142,6 @@ class TestTreeSimulator(tests.MsprimeTestCase):
             r = random.random()
             self.verify_simulation(n, m, r)
 
-    def test_memory_limits(self):
-        ts = msprime.TreeSimulator(10, self._treefile)
-        # TODO This causes a segfault on 32bit systems!
-        assert False
-        ts.set_max_memory("10G")
-        ts.run()
-
 
 
 class TestHaplotypeGenerator(tests.MsprimeTestCase):
