@@ -251,14 +251,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t node_mapping_block_size = 10;
     const char *tree_file_name;
     Py_ssize_t tree_file_name_len;
-    msp_t *sim = PyMem_Malloc(sizeof(msp_t));
 
-    self->sim = sim;
+    self->sim = NULL;
     self->tree_file_name = NULL;
-    if (self->sim == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "Ils#|IdO!nnnn", kwlist,
             &sample_size, &random_seed, &tree_file_name,
             &tree_file_name_len,
@@ -268,26 +263,31 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &node_mapping_block_size)) {
         goto out;
     }
+    self->sim = PyMem_Malloc(sizeof(msp_t));
+    if (self->sim == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
     memset(self->sim, 0, sizeof(msp_t));
-    sim->sample_size = (uint32_t) sample_size;
-    sim->num_loci = (uint32_t) num_loci;
-    sim->random_seed = random_seed;
-    sim->scaled_recombination_rate = scaled_recombination_rate;
-    sim->max_memory = (size_t) max_memory;
-    sim->avl_node_block_size = (size_t) avl_node_block_size;
-    sim->segment_block_size = (size_t) segment_block_size;
-    sim->node_mapping_block_size = (size_t) node_mapping_block_size;
+    self->sim->sample_size = (uint32_t) sample_size;
+    self->sim->num_loci = (uint32_t) num_loci;
+    self->sim->random_seed = random_seed;
+    self->sim->scaled_recombination_rate = scaled_recombination_rate;
+    self->sim->max_memory = (size_t) max_memory;
+    self->sim->avl_node_block_size = (size_t) avl_node_block_size;
+    self->sim->segment_block_size = (size_t) segment_block_size;
+    self->sim->node_mapping_block_size = (size_t) node_mapping_block_size;
     self->tree_file_name = PyMem_Malloc(tree_file_name_len + 1);
     if (self->tree_file_name == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     strcpy(self->tree_file_name, tree_file_name);
-    sim->tree_file_name = self->tree_file_name;
+    self->sim->tree_file_name = self->tree_file_name;
     /* TODO this is very nasty and must be moved into the msprime
      * code when the refactoring is done.
      */
-    sim_ret = msp_add_constant_population_model(sim, -1.0, 1.0);
+    sim_ret = msp_add_constant_population_model(self->sim, -1.0, 1.0);
     if (sim_ret != 0) {
         handle_library_error(sim_ret);
         goto out;
