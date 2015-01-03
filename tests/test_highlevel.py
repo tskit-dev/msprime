@@ -143,6 +143,7 @@ class TestTreeSimulator(tests.MsprimeTestCase):
             self.verify_simulation(n, m, r)
 
 
+
 class TestHaplotypeGenerator(tests.MsprimeTestCase):
     """
     Tests the haplotype generation code.

@@ -243,6 +243,15 @@ class TestInterface(tests.MsprimeTestCase):
             self.verify_simulation(n, 1, 0.0, [m2])
             self.verify_simulation(n, 1, 0.0, [m1, m2])
 
+    def test_bad_parameters(self):
+        def f(n=2, m=1, treefile=self._treefile, **kwargs):
+            return _msprime.Simulator(n, m, treefile, **kwargs)
+        self.assertRaises(TypeError, f, n=None)
+        self.assertRaises(TypeError, f, m=None)
+        self.assertRaises(OverflowError, f, max_memory=2**65)
+        # TODO insert more error parameters.
+
+
 class TestTreeFile(tests.MsprimeTestCase):
     """
     Test cases on the specifics of reading and writing tree files.
