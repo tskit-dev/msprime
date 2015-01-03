@@ -7,6 +7,12 @@ from __future__ import division
 import os
 import tempfile
 import unittest
+import random
+
+def setUp():
+    # Make random tests reproducible.
+    random.seed(2)
+
 
 class MsprimeTestCase(unittest.TestCase):
     """
