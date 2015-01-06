@@ -25,7 +25,7 @@
 #include "msprime.h"
 
 int
-newick_alloc(newick_t *self, const char *tree_file_name)
+newick_alloc(newick_t *self, const char *tree_file_name, int precision)
 {
     int ret = -1;
     size_t j, n, N, max_label_size;
@@ -41,10 +41,14 @@ newick_alloc(newick_t *self, const char *tree_file_name)
         ret = MSP_ERR_TREE_FILE_NOT_SORTED;
         goto out;
     }
+    self->precision = precision;
     self->sample_size = self->tree_file.sample_size;
     self->num_loci = self->tree_file.num_loci;
     max_label_size = (size_t) log10(self->sample_size) + 2;
-    self->max_branch_length_size = 7; /* TODO make a function of precision */
+    /* we have a fixed precision, a leading digit, a . and a
+     * trailing \0
+     */
+    self->max_branch_length_size = self->precision + 3;
     N = 2 * self->sample_size;
     n = self->sample_size;
     self->output_buffer_size = 3 * n + 2 * n * self->max_branch_length_size
@@ -160,11 +164,6 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
     float t;
 
     while (self->next_record.left == self->breakpoint && tree_ret == 1) {
-        /*
-        printf("examining: %d\t(%d, %d)->%d @ %f\n",
-                self->next_record.left, self->next_record.children[0],
-                self->next_record.children[1], self->next_record.parent, self->next_record.time);
-        */
         self->tau[self->next_record.parent] = self->next_record.time;
         c1 = self->next_record.children[0];
         c2 = self->next_record.children[1];
@@ -180,7 +179,7 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
             c = self->children[p][j];
             t = self->next_record.time - self->tau[c];
             r = snprintf(self->branch_lengths[c], self->max_branch_length_size,
-                    "%.3f", t);
+                    "%.*f", self->precision, t);
             if (r >= self->max_branch_length_size) {
                 ret = MSP_ERR_NEWICK_OVERFLOW;
                 goto out;
@@ -344,7 +343,6 @@ newick_output_ms_format(newick_t *self, FILE *out)
             goto out;
         }
     }
-    ret = 0;
 out:
     return ret;
 }

@@ -119,7 +119,7 @@ read_population_models(msp_t *msp, config_t *config)
 
 static void
 read_config(msp_t *msp, const char *filename, double *mutation_rate,
-        size_t *max_haplotype_length)
+        size_t *max_haplotype_length, int *precision)
 {
     int err;
     int tmp;
@@ -180,6 +180,9 @@ read_config(msp_t *msp, const char *filename, double *mutation_rate,
             == CONFIG_FALSE) {
         fatal_error("tree_file is a required parameter");
     }
+    if (config_lookup_int(config, "precision", precision) == CONFIG_FALSE) {
+        fatal_error("precision is a required parameter");
+    }
     s = strlen(str);
     msp->tree_file_name = malloc(s + 1);
     if (msp->tree_file_name == NULL) {
@@ -200,6 +203,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     /* TEMP; we want to move all the parameters into a dedicated UI struct */
     double mutation_rate;
     size_t max_haplotype_length;
+    int precision;
     tree_file_t tf;
     hapgen_t hapgen;
     newick_t newick;
@@ -215,7 +219,8 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    read_config(msp, conf_file, &mutation_rate, &max_haplotype_length);
+    read_config(msp, conf_file, &mutation_rate, &max_haplotype_length,
+            &precision);
     ret = msp_alloc(msp);
     if (ret != 0) {
         goto out;
@@ -268,7 +273,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     }
     /* Print out the newick trees */
     printf("Newick trees:\n");
-    ret = newick_alloc(&newick, msp->tree_file_name);
+    ret = newick_alloc(&newick, msp->tree_file_name, precision);
     if (ret != 0) {
         goto out;
     }
