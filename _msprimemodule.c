@@ -1250,12 +1250,13 @@ NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int nw_ret;
-    static char *kwlist[] = {"tree_file_name", NULL};
+    static char *kwlist[] = {"tree_file_name", "precision", NULL};
     char *tree_file_name;
+    int precision = 3;
 
     self->newick = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
-                &tree_file_name)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
+                &tree_file_name, &precision)) {
         goto out;
     }
     self->newick = PyMem_Malloc(sizeof(newick_t));
@@ -1263,7 +1264,7 @@ NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    nw_ret = newick_alloc(self->newick, tree_file_name);
+    nw_ret = newick_alloc(self->newick, tree_file_name, precision);
     if (nw_ret != 0) {
         handle_library_error(nw_ret);
         goto out;
@@ -1302,10 +1303,12 @@ out:
 }
 
 static PyObject *
-NewickConverter_write_ms_format(NewickConverter *self)
+NewickConverter_write_ms_format(NewickConverter *self, PyObject *args)
 {
     PyObject *ret = NULL;
     int lib_ret;
+
+    /* TODO add an argument allowing us to pass a FILE object */
 
     if (NewickConverter_check_newick(self) != 0) {
         goto out;
@@ -1355,7 +1358,7 @@ static PyMethodDef NewickConverter_methods[] = {
     {"get_sample_size", (PyCFunction) NewickConverter_get_sample_size, METH_NOARGS,
             "Returns the sample size"},
     {"write_ms_format", (PyCFunction) NewickConverter_write_ms_format,
-            METH_NOARGS, "Writes the newick trees to stdout in ms format"},
+            METH_VARARGS, "Writes the newick trees to stdout in ms format"},
     {NULL}  /* Sentinel */
 };
 
