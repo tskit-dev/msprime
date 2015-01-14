@@ -7,6 +7,7 @@ from __future__ import division
 import json
 import random
 import os.path
+import tempfile
 
 import tests
 import _msprime
@@ -382,6 +383,17 @@ class TestNewickConverter(tests.MsprimeTestCase):
         self.assertEqual(num_trees, sim.get_num_breakpoints())
         self.assertEqual(total, sim.get_num_loci())
 
+    def verify_ms_format(self, nc):
+        """
+        Verifies that the msformat output is correct and agrees with our
+        other output.
+
+        TODO this doesn't work - we are breaking the line between the
+        layers here. We should test to see if printing to stdout
+        directly really makes that much difference and fix this.
+        """
+        nc = _msprime.NewickConverter(self._treefile)
+        msformat = nc.write_ms_format()
 
     def run_simulation(self):
         sim = self.get_simulator()
@@ -401,3 +413,5 @@ class TestNewickConverter(tests.MsprimeTestCase):
                 self.assertEqual(nc.get_sample_size(), n)
                 self.assertEqual(nc.get_num_loci(), m)
                 self.verify_newick(sim, nc)
+                # TODO see note above!
+                # self.verify_ms_format(self._treefile)
