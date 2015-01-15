@@ -111,12 +111,16 @@ class SimulationRunner(object):
             print()
             print("//")
             if self.print_trees:
-                # tf.write_ms_format(self.precision)
-                for l, ns in tf.newick_trees(self.precision):
-                    if self.num_loci == 1:
+                iterator = tf.newick_trees(self.precision)
+                if self.num_loci == 1:
+                    for l, ns in iterator:
                         print(ns)
-                    else:
-                        print("[{0}]{1}".format(l, ns))
+                else:
+                    for l, ns in iterator:
+                        # Print these seperately to avoid the cost of creating another
+                        # string.
+                        print("[{0}]".format(l), end="")
+                        print(ns)
             if self.mutation_rate is not None:
                 hg = msprime.HaplotypeGenerator(self.tree_file_name,
                         self.mutation_rate)
@@ -170,7 +174,7 @@ def mscompat_main():
     group.add_argument("--random-seeds", "-seeds", nargs=3, type=positive_int,
             metavar=("x1", "x2", "x3"),
             help="Random seeds (must be three integers)")
-    group.add_argument("--precision", "-p", type=positive_int,
+    group.add_argument("--precision", "-p", type=positive_int, default=3,
             help="Number of values after decimal place to print")
     group.add_argument("--max-memory", "-M", default="100M",
             help="Maximum memory used. Supports K,M and G suffixes")
