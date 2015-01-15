@@ -10,7 +10,7 @@ import unittest
 import msprime
 import tests
 
-def oriented_tree_to_newick(pi, tau):
+def oriented_tree_to_newick(pi, tau, precision):
     """
     Converts the specified oriented tree to an ms-compatible Newick tree.
     """
@@ -25,8 +25,7 @@ def oriented_tree_to_newick(pi, tau):
         d[u] = None
         not_done = True
         while pi[u] != 0 and not_done:
-            # ms uses a fixed 3 digit precision; we can easily fix this.
-            b[u] = "{0:.3f}".format(tau[pi[u]] - tau[u])
+            b[u] = "{0:.{1}f}".format(tau[pi[u]] - tau[u], precision)
             if pi[u] in d:
                 # This is the second time we've seen this node
                 not_done = False
@@ -177,16 +176,12 @@ class TestNewickConversion(tests.MsprimeTestCase):
         """
         Verifies that the specified tree is converted to Newick correctly.
         """
-        old_trees = [(l, oriented_tree_to_newick(pi, tau)) for l, pi, tau
-                in msprime.TreeFile(treefile).trees()]
-        new_trees = list(msprime.TreeFile(treefile).newick_trees())
-        # This test is highly problematic, as we cannot know for sure what
-        # way printf and python's format function are going to round the
-        # floating point numbers when there is a tie. This is a problem
-        # with Python 3, as it does not necessarily agree with printf. There
-        # isn't a lot we can do about this, so I've just set the random
-        # seed to a value that doesn't provoke the error. This is pretty weak,
-        # but it is a good test otherwise. TODO fix this properly!
+        # We make the precision large enough so that rounding issues cannot
+        # occur between Python and C.
+        precision = 16
+        old_trees = [(l, oriented_tree_to_newick(pi, tau, precision))
+                for l, pi, tau in msprime.TreeFile(treefile).trees()]
+        new_trees = list(msprime.TreeFile(treefile).newick_trees(precision))
         self.assertEqual(new_trees, old_trees)
 
     def test_simple_cases(self):

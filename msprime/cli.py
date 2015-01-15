@@ -69,6 +69,7 @@ class SimulationRunner(object):
         self.num_replicates = args.num_replicates
         self.mutation_rate = args.mutation_rate
         self.print_trees = args.trees
+        self.precision = args.precision
         fd, tf = tempfile.mkstemp(prefix="mscompat_", suffix=".dat")
         os.close(fd)
         self.tree_file_name = tf
@@ -110,12 +111,12 @@ class SimulationRunner(object):
             print()
             print("//")
             if self.print_trees:
-                tf.write_ms_format()
-                # for l, ns in tf.newick_trees():
-                #     if self.num_loci == 1:
-                #         print(ns)
-                #     else:
-                #         print("[{0}]{1}".format(l, ns))
+                # tf.write_ms_format(self.precision)
+                for l, ns in tf.newick_trees(self.precision):
+                    if self.num_loci == 1:
+                        print(ns)
+                    else:
+                        print("[{0}]{1}".format(l, ns))
             if self.mutation_rate is not None:
                 hg = msprime.HaplotypeGenerator(self.tree_file_name,
                         self.mutation_rate)

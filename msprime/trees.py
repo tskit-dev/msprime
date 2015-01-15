@@ -271,39 +271,19 @@ class TreeFile(object):
     def records(self):
         return self._ll_tree_file
 
-    def newick_trees(self):
-        nc = _msprime.NewickConverter(self._file_name)
+    def newick_trees(self, precision=3):
+        nc = _msprime.NewickConverter(self._file_name, precision)
         return nc
 
-    def write_ms_format(self):
+    def write_ms_format(self, precision=3):
         """
         Writes the trees to stdout in ms format.
         """
         # TODO make this take a file obj and test it!
         # Also need to make it handle single locus case properly.
-        nc = _msprime.NewickConverter(self._file_name)
+        nc = _msprime.NewickConverter(self._file_name, precision)
         nc.write_ms_format()
 
-    def newick_trees_old(self):
-        n = self.get_sample_size()
-        tau = [0 for j in range(2 * n)]
-        c = [None for j in range(2 * n)]
-        bl = [None for j in range(2 * n)]
-        b = 1
-        for l, c1, c2, p, t in self._ll_tree_file:
-            if l != b:
-                s = self._convert_newick(c, bl)
-                yield l - b, s
-                b = l
-            if c1 < c2:
-                c[p] = c1, c2
-            else:
-                c[p] = c2, c1
-            tau[p] = t
-            bl[c1] = "{0:.3f}".format(t - tau[c1])
-            bl[c2] = "{0:.3f}".format(t - tau[c2])
-        s = self._convert_newick(c, bl)
-        yield self.get_num_loci() - l + 1, s
 
     def _convert_newick(self, c, branch_lengths):
         """
