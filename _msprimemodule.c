@@ -934,7 +934,7 @@ TreeFile_next(TreeFile *self)
     int v;
 
     if (TreeFile_check_tree_file(self) != 0) {
-        /* TODO raise an exception */
+        PyErr_SetString(PyExc_ValueError, "Treefile has not been initialised");
         goto out;
     }
     v = tree_file_next_record(self->tree_file, &cr);
@@ -1335,7 +1335,8 @@ NewickConverter_next(NewickConverter *self)
     int v;
 
     if (NewickConverter_check_newick(self) != 0) {
-        /* TODO raise an exception */
+        PyErr_SetString(PyExc_ValueError,
+                "NewickConverter has not been initialised");
         goto out;
     }
     v = newick_next_tree(self->newick, &tree_length, &tree, &str_length);
