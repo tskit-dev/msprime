@@ -27,11 +27,6 @@ import os
 import random
 import tempfile
 
-try:
-    from io import StringIO
-except ImportError:
-    from cStringIO import StringIO
-
 import _msprime
 from _msprime import sort_tree_file
 from _msprime import InputError
@@ -274,49 +269,6 @@ class TreeFile(object):
     def newick_trees(self, precision=3):
         nc = _msprime.NewickConverter(self._file_name, precision)
         return nc
-
-    def write_ms_format(self, precision=3):
-        """
-        Writes the trees to stdout in ms format.
-        """
-        # TODO make this take a file obj and test it!
-        # Also need to make it handle single locus case properly.
-        nc = _msprime.NewickConverter(self._file_name, precision)
-        nc.write_ms_format()
-
-
-    def _convert_newick(self, c, branch_lengths):
-        """
-        Converts the specified top-down node mapping to a newick tree.
-        """
-        n = self.get_sample_size()
-        buff = StringIO()
-        stack = [2 * n - 1]
-        visited = [0 for j in range(2 * n)]
-        while len(stack) > 0:
-            u = stack.pop()
-            l = branch_lengths[u]
-            if c[u] is not None:
-                if visited[u] == 0:
-                    buff.write("(")
-                    stack.append(u)
-                    stack.append(c[u][0])
-                elif visited[u] == 1:
-                    buff.write(",")
-                    stack.append(u)
-                    stack.append(c[u][1])
-                else:
-                    buff.write(")")
-                    if l is None:
-                        buff.write(";")
-                    else:
-                        buff.write(":" + l)
-                visited[u] += 1
-            else:
-                buff.write("{0}:".format(u) + l)
-        s = buff.getvalue()
-        return buff.getvalue()
-
 
 
 class HaplotypeGenerator(object):

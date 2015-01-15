@@ -87,7 +87,7 @@ class MsprimeSimulator(Simulator):
                 for m in self.population_models:
                     sim.add_population_model(m)
                 sim.run()
-                num_trees[j] = sim.get_num_trees()
+                num_trees[j] = sim.get_num_breakpoints()
                 tf = msprime.TreeFile(f.name)
                 time[j] = sim.get_time()
                 ca_events[j] = sim.get_num_coancestry_events()
@@ -153,10 +153,10 @@ def main():
             msprime.ConstantPopulationModel(0.4, 0.5),
             msprime.ExponentialPopulationModel(0.5, 1.0)]
     output_prefix = "tmp__NOBACKUP__/simple"
-    # run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+    run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
     # TODO definite problem here using random parameters.
     # - don't change until this has been  fixed.
-    verify_random(100)
+    # verify_random(1)
 
 def verify_human_demographics():
     """
@@ -193,5 +193,5 @@ def verify_human_demographics():
     run_verify(n, m, N0, r, models, num_replicates, output_prefix)
 
 if __name__ == "__main__":
-    # main()
-    verify_human_demographics()
+    main()
+    # verify_human_demographics()
