@@ -11,7 +11,7 @@ import random
 
 def setUp():
     # Make random tests reproducible.
-    random.seed(2)
+    random.seed(210)
 
 
 class MsprimeTestCase(unittest.TestCase):
