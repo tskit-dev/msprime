@@ -50,6 +50,8 @@ msp_strerror(int err)
         ret = "Tree file not sorted.";
     } else if (err == MSP_ERR_NEWICK_OVERFLOW) {
         ret = "Newick string generation overflow.";
+    } else if (err == MSP_ERR_UNSORTED_POP_MODELS) {
+        ret = "Population models must sorted by start_time";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -302,7 +304,6 @@ msp_add_population_model(msp_t *self, population_model_t *model)
     if (m == NULL) {
         self->population_models = model;
     } else {
-        // TODO check for sortedness
         while (m->next != NULL) {
             m = m->next;
         }
@@ -310,7 +311,6 @@ msp_add_population_model(msp_t *self, population_model_t *model)
     }
     model->next = NULL;
     ret = 0;
-
     return ret;
 }
 
@@ -321,6 +321,9 @@ msp_add_constant_population_model(msp_t *self, double start_time, double size)
     population_model_t *model = malloc(sizeof(population_model_t));
 
     // TODO check for model specific restrictions.
+    /* NOTE: we can't actually do any checking here right now because of
+     * memory mangement issues. See the note at the end of initialise.
+     */
     if (model == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -348,6 +351,9 @@ msp_add_exponential_population_model(msp_t *self, double start_time, double alph
         ret = msp_add_constant_population_model(self, start_time, 1.0);
     } else {
         model  = malloc(sizeof(population_model_t));
+        /* NOTE: we can't actually do any checking here right now because of
+         * memory mangement issues. See the note at the end of initialise.
+         */
         // TODO check for model specific restrictions.
         if (model == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -1092,6 +1098,7 @@ msp_initialise(msp_t *self)
 {
     int j;
     int ret = 0;
+    population_model_t *m;
     segment_t *u;
 
     /* zero the counters */
@@ -1139,6 +1146,18 @@ msp_initialise(msp_t *self)
         goto out;
     }
     memset(&self->last_coalesence_record, 0, sizeof(coalescence_record_t));
+    /* Check the population models to make sure they are ordered. This should
+     * be done when they are being inserted, but it was too tricky. This
+     * API is really awful and needs fixing!
+     */
+    m = self->population_models;
+    while (m->next != NULL) {
+        if (m->start_time > m->next->start_time) {
+            ret = MSP_ERR_UNSORTED_POP_MODELS;
+            goto out;
+        }
+        m = m->next;
+    }
 out:
     return ret;
 }

@@ -126,7 +126,7 @@ Simulator_parse_population_models(Simulator *self, PyObject *py_pop_models)
     for (j = 0; j < PyList_Size(py_pop_models); j++) {
         item = PyList_GetItem(py_pop_models, j);
         if (!PyDict_Check(item)) {
-            PyErr_SetString(MsprimeInputError, "not a dictionary");
+            PyErr_SetString(PyExc_TypeError, "not a dictionary");
             goto out;
         }
         value = get_dict_number(item, "start_time");
@@ -284,6 +284,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     strcpy(self->tree_file_name, tree_file_name);
     self->sim->tree_file_name = self->tree_file_name;
+    if (Simulator_check_input(self) != 0) {
+        goto out;
+    }
     /* TODO this is very nasty and must be moved into the msprime
      * code when the refactoring is done.
      */
@@ -292,13 +295,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_library_error(sim_ret);
         goto out;
     }
+    /* We don't actually check the population models on the way in because
+     * the memory management is too tricky. We instead check during
+     * initialise. This really population models API really must be fixed!
+     */
     if (population_models != NULL) {
         if (Simulator_parse_population_models(self, population_models) != 0) {
             goto out;
         }
-    }
-    if (Simulator_check_input(self) != 0) {
-        goto out;
     }
     sim_ret = msp_alloc(self->sim);
     if (sim_ret != 0) {
@@ -653,7 +657,7 @@ Simulator_get_population_models(Simulator *self)
             PyErr_SetString(PyExc_SystemError, "Unexpected pop model");
             goto out;
         }
-        d = Py_BuildValue("{s:I,s:d,s:d}", "type", m->type, "time",
+        d = Py_BuildValue("{s:I,s:d,s:d}", "type", m->type, "start_time",
                 m->start_time, param_name, m->param);
         if (d == NULL) {
             goto out;
