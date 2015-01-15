@@ -12,6 +12,25 @@ import tempfile
 import tests
 import _msprime
 
+def get_random_population_models(n):
+    """
+    Returns n random population models.
+    """
+    t = 0.0
+    models = []
+    for j in range(n):
+        t += random.uniform(0, 0.3)
+        p = random.uniform(0.1, 2.0)
+        mod = {"start_time": t}
+        if random.random() < 0.5:
+            mod["type"] = _msprime.POP_MODEL_EXPONENTIAL
+            mod["alpha"] = p
+        else:
+            mod["type"] = _msprime.POP_MODEL_CONSTANT
+            mod["size"] = p
+        models.append(mod)
+    return models
+
 class TestInterface(tests.MsprimeTestCase):
     """
     Test the low-level interface to make sure it is robust.
@@ -146,12 +165,13 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertEqual(sorted_records, sorted(records, key=lambda r: r[0]))
         self.verify_trees(sim, sorted_records)
 
-    def verify_random_paramters(self):
+    def verify_random_parameters(self):
         mb = 1024 * 1024
         n = random.randint(2, 1000)
         m = random.randint(1, 10**6)
         rho = random.uniform(0, 1000)
-        models = []
+        num_pop_models = random.randint(0, 10)
+        models = get_random_population_models(num_pop_models)
         random_seed = random.randint(0, 2**31)
         max_memory = random.randint(10 * mb, 100 * mb)
         segment_block_size = random.randint(1, 100)
@@ -190,15 +210,32 @@ class TestInterface(tests.MsprimeTestCase):
             self.assertEqual(rho, sim.get_scaled_recombination_rate())
             self.assertEqual(random_seed, sim.get_random_seed())
             self.assertEqual(self._treefile, sim.get_tree_file_name())
-            # TODO fix population models!
-            # self.assertEqual(models, sim.get_population_models())
             self.assertEqual(max_memory, sim.get_max_memory())
             self.assertEqual(segment_block_size, sim.get_segment_block_size())
             self.assertEqual(avl_node_block_size, sim.get_avl_node_block_size())
             self.assertEqual(node_mapping_block_size, sim.get_node_mapping_block_size())
+            self.verify_population_models(sim, models)
             # Run this for a tiny amount of time and check the state
             self.assertFalse(sim.run(1e-8))
             self.verify_running_simulation(sim)
+            self.verify_population_models(sim, models)
+
+    def verify_population_models(self, sim, models):
+        """
+        Verifies that the population models returned by the simulator
+        match the specified list.
+        """
+        # TODO fix this API!
+        pop_models = sim.get_population_models()
+        # Exclude first and last elements.
+        self.assertGreater(len(pop_models), 1)
+        pop_models = pop_models[1:-1]
+        if pop_models != models:
+            print("HERE!!")
+            print("returned = ", pop_models)
+            print("original = ", models)
+            print(sim.get_population_models())
+        self.assertEqual(pop_models, models)
 
     def verify_simulation(self, n, m, r, models):
         """
@@ -224,7 +261,7 @@ class TestInterface(tests.MsprimeTestCase):
     def test_random_sims(self):
         num_random_sims = 10
         for j in range(num_random_sims):
-            self.verify_random_paramters()
+            self.verify_random_parameters()
 
     def test_small_sims(self):
         self.verify_simulation(3, 1, 0.0, [])
@@ -236,6 +273,9 @@ class TestInterface(tests.MsprimeTestCase):
 
     def test_population_models(self):
         exp_model = _msprime.POP_MODEL_EXPONENTIAL
+        # An alpha parameter of 0.0 is changed to a constant population
+        # model, so we can't check that the models are exactly the
+        # same.
         m1 = {"alpha":0.0, "start_time":0.0, "type":exp_model}
         m2 = {"alpha":1.0, "start_time":0.5, "type":exp_model}
         # TODO add constant pop models here too.
@@ -250,7 +290,27 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertRaises(TypeError, f, n=None)
         self.assertRaises(TypeError, f, m=None)
         self.assertRaises(OverflowError, f, max_memory=2**65)
-        # TODO insert more error parameters.
+        # TODO add more tests!
+
+    def test_bad_population_models(self):
+        def f(population_models):
+            return _msprime.Simulator(2, 1, self._treefile,
+                    population_models=population_models)
+        self.assertRaises(TypeError, f, "")
+        self.assertRaises(TypeError, f, [""])
+        self.assertRaises(_msprime.InputError, f, [{}])
+        self.assertRaises(_msprime.InputError, f, [{"start_time":1}])
+        self.assertRaises(_msprime.InputError, f,
+                [{"start_time":1, "type":-1000}])
+        self.assertRaises(_msprime.InputError, f,
+                [{"start_time":1, "type":_msprime.POP_MODEL_EXPONENTIAL}])
+        self.assertRaises(_msprime.InputError, f,
+                [{"start_time":1, "type":_msprime.POP_MODEL_CONSTANT}])
+        m = get_random_population_models(10)
+        m.reverse()
+        # TODO This should really be an input error.
+        self.assertRaises(_msprime.LibraryError, f, m)
+
 
 
 class TestTreeFile(tests.MsprimeTestCase):

@@ -106,6 +106,7 @@ def run_verify(n, m, Ne, r, models, num_replicates, output_prefix):
     df_ms = ms.run(num_replicates)
     msp = MsprimeSimulator(n, m, r, Ne, models)
     df_msp = msp.run(num_replicates)
+    for mod in msp.get_
     for stat in ["t", "num_trees", "re_events", "ca_events"]:
         v1 = df_ms[stat]
         v2 = df_msp[stat]
@@ -127,18 +128,42 @@ def verify_random(k):
         output_prefix = "tmp__NOBACKUP__/random_{0}".format(j)
         models = []
         t = 0
-        for j in range(random.randint(0, 10)):
+        for j in range(3):
+        # for j in range(random.randint(0, 10)):
             t += random.uniform(0, 0.3)
             p = random.uniform(0.1, 2.0)
             if random.random() < 0.5:
-                mod = msprime.ConstantPopulationModel(t, p)
+                # mod = msprime.ConstantPopulationModel(t, p)
+                mod = msprime.ExponentialPopulationModel(t, p)
             else:
                 mod = msprime.ExponentialPopulationModel(t, p)
+                # mod = msprime.ConstantPopulationModel(t, p)
             models.append(mod)
             print(mod.get_ll_model())
         print("running for", n, m, Ne, r, 4 * Ne * r)
         run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
         break
+
+def verify_exponential_models():
+    random.seed(1)
+    n = 15
+    m = 4550
+    Ne = 7730.75967602
+    r = 7.05807713707e-07
+    num_replicates = 1000
+    output_prefix = "tmp__NOBACKUP__/expo_models"
+    models = []
+    t = 0
+    for j in range(5):
+        t += 0.1
+        p = 1.0
+        mod = msprime.ExponentialPopulationModel(t, p)
+        models.append(mod)
+        print(mod.get_ll_model())
+    print("running for", n, m, Ne, r, 4 * Ne * r)
+    run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+
+
 
 def main():
     # default to humanish recombination rates and population sizes.
@@ -153,10 +178,11 @@ def main():
             msprime.ConstantPopulationModel(0.4, 0.5),
             msprime.ExponentialPopulationModel(0.5, 1.0)]
     output_prefix = "tmp__NOBACKUP__/simple"
-    run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+    # run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
     # TODO definite problem here using random parameters.
     # - don't change until this has been  fixed.
-    # verify_random(1)
+    # verify_random(100)
+    verify_exponential_models()
 
 def verify_human_demographics():
     """

@@ -64,9 +64,10 @@ parse_long(const char *str, long *value, const long min,
 }
 
 
-static void
+static int
 read_population_models(msp_t *msp, config_t *config)
 {
+    int ret = 0;
     int j;
     const char *type;
     double time, param;
@@ -108,19 +109,25 @@ read_population_models(msp_t *msp, config_t *config)
         }
         type = config_setting_get_string(t);
         if (strcmp(type, "constant") == 0) {
-            msp_add_constant_population_model(msp, time, param);
+            ret = msp_add_constant_population_model(msp, time, param);
         } else if (strcmp(type, "exponential") == 0) {
-            msp_add_exponential_population_model(msp, time, param);
+            ret = msp_add_exponential_population_model(msp, time, param);
         } else {
             fatal_error("unknown population_model type '%s'", type);
         }
+        if (ret != 0) {
+            goto out;
+        }
     }
+out:
+    return ret;
 }
 
-static void
+static int
 read_config(msp_t *msp, const char *filename, double *mutation_rate,
         size_t *max_haplotype_length, int *precision)
 {
+    int ret = 0;
     int err;
     int tmp;
     size_t s;
@@ -189,9 +196,10 @@ read_config(msp_t *msp, const char *filename, double *mutation_rate,
         fatal_error("no memory");
     }
     strcpy(msp->tree_file_name, str);
-    read_population_models(msp, config);
+    ret = read_population_models(msp, config);
     config_destroy(config);
     free(config);
+    return ret;
 }
 
 static void
@@ -219,8 +227,15 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    read_config(msp, conf_file, &mutation_rate, &max_haplotype_length,
+    ret = read_config(msp, conf_file, &mutation_rate, &max_haplotype_length,
             &precision);
+    if (ret != 0) {
+        /* we haven't alloc'd yet, so we must skip the free. This API really
+         * is nasty and needs to be fixed!
+         */
+        msp = NULL;
+        goto out;
+    }
     ret = msp_alloc(msp);
     if (ret != 0) {
         goto out;
