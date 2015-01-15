@@ -178,7 +178,7 @@ class TestNewickConversion(tests.MsprimeTestCase):
         """
         # We make the precision large enough so that rounding issues cannot
         # occur between Python and C.
-        precision = 16
+        precision = 40
         old_trees = [(l, oriented_tree_to_newick(pi, tau, precision))
                 for l, pi, tau in msprime.TreeFile(treefile).trees()]
         new_trees = list(msprime.TreeFile(treefile).newick_trees(precision))
