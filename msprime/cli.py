@@ -82,6 +82,9 @@ class SimulationRunner(object):
             r = self.rho / (self.num_loci - 1)
             self.simulator.set_scaled_recombination_rate(r)
         # Get the demography parameters
+        # TODO for strict ms compatability, we need to resolve the command line
+        # ordering of arguments when there are two or more events with the
+        # same start time. We should resolve this.
         if args.growth_rate is not None:
             m = msprime.ExponentialPopulationModel(0.0, args.growth_rate)
             self.simulator.add_population_model(m)

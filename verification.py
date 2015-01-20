@@ -221,6 +221,14 @@ def verify_exponential_models():
     print("running for", n, m, Ne, r, 4 * Ne * r)
     run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
 
+def verify_scrm_example():
+    # -eN 0.3 0.5 -eG .3 7.0
+    num_replicates = 10000
+    models = [
+            msprime.ConstantPopulationModel(0.3, 0.5),
+            msprime.ExponentialPopulationModel(0.3, 7.0)]
+    output_prefix = "tmp__NOBACKUP__/scrm"
+    run_verify(5, 1, 1, 0, models, num_replicates, output_prefix)
 
 def verify_zero_growth_example():
     num_replicates = 10000
@@ -252,6 +260,8 @@ def main():
     # verify_exponential_models()
     # verify_simple()
     verify_zero_growth_example()
+    verify_scrm_example()
+
 
 def verify_human_demographics():
     """
