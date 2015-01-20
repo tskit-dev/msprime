@@ -283,15 +283,18 @@ exponential_population_model_get_waiting_time(population_model_t *self,
 {
     double ret = DBL_MAX;
     double alpha = self->param;
-    double dt = t - self->start_time;
-    double z = alpha * self->initial_size * exp(-alpha * dt);
+    double u = gsl_ran_exponential(rng, 1.0 / lambda_coancestry);
+    double dt, z;
 
-    /* alpha = 0 should be handled by the constant model */
-    assert(alpha != 0.0);
-    z = 1 + z * gsl_ran_exponential(rng, 1.0 / lambda_coancestry);
-    /* if z is <= 0 no coancestry can occur */
-    if (z > 0) {
-        ret = log(z) / alpha;
+    if (alpha == 0.0) {
+        ret = self->initial_size * u;
+    } else {
+        dt = t - self->start_time;
+        z = 1 + alpha * self->initial_size * exp(-alpha * dt) * u;
+        /* if z is <= 0 no coancestry can occur */
+        if (z > 0) {
+            ret = log(z) / alpha;
+        }
     }
     return ret;
 }
@@ -345,29 +348,24 @@ int
 msp_add_exponential_population_model(msp_t *self, double start_time, double alpha)
 {
     int ret = -1;
-    population_model_t *model;
+    population_model_t *model = malloc(sizeof(population_model_t));
 
-    if (alpha == 0.0) {
-        ret = msp_add_constant_population_model(self, start_time, 1.0);
-    } else {
-        model  = malloc(sizeof(population_model_t));
-        /* NOTE: we can't actually do any checking here right now because of
-         * memory mangement issues. See the note at the end of initialise.
-         */
-        // TODO check for model specific restrictions.
-        if (model == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        model->start_time = start_time;
-        model->param = alpha;
-        model->type = POP_MODEL_EXPONENTIAL;
-        model->get_size = exponential_population_model_get_size;
-        model->get_waiting_time = exponential_population_model_get_waiting_time;
-        ret = msp_add_population_model(self, model);
-        if (ret != 0) {
-            free(model);
-        }
+    /* NOTE: we can't actually do any checking here right now because of
+     * memory mangement issues. See the note at the end of initialise.
+     */
+    // TODO check for model specific restrictions.
+    if (model == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    model->start_time = start_time;
+    model->param = alpha;
+    model->type = POP_MODEL_EXPONENTIAL;
+    model->get_size = exponential_population_model_get_size;
+    model->get_waiting_time = exponential_population_model_get_waiting_time;
+    ret = msp_add_population_model(self, model);
+    if (ret != 0) {
+        free(model);
     }
 out:
     return ret;
