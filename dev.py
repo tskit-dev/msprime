@@ -120,6 +120,8 @@ def large_sim():
     ts.set_scaled_recombination_rate(4 * N0 * r)
     ts.set_max_memory("245G")
     ts.set_segment_block_size(int(1e8))
+    for m in models:
+        ts.add_population_model(m)
     try:
         ts.run()
     except KeyboardInterrupt:

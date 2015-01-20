@@ -342,7 +342,7 @@ main(int argc, char** argv)
     }
     if (argc >= 4) {
         if (parse_long(argv[3], &output_events, 0, LONG_MAX) != 0) {
-            fatal_error("cannot parse seed '%s'", argv[3]);
+            fatal_error("cannot parse seed '%s'", argv[4]);
         }
     }
     run_simulate(argv[1], seed, output_events);
