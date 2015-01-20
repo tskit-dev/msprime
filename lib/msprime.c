@@ -274,7 +274,7 @@ static double
 exponential_population_model_get_size(population_model_t *self, double t)
 {
     double alpha = self->param;
-    return exp(-alpha * (t - self->start_time));
+    return self->initial_size * exp(-alpha * (t - self->start_time));
 }
 
 static double
@@ -1192,12 +1192,17 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             t_wait = t_c;
             event_method = msp_coancestry_event;
         }
-        // TODO check for infinite waiting time
+        // TODO check for infinite waiting time and return error.
+        assert(t_wait != DBL_MAX);
         if (self->time + t_wait >= pop_model->next->start_time) {
+            /* We skip ahead to the start time for the next demographic
+             * model. The intial size of the population for the next
+             * model is the size at this time for the current model.
+             */
+            self->time = pop_model->next->start_time;
             pop_size = pop_model->get_size(pop_model, self->time);
             pop_model = pop_model->next;
             pop_model->initial_size = pop_size;
-            self->time = pop_model->start_time;
             self->current_population_model = pop_model;
             assert(pop_model->next != NULL);
         } else {
@@ -1208,9 +1213,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             }
             n = avl_count(&self->ancestral_population);
         }
-    }
-    if (ret != 0) {
-        goto out;
     }
     if (n != 0) {
         ret = 1;
