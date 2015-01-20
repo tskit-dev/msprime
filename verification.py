@@ -11,6 +11,7 @@ import random
 import tempfile
 import subprocess
 
+import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 import matplotlib
@@ -61,11 +62,53 @@ class MsSimulator(Simulator):
                 raise ValueError("unknown population model")
             args.extend(v)
         with tempfile.TemporaryFile() as f:
-            print(args)
+            print(" ".join(args))
             subprocess.call(args, stdout=f)
             f.seek(0)
             df = pd.read_table(f)
         return df
+
+class ScrmSimulator(Simulator):
+    """
+    Class representing the SCRM simulator. Only supports TMRCA statistics.
+    """
+    def run(self, replicates):
+        executable = "/home/jk/work/github/scrm/scrm"
+        if not os.path.exists(executable):
+            raise ValueError("SCRM not found")
+        rho = get_scaled_recombination_rate(self.effective_population_size,
+                self.num_loci, self.recombination_rate)
+        args = [executable, str(self.sample_size), str(replicates), "-L",
+                "-r", str(rho), str(self.num_loci)]
+        for model in self.population_models:
+            if isinstance(model, msprime.ConstantPopulationModel):
+                v = ["-eN", str(model.start_time), str(model.size)]
+            elif isinstance(model, msprime.ExponentialPopulationModel):
+                v = ["-eG", str(model.start_time), str(model.alpha)]
+            else:
+                raise ValueError("unknown population model")
+            args.extend(v)
+        times = np.zeros(replicates)
+        trees = np.zeros(replicates)
+        with tempfile.TemporaryFile() as f:
+            print(" ".join(args))
+            subprocess.call(args, stdout=f)
+            f.seek(0)
+            j = -1
+            # process the data file
+            for l in f:
+                if l.startswith("//"):
+                    j += 1
+                elif l.startswith("time"):
+                    trees[j] += 1
+                    t = float(l.split()[1])
+                    times[j] = max(t, times[j])
+        missing = np.zeros(replicates)
+        data = {"t":times, "num_trees":trees, "re_events":missing,
+                "ca_events":missing}
+        df = pd.DataFrame(data)
+        return df
+
 
 class MsprimeSimulator(Simulator):
     """
@@ -103,18 +146,33 @@ def run_verify(n, m, Ne, r, models, num_replicates, output_prefix):
     with the specified prefix.
     """
     ms = MsSimulator(n, m, r, Ne, models)
+    # ms = ScrmSimulator(n, m, r, Ne, models)
     df_ms = ms.run(num_replicates)
     msp = MsprimeSimulator(n, m, r, Ne, models)
+    # msp = MsSimulator(n, m, r, Ne, models)
     df_msp = msp.run(num_replicates)
-    for mod in msp.get_
     for stat in ["t", "num_trees", "re_events", "ca_events"]:
         v1 = df_ms[stat]
         v2 = df_msp[stat]
+        # pyplot.hist(v1, 20, alpha=0.5, label="ms")
+        # pyplot.hist(v2, 20, alpha=0.5, label="msp")
+        # pyplot.legend(loc="upper left")
         sm.graphics.qqplot(v1)
         sm.qqplot_2samples(v1, v2, line="45")
         f = "{0}_{1}.png".format(output_prefix, stat)
         pyplot.savefig(f, dpi=72)
         pyplot.clf()
+        # pyplot.hist(v1, 20, alpha=0.5, label="ms")
+        # pyplot.legend(loc="upper left")
+        # f = "{0}_{1}_1.png".format(output_prefix, stat)
+        # pyplot.savefig(f, dpi=72)
+        # pyplot.clf()
+        # pyplot.hist(v2, 20, alpha=0.5, label="msp")
+        # pyplot.legend(loc="upper left")
+        # f = "{0}_{1}_2.png".format(output_prefix, stat)
+        # pyplot.savefig(f, dpi=72)
+        # pyplot.clf()
+
 
 def verify_random(k):
 
@@ -128,38 +186,36 @@ def verify_random(k):
         output_prefix = "tmp__NOBACKUP__/random_{0}".format(j)
         models = []
         t = 0
-        for j in range(3):
-        # for j in range(random.randint(0, 10)):
+        for j in range(random.randint(0, 10)):
             t += random.uniform(0, 0.3)
             p = random.uniform(0.1, 2.0)
             if random.random() < 0.5:
-                # mod = msprime.ConstantPopulationModel(t, p)
-                mod = msprime.ExponentialPopulationModel(t, p)
+                mod = msprime.ConstantPopulationModel(t, p)
             else:
                 mod = msprime.ExponentialPopulationModel(t, p)
-                # mod = msprime.ConstantPopulationModel(t, p)
             models.append(mod)
             print(mod.get_ll_model())
         print("running for", n, m, Ne, r, 4 * Ne * r)
         run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
-        break
 
 def verify_exponential_models():
-    random.seed(1)
+    random.seed(4)
     n = 15
     m = 4550
     Ne = 7730.75967602
     r = 7.05807713707e-07
-    num_replicates = 1000
+    num_replicates = 10000
     output_prefix = "tmp__NOBACKUP__/expo_models"
     models = []
-    t = 0
-    for j in range(5):
+    t = 0.0
+    for j in range(3):
         t += 0.1
-        p = 1.0
+        p = 100 * t
         mod = msprime.ExponentialPopulationModel(t, p)
         models.append(mod)
         print(mod.get_ll_model())
+    # params = [(0.05, 0.1), (0.1, 0.2), (0.11, 1000), (0.15, 0.0001)]
+    # models = [msprime.ConstantPopulationModel(t, p) for t, p in params]
     print("running for", n, m, Ne, r, 4 * Ne * r)
     run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
 
@@ -178,10 +234,8 @@ def main():
             msprime.ConstantPopulationModel(0.4, 0.5),
             msprime.ExponentialPopulationModel(0.5, 1.0)]
     output_prefix = "tmp__NOBACKUP__/simple"
-    # run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
-    # TODO definite problem here using random parameters.
-    # - don't change until this has been  fixed.
-    # verify_random(100)
+    run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+    verify_random(10)
     verify_exponential_models()
 
 def verify_human_demographics():
