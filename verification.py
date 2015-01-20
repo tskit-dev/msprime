@@ -51,8 +51,9 @@ class MsSimulator(Simulator):
                     + "go to data/ms directory and type make")
         rho = get_scaled_recombination_rate(self.effective_population_size,
                 self.num_loci, self.recombination_rate)
-        args = [executable, str(self.sample_size), str(replicates), "-T",
-                "-r", str(rho), str(self.num_loci)]
+        args = [executable, str(self.sample_size), str(replicates), "-T"]
+        if self.num_loci > 1:
+            args += ["-r", str(rho), str(self.num_loci)]
         for model in self.population_models:
             if isinstance(model, msprime.ConstantPopulationModel):
                 v = ["-eN", str(model.start_time), str(model.size)]
@@ -78,8 +79,9 @@ class ScrmSimulator(Simulator):
             raise ValueError("SCRM not found")
         rho = get_scaled_recombination_rate(self.effective_population_size,
                 self.num_loci, self.recombination_rate)
-        args = [executable, str(self.sample_size), str(replicates), "-L",
-                "-r", str(rho), str(self.num_loci)]
+        args = [executable, str(self.sample_size), str(replicates), "-L"]
+        if self.num_loci > 1:
+            args += ["-r", str(rho), str(self.num_loci)]
         for model in self.population_models:
             if isinstance(model, msprime.ConstantPopulationModel):
                 v = ["-eN", str(model.start_time), str(model.size)]
@@ -220,8 +222,16 @@ def verify_exponential_models():
     run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
 
 
+def verify_zero_growth_example():
+    num_replicates = 10000
+    models = [
+            msprime.ExponentialPopulationModel(0.0, 6.93),
+            msprime.ExponentialPopulationModel(0.2, 0.0),
+            msprime.ConstantPopulationModel(0.3, 0.5)]
+    output_prefix = "tmp__NOBACKUP__/zero"
+    run_verify(5, 1, 1, 0, models, num_replicates, output_prefix)
 
-def main():
+def verify_simple():
     # default to humanish recombination rates and population sizes.
     n = 400
     m = 100000
@@ -235,8 +245,13 @@ def main():
             msprime.ExponentialPopulationModel(0.5, 1.0)]
     output_prefix = "tmp__NOBACKUP__/simple"
     run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
-    verify_random(10)
-    verify_exponential_models()
+
+
+def main():
+    # verify_random(10)
+    # verify_exponential_models()
+    # verify_simple()
+    verify_zero_growth_example()
 
 def verify_human_demographics():
     """

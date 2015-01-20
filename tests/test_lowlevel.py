@@ -230,6 +230,7 @@ class TestInterface(tests.MsprimeTestCase):
         # Exclude first and last elements.
         self.assertGreater(len(pop_models), 1)
         pop_models = pop_models[1:-1]
+        print(pop_models)
         if pop_models != models:
             print("HERE!!")
             print("returned = ", pop_models)
@@ -250,6 +251,7 @@ class TestInterface(tests.MsprimeTestCase):
                 random_seed=random_seed, tree_file_name=self._treefile,
                 max_memory=10 * mb, segment_block_size=1000,
                 avl_node_block_size=1000, node_mapping_block_size=1000)
+        self.verify_population_models(sim, models)
         # Run the sim for a tiny amount of time and check.
         self.assertFalse(sim.run(1e-8))
         # self.assertFalse(sim.run(1e-8))
@@ -257,6 +259,7 @@ class TestInterface(tests.MsprimeTestCase):
         # Now run until coalescence
         self.assertTrue(sim.run())
         self.verify_completed_simulation(sim)
+        self.verify_population_models(sim, models)
 
     def test_random_sims(self):
         num_random_sims = 10
@@ -273,9 +276,6 @@ class TestInterface(tests.MsprimeTestCase):
 
     def test_population_models(self):
         exp_model = _msprime.POP_MODEL_EXPONENTIAL
-        # An alpha parameter of 0.0 is changed to a constant population
-        # model, so we can't check that the models are exactly the
-        # same.
         m1 = {"alpha":0.0, "start_time":0.0, "type":exp_model}
         m2 = {"alpha":1.0, "start_time":0.5, "type":exp_model}
         # TODO add constant pop models here too.
