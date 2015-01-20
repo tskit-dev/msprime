@@ -174,7 +174,7 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 /* Main loop */
 
 	while( nchrom > 1 ) {
-        //printf("t=%f, alpha=%f, size=%f, tmin=%f\n", t, alphag[0], size[0], tmin);
+        /* printf("t=%f, alpha=%f, size=%f, tmin=%f\n", t, alphag[0], size[0], tmin); */
         prec = nlinks*r;
         cin = nlinks*rf ;
         clefta = cleft*rft ;
@@ -238,6 +238,8 @@ segtre_mig(struct c_params *cp, int *pnsegs )
                 }
             }
         }
+        /* printf("\tmid loop: eflag = %d, event=%c, tmin=%f, t+tmin=%f\n", eflag, event, */
+        /*         tmin, t+tmin); */
 
         if( (eflag == 0) && ( nextevent == NULL) ) {
             fprintf(stderr,
