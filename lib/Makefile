@@ -1,5 +1,12 @@
 CFLAGS=-Wall -g -O3
 #CFLAGS=-Wall -g -O3 -march=native 
+CFLAGS=-ansi -pedantic -Werror -Wall -W \
+  -Wno-unused-parameter\
+  -Wmissing-prototypes -Wstrict-prototypes \
+  -Wconversion -Wshadow -Wpointer-arith \
+  -Wcast-qual -Wcast-align \
+  -Wwrite-strings -Wnested-externs \
+  -fshort-enums -fno-common -Dinline= -g -O2
 LDFLAGS=-lgsl -lgslcblas -lconfig -lm
 SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c tree_file.c hapgen.c newick.c
 COMPILED=msprime.c fenwick.c main.c avl.c tree_file.c hapgen.c newick.c

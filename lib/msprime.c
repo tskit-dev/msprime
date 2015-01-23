@@ -30,10 +30,10 @@
 #include "fenwick.h"
 #include "msprime.h"
 
-char *
+const char *
 msp_strerror(int err)
 {
-    char *ret = "Unknown error";
+    const char *ret = "Unknown error";
     if (err == MSP_ERR_NO_MEMORY) {
         ret = "Out of memory";
     } else if (err == MSP_ERR_GENERIC) {
@@ -78,7 +78,7 @@ cmp_node_mapping(const void *a, const void *b) {
 
 
 static inline uint32_t
-num_links(segment_t *u)
+get_num_links(segment_t *u)
 {
     return u->right - u->left;
 }
@@ -87,7 +87,7 @@ static void
 segment_init(void **obj, size_t index)
 {
     segment_t *seg = (segment_t *) obj;
-    seg->index = index + 1;
+    seg->index = (uint32_t) index + 1;
     /* if seg->index is 0 we have overflowed */
     assert(seg->index != 0);
 }
@@ -100,10 +100,10 @@ object_heap_get_num_allocated(object_heap_t *self)
     return self->size - self->top;
 }
 
-void
+static void
 object_heap_print_state(object_heap_t *self)
 {
-    printf("object heap %p::\n", self);
+    printf("object heap %p::\n", (void *) self);
     printf("\tsize = %d\n", (int) self->size);
     printf("\ttop = %d\n", (int) self->top);
     printf("\tblock_size = %d\n", (int) self->block_size);
@@ -113,7 +113,7 @@ object_heap_print_state(object_heap_t *self)
 }
 
 static void
-object_heap_add_block(object_heap_t *self, void *mem_block)
+object_heap_add_block(object_heap_t *self, char *mem_block)
 {
     size_t j, index;
 
@@ -323,7 +323,7 @@ msp_add_constant_population_model(msp_t *self, double start_time, double size)
     int ret = -1;
     population_model_t *model = malloc(sizeof(population_model_t));
 
-    // TODO check for model specific restrictions.
+    /* TODO check for model specific restrictions */
     /* NOTE: we can't actually do any checking here right now because of
      * memory mangement issues. See the note at the end of initialise.
      */
@@ -353,7 +353,7 @@ msp_add_exponential_population_model(msp_t *self, double start_time, double alph
     /* NOTE: we can't actually do any checking here right now because of
      * memory mangement issues. See the note at the end of initialise.
      */
-    // TODO check for model specific restrictions.
+    /* TODO check for model specific restrictions. */
     if (model == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -566,7 +566,7 @@ static inline node_mapping_t *
 msp_alloc_node_mapping(msp_t *self)
 {
     node_mapping_t *ret = NULL;
-    void *p;
+    char *p;
 
     if (self->next_node_mapping == self->node_mapping_block_size) {
         self->used_memory += msp_get_node_mapping_mem_increment(self);
@@ -578,7 +578,8 @@ msp_alloc_node_mapping(msp_t *self)
         }
     }
     p = self->node_mapping_blocks[self->num_node_mapping_blocks - 1];
-    ret = p + self->next_node_mapping * sizeof(node_mapping_t);
+    ret = (node_mapping_t *) (p +
+            self->next_node_mapping * sizeof(node_mapping_t));
     self->next_node_mapping++;
 out:
     return ret;
@@ -586,7 +587,7 @@ out:
 
 
 static segment_t * WARN_UNUSED
-msp_alloc_segment(msp_t *self, int left, int right, int value, segment_t *prev,
+msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, uint32_t value, segment_t *prev,
         segment_t *next)
 {
     segment_t *seg = NULL;
@@ -609,8 +610,8 @@ msp_alloc_segment(msp_t *self, int left, int right, int value, segment_t *prev,
     }
     seg->prev = prev;
     seg->next = next;
-    seg->left = left;
-    seg->right = right;
+    seg->left = (uint32_t) left;
+    seg->right = (uint32_t) right;
     seg->value = value;
 out:
     return seg;
@@ -658,7 +659,7 @@ out:
 static void
 msp_print_segment_chain(msp_t *self, segment_t *head)
 {
-    int j;
+    unsigned int j;
     segment_t *s = head;
     j = 1;
     while (s != NULL) {
@@ -683,7 +684,7 @@ msp_print_segment_chain(msp_t *self, segment_t *head)
 static void
 msp_verify(msp_t *self)
 {
-    long long s, ss, total_links;
+    uint64_t s, ss, total_links;
     size_t total_segments = 0;
     size_t total_avl_nodes = 0;
     avl_node_t *node;
@@ -739,14 +740,14 @@ msp_write_metadata(msp_t *self, FILE *f)
     int ret = -1;
     const char *fmt = "{"
         "\"sample_size\":%d,"
-        "\"num_loci\":%lld,"
+        "\"num_loci\":%d,"
         "\"random_seed\":%ld,"
         "\"recombination_rate\":%f,"
         "\"tree_file_name\":\"%s\""
         "}";
     ret = fprintf(f, fmt,
         self->sample_size,
-        (long long) self->num_loci,
+        self->num_loci,
         self->random_seed,
         self->scaled_recombination_rate,
         self->tree_file_name
@@ -767,8 +768,9 @@ msp_print_state(msp_t *self)
     avl_node_t *node;
     node_mapping_t *nm;
     segment_t *u;
-    long long v;
+    uint64_t v;
     uint32_t j;
+    double gig = 1024.0 * 1024;
     segment_t **ancestors = malloc(msp_get_num_ancestors(self)
             * sizeof(segment_t **));
 
@@ -780,8 +782,8 @@ msp_print_state(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    printf("used_memory = %f MiB\n", self->used_memory / (1024.0 * 1024.0));
-    printf("max_memory  = %f MiB\n", self->max_memory / (1024.0 * 1024.0));
+    printf("used_memory = %f MiB\n", (double) self->used_memory / gig);
+    printf("max_memory  = %f MiB\n", (double) self->max_memory / gig);
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
@@ -793,12 +795,12 @@ msp_print_state(msp_t *self)
         msp_print_segment_chain(self, ancestors[j]);
     }
     printf("Fenwick tree\n");
-    for (j = 1; j <= fenwick_get_size(&self->links); j++) {
+    for (j = 1; j <= (uint32_t) fenwick_get_size(&self->links); j++) {
         u = msp_get_segment(self, j);
         v = fenwick_get_value(&self->links, j);
         if (v != 0) {
-            printf("\t%lld\tl=%d r=%d v=%d prev=%p next=%p\n", v, u->left,
-                    u->right, u->value, u->prev, u->next);
+            printf("\t%d\tl=%d r=%d v=%d prev=%p next=%p\n", (int) v, u->left,
+                    u->right, (int) u->value, (void *) u->prev, (void *) u->next);
         }
     }
     printf("Breakpoints = %d\n", avl_count(&self->breakpoints));
@@ -912,18 +914,18 @@ static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
 {
     int ret = 0;
-    long long l, t, gap, k;
+    uint64_t l, t, gap, k;
     uint32_t j;
     node_mapping_t search;
     segment_t *x, *y, *z;
-    long long num_links = fenwick_get_total(&self->links);
+    uint64_t num_links = fenwick_get_total(&self->links);
 
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
-    l = 1 + (long long) (gsl_rng_uniform(self->rng) * num_links);
+    l = 1 + (uint64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
     assert(l > 0 && l <= num_links);
-    j = fenwick_find(&self->links, l);
-    t = fenwick_get_cumulative_sum(&self->links, j);
+    j = (uint32_t) fenwick_find(&self->links, (size_t) l);
+    t = fenwick_get_cumulative_sum(&self->links, (size_t) j);
     gap = t - l;
     y = msp_get_segment(self, j);
     x = y->prev;
@@ -1165,7 +1167,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     double lambda_c, lambda_r, t_c, t_r, t_wait, pop_size;
-    long long num_links;
+    uint64_t num_links;
     uint32_t n = avl_count(&self->ancestral_population);
     int (*event_method)(msp_t *);
     population_model_t *pop_model = self->current_population_model;
