@@ -75,7 +75,7 @@ typedef struct {
     size_t size;
     size_t num_blocks;
     void **heap;
-    void **mem_blocks;
+    char **mem_blocks;
     void (*init_object)(void **obj, size_t index);
 } object_heap_t;
 
@@ -140,10 +140,10 @@ typedef struct {
 typedef struct {
     /* input parameters */
     /* TODO change these to uint32_t and run compiler with paranoid typing */
-    int sample_size;
-    int num_loci;
+    uint32_t sample_size;
+    uint32_t num_loci;
     double scaled_recombination_rate;
-    long random_seed;
+    unsigned long random_seed;
     char *tree_file_name;
     /* allocation block sizes */
     size_t avl_node_block_size;
@@ -220,5 +220,5 @@ int newick_next_tree(newick_t *self, uint32_t *tree_length, char **tree,
 int newick_output_ms_format(newick_t *self, FILE *out);
 int newick_free(newick_t *self);
 
-char * msp_strerror(int err);
+const char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/
