@@ -129,7 +129,7 @@ tree_file_read_info(tree_file_t *self)
     self->sample_size = h32[2];
     self->num_loci = h32[3];
     self->flags = h32[4];
-    self->metadata_offset = h64[0];
+    self->metadata_offset = (size_t) h64[0];
     self->coalescence_record_offset = (size_t) ftell(self->file);
     /* now read in the metadata */
     if (fseek(self->file, 0, SEEK_END) != 0) {
