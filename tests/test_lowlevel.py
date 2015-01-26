@@ -230,12 +230,6 @@ class TestInterface(tests.MsprimeTestCase):
         # Exclude first and last elements.
         self.assertGreater(len(pop_models), 1)
         pop_models = pop_models[1:-1]
-        print(pop_models)
-        if pop_models != models:
-            print("HERE!!")
-            print("returned = ", pop_models)
-            print("original = ", models)
-            print(sim.get_population_models())
         self.assertEqual(pop_models, models)
 
     def verify_simulation(self, n, m, r, models):

@@ -243,7 +243,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     /* parameter defaults */
     unsigned int sample_size = 2;
     unsigned int num_loci = 1;
-    long random_seed = 1;
+    unsigned long random_seed = 1;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
@@ -429,7 +429,7 @@ Simulator_get_time(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sim->time);
+    ret = Py_BuildValue("d", (float) self->sim->time);
 out:
     return ret;
 }

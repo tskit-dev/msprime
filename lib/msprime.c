@@ -793,7 +793,7 @@ msp_print_state(msp_t *self)
         u = msp_get_segment(self, j);
         v = fenwick_get_value(&self->links, j);
         if (v != 0) {
-            printf("\t%ld\tl=%d r=%d v=%d prev=%p next=%p\n", v, u->left,
+            printf("\t%ld\tl=%d r=%d v=%d prev=%p next=%p\n", (long) v, u->left,
                     u->right, (int) u->value, (void *) u->prev, (void *) u->next);
         }
     }
@@ -802,7 +802,7 @@ msp_print_state(msp_t *self)
         nm = (node_mapping_t *) node->item;
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
-    printf("Coalescence records = %ld\n", self->num_coalescence_records);
+    printf("Coalescence records = %ld\n", (long) self->num_coalescence_records);
     printf("Memory heaps\n");
     printf("avl_node_heap:");
     object_heap_print_state(&self->avl_node_heap);
