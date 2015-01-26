@@ -604,8 +604,8 @@ msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, uint32_t value, se
     }
     seg->prev = prev;
     seg->next = next;
-    seg->left = (uint32_t) left;
-    seg->right = (uint32_t) right;
+    seg->left = left;
+    seg->right = right;
     seg->value = value;
 out:
     return seg;
@@ -802,7 +802,7 @@ msp_print_state(msp_t *self)
         nm = (node_mapping_t *) node->item;
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
-    printf("Coalescence records = %d\n", self->num_coalescence_records);
+    printf("Coalescence records = %ld\n", self->num_coalescence_records);
     printf("Memory heaps\n");
     printf("avl_node_heap:");
     object_heap_print_state(&self->avl_node_heap);
@@ -918,10 +918,13 @@ msp_recombination_event(msp_t *self)
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
     l = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
+    printf("l = %li\n", l);
+    printf("num_links = %li\n", num_links);
     assert(l > 0 && l <= num_links);
     j = (uint32_t) fenwick_find(&self->links, l);
     t = fenwick_get_cumulative_sum(&self->links, (size_t) j);
     gap = t - l;
+    printf("gap = %li\n", gap);
     assert(gap > 0 && gap < self->num_loci);
     y = msp_get_segment(self, j);
     x = y->prev;
@@ -972,6 +975,7 @@ msp_coancestry_event(msp_t *self)
 
     self->num_ca_events++;
     /* Choose x and y */
+    assert(avl_count(&self->ancestral_population) < UINT32_MAX);
     n = avl_count(&self->ancestral_population);
     j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
     node = avl_at(&self->ancestral_population, j);
