@@ -38,23 +38,22 @@ typedef struct segment_t_t {
     uint32_t left;
     uint32_t right;
     uint32_t index;
-    int32_t value;
+    uint32_t value;
     struct segment_t_t *prev;
     struct segment_t_t *next;
 } segment_t;
 
-/* int based oriented forests gives a maximum sample size of ~10^9 */
 typedef struct {
     uint32_t left;
     uint32_t right;
-    int32_t children[2];
-    int32_t parent;
+    uint32_t children[2];
+    uint32_t parent;
     float time;
 } coalescence_record_t;
 
 typedef struct {
     uint32_t left; /* TODO CHANGE THIS - not a good name! */
-    int32_t value;
+    uint32_t value;
 } node_mapping_t;
 
 typedef struct population_model_t_t {
@@ -93,7 +92,7 @@ typedef struct {
 
 typedef struct {
     double mutation_rate;
-    long random_seed;
+    unsigned long random_seed;
     size_t max_haplotype_length;
     size_t haplotype_length;
     size_t num_trees;
@@ -106,16 +105,16 @@ typedef struct {
     int *pi;
     float *tau;
     /* tree traversal memory */
-    int *child;
-    int *sib;
-    int *branch_mutations;
-    int *mutation_sites;
+    int32_t *child;
+    int32_t *sib;
+    uint32_t *branch_mutations;
+    uint32_t *mutation_sites;
 } hapgen_t;
 
 typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
-    int precision;
+    size_t precision;
     float *tau;
     int **children;
     int *visited;
@@ -123,7 +122,7 @@ typedef struct {
     size_t stack_size;
     char *output_buffer;
     size_t output_buffer_size;
-    int *children_mem;
+    int32_t *children_mem;
     tree_file_t tree_file;
     uint32_t breakpoint;
     size_t num_trees;
@@ -160,7 +159,7 @@ typedef struct {
     uint32_t num_coalescence_records;
     /* state */
     size_t used_memory;
-    float time;
+    double time;
     gsl_rng *rng;
     avl_tree_t ancestral_population;
     avl_tree_t breakpoints;
@@ -208,13 +207,13 @@ int tree_file_issorted(tree_file_t *self);
 int tree_file_isopen(tree_file_t *self);
 
 int hapgen_alloc(hapgen_t *self, double mutation_rate, 
-        const char *tree_file_name, long random_seed, 
+        const char *tree_file_name, unsigned long random_seed, 
         size_t max_haplotype_length);
 int hapgen_generate(hapgen_t *self);
 int hapgen_get_haplotypes(hapgen_t *self, char ***haplotypes, size_t *s);
 int hapgen_free(hapgen_t *self);
 
-int newick_alloc(newick_t *self, const char *tree_file_name, int precision);
+int newick_alloc(newick_t *self, const char *tree_file_name, size_t precision);
 int newick_next_tree(newick_t *self, uint32_t *tree_length, char **tree,
         size_t *str_length);
 int newick_output_ms_format(newick_t *self, FILE *out);

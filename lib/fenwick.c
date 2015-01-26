@@ -149,7 +149,7 @@ fenwick_increment(fenwick_t *self, size_t index, uint64_t value)
 }
 
 void
-fenwick_set_value(fenwick_t *self, size_t index, uuint64_t value)
+fenwick_set_value(fenwick_t *self, size_t index, uint64_t value)
 {
     uint64_t v = value - self->values[index];
 

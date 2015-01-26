@@ -30,7 +30,7 @@
 
 int
 hapgen_alloc(hapgen_t *self, double mutation_rate, const char *tree_file_name,
-        long random_seed, size_t max_haplotype_length)
+        unsigned long random_seed, size_t max_haplotype_length)
 {
     int ret = -1;
     uint32_t j;
@@ -125,12 +125,13 @@ hapgen_process_tree(hapgen_t *self, uint32_t l)
 {
     int ret = -1;
     char *h, *hp;
-    int N = 2 * self->sample_size;
-    int *child = self->child;
-    int *sib = self->sib;
-    int *branch_mutations = self->branch_mutations;
-    int *mutation_sites = self->mutation_sites;
-    int u, v, j, s, not_done;
+    uint32_t N = 2 * self->sample_size;
+    uint32_t *branch_mutations = self->branch_mutations;
+    uint32_t *mutation_sites = self->mutation_sites;
+    uint32_t j, s, not_done;
+    int32_t *child = self->child;
+    int32_t *sib = self->sib;
+    int32_t u, v;
     double mu = (self->mutation_rate * l) / self->num_loci;
     double t;
 
@@ -155,7 +156,7 @@ hapgen_process_tree(hapgen_t *self, uint32_t l)
         goto out;
     }
     /* Now traverse the tree and apply these mutations */
-    for (u = 1; u < N; u++) {
+    for (u = 1; u < (int32_t) N; u++) {
         v = self->pi[u];
         sib[u] = child[v];
         child[v] = u;
@@ -219,8 +220,8 @@ hapgen_generate(hapgen_t *self)
             }
             b = cr.left;
         }
-        self->pi[cr.children[0]] = cr.parent;
-        self->pi[cr.children[1]] = cr.parent;
+        self->pi[cr.children[0]] = (int32_t) cr.parent;
+        self->pi[cr.children[1]] = (int32_t) cr.parent;
         self->tau[cr.parent] = cr.time;
     }
     if (ret != 0) {

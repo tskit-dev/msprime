@@ -34,8 +34,7 @@ static void
 test_simple_cases(void)
 {
     fenwick_t t;
-    unsigned int n, j;
-    long s;
+    uint64_t n, j, s;
     for (n = 1; n < 100; n++) {
         s = 0;
         assert(fenwick_alloc(&t, n) == 0);

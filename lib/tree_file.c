@@ -50,9 +50,9 @@ decode_coalescence_record(uint32_t *record, coalescence_record_t *cr)
 
     cr->left = record[0];
     cr->right = 0; /* we do not store right for complete sims */
-    cr->children[0] = (int32_t) record[1];
-    cr->children[1] = (int32_t) record[2];
-    cr->parent = (int32_t) record[3];
+    cr->children[0] = record[1];
+    cr->children[1] = record[2];
+    cr->parent = record[3];
     conv.uint_value = record[4];
     cr->time = conv.float_value;
 }
@@ -130,19 +130,19 @@ tree_file_read_info(tree_file_t *self)
     self->num_loci = h32[3];
     self->flags = h32[4];
     self->metadata_offset = h64[0];
-    self->coalescence_record_offset = ftell(self->file);
+    self->coalescence_record_offset = (size_t) ftell(self->file);
     /* now read in the metadata */
     if (fseek(self->file, 0, SEEK_END) != 0) {
         ret = MSP_ERR_IO;
         goto out;
     }
-    metadata_size = ftell(self->file) - self->metadata_offset;
+    metadata_size = (size_t) ftell(self->file) - self->metadata_offset;
     self->metadata = malloc(metadata_size + 1);
     if (self->metadata == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    if (fseek(self->file, self->metadata_offset, SEEK_SET) != 0) {
+    if (fseek(self->file, (long) self->metadata_offset, SEEK_SET) != 0) {
         ret = MSP_ERR_IO;
         goto out;
     }
@@ -205,7 +205,8 @@ tree_file_open_read_mode(tree_file_t *self)
     /* now, seek back to the start of the record section so we're ready
      * to start reading records.
      */
-    if (fseek(self->file, self->coalescence_record_offset, SEEK_SET) != 0) {
+    if (fseek(self->file, (long) self->coalescence_record_offset, SEEK_SET)
+            != 0) {
         ret = MSP_ERR_IO;
         goto out;
     }
@@ -367,7 +368,7 @@ tree_file_sort(tree_file_t *self)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    if (fseek(f, self->coalescence_record_offset, SEEK_SET) != 0) {
+    if (fseek(f, (long) self->coalescence_record_offset, SEEK_SET) != 0) {
         ret = MSP_ERR_IO;
         goto out;
     }
@@ -381,7 +382,7 @@ tree_file_sort(tree_file_t *self)
      * here, as we are going to be sorting very large files.
      */
     qsort(buff, num_records, record_size, cmp_coalescence_record);
-    if (fseek(f, self->coalescence_record_offset, SEEK_SET) != 0) {
+    if (fseek(f, (long) self->coalescence_record_offset, SEEK_SET) != 0) {
         ret = MSP_ERR_IO;
         goto out;
     }
@@ -412,7 +413,7 @@ tree_file_finalise(tree_file_t *self, msp_t *msp)
         ret = MSP_ERR_BAD_MODE;
         goto out;
     }
-    self->metadata_offset = ftell(f);
+    self->metadata_offset = (size_t) ftell(f);
     ret = msp_write_metadata(msp, f);
     if (ret != 0) {
         goto out;
@@ -469,7 +470,7 @@ tree_file_next_record(tree_file_t *self, coalescence_record_t *r)
         ret = MSP_ERR_BAD_MODE;
         goto out;
     }
-    if (ftell(f) == self->metadata_offset) {
+    if (ftell(f) == (long) self->metadata_offset) {
         ret = 0;
     } else {
         if (fread(record, sizeof(record), 1, f) != 1) {

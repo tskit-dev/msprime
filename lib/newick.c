@@ -25,7 +25,7 @@
 #include "msprime.h"
 
 int
-newick_alloc(newick_t *self, const char *tree_file_name, int precision)
+newick_alloc(newick_t *self, const char *tree_file_name, size_t precision)
 {
     int ret = -1;
     size_t j, n, N, max_label_size;
@@ -89,7 +89,7 @@ newick_alloc(newick_t *self, const char *tree_file_name, int precision)
     pc = self->leaf_labels_mem;
     for (j = 1; j <= self->sample_size; j++) {
         r = snprintf(pc, max_label_size, "%d", (int) j);
-        if (r >= max_label_size) {
+        if (r >= (int) max_label_size) {
             ret = MSP_ERR_NEWICK_OVERFLOW;
             goto out;
         }
@@ -165,9 +165,9 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
 
     while (self->next_record.left == self->breakpoint && tree_ret == 1) {
         self->tau[self->next_record.parent] = self->next_record.time;
-        c1 = self->next_record.children[0];
-        c2 = self->next_record.children[1];
-        p = self->next_record.parent;
+        c1 = (int32_t) self->next_record.children[0];
+        c2 = (int32_t) self->next_record.children[1];
+        p = (int32_t) self->next_record.parent;
         if (c1 < c2) {
             self->children[p][0] = c1;
             self->children[p][1] = c2;
@@ -179,8 +179,8 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
             c = self->children[p][j];
             t = self->next_record.time - self->tau[c];
             r = snprintf(self->branch_lengths[c], self->max_branch_length_size,
-                    "%.*f", self->precision, t);
-            if (r >= self->max_branch_length_size) {
+                    "%.*f", (int) self->precision, t);
+            if (r >= (int) self->max_branch_length_size) {
                 ret = MSP_ERR_NEWICK_OVERFLOW;
                 goto out;
             }
@@ -210,14 +210,14 @@ static int
 newick_generate_string(newick_t *self, size_t *output_length)
 {
     int ret = 0;
-    uint32_t u;
-    int32_t n = self->sample_size;
-    int32_t root = 2 * n - 1;
-    int **c = self->children;
+    uint32_t n = self->sample_size;
+    int32_t stack_top = 0;
+    int32_t u;
+    int32_t root = 2 * (int32_t) n - 1;
+    int32_t **c = self->children;
     char **branch_lengths = self->branch_lengths;
-    int *stack = self->stack;
-    int *visited = self->visited;
-    int stack_top = 0;
+    int32_t *stack = self->stack;
+    int32_t *visited = self->visited;
     char *s = self->output_buffer;
     size_t length = 0;
     size_t j;
@@ -228,7 +228,7 @@ newick_generate_string(newick_t *self, size_t *output_length)
      */
     stack[0] = root;
     stack_top = 0;
-    memset(visited, 0, 2 * n * sizeof(int32_t));
+    memset(visited, 0, (size_t) 2 * n * sizeof(int32_t));
     while (stack_top >= 0) {
         u = stack[stack_top];
         stack_top--;
@@ -250,19 +250,19 @@ newick_generate_string(newick_t *self, size_t *output_length)
                 s[length] = '(';
                 length++;
                 stack_top++;
-                assert(stack_top < self->stack_size);
+                assert(stack_top < (int32_t) self->stack_size);
                 stack[stack_top] = u;
                 stack_top++;
-                assert(stack_top < self->stack_size);
+                assert(stack_top < (int32_t) self->stack_size);
                 stack[stack_top] = c[u][0];
             } else if (visited[u] == 1) {
                 s[length] = ',';
                 length++;
                 stack_top++;
-                assert(stack_top < self->stack_size);
+                assert(stack_top < (int32_t) self->stack_size);
                 stack[stack_top] = u;
                 stack_top++;
-                assert(stack_top < self->stack_size);
+                assert(stack_top < (int32_t) self->stack_size);
                 stack[stack_top] = c[u][1];
             } else {
                 s[length] = ')';
@@ -332,7 +332,7 @@ newick_output_ms_format(newick_t *self, FILE *out)
             ret = MSP_ERR_IO;
             goto out;
         }
-        io_ret = fwrite(tree, str_len, 1, out);
+        io_ret = (int) fwrite(tree, str_len, 1, out);
         if (io_ret != 1) {
             ret = MSP_ERR_IO;
             goto out;
