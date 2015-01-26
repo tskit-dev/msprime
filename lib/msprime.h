@@ -138,7 +138,6 @@ typedef struct {
 
 typedef struct {
     /* input parameters */
-    /* TODO change these to uint32_t and run compiler with paranoid typing */
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
@@ -153,10 +152,10 @@ typedef struct {
     population_model_t *population_models;
     population_model_t *current_population_model;
     /* Counters for statistics */
-    uint32_t num_re_events;
-    uint32_t num_ca_events;
-    uint32_t num_trapped_re_events;
-    uint32_t num_coalescence_records;
+    uint64_t num_re_events;
+    uint64_t num_ca_events;
+    uint64_t num_trapped_re_events;
+    uint64_t num_coalescence_records;
     /* state */
     size_t used_memory;
     double time;
