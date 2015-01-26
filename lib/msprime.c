@@ -793,7 +793,7 @@ msp_print_state(msp_t *self)
         u = msp_get_segment(self, j);
         v = fenwick_get_value(&self->links, j);
         if (v != 0) {
-            printf("\t%d\tl=%d r=%d v=%d prev=%p next=%p\n", (int) v, u->left,
+            printf("\t%ld\tl=%d r=%d v=%d prev=%p next=%p\n", v, u->left,
                     u->right, (int) u->value, (void *) u->prev, (void *) u->next);
         }
     }
