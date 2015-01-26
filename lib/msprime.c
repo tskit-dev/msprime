@@ -909,8 +909,8 @@ static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
 {
     int ret = 0;
-    int64_t l, t, gap;
-    uint32_t j, k;
+    int64_t l, t, gap, k;
+    uint32_t j;
     node_mapping_t search;
     segment_t *x, *y, *z;
     int64_t num_links = fenwick_get_total(&self->links);
@@ -918,19 +918,16 @@ msp_recombination_event(msp_t *self)
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
     l = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
-    printf("l = %li\n", l);
-    printf("num_links = %li\n", num_links);
     assert(l > 0 && l <= num_links);
     j = (uint32_t) fenwick_find(&self->links, l);
     t = fenwick_get_cumulative_sum(&self->links, (size_t) j);
     gap = t - l;
-    printf("gap = %li\n", gap);
     assert(gap > 0 && gap < self->num_loci);
     y = msp_get_segment(self, j);
     x = y->prev;
     k = y->right - (uint32_t) gap - 1;
     if (y->left <= k) {
-        z = msp_alloc_segment(self, k + 1, y->right, y->value, NULL, y->next);
+        z = msp_alloc_segment(self, (uint32_t) k + 1, y->right, y->value, NULL, y->next);
         if (z == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -940,11 +937,11 @@ msp_recombination_event(msp_t *self)
             y->next->prev = z;
         }
         y->next = NULL;
-        y->right = k;
+        y->right = (uint32_t) k;
         fenwick_increment(&self->links, y->index, k - z->right);
-        search.left = k + 1;
+        search.left = (uint32_t) k + 1;
         if (avl_search(&self->breakpoints, &search) == NULL) {
-            ret = msp_copy_breakpoint(self, k + 1);
+            ret = msp_copy_breakpoint(self, (uint32_t) k + 1);
             if (ret != 0) {
                 goto out;
             }
