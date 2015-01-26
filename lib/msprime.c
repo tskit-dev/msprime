@@ -77,12 +77,6 @@ cmp_node_mapping(const void *a, const void *b) {
 }
 
 
-static inline uint32_t
-get_num_links(segment_t *u)
-{
-    return u->right - u->left;
-}
-
 static void
 segment_init(void **obj, size_t index)
 {
@@ -832,7 +826,7 @@ out:
  * specified tree node v.
  */
 static int WARN_UNUSED
-msp_insert_breakpoint(msp_t *self, uint32_t left, int v)
+msp_insert_breakpoint(msp_t *self, uint32_t left, uint32_t v)
 {
     int ret = 0;
     avl_node_t *node = msp_alloc_avl_node(self);
@@ -877,10 +871,11 @@ msp_copy_breakpoint(msp_t *self, uint32_t k)
 
 static int WARN_UNUSED
 msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
-        int32_t child1, int32_t child2, int32_t parent)
+        uint32_t child1, uint32_t child2, uint32_t parent)
 {
     int ret = 0;
     coalescence_record_t *lcr = &self->last_coalesence_record;
+
 
 /* Disable record squashing for now - we get a reduction in the number
  * of trees output from mscompat, which could be very confusing.
@@ -902,7 +897,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         }
         lcr->left = left;
         lcr->right = right;
-        lcr->time = self->time;
+        lcr->time = (float) self->time;
         lcr->children[0] = child1;
         lcr->children[1] = child2;
         lcr->parent = parent;
@@ -914,8 +909,8 @@ static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
 {
     int ret = 0;
-    uint64_t l, t, gap, k;
-    uint32_t j;
+    uint64_t l, t, gap;
+    uint32_t j, k;
     node_mapping_t search;
     segment_t *x, *y, *z;
     uint64_t num_links = fenwick_get_total(&self->links);
@@ -927,9 +922,10 @@ msp_recombination_event(msp_t *self)
     j = (uint32_t) fenwick_find(&self->links, (size_t) l);
     t = fenwick_get_cumulative_sum(&self->links, (size_t) j);
     gap = t - l;
+    assert(gap < UINT32_MAX);
     y = msp_get_segment(self, j);
     x = y->prev;
-    k = y->right - gap - 1;
+    k = y->right - (uint32_t) gap - 1;
     if (y->left <= k) {
         z = msp_alloc_segment(self, k + 1, y->right, y->value, NULL, y->next);
         if (z == NULL) {
@@ -969,8 +965,7 @@ static int WARN_UNUSED
 msp_coancestry_event(msp_t *self)
 {
     int ret = 0;
-    int32_t eta;
-    uint32_t j, n, l, r, r_max;
+    uint32_t j, n, l, r, r_max, eta;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
@@ -978,13 +973,13 @@ msp_coancestry_event(msp_t *self)
     self->num_ca_events++;
     /* Choose x and y */
     n = avl_count(&self->ancestral_population);
-    j = gsl_rng_uniform_int(self->rng, n);
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
     node = avl_at(&self->ancestral_population, j);
     assert(node != NULL);
     x = (segment_t *) node->item;
     avl_unlink_node(&self->ancestral_population, node);
     msp_free_avl_node(self, node);
-    j = gsl_rng_uniform_int(self->rng, n - 1);
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
     node = avl_at(&self->ancestral_population, j);
     assert(node != NULL);
     y = (segment_t *) node->item;
@@ -1096,7 +1091,7 @@ out:
 int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
-    int j;
+    unsigned int j;
     int ret = 0;
     population_model_t *m;
     segment_t *u;
@@ -1176,7 +1171,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     while (n > 1 && self->time < max_time && events < max_events) {
         events++;
         num_links = fenwick_get_total(&self->links);
-        lambda_r = num_links * self->scaled_recombination_rate;
+        lambda_r = (double) num_links * self->scaled_recombination_rate;
         t_r = DBL_MAX;
         if (lambda_r != 0.0) {
             t_r = gsl_ran_exponential(self->rng, 1.0 / lambda_r);
@@ -1192,7 +1187,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             t_wait = t_c;
             event_method = msp_coancestry_event;
         }
-        // TODO check for infinite waiting time and return error.
+        /* TODO check for infinite waiting time and return error. */
         assert(t_wait != DBL_MAX);
         if (self->time + t_wait >= pop_model->next->start_time) {
             /* We skip ahead to the start time for the next demographic

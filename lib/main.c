@@ -27,7 +27,7 @@
 
 #include "msprime.h"
 
-void
+static void
 fatal_error(const char *msg, ...)
 {
     va_list argp;
@@ -45,7 +45,7 @@ fatal_error(const char *msg, ...)
  * converted to double or if min <= x <= max does not hold; returns 0 if
  * the value is converted successfully.
  */
-int
+static int
 parse_long(const char *str, long *value, const long min,
         const long max)
 {
@@ -71,7 +71,7 @@ read_population_models(msp_t *msp, config_t *config)
     int j;
     const char *type;
     double time, param;
-    unsigned int num_population_models;
+    int num_population_models;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "population_models");
 
@@ -83,7 +83,7 @@ read_population_models(msp_t *msp, config_t *config)
     }
     num_population_models = config_setting_length(setting);
     for (j = 0; j < num_population_models; j++) {
-        s = config_setting_get_elem(setting, j);
+        s = config_setting_get_elem(setting, (unsigned int) j);
         if (s == NULL) {
             fatal_error("error reading population_models[%d]", j);
         }
@@ -125,7 +125,7 @@ out:
 
 static int
 read_config(msp_t *msp, const char *filename, double *mutation_rate,
-        size_t *max_haplotype_length, int *precision)
+        size_t *max_haplotype_length, size_t *precision)
 {
     int ret = 0;
     int err;
@@ -147,34 +147,34 @@ read_config(msp_t *msp, const char *filename, double *mutation_rate,
     if (config_lookup_int(config, "sample_size", &tmp) == CONFIG_FALSE) {
         fatal_error("sample_size is a required parameter");
     }
-    msp->sample_size = tmp;
+    msp->sample_size = (uint32_t) tmp;
     if (config_lookup_int(config, "num_loci", &tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
-    msp->num_loci = tmp;
+    msp->num_loci = (uint32_t) tmp;
     if (config_lookup_int(config, "avl_node_block_size", &tmp) == CONFIG_FALSE) {
         fatal_error("avl_node_block_size is a required parameter");
     }
-    msp->avl_node_block_size = tmp;
+    msp->avl_node_block_size = (size_t) tmp;
     if (config_lookup_int(config, "segment_block_size", &tmp) == CONFIG_FALSE) {
         fatal_error("segment_block_size is a required parameter");
     }
-    msp->segment_block_size = tmp;
+    msp->segment_block_size = (size_t) tmp;
     if (config_lookup_int(config, "node_mapping_block_size", &tmp)
             == CONFIG_FALSE) {
         fatal_error("node_mapping_block_size is a required parameter");
     }
-    msp->node_mapping_block_size = tmp;
+    msp->node_mapping_block_size = (size_t) tmp;
     if (config_lookup_int(config, "max_memory", &tmp)
             == CONFIG_FALSE) {
         fatal_error("max_memory is a required parameter");
     }
-    msp->max_memory = tmp * 1024 * 1024;
+    msp->max_memory = (size_t) tmp * 1024 * 1024;
     if (config_lookup_int(config, "max_haplotype_length", &tmp)
             == CONFIG_FALSE) {
         fatal_error("max_haplotype_length is a required parameter");
     }
-    *max_haplotype_length = tmp;
+    *max_haplotype_length = (size_t) tmp;
     if (config_lookup_float(config, "recombination_rate",
             &msp->scaled_recombination_rate) == CONFIG_FALSE) {
         fatal_error("recombination_rate is a required parameter");
@@ -187,9 +187,10 @@ read_config(msp_t *msp, const char *filename, double *mutation_rate,
             == CONFIG_FALSE) {
         fatal_error("tree_file is a required parameter");
     }
-    if (config_lookup_int(config, "precision", precision) == CONFIG_FALSE) {
+    if (config_lookup_int(config, "precision", &tmp) == CONFIG_FALSE) {
         fatal_error("precision is a required parameter");
     }
+    *precision = (size_t) tmp;
     s = strlen(str);
     msp->tree_file_name = malloc(s + 1);
     if (msp->tree_file_name == NULL) {
@@ -203,7 +204,7 @@ read_config(msp_t *msp, const char *filename, double *mutation_rate,
 }
 
 static void
-run_simulate(char *conf_file, long seed, unsigned long output_events)
+run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
 {
     int ret = -1;
     int result;
@@ -211,7 +212,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     /* TEMP; we want to move all the parameters into a dedicated UI struct */
     double mutation_rate;
     size_t max_haplotype_length;
-    int precision;
+    size_t precision;
     tree_file_t tf;
     hapgen_t hapgen;
     newick_t newick;
@@ -222,7 +223,7 @@ run_simulate(char *conf_file, long seed, unsigned long output_events)
     if (msp == NULL) {
         goto out;
     }
-    msp->random_seed = seed;
+    msp->random_seed = (long unsigned int) seed;
     ret = msp_add_constant_population_model(msp, -1.0, 1.0);
     if (ret != 0) {
         goto out;
@@ -345,6 +346,6 @@ main(int argc, char** argv)
             fatal_error("cannot parse seed '%s'", argv[4]);
         }
     }
-    run_simulate(argv[1], seed, output_events);
+    run_simulate(argv[1], (unsigned long) seed, (unsigned long) output_events);
     return EXIT_SUCCESS;
 }
