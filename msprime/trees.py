@@ -172,6 +172,15 @@ class TreeSimulator(object):
         # Set the block sizes using our estimates.
         n = self._sample_size
         m = self._num_loci
+        # First check to make sure they are sane.
+        if not isinstance(n, int):
+            raise TypeError("Sample size must be an integer")
+        if not isinstance(m, int):
+            raise TypeError("Number of loci must be an integer")
+        if n < 2:
+            raise ValueError("Sample size must be >= 2")
+        if m < 1:
+            raise ValueError("Postive number of loci required")
         rho = 4 * self._scaled_recombination_rate * (m - 1)
         num_trees = min(m // 2, rho * harmonic_number(n - 1))
         b = 10 # Baseline maximum

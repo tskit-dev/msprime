@@ -67,7 +67,7 @@ class TestSingleLocusSimulation(tests.MsprimeTestCase):
 
     def test_error_cases(self):
         for n in [-100, -1, 0, 1]:
-            self.assertRaises(msprime.InputError, msprime.simulate_tree, n)
+            self.assertRaises(ValueError, msprime.simulate_tree, n)
         for n in ["", None, "2", 2.2, 1e5]:
             self.assertRaises(TypeError, msprime.simulate_tree, n)
 
@@ -109,7 +109,7 @@ class TestMultiLocusSimulation(tests.MsprimeTestCase):
         def f(n, m, r):
             return [t for t in msprime.simulate_trees(n, m, r)]
         for n in [-100, -1, 0, 1]:
-            self.assertRaises(msprime.InputError, f, n, 1, 1.0)
+            self.assertRaises(ValueError, f, n, 1, 1.0)
         for n in ["", None, "2", 2.2, 1e5]:
             self.assertRaises(TypeError, f, n, 1, 1.0)
 
