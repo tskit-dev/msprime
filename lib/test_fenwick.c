@@ -34,22 +34,23 @@ static void
 test_simple_cases(void)
 {
     fenwick_t t;
-    uint64_t n, j, s;
+    int64_t s;
+    size_t j, n;
     for (n = 1; n < 100; n++) {
         s = 0;
         assert(fenwick_alloc(&t, n) == 0);
         for (j = 1; j <= n; j++) {
-            fenwick_increment(&t, j, j);
-            s += j;
-            assert(fenwick_get_value(&t, j) == j);
+            fenwick_increment(&t, j, (int64_t) j);
+            s = s + (int64_t) j;
+            assert(fenwick_get_value(&t, j) == (int64_t) j);
             assert(fenwick_get_cumulative_sum(&t, j) == s);
             assert(fenwick_get_total(&t) == s);
             assert(fenwick_find(&t, s) == j);
             fenwick_set_value(&t, j, 0);
             assert(fenwick_get_value(&t, j) == 0);
-            assert(fenwick_get_cumulative_sum(&t, j) == s - j);
-            fenwick_set_value(&t, j, j);
-            assert(fenwick_get_value(&t, j) == j);
+            assert(fenwick_get_cumulative_sum(&t, j) == s - (int64_t) j);
+            fenwick_set_value(&t, j, (int64_t) j);
+            assert(fenwick_get_value(&t, j) == (int64_t) j);
 
         }
         assert(fenwick_free(&t) == 0);

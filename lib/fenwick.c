@@ -49,12 +49,12 @@ fenwick_alloc_buffers(fenwick_t *self)
 
     self->tree = NULL;
     self->values = NULL;
-    self->tree = calloc((1 + self->size), sizeof(uint64_t));
+    self->tree = calloc((1 + self->size), sizeof(int64_t));
     if (self->tree == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    self->values = calloc((1 + self->size), sizeof(uint64_t));
+    self->values = calloc((1 + self->size), sizeof(int64_t));
     if (self->values == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -77,7 +77,7 @@ fenwick_expand(fenwick_t *self, size_t increment)
 {
     int ret = -1;
     size_t j;
-    uint64_t *values = self->values;
+    int64_t *values = self->values;
     size_t old_size = self->size;
 
     if (self->tree == NULL || self->values == NULL) {
@@ -129,14 +129,14 @@ fenwick_get_size(fenwick_t *self)
     return self->size;
 }
 
-uint64_t
+int64_t
 fenwick_get_total(fenwick_t *self)
 {
     return fenwick_get_cumulative_sum(self, self->size);
 }
 
 void
-fenwick_increment(fenwick_t *self, size_t index, uint64_t value)
+fenwick_increment(fenwick_t *self, size_t index, int64_t value)
 {
     size_t j = index;
 
@@ -149,17 +149,17 @@ fenwick_increment(fenwick_t *self, size_t index, uint64_t value)
 }
 
 void
-fenwick_set_value(fenwick_t *self, size_t index, uint64_t value)
+fenwick_set_value(fenwick_t *self, size_t index, int64_t value)
 {
-    uint64_t v = value - self->values[index];
+    int64_t v = value - self->values[index];
 
     fenwick_increment(self, index, v);
 }
 
-uint64_t
+int64_t
 fenwick_get_cumulative_sum(fenwick_t *self, size_t index)
 {
-    uint64_t ret = 0;
+    int64_t ret = 0;
     size_t j = index;
 
     assert(0 < index && index <= self->size);
@@ -170,7 +170,7 @@ fenwick_get_cumulative_sum(fenwick_t *self, size_t index)
     return ret;
 }
 
-uint64_t
+int64_t
 fenwick_get_value(fenwick_t *self, size_t index)
 {
     assert(0 < index && index <= self->size);
@@ -179,11 +179,11 @@ fenwick_get_value(fenwick_t *self, size_t index)
 
 
 size_t
-fenwick_find(fenwick_t *self, uint64_t sum)
+fenwick_find(fenwick_t *self, int64_t sum)
 {
     size_t j = 0;
     size_t k;
-    uint64_t s = sum;
+    int64_t s = sum;
     size_t half = self->log_size;
 
     while (half > 0) {

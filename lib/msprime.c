@@ -678,7 +678,7 @@ msp_print_segment_chain(msp_t *self, segment_t *head)
 static void
 msp_verify(msp_t *self)
 {
-    uint64_t s, ss, total_links;
+    int64_t s, ss, total_links;
     size_t total_segments = 0;
     size_t total_avl_nodes = 0;
     avl_node_t *node;
@@ -704,7 +704,7 @@ msp_verify(msp_t *self)
             } else {
                 s = u->right - u->left;
             }
-            ss = fenwick_get_value(&self->links, u->index);
+            ss = fenwick_get_value(&self->links, (size_t) u->index);
             total_links += ss;
             assert(s == ss);
             ss = s; /* just to keep compiler happy - see below also */
@@ -762,7 +762,7 @@ msp_print_state(msp_t *self)
     avl_node_t *node;
     node_mapping_t *nm;
     segment_t *u;
-    uint64_t v;
+    int64_t v;
     uint32_t j;
     double gig = 1024.0 * 1024;
     segment_t **ancestors = malloc(msp_get_num_ancestors(self)
@@ -909,20 +909,20 @@ static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
 {
     int ret = 0;
-    uint64_t l, t, gap;
+    int64_t l, t, gap;
     uint32_t j, k;
     node_mapping_t search;
     segment_t *x, *y, *z;
-    uint64_t num_links = fenwick_get_total(&self->links);
+    int64_t num_links = fenwick_get_total(&self->links);
 
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
-    l = 1 + (uint64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
+    l = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
     assert(l > 0 && l <= num_links);
-    j = (uint32_t) fenwick_find(&self->links, (size_t) l);
+    j = (uint32_t) fenwick_find(&self->links, l);
     t = fenwick_get_cumulative_sum(&self->links, (size_t) j);
     gap = t - l;
-    assert(gap < UINT32_MAX);
+    assert(gap > 0 && gap < self->num_loci);
     y = msp_get_segment(self, j);
     x = y->prev;
     k = y->right - (uint32_t) gap - 1;
@@ -1162,7 +1162,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     double lambda_c, lambda_r, t_c, t_r, t_wait, pop_size;
-    uint64_t num_links;
+    int64_t num_links;
     uint32_t n = avl_count(&self->ancestral_population);
     int (*event_method)(msp_t *);
     population_model_t *pop_model = self->current_population_model;
