@@ -30,15 +30,20 @@
 #define POP_MODEL_CONSTANT 0
 #define POP_MODEL_EXPONENTIAL 1
 
-/* index: 2^32 * 32 bytes gives a maximum of 128 GiB of segments */
-/* TODO should we change index to a size_t? This will make running out
- * of segment space irrelevant. However, we get an 8 byte penalty for 
- * doing so, because of the struct alignment requirements. */
+/* Using a size_t for index allows us to have an effectively unlimited
+ * number of segments. However, we end up wasting 4 bytes of space 
+ * per segment because of alignments requirements. This means that 
+ * we use 40 bytes instead of 32 (if we use a 32 bit index for a limit
+ * of 4G segments), which is a 25% increase in space. It may be possible
+ * to do something clever using the offsets of the pointers from the 
+ * base address of the memory chunk, which might allow us to get this
+ * memory back.
+ */
 typedef struct segment_t_t {
     uint32_t left;
     uint32_t right;
-    uint32_t index;
     uint32_t value;
+    size_t index;
     struct segment_t_t *prev;
     struct segment_t_t *next;
 } segment_t;

@@ -83,8 +83,7 @@ static void
 segment_init(void **obj, size_t index)
 {
     segment_t *seg = (segment_t *) obj;
-    seg->index = (uint32_t) index + 1;
-    assert(index < UINT32_MAX);
+    seg->index = index + 1;
 }
 
 /* memory heap manager */
@@ -616,7 +615,7 @@ out:
  * Returns the segment with the specified index.
  */
 static segment_t *
-msp_get_segment(msp_t *self, uint32_t index)
+msp_get_segment(msp_t *self, size_t index)
 {
     segment_t *u = object_heap_get_object(&self->segment_heap, index - 1);
 
@@ -705,7 +704,7 @@ msp_verify(msp_t *self)
             } else {
                 s = u->right - u->left;
             }
-            ss = fenwick_get_value(&self->links, (size_t) u->index);
+            ss = fenwick_get_value(&self->links, u->index);
             total_links += ss;
             assert(s == ss);
             ss = s; /* just to keep compiler happy - see below also */
