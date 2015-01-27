@@ -15,3 +15,19 @@ install:
   - python setup.py install
 
 script: nosetests 
+
+env:
+  global:
+  # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+  # via the "travis encrypt" command using the project repo's public key
+  - secure: "XRqUqbcFEmdl5dN7bvBeMRRdMtN1Sfcfqc0iLx8mH1xRRy8lQgaSmWG3zdaY5WSFbCGwoPuv2IXy7bPbwX5DKYsH0OkXLfkgo3yjw5X4341hQjMn0B7scr0lM8QU30YcSgqniFxEwMOytmQsQGSKwlz6tMKs2R758GCR7xJIyi4="
+
+  addons:
+    coverity_scan:
+      project:
+        name: "jeromekelleher/msprime"
+        description: "Coalescent simulator"
+      notification_email: jk@well.ox.ac.uk
+      build_command_prepend: "cd lib && make && rm main"
+      build_command:   "cd lib && make"
+      branch_pattern: coverity_scan
