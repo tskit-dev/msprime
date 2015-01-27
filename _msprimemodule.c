@@ -332,7 +332,7 @@ Simulator_get_num_loci(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", self->sim->num_loci);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_loci);
 out:
     return ret;
 }
@@ -344,7 +344,7 @@ Simulator_get_sample_size(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", self->sim->sample_size);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->sample_size);
 out:
     return ret;
 }
@@ -453,7 +453,7 @@ Simulator_get_num_ancestors(Simulator *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", msp_get_num_ancestors(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_ancestors(self->sim));
 out:
     return ret;
 }
@@ -465,7 +465,7 @@ Simulator_get_num_coancestry_events(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", self->sim->num_ca_events);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_ca_events);
 out:
     return ret;
 }
@@ -477,7 +477,7 @@ Simulator_get_num_recombination_events(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", self->sim->num_re_events);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_re_events);
 out:
     return ret;
 }
@@ -489,7 +489,7 @@ Simulator_get_num_avl_node_blocks(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", msp_get_num_avl_node_blocks(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_avl_node_blocks(self->sim));
 out:
     return ret;
 }
@@ -501,7 +501,7 @@ Simulator_get_num_node_mapping_blocks(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", msp_get_num_node_mapping_blocks(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_node_mapping_blocks(self->sim));
 out:
     return ret;
 }
@@ -513,7 +513,7 @@ Simulator_get_num_segment_blocks(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", msp_get_num_segment_blocks(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_segment_blocks(self->sim));
 out:
     return ret;
 }
@@ -525,7 +525,7 @@ Simulator_get_used_memory(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", msp_get_used_memory(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_used_memory(self->sim));
 out:
     return ret;
 }
@@ -538,7 +538,7 @@ Simulator_get_num_breakpoints(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("I", msp_get_num_breakpoints(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_breakpoints(self->sim));
 out:
     return ret;
 }
