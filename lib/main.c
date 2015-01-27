@@ -234,6 +234,7 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
         /* we haven't alloc'd yet, so we must skip the free. This API really
          * is nasty and needs to be fixed!
          */
+        free(msp);
         msp = NULL;
         goto out;
     }

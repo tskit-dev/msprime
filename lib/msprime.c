@@ -149,7 +149,7 @@ object_heap_expand(object_heap_t *self)
     free(self->heap);
     self->heap = NULL;
     self->size += self->block_size;
-    self->heap = malloc(self->size * sizeof(void **));
+    self->heap = malloc(self->size * sizeof(void *));
     if (self->heap == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -215,7 +215,7 @@ object_heap_init(object_heap_t *self, size_t object_size, size_t block_size,
     self->object_size = object_size;
     self->init_object = init_object;
     self->num_blocks = 1;
-    self->heap = malloc(self->size * sizeof(void **));
+    self->heap = malloc(self->size * sizeof(void *));
     self->mem_blocks = malloc(sizeof(void *));
     if (self->heap == NULL || self->mem_blocks == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -768,7 +768,7 @@ msp_print_state(msp_t *self)
     uint32_t j;
     double gig = 1024.0 * 1024;
     segment_t **ancestors = malloc(msp_get_num_ancestors(self)
-            * sizeof(segment_t **));
+            * sizeof(segment_t *));
 
     if (ancestors == NULL && msp_get_num_ancestors(self) != 0) {
         ret = MSP_ERR_NO_MEMORY;
