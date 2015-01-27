@@ -52,8 +52,10 @@ msp_strerror(int err)
         ret = "Newick string generation overflow.";
     } else if (err == MSP_ERR_UNSORTED_POP_MODELS) {
         ret = "Population models must sorted by start_time";
-    } else if (err == MSP_ERR_OVERFLOW) {
-        ret = "Overflow occured.";
+    } else if (err == MSP_ERR_POPULATION_OVERFLOW) {
+        ret = "Population Overflow occured.";
+    } else if (err == MSP_ERR_LINKS_OVERFLOW) {
+        ret = "Links Overflow occured.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -973,15 +975,6 @@ msp_coancestry_event(msp_t *self)
     self->num_ca_events++;
     /* Choose x and y */
     n = avl_count(&self->ancestral_population);
-    /* TODO do we need to worry about the size of the ancestral
-     * population being too big for the gsl integer random generator?
-     * This seems like a very large population. We put this check
-     * in here just to be on the safe side.
-     */
-    if (n >= UINT32_MAX / 8) {
-        ret = MSP_ERR_OVERFLOW;
-        goto out;
-    }
     j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
     node = avl_at(&self->ancestral_population, j);
     assert(node != NULL);
@@ -1180,6 +1173,21 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     while (n > 1 && self->time < max_time && events < max_events) {
         events++;
         num_links = fenwick_get_total(&self->links);
+        /* TODO there are various worries when we're dealing with very
+         * large population sizes and numbers of links. For example,
+         * what if n is too big for the gsl integer random generator?
+         * To at least determine if these are real things to worry
+         * about, we put in some arbitrary (and hopefully safe) limits
+         * and see if they are ever hit in practise.
+         */
+        if (n >= UINT32_MAX / 8) {
+            ret = MSP_ERR_POPULATION_OVERFLOW;
+            goto out;
+        }
+        if (num_links >= INT64_MAX / 8) {
+            ret = MSP_ERR_LINKS_OVERFLOW;
+            goto out;
+        }
         lambda_r = (double) num_links * self->scaled_recombination_rate;
         t_r = DBL_MAX;
         if (lambda_r != 0.0) {
