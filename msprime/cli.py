@@ -149,7 +149,7 @@ def positive_int(value):
         raise argparse.ArgumentTypeError(msg)
     return int_value
 
-def mscompat_main():
+def msp_ms_main():
     parser = argparse.ArgumentParser(description=mscompat_description)
     parser.add_argument("sample_size", type=positive_int, help="Sample size")
     parser.add_argument("num_replicates", type=positive_int,
