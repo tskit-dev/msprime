@@ -52,6 +52,8 @@ msp_strerror(int err)
         ret = "Newick string generation overflow.";
     } else if (err == MSP_ERR_UNSORTED_POP_MODELS) {
         ret = "Population models must sorted by start_time";
+    } else if (err == MSP_ERR_OVERFLOW) {
+        ret = "Overflow occured.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -82,8 +84,7 @@ segment_init(void **obj, size_t index)
 {
     segment_t *seg = (segment_t *) obj;
     seg->index = (uint32_t) index + 1;
-    /* if seg->index is 0 we have overflowed */
-    assert(seg->index != 0);
+    assert(index < UINT32_MAX);
 }
 
 /* memory heap manager */
@@ -625,10 +626,10 @@ msp_get_segment(msp_t *self, uint32_t index)
 }
 
 static void
-msp_free_segment(msp_t *self, segment_t *node)
+msp_free_segment(msp_t *self, segment_t *seg)
 {
-    object_heap_free_object(&self->segment_heap, node);
-    fenwick_set_value(&self->links, node->index, 0);
+    object_heap_free_object(&self->segment_heap, seg);
+    fenwick_set_value(&self->links, seg->index, 0);
 }
 
 static inline int WARN_UNUSED
@@ -972,8 +973,16 @@ msp_coancestry_event(msp_t *self)
 
     self->num_ca_events++;
     /* Choose x and y */
-    assert(avl_count(&self->ancestral_population) < UINT32_MAX);
     n = avl_count(&self->ancestral_population);
+    /* TODO do we need to worry about the size of the ancestral
+     * population being too big for the gsl integer random generator?
+     * This seems like a very large population. We put this check
+     * in here just to be on the safe side.
+     */
+    if (n >= UINT32_MAX / 8) {
+        ret = MSP_ERR_OVERFLOW;
+        goto out;
+    }
     j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
     node = avl_at(&self->ancestral_population, j);
     assert(node != NULL);
