@@ -127,12 +127,14 @@ class SimulationRunner(object):
             if self.mutation_rate is not None:
                 hg = msprime.HaplotypeGenerator(self.tree_file_name,
                         self.mutation_rate)
-                print("segsites:", hg.get_num_segregating_sites())
-                P = hg.get_positions()
-                print("positions:", " ".join("{0:.3f}".format(p) for p in P))
-                for h in hg.get_haplotypes():
-                    print(h)
-
+                s = hg.get_num_segregating_sites()
+                print("segsites:", s)
+                if s != 0:
+                    print("positions: NOT IMPLEMENTED")
+                    for h in hg.get_haplotypes():
+                        print(h)
+                else:
+                    print()
             self.simulator.reset()
 
     def cleanup(self):

@@ -306,9 +306,6 @@ class HaplotypeGenerator(object):
         haps = [h.decode() for h in bytes_haplotypes[1:]]
         return haps
 
-    def get_positions(self):
-        return [0 for j in range(self.get_num_segregating_sites())]
-
 
 class PopulationModel(object):
     """
