@@ -924,7 +924,7 @@ msp_recombination_event(msp_t *self)
     segment_index = fenwick_find(&self->links, l);
     t = fenwick_get_cumulative_sum(&self->links, segment_index);
     gap = t - l;
-    assert(gap > 0 && gap < self->num_loci);
+    assert(gap >= 0 && gap < self->num_loci);
     y = msp_get_segment(self, segment_index);
     x = y->prev;
     k = y->right - (uint32_t) gap - 1;
