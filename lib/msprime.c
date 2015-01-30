@@ -927,7 +927,8 @@ msp_recombination_event(msp_t *self)
     assert(gap >= 0 && gap < self->num_loci);
     y = msp_get_segment(self, segment_index);
     x = y->prev;
-    k = y->right - (uint32_t) gap - 1;
+    k = y->right - gap - 1;
+    assert(k >= 1 && k <= self->num_loci);
     if (y->left <= k) {
         z = msp_alloc_segment(self, (uint32_t) k + 1, y->right, y->value, NULL, y->next);
         if (z == NULL) {
