@@ -949,6 +949,7 @@ msp_recombination_event(msp_t *self)
             }
         }
     } else {
+        assert(x != NULL);
         x->next = NULL;
         y->prev = NULL;
         t = x->right;
