@@ -39,6 +39,8 @@ _msprime_module = Extension('_msprime',
             d + "tree_file.c", d + "hapgen.c", d + "newick.c",
             d + "avl.c"],
     libraries = ["gsl", "gslcblas"],
+    # Enable asserts by default.
+    undef_macros=['NDEBUG'],
     include_dirs = [d])
 
 setup(
