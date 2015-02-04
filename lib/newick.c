@@ -53,7 +53,7 @@ newick_alloc(newick_t *self, const char *tree_file_name, size_t precision)
     n = self->sample_size;
     self->output_buffer_size = 3 * n + 2 * n * self->max_branch_length_size
         + n * max_label_size;
-    self->tau = malloc(N * sizeof(float));
+    self->tau = malloc(N * sizeof(double));
     self->branch_lengths = malloc(N * sizeof(char *));
     self->branch_lengths_mem = malloc(N * self->max_branch_length_size);
     self->children = malloc(N * sizeof(int *));
@@ -73,7 +73,7 @@ newick_alloc(newick_t *self, const char *tree_file_name, size_t precision)
      * here by not keeping the null pointers for 1 to n.
      */
     memset(self->children, 0, N * sizeof(int *));
-    memset(self->tau, 0, N * sizeof(float));
+    memset(self->tau, 0, N * sizeof(double));
     pi = self->children_mem;
     for (j = self->sample_size + 1; j < N; j++) {
         self->children[j] = pi;
@@ -161,7 +161,7 @@ static int newick_update_tree(newick_t *self, uint32_t *length)
     int tree_ret = 1;
     int r;
     int32_t c1, c2, p, j, c;
-    float t;
+    double t;
 
     while (self->next_record.left == self->breakpoint && tree_ret == 1) {
         self->tau[self->next_record.parent] = self->next_record.time;

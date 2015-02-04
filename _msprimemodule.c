@@ -429,7 +429,7 @@ Simulator_get_time(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", (float) self->sim->time);
+    ret = Py_BuildValue("d", self->sim->time);
 out:
     return ret;
 }
