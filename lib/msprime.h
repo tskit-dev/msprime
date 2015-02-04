@@ -53,7 +53,7 @@ typedef struct {
     uint32_t right;
     uint32_t children[2];
     uint32_t parent;
-    float time;
+    double time;
 } coalescence_record_t;
 
 typedef struct {
@@ -108,7 +108,7 @@ typedef struct {
     char **haplotypes;
     char *haplotype_mem;
     int *pi;
-    float *tau;
+    double *tau;
     /* tree traversal memory */
     int32_t *child;
     int32_t *sib;
@@ -120,7 +120,7 @@ typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     size_t precision;
-    float *tau;
+    double *tau;
     int **children;
     int *visited;
     int *stack;

@@ -899,7 +899,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         }
         lcr->left = left;
         lcr->right = right;
-        lcr->time = (float) self->time;
+        lcr->time = self->time;
         lcr->children[0] = child1;
         lcr->children[1] = child2;
         lcr->parent = parent;

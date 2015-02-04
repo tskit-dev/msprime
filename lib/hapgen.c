@@ -58,7 +58,7 @@ hapgen_alloc(hapgen_t *self, double mutation_rate, const char *tree_file_name,
     self->num_loci = self->tree_file.num_loci;
     N  = 2 * self->sample_size;
     self->pi = calloc(N, sizeof(int));
-    self->tau = calloc(N, sizeof(float));
+    self->tau = calloc(N, sizeof(double));
     self->child = malloc(N * sizeof(int));
     self->sib = malloc(N * sizeof(int));
     self->branch_mutations = malloc(N * sizeof(int));

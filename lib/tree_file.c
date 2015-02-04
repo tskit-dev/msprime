@@ -26,7 +26,7 @@
 #define MSP_TREE_FILE_MAGIC 0xa52cd4a4
 #define MSP_TREE_FILE_VERSION 1
 #define MSP_TREE_FILE_HEADER_SIZE 28
-#define MSP_NUM_CR_ELEMENTS 5
+#define MSP_NUM_CR_ELEMENTS 6
 
 #define MSP_FLAGS_COMPLETE 1
 #define MSP_FLAGS_SORTED 2
@@ -46,23 +46,26 @@ cmp_coalescence_record(const void *a, const void *b) {
 static inline void
 decode_coalescence_record(uint32_t *record, coalescence_record_t *cr)
 {
-    union { float float_value; uint32_t uint_value; } conv;
+    uint64_t *time;
+    union { double double_value; uint64_t uint_value; } conv;
 
     cr->left = record[0];
     cr->right = 0; /* we do not store right for complete sims */
     cr->children[0] = record[1];
     cr->children[1] = record[2];
     cr->parent = record[3];
-    conv.uint_value = record[4];
-    cr->time = conv.float_value;
+    time = (uint64_t *) &record[4];
+    conv.uint_value = *time;
+    cr->time = conv.double_value;
 }
 
 static inline void
 encode_coalescence_record(coalescence_record_t *cr, uint32_t *record)
 {
-    union { float float_value; uint32_t uint_value; } conv;
+    uint64_t *time;
+    union { double double_value; uint64_t uint_value; } conv;
 
-    conv.float_value = cr->time;
+    conv.double_value = cr->time;
     record[0] = cr->left;
     /* we do not record the right value as it's not needed when doing
      * complete simulations.
@@ -70,7 +73,8 @@ encode_coalescence_record(coalescence_record_t *cr, uint32_t *record)
     record[1] = (uint32_t) cr->children[0];
     record[2] = (uint32_t) cr->children[1];
     record[3] = (uint32_t) cr->parent;
-    record[4] = conv.uint_value;
+    time = (uint64_t *) &record[4];
+    *time = conv.uint_value;
 }
 
 static inline int WARN_UNUSED
