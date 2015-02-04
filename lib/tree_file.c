@@ -24,7 +24,7 @@
 #include "msprime.h"
 
 #define MSP_TREE_FILE_MAGIC 0xa52cd4a4
-#define MSP_TREE_FILE_VERSION 1
+#define MSP_TREE_FILE_VERSION 2
 #define MSP_TREE_FILE_HEADER_SIZE 28
 #define MSP_NUM_CR_ELEMENTS 6
 
