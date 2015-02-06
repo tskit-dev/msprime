@@ -3,6 +3,7 @@
 from __future__ import print_function
 from __future__ import division
 
+import re
 import os
 import random
 import unittest
@@ -117,7 +118,7 @@ class TestTreeSimulator(tests.MsprimeTestCase):
     """
     Runs tests on the underlying TreeSimulator object.
     """
-    def verify_simulation(self, n, m, r):
+    def verify_simulation(self, n, m, r, squash_records):
         """
         Verifies a simulation for the specified parameters.
         """
@@ -125,13 +126,20 @@ class TestTreeSimulator(tests.MsprimeTestCase):
         # todo verify all the setters.
         # self.assertEqual(ts.get_sample_size(), n)
         ts.set_scaled_recombination_rate(r)
+        ts.set_squash_records(squash_records)
         ts.set_num_loci(m)
         self.assertTrue(ts.run())
+        self.assertEqual(squash_records, ts.get_squash_records())
         msprime.sort_tree_file(self._treefile)
         tf = msprime.TreeFile(self._treefile)
         l = [t for t in tf]
         self.verify_trees(n, m, l)
-        self.assertLessEqual(len(l), ts.get_num_breakpoints())
+        # If record squashing is on, we won't necessarily get a distinct
+        # tree for every recombination breakpoint.
+        if ts.get_squash_records():
+            self.assertLessEqual(len(l), ts.get_num_breakpoints())
+        else:
+            self.assertEqual(len(l), ts.get_num_breakpoints())
 
     def test_random_parameters(self):
         num_random_sims = 10
@@ -139,7 +147,8 @@ class TestTreeSimulator(tests.MsprimeTestCase):
             n = random.randint(2, 100)
             m = random.randint(10, 1000)
             r = random.random()
-            self.verify_simulation(n, m, r)
+            s = bool(random.randint(0, 1))
+            self.verify_simulation(n, m, r, s)
 
 
 
@@ -180,9 +189,7 @@ class TestNewickConversion(tests.MsprimeTestCase):
             """
             Strips all time information out of the specified newick tree.
             """
-            s = newick.replace(":0", "")
-            s = s.replace(":1", "")
-            return s
+            return re.sub(":\d", "", newick)
         # We set the precision to 0 here to avoid problems that occur when
         # Python and C using different rounding strategies. This allows us
         # to remove the times completely, so we're just comparing the
