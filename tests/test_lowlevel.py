@@ -170,6 +170,7 @@ class TestInterface(tests.MsprimeTestCase):
         n = random.randint(2, 1000)
         m = random.randint(1, 10**6)
         rho = random.uniform(0, 1000)
+        squash_records = bool(random.randint(0, 1))
         num_pop_models = random.randint(0, 10)
         models = get_random_population_models(num_pop_models)
         random_seed = random.randint(0, 2**31)
@@ -178,7 +179,8 @@ class TestInterface(tests.MsprimeTestCase):
         node_mapping_block_size = random.randint(1, 100)
         avl_node_block_size = random.randint(1, 100)
         sim = _msprime.Simulator(sample_size=n, num_loci=m,
-                population_models=models, scaled_recombination_rate=rho,
+                squash_records=squash_records, population_models=models,
+                scaled_recombination_rate=rho,
                 random_seed=random_seed, tree_file_name=self._treefile,
                 max_memory=max_memory, segment_block_size=segment_block_size,
                 avl_node_block_size=avl_node_block_size,
@@ -192,6 +194,9 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
+        self.assertEqual(sim.get_sample_size(), n)
+        self.assertEqual(sim.get_num_loci(), m)
+        self.assertEqual(sim.get_squash_records(), squash_records)
         a = 0
         nodes = set()
         for ind in sim.get_ancestors():
