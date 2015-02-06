@@ -148,6 +148,7 @@ typedef struct {
     double scaled_recombination_rate;
     unsigned long random_seed;
     char *tree_file_name;
+    int squash_records;
     /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;

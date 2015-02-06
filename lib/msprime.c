@@ -782,6 +782,7 @@ msp_print_state(msp_t *self)
     printf("max_memory  = %f MiB\n", (double) self->max_memory / gig);
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
+    printf("squash_records = %d\n", self->squash_records);
     printf("random seed = %ld\n", self->random_seed);
     printf("num_links = %ld\n", (long) fenwick_get_total(&self->links));
     printf("population = %d\n", avl_count(&self->ancestral_population));
@@ -878,19 +879,13 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
     int ret = 0;
     coalescence_record_t *lcr = &self->last_coalesence_record;
 
-
-/* Disable record squashing for now - we get a reduction in the number
- * of trees output from mscompat, which could be very confusing.
- */
-#if 0
-    if (lcr->time == self->time && lcr->right + 1 == left
-            && lcr->children[0] == child1 && lcr->children[1] == child2
+    if (self->squash_records && lcr->time == self->time
+            && lcr->right + 1 == left
+            && lcr->children[0] == child1
+            && lcr->children[1] == child2
             && lcr->parent == parent) {
         /* squash this record into the last */
         lcr->right = right;
-#else
-    if (0) {
-#endif
     } else {
         /* Don't flush the first dummy record */
         if (lcr->left != 0) {

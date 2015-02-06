@@ -307,16 +307,20 @@ def make_tree_visualisation(pi, tau, out, max_time):
             u = pi[u]
 
 def print_tree_file(tree_file_name):
-    for l, pi, tau in msprime.TreeFile(tree_file_name):
+    tf = msprime.TreeFile(tree_file_name)
+    if not tf.issorted():
+        msprime.sort_tree_file(tree_file_name)
+        tf = msprime.TreeFile(tree_file_name)
+    for l, pi, tau in tf:
         print(l, pi, tau)
     for r in msprime.TreeFile(tree_file_name).records():
         print(r)
 
 if __name__ == "__main__":
-    # print_tree_file(sys.argv[1])
+    print_tree_file(sys.argv[1])
     # edit_visualisation()
     # mutation_dev()
-    example1()
+    # example1()
     #hl_main()
     # ll_main()
     # memory_test()
