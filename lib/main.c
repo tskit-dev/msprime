@@ -152,6 +152,10 @@ read_config(msp_t *msp, const char *filename, double *mutation_rate,
         fatal_error("num_loci is a required parameter");
     }
     msp->num_loci = (uint32_t) tmp;
+    if (config_lookup_int(config, "squash_records", &msp->squash_records)
+            == CONFIG_FALSE) {
+        fatal_error("squash_records is a required parameter");
+    }
     if (config_lookup_int(config, "avl_node_block_size", &tmp) == CONFIG_FALSE) {
         fatal_error("avl_node_block_size is a required parameter");
     }
