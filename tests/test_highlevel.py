@@ -176,16 +176,27 @@ class TestNewickConversion(tests.MsprimeTestCase):
         """
         Verifies that the specified tree is converted to Newick correctly.
         """
+        def strip_tree(newick):
+            """
+            Strips all time information out of the specified newick tree.
+            """
+            s = newick.replace(":0", "")
+            s = s.replace(":1", "")
+            return s
         # We set the precision to 0 here to avoid problems that occur when
-        # Python and C using different rounding strategies. There is a still
-        # small probablity that we'll still get a different value from the
-        # conversion to decimal, so we may still need to get rid of this
-        # test entirely.
+        # Python and C using different rounding strategies. This allows us
+        # to remove the times completely, so we're just comparing the
+        # structure of the trees.
         precision = 0
         old_trees = [(l, oriented_tree_to_newick(pi, tau, precision))
                 for l, pi, tau in msprime.TreeFile(treefile).trees()]
         new_trees = list(msprime.TreeFile(treefile).newick_trees(precision))
-        self.assertEqual(new_trees, old_trees)
+        self.assertEqual(len(new_trees), len(old_trees))
+        for (l1, t1), (l2, t2) in zip(new_trees, old_trees):
+            self.assertEqual(l1, l2)
+            s1 = strip_tree(t1)
+            s2 = strip_tree(t2)
+            self.assertEqual(s1, s2)
 
     def test_simple_cases(self):
         cases = [
@@ -210,10 +221,12 @@ class TestNewickConversion(tests.MsprimeTestCase):
         for j in range(num_random_sims):
             n = random.randint(2, 100)
             m = random.randint(10, 1000)
+            squash_records = bool(random.randint(0, 1))
             r = random.random()
             ts = msprime.TreeSimulator(n, self._treefile)
             ts.set_scaled_recombination_rate(r)
             ts.set_num_loci(m)
+            ts.set_squash_records(squash_records)
             self.assertTrue(ts.run())
             msprime.sort_tree_file(self._treefile)
             self.verify_trees(self._treefile)

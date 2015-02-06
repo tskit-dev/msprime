@@ -135,7 +135,7 @@ class TreeSimulator(object):
     def set_num_loci(self, num_loci):
         self._num_loci = num_loci
 
-    def set_record_squasing(self, squash_records):
+    def set_squash_records(self, squash_records):
         self._squash_records = squash_records
 
     def set_scaled_recombination_rate(self, scaled_recombination_rate):
