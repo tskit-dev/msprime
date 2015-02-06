@@ -236,14 +236,16 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int sim_ret;
     static char *kwlist[] = {"sample_size", "random_seed",
-        "tree_file_name", "num_loci", "scaled_recombination_rate",
-        "population_models", "max_memory", "avl_node_block_size",
+        "tree_file_name", "num_loci", "squash_records",
+        "scaled_recombination_rate", "population_models",
+        "max_memory", "avl_node_block_size",
         "segment_block_size", "node_mapping_block_size", NULL};
     PyObject *population_models = NULL;
     /* parameter defaults */
     unsigned int sample_size = 2;
     unsigned int num_loci = 1;
     unsigned long random_seed = 1;
+    int squash_records = 0;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
@@ -254,12 +256,11 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 
     self->sim = NULL;
     self->tree_file_name = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Ils#|IdO!nnnn", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Ils#|IidO!nnnn", kwlist,
             &sample_size, &random_seed, &tree_file_name,
-            &tree_file_name_len,
-            &num_loci, &scaled_recombination_rate,
-            &PyList_Type, &population_models, &max_memory,
-            &avl_node_block_size, &segment_block_size,
+            &tree_file_name_len, &num_loci, &squash_records,
+            &scaled_recombination_rate, &PyList_Type, &population_models,
+            &max_memory, &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size)) {
         goto out;
     }
@@ -271,6 +272,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     memset(self->sim, 0, sizeof(msp_t));
     self->sim->sample_size = (uint32_t) sample_size;
     self->sim->num_loci = (uint32_t) num_loci;
+    self->sim->squash_records = squash_records;
     self->sim->random_seed = random_seed;
     self->sim->scaled_recombination_rate = scaled_recombination_rate;
     self->sim->max_memory = (size_t) max_memory;
@@ -336,6 +338,19 @@ Simulator_get_num_loci(Simulator  *self)
 out:
     return ret;
 }
+
+static PyObject *
+Simulator_get_squash_records(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = PyBool_FromLong((long) self->sim->squash_records);
+out:
+    return ret;
+}
+
 
 static PyObject *
 Simulator_get_sample_size(Simulator  *self)
@@ -718,6 +733,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the number of loci" },
     {"get_sample_size", (PyCFunction) Simulator_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
+    {"get_squash_records", (PyCFunction) Simulator_get_squash_records, METH_NOARGS,
+            "Returns True is record squashing is enabled." },
     {"get_scaled_recombination_rate",
             (PyCFunction) Simulator_get_scaled_recombination_rate, METH_NOARGS,
             "Returns the scaled recombination rate." },

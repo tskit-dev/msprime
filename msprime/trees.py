@@ -87,6 +87,7 @@ class TreeSimulator(object):
         self._tree_file_name = tree_file_name
         self._scaled_recombination_rate = 1.0
         self._num_loci = 1
+        self._squash_records = False
         self._population_models = []
         self._random_seed = None
         self._segment_block_size = None
@@ -125,11 +126,17 @@ class TreeSimulator(object):
     def get_max_memory(self):
         return self._ll_sim.get_max_memory()
 
+    def get_squash_records(self):
+        return self._ll_sim.get_squash_records()
+
     def add_population_model(self, pop_model):
         self._population_models.append(pop_model)
 
     def set_num_loci(self, num_loci):
         self._num_loci = num_loci
+
+    def set_record_squasing(self, squash_records):
+        self._squash_records = squash_records
 
     def set_scaled_recombination_rate(self, scaled_recombination_rate):
         self._scaled_recombination_rate = scaled_recombination_rate
@@ -207,6 +214,7 @@ class TreeSimulator(object):
         self._set_environment_defaults()
         self._ll_sim = _msprime.Simulator(sample_size=self._sample_size,
                 num_loci=self._num_loci, population_models=models,
+                squash_records=int(self._squash_records),
                 scaled_recombination_rate=self._scaled_recombination_rate,
                 random_seed=self._random_seed,
                 tree_file_name=self._tree_file_name,
