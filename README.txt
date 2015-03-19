@@ -4,32 +4,29 @@ msprime
 
 Msprime is a reimplementation of Hudson's classical ms program for modern
 datasets. It is under heavy development at the moment, and the present
-code should be considered early alpha quality. Bugs may be present,
-and the API might change considerably. Ultimately, msprime will contain
-an ms-compatible command-line interface along with other utilities to
-generate and view trees. For now, only the Python API is available;
-see the `Examples`_ section below for how to use it.
+code should be considered beta quality. Bugs may be present,
+and the API might change considerably. We provide an ms-compatible
+command line interface ``mspms``, which should be useful to fit into
+existing workflows. However, the Python API is the recommended way to
+use msprime to gain full advantage of its internal structures.
 
-**TODO:**
-
-- Add mutations and output sequences. Simple infinite sites will do for version 1.0.
-- Add the ms compatible CLI program.
-- Add full documentation, both for the API and the programs as well as the tree file
-  format. Change the documentation here to be purely for installation and quick
-  up-and-running examples.
+See the `Examples`_ section below for some quick examples on how to
+use the API. Full documentation will be forthcoming.
 
 -------------
 Installation
 -------------
 
-The project will be available on PyPI soon. Until then, it is easiest
-to clone the git repo and install to a virtualenv. For example::
+The simplest method of installation is to use PyPI and pip::
 
-    $ git clone https://github.com/jeromekelleher/msprime.git
-    $ cd msprime
-    $ virtualenv testenv
-    $ source testenv/bin/activate
-    $ python setup.py install
+    $ pip install msprime --user
+
+will install msprime your user Python installation. This should
+work in most cases (but see the `Requirements`_ section).
+
+To use the ms-compatible command line program, you must ensure
+that the ``~/.local/bin/`` directory is in your ``PATH``.
+
 
 *************
 Requirements

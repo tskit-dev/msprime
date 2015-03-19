@@ -53,7 +53,7 @@ setup(
     url="http://pypi.python.org/pypi/msprime",
     entry_points={
         'console_scripts': [
-            'msp-ms=msprime.cli:msp_ms_main',
+            'mspms=msprime.cli:msp_ms_main',
         ]
     },
     install_requires=requirements,
