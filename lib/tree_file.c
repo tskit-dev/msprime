@@ -24,9 +24,9 @@
 #include "msprime.h"
 
 #define MSP_TREE_FILE_MAGIC 0xa52cd4a4
-#define MSP_TREE_FILE_VERSION 2
+#define MSP_TREE_FILE_VERSION 3
 #define MSP_TREE_FILE_HEADER_SIZE 28
-#define MSP_NUM_CR_ELEMENTS 6
+#define MSP_NUM_CR_ELEMENTS 7
 
 #define MSP_FLAGS_COMPLETE 1
 #define MSP_FLAGS_SORTED 2
@@ -50,11 +50,11 @@ decode_coalescence_record(uint32_t *record, coalescence_record_t *cr)
     union { double double_value; uint64_t uint_value; } conv;
 
     cr->left = record[0];
-    cr->right = 0; /* we do not store right for complete sims */
-    cr->children[0] = record[1];
-    cr->children[1] = record[2];
-    cr->parent = record[3];
-    time = (uint64_t *) &record[4];
+    cr->right = record[1];
+    cr->children[0] = record[2];
+    cr->children[1] = record[3];
+    cr->parent = record[4];
+    time = (uint64_t *) &record[5];
     conv.uint_value = *time;
     cr->time = conv.double_value;
 }
@@ -67,13 +67,11 @@ encode_coalescence_record(coalescence_record_t *cr, uint32_t *record)
 
     conv.double_value = cr->time;
     record[0] = cr->left;
-    /* we do not record the right value as it's not needed when doing
-     * complete simulations.
-     */
-    record[1] = (uint32_t) cr->children[0];
-    record[2] = (uint32_t) cr->children[1];
-    record[3] = (uint32_t) cr->parent;
-    time = (uint64_t *) &record[4];
+    record[1] = cr->right;
+    record[2] = (uint32_t) cr->children[0];
+    record[3] = (uint32_t) cr->children[1];
+    record[4] = (uint32_t) cr->parent;
+    time = (uint64_t *) &record[5];
     *time = conv.uint_value;
 }
 
@@ -495,8 +493,8 @@ tree_file_print_records(tree_file_t *self)
     coalescence_record_t cr;
 
     while ((ret = tree_file_next_record(self, &cr)) == 1) {
-        printf("%d\t(%d, %d)->%d @ %f\n", cr.left, cr.children[0],
-                cr.children[1], cr.parent, cr.time);
+        printf("%d-%d\t(%d\t%d)->\t%d @ \t%f\n", cr.left, cr.right,
+                cr.children[0], cr.children[1], cr.parent, cr.time);
     }
     return ret;
 }
