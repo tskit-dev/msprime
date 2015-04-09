@@ -36,6 +36,8 @@ hapgen_alloc(hapgen_t *self, double mutation_rate, const char *tree_file_name,
     uint32_t j;
     uint32_t N;
 
+    /* Disabling this code until we have fixed tree representation. */
+    goto out;
     memset(self, 0, sizeof(hapgen_t));
     self->mutation_rate = mutation_rate;
     self->random_seed = random_seed;

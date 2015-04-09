@@ -964,7 +964,7 @@ TreeFile_next(TreeFile *self)
         goto out;
     }
     if (v == 1) {
-        ret = Py_BuildValue("iiiid", cr.left, cr.children[0],
+        ret = Py_BuildValue("iiiiid", cr.left, cr.right, cr.children[0],
                 cr.children[1], cr.parent, cr.time);
     }
 out:

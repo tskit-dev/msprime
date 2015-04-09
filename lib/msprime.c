@@ -964,7 +964,8 @@ static int WARN_UNUSED
 msp_coancestry_event(msp_t *self)
 {
     int ret = 0;
-    uint32_t j, n, l, r, r_max, eta;
+    int coalescence = 0;
+    uint32_t j, n, l, r, r_max, eta, v;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
@@ -1034,14 +1035,21 @@ msp_coancestry_event(msp_t *self)
                     nm = (node_mapping_t *) node->item;
                     r = nm->left;
                 }
+                if (! coalescence) {
+                    coalescence = 1;
+                    self->next_node++;
+                }
+                v = self->next_node - 1;
                 r--;
-                ret = msp_record_coalescence(self, l, r, x->value, y->value,
-                        eta);
+                ret = msp_record_coalescence(self, l, r, x->value, y->value, v);
+                /* ret = msp_record_coalescence(self, l, r, x->value, y->value, */
+                /*         eta); */
                 if (ret != 0) {
                     goto out;
                 }
                 if (eta < 2 * self->sample_size - 1) {
-                    alpha = msp_alloc_segment(self, l, r, eta, NULL, NULL);
+                    /* alpha = msp_alloc_segment(self, l, r, eta, NULL, NULL); */
+                    alpha = msp_alloc_segment(self, l, r, v, NULL, NULL);
                     if (alpha == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
                         goto out;
@@ -1112,6 +1120,7 @@ msp_initialise(msp_t *self)
         }
         fenwick_increment(&self->links, u->index, self->num_loci - 1);
     }
+    self->next_node = self->sample_size + 1;
     ret = msp_insert_breakpoint(self, 1, self->sample_size + 1);
     if (ret != 0) {
         goto out;

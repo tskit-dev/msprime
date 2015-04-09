@@ -165,6 +165,7 @@ typedef struct {
     /* state */
     size_t used_memory;
     double time;
+    uint32_t next_node;
     gsl_rng *rng;
     avl_tree_t ancestral_population;
     avl_tree_t breakpoints;
