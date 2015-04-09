@@ -35,9 +35,11 @@ class MsprimeTestCase(unittest.TestCase):
         """
         self.assertEqual(len(pi), 2 * n)
         self.assertEqual(len(tau), 2 * n)
-        # leading value must be zero.
+        # leading value must be -1
         self.assertEqual(pi[0], -1)
         self.assertEqual(tau[0], -1)
+        # We should have exactly one root
+        self.assertEqual(pi.count(0), 1)
         num_children = [0 for j in range(0, 2 * n)]
         for j in range(1, 2 * n):
             num_children[pi[j]] += 1
@@ -51,10 +53,9 @@ class MsprimeTestCase(unittest.TestCase):
         for j in range(n + 1, 2 * n):
             self.assertEqual(num_children[j], 2)
             self.assertGreater(tau[j], 0.0)
-        # times of non leaves should be distinct and increasing.
+        # times of non leaves should be distinct
         taup = [tau[j] for j in range(n + 1, 2 * n)]
         self.assertEqual(len(set(taup)), len(taup))
-        self.assertEqual(taup, sorted(taup))
 
     def verify_sparse_tree(self, n, pi, tau):
         """
@@ -88,6 +89,18 @@ class MsprimeTestCase(unittest.TestCase):
                 taup[j] = tau[j]
         # times of non leaves should be distinct
         self.assertEqual(len(set(taup)), len(taup))
+
+    def verify_dense_trees(self, n, m, trees):
+        """
+        Verifies that the specified set of dense trees is consistent with the specified
+        paramters.
+        """
+        s = 0
+        for l, pi, tau in trees:
+            self.verify_dense_tree(n, pi, tau)
+            self.assertTrue(l > 0)
+            s += l
+        self.assertEqual(s, m)
 
     def verify_sparse_trees(self, n, m, trees):
         """
