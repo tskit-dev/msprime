@@ -23,10 +23,10 @@ import msprime
 def print_sim(sim):
     print("sample_size = ", sim.get_sample_size())
     print("num_loci = ", sim.get_num_loci())
-    print("recombination_rate = ", sim.get_recombination_rate())
+    print("recombination_rate = ", sim.get_scaled_recombination_rate())
     print("random_seed = ", sim.get_random_seed())
     print("time = ", sim.get_time())
-    print("tree_file = ", sim.get_tree_file())
+    print("tree_file = ", sim.get_tree_file_name())
     print("num_ancestors = ", sim.get_num_ancestors())
     for segs in sim.get_ancestors():
         print(segs)
@@ -42,11 +42,11 @@ def ll_main():
     j = 0
     while True:
         j += 1
-        models = [{"type":_msprime.POP_MODEL_CONSTANT, "time":0.3, "size":0.2},
-                {"type":_msprime.POP_MODEL_EXPONENTIAL, "time":0.5, "alpha":5}]
+        models = [{"type":_msprime.POP_MODEL_CONSTANT, "start_time":0.3, "size":0.2},
+                {"type":_msprime.POP_MODEL_EXPONENTIAL, "start_time":0.5, "alpha":5}]
         sim = _msprime.Simulator(sample_size=400, random_seed=j,
                 tree_file_name=treefile,
-                num_loci=1000, recombination_rate=0.1,
+                num_loci=1000, scaled_recombination_rate=0.1,
                 max_memory=1024**3, segment_block_size=10**6,
                 population_models=models)
         before = time.time()
@@ -57,13 +57,13 @@ def ll_main():
         print_sim(sim)
 
         before = time.time()
-        tr = _msprime.TreeFile(treefile)
-        tr.sort()
+        _msprime.sort_tree_file(treefile)
         duration = time.time() - before
+        tr = _msprime.TreeFile(treefile)
         print("create tree_reader Ran in", duration)
         print(tr.get_num_loci())
         print(tr.get_sample_size())
-        print(tr.get_num_trees())
+        # print(tr.get_num_breakpoints())
         print(tr.get_metadata())
         s = json.loads(tr.get_metadata())
         # print(s)
@@ -95,6 +95,7 @@ def hl_main():
 
 def large_sim():
     n = 10**3
+    # m = 20 * 10**6
     m = 20 * 10**6
     r = 1e-8
     # Calculate the models
@@ -116,8 +117,10 @@ def large_sim():
     ]
     treefile = "tmp__NOBACKUP__/large_tree_models.dat"
     ts = msprime.TreeSimulator(n, treefile)
+    ts.set_random_seed(1)
     ts.set_num_loci(m)
     ts.set_scaled_recombination_rate(4 * N0 * r)
+    ts.set_squash_records(True)
     ts.set_max_memory("245G")
     ts.set_segment_block_size(int(1e8))
     for m in models:
@@ -131,6 +134,16 @@ def large_sim():
     print("num_avl_node_blocks = ", ts.get_num_avl_node_blocks())
     print("num_node_mapping_blocks = ", ts.get_num_node_mapping_blocks())
     print("num_segment_blocks = ", ts.get_num_segment_blocks())
+
+    # tf = msprime.TreeFile(treefile)
+    # for l, r, c1, c2, p, t in tf.records():
+    #     print(l, r, c1, c2, p, t, sep="\t")
+    # msprime.sort_tree_file()
+
+def print_tree_records(treefile):
+    tf = msprime.TreeFile(treefile)
+    for l, r, c1, c2, p, t in tf.records():
+        print(l, r, c1, c2, p, t, sep="\t")
 
 def sort_tree(f):
     tf = msprime.TreeFile(f)
@@ -174,13 +187,33 @@ def example1():
     # TODO add some different n and m values here.
     ts = msprime.TreeSimulator(5, treefile)
     ts.set_scaled_recombination_rate(0.1)
-    ts.set_num_loci(20)
+    ts.set_num_loci(60)
     ts.set_random_seed(10)
+    ts.set_squash_records(True)
     ts.run()
     msprime.sort_tree_file(treefile)
     tf = msprime.TreeFile(treefile)
-    for l, newick in tf.newick_trees():
-        print(l, ":", newick)
+    # for l, records_in, records_out in tf.get_tree_diffs():
+    #     print(l, records_in, records_out, sep="\t")
+
+    pi = {}
+    tau = {}
+    for l, records_in, records_out in tf.get_tree_diffs():
+        for c1, c2, p in records_out:
+            del pi[c1]
+            del pi[c2]
+            del tau[p]
+        for c1, c2, p, t in records_in:
+            pi[c1] = p
+            pi[c2] = p
+            tau[p] = t
+        print(l, pi, tau, sep="\t")
+    print()
+    tf = msprime.TreeFile(treefile)
+    for l, pi, tau in tf.trees():
+        print(l, pi, tau, sep="\t")
+    # for l, newick in tf.newick_trees():
+    #     print(l, ":", newick)
     # models = [
     #     msprime.ConstantPopulationModel(0.5, 2.0),
     #     msprime.ConstantPopulationModel(1.0, 0.5)
@@ -317,13 +350,14 @@ def print_tree_file(tree_file_name):
         print(r)
 
 if __name__ == "__main__":
-    print_tree_file(sys.argv[1])
+    # print_tree_file(sys.argv[1])
     # edit_visualisation()
     # mutation_dev()
-    # example1()
-    #hl_main()
+    example1()
+    # hl_main()
     # ll_main()
     # memory_test()
     # large_sim()
+    # print_tree_records(sys.argv[1])
     # sort_tree("tmp__NOBACKUP__/large_tree.dat")
     # print_tree("tmp__NOBACKUP__/large_tree.dat")

@@ -23,6 +23,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import heapq
 import os
 import random
 import tempfile
@@ -265,23 +266,68 @@ class TreeFile(object):
     def __iter__(self):
         return self.trees()
 
-    def trees(self):
+    def get_tree_diffs(self):
+        """
+        Returns an iterator over the list of keys,value pairs to
+        remove and add to the trees to generate the full tree
+        sequence.
+        """
         assert self._ll_tree_file.issorted()
-        n = 2 * self.get_sample_size()
-        pi = [0 for j in range(n)]
-        tau = [0 for j in range(n)]
-        # Set the unused element to -1 following Knuth's convention.
-        pi[0] = -1
-        tau[0] = -1
+        live_segments = [(2**63, None)] # Sentinel
+        records_in = []
+        records_out = []
         b = 1
         for l, r, c1, c2, p, t in self._ll_tree_file:
             if l != b:
-                yield l - b, pi, tau
+                yield l - b, records_in, records_out
                 b = l
-            pi[c1] = p
-            pi[c2] = p
-            tau[p] = t
-        yield self.get_num_loci() - l + 1, pi, tau
+                records_in = []
+                records_out = []
+            records_in.append((c1, c2, p, t))
+            if live_segments[0][0] < l:
+                _, value = heapq.heappop(live_segments)
+                records_out.append(value)
+            heapq.heappush(live_segments, (r, (c1, c2, p)))
+        yield self.get_num_loci() - l + 1, records_in, records_out
+
+
+    def trees(self):
+        n = self.get_sample_size()
+        pi = [0 for j in range(2 * n)]
+        tau = [0 for j in range(2 * n)]
+        # Set the unused element to -1 following Knuth's convention.
+        pi[0] = -1
+        tau[0] = -1
+        node_map = {j:j for j in range(1, n + 1)}
+        # The first set of records must be n - 1 ins and 0 outs.
+        diffs = self.get_tree_diffs()
+        l, records_in, records_out = next(diffs)
+        assert len(records_in) == n - 1 and len(records_out) == 0
+        k = n + 1
+        for c1, c2, p, t in records_in:
+            node_map[p] = k
+            pi[node_map[c1]] = k
+            pi[node_map[c2]] = k
+            tau[k] = t
+            k += 1
+        yield l, pi, tau
+        for l, records_in, records_out in diffs:
+            assert len(node_map) == 2 * n - 1
+            assert len(records_in) == len(records_out)
+            out_parents = set(p for c1, c2, p in records_out)
+            in_parents = set(p for c1, c2, p, t in records_in)
+            intersection = out_parents & in_parents
+            out_parents = out_parents - intersection
+            in_parents = in_parents - intersection
+            assert len(out_parents) == len(in_parents)
+            for out_p, in_p in zip(out_parents, in_parents):
+                node_map[in_p] = node_map.pop(out_p)
+            for c1, c2, p, t in records_in:
+                k = node_map[p]
+                pi[node_map[c1]] = k
+                pi[node_map[c2]] = k
+                tau[k] = t
+            yield l, pi, tau
 
     def records(self):
         return self._ll_tree_file
