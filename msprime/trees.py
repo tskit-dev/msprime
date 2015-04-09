@@ -264,7 +264,7 @@ class TreeFile(object):
         return self._ll_tree_file.get_metadata()
 
     def __iter__(self):
-        return self.trees()
+        return self.dense_trees()
 
     def get_tree_diffs(self):
         """
@@ -291,7 +291,23 @@ class TreeFile(object):
         yield self.get_num_loci() - l + 1, records_in, records_out
 
 
-    def trees(self):
+    def sparse_trees(self):
+        n = self.get_sample_size()
+        pi = {}
+        tau = {j:0 for j in range(1, n + 1)}
+        for l, records_in, records_out in self.get_tree_diffs():
+            for c1, c2, p in records_out:
+                del pi[c1]
+                del pi[c2]
+                del tau[p]
+            for c1, c2, p, t in records_in:
+                pi[c1] = p
+                pi[c2] = p
+                tau[p] = t
+                tau[p] = 0
+            yield l, pi, tau
+
+    def dense_trees(self):
         n = self.get_sample_size()
         pi = [0 for j in range(2 * n)]
         tau = [0 for j in range(2 * n)]
@@ -327,6 +343,8 @@ class TreeFile(object):
                 pi[node_map[c1]] = k
                 pi[node_map[c2]] = k
                 tau[k] = t
+                pi[k] = 0
+            print(pi)
             yield l, pi, tau
 
     def records(self):
