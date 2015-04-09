@@ -1066,6 +1066,10 @@ HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds
     double mutation_rate;
 
     self->hapgen = NULL;
+
+    PyErr_Format(PyExc_RuntimeError, "haplotype generation temporarily disabled.");
+    goto out;
+
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "sdln", kwlist,
                 &tree_file_name, &mutation_rate, &random_seed,
                 &max_haplotype_length)) {
@@ -1276,6 +1280,9 @@ NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
     int precision = 3;
 
     self->newick = NULL;
+
+    PyErr_Format(PyExc_RuntimeError, "newick generation temporarily disabled.");
+    goto out;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
                 &tree_file_name, &precision)) {
         goto out;

@@ -4,10 +4,11 @@ Common code for the msprime test cases.
 from __future__ import print_function
 from __future__ import division
 
+import collections
 import os
+import random
 import tempfile
 import unittest
-import random
 
 def setUp():
     # Make random tests reproducible.
@@ -27,9 +28,9 @@ class MsprimeTestCase(unittest.TestCase):
     def tearDown(self):
         os.unlink(self._treefile)
 
-    def verify_tree(self, n, pi, tau):
+    def verify_dense_tree(self, n, pi, tau):
         """
-        Verifies that the specified tree is a consistent coalescent history
+        Verifies that the specified dense tree is a consistent coalescent history
         for a sample of size n.
         """
         self.assertEqual(len(pi), 2 * n)
@@ -55,14 +56,47 @@ class MsprimeTestCase(unittest.TestCase):
         self.assertEqual(len(set(taup)), len(taup))
         self.assertEqual(taup, sorted(taup))
 
-    def verify_trees(self, n, m, trees):
+    def verify_sparse_tree(self, n, pi, tau):
         """
-        Verifies that the specified set of trees is consistent with the specified
+        Verifies that the specified sparse_tree is a consistent coalescent history
+        for a sample of size n.
+        """
+        self.assertEqual(set(pi.keys()), set(tau.keys()))
+        self.assertEqual(len(pi), 2 * n - 1)
+        self.assertEqual(len(tau), 2 * n - 1)
+        # Zero should not be a node
+        self.assertNotIn(0, pi)
+        self.assertNotIn(0, tau)
+        # 1 to n inclusive should always be nodes
+        for j in range(1, n + 1):
+            self.assertIn(j, pi)
+            self.assertIn(j, tau)
+        num_children = collections.defaultdict(int)
+        for j in pi.keys():
+            num_children[pi[j]] += 1
+        # nodes 1 to n are leaves.
+        for j in range(1, n + 1):
+            self.assertNotEqual(pi[j], 0)
+            self.assertEqual(tau[j], 0)
+            self.assertEqual(num_children[j], 0)
+        # All non-leaf nodes should be binary with non-zero times.
+        taup = {}
+        for j in pi.keys():
+            if j > n:
+                self.assertEqual(num_children[j], 2)
+                self.assertGreater(tau[j], 0.0)
+                taup[j] = tau[j]
+        # times of non leaves should be distinct
+        self.assertEqual(len(set(taup)), len(taup))
+
+    def verify_sparse_trees(self, n, m, trees):
+        """
+        Verifies that the specified set of sparse trees is consistent with the specified
         paramters.
         """
         s = 0
         for l, pi, tau in trees:
-            self.verify_tree(n, pi, tau)
+            self.verify_sparse_tree(n, pi, tau)
             self.assertTrue(l > 0)
             s += l
         self.assertEqual(s, m)
