@@ -292,6 +292,10 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
+/* Disabling this code for now because of the change in
+ * tree representation.
+ */
+if (0) {
     /* Print out the newick trees */
     printf("Newick trees:\n");
     ret = newick_alloc(&newick, msp->tree_file_name, precision);
@@ -324,6 +328,7 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
         printf("%d: %s\n", (int) strlen(haplotypes[j]), haplotypes[j]);
     }
     hapgen_free(&hapgen);
+}
 out:
     if (msp != NULL) {
         free(msp->tree_file_name);

@@ -32,6 +32,8 @@ newick_alloc(newick_t *self, const char *tree_file_name, size_t precision)
     int *pi, r;
     char *pc;
 
+    /* Disabling this code until the tree representation has been fixed */
+    goto out;
     memset(self, 0, sizeof(newick_t));
     ret = tree_file_open(&self->tree_file, tree_file_name, 'r');
     if (ret != 0) {

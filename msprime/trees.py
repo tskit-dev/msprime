@@ -274,7 +274,7 @@ class TreeFile(object):
         pi[0] = -1
         tau[0] = -1
         b = 1
-        for l, c1, c2, p, t in self._ll_tree_file:
+        for l, r, c1, c2, p, t in self._ll_tree_file:
             if l != b:
                 yield l - b, pi, tau
                 b = l
