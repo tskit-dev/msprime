@@ -33,6 +33,33 @@ from _msprime import sort_tree_file
 from _msprime import InputError
 from _msprime import LibraryError
 
+
+def _convert_sparse_tree(n, pi_s, tau_s):
+    """
+    Converts the specified sparse tree to a dense tree using a simple
+    algorithm.
+    """
+    # TODO this algorithm needs a lot of work!
+    pi = [0 for j in range(2 * n)]
+    tau = [0 for j in range(2 * n)]
+    # Set the unused element to -1 following Knuth's convention.
+    pi[0] = -1
+    tau[0] = -1
+    times = sorted(tau_s.values())
+    node_map = {times[j]: j + 1 for j in range(n, 2 * n - 1)}
+    for j in range(1, n + 1):
+        dense_child = j
+        sparse_parent = pi_s[j]
+        while sparse_parent != 0 and pi[dense_child] == 0:
+            t = tau_s[sparse_parent]
+            dense_parent = node_map[t]
+            pi[dense_child] = dense_parent
+            tau[dense_parent] = t
+            dense_child = dense_parent
+            sparse_parent = pi_s[sparse_parent]
+    return pi, tau
+
+
 def harmonic_number(n):
     """
     Returns the nth Harmonic number.
@@ -292,60 +319,66 @@ class TreeFile(object):
 
 
     def sparse_trees(self):
+
         n = self.get_sample_size()
         pi = {}
         tau = {j:0 for j in range(1, n + 1)}
-        for l, records_in, records_out in self.get_tree_diffs():
-            for c1, c2, p in records_out:
-                del pi[c1]
-                del pi[c2]
+        last_l = 1
+        live_segments = []
+        # print("START")
+        for l, r, c1, c2, parent, t in self._ll_tree_file:
+            # print(l, r, c1, c2, parent, t, sep="\t")
+            if last_l != l:
+                # print("YIELDING TREE", len(live_segments))
+                # for right, v in live_segments:
+                #     print("\t", right, v)
+                q = 1
+                while q in pi:
+                    q = pi[q]
+                pi[q] = 0
+                yield l - last_l, pi, tau
+                del pi[q]
+                last_l = l
+            heapq.heappush(live_segments, (r, ([c1, c2], parent)))
+            while live_segments[0][0] < l:
+                x, (children, p) = heapq.heappop(live_segments)
+                # print("Popping off segment", x, children, p)
+                for c in children:
+                    del pi[c]
                 del tau[p]
-            for c1, c2, p, t in records_in:
-                pi[c1] = p
-                pi[c2] = p
-                tau[p] = t
-                tau[p] = 0
-            yield l, pi, tau
+            pi[c1] = parent
+            pi[c2] = parent
+            tau[parent] = t
+        q = 1
+        while q in pi:
+            q = pi[q]
+        pi[q] = 0
+        yield self.get_num_loci() - l + 1, pi, tau
+
+#         n = self.get_sample_size()
+#         pi = {}
+#         tau = {j:0 for j in range(1, n + 1)}
+#         trees_visited = 0
+#         for l, records_in, records_out in self.get_tree_diffs():
+#             for c1, c2, p in records_out:
+#                 del tau[p]
+#                 del pi[p]
+#             for c1, c2, p, t in records_in:
+#                 pi[c1] = p
+#                 pi[c2] = p
+#                 tau[p] = t
+#                 pi[p] = 0
+#             if pi.values().count(0) != 1:
+#                 print("ERROR!", trees_visited)
+#                 print(pi.values().count(0), "roots")
+#                 print("n = ", n, len(pi))
+#             yield l, pi, tau
+#             trees_visited += 1
 
     def dense_trees(self):
-        n = self.get_sample_size()
-        pi = [0 for j in range(2 * n)]
-        tau = [0 for j in range(2 * n)]
-        # Set the unused element to -1 following Knuth's convention.
-        pi[0] = -1
-        tau[0] = -1
-        node_map = {j:j for j in range(1, n + 1)}
-        # The first set of records must be n - 1 ins and 0 outs.
-        diffs = self.get_tree_diffs()
-        l, records_in, records_out = next(diffs)
-        assert len(records_in) == n - 1 and len(records_out) == 0
-        k = n + 1
-        for c1, c2, p, t in records_in:
-            node_map[p] = k
-            pi[node_map[c1]] = k
-            pi[node_map[c2]] = k
-            tau[k] = t
-            k += 1
-        yield l, pi, tau
-        for l, records_in, records_out in diffs:
-            assert len(node_map) == 2 * n - 1
-            assert len(records_in) == len(records_out)
-            out_parents = set(p for c1, c2, p in records_out)
-            in_parents = set(p for c1, c2, p, t in records_in)
-            intersection = out_parents & in_parents
-            out_parents = out_parents - intersection
-            in_parents = in_parents - intersection
-            assert len(out_parents) == len(in_parents)
-            for out_p, in_p in zip(out_parents, in_parents):
-                node_map[in_p] = node_map.pop(out_p)
-            for c1, c2, p, t in records_in:
-                k = node_map[p]
-                pi[node_map[c1]] = k
-                pi[node_map[c2]] = k
-                tau[k] = t
-                pi[k] = 0
-            print(pi)
-            yield l, pi, tau
+        for l, pi, tau in self.sparse_trees():
+            pi_dense, tau_dense = _convert_sparse_tree(self.get_sample_size(), pi, tau)
+            yield l, pi_dense, tau_dense
 
     def records(self):
         return self._ll_tree_file

@@ -1,4 +1,5 @@
-""" Test cases for the high level interface to msprime.
+"""
+Test cases for the high level interface to msprime.
 """
 from __future__ import print_function
 from __future__ import division
@@ -137,17 +138,22 @@ class TestTreeSimulator(tests.MsprimeTestCase):
         self.assertEqual(squash_records, ts.get_squash_records())
         msprime.sort_tree_file(self._treefile)
         tf = msprime.TreeFile(self._treefile)
-        dense_trees = [t for t in tf.dense_trees()]
-        self.verify_dense_trees(n, m, dense_trees)
-        tf = msprime.TreeFile(self._treefile)
-        sparse_trees = [t for t in tf.sparse_trees()]
+        sparse_trees = [(l, dict(pi), dict(tau)) for l, pi, tau in tf.sparse_trees()]
         self.verify_sparse_trees(n, m, sparse_trees)
+        tf = msprime.TreeFile(self._treefile)
+        dense_trees = [(l, list(pi), list(tau)) for l, pi, tau in tf.dense_trees()]
+        self.verify_dense_trees(n, m, dense_trees)
+        self.assertEqual(len(sparse_trees), len(dense_trees))
+        for (l_sparse, sparse_pi, sparse_tau), (l_dense, dense_pi, dense_tau) in zip(
+                sparse_trees, dense_trees):
+            self.assertEqual(l_sparse, l_dense)
+            self.assertTreesEqual(n, sparse_pi, sparse_tau, dense_pi, dense_tau)
         # If record squashing is on, we won't necessarily get a distinct
         # tree for every recombination breakpoint.
         if ts.get_squash_records():
-            self.assertLessEqual(len(l), ts.get_num_breakpoints())
+            self.assertLessEqual(len(sparse_trees), ts.get_num_breakpoints())
         else:
-            self.assertEqual(len(l), ts.get_num_breakpoints())
+            self.assertEqual(len(sparse_trees), ts.get_num_breakpoints())
 
     def test_random_parameters(self):
         num_random_sims = 10

@@ -193,26 +193,28 @@ def example1():
     ts.run()
     msprime.sort_tree_file(treefile)
     tf = msprime.TreeFile(treefile)
+    for l, pi, tau in tf.sparse_trees():
+        print(l, pi, tau)
     # for l, records_in, records_out in tf.get_tree_diffs():
     #     print(l, records_in, records_out, sep="\t")
 
-    pi = {}
-    tau = {}
-    for l, records_in, records_out in tf.get_tree_diffs():
-        for c1, c2, p in records_out:
-            del pi[c1]
-            del pi[c2]
-            del tau[p]
-        for c1, c2, p, t in records_in:
-            pi[c1] = p
-            pi[c2] = p
-            tau[p] = t
-        print(l, pi, tau, sep="\t")
-    print()
-    tf = msprime.TreeFile(treefile)
-    for l, pi, tau in tf.trees():
-        print(l, pi, tau, sep="\t")
-    # for l, newick in tf.newick_trees():
+    # pi = {}
+    # tau = {}
+    # for l, records_in, records_out in tf.get_tree_diffs():
+    #     for c1, c2, p in records_out:
+    #         del pi[c1]
+    #         del pi[c2]
+    #         del tau[p]
+    #     for c1, c2, p, t in records_in:
+    #         pi[c1] = p
+    #         pi[c2] = p
+    #         tau[p] = t
+    #     print(l, pi, tau, sep="\t")
+    # print()
+    # tf = msprime.TreeFile(treefile)
+    # for l, pi, tau in tf.trees():
+    #     print(l, pi, tau, sep="\t")
+    # # for l, newick in tf.newick_trees():
     #     print(l, ":", newick)
     # models = [
     #     msprime.ConstantPopulationModel(0.5, 2.0),
