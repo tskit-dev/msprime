@@ -968,7 +968,7 @@ msp_coancestry_event(msp_t *self)
     uint32_t j, n, l, r, r_max, eta, v;
     avl_node_t *node;
     node_mapping_t *nm, search;
-    segment_t *x, *y, *z, *alpha, *beta;
+    segment_t *x, *y, *z, *alpha, *beta, *head;
 
     self->num_ca_events++;
     /* Choose x and y */
@@ -987,6 +987,7 @@ msp_coancestry_event(msp_t *self)
     msp_free_avl_node(self, node);
 
     /* update num_links and get ready for loop */
+    head = NULL;
     z = NULL;
     while (x != NULL || y != NULL) {
         alpha = NULL;
@@ -1074,6 +1075,7 @@ msp_coancestry_event(msp_t *self)
         if (alpha != NULL) {
             l = alpha->left;
             if (z == NULL) {
+                head = alpha;
                 ret = msp_insert_individual(self, alpha);
                 if (ret != 0) {
                     goto out;
@@ -1086,6 +1088,36 @@ msp_coancestry_event(msp_t *self)
             z = alpha;
             fenwick_set_value(&self->links, alpha->index, alpha->right - l);
         }
+    }
+    /* NEW merge together any segments we can. */
+    if (head != NULL) {
+        /* printf("END OF LOOP\n"); */
+        /* x = head; */
+        /* while (x != NULL) { */
+        /*     printf("\t%d\t%d\t%d\n", x->left, x->right, x->value); */
+        /*     x = x->next; */
+        /* } */
+        x = head;
+        while (x != NULL) {
+            y = x->next;
+            while (y != NULL && x->right == y->left - 1
+                    && x->value == y->value) {
+                fenwick_increment(&self->links, x->index, y->right - x->right);
+                x->right = y->right;
+                x->next = y->next;
+                if (y->next != NULL) {
+                    y->next->prev = x;
+                }
+                msp_free_segment(self, y);
+            }
+            x = x->next;
+        }
+        /* printf("FINISHED MERGE\n"); */
+        /* x = head; */
+        /* while (x != NULL) { */
+        /*     printf("\t%d\t%d\t%d\n", x->left, x->right, x->value); */
+        /*     x = x->next; */
+        /* } */
     }
 out:
     return ret;
