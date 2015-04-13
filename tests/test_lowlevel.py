@@ -90,33 +90,39 @@ class TestInterface(tests.MsprimeTestCase):
         last_l = 1
         last_t = 0
         num_trees = 0
-        live_nodes = [(2**63, None)] # Sentinel
+        live_segments = []
         for l, r, c1, c2, parent, t in sorted_records:
             if last_l != l:
                 last_l = l
                 last_t = 0
+                # Insert the root.
+                q = 1
+                while q in pi:
+                    q = pi[q]
+                pi[q] = 0
                 self.verify_sparse_tree(n, pi, tau)
+                del pi[q]
                 num_trees += 1
             else:
                 last_t = t
-            # Ensure that records are sorted by time within a block
-            self.assertLessEqual(last_t, t)
+            heapq.heappush(live_segments, (r, ([c1, c2], parent)))
+            while live_segments[0][0] < l:
+                x, (children, p) = heapq.heappop(live_segments)
+                for c in children:
+                    del pi[c]
+                del tau[p]
             pi[c1] = parent
             pi[c2] = parent
             tau[parent] = t
-            pi[parent] = 0
-            while live_nodes[0][0] < l:
-                x, node = heapq.heappop(live_nodes)
-                if node != parent:
-                    del pi[node]
-                    del tau[node]
-            heapq.heappush(live_nodes, (r, parent))
+            # Ensure that records are sorted by time within a block
+            self.assertLessEqual(last_t, t)
+        q = 1
+        while q in pi:
+            q = pi[q]
+        pi[q] = 0
         self.verify_sparse_tree(n, pi, tau)
         num_trees += 1
-        # TODO make record squashing optional and update this.
-        # self.verify_squashed_records(sorted_records)
-        # This will fail when we have squashed records.
-        self.assertEqual(num_trees, sim.get_num_breakpoints())
+        self.assertLessEqual(num_trees, sim.get_num_breakpoints())
 
     def verify_squashed_records(self, sorted_records):
         """

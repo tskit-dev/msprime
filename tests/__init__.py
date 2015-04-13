@@ -102,6 +102,8 @@ class MsprimeTestCase(unittest.TestCase):
         for j in pi.keys():
             num_children[pi[j]] += 1
             roots += pi[j] == 0
+        if roots != 1:
+            print(pi)
         self.assertEqual(roots, 1)
         # nodes 1 to n are leaves.
         for j in range(1, n + 1):
