@@ -256,7 +256,7 @@ def verify_simple():
 
 
 def main():
-    # verify_random(10)
+    verify_random(10)
     # verify_exponential_models()
     # verify_simple()
     verify_zero_growth_example()
