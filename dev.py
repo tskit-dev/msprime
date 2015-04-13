@@ -122,7 +122,7 @@ def large_sim():
     ts.set_scaled_recombination_rate(4 * N0 * r)
     ts.set_squash_records(True)
     ts.set_max_memory("245G")
-    ts.set_segment_block_size(int(1e8))
+    # ts.set_segment_block_size(int(1e8))
     for m in models:
         ts.add_population_model(m)
     try:
@@ -355,11 +355,11 @@ if __name__ == "__main__":
     # print_tree_file(sys.argv[1])
     # edit_visualisation()
     # mutation_dev()
-    example1()
+    # example1()
     # hl_main()
     # ll_main()
     # memory_test()
-    # large_sim()
+    large_sim()
     # print_tree_records(sys.argv[1])
     # sort_tree("tmp__NOBACKUP__/large_tree.dat")
     # print_tree("tmp__NOBACKUP__/large_tree.dat")
