@@ -148,12 +148,18 @@ class TestTreeSimulator(tests.MsprimeTestCase):
                 sparse_trees, dense_trees):
             self.assertEqual(l_sparse, l_dense)
             self.assertTreesEqual(n, sparse_pi, sparse_tau, dense_pi, dense_tau)
+        # With inline segment merging, the number of trees we get back is
+        # not necessarily equal to the number of breakpoints.
+        self.assertLessEqual(len(sparse_trees), ts.get_num_breakpoints())
+        # TODO implement full tree access that uses the breakpoints so that
+        # we can fully recover the set of trees including the adjacent
+        # identical trees.
         # If record squashing is on, we won't necessarily get a distinct
         # tree for every recombination breakpoint.
-        if ts.get_squash_records():
-            self.assertLessEqual(len(sparse_trees), ts.get_num_breakpoints())
-        else:
-            self.assertEqual(len(sparse_trees), ts.get_num_breakpoints())
+        # if ts.get_squash_records():
+        #     self.assertLessEqual(len(sparse_trees), ts.get_num_breakpoints())
+        # else:
+        #     self.assertEqual(len(sparse_trees), ts.get_num_breakpoints())
 
     def test_random_parameters(self):
         num_random_sims = 10
