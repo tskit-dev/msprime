@@ -12,6 +12,8 @@ import json
 import time
 import random
 import tempfile
+import unittest
+import collections
 import subprocess
 
 import numpy as np
@@ -346,12 +348,100 @@ def print_tree_file(tree_file_name):
     if not tf.issorted():
         msprime.sort_tree_file(tree_file_name)
         tf = msprime.TreeFile(tree_file_name)
-    for l, pi, tau in tf:
-        print(l, pi, tau)
-    for r in msprime.TreeFile(tree_file_name).records():
-        print(r)
+    metadata = json.loads(tf.get_metadata())
+    # print(metadata)
+    n = metadata["sample_size"]
+    # for l, r, c1, c2, p, t in tf.records():
+    #     print(l, r, c1, c2, p, t, sep="\t")
+    count = 0
+    # for l, pi, tau in tf.sparse_trees():
+    for l, r, c1, c2, p, t in tf.records():
+        # print(l, pi, tau)
+        # print(l, len(pi))
+        count += 1
+    print(count)
+
+    # for r in msprime.TreeFile(tree_file_name).records():
+    #     print(r)
+
+class VerifyTrees(unittest.TestCase):
+
+    def verify_sparse_tree(self, n, pi, tau):
+        """
+        Verifies that the specified sparse_tree is a consistent coalescent history
+        for a sample of size n.
+        """
+        self.assertEqual(set(pi.keys()), set(tau.keys()))
+        self.assertEqual(len(pi), 2 * n - 1)
+        self.assertEqual(len(tau), 2 * n - 1)
+        # Zero should not be a node
+        self.assertNotIn(0, pi)
+        self.assertNotIn(0, tau)
+        # 1 to n inclusive should always be nodes
+        for j in range(1, n + 1):
+            self.assertIn(j, pi)
+            self.assertIn(j, tau)
+        num_children = collections.defaultdict(int)
+        roots = 0
+        for j in pi.keys():
+            num_children[pi[j]] += 1
+            roots += pi[j] == 0
+        if roots != 1:
+            print(pi)
+        self.assertEqual(roots, 1)
+        # nodes 1 to n are leaves.
+        for j in range(1, n + 1):
+            self.assertNotEqual(pi[j], 0)
+            self.assertEqual(tau[j], 0)
+            self.assertEqual(num_children[j], 0)
+        # All non-leaf nodes should be binary with non-zero times.
+        taup = {}
+        for j in pi.keys():
+            if j > n:
+                self.assertEqual(num_children[j], 2)
+                self.assertGreater(tau[j], 0.0)
+                taup[j] = tau[j]
+        # times of non leaves should be distinct
+        self.assertEqual(len(set(taup)), len(taup))
+        self.verify_general_tree(n, pi, tau)
+
+    def verify_general_tree(self, n, pi, tau):
+        """
+        Verifies properties that should hold for both sparse and
+        dense trees.
+        """
+        # Times of leaves should be zero, and increasing up the tree
+        for j in range(1, n + 1):
+            self.assertEqual(tau[j], 0.0)
+            last_time = -1
+            k = j
+            while k != 0:
+                self.assertNotEqual(k, pi[k])
+                self.assertGreater(tau[k], last_time)
+                last_time = tau[k]
+                k = pi[k]
+
+    def test_large_tree(self):
+        tree_file_name = "tmp__NOBACKUP__/human-treefile-squashed-5-5.dat"
+        tf = msprime.TreeFile(tree_file_name)
+        if not tf.issorted():
+            msprime.sort_tree_file(tree_file_name)
+            tf = msprime.TreeFile(tree_file_name)
+        metadata = json.loads(tf.get_metadata())
+        n = metadata["sample_size"]
+        count = 0
+        for l, pi, tau in tf.sparse_trees():
+            count += 1
+            self.verify_sparse_tree(n, pi, tau)
+            if count % 10 == 0:
+                print(".", end="")
+                sys.stdout.flush()
+        print()
+        print("Checked", count, "trees")
+
 
 if __name__ == "__main__":
+    unittest.main()
     # print_tree_file(sys.argv[1])
     # edit_visualisation()
     # mutation_dev()
@@ -359,7 +449,7 @@ if __name__ == "__main__":
     # hl_main()
     # ll_main()
     # memory_test()
-    large_sim()
+    # large_sim()
     # print_tree_records(sys.argv[1])
     # sort_tree("tmp__NOBACKUP__/large_tree.dat")
     # print_tree("tmp__NOBACKUP__/large_tree.dat")
