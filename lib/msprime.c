@@ -1039,6 +1039,8 @@ msp_coancestry_event(msp_t *self)
                 if (! coalescence) {
                     coalescence = 1;
                     self->next_node++;
+                    /* Check for overflow */
+                    assert(self->next_node != 0);
                 }
                 v = self->next_node - 1;
                 r--;
