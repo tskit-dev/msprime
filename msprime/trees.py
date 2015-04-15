@@ -323,7 +323,7 @@ class TreeFile(object):
         n = self.get_sample_size()
         pi = {}
         tau = {j:0 for j in range(1, n + 1)}
-        last_l = 1
+        last_l = 0
         live_segments = []
         # print("START")
         for l, r, c1, c2, parent, t in self._ll_tree_file:
@@ -340,7 +340,7 @@ class TreeFile(object):
                 del pi[q]
                 last_l = l
             heapq.heappush(live_segments, (r, ([c1, c2], parent)))
-            while live_segments[0][0] < l:
+            while live_segments[0][0] <= l:
                 x, (children, p) = heapq.heappop(live_segments)
                 # print("Popping off segment", x, children, p)
                 for c in children:
@@ -353,27 +353,7 @@ class TreeFile(object):
         while q in pi:
             q = pi[q]
         pi[q] = 0
-        yield self.get_num_loci() - l + 1, pi, tau
-
-#         n = self.get_sample_size()
-#         pi = {}
-#         tau = {j:0 for j in range(1, n + 1)}
-#         trees_visited = 0
-#         for l, records_in, records_out in self.get_tree_diffs():
-#             for c1, c2, p in records_out:
-#                 del tau[p]
-#                 del pi[p]
-#             for c1, c2, p, t in records_in:
-#                 pi[c1] = p
-#                 pi[c2] = p
-#                 tau[p] = t
-#                 pi[p] = 0
-#             if pi.values().count(0) != 1:
-#                 print("ERROR!", trees_visited)
-#                 print(pi.values().count(0), "roots")
-#                 print("n = ", n, len(pi))
-#             yield l, pi, tau
-#             trees_visited += 1
+        yield self.get_num_loci() - l, pi, tau
 
     def dense_trees(self):
         for l, pi, tau in self.sparse_trees():

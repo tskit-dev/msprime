@@ -60,9 +60,9 @@ class TestInterface(tests.MsprimeTestCase):
         m = sim.get_num_loci()
         for ind in sim.get_ancestors():
             for l, r, node in ind:
-                self.assertTrue(1 <= l <= m)
+                self.assertTrue(0 <= l < m)
                 self.assertTrue(1 <= r <= m)
-                self.assertTrue(1 <= node <= 2 * n)
+                self.assertGreaterEqual(node, 1)
 
     def verify_tree_file_information(self, sim, tf):
         """
@@ -87,7 +87,7 @@ class TestInterface(tests.MsprimeTestCase):
         m = sim.get_num_loci()
         pi = {}
         tau = {j:0 for j in range(1, n + 1)}
-        last_l = 1
+        last_l = 0
         last_t = 0
         num_trees = 0
         live_segments = []
@@ -106,7 +106,7 @@ class TestInterface(tests.MsprimeTestCase):
             else:
                 last_t = t
             heapq.heappush(live_segments, (r, ([c1, c2], parent)))
-            while live_segments[0][0] < l:
+            while live_segments[0][0] <= l:
                 x, (children, p) = heapq.heappop(live_segments)
                 for c in children:
                     del pi[c]
@@ -217,8 +217,8 @@ class TestInterface(tests.MsprimeTestCase):
         nodes = set()
         for ind in sim.get_ancestors():
             self.assertEqual(len(ind), 1)
-            l, r, node  = ind[0]
-            self.assertEqual(l, 1)
+            l, r, node = ind[0]
+            self.assertEqual(l, 0)
             self.assertEqual(r, m)
             self.assertFalse(node in nodes)
             nodes.add(node)
