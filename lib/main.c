@@ -124,14 +124,11 @@ out:
 }
 
 static int
-read_config(msp_t *msp, const char *filename, double *mutation_rate,
-        size_t *max_haplotype_length, size_t *precision)
+read_config(msp_t *msp, const char *filename)
 {
     int ret = 0;
     int err;
     int tmp;
-    size_t s;
-    const char *str;
     config_t *config = malloc(sizeof(config_t));
 
     if (config == NULL) {
@@ -152,10 +149,6 @@ read_config(msp_t *msp, const char *filename, double *mutation_rate,
         fatal_error("num_loci is a required parameter");
     }
     msp->num_loci = (uint32_t) tmp;
-    if (config_lookup_int(config, "squash_records", &msp->squash_records)
-            == CONFIG_FALSE) {
-        fatal_error("squash_records is a required parameter");
-    }
     if (config_lookup_int(config, "avl_node_block_size", &tmp) == CONFIG_FALSE) {
         fatal_error("avl_node_block_size is a required parameter");
     }
@@ -169,38 +162,20 @@ read_config(msp_t *msp, const char *filename, double *mutation_rate,
         fatal_error("node_mapping_block_size is a required parameter");
     }
     msp->node_mapping_block_size = (size_t) tmp;
+    if (config_lookup_int(config, "coalescence_record_block_size", &tmp)
+            == CONFIG_FALSE) {
+        fatal_error("coalescence_record_block_size is a required parameter");
+    }
+    msp->coalescence_record_block_size = (size_t) tmp;
     if (config_lookup_int(config, "max_memory", &tmp)
             == CONFIG_FALSE) {
         fatal_error("max_memory is a required parameter");
     }
     msp->max_memory = (size_t) tmp * 1024 * 1024;
-    if (config_lookup_int(config, "max_haplotype_length", &tmp)
-            == CONFIG_FALSE) {
-        fatal_error("max_haplotype_length is a required parameter");
-    }
-    *max_haplotype_length = (size_t) tmp;
     if (config_lookup_float(config, "recombination_rate",
             &msp->scaled_recombination_rate) == CONFIG_FALSE) {
         fatal_error("recombination_rate is a required parameter");
     }
-    if (config_lookup_float(config, "mutation_rate",
-            mutation_rate) == CONFIG_FALSE) {
-        fatal_error("mutation_rate is a required parameter");
-    }
-    if (config_lookup_string(config, "tree_file", &str)
-            == CONFIG_FALSE) {
-        fatal_error("tree_file is a required parameter");
-    }
-    if (config_lookup_int(config, "precision", &tmp) == CONFIG_FALSE) {
-        fatal_error("precision is a required parameter");
-    }
-    *precision = (size_t) tmp;
-    s = strlen(str);
-    msp->tree_file_name = malloc(s + 1);
-    if (msp->tree_file_name == NULL) {
-        fatal_error("no memory");
-    }
-    strcpy(msp->tree_file_name, str);
     ret = read_population_models(msp, config);
     config_destroy(config);
     free(config);
@@ -213,16 +188,6 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     int ret = -1;
     int result;
     msp_t *msp = calloc(1, sizeof(msp_t));
-    /* TEMP; we want to move all the parameters into a dedicated UI struct */
-    double mutation_rate;
-    size_t max_haplotype_length;
-    size_t precision;
-    tree_file_t tf;
-    hapgen_t hapgen;
-    newick_t newick;
-    char **haplotypes;
-    uint32_t j;
-    size_t s;
 
     if (msp == NULL) {
         goto out;
@@ -232,8 +197,7 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    ret = read_config(msp, conf_file, &mutation_rate, &max_haplotype_length,
-            &precision);
+    ret = read_config(msp, conf_file);
     if (ret != 0) {
         /* we haven't alloc'd yet, so we must skip the free. This API really
          * is nasty and needs to be fixed!
@@ -262,76 +226,8 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
             goto out;
         }
     } while (result > 0);
-    /* sort the file */
-    ret = tree_file_open(&tf, msp->tree_file_name, 'u');
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_file_sort(&tf);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_file_close(&tf);
-    if (ret != 0) {
-        goto out;
-    }
-    /* now print the records */
-    ret = tree_file_open(&tf, msp->tree_file_name, 'r');
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_file_print_state(&tf);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_file_print_records(&tf);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_file_close(&tf);
-    if (ret != 0) {
-        goto out;
-    }
-/* Disabling this code for now because of the change in
- * tree representation.
- */
-if (0) {
-    /* Print out the newick trees */
-    printf("Newick trees:\n");
-    ret = newick_alloc(&newick, msp->tree_file_name, precision);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = newick_output_ms_format(&newick, stdout);
-    if (ret != 0) {
-        goto out;
-    }
-    newick_free(&newick);
-
-    /* make the haplotypes */
-    ret = hapgen_alloc(&hapgen, mutation_rate, msp->tree_file_name,
-            msp->random_seed, max_haplotype_length);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = hapgen_generate(&hapgen);
-    if (ret != 0) {
-        hapgen_free(&hapgen);
-        goto out;
-    }
-    ret = hapgen_get_haplotypes(&hapgen, &haplotypes, &s);
-    if (ret != 0) {
-        goto out;
-    }
-    printf("Segregating sites: %d\n", (int) s);
-    for (j = 1; j <= msp->sample_size; j++) {
-        printf("%d: %s\n", (int) strlen(haplotypes[j]), haplotypes[j]);
-    }
-    hapgen_free(&hapgen);
-}
 out:
     if (msp != NULL) {
-        free(msp->tree_file_name);
         msp_free(msp);
         free(msp);
     }

@@ -84,71 +84,11 @@ typedef struct {
 } object_heap_t;
 
 typedef struct {
-    char *filename;
-    char mode;
-    FILE *file;
-    uint32_t sample_size;
-    uint32_t num_loci;
-    uint32_t flags;
-    char *metadata;
-    size_t coalescence_record_offset;
-    size_t metadata_offset;
-} tree_file_t;
-
-typedef struct {
-    double mutation_rate;
-    unsigned long random_seed;
-    size_t max_haplotype_length;
-    size_t haplotype_length;
-    size_t num_trees;
-    uint32_t sample_size;
-    uint32_t num_loci;
-    tree_file_t tree_file;
-    gsl_rng *rng;
-    char **haplotypes;
-    char *haplotype_mem;
-    int *pi;
-    double *tau;
-    /* tree traversal memory */
-    int32_t *child;
-    int32_t *sib;
-    uint32_t *branch_mutations;
-    uint32_t *mutation_sites;
-} hapgen_t;
-
-typedef struct {
-    uint32_t sample_size;
-    uint32_t num_loci;
-    size_t precision;
-    double *tau;
-    int **children;
-    int *visited;
-    int *stack;
-    size_t stack_size;
-    char *output_buffer;
-    size_t output_buffer_size;
-    int32_t *children_mem;
-    tree_file_t tree_file;
-    uint32_t breakpoint;
-    size_t num_trees;
-    coalescence_record_t next_record;
-    int completed;
-    char **leaf_labels;
-    char *leaf_labels_mem;
-    char **branch_lengths;
-    char *branch_lengths_mem;
-    size_t max_branch_length_size;
-} newick_t;
-
-
-typedef struct {
     /* input parameters */
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
     unsigned long random_seed;
-    char *tree_file_name;
-    int squash_records;
     /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
@@ -161,7 +101,6 @@ typedef struct {
     uint64_t num_re_events;
     uint64_t num_ca_events;
     uint64_t num_trapped_re_events;
-    uint64_t num_coalescence_records;
     /* state */
     size_t used_memory;
     double time;
@@ -170,7 +109,6 @@ typedef struct {
     avl_tree_t ancestral_population;
     avl_tree_t breakpoints;
     fenwick_t links;
-    tree_file_t tree_file;
     /* memory management */
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
@@ -178,8 +116,11 @@ typedef struct {
     void **node_mapping_blocks;
     size_t num_node_mapping_blocks;
     size_t next_node_mapping;
-    /* last coalescence record to enable squashing of adjacent records */
-    coalescence_record_t last_coalesence_record;
+    /* coalescence records are stored in an array */
+    coalescence_record_t *coalescence_records;
+    size_t num_coalescence_records;
+    size_t max_coalescence_records;
+    size_t coalescence_record_block_size;
 } msp_t;
 
 int msp_alloc(msp_t *self);
@@ -197,33 +138,6 @@ size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
-
-int tree_file_open(tree_file_t *self, const char *tree_file_name, char mode);
-int tree_file_set_sample_size(tree_file_t *self, uint32_t sample_size);
-int tree_file_set_num_loci(tree_file_t *self, uint32_t num_loci);
-int tree_file_close(tree_file_t *self);
-int tree_file_sort(tree_file_t *self);
-int tree_file_finalise(tree_file_t *self, msp_t *msp);
-int tree_file_append_record(tree_file_t *self, coalescence_record_t *r);
-int tree_file_next_record(tree_file_t *self, coalescence_record_t *r);
-int tree_file_print_state(tree_file_t *self);
-int tree_file_print_records(tree_file_t *self);
-int tree_file_iscomplete(tree_file_t *self);
-int tree_file_issorted(tree_file_t *self);
-int tree_file_isopen(tree_file_t *self);
-
-int hapgen_alloc(hapgen_t *self, double mutation_rate, 
-        const char *tree_file_name, unsigned long random_seed, 
-        size_t max_haplotype_length);
-int hapgen_generate(hapgen_t *self);
-int hapgen_get_haplotypes(hapgen_t *self, char ***haplotypes, size_t *s);
-int hapgen_free(hapgen_t *self);
-
-int newick_alloc(newick_t *self, const char *tree_file_name, size_t precision);
-int newick_next_tree(newick_t *self, uint32_t *tree_length, char **tree,
-        size_t *str_length);
-int newick_output_ms_format(newick_t *self, FILE *out);
-int newick_free(newick_t *self);
 
 const char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/
