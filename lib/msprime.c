@@ -881,7 +881,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
     coalescence_record_t *lcr = &self->last_coalesence_record;
 
     if (self->squash_records && lcr->time == self->time
-            && lcr->right + 1 == left
+            && lcr->right == left
             && lcr->children[0] == child1
             && lcr->children[1] == child2
             && lcr->parent == parent) {
@@ -889,7 +889,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         lcr->right = right;
     } else {
         /* Don't flush the first dummy record */
-        if (lcr->left != 0) {
+        if (lcr->left != UINT32_MAX) {
             ret = tree_file_append_record(&self->tree_file, lcr);
             self->num_coalescence_records++;
         }
@@ -1166,6 +1166,7 @@ msp_initialise(msp_t *self)
         goto out;
     }
     memset(&self->last_coalesence_record, 0, sizeof(coalescence_record_t));
+    self->last_coalesence_record.left = UINT32_MAX;
     /* Check the population models to make sure they are ordered. This should
      * be done when they are being inserted, but it was too tricky. This
      * API is really awful and needs fixing!

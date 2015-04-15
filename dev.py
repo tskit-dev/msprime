@@ -72,6 +72,7 @@ def ll_main():
         before = time.time()
         j = 0
         for r in tr:
+            print(r)
             j += 1
         print(j)
 
@@ -441,13 +442,13 @@ class VerifyTrees(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    # unittest.main()
     # print_tree_file(sys.argv[1])
     # edit_visualisation()
     # mutation_dev()
     # example1()
     # hl_main()
-    # ll_main()
+    ll_main()
     # memory_test()
     # large_sim()
     # print_tree_records(sys.argv[1])
