@@ -693,7 +693,8 @@ msp_verify(msp_t *self)
         assert(u->prev == NULL);
         while (u != NULL) {
             total_segments++;
-            assert(u->left <= u->right);
+            assert(u->left < u->right);
+            assert(u->right <= self->num_loci);
             /*
              TODO add back in checking for tree integrity
             for (j = u->left; j <= u->right; j++) {
@@ -702,9 +703,9 @@ msp_verify(msp_t *self)
             }
             */
             if (u->prev != NULL) {
-                s = u->right - u->prev->right;
+                s = u->right - u->prev->right - 1;
             } else {
-                s = u->right - u->left;
+                s = u->right - u->left - 1;
             }
             ss = fenwick_get_value(&self->links, u->index);
             total_links += ss;
@@ -923,23 +924,22 @@ msp_recombination_event(msp_t *self)
     y = msp_get_segment(self, segment_index);
     x = y->prev;
     k = y->right - gap - 1;
-    assert(k >= 1 && k <= self->num_loci);
-    if (y->left <= k) {
-        z = msp_alloc_segment(self, (uint32_t) k + 1, y->right, y->value, NULL, y->next);
+    assert(k >= 0 && k < self->num_loci);
+    if (y->left < k) {
+        z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value, NULL, y->next);
         if (z == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        fenwick_increment(&self->links, z->index, z->right - k - 1);
         if (y->next != NULL) {
             y->next->prev = z;
         }
         y->next = NULL;
         y->right = (uint32_t) k;
         fenwick_increment(&self->links, y->index, k - z->right);
-        search.left = (uint32_t) k + 1;
+        search.left = (uint32_t) k;
         if (avl_search(&self->breakpoints, &search) == NULL) {
-            ret = msp_copy_breakpoint(self, (uint32_t) k + 1);
+            ret = msp_copy_breakpoint(self, (uint32_t) k);
             if (ret != 0) {
                 goto out;
             }
@@ -948,13 +948,10 @@ msp_recombination_event(msp_t *self)
         assert(x != NULL);
         x->next = NULL;
         y->prev = NULL;
-        t = x->right;
-        t -= y->left;
-        fenwick_increment(&self->links, y->index, t);
         z = y;
-        y = x;
         self->num_trapped_re_events++;
     }
+    fenwick_set_value(&self->links, z->index, z->right - z->left - 1);
     ret = msp_insert_individual(self, z);
 out:
     return ret;
@@ -965,10 +962,12 @@ msp_coancestry_event(msp_t *self)
 {
     int ret = 0;
     int coalescence = 0;
-    uint32_t j, n, l, r, r_max, eta, v;
+    int defrag_required = 0;
+    int segment_coalesced;
+    uint32_t j, n, l, r, r_max, v;
     avl_node_t *node;
     node_mapping_t *nm, search;
-    segment_t *x, *y, *z, *alpha, *beta, *head;
+    segment_t *x, *y, *z, *alpha, *beta;
 
     self->num_ca_events++;
     /* Choose x and y */
@@ -987,7 +986,6 @@ msp_coancestry_event(msp_t *self)
     msp_free_avl_node(self, node);
 
     /* update num_links and get ready for loop */
-    head = NULL;
     z = NULL;
     while (x != NULL || y != NULL) {
         alpha = NULL;
@@ -1006,12 +1004,12 @@ msp_coancestry_event(msp_t *self)
                 x = y;
                 y = beta;
             }
-            if (x->right < y->left) {
+            if (x->right <= y->left) {
                 alpha = x;
                 x = x->next;
                 alpha->next = NULL;
             } else if (x->left != y->left) {
-                alpha = msp_alloc_segment(self, x->left, y->left - 1, x->value,
+                alpha = msp_alloc_segment(self, x->left, y->left, x->value,
                         NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
@@ -1019,107 +1017,92 @@ msp_coancestry_event(msp_t *self)
                 }
                 x->left = y->left;
             } else {
-                l = x->left;
-                search.left = l;
-                node = avl_search(&self->breakpoints, &search);
-                assert(node != NULL);
-                nm = (node_mapping_t *) node->item;
-                eta = nm->value;
-                r_max = GSL_MIN(x->right, y->right);
-                nm->value++;
-                node = node->next;
-                nm = (node_mapping_t *) node->item;
-                r = nm->left;
-                while (nm->value == eta && r < r_max) {
-                    nm->value++;
-                    node = node->next;
-                    nm = (node_mapping_t *) node->item;
-                    r = nm->left;
-                }
-                if (! coalescence) {
+                if (!coalescence) {
                     coalescence = 1;
                     self->next_node++;
                     /* Check for overflow */
                     assert(self->next_node != 0);
                 }
                 v = self->next_node - 1;
-                r--;
-                ret = msp_record_coalescence(self, l, r, x->value, y->value, v);
-                /* ret = msp_record_coalescence(self, l, r, x->value, y->value, */
-                /*         eta); */
-                if (ret != 0) {
-                    goto out;
-                }
-                if (eta < 2 * self->sample_size - 1) {
-                    /* alpha = msp_alloc_segment(self, l, r, eta, NULL, NULL); */
+
+                l = x->left;
+                search.left = l;
+                node = avl_search(&self->breakpoints, &search);
+                assert(node != NULL);
+                nm = (node_mapping_t *) node->item;
+                nm->value -= 1;
+                segment_coalesced = nm->value == 1;
+                node = node->next;
+                assert(node != NULL);
+                nm = (node_mapping_t *) node->item;
+                r = nm->left;
+                if (!segment_coalesced) {
+                    r_max = GSL_MIN(x->right, y->right);
+                    while (nm->value > 2 && r < r_max) {
+                        nm->value--;
+                        node = node->next;
+                        assert(node != NULL);
+                        nm = (node_mapping_t *) node->item;
+                        r = nm->left;
+                    }
                     alpha = msp_alloc_segment(self, l, r, v, NULL, NULL);
                     if (alpha == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
                         goto out;
                     }
                 }
+                ret = msp_record_coalescence(self, l, r, x->value, y->value, v);
+                if (ret != 0) {
+                    goto out;
+                }
                 if (x->right == r) {
                     beta = x;
                     x = x->next;
                     msp_free_segment(self, beta);
                 } else {
-                    x->left = r + 1;
+                    x->left = r;
                 }
                 if (y->right == r) {
                     beta = y;
                     y = y->next;
                     msp_free_segment(self, beta);
                 } else {
-                    y->left = r + 1;
+                    y->left = r;
                 }
             }
         }
         if (alpha != NULL) {
             l = alpha->left;
             if (z == NULL) {
-                head = alpha;
                 ret = msp_insert_individual(self, alpha);
                 if (ret != 0) {
                     goto out;
                 }
             } else {
+                defrag_required |= z->right == alpha->left && z->value == alpha->value;
                 z->next = alpha;
                 l = z->right;
             }
             alpha->prev = z;
             z = alpha;
-            fenwick_set_value(&self->links, alpha->index, alpha->right - l);
+            fenwick_set_value(&self->links, alpha->index, alpha->right - l - 1);
         }
     }
-    /* NEW merge together any segments we can. */
-    if (head != NULL) {
-        /* printf("END OF LOOP\n"); */
-        /* x = head; */
-        /* while (x != NULL) { */
-        /*     printf("\t%d\t%d\t%d\n", x->left, x->right, x->value); */
-        /*     x = x->next; */
-        /* } */
-        x = head;
-        while (x != NULL) {
-            y = x->next;
-            while (y != NULL && x->right == y->left - 1
-                    && x->value == y->value) {
-                fenwick_increment(&self->links, x->index, y->right - x->right);
+    if (defrag_required) {
+        y = z;
+        while (y->prev != NULL) {
+            x = y->prev;
+            if (x->right == y->left && x->value == y->value) {
                 x->right = y->right;
                 x->next = y->next;
                 if (y->next != NULL) {
                     y->next->prev = x;
                 }
+                fenwick_increment(&self->links, x->index, y->right - y->left);
                 msp_free_segment(self, y);
             }
-            x = x->next;
+            y = x;
         }
-        /* printf("FINISHED MERGE\n"); */
-        /* x = head; */
-        /* while (x != NULL) { */
-        /*     printf("\t%d\t%d\t%d\n", x->left, x->right, x->value); */
-        /*     x = x->next; */
-        /* } */
     }
 out:
     return ret;
@@ -1141,9 +1124,9 @@ msp_initialise(msp_t *self)
     self->num_re_events = 0;
     self->num_ca_events = 0;
     self->num_coalescence_records = 0;
-    self->num_trapped_re_events = 0;;
+    self->num_trapped_re_events = 0;
     for (j = 1; j <= self->sample_size; j++) {
-        u = msp_alloc_segment(self, 1, self->num_loci, j, NULL, NULL);
+        u = msp_alloc_segment(self, 0, self->num_loci, j, NULL, NULL);
         if (u == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -1152,14 +1135,14 @@ msp_initialise(msp_t *self)
         if (ret != 0) {
             goto out;
         }
-        fenwick_increment(&self->links, u->index, self->num_loci - 1);
+        fenwick_set_value(&self->links, u->index, self->num_loci - 1);
     }
     self->next_node = self->sample_size + 1;
-    ret = msp_insert_breakpoint(self, 1, self->sample_size + 1);
+    ret = msp_insert_breakpoint(self, 0, self->sample_size);
     if (ret != 0) {
         goto out;
     }
-    ret = msp_insert_breakpoint(self, self->num_loci + 1, 0);
+    ret = msp_insert_breakpoint(self, self->num_loci, 0);
     if (ret != 0) {
         goto out;
     }
