@@ -8,8 +8,8 @@ CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wwrite-strings -Wnested-externs \
   -fshort-enums -fno-common -Dinline= -g -O2
 LDFLAGS=-lgsl -lgslcblas -lconfig -lm
-SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c tree_file.c hapgen.c newick.c
-COMPILED=msprime.c fenwick.c main.c tree_file.c hapgen.c newick.c
+SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c 
+COMPILED=msprime.c fenwick.c main.c 
 
 all: main test_fenwick
 

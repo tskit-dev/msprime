@@ -495,6 +495,14 @@ msp_alloc(msp_t *self)
     /* set up the AVL trees */
     avl_init_tree(&self->ancestral_population, cmp_individual, NULL);
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
+    /* Allocate the coalescence records */
+    self->coalescence_records = malloc(
+            self->coalescence_record_block_size * sizeof(coalescence_record_t));
+    self->max_coalescence_records = self->coalescence_record_block_size;
+    if (self->coalescence_records == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     ret = 0;
 out:
     return ret;
@@ -528,7 +536,9 @@ msp_free(msp_t *self)
         }
         free(self->node_mapping_blocks);
     }
-    ret = tree_file_close(&self->tree_file);
+    if (self->coalescence_records != NULL) {
+        free(self->coalescence_records);
+    }
     return ret;
 }
 
@@ -729,35 +739,6 @@ msp_verify(msp_t *self)
     }
 }
 
-/* Writes all metadata to the specified file in JSON format
- */
-int WARN_UNUSED
-msp_write_metadata(msp_t *self, FILE *f)
-{
-    int ret = -1;
-    const char *fmt = "{"
-        "\"sample_size\":%d,"
-        "\"num_loci\":%d,"
-        "\"random_seed\":%ld,"
-        "\"recombination_rate\":%f,"
-        "\"tree_file_name\":\"%s\""
-        "}";
-    ret = fprintf(f, fmt,
-        self->sample_size,
-        self->num_loci,
-        self->random_seed,
-        self->scaled_recombination_rate,
-        self->tree_file_name
-    );
-    if (ret < 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
 int
 msp_print_state(msp_t *self)
 {
@@ -783,7 +764,6 @@ msp_print_state(msp_t *self)
     printf("max_memory  = %f MiB\n", (double) self->max_memory / gig);
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
-    printf("squash_records = %d\n", self->squash_records);
     printf("random seed = %ld\n", self->random_seed);
     printf("num_links = %ld\n", (long) fenwick_get_total(&self->links));
     printf("population = %d\n", avl_count(&self->ancestral_population));
@@ -817,7 +797,6 @@ msp_print_state(msp_t *self)
     printf("\tnext = %d\n", (int) self->next_node_mapping);
     printf("\tnum_blocks = %d\n",  (int) self->num_node_mapping_blocks);
     msp_verify(self);
-    ret = tree_file_print_state(&self->tree_file);
 out:
     if (ancestors != NULL) {
         free(ancestors);
@@ -878,30 +857,33 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         uint32_t child1, uint32_t child2, uint32_t parent)
 {
     int ret = 0;
-    coalescence_record_t *lcr = &self->last_coalesence_record;
 
-    if (self->squash_records && lcr->time == self->time
-            && lcr->right == left
-            && lcr->children[0] == child1
-            && lcr->children[1] == child2
-            && lcr->parent == parent) {
-        /* squash this record into the last */
-        lcr->right = right;
-    } else {
-        /* Don't flush the first dummy record */
-        if (lcr->left != UINT32_MAX) {
-            ret = tree_file_append_record(&self->tree_file, lcr);
-            self->num_coalescence_records++;
-        }
-        lcr->left = left;
-        lcr->right = right;
-        lcr->time = self->time;
-        lcr->children[0] = child1;
-        lcr->children[1] = child2;
-        lcr->parent = parent;
-    }
     return ret;
 }
+/*     coalescence_record_t *lcr = &self->last_coalesence_record; */
+
+/*     if (self->squash_records && lcr->time == self->time */
+/*             && lcr->right == left */
+/*             && lcr->children[0] == child1 */
+/*             && lcr->children[1] == child2 */
+/*             && lcr->parent == parent) { */
+/*         /1* squash this record into the last *1/ */
+/*         lcr->right = right; */
+/*     } else { */
+/*         /1* Don't flush the first dummy record *1/ */
+/*         if (lcr->left != UINT32_MAX) { */
+/*             printf("Storing record\n"); */
+/*             self->num_coalescence_records++; */
+/*         } */
+/*         lcr->left = left; */
+/*         lcr->right = right; */
+/*         lcr->time = self->time; */
+/*         lcr->children[0] = child1; */
+/*         lcr->children[1] = child2; */
+/*         lcr->parent = parent; */
+/*     } */
+/*     return ret; */
+/* } */
 
 static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
@@ -1123,7 +1105,6 @@ msp_initialise(msp_t *self)
     /* zero the counters */
     self->num_re_events = 0;
     self->num_ca_events = 0;
-    self->num_coalescence_records = 0;
     self->num_trapped_re_events = 0;
     for (j = 1; j <= self->sample_size; j++) {
         u = msp_alloc_segment(self, 0, self->num_loci, j, NULL, NULL);
@@ -1153,20 +1134,7 @@ msp_initialise(msp_t *self)
     }
     self->current_population_model = self->population_models;
     self->time = 0.0;
-    ret = tree_file_open(&self->tree_file, self->tree_file_name, 'w');
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_file_set_sample_size(&self->tree_file, self->sample_size);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_file_set_num_loci(&self->tree_file, self->num_loci);
-    if (ret != 0) {
-        goto out;
-    }
-    memset(&self->last_coalesence_record, 0, sizeof(coalescence_record_t));
-    self->last_coalesence_record.left = UINT32_MAX;
+    self->num_coalescence_records = 0;
     /* Check the population models to make sure they are ordered. This should
      * be done when they are being inserted, but it was too tricky. This
      * API is really awful and needs fixing!
@@ -1255,15 +1223,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         if (self->time > max_time) {
             ret = 2;
         }
-    } else {
-        /* we need to write a dummy record to flush the last
-         * coalescence record.
-         */
-        ret = msp_record_coalescence(self, 0, 0, 0, 0, 0);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = tree_file_finalise(&self->tree_file, self);
     }
 out:
     return ret;
