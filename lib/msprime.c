@@ -746,6 +746,7 @@ msp_print_state(msp_t *self)
     avl_node_t *node;
     node_mapping_t *nm;
     segment_t *u;
+    coalescence_record_t *cr;
     int64_t v;
     uint32_t j;
     double gig = 1024.0 * 1024;
@@ -787,6 +788,11 @@ msp_print_state(msp_t *self)
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
     printf("Coalescence records = %ld\n", (long) self->num_coalescence_records);
+    for (j = 0; j < self->num_coalescence_records; j++) {
+        cr = &self->coalescence_records[j];
+        printf("\t%d\t%d\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
+                cr->children[1], cr->parent, cr->time);
+    }
     printf("Memory heaps\n");
     printf("avl_node_heap:");
     object_heap_print_state(&self->avl_node_heap);
@@ -829,7 +835,7 @@ out:
 }
 
 /*
- * Inserts a new breakpoint at the specified locus, and copies it's
+ * Inserts a new breakpoint at the specified locus, and copies its
  * node mapping from the containing breakpoint.
  */
 static int WARN_UNUSED
@@ -857,33 +863,44 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         uint32_t child1, uint32_t child2, uint32_t parent)
 {
     int ret = 0;
+    coalescence_record_t *cr;
+    coalescence_record_t *lcr;
 
+    if (self->num_coalescence_records == self->max_coalescence_records - 1) {
+        /* Grow the array */
+        self->max_coalescence_records += self->coalescence_record_block_size;;
+        cr = realloc(self->coalescence_records,
+                self->max_coalescence_records * sizeof(coalescence_record_t));
+        if (cr == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        self->coalescence_records = cr;
+    }
+    cr = &self->coalescence_records[self->num_coalescence_records];
+    if (self->num_coalescence_records != 0) {
+        lcr = &self->coalescence_records[self->num_coalescence_records - 1];
+        if (lcr->right == left
+                && lcr->children[0] == child1
+                && lcr->children[1] == child2
+                && lcr->parent == parent) {
+            /* squash this record into the last */
+            lcr->right = right;
+            cr = NULL;
+        }
+    }
+    if (cr != NULL) {
+        cr->left = left;
+        cr->right = right;
+        cr->children[0] = child1;
+        cr->children[1] = child2;
+        cr->parent = parent;
+        cr->time = self->time;
+        self->num_coalescence_records++;
+    }
+out:
     return ret;
 }
-/*     coalescence_record_t *lcr = &self->last_coalesence_record; */
-
-/*     if (self->squash_records && lcr->time == self->time */
-/*             && lcr->right == left */
-/*             && lcr->children[0] == child1 */
-/*             && lcr->children[1] == child2 */
-/*             && lcr->parent == parent) { */
-/*         /1* squash this record into the last *1/ */
-/*         lcr->right = right; */
-/*     } else { */
-/*         /1* Don't flush the first dummy record *1/ */
-/*         if (lcr->left != UINT32_MAX) { */
-/*             printf("Storing record\n"); */
-/*             self->num_coalescence_records++; */
-/*         } */
-/*         lcr->left = left; */
-/*         lcr->right = right; */
-/*         lcr->time = self->time; */
-/*         lcr->children[0] = child1; */
-/*         lcr->children[1] = child2; */
-/*         lcr->parent = parent; */
-/*     } */
-/*     return ret; */
-/* } */
 
 static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
