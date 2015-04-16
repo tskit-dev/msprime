@@ -121,6 +121,7 @@ typedef struct {
     size_t num_coalescence_records;
     size_t max_coalescence_records;
     size_t coalescence_record_block_size;
+    size_t num_coalescence_record_blocks;
 } msp_t;
 
 int msp_alloc(msp_t *self);
@@ -128,15 +129,20 @@ int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
-int msp_get_ancestors(msp_t *self, segment_t **);
 int msp_print_state(msp_t *self);
 int msp_write_metadata(msp_t *self, FILE *f);
 int msp_free(msp_t *self);
+int msp_get_ancestors(msp_t *self, segment_t **);
+int msp_get_breakpoints(msp_t *self, uint32_t *);
+int msp_get_coalescence_records(msp_t *self, coalescence_record_t *);
+
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
+size_t msp_get_num_coalescence_records(msp_t *self);
 size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
+size_t msp_get_num_coalescence_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
 
 const char * msp_strerror(int err);

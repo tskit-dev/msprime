@@ -28,53 +28,41 @@ def print_sim(sim):
     print("recombination_rate = ", sim.get_scaled_recombination_rate())
     print("random_seed = ", sim.get_random_seed())
     print("time = ", sim.get_time())
-    print("tree_file = ", sim.get_tree_file_name())
     print("num_ancestors = ", sim.get_num_ancestors())
+    print("num_breakpoints = ", sim.get_num_breakpoints())
+    print("num_coalescence_records = ", sim.get_num_coalescence_records())
+    print("num_coalescence_record_blocks = ", sim.get_num_coalescence_record_blocks())
     for segs in sim.get_ancestors():
         print(segs)
+    print("breakpoints = ", sim.get_breakpoints())
+    for cr in sim.get_coalescence_records():
+        print(cr)
     print("population models = ")
     for model in sim.get_population_models():
         print(model)
-    # print("X = ", sim.get_X())
-    # print("X = ", sim.get_X())
-    # print("X = ", sim.get_X())
 
 def ll_main():
-    treefile = "tmp__NOBACKUP__/tmp2.dat"
     j = 0
     while True:
         j += 1
         models = [{"type":_msprime.POP_MODEL_CONSTANT, "start_time":0.3, "size":0.2},
                 {"type":_msprime.POP_MODEL_EXPONENTIAL, "start_time":0.5, "alpha":5}]
         sim = _msprime.Simulator(sample_size=400, random_seed=j,
-                tree_file_name=treefile,
                 num_loci=1000, scaled_recombination_rate=0.1,
                 max_memory=1024**3, segment_block_size=10**6,
+                coalescence_record_block_size=1000,
                 population_models=models)
-        before = time.time()
-        print(sim.run())
-        #print(sim.run(0.5))
-        duration = time.time() - before
-        print("Ran in", duration)
-        print_sim(sim)
-
-        before = time.time()
-        _msprime.sort_tree_file(treefile)
-        duration = time.time() - before
-        tr = _msprime.TreeFile(treefile)
-        print("create tree_reader Ran in", duration)
-        print(tr.get_num_loci())
-        print(tr.get_sample_size())
-        # print(tr.get_num_breakpoints())
-        print(tr.get_metadata())
-        s = json.loads(tr.get_metadata())
-        # print(s)
-        before = time.time()
-        j = 0
-        for r in tr:
-            print(r)
-            j += 1
-        print(j)
+        for t in [0.5, 1000]:
+            before = time.time()
+            # print(sim.run())
+            print(sim.run(t))
+            duration = time.time() - before
+            print("Ran in", duration)
+            # print_sim(sim)
+            segs = sim.get_ancestors()
+            crs = sim.get_coalescence_records()
+            bps = sim.get_breakpoints()
+            print(len(segs), len(crs), len(bps))
 
         # for j in range(tr.get_num_trees()):
         #     breakpoint, pi, tau = tr.get_tree(j)

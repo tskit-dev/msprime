@@ -29,7 +29,6 @@ import random
 import tempfile
 
 import _msprime
-from _msprime import sort_tree_file
 from _msprime import InputError
 from _msprime import LibraryError
 

@@ -433,6 +433,12 @@ msp_get_num_segment_blocks(msp_t *self)
 }
 
 size_t
+msp_get_num_coalescence_record_blocks(msp_t *self)
+{
+    return self->num_coalescence_record_blocks;
+}
+
+size_t
 msp_get_used_memory(msp_t *self)
 {
     return self->used_memory;
@@ -499,6 +505,7 @@ msp_alloc(msp_t *self)
     self->coalescence_records = malloc(
             self->coalescence_record_block_size * sizeof(coalescence_record_t));
     self->max_coalescence_records = self->coalescence_record_block_size;
+    self->num_coalescence_record_blocks = 1;
     if (self->coalescence_records == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -876,6 +883,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
             goto out;
         }
         self->coalescence_records = cr;
+        self->num_coalescence_record_blocks++;
     }
     cr = &self->coalescence_records[self->num_coalescence_records];
     if (self->num_coalescence_records != 0) {
@@ -1179,7 +1187,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     population_model_t *pop_model = self->current_population_model;
     unsigned long events = 0;
 
-    while (n > 1 && self->time < max_time && events < max_events) {
+    while (n > 1 && self->time <= max_time && events < max_events) {
         events++;
         num_links = fenwick_get_total(&self->links);
         /* TODO there are various worries when we're dealing with very
@@ -1254,7 +1262,13 @@ msp_get_num_ancestors(msp_t *self)
 size_t
 msp_get_num_breakpoints(msp_t *self)
 {
-    return avl_count(&self->breakpoints) - 1;
+    return avl_count(&self->breakpoints);
+}
+
+size_t
+msp_get_num_coalescence_records(msp_t *self)
+{
+    return self->num_coalescence_records;
 }
 
 int
@@ -1272,3 +1286,27 @@ msp_get_ancestors(msp_t *self, segment_t **ancestors)
     return ret;
 }
 
+int
+msp_get_breakpoints(msp_t *self, uint32_t *breakpoints)
+{
+    int ret = -1;
+    avl_node_t *node;
+    node_mapping_t *nm;
+    size_t j = 0;
+
+    for (node = (&self->breakpoints)->head; node != NULL; node = node->next) {
+        nm = (node_mapping_t *) node->item;
+        breakpoints[j] = nm->left;
+        j++;
+    }
+    ret = 0;
+    return ret;
+}
+
+int
+msp_get_coalescence_records(msp_t *self, coalescence_record_t *coalescence_records)
+{
+    memcpy(coalescence_records, self->coalescence_records,
+            self->num_coalescence_records * sizeof(coalescence_record_t));
+    return 0;
+}

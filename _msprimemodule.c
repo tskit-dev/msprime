@@ -37,24 +37,8 @@ static PyObject *MsprimeLibraryError;
 
 typedef struct {
     PyObject_HEAD
-    char *tree_file_name;
     msp_t *sim;
 } Simulator;
-
-typedef struct {
-    PyObject_HEAD
-    tree_file_t *tree_file;
-} TreeFile;
-
-typedef struct {
-    PyObject_HEAD
-    hapgen_t *hapgen;
-} HaplotypeGenerator;
-
-typedef struct {
-    PyObject_HEAD
-    newick_t *newick;
-} NewickConverter;
 
 
 static void
@@ -176,10 +160,6 @@ Simulator_dealloc(Simulator* self)
         PyMem_Free(self->sim);
         self->sim = NULL;
     }
-    if (self->tree_file_name != NULL) {
-        PyMem_Free(self->tree_file_name);
-        self->tree_file_name = NULL;
-    }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -220,8 +200,8 @@ Simulator_check_input(Simulator *self)
         handle_input_error("node_mapping_block_size must be > 0");
         goto out;
     }
-    if (strlen(sim->tree_file_name) == 0) {
-        handle_input_error("Cannot use empty string as filename");
+    if (sim->coalescence_record_block_size == 0) {
+        handle_input_error("coalescence_record_block_size must be > 0");
         goto out;
     }
     /* TODO more checks! */
@@ -236,32 +216,28 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int sim_ret;
     static char *kwlist[] = {"sample_size", "random_seed",
-        "tree_file_name", "num_loci", "squash_records",
-        "scaled_recombination_rate", "population_models",
-        "max_memory", "avl_node_block_size",
-        "segment_block_size", "node_mapping_block_size", NULL};
+        "num_loci", "scaled_recombination_rate", "population_models",
+        "max_memory", "avl_node_block_size", "segment_block_size",
+        "node_mapping_block_size", "coalescence_record_block_size", NULL};
     PyObject *population_models = NULL;
     /* parameter defaults */
     unsigned int sample_size = 2;
     unsigned int num_loci = 1;
     unsigned long random_seed = 1;
-    int squash_records = 0;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
-    const char *tree_file_name;
-    Py_ssize_t tree_file_name_len;
+    Py_ssize_t coalescence_record_block_size = 10;
 
     self->sim = NULL;
-    self->tree_file_name = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Ils#|IidO!nnnn", kwlist,
-            &sample_size, &random_seed, &tree_file_name,
-            &tree_file_name_len, &num_loci, &squash_records,
-            &scaled_recombination_rate, &PyList_Type, &population_models,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Il|IdO!nnnnn", kwlist,
+            &sample_size, &random_seed, &num_loci,
+            &scaled_recombination_rate,
+            &PyList_Type, &population_models,
             &max_memory, &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size)) {
+            &node_mapping_block_size, &coalescence_record_block_size)) {
         goto out;
     }
     self->sim = PyMem_Malloc(sizeof(msp_t));
@@ -272,20 +248,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     memset(self->sim, 0, sizeof(msp_t));
     self->sim->sample_size = (uint32_t) sample_size;
     self->sim->num_loci = (uint32_t) num_loci;
-    self->sim->squash_records = squash_records;
     self->sim->random_seed = random_seed;
     self->sim->scaled_recombination_rate = scaled_recombination_rate;
     self->sim->max_memory = (size_t) max_memory;
     self->sim->avl_node_block_size = (size_t) avl_node_block_size;
     self->sim->segment_block_size = (size_t) segment_block_size;
     self->sim->node_mapping_block_size = (size_t) node_mapping_block_size;
-    self->tree_file_name = PyMem_Malloc(tree_file_name_len + 1);
-    if (self->tree_file_name == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    strcpy(self->tree_file_name, tree_file_name);
-    self->sim->tree_file_name = self->tree_file_name;
+    self->sim->coalescence_record_block_size =
+        (size_t) coalescence_record_block_size;
     if (Simulator_check_input(self) != 0) {
         goto out;
     }
@@ -299,7 +269,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     /* We don't actually check the population models on the way in because
      * the memory management is too tricky. We instead check during
-     * initialise. This really population models API really must be fixed!
+     * initialise. This  population models API really must be fixed!
      */
     if (population_models != NULL) {
         if (Simulator_parse_population_models(self, population_models) != 0) {
@@ -338,19 +308,6 @@ Simulator_get_num_loci(Simulator  *self)
 out:
     return ret;
 }
-
-static PyObject *
-Simulator_get_squash_records(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = PyBool_FromLong((long) self->sim->squash_records);
-out:
-    return ret;
-}
-
 
 static PyObject *
 Simulator_get_sample_size(Simulator  *self)
@@ -450,18 +407,6 @@ out:
 }
 
 static PyObject *
-Simulator_get_tree_file_name(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("s", self->sim->tree_file_name);
-out:
-    return ret;
-}
-
-static PyObject *
 Simulator_get_num_ancestors(Simulator *self)
 {
     PyObject *ret = NULL;
@@ -534,6 +479,19 @@ out:
 }
 
 static PyObject *
+Simulator_get_num_coalescence_record_blocks(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+            (Py_ssize_t) msp_get_num_coalescence_record_blocks(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_get_used_memory(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -558,6 +516,18 @@ out:
     return ret;
 }
 
+static PyObject *
+Simulator_get_num_coalescence_records(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+            (Py_ssize_t) msp_get_num_coalescence_records(self->sim));
+out:
+    return ret;
+}
 
 static PyObject *
 Simulator_individual_to_python(Simulator *self, segment_t *ind)
@@ -638,6 +608,100 @@ out:
     }
     return ret;
 }
+
+static PyObject *
+Simulator_get_breakpoints(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_int = NULL;
+    uint32_t *breakpoints = NULL;
+    size_t num_breakpoints, j;
+    int err;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    num_breakpoints = msp_get_num_breakpoints(self->sim);
+    breakpoints = PyMem_Malloc(num_breakpoints * sizeof(uint32_t));
+    if (breakpoints == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = msp_get_breakpoints(self->sim, breakpoints);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    l = PyList_New(num_breakpoints);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_breakpoints; j++) {
+        py_int = PyInt_FromLong((long) breakpoints[j]);
+        if (py_int == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_int);
+    }
+    ret = l;
+out:
+    if (breakpoints != NULL) {
+        PyMem_Free(breakpoints);
+    }
+    return ret;
+}
+
+static PyObject *
+Simulator_get_coalescence_records(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_cr = NULL;
+    coalescence_record_t *coalescence_records = NULL;
+    coalescence_record_t *cr;
+    size_t num_coalescence_records, j;
+    int err;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    num_coalescence_records = msp_get_num_coalescence_records(self->sim);
+    coalescence_records = PyMem_Malloc(
+            num_coalescence_records * sizeof(coalescence_record_t));
+    if (coalescence_records == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = msp_get_coalescence_records(self->sim, coalescence_records);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    l = PyList_New(num_coalescence_records);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_coalescence_records; j++) {
+        cr = &coalescence_records[j];
+        py_cr = Py_BuildValue("iiiiid", cr->left, cr->right, cr->children[0],
+                cr->children[1], cr->parent, cr->time);
+        if (py_cr == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_cr);
+    }
+    ret = l;
+out:
+    if (coalescence_records != NULL) {
+        PyMem_Free(coalescence_records);
+    }
+    return ret;
+}    /*
+    */
+
 static PyObject *
 Simulator_get_population_models(Simulator *self)
 {
@@ -733,8 +797,6 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the number of loci" },
     {"get_sample_size", (PyCFunction) Simulator_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
-    {"get_squash_records", (PyCFunction) Simulator_get_squash_records, METH_NOARGS,
-            "Returns True is record squashing is enabled." },
     {"get_scaled_recombination_rate",
             (PyCFunction) Simulator_get_scaled_recombination_rate, METH_NOARGS,
             "Returns the scaled recombination rate." },
@@ -753,9 +815,6 @@ static PyMethodDef Simulator_methods[] = {
             "Returns node_mapping block size" },
     {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS,
             "Returns the current simulation time" },
-    {"get_tree_file_name",
-            (PyCFunction) Simulator_get_tree_file_name, METH_NOARGS,
-            "Returns the name of the tree file." },
     {"get_num_ancestors", (PyCFunction) Simulator_get_num_ancestors, METH_NOARGS,
             "Returns the number of ancestors" },
     {"get_num_coancestry_events",
@@ -773,12 +832,22 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_segment_blocks",
             (PyCFunction) Simulator_get_num_segment_blocks, METH_NOARGS,
             "Returns the number of segment memory blocks"},
+    {"get_num_coalescence_record_blocks",
+            (PyCFunction) Simulator_get_num_coalescence_record_blocks, METH_NOARGS,
+            "Returns the number of coalescence record memory blocks"},
     {"get_num_breakpoints", (PyCFunction) Simulator_get_num_breakpoints,
-            METH_NOARGS, "Returns the number of trees" },
+            METH_NOARGS, "Returns the number of recombination breakpoints" },
+    {"get_num_coalescence_records",
+            (PyCFunction) Simulator_get_num_coalescence_records,
+            METH_NOARGS, "Returns the number of coalescence records" },
     {"get_used_memory", (PyCFunction) Simulator_get_used_memory,
             METH_NOARGS, "Returns the approximate amount of memory used." },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
+    {"get_breakpoints", (PyCFunction) Simulator_get_breakpoints,
+            METH_NOARGS, "Returns the list of breakpoints." },
+    {"get_coalescence_records", (PyCFunction) Simulator_get_coalescence_records,
+            METH_NOARGS, "Returns the coalescence records." },
     {"get_population_models", (PyCFunction) Simulator_get_population_models,
             METH_VARARGS, "Returns the population models"},
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
@@ -827,646 +896,9 @@ static PyTypeObject SimulatorType = {
     (initproc)Simulator_init,      /* tp_init */
 };
 
-/*===================================================================
- * TreeFile
- *===================================================================
- */
-static int
-TreeFile_check_tree_file(TreeFile *self)
-{
-    int ret = 0;
-    if (self->tree_file == NULL) {
-        PyErr_SetString(PyExc_SystemError, "tree_file not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-
-static void
-TreeFile_dealloc(TreeFile* self)
-{
-    if (self->tree_file != NULL) {
-        tree_file_close(self->tree_file);
-        PyMem_Free(self->tree_file);
-        self->tree_file = NULL;
-    }
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-TreeFile_init(TreeFile *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int tr_ret;
-    static char *kwlist[] = {"tree_file_name", NULL};
-    char *tree_file_name;
-    char mode = 'r';
-
-    self->tree_file = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
-                &tree_file_name)) {
-        goto out;
-    }
-    self->tree_file = PyMem_Malloc(sizeof(tree_file_t));
-    if (self->tree_file == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    tr_ret = tree_file_open(self->tree_file, tree_file_name, mode);
-    if (tr_ret != 0) {
-        handle_library_error(tr_ret);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyMemberDef TreeFile_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyObject *
-TreeFile_get_num_loci(TreeFile *self)
-{
-    PyObject *ret = NULL;
-    if (TreeFile_check_tree_file(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->tree_file->num_loci);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeFile_get_sample_size(TreeFile *self)
-{
-    PyObject *ret = NULL;
-    if (TreeFile_check_tree_file(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("I", self->tree_file->sample_size);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeFile_get_metadata(TreeFile *self)
-{
-    PyObject *ret = NULL;
-    if (TreeFile_check_tree_file(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("s", self->tree_file->metadata);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeFile_iscomplete(TreeFile *self)
-{
-    PyObject *ret = NULL;
-    if (TreeFile_check_tree_file(self) != 0) {
-        goto out;
-    }
-    ret = PyBool_FromLong((long) tree_file_iscomplete(self->tree_file));
-out:
-    return ret;
-}
-
-static PyObject *
-TreeFile_issorted(TreeFile *self)
-{
-    PyObject *ret = NULL;
-    if (TreeFile_check_tree_file(self) != 0) {
-        goto out;
-    }
-    ret = PyBool_FromLong((long) tree_file_issorted(self->tree_file));
-out:
-    return ret;
-}
-
-static PyObject *
-TreeFile_next(TreeFile *self)
-{
-    PyObject *ret = NULL;
-    coalescence_record_t cr;
-    int v;
-
-    if (TreeFile_check_tree_file(self) != 0) {
-        PyErr_SetString(PyExc_ValueError, "Treefile has not been initialised");
-        goto out;
-    }
-    v = tree_file_next_record(self->tree_file, &cr);
-    if (v < 0) {
-        handle_library_error(v);
-        goto out;
-    }
-    if (v == 1) {
-        ret = Py_BuildValue("iiiiid", cr.left, cr.right, cr.children[0],
-                cr.children[1], cr.parent, cr.time);
-    }
-out:
-    return ret;
-}
-
-
-static PyMethodDef TreeFile_methods[] = {
-    {"get_num_loci", (PyCFunction) TreeFile_get_num_loci, METH_NOARGS,
-            "Returns the number of loci"},
-    {"get_sample_size", (PyCFunction) TreeFile_get_sample_size, METH_NOARGS,
-            "Returns the sample size"},
-    {"get_metadata", (PyCFunction) TreeFile_get_metadata, METH_NOARGS,
-            "Returns the simulation metadata"},
-    {"iscomplete", (PyCFunction) TreeFile_iscomplete, METH_NOARGS,
-            "Returns True if this file corresponds to a complete simulation."},
-    {"issorted", (PyCFunction) TreeFile_issorted, METH_NOARGS,
-            "Returns True if this file is sorted"},
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject TreeFileType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.TreeFile",             /* tp_name */
-    sizeof(TreeFile),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)TreeFile_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "TreeFile objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,            /* tp_iter */
-    (iternextfunc) TreeFile_next, /* tp_iternext */
-    TreeFile_methods,             /* tp_methods */
-    TreeFile_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)TreeFile_init,      /* tp_init */
-};
-
-/*===================================================================
- * HaplotypeGenerator
- *===================================================================
- */
-
-static int
-HaplotypeGenerator_check_hapgen(HaplotypeGenerator *self)
-{
-    int ret = 0;
-    if (self->hapgen == NULL) {
-        PyErr_SetString(PyExc_SystemError, "hapgen not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-
-static void
-HaplotypeGenerator_dealloc(HaplotypeGenerator* self)
-{
-    if (self->hapgen != NULL) {
-        hapgen_free(self->hapgen);
-        PyMem_Free(self->hapgen);
-        self->hapgen = NULL;
-    }
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int hg_ret;
-    static char *kwlist[] = {"tree_file_name", "mutation_rate", "random_seed",
-        "max_haplotype_length", NULL};
-    char *tree_file_name;
-    Py_ssize_t max_haplotype_length;
-    long random_seed;
-    double mutation_rate;
-
-    self->hapgen = NULL;
-
-    PyErr_Format(PyExc_RuntimeError, "haplotype generation temporarily disabled.");
-    goto out;
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sdln", kwlist,
-                &tree_file_name, &mutation_rate, &random_seed,
-                &max_haplotype_length)) {
-        goto out;
-    }
-    self->hapgen = PyMem_Malloc(sizeof(hapgen_t));
-    if (self->hapgen == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    hg_ret = hapgen_alloc(self->hapgen, mutation_rate, tree_file_name,
-            random_seed, (size_t) max_haplotype_length);
-    if (hg_ret != 0) {
-        handle_library_error(hg_ret);
-        goto out;
-    }
-    hg_ret = hapgen_generate(self->hapgen);
-    if (hg_ret != 0) {
-        handle_library_error(hg_ret);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyMemberDef HaplotypeGenerator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyObject *
-HaplotypeGenerator_get_num_loci(HaplotypeGenerator *self)
-{
-    PyObject *ret = NULL;
-    if (HaplotypeGenerator_check_hapgen(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->hapgen->num_loci);
-out:
-    return ret;
-}
-
-static PyObject *
-HaplotypeGenerator_get_sample_size(HaplotypeGenerator *self)
-{
-    PyObject *ret = NULL;
-    if (HaplotypeGenerator_check_hapgen(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->hapgen->sample_size);
-out:
-    return ret;
-}
-
-static PyObject *
-HaplotypeGenerator_get_num_trees(HaplotypeGenerator *self)
-{
-    PyObject *ret = NULL;
-    if (HaplotypeGenerator_check_hapgen(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->hapgen->num_trees);
-out:
-    return ret;
-}
-
-static PyObject *
-HaplotypeGenerator_get_haplotype_length(HaplotypeGenerator *self)
-{
-    PyObject *ret = NULL;
-    if (HaplotypeGenerator_check_hapgen(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->hapgen->haplotype_length);
-out:
-    return ret;
-}
-
-static PyObject *
-HaplotypeGenerator_get_haplotypes(HaplotypeGenerator *self)
-{
-    PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *h = NULL;
-    int hg_ret;
-    uint32_t n = self->hapgen->sample_size;
-    uint64_t j;
-    char **haplotypes;
-    size_t s;
-
-    if (HaplotypeGenerator_check_hapgen(self) != 0) {
-        goto out;
-    }
-    hg_ret = hapgen_get_haplotypes(self->hapgen, &haplotypes, &s);
-    if (hg_ret != 0) {
-        handle_library_error(hg_ret);
-        goto out;
-    }
-    l = PyList_New(n + 1);
-    if (l == NULL) {
-        goto out;
-    }
-    Py_INCREF(Py_None);
-    PyList_SET_ITEM(l, 0, Py_None);
-    for (j = 1; j <= n; j++) {
-        h = PyBytes_FromStringAndSize(haplotypes[j], s);
-        if (h == NULL) {
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, h);
-    }
-    ret = l;
-    l = NULL;
-out:
-    Py_XDECREF(l);
-    return ret;
-}
-
-
-static PyMethodDef HaplotypeGenerator_methods[] = {
-    {"get_num_loci", (PyCFunction) HaplotypeGenerator_get_num_loci, METH_NOARGS,
-            "Returns the number of loci"},
-    {"get_sample_size", (PyCFunction) HaplotypeGenerator_get_sample_size, METH_NOARGS,
-            "Returns the sample size"},
-    {"get_num_trees", (PyCFunction) HaplotypeGenerator_get_num_trees, METH_NOARGS,
-            "Returns the sample size"},
-    {"get_haplotype_length",
-            (PyCFunction) HaplotypeGenerator_get_haplotype_length, METH_NOARGS,
-            "Returns the number of segregating sites in the generated haplotypes."},
-    {"get_haplotypes", (PyCFunction) HaplotypeGenerator_get_haplotypes, METH_NOARGS,
-            "Returns the generated haplotypes."},
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject HaplotypeGeneratorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.HaplotypeGenerator",             /* tp_name */
-    sizeof(HaplotypeGenerator),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)HaplotypeGenerator_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "HaplotypeGenerator objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    0,                     /* tp_iter */
-    0,                     /* tp_iternext */
-    HaplotypeGenerator_methods,             /* tp_methods */
-    HaplotypeGenerator_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)HaplotypeGenerator_init,      /* tp_init */
-};
-
-/*===================================================================
- * NewickConverter
- *===================================================================
- */
-
-static int
-NewickConverter_check_newick(NewickConverter *self)
-{
-    int ret = 0;
-    if (self->newick == NULL) {
-        PyErr_SetString(PyExc_SystemError, "newick not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-NewickConverter_dealloc(NewickConverter* self)
-{
-    if (self->newick != NULL) {
-        newick_free(self->newick);
-        PyMem_Free(self->newick);
-        self->newick = NULL;
-    }
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int nw_ret;
-    static char *kwlist[] = {"tree_file_name", "precision", NULL};
-    char *tree_file_name;
-    int precision = 3;
-
-    self->newick = NULL;
-
-    PyErr_Format(PyExc_RuntimeError, "newick generation temporarily disabled.");
-    goto out;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
-                &tree_file_name, &precision)) {
-        goto out;
-    }
-    self->newick = PyMem_Malloc(sizeof(newick_t));
-    if (self->newick == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    nw_ret = newick_alloc(self->newick, tree_file_name, precision);
-    if (nw_ret != 0) {
-        handle_library_error(nw_ret);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyMemberDef NewickConverter_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyObject *
-NewickConverter_get_num_loci(NewickConverter *self)
-{
-    PyObject *ret = NULL;
-    if (NewickConverter_check_newick(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->newick->num_loci);
-out:
-    return ret;
-}
-
-static PyObject *
-NewickConverter_get_sample_size(NewickConverter *self)
-{
-    PyObject *ret = NULL;
-    if (NewickConverter_check_newick(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->newick->sample_size);
-out:
-    return ret;
-}
-
-static PyObject *
-NewickConverter_next(NewickConverter *self)
-{
-    PyObject *ret = NULL;
-    uint32_t tree_length;
-    size_t str_length;
-    char *tree;
-    int v;
-
-    if (NewickConverter_check_newick(self) != 0) {
-        PyErr_SetString(PyExc_ValueError,
-                "NewickConverter has not been initialised");
-        goto out;
-    }
-    v = newick_next_tree(self->newick, &tree_length, &tree, &str_length);
-    if (v < 0) {
-        handle_library_error(v);
-        goto out;
-    }
-    if (v == 1) {
-        ret = Py_BuildValue("(I,s#)", (unsigned int) tree_length,
-                tree, (int) str_length);
-    }
-out:
-    return ret;
-}
-
-
-static PyMethodDef NewickConverter_methods[] = {
-    {"get_num_loci", (PyCFunction) NewickConverter_get_num_loci, METH_NOARGS,
-            "Returns the number of loci"},
-    {"get_sample_size", (PyCFunction) NewickConverter_get_sample_size, METH_NOARGS,
-            "Returns the sample size"},
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject NewickConverterType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.NewickConverter",             /* tp_name */
-    sizeof(NewickConverter),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)NewickConverter_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "NewickConverter objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,            /* tp_iter */
-    (iternextfunc) NewickConverter_next, /* tp_iternext */
-    NewickConverter_methods,             /* tp_methods */
-    NewickConverter_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)NewickConverter_init,      /* tp_init */
-};
-
-/*==========================================================
- * Module level functions
- *==========================================================
- */
-
-PyDoc_STRVAR(msprime_sort_tree_file_doc,
-"Sorts the specified tree file..\n");
-
-static PyObject *
-msprime_sort_tree_file(PyObject *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    char *filename = NULL;
-    tree_file_t *tf = NULL;
-    int tf_ret;
-
-    if (!PyArg_ParseTuple(args, "s", &filename)) {
-        goto out;
-    }
-    tf = PyMem_Malloc(sizeof(tree_file_t));
-    if (tf == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    tf_ret = tree_file_open(tf, filename, 'u');
-    if (tf_ret != 0) {
-        handle_library_error(tf_ret);
-        goto out;
-    }
-    if (tree_file_issorted(tf)) {
-        PyErr_SetString(PyExc_ValueError, "Tree file is already sorted");
-        goto out;
-    }
-    tf_ret = tree_file_sort(tf);
-    if (tf_ret != 0) {
-        handle_library_error(tf_ret);
-        goto out;
-    }
-    tf_ret = tree_file_close(tf);
-    if (tf_ret != 0) {
-        handle_library_error(tf_ret);
-        goto out;
-    }
-    ret = Py_None;
-    Py_INCREF(Py_None);
-out:
-    if (tf != NULL) {
-        if (tree_file_isopen(tf)) {
-            /* we are already in an error condition, so ignore new errors */
-            tree_file_close(tf);
-        }
-        PyMem_Free(tf);
-    }
-    return ret;
-}
-
 static PyMethodDef msprime_methods[] = {
-    {"sort_tree_file", (PyCFunction) msprime_sort_tree_file, METH_VARARGS,
-        msprime_sort_tree_file_doc},
     {NULL}        /* Sentinel */
 };
-
 
 /* Initialisation code supports Python 2.x and 3.x. The framework uses the
  * recommended structure from http://docs.python.org/howto/cporting.html.
@@ -1511,26 +943,6 @@ init_msprime(void)
     }
     Py_INCREF(&SimulatorType);
     PyModule_AddObject(module, "Simulator", (PyObject *) &SimulatorType);
-    TreeFileType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&TreeFileType) < 0) {
-        INITERROR;
-    }
-    Py_INCREF(&TreeFileType);
-    PyModule_AddObject(module, "TreeFile", (PyObject *) &TreeFileType);
-    HaplotypeGeneratorType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&HaplotypeGeneratorType) < 0) {
-        INITERROR;
-    }
-    Py_INCREF(&HaplotypeGeneratorType);
-    PyModule_AddObject(module, "HaplotypeGenerator",
-            (PyObject *) &HaplotypeGeneratorType);
-    NewickConverterType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&NewickConverterType) < 0) {
-        INITERROR;
-    }
-    Py_INCREF(&NewickConverterType);
-    PyModule_AddObject(module, "NewickConverter",
-            (PyObject *) &NewickConverterType);
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);

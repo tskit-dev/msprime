@@ -36,7 +36,6 @@ if v < (2, 7) or v == (3, 0) or v == (3, 1):
 d = "lib/"
 _msprime_module = Extension('_msprime',
     sources = ["_msprimemodule.c", d + "msprime.c", d + "fenwick.c",
-            d + "tree_file.c", d + "hapgen.c", d + "newick.c",
             d + "avl.c"],
     libraries = ["gsl", "gslcblas"],
     # Enable asserts by default.
