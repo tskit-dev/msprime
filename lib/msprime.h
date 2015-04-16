@@ -130,8 +130,8 @@ int msp_add_exponential_population_model(msp_t *self, double time, double alpha)
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
-int msp_write_metadata(msp_t *self, FILE *f);
 int msp_free(msp_t *self);
+
 int msp_get_ancestors(msp_t *self, segment_t **);
 int msp_get_breakpoints(msp_t *self, uint32_t *);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *);
