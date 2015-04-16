@@ -395,6 +395,19 @@ out:
 }
 
 static PyObject *
+Simulator_get_coalescence_record_block_size(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+            (Py_ssize_t) self->sim->coalescence_record_block_size);
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_get_time(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -813,6 +826,9 @@ static PyMethodDef Simulator_methods[] = {
     {"get_node_mapping_block_size",
             (PyCFunction) Simulator_get_node_mapping_block_size, METH_NOARGS,
             "Returns node_mapping block size" },
+    {"get_coalescence_record_block_size",
+            (PyCFunction) Simulator_get_coalescence_record_block_size,
+            METH_NOARGS, "Returns the coalescent record block size" },
     {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS,
             "Returns the current simulation time" },
     {"get_num_ancestors", (PyCFunction) Simulator_get_num_ancestors, METH_NOARGS,

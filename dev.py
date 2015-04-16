@@ -41,18 +41,46 @@ def print_sim(sim):
     for model in sim.get_population_models():
         print(model)
 
+def check_sim(sim):
+    n = sim.get_sample_size()
+    ancestors = sim.get_ancestors()
+    records = sim.get_coalescence_records()
+    print("num records = ", len(records))
+    breakpoints = sim.get_breakpoints()
+    # The amount of ancestral material in the coalescence records and
+    # the extant segments over all intervals should be n.
+    segments_am = [0 for b in breakpoints[:-1]]
+    for ind in ancestors:
+        for l, r, _ in ind:
+            j = breakpoints.index(l)
+            while breakpoints[j] < r:
+                segments_am[j] += 1
+                j += 1
+    records_am = [0 for b in breakpoints[:-1]]
+    for l, r, _, _, _, _ in records:
+        j = breakpoints.index(l)
+        while breakpoints[j] < r:
+            records_am[j] += 1
+            j += 1
+    for segment_am, record_am in zip(segments_am, records_am):
+        if segment_am == 0:
+            assert record_am == n - 1
+        else:
+            assert segment_am + record_am == n
+
+
 def ll_main():
     j = 0
-    while True:
+    if True:
         j += 1
         models = [{"type":_msprime.POP_MODEL_CONSTANT, "start_time":0.3, "size":0.2},
                 {"type":_msprime.POP_MODEL_EXPONENTIAL, "start_time":0.5, "alpha":5}]
-        sim = _msprime.Simulator(sample_size=400, random_seed=j,
+        sim = _msprime.Simulator(sample_size=4, random_seed=j,
                 num_loci=1000, scaled_recombination_rate=0.1,
                 max_memory=1024**3, segment_block_size=10**6,
                 coalescence_record_block_size=1000,
                 population_models=models)
-        for t in [0.5, 1000]:
+        for t in [0.001, 0.1, 0.15, 0.5, 1000]:
             before = time.time()
             # print(sim.run())
             print(sim.run(t))
@@ -63,6 +91,7 @@ def ll_main():
             crs = sim.get_coalescence_records()
             bps = sim.get_breakpoints()
             print(len(segs), len(crs), len(bps))
+            check_sim(sim)
 
         # for j in range(tr.get_num_trees()):
         #     breakpoint, pi, tau = tr.get_tree(j)

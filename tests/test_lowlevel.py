@@ -10,10 +10,6 @@ import random
 import os.path
 import tempfile
 
-# Used to disable the newick and haplotype tests while we're developing
-# the new tree format.
-from nose.tools import nottest
-
 import tests
 import _msprime
 
@@ -45,7 +41,6 @@ class TestInterface(tests.MsprimeTestCase):
         Verifies the state of the specified simulation that has run
         for at least one event.
         """
-        self.assertTrue(os.path.exists(sim.get_tree_file_name()))
         self.assertGreater(sim.get_num_breakpoints(), 0)
         self.assertGreater(sim.get_time(), 0.0)
         self.assertGreater(sim.get_num_ancestors(), 1)
@@ -56,27 +51,51 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
+        self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
         n = sim.get_sample_size()
         m = sim.get_num_loci()
-        for ind in sim.get_ancestors():
+        ancestors = sim.get_ancestors()
+        self.assertEqual(len(ancestors), sim.get_num_ancestors())
+        for ind in ancestors:
             for l, r, node in ind:
                 self.assertTrue(0 <= l < m)
                 self.assertTrue(1 <= r <= m)
                 self.assertGreaterEqual(node, 1)
-
-    def verify_tree_file_information(self, sim, tf):
-        """
-        Verifies that the tree file corresponds to the specified
-        simulation.
-        """
-        self.assertEqual(tf.get_sample_size(), sim.get_sample_size())
-        self.assertEqual(tf.get_num_loci(), sim.get_num_loci())
-        md = json.loads(tf.get_metadata())
-        self.assertEqual(sim.get_sample_size(), md["sample_size"])
-        self.assertEqual(sim.get_num_loci(), md["num_loci"])
-        self.assertEqual(sim.get_random_seed(), md["random_seed"])
-        self.assertEqual(sim.get_tree_file_name(), md["tree_file_name"])
-        # TODO check rest of metadata.
+        breakpoints = sim.get_breakpoints()
+        self.assertEqual(len(breakpoints), sim.get_num_breakpoints())
+        self.assertEqual(breakpoints, sorted(breakpoints))
+        self.assertEqual(breakpoints[0], 0)
+        self.assertEqual(breakpoints[-1], m)
+        records = sim.get_coalescence_records()
+        self.assertEqual(len(records), sim.get_num_coalescence_records())
+        for l, r, c1, c2, p, t in records:
+            self.assertTrue(0 <= l < m)
+            self.assertTrue(1 <= r <= m)
+            self.assertGreater(t, 0.0)
+            self.assertIn(l, breakpoints)
+            self.assertIn(r, breakpoints)
+        # The amount of ancestral material in the coalescence records and
+        # the extant segments over all intervals should be either n (if
+        # the given interval has not fully coalesced yet) or n - 1 (if
+        # full coalescence has occured).
+        segments_am = [0 for b in breakpoints[:-1]]
+        for ind in ancestors:
+            for l, r, _ in ind:
+                j = breakpoints.index(l)
+                while breakpoints[j] < r:
+                    segments_am[j] += 1
+                    j += 1
+        records_am = [0 for b in breakpoints[:-1]]
+        for l, r, _, _, _, _ in records:
+            j = breakpoints.index(l)
+            while breakpoints[j] < r:
+                records_am[j] += 1
+                j += 1
+        for segment_am, record_am in zip(segments_am, records_am):
+            if segment_am == 0:
+                self.assertEqual(record_am, n - 1)
+            else:
+                self.assertEqual(segment_am + record_am, n)
 
     def verify_trees(self, sim, sorted_records):
         """
@@ -127,7 +146,7 @@ class TestInterface(tests.MsprimeTestCase):
     def verify_squashed_records(self, sorted_records):
         """
         Checks to see if there were any unsquashed records in the specified
-        set of sorted records.
+        set of time sorted records.
         """
         u = sorted_records[0]
         for v in sorted_records[1:]:
@@ -142,8 +161,8 @@ class TestInterface(tests.MsprimeTestCase):
         """
         self.assertEqual(sim.get_ancestors(), [])
         self.assertEqual(sim.get_num_ancestors(), 0)
-        self.assertTrue(os.path.exists(sim.get_tree_file_name()))
         self.assertGreater(sim.get_num_breakpoints(), 0)
+        self.assertGreater(sim.get_num_coalescence_records(), 0)
         self.assertGreater(sim.get_time(), 0.0)
         events = sim.get_num_coancestry_events()
         events += sim.get_num_recombination_events()
@@ -151,34 +170,17 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
+        self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
         self.assertGreater(sim.get_used_memory(), 0)
-        # Open the tree file and get the records
-        tf = _msprime.TreeFile(sim.get_tree_file_name())
-        self.verify_tree_file_information(sim, tf)
-        self.assertTrue(tf.iscomplete())
-        self.assertFalse(tf.issorted())
-        records = [r for r in tf]
+        records = sim.get_coalescence_records()
         self.assertGreater(len(records), 0)
+        self.assertEqual(len(records), sim.get_num_coalescence_records())
         # Records should be in nondecreasing time order
         times = [t for l, r,  c1, c2, parent, t in records]
         self.assertEqual(times, sorted(times))
         self.assertEqual(times[-1], sim.get_time())
-        # The iterator has been used, so we should not be able
-        # to go through it again.
-        r2 = [r for r in tf]
-        self.assertEqual(0, len(r2))
-        # Sort the records
-        _msprime.sort_tree_file(sim.get_tree_file_name())
-        # Verify we can't resort the file
-        self.assertRaises(ValueError, _msprime.sort_tree_file,
-                sim.get_tree_file_name())
-        # Read back the records and verify
-        tf = _msprime.TreeFile(sim.get_tree_file_name())
-        self.verify_tree_file_information(sim, tf)
-        self.assertTrue(tf.iscomplete())
-        self.assertTrue(tf.issorted())
-        sorted_records = [r for r in tf]
-        self.assertEqual(sorted_records, sorted(records, key=lambda r: r[0]))
+        self.verify_squashed_records(records)
+        sorted_records = sorted(records, key=lambda r: r[0])
         self.verify_trees(sim, sorted_records)
 
     def verify_random_parameters(self):
@@ -186,7 +188,6 @@ class TestInterface(tests.MsprimeTestCase):
         n = random.randint(2, 1000)
         m = random.randint(1, 10**6)
         rho = random.uniform(0, 1000)
-        squash_records = bool(random.randint(0, 1))
         num_pop_models = random.randint(0, 10)
         models = get_random_population_models(num_pop_models)
         random_seed = random.randint(0, 2**31)
@@ -194,15 +195,17 @@ class TestInterface(tests.MsprimeTestCase):
         segment_block_size = random.randint(1, 100)
         node_mapping_block_size = random.randint(1, 100)
         avl_node_block_size = random.randint(1, 100)
+        coalescence_record_block_size = random.randint(1, 100)
         sim = _msprime.Simulator(sample_size=n, num_loci=m,
-                squash_records=squash_records, population_models=models,
+                population_models=models,
                 scaled_recombination_rate=rho,
-                random_seed=random_seed, tree_file_name=self._treefile,
-                max_memory=max_memory, segment_block_size=segment_block_size,
+                random_seed=random_seed, max_memory=max_memory,
+                segment_block_size=segment_block_size,
                 avl_node_block_size=avl_node_block_size,
-                node_mapping_block_size=node_mapping_block_size)
+                node_mapping_block_size=node_mapping_block_size,
+                coalescence_record_block_size=coalescence_record_block_size)
         # Check initial state
-        self.assertEqual(1, sim.get_num_breakpoints())
+        self.assertEqual(2, sim.get_num_breakpoints())
         self.assertEqual(0.0, sim.get_time())
         self.assertEqual(n, sim.get_num_ancestors())
         self.assertEqual(0, sim.get_num_coancestry_events())
@@ -210,9 +213,9 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
+        self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
         self.assertEqual(sim.get_sample_size(), n)
         self.assertEqual(sim.get_num_loci(), m)
-        self.assertEqual(sim.get_squash_records(), squash_records)
         a = 0
         nodes = set()
         for ind in sim.get_ancestors():
@@ -230,11 +233,12 @@ class TestInterface(tests.MsprimeTestCase):
             self.assertEqual(m, sim.get_num_loci())
             self.assertEqual(rho, sim.get_scaled_recombination_rate())
             self.assertEqual(random_seed, sim.get_random_seed())
-            self.assertEqual(self._treefile, sim.get_tree_file_name())
             self.assertEqual(max_memory, sim.get_max_memory())
             self.assertEqual(segment_block_size, sim.get_segment_block_size())
             self.assertEqual(avl_node_block_size, sim.get_avl_node_block_size())
             self.assertEqual(node_mapping_block_size, sim.get_node_mapping_block_size())
+            self.assertEqual(coalescence_record_block_size,
+                    sim.get_coalescence_record_block_size())
             self.verify_population_models(sim, models)
             # Run this for a tiny amount of time and check the state
             self.assertFalse(sim.run(1e-8))
@@ -263,16 +267,21 @@ class TestInterface(tests.MsprimeTestCase):
         random_seed = random.randint(0, 2**31)
         sim = _msprime.Simulator(sample_size=n, num_loci=m,
                 population_models=models, scaled_recombination_rate=r,
-                random_seed=random_seed, tree_file_name=self._treefile,
+                random_seed=random_seed,
                 max_memory=10 * mb, segment_block_size=1000,
-                avl_node_block_size=1000, node_mapping_block_size=1000)
+                avl_node_block_size=1000, node_mapping_block_size=1000,
+                coalescence_record_block_size=1000)
         self.verify_population_models(sim, models)
         # Run the sim for a tiny amount of time and check.
-        self.assertFalse(sim.run(1e-8))
         # self.assertFalse(sim.run(1e-8))
+        self.assertFalse(sim.run(1e-8))
         self.verify_running_simulation(sim)
-        # Now run until coalescence
-        self.assertTrue(sim.run())
+        increment = 0.01
+        t = sim.get_time() + increment
+        while not sim.run(t):
+            self.assertGreaterEqual(sim.get_time(), t)
+            self.verify_running_simulation(sim)
+            t += increment
         self.verify_completed_simulation(sim)
         self.verify_population_models(sim, models)
 
@@ -300,8 +309,8 @@ class TestInterface(tests.MsprimeTestCase):
             self.verify_simulation(n, 1, 0.0, [m1, m2])
 
     def test_bad_parameters(self):
-        def f(n=2, m=1, treefile=self._treefile, **kwargs):
-            return _msprime.Simulator(n, m, treefile, **kwargs)
+        def f(n=2, m=1, **kwargs):
+            return _msprime.Simulator(n, m, **kwargs)
         self.assertRaises(TypeError, f, n=None)
         self.assertRaises(TypeError, f, m=None)
         self.assertRaises(OverflowError, f, max_memory=2**65)
@@ -309,7 +318,7 @@ class TestInterface(tests.MsprimeTestCase):
 
     def test_bad_population_models(self):
         def f(population_models):
-            return _msprime.Simulator(2, 1, self._treefile,
+            return _msprime.Simulator(2, 1,
                     population_models=population_models)
         self.assertRaises(TypeError, f, "")
         self.assertRaises(TypeError, f, [""])
@@ -326,157 +335,3 @@ class TestInterface(tests.MsprimeTestCase):
         # TODO This should really be an input error.
         self.assertRaises(_msprime.LibraryError, f, m)
 
-
-
-class TestTreeFile(tests.MsprimeTestCase):
-    """
-    Test cases on the specifics of reading and writing tree files.
-    """
-    def get_simulator(self, filename):
-        sim = _msprime.Simulator(sample_size=10, tree_file_name=filename,
-                random_seed=1)
-        return sim
-
-    def test_file_errors(self):
-        files = ["/no_permissions", "dir/does/not/exist"]
-        for f in files:
-            self.assertRaises(_msprime.LibraryError, self.get_simulator, f)
-            self.assertRaises(_msprime.LibraryError, _msprime.TreeFile, f)
-            self.assertRaises(_msprime.LibraryError,
-                    _msprime.sort_tree_file, f)
-
-    def test_bad_formats(self):
-        # TODO add tests where we take a valid file and mangle it a bit.
-        bad_contents = ["",
-            "This is not a valid tree file",
-        ]
-        for contents in bad_contents:
-            with open(self._treefile, "w") as f:
-                f.write(contents)
-            self.assertRaises(_msprime.LibraryError, _msprime.TreeFile,
-                    self._treefile)
-            self.assertRaises(_msprime.LibraryError, _msprime.sort_tree_file,
-                    self._treefile)
-
-
-class TestHaplotypeGenerator(tests.MsprimeTestCase):
-    """
-    Test cases for the haplotype generation class.
-    """
-    def get_simulator(self, sample_size=2, num_loci=1, recombination_rate=0.0):
-        sim = _msprime.Simulator(sample_size=sample_size, num_loci=num_loci,
-                scaled_recombination_rate=recombination_rate,
-                tree_file_name=self._treefile, random_seed=1)
-        return sim
-
-    def run_simulation(self):
-        sim = self.get_simulator()
-        sim.run()
-        _msprime.sort_tree_file(sim.get_tree_file_name())
-
-    @nottest
-    def test_memory_errors(self):
-        self.run_simulation()
-        def f(mutation_rate=0.0, max_haplotype_length=100):
-            return _msprime.HaplotypeGenerator(self._treefile, mutation_rate, 1,
-                    max_haplotype_length)
-        self.assertRaises(_msprime.LibraryError, f, max_haplotype_length=0)
-        self.assertRaises(_msprime.LibraryError, f, 1000, 0)
-        self.assertRaises(_msprime.LibraryError, f, 1000, 1)
-        # This will be converted into an unsigned value, and should raise an
-        # out of memory error
-        self.assertRaises(_msprime.LibraryError, f, max_haplotype_length=-1)
-
-    @nottest
-    def test_haplotypes(self):
-        def f(mutation_rate=1.0, max_haplotype_length=1000):
-            return _msprime.HaplotypeGenerator(self._treefile, mutation_rate, 1,
-                    max_haplotype_length)
-        for n in range(2, 10):
-            for m in [1, 5, 10]:
-                sim = self.get_simulator(n, m, 1.0)
-                sim.run()
-                self.assertRaises(_msprime.LibraryError, f)
-                _msprime.sort_tree_file(sim.get_tree_file_name())
-                hg = f(0)
-                self.assertEqual(hg.get_haplotype_length(), 0)
-                self.assertEqual(hg.get_sample_size(), n)
-                self.assertEqual(hg.get_num_loci(), m)
-                # These are not necessarily the same because of record merging
-                self.assertLessEqual(hg.get_num_trees(),
-                        sim.get_num_breakpoints())
-                self.assertGreater(hg.get_num_trees(), 0)
-                for mu in [0.1, 10.0]:
-                    hg = f(mu)
-                    haplotypes = hg.get_haplotypes()
-                    self.assertTrue(haplotypes[0] is None)
-                    for h in haplotypes[1:]:
-                        self.assertEqual(len(h), hg.get_haplotype_length())
-                        self.assertTrue(isinstance(h, bytes))
-                        # It's easier to work with str here for Python 3.
-                        h = h.decode()
-                        if len(h) > 0:
-                            chars = set(h)
-                            self.assertLess(len(chars), 3)
-                            if len(chars) == 1:
-                                self.assertTrue("0" in chars or "1" in chars)
-                            else:
-                                self.assertEqual(chars, set(["0", "1"]))
-
-    @nottest
-    def test_bad_parameters(self):
-        self.run_simulation()
-        def f(tf=self._treefile, mutation_rate=0.0, random_seed=1, max_haplotype_length=100):
-            return _msprime.HaplotypeGenerator(tf, mutation_rate, random_seed,
-                    max_haplotype_length)
-        self.assertRaises(TypeError, f, None)
-        self.assertRaises(TypeError, f, mutation_rate="mut")
-        self.assertRaises(TypeError, f, random_seed="seed")
-        self.assertRaises(TypeError, f, max_haplotype_length="len")
-        self.assertRaises(_msprime.LibraryError, f, "")
-        self.assertRaises(_msprime.LibraryError, f, "/etc")
-
-class TestNewickConverter(tests.MsprimeTestCase):
-    """
-    Test cases for the Newick converter class.
-    """
-    def get_simulator(self, sample_size=2, num_loci=1, recombination_rate=0.0):
-        sim = _msprime.Simulator(sample_size=sample_size, num_loci=num_loci,
-                scaled_recombination_rate=recombination_rate,
-                tree_file_name=self._treefile, random_seed=1)
-        return sim
-
-    def verify_newick(self, sim, nc):
-        """
-        Verifies that the specified newick converter generates trees
-        that are consistent with the specified simulator.
-        """
-        num_trees = 0
-        total = 0
-        for l, tree in nc:
-            self.assertTrue(isinstance(tree, str))
-            num_trees += 1
-            total += l
-        # TODO this will break when we renable record squashing.
-        self.assertEqual(num_trees, sim.get_num_breakpoints())
-        self.assertEqual(total, sim.get_num_loci())
-
-    def run_simulation(self):
-        sim = self.get_simulator()
-        sim.run()
-        _msprime.sort_tree_file(sim.get_tree_file_name())
-
-    @nottest
-    def test_newick(self):
-        def f():
-            return _msprime.NewickConverter(self._treefile)
-        for n in range(2, 10):
-            for m in [1, 5, 10]:
-                sim = self.get_simulator(n, m, 1.0)
-                sim.run()
-                self.assertRaises(_msprime.LibraryError, f)
-                _msprime.sort_tree_file(sim.get_tree_file_name())
-                nc = f()
-                self.assertEqual(nc.get_sample_size(), n)
-                self.assertEqual(nc.get_num_loci(), m)
-                self.verify_newick(sim, nc)
