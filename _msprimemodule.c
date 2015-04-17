@@ -651,7 +651,7 @@ Simulator_get_breakpoints(Simulator *self, PyObject *args)
         goto out;
     }
     for (j = 0; j < num_breakpoints; j++) {
-        py_int = PyLong_FromLong((long) breakpoints[j]);
+        py_int = Py_BuildValue("I", (unsigned int) breakpoints[j]);
         if (py_int == NULL) {
             Py_DECREF(l);
             goto out;
@@ -670,8 +670,12 @@ static PyObject *
 Simulator_get_coalescence_records(Simulator *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *py_cr = NULL;
+    PyObject *left = NULL;
+    PyObject *right = NULL;
+    PyObject *children = NULL;
+    PyObject *parent  = NULL;
+    PyObject *time = NULL;
+    PyObject *v = NULL;
     coalescence_record_t *coalescence_records = NULL;
     coalescence_record_t *cr;
     size_t num_coalescence_records, j;
@@ -692,28 +696,70 @@ Simulator_get_coalescence_records(Simulator *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    l = PyList_New(num_coalescence_records);
-    if (l == NULL) {
+    left = PyTuple_New(num_coalescence_records);
+    if (left == NULL) {
+        goto out;
+    }
+    right = PyTuple_New(num_coalescence_records);
+    if (right == NULL) {
+        goto out;
+    }
+    children = PyTuple_New(num_coalescence_records);
+    if (children == NULL) {
+        goto out;
+    }
+    parent = PyTuple_New(num_coalescence_records);
+    if (parent == NULL) {
+        goto out;
+    }
+    time = PyTuple_New(num_coalescence_records);
+    if (time == NULL) {
         goto out;
     }
     for (j = 0; j < num_coalescence_records; j++) {
         cr = &coalescence_records[j];
-        py_cr = Py_BuildValue("iiiiid", cr->left, cr->right, cr->children[0],
-                cr->children[1], cr->parent, cr->time);
-        if (py_cr == NULL) {
-            Py_DECREF(l);
+        v = Py_BuildValue("I", (unsigned int) cr->left);
+        if (v == NULL) {
             goto out;
         }
-        PyList_SET_ITEM(l, j, py_cr);
+        PyTuple_SET_ITEM(left, j, v);
+        v = Py_BuildValue("I", (unsigned int) cr->right);
+        if (v == NULL) {
+            goto out;
+        }
+        PyTuple_SET_ITEM(right, j, v);
+        v = Py_BuildValue("II", (unsigned int) cr->children[0],
+                (unsigned int) cr->children[1]);
+        if (v == NULL) {
+            goto out;
+        }
+        PyTuple_SET_ITEM(children, j, v);
+        v = Py_BuildValue("I", (unsigned int) cr->parent);
+        if (v == NULL) {
+            goto out;
+        }
+        PyTuple_SET_ITEM(parent, j, v);
+        v = PyFloat_FromDouble(cr->time);
+        if (v == NULL) {
+            goto out;
+        }
+        PyTuple_SET_ITEM(time, j, v);
     }
-    ret = l;
+    v = Py_BuildValue("OOOOO", left, right, children, parent, time);
+    ret = v;
 out:
     if (coalescence_records != NULL) {
         PyMem_Free(coalescence_records);
     }
+    if (ret == NULL) {
+        Py_DECREF(left);
+        Py_DECREF(right);
+        Py_DECREF(children);
+        Py_DECREF(parent);
+        Py_DECREF(time);
+    }
     return ret;
-}    /*
-    */
+}
 
 static PyObject *
 Simulator_get_population_models(Simulator *self)
