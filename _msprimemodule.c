@@ -651,7 +651,7 @@ Simulator_get_breakpoints(Simulator *self, PyObject *args)
         goto out;
     }
     for (j = 0; j < num_breakpoints; j++) {
-        py_int = PyInt_FromLong((long) breakpoints[j]);
+        py_int = PyLong_FromLong((long) breakpoints[j]);
         if (py_int == NULL) {
             Py_DECREF(l);
             goto out;
