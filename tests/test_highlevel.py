@@ -67,10 +67,10 @@ class TestSingleLocusSimulation(tests.MsprimeTestCase):
     def test_simple_cases(self):
         for n in range(2, 10):
             pi, tau = msprime.simulate_tree(n)
-            self.verify_dense_tree(n, pi, tau)
+            self.verify_sparse_tree(n, pi, tau)
         for n in [11, 13, 19, 101]:
             pi, tau = msprime.simulate_tree(n)
-            self.verify_dense_tree(n, pi, tau)
+            self.verify_sparse_tree(n, pi, tau)
 
     def test_error_cases(self):
         for n in [-100, -1, 0, 1]:
@@ -104,13 +104,13 @@ class TestMultiLocusSimulation(tests.MsprimeTestCase):
         m = 1
         r = 0.1
         for n in range(2, 10):
-            self.verify_dense_trees(n, m, msprime.simulate_trees(n, m, r))
+            self.verify_sparse_trees(n, m, msprime.simulate_trees(n, m, r))
         n = 4
         for m in range(1, 10):
-            self.verify_dense_trees(n, m, msprime.simulate_trees(n, m, r))
+            self.verify_sparse_trees(n, m, msprime.simulate_trees(n, m, r))
         m = 100
         for r in [0.001, 0.01]:
-            self.verify_dense_trees(n, m, msprime.simulate_trees(n, m, r))
+            self.verify_sparse_trees(n, m, msprime.simulate_trees(n, m, r))
 
     def test_error_cases(self):
         def f(n, m, r):
@@ -124,42 +124,25 @@ class TestTreeSimulator(tests.MsprimeTestCase):
     """
     Runs tests on the underlying TreeSimulator object.
     """
-    def verify_simulation(self, n, m, r, squash_records):
+    def verify_simulation(self, n, m, r):
         """
         Verifies a simulation for the specified parameters.
         """
-        ts = msprime.TreeSimulator(n, self._treefile)
-        # todo verify all the setters.
-        # self.assertEqual(ts.get_sample_size(), n)
-        ts.set_scaled_recombination_rate(r)
-        ts.set_squash_records(squash_records)
-        ts.set_num_loci(m)
-        self.assertTrue(ts.run())
-        self.assertEqual(squash_records, ts.get_squash_records())
-        msprime.sort_tree_file(self._treefile)
-        tf = msprime.TreeFile(self._treefile)
-        sparse_trees = [(l, dict(pi), dict(tau)) for l, pi, tau in tf.sparse_trees()]
+        sim = msprime.TreeSimulator(n)
+        # TODO verify all the setters.
+        self.assertEqual(sim.get_sample_size(), n)
+        sim.set_scaled_recombination_rate(r)
+        self.assertEqual(sim.get_scaled_recombination_rate(), r)
+        sim.set_num_loci(m)
+        self.assertEqual(sim.get_num_loci(), m)
+        tree_sequence = sim.run()
+        sparse_trees = [
+            (l, dict(pi), dict(tau)) for l, pi, tau in tree_sequence.sparse_trees()]
         self.verify_sparse_trees(n, m, sparse_trees)
-        tf = msprime.TreeFile(self._treefile)
-        dense_trees = [(l, list(pi), list(tau)) for l, pi, tau in tf.dense_trees()]
-        self.verify_dense_trees(n, m, dense_trees)
-        self.assertEqual(len(sparse_trees), len(dense_trees))
-        for (l_sparse, sparse_pi, sparse_tau), (l_dense, dense_pi, dense_tau) in zip(
-                sparse_trees, dense_trees):
-            self.assertEqual(l_sparse, l_dense)
-            self.assertTreesEqual(n, sparse_pi, sparse_tau, dense_pi, dense_tau)
+
         # With inline segment merging, the number of trees we get back is
         # not necessarily equal to the number of breakpoints.
-        self.assertLessEqual(len(sparse_trees), ts.get_num_breakpoints())
-        # TODO implement full tree access that uses the breakpoints so that
-        # we can fully recover the set of trees including the adjacent
-        # identical trees.
-        # If record squashing is on, we won't necessarily get a distinct
-        # tree for every recombination breakpoint.
-        # if ts.get_squash_records():
-        #     self.assertLessEqual(len(sparse_trees), ts.get_num_breakpoints())
-        # else:
-        #     self.assertEqual(len(sparse_trees), ts.get_num_breakpoints())
+        self.assertLess(len(sparse_trees), sim.get_num_breakpoints())
 
     def test_random_parameters(self):
         num_random_sims = 10
@@ -167,8 +150,7 @@ class TestTreeSimulator(tests.MsprimeTestCase):
             n = random.randint(2, 100)
             m = random.randint(10, 1000)
             r = random.random()
-            s = bool(random.randint(0, 1))
-            self.verify_simulation(n, m, r, s)
+            self.verify_simulation(n, m, r)
 
 
 
@@ -251,12 +233,10 @@ class TestNewickConversion(tests.MsprimeTestCase):
         for j in range(num_random_sims):
             n = random.randint(2, 100)
             m = random.randint(10, 1000)
-            squash_records = bool(random.randint(0, 1))
             r = random.random()
             ts = msprime.TreeSimulator(n, self._treefile)
             ts.set_scaled_recombination_rate(r)
             ts.set_num_loci(m)
-            ts.set_squash_records(squash_records)
             self.assertTrue(ts.run())
             msprime.sort_tree_file(self._treefile)
             self.verify_trees(self._treefile)
