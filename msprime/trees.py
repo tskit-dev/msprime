@@ -33,32 +33,6 @@ from _msprime import InputError
 from _msprime import LibraryError
 
 
-def _convert_sparse_tree(n, pi_s, tau_s):
-    """
-    Converts the specified sparse tree to a dense tree using a simple
-    algorithm.
-    """
-    # TODO this algorithm needs a lot of work!
-    pi = [0 for j in range(2 * n)]
-    tau = [0 for j in range(2 * n)]
-    # Set the unused element to -1 following Knuth's convention.
-    pi[0] = -1
-    tau[0] = -1
-    times = sorted(tau_s.values())
-    node_map = {times[j]: j + 1 for j in range(n, 2 * n - 1)}
-    for j in range(1, n + 1):
-        dense_child = j
-        sparse_parent = pi_s[j]
-        while sparse_parent != 0 and pi[dense_child] == 0:
-            t = tau_s[sparse_parent]
-            dense_parent = node_map[t]
-            pi[dense_child] = dense_parent
-            tau[dense_parent] = t
-            dense_child = dense_parent
-            sparse_parent = pi_s[sparse_parent]
-    return pi, tau
-
-
 def harmonic_number(n):
     """
     Returns the nth Harmonic number.
@@ -71,27 +45,16 @@ def simulate_trees(sample_size, num_loci, scaled_recombination_rate,
     Simulates the coalescent with recombination under the specified model
     parameters and returns an iterator over the resulting trees.
     """
-    fd, tf = tempfile.mkstemp(prefix="msp_", suffix=".dat")
-    os.close(fd)
-    try:
-        sim = TreeSimulator(sample_size, tf)
-        sim.set_num_loci(num_loci)
-        sim.set_scaled_recombination_rate(scaled_recombination_rate)
-        if random_seed is not None:
-            sim.set_random_seed(random_seed)
-        sim.set_max_memory(max_memory)
-        for m in population_models:
-            sim.add_population_model(m)
-        sim.run()
-        # We are done with the simulator so free up the memory
-        del sim
-        sort_tree_file(tf)
-        tree_file = TreeFile(tf)
-        for l, pi, tau in tree_file:
-            yield l, pi, tau
-        tree_file.close()
-    finally:
-        os.unlink(tf)
+    sim = TreeSimulator(sample_size)
+    sim.set_num_loci(num_loci)
+    sim.set_scaled_recombination_rate(scaled_recombination_rate)
+    if random_seed is not None:
+        sim.set_random_seed(random_seed)
+    sim.set_max_memory(max_memory)
+    for m in population_models:
+        sim.add_population_model(m)
+    tree_sequence = sim.run()
+    return tree_sequence.sparse_trees()
 
 def simulate_tree(sample_size, population_models=[], random_seed=None,
         max_memory="10M"):
@@ -109,19 +72,27 @@ class TreeSimulator(object):
     Class to simulate trees under the standard neutral coalescent with
     recombination.
     """
-    def __init__(self, sample_size, tree_file_name):
+    def __init__(self, sample_size):
         self._sample_size = sample_size
-        self._tree_file_name = tree_file_name
         self._scaled_recombination_rate = 1.0
         self._num_loci = 1
-        self._squash_records = False
         self._population_models = []
         self._random_seed = None
         self._segment_block_size = None
         self._avl_node_block_size = None
         self._node_mapping_block_size = None
+        self._coalescence_record_block_size = None
         self._max_memory = None
         self._ll_sim = None
+
+    def get_sample_size(self):
+        return self._sample_size
+
+    def get_scaled_recombination_rate(self):
+        return self._scaled_recombination_rate
+
+    def get_num_loci(self):
+        return self._num_loci
 
     def get_num_breakpoints(self):
         return self._ll_sim.get_num_breakpoints()
@@ -134,6 +105,9 @@ class TreeSimulator(object):
 
     def get_num_avl_node_blocks(self):
         return self._ll_sim.get_num_avl_node_blocks()
+
+    def get_num_coalescence_record_blocks(self):
+        return self._ll_sim.get_num_coalescence_record_blocks()
 
     def get_num_node_mapping_blocks(self):
         return self._ll_sim.get_num_node_mapping_blocks()
@@ -153,17 +127,11 @@ class TreeSimulator(object):
     def get_max_memory(self):
         return self._ll_sim.get_max_memory()
 
-    def get_squash_records(self):
-        return self._ll_sim.get_squash_records()
-
     def add_population_model(self, pop_model):
         self._population_models.append(pop_model)
 
     def set_num_loci(self, num_loci):
         self._num_loci = num_loci
-
-    def set_squash_records(self, squash_records):
-        self._squash_records = squash_records
 
     def set_scaled_recombination_rate(self, scaled_recombination_rate):
         self._scaled_recombination_rate = scaled_recombination_rate
@@ -182,6 +150,9 @@ class TreeSimulator(object):
 
     def set_node_mapping_block_size(self, node_mapping_block_size):
         self._node_mapping_block_size = node_mapping_block_size
+
+    def set_coalescence_record_block_size(self, coalescence_record_block_size):
+        self._coalescence_record_block_size = coalescence_record_block_size
 
     def set_max_memory(self, max_memory):
         """
@@ -220,6 +191,7 @@ class TreeSimulator(object):
         b = 10 # Baseline maximum
         num_trees = max(b, int(num_trees))
         num_avl_nodes = max(b, 4 * n + num_trees)
+        # TODO This is probably much too large now.
         num_segments = max(b, int(0.0125 * n  * rho))
         if self._avl_node_block_size is None:
             self._avl_node_block_size = num_avl_nodes
@@ -227,6 +199,10 @@ class TreeSimulator(object):
             self._segment_block_size = num_segments
         if self._node_mapping_block_size is None:
             self._node_mapping_block_size = num_trees
+        if self._coalescence_record_block_size is None:
+            memory = 16 * 2**10  # 16M
+            # Each coalescence record is 32bytes
+            self._coalescence_record_block_size = memory // 32
         if self._random_seed is None:
             self._random_seed = random.randint(0, 2**31 - 1)
         if self._max_memory is None:
@@ -239,25 +215,82 @@ class TreeSimulator(object):
         models = [m.get_ll_model() for m in self._population_models]
         assert self._ll_sim is None
         self._set_environment_defaults()
-        self._ll_sim = _msprime.Simulator(sample_size=self._sample_size,
-                num_loci=self._num_loci, population_models=models,
-                squash_records=int(self._squash_records),
-                scaled_recombination_rate=self._scaled_recombination_rate,
-                random_seed=self._random_seed,
-                tree_file_name=self._tree_file_name,
-                max_memory=self._max_memory,
-                segment_block_size=self._segment_block_size,
-                avl_node_block_size=self._avl_node_block_size,
-                node_mapping_block_size=self._node_mapping_block_size)
-        # This will change to return True/False when we support partial
-        # simulations.
-        return self._ll_sim.run()
+        self._ll_sim = _msprime.Simulator(
+            sample_size=self._sample_size,
+            num_loci=self._num_loci,
+            population_models=models,
+            scaled_recombination_rate=self._scaled_recombination_rate,
+            random_seed=self._random_seed,
+            max_memory=self._max_memory,
+            segment_block_size=self._segment_block_size,
+            avl_node_block_size=self._avl_node_block_size,
+            node_mapping_block_size=self._node_mapping_block_size,
+            coalescence_record_block_size=self._coalescence_record_block_size)
+        self._ll_sim.run()
+        ts = TreeSequence(self._ll_sim)
+        return ts
 
     def reset(self):
         """
         Resets the simulation so that we can perform another replicate.
         """
         self._ll_sim = None
+
+class TreeSequence(object):
+
+    def __init__(self, ll_simulator):
+        self._breakpoints = ll_simulator.get_breakpoints()
+        records = ll_simulator.get_coalescence_records()
+        self._records = sorted(records, key=lambda r: r[0])
+        self._sample_size = ll_simulator.get_sample_size()
+        self._num_loci = ll_simulator.get_num_loci()
+
+    def get_sample_size(self):
+        return self._sample_size
+
+    def get_num_loci(self):
+        return self._num_loci
+
+    def get_num_breakpoints(self):
+        return len(self._breakpoints)
+
+    def sparse_trees(self):
+        n = self._sample_size
+        pi = {}
+        tau = {j:0 for j in range(1, n + 1)}
+        l = 0
+        last_l = 0
+        live_segments = []
+        # print("START")
+        for l, r, c1, c2, parent, t in self._records:
+            # print(l, r, c1, c2, parent, t, sep="\t")
+            if last_l != l:
+                # print("YIELDING TREE", len(live_segments))
+                # for right, v in live_segments:
+                    # print("\t", right, v)
+                q = 1
+                while q in pi:
+                    q = pi[q]
+                pi[q] = 0
+                yield l - last_l, pi, tau
+                del pi[q]
+                last_l = l
+            heapq.heappush(live_segments, (r, ([c1, c2], parent)))
+            while live_segments[0][0] <= l:
+                x, (children, p) = heapq.heappop(live_segments)
+                # print("Popping off segment", x, children, p)
+                for c in children:
+                    del pi[c]
+                del tau[p]
+            pi[c1] = parent
+            pi[c2] = parent
+            tau[parent] = t
+        q = 1
+        while q in pi:
+            q = pi[q]
+        pi[q] = 0
+        yield self.get_num_loci() - l, pi, tau
+
 
 
 class TreeFile(object):
