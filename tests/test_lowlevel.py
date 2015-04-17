@@ -66,9 +66,9 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertEqual(breakpoints, sorted(breakpoints))
         self.assertEqual(breakpoints[0], 0)
         self.assertEqual(breakpoints[-1], m)
-        records = sim.get_coalescence_records()
+        records = [t for t in zip(*sim.get_coalescence_records())]
         self.assertEqual(len(records), sim.get_num_coalescence_records())
-        for l, r, c1, c2, p, t in records:
+        for l, r, children, p, t in records:
             self.assertTrue(0 <= l < m)
             self.assertTrue(1 <= r <= m)
             self.assertGreater(t, 0.0)
@@ -86,7 +86,7 @@ class TestInterface(tests.MsprimeTestCase):
                     segments_am[j] += 1
                     j += 1
         records_am = [0 for b in breakpoints[:-1]]
-        for l, r, _, _, _, _ in records:
+        for l, r, _, _, _ in records:
             j = breakpoints.index(l)
             while breakpoints[j] < r:
                 records_am[j] += 1
@@ -110,11 +110,13 @@ class TestInterface(tests.MsprimeTestCase):
         last_t = 0
         num_trees = 0
         live_segments = []
-        for l, r, c1, c2, parent, t in sorted_records:
+        for l, r, children, parent, t in sorted_records:
             if last_l != l:
                 last_l = l
                 last_t = 0
-                # Insert the root.
+                for j in range(1, n + 1):
+                    assert j in pi
+                # insert the root
                 q = 1
                 while q in pi:
                     q = pi[q]
@@ -124,17 +126,19 @@ class TestInterface(tests.MsprimeTestCase):
                 num_trees += 1
             else:
                 last_t = t
-            heapq.heappush(live_segments, (r, ([c1, c2], parent)))
+            heapq.heappush(live_segments, (r, (children, parent)))
             while live_segments[0][0] <= l:
-                x, (children, p) = heapq.heappop(live_segments)
-                for c in children:
+                x, (other_children, p) = heapq.heappop(live_segments)
+                for c in other_children:
                     del pi[c]
                 del tau[p]
-            pi[c1] = parent
-            pi[c2] = parent
+            pi[children[0]] = parent
+            pi[children[1]] = parent
             tau[parent] = t
             # Ensure that records are sorted by time within a block
             self.assertLessEqual(last_t, t)
+        for j in range(1, n + 1):
+            assert j in pi
         q = 1
         while q in pi:
             q = pi[q]
@@ -172,11 +176,11 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
         self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
         self.assertGreater(sim.get_used_memory(), 0)
-        records = sim.get_coalescence_records()
+        records = [t for t in zip(*sim.get_coalescence_records())]
         self.assertGreater(len(records), 0)
         self.assertEqual(len(records), sim.get_num_coalescence_records())
         # Records should be in nondecreasing time order
-        times = [t for l, r,  c1, c2, parent, t in records]
+        times = [t for l, r, children, parent, t in records]
         self.assertEqual(times, sorted(times))
         self.assertEqual(times[-1], sim.get_time())
         self.verify_squashed_records(records)

@@ -45,7 +45,6 @@ def check_sim(sim):
     n = sim.get_sample_size()
     ancestors = sim.get_ancestors()
     records = sim.get_coalescence_records()
-    print("num records = ", len(records))
     breakpoints = sim.get_breakpoints()
     # The amount of ancestral material in the coalescence records and
     # the extant segments over all intervals should be n.
@@ -57,7 +56,7 @@ def check_sim(sim):
                 segments_am[j] += 1
                 j += 1
     records_am = [0 for b in breakpoints[:-1]]
-    for l, r, _, _, _, _ in records:
+    for l, r, _, _, _ in zip(*records):
         j = breakpoints.index(l)
         while breakpoints[j] < r:
             records_am[j] += 1
@@ -71,7 +70,7 @@ def check_sim(sim):
 
 def ll_main():
     j = 0
-    if True:
+    while True:
         j += 1
         models = [{"type":_msprime.POP_MODEL_CONSTANT, "start_time":0.3, "size":0.2},
                 {"type":_msprime.POP_MODEL_EXPONENTIAL, "start_time":0.5, "alpha":5}]
@@ -83,14 +82,14 @@ def ll_main():
         for t in [0.001, 0.1, 0.15, 0.5, 1000]:
             before = time.time()
             # print(sim.run())
-            print(sim.run(t))
+            # print(sim.run(t))
             duration = time.time() - before
-            print("Ran in", duration)
+            # print("Ran in", duration)
             # print_sim(sim)
             segs = sim.get_ancestors()
             crs = sim.get_coalescence_records()
             bps = sim.get_breakpoints()
-            print(len(segs), len(crs), len(bps))
+            # print(len(segs), len(crs), len(bps))
             check_sim(sim)
 
         # for j in range(tr.get_num_trees()):
@@ -108,10 +107,30 @@ def ll_main():
 def hl_main():
 
     random.seed(1)
-    pi, tau = msprime.simulate_tree(4)
-    print(pi, tau)
-    for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
-        print(l, pi, tau)
+    # pi, tau = msprime.simulate_tree(4)
+    # print(pi, tau)
+    # for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
+    #     print(l, pi, tau)
+    treefile = "tmp__NOBACKUP__/tmp.hdf5"
+    sim = msprime.TreeSimulator(10)
+    sim.set_random_seed(1)
+    sim.set_num_loci(100)
+    sim.set_scaled_recombination_rate(0.1)
+    models = [
+            msprime.ExponentialPopulationModel(0, 1),
+            msprime.ExponentialPopulationModel(0.1, 2),
+            msprime.ConstantPopulationModel(0.5, 2.0),
+    ]
+    for m in models:
+        sim.add_population_model(m)
+
+    tree_sequence = sim.run()
+    tree_sequence.dump(treefile)
+    tree_sequence.print_state()
+    ts = msprime.TreeSequence.load(treefile)
+    print("after")
+    ts.print_state()
+
 
 def large_sim():
     n = 10**3

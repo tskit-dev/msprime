@@ -24,9 +24,13 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import heapq
+import json
 import os
 import random
 import tempfile
+
+import h5py
+import numpy as np
 
 import _msprime
 from _msprime import InputError
@@ -227,7 +231,16 @@ class TreeSimulator(object):
             node_mapping_block_size=self._node_mapping_block_size,
             coalescence_record_block_size=self._coalescence_record_block_size)
         self._ll_sim.run()
-        ts = TreeSequence(self._ll_sim)
+        metadata = {
+            "sample_size": self._sample_size,
+            "num_loci": self._num_loci,
+            "population_models": models,
+            "random_seed": self._random_seed
+        }
+        records = self._ll_sim.get_coalescence_records()
+        left, right, children, parent, time = records
+        ts = TreeSequence(self._ll_sim.get_breakpoints(), left, right,
+                children, parent, time, metadata, True)
         return ts
 
     def reset(self):
@@ -238,12 +251,68 @@ class TreeSimulator(object):
 
 class TreeSequence(object):
 
-    def __init__(self, ll_simulator):
-        self._breakpoints = ll_simulator.get_breakpoints()
-        records = ll_simulator.get_coalescence_records()
-        self._records = sorted(records, key=lambda r: r[0])
-        self._sample_size = ll_simulator.get_sample_size()
-        self._num_loci = ll_simulator.get_num_loci()
+    def __init__(self, breakpoints, left, right, children, parent, time,
+            metadata, sort_records=False):
+        uint32 = "uint32"
+        self._breakpoints = np.array(breakpoints, dtype=uint32)
+        self._num_records = len(left)
+        self._left  = np.array(left , dtype=uint32)
+        self._right = np.array(right, dtype=uint32)
+        self._children = np.array(children, dtype=uint32)
+        self._parent = np.array(parent, dtype=uint32)
+        self._time = np.array(time, dtype="double")
+        self._sample_size = metadata["sample_size"]
+        self._num_loci = metadata["num_loci"]
+        self._metadata = dict(metadata)
+        if sort_records:
+            p = np.argsort(self._left)
+            self._left = self._left[p]
+            self._right = self._right[p]
+            self._children = self._children[p]
+            self._parent = self._parent[p]
+            self._time = self._time[p]
+
+    def print_state(self):
+        print("metadata = ", self._metadata)
+        for j in range(self._num_records):
+            print(self._left[j], self._right[j], self._children[j],
+                    self._parent[j], self._time[j], sep="\t")
+
+    def dump(self, path):
+        """
+        Writes the tree sequence to the specified file path.
+        """
+        compression = "gzip"
+        with h5py.File(path, "w") as f:
+            f.attrs["version"] = "0.1"
+            f.attrs["metadata"] = json.dumps(self._metadata)
+            uint32 = "uint32"
+            f.create_dataset(
+                "breakpoints", data=self._breakpoints, dtype=uint32,
+                compression=compression)
+            records = f.create_group("records")
+            records.create_dataset(
+                "left", data=self._left, dtype=uint32, compression=compression)
+            records.create_dataset(
+                "right", data=self._right, dtype=uint32, compression=compression)
+            records.create_dataset(
+                "children", data=self._children, dtype=uint32, compression=compression)
+            records.create_dataset(
+                "parent", data=self._parent, dtype=uint32, compression=compression)
+            records.create_dataset(
+                "time", data=self._time, dtype="double", compression=compression)
+
+
+    @classmethod
+    def load(cls, path):
+        with h5py.File(path, "r") as f:
+            records = f["records"]
+            metadata = json.loads(f.attrs["metadata"])
+            ret = TreeSequence(f["breakpoints"], records["left"],
+                    records["right"], records["children"],
+                    records["parent"], records["time"], metadata)
+
+        return ret
 
     def get_sample_size(self):
         return self._sample_size
@@ -262,8 +331,9 @@ class TreeSequence(object):
         last_l = 0
         live_segments = []
         # print("START")
-        for l, r, c1, c2, parent, t in self._records:
-            # print(l, r, c1, c2, parent, t, sep="\t")
+        iterator = zip(
+            self._left, self._right, self._children, self._parent, self._time)
+        for l, r, children, parent, t in iterator:
             if last_l != l:
                 # print("YIELDING TREE", len(live_segments))
                 # for right, v in live_segments:
@@ -275,15 +345,15 @@ class TreeSequence(object):
                 yield l - last_l, pi, tau
                 del pi[q]
                 last_l = l
-            heapq.heappush(live_segments, (r, ([c1, c2], parent)))
+            heapq.heappush(live_segments, (r, (tuple(children), parent)))
             while live_segments[0][0] <= l:
-                x, (children, p) = heapq.heappop(live_segments)
+                x, (other_children, p) = heapq.heappop(live_segments)
                 # print("Popping off segment", x, children, p)
-                for c in children:
+                for c in other_children:
                     del pi[c]
                 del tau[p]
-            pi[c1] = parent
-            pi[c2] = parent
+            pi[children[0]] = parent
+            pi[children[1]] = parent
             tau[parent] = t
         q = 1
         while q in pi:
