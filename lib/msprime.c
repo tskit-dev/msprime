@@ -870,6 +870,8 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         uint32_t child1, uint32_t child2, uint32_t parent)
 {
     int ret = 0;
+    uint32_t c1 = GSL_MIN(child1, child2);
+    uint32_t c2 = GSL_MAX(child1, child2);
     coalescence_record_t *cr;
     coalescence_record_t *lcr;
 
@@ -889,8 +891,8 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
     if (self->num_coalescence_records != 0) {
         lcr = &self->coalescence_records[self->num_coalescence_records - 1];
         if (lcr->right == left
-                && lcr->children[0] == child1
-                && lcr->children[1] == child2
+                && lcr->children[0] == c1
+                && lcr->children[1] == c2
                 && lcr->parent == parent) {
             /* squash this record into the last */
             lcr->right = right;
@@ -900,8 +902,8 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
     if (cr != NULL) {
         cr->left = left;
         cr->right = right;
-        cr->children[0] = child1;
-        cr->children[1] = child2;
+        cr->children[0] = c1;
+        cr->children[1] = c2;
         cr->parent = parent;
         cr->time = self->time;
         self->num_coalescence_records++;
