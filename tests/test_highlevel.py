@@ -4,9 +4,9 @@ Test cases for the high level interface to msprime.
 from __future__ import print_function
 from __future__ import division
 
-import re
 import os
 import random
+import re
 import unittest
 
 # Used to disable the newick and haplotype tests while we're developing
@@ -17,48 +17,58 @@ import msprime
 
 import tests
 
-def oriented_tree_to_newick(pi, tau, precision):
-    """
-    Converts the specified oriented tree to an ms-compatible Newick tree.
-    """
-    # Build a top-down linked tree using a dict. Each node has a list
-    # of its children
-    d = {}
-    n = len(pi) // 2
-    # We also want the branch lengths; time from a node back to its parent
-    b = {2 * n - 1: None}
-    for j in range(1, n + 1):
-        u = j
-        d[u] = None
-        not_done = True
-        while pi[u] != 0 and not_done:
-            b[u] = "{0:.{1}f}".format(tau[pi[u]] - tau[u], precision)
-            if pi[u] in d:
-                # This is the second time we've seen this node
-                not_done = False
-            else:
-                d[pi[u]] = []
-            d[pi[u]].append(u)
-            # make sure the children are sorted so we can compare trees easily
-            if len(d[pi[u]]) == 2:
-                d[pi[u]] = sorted(d[pi[u]])
-            u = pi[u]
-    return _build_newick(2 * n - 1, d, b)
-
-def _build_newick(node, tree, branch_lengths):
-    l = branch_lengths[node]
-    if tree[node] is not None:
+def _build_newick(node, root, tree, branch_lengths):
+    if node in tree:
         c1, c2 = tree[node]
-        s1 = _build_newick(c1, tree, branch_lengths)
-        s2 = _build_newick(c2, tree, branch_lengths)
-        if l is None:
+        s1 = _build_newick(c1, root, tree, branch_lengths)
+        s2 = _build_newick(c2, root, tree, branch_lengths)
+        if node == root:
             # The root node is treated differently
             s = "({0},{1});".format(s1, s2)
         else:
-            s = "({0},{1}):{2}".format(s1, s2, l)
+            s = "({0},{1}):{2}".format(
+                s1, s2, branch_lengths[node])
     else:
-        s = "{0}:{1}".format(node, l)
+        # Leaf node
+        s = "{0}:{1}".format(node, branch_lengths[node])
     return s
+
+def sparse_tree_to_newick(pi, tau, precision):
+    """
+    Converts the specified oriented tree to an ms-compatible Newick tree.
+    """
+    c = {}
+    branch_lengths = {}
+    root = 1
+    for child, parent in pi.items():
+        if parent in c:
+            c[parent].append(child)
+            c[parent] = sorted(c[parent])
+        else:
+            c[parent] = [child]
+        s = "{0:.{1}f}".format(tau[parent] - tau[child], precision)
+        branch_lengths[child] = s
+        if parent not in pi:
+            root = parent
+    return _build_newick(root, root, c, branch_lengths)
+
+
+def _build_newick(node, root, tree, branch_lengths):
+    if node in tree:
+        c1, c2 = tree[node]
+        s1 = _build_newick(c1, root, tree, branch_lengths)
+        s2 = _build_newick(c2, root, tree, branch_lengths)
+        if node == root:
+            # The root node is treated differently
+            s = "({0},{1});".format(s1, s2)
+        else:
+            s = "({0},{1}):{2}".format(
+                s1, s2, branch_lengths[node])
+    else:
+        # Leaf node
+        s = "{0}:{1}".format(node, branch_lengths[node])
+    return s
+
 
 class TestSingleLocusSimulation(tests.MsprimeTestCase):
     """
@@ -136,13 +146,7 @@ class TestTreeSimulator(tests.MsprimeTestCase):
         sim.set_num_loci(m)
         self.assertEqual(sim.get_num_loci(), m)
         tree_sequence = sim.run()
-        sparse_trees = [
-            (l, dict(pi), dict(tau)) for l, pi, tau in tree_sequence.sparse_trees()]
-        self.verify_sparse_trees(n, m, sparse_trees)
-
-        # With inline segment merging, the number of trees we get back is
-        # not necessarily equal to the number of breakpoints.
-        self.assertLess(len(sparse_trees), sim.get_num_breakpoints())
+        self.verify_tree_sequence(sim, tree_sequence)
 
     def test_random_parameters(self):
         num_random_sims = 10
@@ -184,31 +188,19 @@ class TestNewickConversion(tests.MsprimeTestCase):
     """
     Test the newick tree generation code.
     """
-    def verify_trees(self, treefile):
+    def verify_trees(self, tree_sequence):
         """
         Verifies that the specified tree is converted to Newick correctly.
         """
-        def strip_tree(newick):
-            """
-            Strips all time information out of the specified newick tree.
-            """
-            return re.sub(":\d", "", newick)
-        # We set the precision to 0 here to avoid problems that occur when
-        # Python and C using different rounding strategies. This allows us
-        # to remove the times completely, so we're just comparing the
-        # structure of the trees.
-        precision = 0
-        old_trees = [(l, oriented_tree_to_newick(pi, tau, precision))
-                for l, pi, tau in msprime.TreeFile(treefile).trees()]
-        new_trees = list(msprime.TreeFile(treefile).newick_trees(precision))
+        precision = 5
+        old_trees = [(l, sparse_tree_to_newick(pi, tau, precision))
+                for l, pi, tau in tree_sequence.sparse_trees()]
+        new_trees = list(tree_sequence.newick_trees(precision))
         self.assertEqual(len(new_trees), len(old_trees))
         for (l1, t1), (l2, t2) in zip(new_trees, old_trees):
             self.assertEqual(l1, l2)
-            s1 = strip_tree(t1)
-            s2 = strip_tree(t2)
-            self.assertEqual(s1, s2)
+            self.assertEqual(t1, t2)
 
-    @nottest
     def test_simple_cases(self):
         cases = [
             (2, 1, 0),
@@ -217,28 +209,28 @@ class TestNewickConversion(tests.MsprimeTestCase):
             (10, 10, 0.1),
             (20, 1, 0),
             (20, 10, 0.1),
+            (10, 50, 1.0),
         ]
         for n, m, r in cases:
-            ts = msprime.TreeSimulator(n, self._treefile)
+            ts = msprime.TreeSimulator(n)
             ts.set_random_seed(1)
             ts.set_scaled_recombination_rate(r)
             ts.set_num_loci(m)
-            self.assertTrue(ts.run())
-            msprime.sort_tree_file(self._treefile)
-            self.verify_trees(self._treefile)
+            tree_sequence = ts.run()
+            self.verify_tree_sequence(ts, tree_sequence)
+            self.verify_trees(tree_sequence)
 
-    @nottest
     def test_random_parameters(self):
         num_random_sims = 10
         for j in range(num_random_sims):
             n = random.randint(2, 100)
             m = random.randint(10, 1000)
             r = random.random()
-            ts = msprime.TreeSimulator(n, self._treefile)
+            ts = msprime.TreeSimulator(n)
             ts.set_scaled_recombination_rate(r)
             ts.set_num_loci(m)
-            self.assertTrue(ts.run())
-            msprime.sort_tree_file(self._treefile)
-            self.verify_trees(self._treefile)
+            tree_sequence = ts.run()
+            self.verify_tree_sequence(ts, tree_sequence)
+            self.verify_trees(tree_sequence)
 
 

@@ -2,6 +2,7 @@
 Common code for the msprime test cases.
 """
 from __future__ import print_function
+from __future__ import unicode_literals
 from __future__ import division
 
 import collections
@@ -25,8 +26,18 @@ class MsprimeTestCase(unittest.TestCase):
         Verifies that the specified sparse_tree is a consistent coalescent history
         for a sample of size n.
         """
-        self.assertEqual(set(pi.keys()), set(tau.keys()))
-        self.assertEqual(len(pi), 2 * n - 1)
+        # verify the root is equal for all leaves
+        root = 1
+        while root in pi:
+            root = pi[root]
+        for j in range(1, n + 1):
+            k = j
+            while k in pi:
+                k = pi[k]
+            self.assertEqual(k, root)
+        self.assertIn(root, tau)
+        self.assertEqual(set(list(pi.keys()) + [root]), set(tau.keys()))
+        self.assertEqual(len(pi), 2 * n - 2)
         self.assertEqual(len(tau), 2 * n - 1)
         # Zero should not be a node
         self.assertNotIn(0, pi)
@@ -36,13 +47,8 @@ class MsprimeTestCase(unittest.TestCase):
             self.assertIn(j, pi)
             self.assertIn(j, tau)
         num_children = collections.defaultdict(int)
-        roots = 0
         for j in pi.keys():
             num_children[pi[j]] += 1
-            roots += pi[j] == 0
-        if roots != 1:
-            print(pi)
-        self.assertEqual(roots, 1)
         # nodes 1 to n are leaves.
         for j in range(1, n + 1):
             self.assertNotEqual(pi[j], 0)
@@ -62,7 +68,7 @@ class MsprimeTestCase(unittest.TestCase):
             self.assertEqual(tau[j], 0.0)
             last_time = -1
             k = j
-            while k != 0:
+            while k in pi:
                 self.assertNotEqual(k, pi[k])
                 self.assertGreater(tau[k], last_time)
                 last_time = tau[k]
@@ -95,3 +101,52 @@ class MsprimeTestCase(unittest.TestCase):
                 zeros += haplotypes[j][k] == '0'
                 ones += haplotypes[j][k] == '1'
             self.assertEqual(zeros + ones, n)
+
+    def verify_tree_sequence(self, sim, tree_sequence):
+        """
+        Verify that varoius ways of looking at the specified tree sequence
+        are equivalent.
+        """
+        n = tree_sequence.get_sample_size()
+        m = tree_sequence.get_num_loci()
+        self.assertEqual(sim.get_sample_size(), n)
+        self.assertEqual(sim.get_num_loci(), m)
+        # TODO verify the rest of the metadata.
+
+        sparse_trees = [
+            (l, dict(pi), dict(tau)) for l, pi, tau in tree_sequence.sparse_trees()]
+        self.verify_sparse_trees(n, m, sparse_trees)
+        self.assertLess(len(sparse_trees), sim.get_num_breakpoints())
+        # Verify the diffs
+        diffs = tree_sequence.diffs()
+        l, records_out, records_in = next(diffs)
+        self.assertGreaterEqual(l, 1)
+        self.assertEqual(len(records_out), 0)
+        self.assertEqual(len(records_in), n - 1)
+        pi = {}
+        tau = {j:0 for j in range(1, n + 1)}
+        for children, parent, t in records_in:
+            pi[children[0]] = parent
+            pi[children[1]] = parent
+            tau[parent] = t
+        l_p, pi_p, tau_p = sparse_trees[0]
+        self.assertEqual(l_p, l)
+        self.assertEqual(pi_p, pi)
+        self.assertEqual(tau_p, tau)
+        j = 1
+        for l, records_out, records_in in diffs:
+            self.assertGreaterEqual(l, 1)
+            self.assertEqual(len(records_out), len(records_in))
+            for children, parent, time in records_out:
+                del pi[children[0]]
+                del pi[children[1]]
+                del tau[parent]
+            for children, parent, time in records_in:
+                pi[children[0]] = parent
+                pi[children[1]] = parent
+                tau[parent] = time
+            l_p, pi_p, tau_p = sparse_trees[j]
+            self.assertEqual(l_p, l)
+            self.assertEqual(pi_p, pi)
+            self.assertEqual(tau_p, tau)
+            j += 1

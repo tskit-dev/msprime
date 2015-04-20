@@ -69,6 +69,7 @@ class TestInterface(tests.MsprimeTestCase):
         records = [t for t in zip(*sim.get_coalescence_records())]
         self.assertEqual(len(records), sim.get_num_coalescence_records())
         for l, r, children, p, t in records:
+            self.assertEqual(children, tuple(sorted(children)))
             self.assertTrue(0 <= l < m)
             self.assertTrue(1 <= r <= m)
             self.assertGreater(t, 0.0)
@@ -116,13 +117,7 @@ class TestInterface(tests.MsprimeTestCase):
                 last_t = 0
                 for j in range(1, n + 1):
                     assert j in pi
-                # insert the root
-                q = 1
-                while q in pi:
-                    q = pi[q]
-                pi[q] = 0
                 self.verify_sparse_tree(n, pi, tau)
-                del pi[q]
                 num_trees += 1
             else:
                 last_t = t
@@ -139,10 +134,6 @@ class TestInterface(tests.MsprimeTestCase):
             self.assertLessEqual(last_t, t)
         for j in range(1, n + 1):
             assert j in pi
-        q = 1
-        while q in pi:
-            q = pi[q]
-        pi[q] = 0
         self.verify_sparse_tree(n, pi, tau)
         num_trees += 1
         self.assertLessEqual(num_trees, sim.get_num_breakpoints())
@@ -181,6 +172,9 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertEqual(len(records), sim.get_num_coalescence_records())
         # Records should be in nondecreasing time order
         times = [t for l, r, children, parent, t in records]
+        # Children should always be sorted in order.
+        for _, _, children, _, _ in records:
+            self.assertEqual(children, tuple(sorted(children)))
         self.assertEqual(times, sorted(times))
         self.assertEqual(times[-1], sim.get_time())
         self.verify_squashed_records(records)
