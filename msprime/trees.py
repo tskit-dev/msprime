@@ -27,6 +27,7 @@ import collections
 import heapq
 import json
 import os
+import pprint
 import random
 import tempfile
 
@@ -276,7 +277,7 @@ class TreeSequence(object):
             self._time = self._time[p]
 
     def print_state(self):
-        print("metadata = ", self._metadata)
+        pprint.pprint(self._metadata)
         for j in range(self._num_records):
             print(self._left[j], self._right[j], self._children[j],
                     self._parent[j], self._time[j], sep="\t")
@@ -382,56 +383,113 @@ class TreeSequence(object):
         yield r - left, used_records[left], records_in
 
     def newick_trees(self, precision=3):
-        # We want a top-down representation of the tree to make
-        # generation of the Newick trees easier.
-        c = {}
-        branch_lengths = {}
-        tau = {j: 0.0 for j in range(1, self._sample_size + 1)}
-        pi = {}
-        root = 1
-        for length, records_out, records_in in self.diffs():
-            # print("New tree:", length)
-            # print("OUT")
-            # for r in records_out:
-            #     print("\t", r)
-            # print("IN")
-            # for r in records_in:
-            #     print("\t", r)
-            for children, parent, time in records_out:
-                del c[parent]
-                del tau[parent]
-                for j in range(0, 2):
-                    del pi[children[j]]
-                    del branch_lengths[children[j]]
-                if parent == root:
-                    root = 1
-            for children, parent, time in records_in:
-                c[parent] = tuple(children)
-                for j in range(0, 2):
-                    pi[children[j]] = parent
-                tau[parent] = time
-                if time > tau[root]:
-                    root = parent
-            # Update the branch_lengths
-            for children, parent, time in records_in:
-                for j in range(0, 2):
-                    s = "{0:.{1}f}".format(time - tau[children[j]], precision)
-                    branch_lengths[children[j]] = s
-            # print("Root = ", root)
-            # print("child map:", c)
-            # print("tau: ", tau)
-            # print("b :", branch_lengths)
-            assert len(c) == self._sample_size - 1
-            assert len(tau) == 2 * self._sample_size - 1
-            assert len(pi) == 2 * self._sample_size - 2
-            assert len(branch_lengths) == 2 * self._sample_size - 2
-            # TODO This root calculation above is wrong! Fix it!
-            j = 1
-            while j in pi:
-                j = pi[j]
-            root = j
-            yield length, _tmp_build_newick(root, root, c, branch_lengths)
+        return NewickGenerator(self, precision)
 
+
+class NewickGenerator(object):
+    """
+    An iterator over the newick trees for a given tree sequence.
+    """
+    def __init__(self, tree_sequence, precision):
+        self._tree_sequence = tree_sequence
+        self._diffs = tree_sequence.diffs()
+        self._sample_size = tree_sequence.get_sample_size()
+        self._precision = precision
+        self._children = {}
+        self._branch_length = {}
+        self._time = {j: 0.0 for j in range(1, self._sample_size + 1)}
+        self._parent = {}
+        self._subtree = {}
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.next()
+
+    def next(self):
+        length, records_out, records_in = next(self._diffs)
+        # print("New tree:", length)
+        # print("OUT")
+        # for r in records_out:
+        #     print("\t", r)
+        # print("IN")
+        # for r in records_in:
+        #     print("\t", r)
+        # print("subtrees before = ")
+        # pprint.pprint(self._subtree)
+        for children, parent, time in records_out:
+            del self._children[parent]
+            del self._time[parent]
+            for j in children:
+                self._propogate_subtree_loss(j)
+                del self._parent[j]
+                del self._branch_length[j]
+        for children, parent, time in records_in:
+            self._children[parent] = tuple(children)
+            for j in children:
+                self._parent[j] = parent
+                self._propogate_subtree_loss(j)
+            self._time[parent] = time
+        # Update the branch_lengths
+        for children, parent, time in records_in:
+            for j in range(0, 2):
+                s = "{0:.{1}f}".format(
+                    time - self._time[children[j]], self._precision)
+                self._branch_length[children[j]] = s
+        self._root = 1
+        while self._root in self._parent:
+            self._root = self._parent[self._root]
+        # print("Root = ", self._root)
+        # print("children = ", self._children)
+        assert len(self._time) == 2 * self._sample_size - 1
+        assert len(self._parent) == 2 * self._sample_size - 2
+        assert len(self._branch_length) == 2 * self._sample_size - 2
+        # assert len(self._subtree) == self._sample_size - 1
+        # print("root = ", root)
+        # print("tau = ", tau)
+        # print(c)
+        # return length, _tmp_build_newick(root, root, self._children,
+        #         self._branch_length)
+
+        # Now, subtrees contains only trees that are still valid.
+        # print("subtrees after = ")
+        # pprint.pprint(self._subtree)
+
+        self._update_subtrees(self._root)
+        return length, self._subtree[self._root]
+
+    def _propogate_subtree_loss(self, node):
+        """
+        Propogates the loss of the subtree at the specified node up
+        through the tree.
+        """
+        k = node
+        while k in self._subtree:
+            # print("propogating loss", k)
+            del self._subtree[k]
+            if k in self._parent:
+                k = self._parent[k]
+
+    def _update_subtrees(self, node):
+        # print("traverse", node)
+        if node not in self._subtree:
+            if node in self._children:
+                children = self._children[node]
+                self._update_subtrees(children[0])
+                self._update_subtrees(children[1])
+                s1 = self._subtree[children[0]]
+                s2 = self._subtree[children[1]]
+                if node == self._root:
+                    # The root node is treated differently
+                    s = "({0},{1});".format(s1, s2)
+                else:
+                    s = "({0},{1}):{2}".format(
+                        s1, s2, self._branch_length[node])
+            else:
+                s = "{0}:{1}".format(node, self._branch_length[node])
+            # print("setting", node, "=", s)
+            self._subtree[node] = s
 
 def _tmp_build_newick(node, root, tree, branch_lengths):
     if node in tree:
