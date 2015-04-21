@@ -26,7 +26,6 @@ import os
 import sys
 import struct
 import random
-import tempfile
 import argparse
 
 import msprime
@@ -62,7 +61,6 @@ class SimulationRunner(object):
     Class to run msprime simulation and output the results.
     """
     def __init__(self, args):
-        self.tree_file_name = None
         self.sample_size = args.sample_size
         self.num_loci = int(args.recombination[1])
         self.rho = args.recombination[0]
@@ -70,11 +68,7 @@ class SimulationRunner(object):
         self.mutation_rate = args.mutation_rate
         self.print_trees = args.trees
         self.precision = args.precision
-        fd, tf = tempfile.mkstemp(prefix="mscompat_", suffix=".dat")
-        os.close(fd)
-        self.tree_file_name = tf
-        self.simulator = msprime.TreeSimulator(self.sample_size,
-                self.tree_file_name)
+        self.simulator = msprime.TreeSimulator(self.sample_size)
         self.simulator.set_max_memory(args.max_memory)
         self.simulator.set_num_loci(self.num_loci)
         # We don't scale recombination rate by the size of the region.
@@ -108,13 +102,11 @@ class SimulationRunner(object):
         print(" ".join(str(s) for s in self.ms_random_seeds))
         for j in range(self.num_replicates):
             self.simulator.set_random_seed(random.randint(0, 2**30))
-            self.simulator.run()
-            msprime.sort_tree_file(self.tree_file_name)
-            tf = msprime.TreeFile(self.tree_file_name)
+            tree_sequence = self.simulator.run()
             print()
             print("//")
             if self.print_trees:
-                iterator = tf.newick_trees(self.precision)
+                iterator = tree_sequence.newick_trees(self.precision)
                 if self.num_loci == 1:
                     for l, ns in iterator:
                         print(ns)
@@ -137,12 +129,6 @@ class SimulationRunner(object):
                     print()
             self.simulator.reset()
 
-    def cleanup(self):
-        """
-        Cleans up any files created during simulation.
-        """
-        if self.tree_file_name is not None:
-            os.unlink(self.tree_file_name)
 
 def positive_int(value):
     int_value = int(value)

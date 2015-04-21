@@ -114,7 +114,7 @@ def hl_main():
     treefile = "tmp__NOBACKUP__/tmp.hdf5"
     sim = msprime.TreeSimulator(10)
     sim.set_random_seed(1)
-    sim.set_num_loci(1000)
+    sim.set_num_loci(100)
     sim.set_scaled_recombination_rate(0.1)
     models = [
             msprime.ExponentialPopulationModel(0, 1),
@@ -127,11 +127,11 @@ def hl_main():
     tree_sequence = sim.run()
     # tree_sequence.dump(treefile)
     # tree_sequence.print_state()
-    for newick in tree_sequence.newick_trees():
+    for l, newick in tree_sequence.newick_trees(all_breaks=True):
         print(newick)
-    # for l, records_out, records_in in tree_sequence.diffs():
-    #     print("\tin  = ", records_in)
-    #     print("\tout = ", records_out)
+    for l, records_out, records_in in tree_sequence.diffs(True):
+        print("\tin  = ", records_in)
+        print("\tout = ", records_out)
 
     # ts = msprime.TreeSequence.load(treefile)
     # print("after")
@@ -141,7 +141,7 @@ def print_newick(filename):
     ts = msprime.TreeSequence.load(filename)
     j = 0
     s = 0
-    for l, newick in ts.newick_trees(5):
+    for l, newick in ts.newick_trees(10):
         j += 1
         s += l
         # # print()
@@ -501,9 +501,9 @@ if __name__ == "__main__":
     # edit_visualisation()
     # mutation_dev()
     # example1()
-    # hl_main()
+    hl_main()
     # ll_main()
-    print_newick(sys.argv[1])
+    # print_newick(sys.argv[1])
     # memory_test()
     # large_sim()
     # print_tree_records(sys.argv[1])
