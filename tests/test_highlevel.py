@@ -17,21 +17,6 @@ import msprime
 
 import tests
 
-def _build_newick(node, root, tree, branch_lengths):
-    if node in tree:
-        c1, c2 = tree[node]
-        s1 = _build_newick(c1, root, tree, branch_lengths)
-        s2 = _build_newick(c2, root, tree, branch_lengths)
-        if node == root:
-            # The root node is treated differently
-            s = "({0},{1});".format(s1, s2)
-        else:
-            s = "({0},{1}):{2}".format(
-                s1, s2, branch_lengths[node])
-    else:
-        # Leaf node
-        s = "{0}:{1}".format(node, branch_lengths[node])
-    return s
 
 def sparse_tree_to_newick(pi, tau, precision):
     """
@@ -50,7 +35,7 @@ def sparse_tree_to_newick(pi, tau, precision):
         branch_lengths[child] = s
         if parent not in pi:
             root = parent
-    return _build_newick(root, root, c, branch_lengths)
+    return _build_newick(root, root, c, branch_lengths).encode()
 
 
 def _build_newick(node, root, tree, branch_lengths):
