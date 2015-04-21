@@ -434,9 +434,9 @@ class NewickGenerator(object):
         # Update the branch_lengths
         for children, parent, time in records_in:
             for j in range(0, 2):
-                s = "{0:.{1}f}".format(
+                s = b"{0:.{1}f}".format(
                     time - self._time[children[j]], self._precision)
-                self._branch_length[children[j]] = s
+                self._branch_length[children[j]] = np.char.array(s, 1)
         self._root = 1
         while self._root in self._parent:
             self._root = self._parent[self._root]
@@ -445,12 +445,6 @@ class NewickGenerator(object):
         assert len(self._time) == 2 * self._sample_size - 1
         assert len(self._parent) == 2 * self._sample_size - 2
         assert len(self._branch_length) == 2 * self._sample_size - 2
-        # assert len(self._subtree) == self._sample_size - 1
-        # print("root = ", root)
-        # print("tau = ", tau)
-        # print(c)
-        # return length, _tmp_build_newick(root, root, self._children,
-        #         self._branch_length)
 
         # Now, subtrees contains only trees that are still valid.
         # print("subtrees after = ")
@@ -480,32 +474,49 @@ class NewickGenerator(object):
                 self._update_subtrees(children[1])
                 s1 = self._subtree[children[0]]
                 s2 = self._subtree[children[1]]
+                # s = "(" + s1 + "," + s2 + ")"
                 if node == self._root:
                     # The root node is treated differently
-                    s = "({0},{1});".format(s1, s2)
+                    # s = "({0},{1});".format(s1, s2)
+                    s = np.zeros(len(s1) + len(s2) + 4, dtype=(str, 1))
+                    s[0] = b"("
+                    k = 1
+                    s[k:len(s1) + 1] = s1
+                    k += len(s1)
+                    s[k] = b","
+                    k += 1
+                    s[k: k + len(s2)] = s2
+                    k += len(s2)
+                    s[k] = b")"
+                    s[k + 1] = b";"
                 else:
-                    s = "({0},{1}):{2}".format(
-                        s1, s2, self._branch_length[node])
+                    # s += ":" + self._branch_length[node]
+                    # s = "({0},{1}):{2}".format(
+                    #     s1, s2, self._branch_length[node])
+                    suffix = self._branch_length[node]
+                    s = np.zeros(len(s1) + len(s2) + len(suffix) + 4, dtype=(str, 1))
+                    s[0] = b"("
+                    k = 1
+                    s[k:len(s1) + 1] = s1
+                    k += len(s1)
+                    s[k] = b","
+                    k += 1
+                    s[k: k + len(s2)] = s2
+                    k += len(s2)
+                    s[k] = b")"
+                    s[k + 1] = b":"
+                    k += 2
+                    s[k:] = suffix
             else:
-                s = "{0}:{1}".format(node, self._branch_length[node])
-            # print("setting", node, "=", s)
+                # s = str(node) + ":" + self._branch_length[node]
+                prefix = np.char.array(str(node) + b":", 1)
+                suffix = self._branch_length[node]
+                s = np.zeros(len(prefix) + len(suffix), dtype=(str, 1))
+                s[:len(prefix)] = prefix
+                s[len(prefix):] = suffix
+            # print("setting", node, "=", "".join(s))
             self._subtree[node] = s
 
-def _tmp_build_newick(node, root, tree, branch_lengths):
-    if node in tree:
-        c1, c2 = tree[node]
-        s1 = _tmp_build_newick(c1, root, tree, branch_lengths)
-        s2 = _tmp_build_newick(c2, root, tree, branch_lengths)
-        if node == root:
-            # The root node is treated differently
-            s = "({0},{1});".format(s1, s2)
-        else:
-            s = "({0},{1}):{2}".format(
-                s1, s2, branch_lengths[node])
-    else:
-        # Leaf node
-        s = "{0}:{1}".format(node, branch_lengths[node])
-    return s
 
 
 class HaplotypeGenerator(object):

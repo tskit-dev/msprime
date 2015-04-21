@@ -137,6 +137,19 @@ def hl_main():
     # print("after")
     # ts.print_state()
 
+def print_newick(filename):
+    ts = msprime.TreeSequence.load(filename)
+    j = 0
+    s = 0
+    for l, newick in ts.newick_trees():
+        j += 1
+        s += l
+        # newick.tofile(sys.stdout)
+        # print()
+        # print(l, newick)
+        if j % 100000 == 0:
+            print(j, s)
+            break
 
 def large_sim():
     n = 10**3
@@ -489,10 +502,12 @@ if __name__ == "__main__":
     # edit_visualisation()
     # mutation_dev()
     # example1()
-    hl_main()
+    # hl_main()
     # ll_main()
+    print_newick(sys.argv[1])
     # memory_test()
     # large_sim()
     # print_tree_records(sys.argv[1])
     # sort_tree("tmp__NOBACKUP__/large_tree.dat")
     # print_tree("tmp__NOBACKUP__/large_tree.dat")
+
