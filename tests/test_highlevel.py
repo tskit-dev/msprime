@@ -55,7 +55,102 @@ def _build_newick(node, root, tree, branch_lengths):
     return s
 
 
-class TestSingleLocusSimulation(tests.MsprimeTestCase):
+class HighLevelTestCase(tests.MsprimeTestCase):
+    """
+    Superclass of tests on the high level interface.
+    """
+
+    def verify_tree_sequence(self, sim, tree_sequence):
+        """
+        Verify that varoius ways of looking at the specified tree sequence
+        are equivalent.
+        """
+        self.verify_breakpoints(tree_sequence)
+        n = tree_sequence.get_sample_size()
+        m = tree_sequence.get_num_loci()
+        self.assertEqual(sim.get_sample_size(), n)
+        self.assertEqual(sim.get_num_loci(), m)
+        # TODO verify the rest of the metadata.
+
+        sparse_trees = [
+            (l, dict(pi), dict(tau)) for l, pi, tau in tree_sequence.sparse_trees()]
+        self.verify_sparse_trees(n, m, sparse_trees)
+        self.assertLess(len(sparse_trees), sim.get_num_breakpoints())
+        # Verify the diffs
+        diffs = tree_sequence.diffs()
+        l, records_out, records_in = next(diffs)
+        self.assertGreaterEqual(l, 1)
+        self.assertEqual(len(records_out), 0)
+        self.assertEqual(len(records_in), n - 1)
+        pi = {}
+        tau = {j:0 for j in range(1, n + 1)}
+        for children, parent, t in records_in:
+            pi[children[0]] = parent
+            pi[children[1]] = parent
+            tau[parent] = t
+        l_p, pi_p, tau_p = sparse_trees[0]
+        self.assertEqual(l_p, l)
+        self.assertEqual(pi_p, pi)
+        self.assertEqual(tau_p, tau)
+        j = 1
+        s = 0
+        for l, records_out, records_in in diffs:
+            self.assertGreaterEqual(l, 1)
+            self.assertEqual(len(records_out), len(records_in))
+            for children, parent, time in records_out:
+                del pi[children[0]]
+                del pi[children[1]]
+                del tau[parent]
+            for children, parent, time in records_in:
+                pi[children[0]] = parent
+                pi[children[1]] = parent
+                tau[parent] = time
+            l_p, pi_p, tau_p = sparse_trees[j]
+            self.assertEqual(l_p, l)
+            self.assertEqual(pi_p, pi)
+            self.assertEqual(tau_p, tau)
+            j += 1
+
+    def verify_breakpoints(self, tree_sequence):
+        n = tree_sequence.get_sample_size()
+        m = tree_sequence.get_num_loci()
+        all_breaks = tree_sequence.diffs(all_breaks=True)
+        distinct_trees = tree_sequence.diffs(all_breaks=False)
+        x_all = 0
+        x_distinct = 0
+        for l1, out1, in1 in distinct_trees:
+            x_distinct += l1
+            l2, out2, in2 = next(all_breaks)
+            x_all += l2
+            if x_distinct == x_all:
+                self.assertEqual(out1, out2)
+                self.assertEqual(in1, in2)
+            else:
+                while x_distinct != x_all:
+                    self.assertEqual(0, len(out2))
+                    self.assertEqual(0, len(in2))
+                    l2, out2, in2 = next(all_breaks)
+                    x_all += l2
+        total = 0
+        num_breaks = 0
+        breakpoints = tree_sequence.get_breakpoints()
+        for l, records_out, records_in in tree_sequence.diffs(all_breaks=True):
+            num_breaks += 1
+            total += l
+        self.assertEqual(num_breaks, len(breakpoints) - 1)
+        self.assertEqual(num_breaks, len(breakpoints) - 1)
+        self.assertEqual(total,  m)
+        total = 0
+        num_breaks = 0
+        for l, records_out, records_in in tree_sequence.diffs(all_breaks=False):
+            total += l
+            num_breaks += 1
+        self.assertEqual(total,  m)
+        self.assertLessEqual(num_breaks, len(breakpoints) - 1)
+
+
+
+class TestSingleLocusSimulation(HighLevelTestCase):
     """
     Tests on the single locus simulations.
     """
@@ -90,7 +185,7 @@ class TestSingleLocusSimulation(tests.MsprimeTestCase):
 
 
 
-class TestMultiLocusSimulation(tests.MsprimeTestCase):
+class TestMultiLocusSimulation(HighLevelTestCase):
     """
     Tests on the single locus simulations.
     """
@@ -115,7 +210,7 @@ class TestMultiLocusSimulation(tests.MsprimeTestCase):
         for n in ["", None, "2", 2.2, 1e5]:
             self.assertRaises(TypeError, f, n, 1, 1.0)
 
-class TestTreeSimulator(tests.MsprimeTestCase):
+class TestTreeSimulator(HighLevelTestCase):
     """
     Runs tests on the underlying TreeSimulator object.
     """
@@ -143,7 +238,7 @@ class TestTreeSimulator(tests.MsprimeTestCase):
 
 
 
-class TestHaplotypeGenerator(tests.MsprimeTestCase):
+class TestHaplotypeGenerator(HighLevelTestCase):
     """
     Tests the haplotype generation code.
     """
@@ -169,7 +264,7 @@ class TestHaplotypeGenerator(tests.MsprimeTestCase):
             theta = random.uniform(0, 2)
             self.verify_simulation(n, m, r,theta)
 
-class TestNewickConversion(tests.MsprimeTestCase):
+class TestNewickConversion(HighLevelTestCase):
     """
     Test the newick tree generation code.
     """
