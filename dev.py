@@ -112,9 +112,9 @@ def hl_main():
     # for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
     #     print(l, pi, tau)
     treefile = "tmp__NOBACKUP__/tmp.hdf5"
-    sim = msprime.TreeSimulator(5)
+    sim = msprime.TreeSimulator(10)
     sim.set_random_seed(1)
-    sim.set_num_loci(100)
+    sim.set_num_loci(1000)
     sim.set_scaled_recombination_rate(0.1)
     models = [
             msprime.ExponentialPopulationModel(0, 1),
@@ -125,8 +125,8 @@ def hl_main():
         sim.add_population_model(m)
 
     tree_sequence = sim.run()
-    tree_sequence.dump(treefile)
-    tree_sequence.print_state()
+    # tree_sequence.dump(treefile)
+    # tree_sequence.print_state()
     for newick in tree_sequence.newick_trees():
         print(newick)
     # for l, records_out, records_in in tree_sequence.diffs():
