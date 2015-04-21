@@ -409,15 +409,6 @@ class NewickGenerator(object):
 
     def next(self):
         length, records_out, records_in = next(self._diffs)
-        # print("New tree:", length)
-        # print("OUT")
-        # for r in records_out:
-        #     print("\t", r)
-        # print("IN")
-        # for r in records_in:
-        #     print("\t", r)
-        # print("subtrees before = ")
-        # pprint.pprint(self._subtree)
         for children, parent, time in records_out:
             del self._children[parent]
             del self._time[parent]
@@ -434,24 +425,18 @@ class NewickGenerator(object):
         # Update the branch_lengths
         for children, parent, time in records_in:
             for j in range(0, 2):
-                s = b"{0:.{1}f}".format(
+                s = "{0:.{1}f}".format(
                     time - self._time[children[j]], self._precision)
-                self._branch_length[children[j]] = np.char.array(s, 1)
+                self._branch_length[children[j]] = np.char.array(s.encode(), 1)
         self._root = 1
         while self._root in self._parent:
             self._root = self._parent[self._root]
-        # print("Root = ", self._root)
-        # print("children = ", self._children)
         assert len(self._time) == 2 * self._sample_size - 1
         assert len(self._parent) == 2 * self._sample_size - 2
         assert len(self._branch_length) == 2 * self._sample_size - 2
-
-        # Now, subtrees contains only trees that are still valid.
-        # print("subtrees after = ")
-        # pprint.pprint(self._subtree)
-
-        self._update_subtrees(self._root)
-        return length, self._subtree[self._root]
+        self._update_subtrees()
+        ret = self._subtree[self._root].tostring()
+        return length, ret
 
     def _propogate_subtree_loss(self, node):
         """
@@ -460,63 +445,59 @@ class NewickGenerator(object):
         """
         k = node
         while k in self._subtree:
-            # print("propogating loss", k)
             del self._subtree[k]
             if k in self._parent:
                 k = self._parent[k]
 
-    def _update_subtrees(self, node):
-        # print("traverse", node)
-        if node not in self._subtree:
+    def _update_subtrees(self):
+        # We use a two stack iterative method to do a postorder traversal.
+        stack = [self._root]
+        nodes = np.zeros(2 * self._sample_size, dtype="uint32")
+        k = 0
+        while len(stack) != 0:
+            node = stack.pop()
+            if node not in self._subtree:
+                nodes[k] = node
+                k += 1
+                if node in self._children:
+                    for j in self._children[node]:
+                        stack.append(j)
+        # Now, nodes contains the list of nodes we must visit in
+        # reverse order.
+        dtype = (bytes, 1)
+        nodes = nodes[:k]
+        for node in nodes[::-1]:
             if node in self._children:
                 children = self._children[node]
-                self._update_subtrees(children[0])
-                self._update_subtrees(children[1])
                 s1 = self._subtree[children[0]]
                 s2 = self._subtree[children[1]]
-                # s = "(" + s1 + "," + s2 + ")"
-                if node == self._root:
-                    # The root node is treated differently
-                    # s = "({0},{1});".format(s1, s2)
-                    s = np.zeros(len(s1) + len(s2) + 4, dtype=(str, 1))
-                    s[0] = b"("
-                    k = 1
-                    s[k:len(s1) + 1] = s1
-                    k += len(s1)
-                    s[k] = b","
-                    k += 1
-                    s[k: k + len(s2)] = s2
-                    k += len(s2)
-                    s[k] = b")"
-                    s[k + 1] = b";"
-                else:
-                    # s += ":" + self._branch_length[node]
-                    # s = "({0},{1}):{2}".format(
-                    #     s1, s2, self._branch_length[node])
-                    suffix = self._branch_length[node]
-                    s = np.zeros(len(s1) + len(s2) + len(suffix) + 4, dtype=(str, 1))
-                    s[0] = b"("
-                    k = 1
-                    s[k:len(s1) + 1] = s1
-                    k += len(s1)
-                    s[k] = b","
-                    k += 1
-                    s[k: k + len(s2)] = s2
-                    k += len(s2)
-                    s[k] = b")"
-                    s[k + 1] = b":"
-                    k += 2
-                    s[k:] = suffix
+                length = len(s1) + len(s2) + 4
+                sep = b";"
+                if node != self._root:
+                    length += len(self._branch_length[node])
+                    sep = b":"
+                s = np.empty(length, dtype=dtype)
+                s[0] = b"("
+                k = 1
+                s[k:len(s1) + 1] = s1
+                k += len(s1)
+                s[k] = b","
+                k += 1
+                s[k: k + len(s2)] = s2
+                k += len(s2)
+                s[k] = b")"
+                k += 1
+                s[k] = sep
+                k += 1
+                if node != self._root:
+                    s[k:] = self._branch_length[node]
             else:
-                # s = str(node) + ":" + self._branch_length[node]
-                prefix = np.char.array(str(node) + b":", 1)
+                prefix = np.char.array(str(node).encode() + b":", 1)
                 suffix = self._branch_length[node]
-                s = np.zeros(len(prefix) + len(suffix), dtype=(str, 1))
+                s = np.empty(len(prefix) + len(suffix), dtype=dtype)
                 s[:len(prefix)] = prefix
                 s[len(prefix):] = suffix
-            # print("setting", node, "=", "".join(s))
             self._subtree[node] = s
-
 
 
 class HaplotypeGenerator(object):

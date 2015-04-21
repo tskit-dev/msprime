@@ -141,15 +141,14 @@ def print_newick(filename):
     ts = msprime.TreeSequence.load(filename)
     j = 0
     s = 0
-    for l, newick in ts.newick_trees():
+    for l, newick in ts.newick_trees(5):
         j += 1
         s += l
-        # newick.tofile(sys.stdout)
-        # print()
-        # print(l, newick)
-        if j % 100000 == 0:
-            print(j, s)
-            break
+        # # print()
+        print(l, newick)
+        # if j % 10000 == 0:
+        #     print(j, s)
+        #     break
 
 def large_sim():
     n = 10**3
