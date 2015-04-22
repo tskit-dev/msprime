@@ -666,8 +666,12 @@ class HaplotypeGenerator(object):
 
     def haplotypes(self):
         for h in self._haplotype:
-            yield h[:self._num_segregating_sites].tostring()
+            yield h[:self._num_segregating_sites]
 
+    def haplotype_strings(self):
+        for h in self.haplotypes():
+            # We need to convert to str for compatibility with python 3
+            yield h.tostring().decode()
 
 class PopulationModel(object):
     """

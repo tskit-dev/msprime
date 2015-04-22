@@ -261,20 +261,21 @@ class TestHaplotypeGenerator(HighLevelTestCase):
     Tests the haplotype generation code.
     """
 
-    def verify_haplotypes(self, n, haplotypes):
+    def verify_haplotypes(self, n, haplotype_strings):
         """
         Verify that the specified set of haplotypes are consistent.
         """
-        self.assertEqual(len(haplotypes), n)
-        for h in haplotypes:
-            self.assertEqual(len(h), len(haplotypes[0]))
+        self.assertEqual(len(haplotype_strings), n)
+        for h in haplotype_strings:
+            self.assertEqual(len(h), len(haplotype_strings[0]))
         # Examine each column; we must have a mixture of 0s and 1s
-        for k in range(len(haplotypes[0])):
+        for k in range(len(haplotype_strings[0])):
             zeros = 0
             ones = 0
             for j in range(n):
-                zeros += haplotypes[j][k] == '0'
-                ones += haplotypes[j][k] == '1'
+                b = haplotype_strings[j][k]
+                zeros += b == '0'
+                ones += b == '1'
             self.assertEqual(zeros + ones, n)
 
     def verify_simulation(self, n, m, r, theta):
@@ -286,7 +287,7 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         ts.set_num_loci(m)
         tree_sequence = ts.run()
         hg = msprime.HaplotypeGenerator(tree_sequence, theta)
-        haplotypes = list(hg.haplotypes())
+        haplotypes = list(hg.haplotype_strings())
         for h in haplotypes:
             self.assertEqual(len(h), hg.get_num_segregating_sites())
         self.verify_haplotypes(n, haplotypes)
