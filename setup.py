@@ -28,15 +28,12 @@ msprime_readme = f.read()
 f.close()
 msprime_version = parse_version("msprime/__init__.py")
 
-requirements = []
-v = sys.version_info[:2]
-if v < (2, 7) or v == (3, 0) or v == (3, 1):
-    requirements.append("argparse")
+requirements = ["h5py", "numpy"]
 
 d = "lib/"
 _msprime_module = Extension('_msprime',
-    sources = ["_msprimemodule.c", d + "msprime.c", d + "fenwick.c",
-            d + "avl.c"],
+    sources = [
+        "_msprimemodule.c", d + "msprime.c", d + "fenwick.c", d + "avl.c"],
     libraries = ["gsl", "gslcblas"],
     # Enable asserts by default.
     undef_macros=['NDEBUG'],
