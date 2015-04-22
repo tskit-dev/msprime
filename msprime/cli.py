@@ -173,7 +173,4 @@ def msp_ms_main():
     if args.mutation_rate is None and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
     sr = SimulationRunner(args)
-    try:
-        sr.run()
-    finally:
-        sr.cleanup()
+    sr.run()
