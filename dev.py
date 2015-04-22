@@ -125,18 +125,22 @@ def hl_main():
         sim.add_population_model(m)
 
     tree_sequence = sim.run()
-    tree_sequence.dump(treefile)
+    # tree_sequence.dump(treefile)
     # tree_sequence.print_state()
     # for l, newick in tree_sequence.newick_trees(all_breaks=True):
     #     print(newick)
-    for l, records_out, records_in in tree_sequence.diffs(True):
-        print("\tlength = ", l)
-        print("\tin  = ", records_in)
-        print("\tout = ", records_out)
+    # for l, records_out, records_in in tree_sequence.diffs(True):
+    #     print("\tlength = ", l)
+    #     print("\tin  = ", records_in)
+    #     print("\tout = ", records_out)
 
     # ts = msprime.TreeSequence.load(treefile)
     # print("after")
     # ts.print_state()
+    haplotype_generator = msprime.HaplotypeGenerator(tree_sequence, 116.1)
+    for h in haplotype_generator.haplotypes():
+        print(h)
+
 
 def print_newick(filename):
     ts = msprime.TreeSequence.load(filename)
