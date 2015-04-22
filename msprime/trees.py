@@ -490,17 +490,17 @@ class NewickGenerator(object):
                 del self._parent[j]
                 del self._branch_length[j]
         for children, parent, time in records_in:
-            self._children[parent] = tuple(children)
+            self._children[parent] = children
             for j in children:
                 self._parent[j] = parent
                 self._propogate_subtree_loss(j)
             self._time[parent] = time
         # Update the branch_lengths
         for children, parent, time in records_in:
-            for j in range(0, 2):
+            for j in children:
                 s = "{0:.{1}f}".format(
-                    time - self._time[children[j]], self._precision)
-                self._branch_length[children[j]] = np.char.array(s.encode(), 1)
+                    time - self._time[j], self._precision)
+                self._branch_length[j] = np.char.array(s.encode(), 1)
         self._root = 1
         while self._root in self._parent:
             self._root = self._parent[self._root]
@@ -575,26 +575,98 @@ class NewickGenerator(object):
 
 class HaplotypeGenerator(object):
     """
-    Class that takes a TreeFile and a recombination rate and builds a set
+    Class that takes a TreeSequence and a recombination rate and builds a set
     of haplotypes consistent with the underlying trees.
     """
-    def __init__(self, tree_file_name, mutation_rate, random_seed=None):
-        seed = random_seed
+    def __init__(self, tree_sequence, scaled_mutation_rate, random_seed=None):
+        self._random_seed = random_seed
         if random_seed is None:
-            seed = random.randint(0, 2**31)
-        self._ll_haplotype_generator = _msprime.HaplotypeGenerator(
-                tree_file_name, mutation_rate=mutation_rate,
-                random_seed=seed, max_haplotype_length=10000)
+            self._random_seed = random.randint(0, 2**31)
+        # TODO make a local numpy random generator here so we don't clobber
+        # any RNG sequences the user might have.
+        np.random.seed(random_seed)
+        self._tree_sequence = tree_sequence
+        self._num_loci = tree_sequence.get_num_loci()
+        self._sample_size = tree_sequence.get_sample_size()
+        self._scaled_mutation_rate = scaled_mutation_rate
+        self._num_segregating_sites = 0
+        self._max_segregating_sites = self._num_loci
+        self._max_segregating_sites = 4
+        self._total_branch_length = 0
+        self._branch_length = {}
+        self._children = {}
+        self._time = {j: 0 for j in range(1, self._sample_size + 1)}
+        self._haplotype = np.empty(
+            (self._sample_size, self._max_segregating_sites),
+            dtype=(bytes, 1))
+        self._haplotype.fill(b"0")
+        self._generate_haplotypes()
+
+    def _generate_haplotypes(self):
+        branches = np.zeros(2 * self._sample_size - 2, dtype="uint32")
+        probabilities = np.zeros(2 * self._sample_size - 2)
+        for length, records_out, records_in in self._tree_sequence.diffs():
+            for children, parent, time in records_out:
+                del self._children[parent]
+                del self._time[parent]
+                for j in children:
+                    self._total_branch_length -= self._branch_length[j]
+                    del self._branch_length[j]
+            for children, parent, time in records_in:
+                self._children[parent] = children
+                self._time[parent] = time
+            for children, parent, time in records_in:
+                for j in children:
+                    bl = time - self._time[j]
+                    self._branch_length[j] = bl
+                    self._total_branch_length += bl
+            # The internal models are now consistent, we can generate the
+            # mutations.
+            mu = self._scaled_mutation_rate * length / self._num_loci
+            num_mutations = np.random.poisson(mu)
+            if num_mutations > 0:
+                for j, (node, bl) in enumerate(self._branch_length.items()):
+                    branches[j] = node
+                    probabilities[j] = bl / self._total_branch_length
+                mutation_branches = np.random.choice(
+                    branches, num_mutations, p=probabilities)
+                for j in mutation_branches:
+                    self._add_mutation(j)
+
+
+    def _add_mutation(self, node):
+        """
+        Adds a single mutation on the branch between the specified
+        node and its parent. Add a 1 to the end of each leaf node
+        below this node.
+        """
+        if self._num_segregating_sites == self._max_segregating_sites:
+            old_haplotypes = self._haplotype
+            n = self._sample_size
+            k = self._max_segregating_sites
+            self._max_segregating_sites += self._max_segregating_sites
+            self._haplotype = np.empty(
+                (self._sample_size, self._max_segregating_sites),
+                dtype=(bytes, 1))
+            self._haplotype.fill(b"0")
+            self._haplotype[0:n, 0:k] = old_haplotypes
+        stack = [node]
+        while len(stack) > 0:
+            u = stack.pop()
+            if u <= self._sample_size:
+                self._haplotype[u - 1, self._num_segregating_sites] = b"1"
+            else:
+                stack.extend(self._children[u])
+        self._num_segregating_sites += 1
+
+
 
     def get_num_segregating_sites(self):
-        return self._ll_haplotype_generator.get_haplotype_length()
+        return self._num_segregating_sites
 
-    def get_haplotypes(self):
-        # TODO this is pretty inefficient; should we do this down in C
-        # or just offer a generator interface instead?
-        bytes_haplotypes = self._ll_haplotype_generator.get_haplotypes()
-        haps = [h.decode() for h in bytes_haplotypes[1:]]
-        return haps
+    def haplotypes(self):
+        for h in self._haplotype:
+            yield h[:self._num_segregating_sites].tostring()
 
 
 class PopulationModel(object):

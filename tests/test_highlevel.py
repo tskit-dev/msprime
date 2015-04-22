@@ -9,10 +9,6 @@ import random
 import re
 import unittest
 
-# Used to disable the newick and haplotype tests while we're developing
-# the new tree format.
-from nose.tools import nottest
-
 import msprime
 
 import tests
@@ -264,19 +260,37 @@ class TestHaplotypeGenerator(HighLevelTestCase):
     """
     Tests the haplotype generation code.
     """
+
+    def verify_haplotypes(self, n, haplotypes):
+        """
+        Verify that the specified set of haplotypes are consistent.
+        """
+        self.assertEqual(len(haplotypes), n)
+        for h in haplotypes:
+            self.assertEqual(len(h), len(haplotypes[0]))
+        # Examine each column; we must have a mixture of 0s and 1s
+        for k in range(len(haplotypes[0])):
+            zeros = 0
+            ones = 0
+            for j in range(n):
+                zeros += haplotypes[j][k] == '0'
+                ones += haplotypes[j][k] == '1'
+            self.assertEqual(zeros + ones, n)
+
     def verify_simulation(self, n, m, r, theta):
         """
         Verifies a simulation for the specified parameters.
         """
-        ts = msprime.TreeSimulator(n, self._treefile)
+        ts = msprime.TreeSimulator(n)
         ts.set_scaled_recombination_rate(r)
         ts.set_num_loci(m)
-        self.assertTrue(ts.run())
-        msprime.sort_tree_file(self._treefile)
-        hg = msprime.HaplotypeGenerator(self._treefile, theta)
-        self.verify_haplotypes(n, hg.get_haplotypes())
+        tree_sequence = ts.run()
+        hg = msprime.HaplotypeGenerator(tree_sequence, theta)
+        haplotypes = list(hg.haplotypes())
+        for h in haplotypes:
+            self.assertEqual(len(h), hg.get_num_segregating_sites())
+        self.verify_haplotypes(n, haplotypes)
 
-    @nottest
     def test_random_parameters(self):
         num_random_sims = 10
         for j in range(num_random_sims):

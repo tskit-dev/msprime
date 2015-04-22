@@ -28,7 +28,7 @@ msprime_readme = f.read()
 f.close()
 msprime_version = parse_version("msprime/__init__.py")
 
-requirements = ["h5py", "numpy"]
+requirements = ["h5py", "numpy>=1.7.0"]
 
 d = "lib/"
 _msprime_module = Extension('_msprime',
