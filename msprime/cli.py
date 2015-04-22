@@ -113,18 +113,18 @@ class SimulationRunner(object):
                         print(ns)
                 else:
                     for l, ns in iterator:
-                        # Print these seperately to avoid the cost of creating another
-                        # string.
+                        # Print these seperately to avoid the cost of creating
+                        # another string.
                         print("[{0}]".format(l), end="")
                         print(ns)
             if self.mutation_rate is not None:
-                hg = msprime.HaplotypeGenerator(self.tree_file_name,
+                hg = msprime.HaplotypeGenerator(tree_sequence,
                         self.mutation_rate)
                 s = hg.get_num_segregating_sites()
                 print("segsites:", s)
                 if s != 0:
                     print("positions: NOT IMPLEMENTED")
-                    for h in hg.get_haplotypes():
+                    for h in hg.haplotypes():
                         print(h)
                 else:
                     print()
