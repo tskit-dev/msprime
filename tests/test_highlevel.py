@@ -123,15 +123,13 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             x_distinct += l1
             l2, out2, in2 = next(all_breaks)
             x_all += l2
-            if x_distinct == x_all:
-                self.assertEqual(out1, out2)
-                self.assertEqual(in1, in2)
-            else:
-                while x_distinct != x_all:
-                    self.assertEqual(0, len(out2))
-                    self.assertEqual(0, len(in2))
-                    l2, out2, in2 = next(all_breaks)
-                    x_all += l2
+            self.assertEqual(out1, out2)
+            self.assertEqual(in1, in2)
+            while x_distinct != x_all:
+                l2, out2, in2 = next(all_breaks)
+                self.assertEqual(0, len(out2))
+                self.assertEqual(0, len(in2))
+                x_all += l2
         total = 0
         num_breaks = 0
         breakpoints = tree_sequence.get_breakpoints()

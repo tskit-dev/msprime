@@ -418,46 +418,42 @@ class TreeSequence(object):
         # pi[q] = 0
         yield self.get_num_loci() - l, pi, tau
 
-    def diffs(self, all_breaks=False):
+    def _diffs(self):
         n = self._sample_size
         left = 0
         used_records = collections.defaultdict(list)
         records_in = []
-        k = 1
-        # TODO break this function into two; have a second iterator over the
-        # diffs where we deal with the breaks as a second layer.
-        # print(self._breakpoints)
         for l, r, c, parent, t in self.records():
-            children = tuple(c)  # This is to make deep comparisons possible
+            # It's a bit wasteful here creating a new tuple, but
+            # we get weird results from comparisons downstream if
+            # we pass back numpy arrays.
+            children = tuple(c)
             if l != left:
-                last_breakpoint = left
-                if all_breaks:
-                    while self._breakpoints[k] != l:
-                        # print("yielding tree covering", left, self._breakpoints[k])
-                        yield self._breakpoints[k] - left, [], []
-                        left = self._breakpoints[k]
-                        # print("missing breakpoint at ", left)
-                        k += 1
-                    k += 1
-                # print("yielding tree covering", left, l)
-                yield l - left, used_records[last_breakpoint], records_in
-                del used_records[last_breakpoint]
+                yield l - left, used_records[left], records_in
+                del used_records[left]
                 records_in = []
                 left = l
             used_records[r].append((children, parent, t))
             records_in.append((children, parent, t))
-        if all_breaks:
-            # print(self._breakpoints[k], left, r)
-            # print(breakpoints)
-            while self._breakpoints[k] != r:
-                # print("yielding tree covering", left, self._breakpoints[k])
-                # print(self._breakpoints[k])
-                yield self._breakpoints[k] - left, [], []
-                left = self._breakpoints[k]
-                # print("missing breakpoint at ", left)
-                k += 1
-            # k += 1
         yield r - left, used_records[left], records_in
+
+    def _diffs_with_breaks(self):
+        k = 1
+        x = 0
+        b = self._breakpoints
+        for length, records_out, records_in in self._diffs():
+            x += length
+            yield b[k] - b[k - 1], records_out, records_in
+            while self._breakpoints[k] != x:
+                k += 1
+                yield b[k] - b[k - 1], [], []
+            k += 1
+
+    def diffs(self, all_breaks=False):
+        if all_breaks:
+            return self._diffs_with_breaks()
+        else:
+            return self._diffs()
 
     def newick_trees(self, precision=3, all_breaks=False):
         return NewickGenerator(self, precision, all_breaks)
