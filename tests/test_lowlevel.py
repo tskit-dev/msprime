@@ -36,6 +36,11 @@ class TestInterface(tests.MsprimeTestCase):
     """
     Test the low-level interface to make sure it is robust.
     """
+    def test_gsl_version(self):
+        s = _msprime.get_gsl_version()
+        self.assertGreater(len(s), 0)
+        self.assertIsInstance(s, str)
+
     def verify_running_simulation(self, sim):
         """
         Verifies the state of the specified simulation that has run

@@ -27,16 +27,19 @@ import collections
 import heapq
 import json
 import os
-import pprint
+import platform
 import random
+import sys
 import tempfile
 
 import h5py
+import h5py.h5
 import numpy as np
 
 import _msprime
 from _msprime import InputError
 from _msprime import LibraryError
+from . import __version__
 
 
 def harmonic_number(n):
@@ -100,6 +103,12 @@ class TreeSimulator(object):
     def get_num_loci(self):
         return self._num_loci
 
+    def get_random_seed(self):
+        return self._random_seed
+
+    def get_population_models(self):
+        return self._population_models
+
     def get_num_breakpoints(self):
         return self._ll_sim.get_num_breakpoints()
 
@@ -127,8 +136,6 @@ class TreeSimulator(object):
     def get_num_recombination_events(self):
         return self._ll_sim.get_num_recombination_events()
 
-    def get_population_models(self):
-        return self._ll_sim.get_population_models()
 
     def get_max_memory(self):
         return self._ll_sim.get_max_memory()
@@ -233,17 +240,48 @@ class TreeSimulator(object):
             node_mapping_block_size=self._node_mapping_block_size,
             coalescence_record_block_size=self._coalescence_record_block_size)
         self._ll_sim.run()
-        metadata = {
+        records = self._ll_sim.get_coalescence_records()
+        left, right, children, parent, time = records
+        ts = TreeSequence(
+            self._ll_sim.get_breakpoints(),
+            left, right, children, parent, time,
+            self._get_parameters(), self._get_environment(), True)
+        return ts
+
+    def _get_parameters(self):
+        """
+        Returns a dictionary of all the parameters required to run precisely
+        this simulation again in the future. That is, only the parameters
+        required to deterministically recreate the same result are included.
+        """
+        models = [m.get_ll_model() for m in self._population_models]
+        parameters = {
             "sample_size": self._sample_size,
             "num_loci": self._num_loci,
+            "scaled_recombination_rate": self._scaled_recombination_rate,
             "population_models": models,
             "random_seed": self._random_seed
         }
-        records = self._ll_sim.get_coalescence_records()
-        left, right, children, parent, time = records
-        ts = TreeSequence(self._ll_sim.get_breakpoints(), left, right,
-                children, parent, time, metadata, True)
-        return ts
+        return parameters
+
+    def _get_environment(self):
+        """
+        Returns a dictionary of information on the simulation environment
+        that is relevant for reproducing the results of a given simulation.
+        """
+        return {
+            "python_version": platform.python_version(),
+            "python_implementation": platform.python_implementation(),
+            "byteorder": sys.byteorder,
+            "platform": sys.platform,
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "word_size": "64" if sys.maxsize > 2**32 else "32",
+            "numpy_version": np.__version__,
+            "h5py_version": h5py.__version__,
+            "hdf5_version": "{}.{}.{}".format(*h5py.h5.get_libversion()),
+            "gsl_version": _msprime.get_gsl_version(),
+        }
 
     def reset(self):
         """
@@ -254,7 +292,7 @@ class TreeSimulator(object):
 class TreeSequence(object):
 
     def __init__(self, breakpoints, left, right, children, parent, time,
-            metadata, sort_records=False):
+            parameters, environment, sort_records=False):
         uint32 = "uint32"
         # TODO there is a quite a lot of copying going on here. Do
         # we need to do this?
@@ -265,9 +303,10 @@ class TreeSequence(object):
         self._children = np.array(children, dtype=uint32)
         self._parent = np.array(parent, dtype=uint32)
         self._time = np.array(time, dtype="double")
-        self._sample_size = metadata["sample_size"]
-        self._num_loci = metadata["num_loci"]
-        self._metadata = dict(metadata)
+        self._sample_size = parameters["sample_size"]
+        self._num_loci = parameters["num_loci"]
+        self._parameters = dict(parameters)
+        self._environment = dict(environment)
         if sort_records:
             p = np.argsort(self._left)
             self._left = self._left[p]
@@ -277,7 +316,10 @@ class TreeSequence(object):
             self._time = self._time[p]
 
     def print_state(self):
-        pprint.pprint(self._metadata)
+        print("parameters = ")
+        print(json.dumps(self._parameters, sort_keys=True, indent=4))
+        print("environment = ")
+        print(json.dumps(self._environment, sort_keys=True, indent=4))
         for j in range(self._num_records):
             print(self._left[j], self._right[j], self._children[j],
                     self._parent[j], self._time[j], sep="\t")
@@ -288,8 +330,10 @@ class TreeSequence(object):
         """
         compression = None
         with h5py.File(path, "w") as f:
-            f.attrs["version"] = "0.1"
-            f.attrs["metadata"] = json.dumps(self._metadata)
+            f.attrs["file_version"] = "0.1"
+            f.attrs["library_version"] = __version__
+            f.attrs["environment"] = json.dumps(self._environment)
+            f.attrs["parameters"] = json.dumps(self._parameters)
             uint32 = "uint32"
             f.create_dataset(
                 "breakpoints", data=self._breakpoints, dtype=uint32,
@@ -311,11 +355,12 @@ class TreeSequence(object):
     def load(cls, path):
         with h5py.File(path, "r") as f:
             records = f["records"]
-            metadata = json.loads(f.attrs["metadata"])
-            ret = TreeSequence(f["breakpoints"], records["left"],
-                    records["right"], records["children"],
-                    records["parent"], records["time"], metadata)
-
+            parameters = json.loads(f.attrs["parameters"])
+            environment = json.loads(f.attrs["environment"])
+            ret = TreeSequence(
+                f["breakpoints"], records["left"], records["right"],
+                records["children"], records["parent"], records["time"],
+                parameters, environment)
         return ret
 
     def get_sample_size(self):
@@ -324,8 +369,11 @@ class TreeSequence(object):
     def get_num_loci(self):
         return self._num_loci
 
-    def get_num_breakpoints(self):
-        return len(self._breakpoints)
+    def get_parameters(self):
+        return self._parameters
+
+    def get_environment(self):
+        return self._environment
 
     def get_breakpoints(self):
         return self._breakpoints

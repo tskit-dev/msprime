@@ -24,6 +24,7 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics_int.h>
+#include <gsl/gsl_version.h>
 
 #include "err.h"
 #include "avl.h"
@@ -64,6 +65,12 @@ msp_strerror(int err)
         }
     }
     return ret;
+}
+
+const char *
+msp_gsl_version(void)
+{
+    return gsl_version;
 }
 
 static int

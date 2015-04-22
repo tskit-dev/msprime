@@ -146,4 +146,5 @@ size_t msp_get_num_coalescence_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
 
 const char * msp_strerror(int err);
+const char * msp_gsl_version(void);
 #endif /*__MSPRIME_H__*/

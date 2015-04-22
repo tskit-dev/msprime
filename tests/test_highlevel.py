@@ -60,6 +60,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     Superclass of tests on the high level interface.
     """
 
+
     def verify_tree_sequence(self, sim, tree_sequence):
         """
         Verify that varoius ways of looking at the specified tree sequence
@@ -214,6 +215,23 @@ class TestTreeSimulator(HighLevelTestCase):
     """
     Runs tests on the underlying TreeSimulator object.
     """
+    def verify_parameters(self, sim, tree_sequence):
+        parameters = tree_sequence.get_parameters()
+        self.assertIsInstance(parameters, dict)
+        self.assertEqual(parameters["sample_size"], sim.get_sample_size())
+        self.assertEqual(parameters["num_loci"], sim.get_num_loci())
+        self.assertEqual(
+            parameters["scaled_recombination_rate"],
+            sim.get_scaled_recombination_rate())
+        self.assertEqual(parameters["random_seed"], sim.get_random_seed())
+        models = [m.get_ll_model() for m in sim.get_population_models()]
+        self.assertEqual(parameters["population_models"], models)
+
+    def verify_environment(self, tree_sequence):
+        environment = tree_sequence.get_environment()
+        self.assertIsInstance(environment, dict)
+        self.assertGreater(len(environment), 0)
+
     def verify_simulation(self, n, m, r):
         """
         Verifies a simulation for the specified parameters.
@@ -226,7 +244,13 @@ class TestTreeSimulator(HighLevelTestCase):
         sim.set_num_loci(m)
         self.assertEqual(sim.get_num_loci(), m)
         tree_sequence = sim.run()
+        self.assertEqual(tree_sequence.get_sample_size(), n)
+        self.assertEqual(tree_sequence.get_num_loci(), m)
+        self.verify_parameters(sim, tree_sequence)
+        self.verify_environment(tree_sequence)
         self.verify_tree_sequence(sim, tree_sequence)
+        # TODO save the tree_sequence to a file and verify equality
+        # between the two.
 
     def test_random_parameters(self):
         num_random_sims = 10

@@ -958,7 +958,20 @@ static PyTypeObject SimulatorType = {
     (initproc)Simulator_init,      /* tp_init */
 };
 
+/*===================================================================
+ * Module level functions
+ *===================================================================
+ */
+
+static PyObject *
+msprime_get_gsl_version(PyObject *self)
+{
+    return Py_BuildValue("s", msp_gsl_version());
+}
+
 static PyMethodDef msprime_methods[] = {
+    {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
+            "Returns the version of GSL we are linking against." },
     {NULL}        /* Sentinel */
 };
 
