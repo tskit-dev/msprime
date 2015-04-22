@@ -23,6 +23,6 @@ modern datasets.
 from __future__ import print_function
 from __future__ import division
 
-__version__ = '0.1.0a2'
+__version__ = '0.1.1a1'
 
 from msprime.trees import *
