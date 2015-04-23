@@ -22,6 +22,12 @@ from matplotlib import pyplot
 
 import msprime
 
+def harmonic_number(n):
+    """
+    Returns the nth Harmonic number.
+    """
+    return sum(1 / k for k in range(1, n + 1))
+
 def get_scaled_recombination_rate(Ne, m, r):
     """
     Returns rho = 4 * Ne * (m - 1) * r, the scaled recombination rate.
@@ -122,21 +128,19 @@ class MsprimeSimulator(Simulator):
         time = [0 for j in range(replicates)]
         ca_events = [0 for j in range(replicates)]
         re_events = [0 for j in range(replicates)]
-        with tempfile.NamedTemporaryFile() as f:
-            for j in range(replicates):
-                sim = msprime.TreeSimulator(self.sample_size, f.name)
-                sim.set_scaled_recombination_rate(4
-                    * self.effective_population_size * self.recombination_rate)
-                sim.set_num_loci(self.num_loci)
-                sim.set_max_memory("1G")
-                for m in self.population_models:
-                    sim.add_population_model(m)
-                sim.run()
-                num_trees[j] = sim.get_num_breakpoints()
-                tf = msprime.TreeFile(f.name)
-                time[j] = sim.get_time()
-                ca_events[j] = sim.get_num_coancestry_events()
-                re_events[j] = sim.get_num_recombination_events()
+        for j in range(replicates):
+            sim = msprime.TreeSimulator(self.sample_size)
+            sim.set_scaled_recombination_rate(4
+                * self.effective_population_size * self.recombination_rate)
+            sim.set_num_loci(self.num_loci)
+            sim.set_max_memory("1G")
+            for m in self.population_models:
+                sim.add_population_model(m)
+            tree_sequence = sim.run()
+            num_trees[j] = sim.get_num_breakpoints()
+            time[j] = sim.get_time()
+            ca_events[j] = sim.get_num_coancestry_events()
+            re_events[j] = sim.get_num_recombination_events()
         df = pd.DataFrame({"t":time, "num_trees":num_trees,
                 "ca_events":ca_events, "re_events":re_events})
         return df
@@ -254,13 +258,30 @@ def verify_simple():
     output_prefix = "tmp__NOBACKUP__/simple"
     run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
 
+def verify_recombination_events():
+    """
+    Simple check to see if the expected number of recombination events
+    is correct for large simulations.
+    """
+    n = 10000
+    Ne = 10**4
+    r = 1e-8
+    num_replicates = 10
+    for k in range(1, 10):
+        m = k * 10**7
+        msp = MsprimeSimulator(n, m, r, Ne, [])
+        df = msp.run(num_replicates)
+        R = get_scaled_recombination_rate(Ne, m, r)
+        expected = R * harmonic_number(n - 1)
+        print(m, df["num_trees"].mean(), expected, sep="\t")
 
 def main():
-    verify_random(10)
+    verify_recombination_events()
+    # verify_random(10)
     # verify_exponential_models()
     # verify_simple()
-    verify_zero_growth_example()
-    verify_scrm_example()
+    # verify_zero_growth_example()
+    # verify_scrm_example()
 
 
 def verify_human_demographics():
