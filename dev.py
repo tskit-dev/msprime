@@ -138,7 +138,7 @@ def hl_main():
     # print("after")
     # ts.print_state()
     haplotype_generator = msprime.HaplotypeGenerator(tree_sequence, 116.1)
-    for h in haplotype_generator.haplotypes():
+    for h in haplotype_generator.haplotype_strings():
         print(h)
 
 

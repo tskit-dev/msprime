@@ -582,16 +582,13 @@ class HaplotypeGenerator(object):
         self._random_seed = random_seed
         if random_seed is None:
             self._random_seed = random.randint(0, 2**31)
-        # TODO make a local numpy random generator here so we don't clobber
-        # any RNG sequences the user might have.
-        np.random.seed(random_seed)
+        self._rng = np.random.RandomState(random_seed)
         self._tree_sequence = tree_sequence
         self._num_loci = tree_sequence.get_num_loci()
         self._sample_size = tree_sequence.get_sample_size()
         self._scaled_mutation_rate = scaled_mutation_rate
         self._num_segregating_sites = 0
         self._max_segregating_sites = self._num_loci
-        self._max_segregating_sites = 4
         self._total_branch_length = 0
         self._branch_length = {}
         self._children = {}
@@ -622,13 +619,15 @@ class HaplotypeGenerator(object):
                     self._total_branch_length += bl
             # The internal models are now consistent, we can generate the
             # mutations.
-            mu = self._scaled_mutation_rate * length / self._num_loci
-            num_mutations = np.random.poisson(mu)
+            mu = (
+                self._total_branch_length * self._scaled_mutation_rate * length
+                / self._num_loci)
+            num_mutations = self._rng.poisson(mu)
             if num_mutations > 0:
                 for j, (node, bl) in enumerate(self._branch_length.items()):
                     branches[j] = node
                     probabilities[j] = bl / self._total_branch_length
-                mutation_branches = np.random.choice(
+                mutation_branches = self._rng.choice(
                     branches, num_mutations, p=probabilities)
                 for j in mutation_branches:
                     self._add_mutation(j)
