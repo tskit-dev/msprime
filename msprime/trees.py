@@ -225,7 +225,9 @@ class TreeSimulator(object):
         """
         Runs the simulation until complete coalescence has occured.
         """
-        models = [m.get_ll_model() for m in self._population_models]
+        # Sort the models by start time
+        models = sorted(self._population_models, key=lambda m: m.start_time)
+        models = [m.get_ll_model() for m in models]
         assert self._ll_sim is None
         self._set_environment_defaults()
         self._ll_sim = _msprime.Simulator(
@@ -629,36 +631,45 @@ class HaplotypeGenerator(object):
                     probabilities[j] = bl / self._total_branch_length
                 mutation_branches = self._rng.choice(
                     branches, num_mutations, p=probabilities)
-                for j in mutation_branches:
-                    self._add_mutation(j)
+                self._apply_mutations(mutation_branches)
 
-
-    def _add_mutation(self, node):
+    def _apply_mutations(self, branches):
         """
-        Adds a single mutation on the branch between the specified
-        node and its parent. Add a 1 to the end of each leaf node
+        Adds a single mutation on each of the branches between the specified
+        nodes and its parent. Add a 1 to the end of each leaf node
         below this node.
         """
-        if self._num_segregating_sites == self._max_segregating_sites:
+        # First grow our memory if we need to
+        new_s = self._num_segregating_sites + len(branches)
+        if new_s >= self._max_segregating_sites:
             old_haplotypes = self._haplotype
             n = self._sample_size
             k = self._max_segregating_sites
-            self._max_segregating_sites += self._max_segregating_sites
+            self._max_segregating_sites = max(2 * k, new_s + 1)
             self._haplotype = np.empty(
                 (self._sample_size, self._max_segregating_sites),
                 dtype=(bytes, 1))
             self._haplotype.fill(b"0")
             self._haplotype[0:n, 0:k] = old_haplotypes
-        stack = [node]
-        while len(stack) > 0:
-            u = stack.pop()
-            if u <= self._sample_size:
-                self._haplotype[u - 1, self._num_segregating_sites] = b"1"
-            else:
-                stack.extend(self._children[u])
-        self._num_segregating_sites += 1
+        # TODO detect the case of common mutations and deal with them
+        # using a different algorithm.
+        self._apply_rare_mutations(branches)
 
 
+    def _apply_rare_mutations(self, branches):
+        """
+        Apply mutations using an algorithm optimised for when we have only
+        a few mutations distributed around the tree.
+        """
+        for node in branches:
+            stack = [node]
+            while len(stack) > 0:
+                u = stack.pop()
+                if u <= self._sample_size:
+                    self._haplotype[u - 1, self._num_segregating_sites] = b"1"
+                else:
+                    stack.extend(self._children[u])
+            self._num_segregating_sites += 1
 
     def get_num_segregating_sites(self):
         return self._num_segregating_sites

@@ -8,7 +8,7 @@ ms_summary_stats: ${SRC}
 ms: ${SRC} 
 	gcc ${CFLAGS} -o ms ${SRC} -lm
 
-sample_stats:
+sample_stats: sample_stats.c
 	gcc ${CFLAGS} -o sample_stats sample_stats.c tajd.c -lm
 
 clean:
