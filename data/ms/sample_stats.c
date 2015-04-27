@@ -1,3 +1,5 @@
+/* Modified by jk to fix some bugs and change the output format.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,82 +9,85 @@
 	double hfay(int, int, char **);
 	double thetah(int, int, char **);
 
-int maxsites = 1000 ;
+int maxsites = 100000;
+int maxline = 8192;
 
 main(argc,argv)
-	int argc;
-	char *argv[];
+    int argc;
+    char *argv[];
 {
-	int nsam, j ,nsites, i,  howmany  ;
-	char **list, **cmatrix(), allele,na, line[1001], slashline[1001]  ;
-	FILE *pf, *fopen(), *pfin ;
-	double *posit   ;
-	int   segsites, count  , nadv, probflag  ;
-	double pi , h, th  ,prob ;
-	char dum[20], astr[100] ;
-	int  nsegsub, segsub( int nsam, int segsites, char **list ) ;
+    int nsam, j ,nsites, i,  howmany  ;
+    char **list, **cmatrix(), allele,na, line[maxline], slashline[maxline]  ;
+    FILE *pf, *fopen(), *pfin ;
+    double *posit   ;
+    int   segsites, count  , nadv, probflag  ;
+    double pi , h, th  ,prob ;
+    char dum[20], astr[100] ;
+    int  nsegsub, segsub( int nsam, int segsites, char **list ) ;
 
-/* read in first two lines of output  (parameters and seed) */
-  pfin = stdin ;
-  fgets( line, 1000, pfin);
-  sscanf(line," %s  %d %d", dum,  &nsam, &howmany);
-  fgets( line, 1000, pfin);
+    /* read in first two lines of output  (parameters and seed) */
+    pfin = stdin ;
+    fgets( line, maxline, pfin);
+    sscanf(line," %s  %d %d", dum,  &nsam, &howmany);
+    fgets( line, maxline, pfin);
 
-	if( argc > 1 ) { 
-	   nadv = atoi( argv[1] ) ; 
-	}
+    if( argc > 1 ) {
+        nadv = atoi( argv[1] ) ;
+    }
 
-  list = cmatrix(nsam,maxsites+1);
-  posit = (double *)malloc( maxsites*sizeof( double ) ) ;
+    list = cmatrix(nsam,maxsites+1);
+    posit = (double *)malloc( maxsites*sizeof( double ) ) ;
 
-  count=0;
-	probflag = 0 ;
-while( howmany-count++ ) {
+    count=0;
+    probflag = 0 ;
+    printf("pi\tss\tD\tthetaH\tH\n");
+    while( howmany-count++ ) {
 
-/* read in a sample */
-  do {
-     if( fgets( line, 1000, pfin) == NULL ){
-	   exit(0);
-	 }
-	 if( line[0] == '/' )  strcpy(slashline,line+2);
-  }while ( (line[0] != 's') && (line[0] != 'p' ) ) ;
- 
-  if( line[0] == 'p'){
-      sscanf( line, "  prob: %lf", &prob );
-	  probflag = 1 ;
-	  if( fgets( line, 1000, pfin) == NULL ){
-	    exit(0);
-	  }
-  }
-  sscanf( line, "  segsites: %d", &segsites );
-  if( segsites >= maxsites){
-	maxsites = segsites + 10 ;
-	posit = (double *)realloc( posit, maxsites*sizeof( double) ) ;
-        biggerlist(nsam,maxsites, list) ;
+        /* read in a sample */
+        do {
+            if( fgets( line, 1000, pfin) == NULL ){
+                exit(0);
+            }
+            if( line[0] == '/' )  strcpy(slashline,line+2);
+        }while ( (line[0] != 's') && (line[0] != 'p' ) ) ;
+
+        if( line[0] == 'p'){
+            sscanf( line, "  prob: %lf", &prob );
+            probflag = 1 ;
+            if( fgets( line, 1000, pfin) == NULL ){
+                exit(0);
+            }
         }
-   if( segsites > 0) {
-	fscanf(pfin," %s", astr);
-	for( i=0; i<segsites ; i++) fscanf(pfin," %lf",posit+i) ;
-	for( i=0; i<nsam;i++) fscanf(pfin," %s", list[i] );
-	}
-/* analyse sample ( do stuff with segsites and list) */
-	if( argc > 1 ) nsegsub = segsub( nadv, segsites, list) ;
-	pi = nucdiv(nsam, segsites, list) ;
-	h = hfay(nsam, segsites, list) ;
-	th = thetah(nsam, segsites, list) ;
-	if( argc > 1 )
-	printf("pi: %lf ss: %d  D: %lf H: %lf thetah: %lf segsub: %d \n", pi,segsites, tajd(nsam,segsites,pi) , h , th, nsegsub ) ;
-	else if( probflag == 1 ) 
-	  printf("pi:\t%lf\tss:\t%d\tD:\t%lf\tthetaH:\t%lf\tH:\t%lf\tprob:\t%g%s",
-	          pi,segsites, tajd(nsam,segsites,pi) , th , h, prob , slashline ) ;
-	else 
-	  printf("pi:\t%lf\tss:\t%d\tD:\t%lf\tthetaH:\t%lf\tH:\t%lf%s", pi,segsites, tajd(nsam,segsites,pi) , th , h,slashline  ) ;
-	
-
-  }
+        sscanf( line, "  segsites: %d", &segsites );
+        if( segsites >= maxsites){
+            maxsites = segsites + 10 ;
+            posit = (double *)realloc( posit, maxsites*sizeof( double) ) ;
+            biggerlist(nsam,maxsites, list) ;
+        }
+        if( segsites > 0) {
+            fscanf(pfin," %s", astr);
+            for( i=0; i<segsites ; i++) fscanf(pfin," %lf",posit+i) ;
+            for( i=0; i<nsam;i++) fscanf(pfin," %s", list[i] );
+        }
+        /* analyse sample ( do stuff with segsites and list) */
+        if( argc > 1 ) nsegsub = segsub( nadv, segsites, list) ;
+        pi = nucdiv(nsam, segsites, list) ;
+        h = hfay(nsam, segsites, list) ;
+        th = thetah(nsam, segsites, list) ;
+        if( argc > 1 ) {
+            printf("pi: %lf ss: %d  D: %lf H: %lf thetah: %lf segsub: %d \n",
+                    pi,segsites, tajd(nsam,segsites,pi) , h , th, nsegsub ) ;
+        } else if( probflag == 1 ) {
+            printf("pi:\t%lf\tss:\t%d\tD:\t%lf\tthetaH:\t%lf\tH:\t%lf\tprob:\t%g%s",
+                    pi,segsites, tajd(nsam,segsites,pi) , th , h, prob , slashline ) ;
+        } else {
+            printf("%lf\t%d\t%lf\t%lf\t%lf%s",
+                    pi,segsites, tajd(nsam,segsites,pi) , th , h, "\n"  ) ;
+        }
+    }
 }
 
-	
+
 
 /* allocates space for gametes (character strings) */
 	char **
@@ -114,7 +119,7 @@ biggerlist(nsam, nmax, list )
            list[i] = (char *)realloc( list[i],maxsites*sizeof(char) ) ;
            if( list[i] == NULL ) perror( "realloc error. bigger");
            }
-}                        
+}
 
 
 	double
@@ -165,7 +170,7 @@ thetah( int nsam, int segsites, char **list)
         nnm1 = nd/(nd-1.0) ;
         for( s = 0; s <segsites; s++){
                 p1 = frequency('1', s,nsam,list) ;
-                pi += p1*p1 ; 
+                pi += p1*p1 ;
                 }
         return( pi*2.0/( nd*(nd-1.0) )  ) ;
 }
@@ -177,7 +182,7 @@ frequency( char allele,int site,int nsam,  char **list)
         int i, count=0;
         for( i=0; i<nsam; i++) count += ( list[i][site] == allele ? 1: 0 ) ;
         return( count);
-}        
+}
 
 	int
 segsub( int nsub, int segsites, char **list )
@@ -191,4 +196,4 @@ segsub( int nsub, int segsites, char **list )
 	  }
 	return( count ) ;
 }
-	
+
