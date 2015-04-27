@@ -38,28 +38,36 @@ class Simulator(object):
     """
     Superclass of coalescent simulator objects.
     """
-    def __init__(self, n, m, Ne, r, models=[]):
+    def __init__(self, n, m, Ne, r, models=[], mutation_rate=None):
         self.sample_size = n
         self.recombination_rate = r
         self.num_loci = m
         self.effective_population_size = Ne
         self.population_models = models
+        self.mutation_rate = mutation_rate
 
 class MsSimulator(Simulator):
     """
     Class representing Hudson's ms simulator. Takes care of running the
     simulations and collating results.
     """
-    def run(self, replicates):
-        executable = "./data/ms/ms_summary_stats"
-        if not os.path.exists(executable):
-            raise ValueError("ms executable does not exist. "
-                    + "go to data/ms directory and type make")
+    def get_executable(self):
+        return ["./data/ms/ms"]
+
+    def generate_trees(self):
+        return True
+
+    def get_command_line(self, replicates):
+        executable = self.get_executable()
         rho = get_scaled_recombination_rate(self.effective_population_size,
                 self.num_loci, self.recombination_rate)
-        args = [executable, str(self.sample_size), str(replicates), "-T"]
+        args = executable + [str(self.sample_size), str(replicates)]
+        if self.generate_trees():
+            args += ["-T"]
         if self.num_loci > 1:
             args += ["-r", str(rho), str(self.num_loci)]
+        if self.mutation_rate is not None:
+            args += ["-t", str(self.mutation_rate)]
         for model in self.population_models:
             if isinstance(model, msprime.ConstantPopulationModel):
                 v = ["-eN", str(model.start_time), str(model.size)]
@@ -68,57 +76,65 @@ class MsSimulator(Simulator):
             else:
                 raise ValueError("unknown population model")
             args.extend(v)
+        return args
+
+
+class MsCoalescentStatisticsSimulator(MsSimulator):
+    """
+    A modified version of ms in which we output statistics about the
+    coalescent algorithm.
+    """
+    def get_executable(self):
+        return ["./data/ms/ms_summary_stats"]
+
+    def run(self, replicates):
         with tempfile.TemporaryFile() as f:
+            args = self.get_command_line(replicates)
             print(" ".join(args))
             subprocess.call(args, stdout=f)
             f.seek(0)
             df = pd.read_table(f)
         return df
 
-class ScrmSimulator(Simulator):
+class MutationStatisticsSimulator(object):
     """
-    Class representing the SCRM simulator. Only supports TMRCA statistics.
+    A mixin to run the simulation and pass the results through Hudson's
+    sample_stats program.
     """
+    def generate_trees(self):
+        return False
+
     def run(self, replicates):
-        executable = "/home/jk/work/github/scrm/scrm"
-        if not os.path.exists(executable):
-            raise ValueError("SCRM not found")
-        rho = get_scaled_recombination_rate(self.effective_population_size,
-                self.num_loci, self.recombination_rate)
-        args = [executable, str(self.sample_size), str(replicates), "-L"]
-        if self.num_loci > 1:
-            args += ["-r", str(rho), str(self.num_loci)]
-        for model in self.population_models:
-            if isinstance(model, msprime.ConstantPopulationModel):
-                v = ["-eN", str(model.start_time), str(model.size)]
-            elif isinstance(model, msprime.ExponentialPopulationModel):
-                v = ["-eG", str(model.start_time), str(model.alpha)]
-            else:
-                raise ValueError("unknown population model")
-            args.extend(v)
-        times = np.zeros(replicates)
-        trees = np.zeros(replicates)
+        args = self.get_command_line(replicates)
+        print(" ".join(args))
+        p1 = subprocess.Popen(args, stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(["./data/ms/sample_stats"], stdin=p1.stdout,
+                stdout=subprocess.PIPE)
+        p1.stdout.close()
+        output = p2.communicate()[0]
         with tempfile.TemporaryFile() as f:
-            print(" ".join(args))
-            subprocess.call(args, stdout=f)
+            f.write(output)
             f.seek(0)
-            j = -1
-            # process the data file
-            for l in f:
-                if l.startswith("//"):
-                    j += 1
-                elif l.startswith("time"):
-                    trees[j] += 1
-                    t = float(l.split()[1])
-                    times[j] = max(t, times[j])
-        missing = np.zeros(replicates)
-        data = {"t":times, "num_trees":trees, "re_events":missing,
-                "ca_events":missing}
-        df = pd.DataFrame(data)
+            df = pd.read_table(f)
         return df
 
 
-class MsprimeSimulator(Simulator):
+
+class MsMutationStatisticsSimulator(MutationStatisticsSimulator, MsSimulator):
+    """
+    Runs ms with a given set of parameters, and returns the mutation
+    statistics.
+    """
+
+class MsprimeMutationStatisticsSimulator(MutationStatisticsSimulator, MsSimulator):
+    """
+    Runs msprime with a given set of parameters, and returns the mutation
+    statistics.
+    """
+    def get_executable(self):
+        return ["python", "mspms_dev.py"]
+
+class MsprimeCoalescentStatisticsSimulator(Simulator):
     """
     Class to simlify running the msprime simulator and getting summary
     stats over many replicates.
@@ -133,7 +149,7 @@ class MsprimeSimulator(Simulator):
             sim.set_scaled_recombination_rate(4
                 * self.effective_population_size * self.recombination_rate)
             sim.set_num_loci(self.num_loci)
-            sim.set_max_memory("1G")
+            sim.set_max_memory("10G")
             for m in self.population_models:
                 sim.add_population_model(m)
             tree_sequence = sim.run()
@@ -145,17 +161,38 @@ class MsprimeSimulator(Simulator):
                 "ca_events":ca_events, "re_events":re_events})
         return df
 
+def run_verify_mutations(n, m, Ne, r, models, num_replicates, mutation_rate,
+        output_prefix):
+    """
+    Runs ms and msprime for the specified parameters, and filters the results
+    through Hudson's sample_stats program to get distributions of the
+    haplotype statistics.
+    """
+    ms = MsMutationStatisticsSimulator(n, m, r, Ne, models, mutation_rate)
+    df_ms = ms.run(num_replicates)
+    msp = MsprimeMutationStatisticsSimulator(n, m, r, Ne, models, mutation_rate)
+    df_msp = msp.run(num_replicates)
+    for stat in ["pi", "ss", "D", "thetaH", "H"]:
+        v1 = df_ms[stat]
+        v2 = df_msp[stat]
+        # pyplot.hist(v1, 20, alpha=0.5, label="ms")
+        # pyplot.hist(v2, 20, alpha=0.5, label="msp")
+        # pyplot.legend(loc="upper left")
+        sm.graphics.qqplot(v1)
+        sm.qqplot_2samples(v1, v2, line="45")
+        f = "{0}_{1}.png".format(output_prefix, stat)
+        pyplot.savefig(f, dpi=72)
+        pyplot.clf()
 
-def run_verify(n, m, Ne, r, models, num_replicates, output_prefix):
+def run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix):
     """
     Runs ms and msprime on the specified parameters and outputs qqplots
-    with the specified prefix.
+    of the coalescent simulation summary statistics with the specified
+    prefix.
     """
-    ms = MsSimulator(n, m, r, Ne, models)
-    # ms = ScrmSimulator(n, m, r, Ne, models)
+    ms = MsCoalescentStatisticsSimulator(n, m, r, Ne, models)
     df_ms = ms.run(num_replicates)
-    msp = MsprimeSimulator(n, m, r, Ne, models)
-    # msp = MsSimulator(n, m, r, Ne, models)
+    msp = MsprimeCoalescentStatisticsSimulator(n, m, r, Ne, models)
     df_msp = msp.run(num_replicates)
     for stat in ["t", "num_trees", "re_events", "ca_events"]:
         v1 = df_ms[stat]
@@ -188,6 +225,7 @@ def verify_random(k):
         m = random.randint(1, 10000)
         Ne = random.uniform(100, 1e4)
         r = random.uniform(1e-9, 1e-6)
+        theta = random.uniform(1, 100)
         num_replicates = 1000
         output_prefix = "tmp__NOBACKUP__/random_{0}".format(j)
         models = []
@@ -202,7 +240,8 @@ def verify_random(k):
             models.append(mod)
             print(mod.get_ll_model())
         print("running for", n, m, Ne, r, 4 * Ne * r)
-        run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+        run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
+        run_verify_mutations(n, m, Ne, r, models, num_replicates, theta, output_prefix)
 
 def verify_exponential_models():
     random.seed(4)
@@ -223,7 +262,7 @@ def verify_exponential_models():
     # params = [(0.05, 0.1), (0.1, 0.2), (0.11, 1000), (0.15, 0.0001)]
     # models = [msprime.ConstantPopulationModel(t, p) for t, p in params]
     print("running for", n, m, Ne, r, 4 * Ne * r)
-    run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+    run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
 
 def verify_scrm_example():
     # -eN 0.3 0.5 -eG .3 7.0
@@ -232,7 +271,7 @@ def verify_scrm_example():
             msprime.ConstantPopulationModel(0.3, 0.5),
             msprime.ExponentialPopulationModel(0.3, 7.0)]
     output_prefix = "tmp__NOBACKUP__/scrm"
-    run_verify(5, 1, 1, 0, models, num_replicates, output_prefix)
+    run_verify_coalescent(5, 1, 1, 0, models, num_replicates, output_prefix)
 
 def verify_zero_growth_example():
     num_replicates = 10000
@@ -241,7 +280,7 @@ def verify_zero_growth_example():
             msprime.ExponentialPopulationModel(0.2, 0.0),
             msprime.ConstantPopulationModel(0.3, 0.5)]
     output_prefix = "tmp__NOBACKUP__/zero"
-    run_verify(5, 1, 1, 0, models, num_replicates, output_prefix)
+    run_verify_coalescent(5, 1, 1, 0, models, num_replicates, output_prefix)
 
 def verify_simple():
     # default to humanish recombination rates and population sizes.
@@ -250,13 +289,14 @@ def verify_simple():
     Ne = 1e4
     r = 1e-8
     num_replicates = 1000
-    # num_replicates = 1
     models = [
             msprime.ConstantPopulationModel(0.1, 2.0),
             msprime.ConstantPopulationModel(0.4, 0.5),
             msprime.ExponentialPopulationModel(0.5, 1.0)]
-    output_prefix = "tmp__NOBACKUP__/simple"
-    run_verify(n, m, Ne, r, models, num_replicates, output_prefix)
+    output_prefix = "tmp__NOBACKUP__/simple_coalescent"
+    run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
+    output_prefix = "tmp__NOBACKUP__/simple_mutations"
+    run_verify_mutations(n, m, Ne, r, models, num_replicates, 10, output_prefix)
 
 def verify_recombination_events():
     """
@@ -267,7 +307,7 @@ def verify_recombination_events():
     Ne = 10**4
     r = 1e-8
     num_replicates = 10
-    for k in range(1, 10):
+    for k in range(1, 21):
         m = k * 10**7
         msp = MsprimeSimulator(n, m, r, Ne, [])
         df = msp.run(num_replicates)
@@ -275,13 +315,29 @@ def verify_recombination_events():
         expected = R * harmonic_number(n - 1)
         print(m, df["num_trees"].mean(), expected, sep="\t")
 
+def verify_mutations():
+
+    n = 9
+    m = 7165
+    Ne = 3717
+    r = 5.05e-07
+    r = 0.0
+    theta = 100
+    num_replicates = 1000
+    output_prefix = "tmp__NOBACKUP__/mutations"
+    models = []
+    run_verify_mutations(n, m, Ne, r, models, num_replicates, theta, output_prefix)
+    # run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
+
+
 def main():
-    verify_recombination_events()
+    # verify_recombination_events()
     # verify_random(10)
     # verify_exponential_models()
     # verify_simple()
     # verify_zero_growth_example()
     # verify_scrm_example()
+    verify_mutations()
 
 
 def verify_human_demographics():
@@ -316,7 +372,7 @@ def verify_human_demographics():
             msprime.ConstantPopulationModel(t2, N3 / N0),
             ]
     output_prefix = "tmp__NOBACKUP__/simple"
-    run_verify(n, m, N0, r, models, num_replicates, output_prefix)
+    run_verify_coalescent(n, m, N0, r, models, num_replicates, output_prefix)
 
 if __name__ == "__main__":
     main()
