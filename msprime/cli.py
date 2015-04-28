@@ -123,7 +123,8 @@ class SimulationRunner(object):
                 s = hg.get_num_segregating_sites()
                 print("segsites:", s)
                 if s != 0:
-                    print("positions: NOT IMPLEMENTED")
+                    print("positions: ", end="")
+                    print("0.0 " * s)
                     for h in hg.haplotype_strings():
                         print(h)
                 else:
