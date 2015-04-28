@@ -605,18 +605,22 @@ class HaplotypeGenerator(object):
         branches = np.zeros(2 * self._sample_size - 2, dtype="uint32")
         probabilities = np.zeros(2 * self._sample_size - 2)
         for length, records_out, records_in in self._tree_sequence.diffs():
+            # print("NEW TREE")
             for children, parent, time in records_out:
+                # print("out:", children, parent, time)
                 del self._children[parent]
                 del self._time[parent]
                 for j in children:
                     self._total_branch_length -= self._branch_length[j]
                     del self._branch_length[j]
             for children, parent, time in records_in:
+                # print("in:", children, parent, time)
                 self._children[parent] = children
                 self._time[parent] = time
             for children, parent, time in records_in:
                 for j in children:
                     bl = time - self._time[j]
+                    # print(j, bl)
                     self._branch_length[j] = bl
                     self._total_branch_length += bl
             # The internal models are now consistent, we can generate the
@@ -629,6 +633,7 @@ class HaplotypeGenerator(object):
                 for j, (node, bl) in enumerate(self._branch_length.items()):
                     branches[j] = node
                     probabilities[j] = bl / self._total_branch_length
+                # print("p = ", np.sum(probabilities))
                 mutation_branches = self._rng.choice(
                     branches, num_mutations, p=probabilities)
                 self._apply_mutations(mutation_branches)
@@ -662,9 +667,11 @@ class HaplotypeGenerator(object):
         a few mutations distributed around the tree.
         """
         for node in branches:
+            # print("Applying mutation to", node)
             stack = [node]
             while len(stack) > 0:
                 u = stack.pop()
+                # print("visit", u)
                 if u <= self._sample_size:
                     self._haplotype[u - 1, self._num_segregating_sites] = b"1"
                 else:

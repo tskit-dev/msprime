@@ -221,7 +221,7 @@ def verify_random(k):
 
     random.seed(k)
     for j in range(k):
-        n = random.randint(1, 100)
+        n = random.randint(2, 100)
         m = random.randint(1, 10000)
         Ne = random.uniform(100, 1e4)
         r = random.uniform(1e-9, 1e-6)
@@ -321,23 +321,22 @@ def verify_mutations():
     m = 7165
     Ne = 3717
     r = 5.05e-07
-    r = 0.0
     theta = 100
     num_replicates = 1000
     output_prefix = "tmp__NOBACKUP__/mutations"
     models = []
     run_verify_mutations(n, m, Ne, r, models, num_replicates, theta, output_prefix)
-    # run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
+    run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
 
 
 def main():
     # verify_recombination_events()
-    # verify_random(10)
+    verify_random(10)
     # verify_exponential_models()
     # verify_simple()
     # verify_zero_growth_example()
     # verify_scrm_example()
-    verify_mutations()
+    # verify_mutations()
 
 
 def verify_human_demographics():
