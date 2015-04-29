@@ -690,6 +690,164 @@ class HaplotypeGenerator(object):
             # We need to convert to str for compatibility with python 3
             yield h.tostring().decode()
 
+class IdentityBlockFinder(object):
+    """
+    Class to find all maximal blocks of shared identity among leaf nodes.
+    """
+    def _get_subtrees(self, records):
+        parents = {}
+        times = {}
+        internal_nodes = set()
+        for children, parent, time in records:
+            internal_nodes.add(parent)
+            times[parent] = time
+            for c in children:
+                parents[c] = parent
+        leaves = set()
+        for children, parent, time in records:
+            for c in children:
+                if c not in internal_nodes:
+                    leaves.add(c)
+        subtrees = collections.defaultdict(list)
+        for leaf in leaves:
+            v = leaf
+            while v in parents:
+                v = parents[v]
+            subtrees[v].append(leaf)
+        # Return the subtrees as a list sorted in order of the time of root.
+        return sorted(subtrees.items(), key=lambda t: times[t[0]])
+
+    def _check_consistency(self):
+        assert set(self._parents.keys()) == set(self._leaves.keys())
+        children = collections.defaultdict(set)
+        for u in range(1, self._sample_size + 1):
+            assert self._leaves[u] == set([u])
+            v = u
+            while v in self._parents:
+                assert u in self._leaves[v]
+                w = v
+                v = self._parents[v]
+                children[v].add(w)
+            root = v
+        stack = list(children[root])
+        while len(stack) > 0:
+            u = stack.pop()
+            if u in children:
+                leaves = set()
+                for v in children[u]:
+                    leaves |= self._leaves[v]
+                    stack.append(v)
+                if self._leaves[u] != leaves:
+                    print("ERROR", u, leaves)
+                assert self._leaves[u] == leaves
+
+
+    def __init__(self, tree_sequence):
+        self._tree_sequence = tree_sequence
+        self._num_loci = tree_sequence.get_num_loci()
+        self._sample_size = tree_sequence.get_sample_size()
+        self._parents = {}
+        self._positions = {}
+        self._leaves = {}
+
+        iterator = self._tree_sequence.diffs()
+        length, records_out, records_in = next(iterator)
+        assert len(records_out) == 0
+        for children, parent, time in records_in:
+            self._positions[parent] = 0
+            for j in children:
+                self._parents[j] = parent
+        # propogate the leaf nodes up the tree
+        for j in range(1, self._sample_size + 1):
+            k = j
+            while k in self._parents:
+                if k not in self._leaves:
+                    self._leaves[k] = set()
+                self._leaves[k].add(j)
+                k = self._parents[k]
+        for k, v in self._leaves.items():
+            print(k, v)
+        print(self._parents)
+
+        x = length
+        for length, records_out, records_in in iterator:
+            self._check_consistency()
+            print("length:", length)
+            print("out:")
+            for r in records_out:
+                print("\t", r)
+            print("in: ")
+            for r in records_in:
+                print("\t", r)
+            # for children, parent, time in records_out:
+            #     for leaf1 in self._leaves[children[0]]:
+            #         for leaf2 in self._leaves[children[1]]:
+            #             distance = x - self._positions[parent]
+            #             print("end of haplotype:", leaf1, leaf2, distance, time)
+            subtrees_out = self._get_subtrees(records_out)
+            print("subtrees_out =", subtrees_out)
+            subtrees_in = self._get_subtrees(records_in)
+            print("subtrees_in =", subtrees_in)
+            # Propogate the loss of all the subtree leaves up the tree.
+            for root, subtree_leaves in subtrees_out:
+                print("Considering removed tree rooted at ", root)
+                all_leaves = set()
+                for subtree_leaf in subtree_leaves:
+                    leaves = self._leaves[subtree_leaf]
+                    print("leaves for ", subtree_leaf, leaves)
+                    all_leaves |= leaves
+                    # remove any internal subtree nodes from the leaves dict.
+                    v = self._parents[subtree_leaf]
+                    while v != root and v in self._leaves:
+                        print("REMOBIONG", v)
+                        del self._leaves[v]
+                        v = self._parents[v]
+                v = root
+                while v in self._parents:
+                    print("removing", all_leaves, "from", v)
+                    self._leaves[v] -= all_leaves
+                    v = self._parents[v]
+
+            # Update the overall tree structures.
+            for children, parent, time in records_out:
+                self._positions[parent]
+                for j in children:
+                    del self._parents[j]
+            for children, parent, time in records_in:
+                self._positions[parent] = x
+                for j in children:
+                    self._parents[j] = parent
+                    # self._leaves[j] = set()
+            # Propogate the addition of the subtree leaves up to the root
+            for root, subtree_leaves in subtrees_in:
+                print("Considering new subtree rooted at", root, subtree_leaves)
+                for subtree_leaf in subtree_leaves:
+                    leaves = self._leaves[subtree_leaf]
+                    print("leaves for", subtree_leaf, "= ", leaves)
+                    v = self._parents[subtree_leaf]
+                    while v in self._parents:
+                        print("inserting", leaves, "to", v)
+                        print("leaves = ", self._leaves)
+                        # insert any new nodes we need
+                        if v not in self._leaves:
+                            self._leaves[v] = set()
+                        print("ADdding", leaves, "to ", self._leaves[v])
+                        self._leaves[v] |= leaves
+                        print("Gvbing", self._leaves[v])
+                        v = self._parents[v]
+
+
+            print("parents = ")
+            for k, v in self._parents.items():
+                print("\t", k, v)
+            print("leaves = ")
+            for k, v in self._leaves.items():
+                print("\t", k, v)
+
+            x += length
+        self._check_consistency()
+
+
 class PopulationModel(object):
     """
     Superclass of simulation population models.
