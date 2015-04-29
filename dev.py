@@ -19,6 +19,11 @@ import subprocess
 import numpy as np
 import numpy.random
 
+import matplotlib
+# Force matplotlib to not use any Xwindows backend.
+matplotlib.use('Agg')
+from matplotlib import pyplot
+
 import _msprime
 import msprime
 
@@ -112,10 +117,11 @@ def hl_main():
     # for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
     #     print(l, pi, tau)
     treefile = "tmp__NOBACKUP__/tmp.hdf5"
-    sim = msprime.TreeSimulator(10)
+    sim = msprime.TreeSimulator(60)
     sim.set_random_seed(1)
-    sim.set_num_loci(100)
+    sim.set_num_loci(10000)
     sim.set_scaled_recombination_rate(0.1)
+    sim.set_max_memory("10G")
     models = [
             msprime.ExponentialPopulationModel(0, 1),
             msprime.ExponentialPopulationModel(0.1, 2),
@@ -137,9 +143,91 @@ def hl_main():
     # ts = msprime.TreeSequence.load(treefile)
     # print("after")
     # ts.print_state()
-    haplotype_generator = msprime.HaplotypeGenerator(tree_sequence, 116.1)
-    for h in haplotype_generator.haplotype_strings():
-        print(h)
+    # haplotype_generator = msprime.HaplotypeGenerator(tree_sequence, 116.1)
+    # for h in haplotype_generator.haplotype_strings():
+    #     print(h)
+    ibf = msprime.IdentityBlockFinder(tree_sequence)
+
+def analyse_records(treefile):
+    tree_sequence = msprime.TreeSequence.load(treefile)
+    n = tree_sequence.get_sample_size()
+    num_records = []
+    iterator = tree_sequence.diffs()
+    length, r_out, r_in = next(iterator)
+    parents = {}
+    for children, parent, time in r_in:
+        for j in children:
+            parents[j] = parent
+    assert len(r_out) == 0
+
+    num_trees = 0
+    num_leaf_diffs = 0
+    for length, r_out, r_in in iterator:
+        num_trees  += 1
+        k = len(r_in)
+        root = 1
+        while root in parents:
+            root = parents[root]
+        print("TREE", len(r_in))
+        print("ROOT", root)
+        print("OUT:")
+        analyse_subtrees(r_out)
+        for children, parent, time in r_out:
+            v = parent
+            d = 0
+            while v in parents:
+                v = parents[v]
+                d += 1
+            leaves = 0
+            for j in children:
+                if j <= n:
+                    leaves += 1
+            print("\t", d, "\t", leaves, "\t", children, parent, time)
+            if k == 1:
+
+                assert parent == root
+        if leaves > 0:
+            num_leaf_diffs += 1
+        for children, parent, time in r_out:
+            for j in children:
+                del parents[j]
+        print("IN:")
+        analyse_subtrees(r_in)
+        for children, parent, time in r_in:
+            for j in children:
+                parents[j] = parent
+            print("\t", children, parent, time)
+        num_records.append(len(r_in))
+
+    print(num_trees, num_leaf_diffs / num_trees)
+    pyplot.hist(num_records, range(1, 10), normed=True)
+    f = "tmp__NOBACKUP__/num_records.png"
+    pyplot.savefig(f, dpi=72)
+    pyplot.clf()
+
+def analyse_subtrees(records):
+
+    parents = {}
+    internal_nodes = set()
+    for children, parent, time in records:
+        internal_nodes.add(parent)
+        for c in children:
+            parents[c] = parent
+    leaves = set()
+    for children, parent, time in records:
+        for c in children:
+            if c not in internal_nodes:
+                leaves.add(c)
+    subtrees = collections.defaultdict(list)
+    for leaf in leaves:
+        v = leaf
+        while v in parents:
+            v = parents[v]
+        subtrees[v].append(leaf)
+    print("subtrees:", subtrees)
+    print("internal_nodes :", internal_nodes)
+    print("leaves = ", leaves)
+    print("roots = ", list(subtrees.keys()))
 
 
 def print_newick(filename):
@@ -503,6 +591,7 @@ class VerifyTrees(unittest.TestCase):
 if __name__ == "__main__":
     # unittest.main()
     # print_tree_file(sys.argv[1])
+    # analyse_records(sys.argv[1])
     # edit_visualisation()
     # mutation_dev()
     # example1()
