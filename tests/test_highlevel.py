@@ -69,6 +69,18 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertEqual(sim.get_num_loci(), m)
         # TODO verify the rest of the metadata.
 
+        # check the records are in the right form.
+        last_l = 0
+        last_t = 0
+        for l, r, children, parent, t in tree_sequence.records():
+            self.assertGreaterEqual(l, last_l)
+            if last_l != l:
+                last_t = 0.0
+                last_l = l
+            self.assertGreaterEqual(t, last_t)
+            last_t = t
+
+
         sparse_trees = [
             (l, dict(pi), dict(tau)) for l, pi, tau in tree_sequence.sparse_trees()]
         self.verify_sparse_trees(n, m, sparse_trees)

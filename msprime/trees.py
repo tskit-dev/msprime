@@ -310,7 +310,9 @@ class TreeSequence(object):
         self._parameters = dict(parameters)
         self._environment = dict(environment)
         if sort_records:
-            p = np.argsort(self._left)
+            # We have to use a stable sort here so that records are output
+            # in increasing time order.
+            p = np.argsort(self._left, kind="mergesort")
             self._left = self._left[p]
             self._right = self._right[p]
             self._children = self._children[p]
@@ -718,17 +720,22 @@ class IdentityBlockFinder(object):
         return sorted(subtrees.items(), key=lambda t: times[t[0]])
 
     def _check_consistency(self):
-        assert set(self._parents.keys()) == set(self._leaves.keys())
+        nodes = set(self._parents.keys())
+        assert len(nodes) == 2 * self._sample_size - 1
+        assert nodes == set(self._leaves.keys())
         children = collections.defaultdict(set)
         for u in range(1, self._sample_size + 1):
             assert self._leaves[u] == set([u])
             v = u
-            while v in self._parents:
+            while v != 0:
+                if u not in self._leaves[v]:
+                    print("ERROR", u, v, self._leaves[v])
                 assert u in self._leaves[v]
                 w = v
                 v = self._parents[v]
                 children[v].add(w)
-            root = v
+            root = w
+        assert root == self._root
         stack = list(children[root])
         while len(stack) > 0:
             u = stack.pop()
@@ -749,6 +756,7 @@ class IdentityBlockFinder(object):
         self._parents = {}
         self._positions = {}
         self._leaves = {}
+        self._root = {}
 
         iterator = self._tree_sequence.diffs()
         length, records_out, records_in = next(iterator)
@@ -757,10 +765,14 @@ class IdentityBlockFinder(object):
             self._positions[parent] = 0
             for j in children:
                 self._parents[j] = parent
+        self._root = 1
+        while self._root in self._parents:
+            self._root = self._parents[self._root]
+        self._parents[self._root] = 0
         # propogate the leaf nodes up the tree
         for j in range(1, self._sample_size + 1):
             k = j
-            while k in self._parents:
+            while k != 0:
                 if k not in self._leaves:
                     self._leaves[k] = set()
                 self._leaves[k].add(j)
@@ -779,62 +791,79 @@ class IdentityBlockFinder(object):
             print("in: ")
             for r in records_in:
                 print("\t", r)
-            # for children, parent, time in records_out:
-            #     for leaf1 in self._leaves[children[0]]:
-            #         for leaf2 in self._leaves[children[1]]:
-            #             distance = x - self._positions[parent]
-            #             print("end of haplotype:", leaf1, leaf2, distance, time)
+            print("root = ", self._root)
             subtrees_out = self._get_subtrees(records_out)
             print("subtrees_out =", subtrees_out)
             subtrees_in = self._get_subtrees(records_in)
             print("subtrees_in =", subtrees_in)
             # Propogate the loss of all the subtree leaves up the tree.
-            for root, subtree_leaves in subtrees_out:
-                print("Considering removed tree rooted at ", root)
+            for subtree_root, subtree_leaves in subtrees_out:
+                # print("Considering removed tree rooted at ", root)
                 all_leaves = set()
                 for subtree_leaf in subtree_leaves:
                     leaves = self._leaves[subtree_leaf]
-                    print("leaves for ", subtree_leaf, leaves)
+                    # print("leaves for ", subtree_leaf, leaves)
                     all_leaves |= leaves
                     # remove any internal subtree nodes from the leaves dict.
                     v = self._parents[subtree_leaf]
-                    while v != root and v in self._leaves:
-                        print("REMOBIONG", v)
+                    while v != subtree_root and v in self._leaves:
+                        # print("REMOBIONG", v)
                         del self._leaves[v]
                         v = self._parents[v]
-                v = root
-                while v in self._parents:
-                    print("removing", all_leaves, "from", v)
+                v = subtree_root
+                while v != 0:
+                    # print("removing", all_leaves, "from", v)
                     self._leaves[v] -= all_leaves
                     v = self._parents[v]
+            # print("AFTER REMOVAL")
+            # print(self._leaves)
+
 
             # Update the overall tree structures.
             for children, parent, time in records_out:
-                self._positions[parent]
                 for j in children:
                     del self._parents[j]
             for children, parent, time in records_in:
-                self._positions[parent] = x
+                print("ADDING RECORD", children, parent, time)
+                if parent not in self._leaves:
+                    print("inserting", parent, "into leaves")
+                    self._leaves[parent] = set()
                 for j in children:
                     self._parents[j] = parent
-                    # self._leaves[j] = set()
+            # Update the root, if necessary.
+            v = 1
+            while v in self._parents:
+                v = self._parents[v]
+            if v != 0:
+                print("root update:", v)
+                del self._parents[self._root]
+                del self._leaves[self._root]
+                self._root = v
+                self._parents[self._root] = 0
+                self._leaves[self._root] = set()
+
+            print("parents = ")
+            for k, v in self._parents.items():
+                print("\t", k, v)
             # Propogate the addition of the subtree leaves up to the root
             for root, subtree_leaves in subtrees_in:
-                print("Considering new subtree rooted at", root, subtree_leaves)
+                # print("Considering new subtree rooted at", root, subtree_leaves)
                 for subtree_leaf in subtree_leaves:
                     leaves = self._leaves[subtree_leaf]
-                    print("leaves for", subtree_leaf, "= ", leaves)
                     v = self._parents[subtree_leaf]
-                    while v in self._parents:
-                        print("inserting", leaves, "to", v)
-                        print("leaves = ", self._leaves)
+                    while v != 0:
+                        # print("inserting", leaves, "to", v)
+                        # print("leaves = ", self._leaves)
                         # insert any new nodes we need
-                        if v not in self._leaves:
-                            self._leaves[v] = set()
-                        print("ADdding", leaves, "to ", self._leaves[v])
+                        # if v not in self._leaves:
+                            # self._leaves[v] = set()
+                        # print("ADdding", leaves, "to ", self._leaves[v])
                         self._leaves[v] |= leaves
-                        print("Gvbing", self._leaves[v])
+                        # print("Gvbing", self._leaves[v])
                         v = self._parents[v]
+                    # if v not in self._leaves:
+                    #     self._leaves[v] = set()
+                    # self._leaves[v] |= leaves
 
 
             print("parents = ")
