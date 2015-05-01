@@ -26,22 +26,26 @@ class MsprimeTestCase(unittest.TestCase):
         Verifies that the specified sparse_tree is a consistent coalescent history
         for a sample of size n.
         """
-        # verify the root is equal for all leaves
-        root = 1
-        while root in pi:
-            root = pi[root]
-        for j in range(1, n + 1):
-            k = j
-            while k in pi:
-                k = pi[k]
-            self.assertEqual(k, root)
-        self.assertIn(root, tau)
-        self.assertEqual(set(list(pi.keys()) + [root]), set(tau.keys()))
-        self.assertEqual(len(pi), 2 * n - 2)
+        self.assertEqual(set(pi.keys()), set(tau.keys()))
+        self.assertEqual(len(pi), 2 * n - 1)
         self.assertEqual(len(tau), 2 * n - 1)
         # Zero should not be a node
         self.assertNotIn(0, pi)
         self.assertNotIn(0, tau)
+        # verify the root is equal for all leaves
+        root = 1
+        while pi[root] != 0:
+            root = pi[root]
+        for j in range(1, n + 1):
+            k = j
+            while pi[k] != 0:
+                k = pi[k]
+            if k != root:
+                print("ERROR!!")
+                print(pi)
+                print(j)
+            self.assertEqual(k, root)
+        self.assertIn(root, tau)
         # 1 to n inclusive should always be nodes
         for j in range(1, n + 1):
             self.assertIn(j, pi)
