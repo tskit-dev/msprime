@@ -122,7 +122,13 @@ class TestInterface(tests.MsprimeTestCase):
                 last_t = 0
                 for j in range(1, n + 1):
                     assert j in pi
+                # insert the root
+                v = 1
+                while v in pi:
+                    v = pi[v]
+                pi[v] = 0
                 self.verify_sparse_tree(n, pi, tau)
+                del pi[v]
                 num_trees += 1
             else:
                 last_t = t
@@ -139,6 +145,11 @@ class TestInterface(tests.MsprimeTestCase):
             self.assertLessEqual(last_t, t)
         for j in range(1, n + 1):
             assert j in pi
+        # Insert the root branch.
+        v = 1
+        while v in pi:
+            v = pi[v]
+        pi[v] = 0
         self.verify_sparse_tree(n, pi, tau)
         num_trees += 1
         self.assertLessEqual(num_trees, sim.get_num_breakpoints())

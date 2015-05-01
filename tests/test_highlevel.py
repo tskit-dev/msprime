@@ -22,15 +22,16 @@ def sparse_tree_to_newick(pi, tau, precision):
     branch_lengths = {}
     root = 1
     for child, parent in pi.items():
-        if parent in c:
-            c[parent].append(child)
-            c[parent] = sorted(c[parent])
+        if parent == 0:
+            root = child
         else:
-            c[parent] = [child]
-        s = "{0:.{1}f}".format(tau[parent] - tau[child], precision)
-        branch_lengths[child] = s
-        if parent not in pi:
-            root = parent
+            if parent in c:
+                c[parent].append(child)
+                c[parent] = sorted(c[parent])
+            else:
+                c[parent] = [child]
+            s = "{0:.{1}f}".format(tau[parent] - tau[child], precision)
+            branch_lengths[child] = s
     return _build_newick(root, root, c, branch_lengths).encode()
 
 
@@ -80,7 +81,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertGreaterEqual(t, last_t)
             last_t = t
 
-
         sparse_trees = [
             (l, dict(pi), dict(tau)) for l, pi, tau in tree_sequence.sparse_trees()]
         self.verify_sparse_trees(n, m, sparse_trees)
@@ -91,33 +91,48 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertGreaterEqual(l, 1)
         self.assertEqual(len(records_out), 0)
         self.assertEqual(len(records_in), n - 1)
+        # Now we create the trees using the simplest algorithm where we
+        # insert the root immediately after we build it and remove it
+        # before we update.
         pi = {}
         tau = {j:0 for j in range(1, n + 1)}
         for children, parent, t in records_in:
             pi[children[0]] = parent
             pi[children[1]] = parent
             tau[parent] = t
+        # insert the root
+        v = 1
+        while v in pi:
+            v = pi[v]
+        pi[v] = 0
         l_p, pi_p, tau_p = sparse_trees[0]
         self.assertEqual(l_p, l)
         self.assertEqual(pi_p, pi)
         self.assertEqual(tau_p, tau)
+        del pi[v]
         j = 1
         s = 0
         for l, records_out, records_in in diffs:
             self.assertGreaterEqual(l, 1)
             self.assertEqual(len(records_out), len(records_in))
+            # Update the sparse tree
             for children, parent, time in records_out:
-                del pi[children[0]]
-                del pi[children[1]]
+                for c in children:
+                    del pi[c]
                 del tau[parent]
             for children, parent, time in records_in:
-                pi[children[0]] = parent
-                pi[children[1]] = parent
+                for c in children:
+                    pi[c] = parent
                 tau[parent] = time
+            v = 1
+            while v in pi:
+                v = pi[v]
+            pi[v] = 0
             l_p, pi_p, tau_p = sparse_trees[j]
             self.assertEqual(l_p, l)
             self.assertEqual(pi_p, pi)
             self.assertEqual(tau_p, tau)
+            del pi[v]
             j += 1
 
     def verify_breakpoints(self, tree_sequence):

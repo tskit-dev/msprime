@@ -390,37 +390,39 @@ class TreeSequence(object):
         n = self._sample_size
         pi = {}
         tau = {j:0 for j in range(1, n + 1)}
-        l = 0
-        last_l = 0
-        live_segments = []
-        # print("START")
-        for l, r, children, parent, t in self.records():
-            if last_l != l:
-                # print("YIELDING TREE", len(live_segments))
-                # for right, v in live_segments:
-                    # print("\t", right, v)
-                # q = 1
-                # while q in pi:
-                #     q = pi[q]
-                # pi[q] = 0
-                yield l - last_l, pi, tau
-                # del pi[q]
-                last_l = l
-            heapq.heappush(live_segments, (r, (tuple(children), parent)))
-            while live_segments[0][0] <= l:
-                x, (other_children, p) = heapq.heappop(live_segments)
-                # print("Popping off segment", x, children, p)
-                for c in other_children:
+        iterator = self.diffs()
+        length, records_out, records_in = next(iterator)
+        assert len(records_out) == 0
+        for children, parent, time in records_in:
+            tau[parent] = time
+            pi[parent] = 0
+            for c in children:
+                pi[c] = parent
+        yield length, pi, tau
+        root = parent
+        del pi[root]
+
+        for length, records_out, records_in in iterator:
+            # print("ROOT = ", root)
+            for children, parent, time in records_out:
+                # print("OUT:", children, parent,time, sep="\t")
+                del tau[parent]
+                for c in children:
                     del pi[c]
-                del tau[p]
-            pi[children[0]] = parent
-            pi[children[1]] = parent
-            tau[parent] = t
-        # q = 1
-        # while q in pi:
-        #     q = pi[q]
-        # pi[q] = 0
-        yield self.get_num_loci() - l, pi, tau
+            for children, parent, time in records_in:
+                # print("IN :", children, parent,time, sep="\t")
+                tau[parent] = time
+                for c in children:
+                    pi[c] = parent
+            # TODO this is a O(h) operation per tree, which seems
+            # unneccessary. However, I can't seem to see a clean way to
+            # keep track of the root using these records...
+            v = 1
+            while v in pi:
+                v = pi[v]
+            pi[v] = 0
+            yield length, pi, tau
+            del pi[v]
 
     def _diffs(self):
         n = self._sample_size
@@ -716,8 +718,12 @@ class IdentityBlockFinder(object):
             while v in parents:
                 v = parents[v]
             subtrees[v].append(leaf)
-        # Return the subtrees as a list sorted in order of the time of root.
-        return sorted(subtrees.items(), key=lambda t: times[t[0]])
+        # TODO REMOVE
+        # check the subtrees as a list sorted in order of the time of root.
+        s = sorted(subtrees.items(), key=lambda t: times[t[0]])
+        l = list(subtrees.items())
+        assert s == l
+        return l
 
     def _check_consistency(self):
         nodes = set(self._parents.keys())

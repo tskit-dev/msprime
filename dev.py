@@ -117,7 +117,8 @@ def hl_main():
     # for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
     #     print(l, pi, tau)
     treefile = "tmp__NOBACKUP__/tmp.hdf5"
-    sim = msprime.TreeSimulator(5)
+    n = 50
+    sim = msprime.TreeSimulator(n)
     sim.set_random_seed(1)
     sim.set_num_loci(10000)
     sim.set_scaled_recombination_rate(0.1)
@@ -139,16 +140,27 @@ def hl_main():
     #     print("\tlength = ", l)
     #     print("\tin  = ", records_in)
     #     print("\tout = ", records_out)
-    for r in tree_sequence.diffs():
-        print(*r, sep="\t")
+    # for r in tree_sequence.diffs():
+    #     print(*r, sep="\t")
+    # for l, pi, tau in tree_sequence.sparse_trees():
+    #     # print(l, pi, tau, sep="\t")
+    #     # print(len(pi), len(tau))
+    #     assert len(pi) == len(tau)
+    #     roots = []
+    #     for j in range(1, n + 1):
+    #         v = j
+    #         while pi[v] != 0:
+    #             v = pi[v]
+    #         roots.append(v)
+    #     assert len(set(roots)) == 1
 
-    # ts = msprime.TreeSequence.load(treefile)
+    # # ts = msprime.TreeSequence.load(treefile)
     # print("after")
     # ts.print_state()
     # haplotype_generator = msprime.HaplotypeGenerator(tree_sequence, 116.1)
     # for h in haplotype_generator.haplotype_strings():
     #     print(h)
-    # ibf = msprime.IdentityBlockFinder(tree_sequence)
+    ibf = msprime.IdentityBlockFinder(tree_sequence)
 
 def analyse_records(treefile):
     tree_sequence = msprime.TreeSequence.load(treefile)
