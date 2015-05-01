@@ -117,7 +117,7 @@ def hl_main():
     # for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
     #     print(l, pi, tau)
     treefile = "tmp__NOBACKUP__/tmp.hdf5"
-    n = 50
+    n = 5
     sim = msprime.TreeSimulator(n)
     sim.set_random_seed(1)
     sim.set_num_loci(10000)
