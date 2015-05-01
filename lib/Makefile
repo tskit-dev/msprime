@@ -6,10 +6,12 @@ CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wconversion -Wshadow -Wpointer-arith \
   -Wcast-qual -Wcast-align \
   -Wwrite-strings -Wnested-externs \
-  -fshort-enums -fno-common -Dinline= -g -O2
-LDFLAGS=-lgsl -lgslcblas -lconfig -lm
-SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c 
-COMPILED=msprime.c fenwick.c main.c 
+  -fshort-enums -fno-common -Dinline= -g -O2\
+  -I/usr/include/hdf5/serial -L/usr/lib/x86_64-linux-gnu/hdf5/serial
+# TODO fix the paths here.
+LDFLAGS=-lgsl -lgslcblas -lconfig -lm -lhdf5
+SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c  tree_sequence.c
+COMPILED=msprime.c fenwick.c main.c tree_sequence.c
 
 all: main test_fenwick
 

@@ -188,8 +188,9 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     int ret = -1;
     int result;
     msp_t *msp = calloc(1, sizeof(msp_t));
+    tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
 
-    if (msp == NULL) {
+    if (msp == NULL || tree_seq == NULL) {
         goto out;
     }
     msp->random_seed = (long unsigned int) seed;
@@ -226,10 +227,23 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
             goto out;
         }
     } while (result > 0);
+    /* Create the tree_sequence from the state of the simulator. */
+    ret = tree_sequence_create(tree_seq, msp);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_dump(tree_seq, "test.hdf5");
+    if (ret != 0) {
+        goto out;
+    }
 out:
     if (msp != NULL) {
         msp_free(msp);
         free(msp);
+    }
+    if (tree_seq != NULL) {
+        tree_sequence_free(tree_seq);
+        free(tree_seq);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));

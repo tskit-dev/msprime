@@ -124,6 +124,13 @@ typedef struct {
     size_t num_coalescence_record_blocks;
 } msp_t;
 
+typedef struct {
+    uint32_t *left;
+    uint32_t *breakpoints;
+    size_t num_records;
+    size_t num_breakpoints;
+} tree_sequence_t;
+
 int msp_alloc(msp_t *self);
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
@@ -144,6 +151,11 @@ size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_coalescence_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
+
+int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
+int tree_sequence_load(tree_sequence_t *self, const char *filename);
+int tree_sequence_dump(tree_sequence_t *self, const char *filename);
+int tree_sequence_free(tree_sequence_t *self);
 
 const char * msp_strerror(int err);
 const char * msp_gsl_version(void);
