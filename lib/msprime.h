@@ -125,7 +125,13 @@ typedef struct {
 } msp_t;
 
 typedef struct {
+    uint32_t sample_size;
+    uint32_t num_loci;
     uint32_t *left;
+    uint32_t *right;
+    uint32_t *children;
+    uint32_t *parent;
+    double *time;
     uint32_t *breakpoints;
     size_t num_records;
     size_t num_breakpoints;

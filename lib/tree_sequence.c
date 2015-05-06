@@ -25,6 +25,15 @@
 #include "err.h"
 #include "msprime.h"
 
+/*
+ * Comparator for coalescence records. Sort by left.
+ */
+static int
+cmp_coalescence_record(const void *a, const void *b) {
+    const coalescence_record_t *ca = (const coalescence_record_t *) a;
+    const coalescence_record_t *cb = (const coalescence_record_t *) b;
+    return (ca->left > cb->left) - (ca->left < cb->left);
+}
 
 int
 tree_sequence_create(tree_sequence_t *self, msp_t *sim)
@@ -36,7 +45,12 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     printf("Creating tree_sequence\n");
     self->num_records = msp_get_num_coalescence_records(sim);
     self->left = malloc(self->num_records * sizeof(uint32_t));
-    if (self->left == NULL) {
+    self->right = malloc(self->num_records * sizeof(uint32_t));
+    self->children = malloc(2 * self->num_records * sizeof(uint32_t));
+    self->parent = malloc(self->num_records * sizeof(uint32_t));
+    self->time = malloc(self->num_records * sizeof(double));
+    if (self->left == NULL || self->right == NULL || self->children == NULL
+            || self->parent == NULL || self->time == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -48,13 +62,17 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     if (ret != 0) {
         goto out;
     }
-
-    /* Sort the records */
-
+    /* Sort the records by the left coordinate*/
+    qsort(records, self->num_records, sizeof(coalescence_record_t),
+            cmp_coalescence_record);
     for (j = 0; j < self->num_records; j++) {
         self->left[j] = records[j].left;
+        self->right[j] = records[j].right;
+        self->parent[j] = records[j].parent;
+        self->children[j] = records[j].children[0];
+        self->children[2 * j] = records[j].children[1];
+        self->time[j] = records[j].time;
     }
-
     ret = 0;
 out:
     if (records != NULL) {
@@ -95,6 +113,7 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename)
         printf("FIXME\n");
         goto out;
     }
+    /* left */
     dataset_id = H5Dcreate2(file_id, "/records/left", H5T_STD_U32LE,
             dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     if (dataset_id < 0) {
@@ -112,6 +131,64 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename)
         printf("FIXME\n");
         goto out;
     }
+    /* right */
+    dataset_id = H5Dcreate2(file_id, "/records/right", H5T_STD_U32LE,
+            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    if (dataset_id < 0) {
+        printf("FIXME\n");
+        goto out;
+    }
+    status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
+            H5P_DEFAULT, self->right);
+    if (status < 0) {
+        printf("FIXME\n");
+        goto out;
+    }
+    status = H5Dclose(dataset_id);
+    if (status < 0) {
+        printf("FIXME\n");
+        goto out;
+    }
+    /* parent */
+    dataset_id = H5Dcreate2(file_id, "/records/parent", H5T_STD_U32LE,
+            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    if (dataset_id < 0) {
+        printf("FIXME\n");
+        goto out;
+    }
+    status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
+            H5P_DEFAULT, self->parent);
+    if (status < 0) {
+        printf("FIXME\n");
+        goto out;
+    }
+    status = H5Dclose(dataset_id);
+    if (status < 0) {
+        printf("FIXME\n");
+        goto out;
+    }
+    /* time */
+    dataset_id = H5Dcreate2(file_id, "/records/time", H5T_IEEE_F64LE,
+            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    if (dataset_id < 0) {
+        printf("FIXME\n");
+        goto out;
+    }
+    status = H5Dwrite(dataset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+            H5P_DEFAULT, self->time);
+    if (status < 0) {
+        printf("FIXME\n");
+        goto out;
+    }
+    status = H5Dclose(dataset_id);
+    if (status < 0) {
+        printf("FIXME\n");
+        goto out;
+    }
+
+
+
+
     status = H5Gclose(group_id);
     if (status < 0) {
         printf("FIXME\n");
@@ -137,6 +214,18 @@ tree_sequence_free(tree_sequence_t *self)
 {
     if (self->left != NULL) {
         free(self->left);
+    }
+    if (self->right != NULL) {
+        free(self->right);
+    }
+    if (self->children != NULL) {
+        free(self->children);
+    }
+    if (self->parent != NULL) {
+        free(self->parent);
+    }
+    if (self->time != NULL) {
+        free(self->time);
     }
     return 0;
 }
