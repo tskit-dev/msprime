@@ -160,8 +160,12 @@ size_t msp_get_used_memory(msp_t *self);
 
 int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
 int tree_sequence_load(tree_sequence_t *self, const char *filename);
-int tree_sequence_dump(tree_sequence_t *self, const char *filename);
 int tree_sequence_free(tree_sequence_t *self);
+int tree_sequence_dump(tree_sequence_t *self, const char *filename);
+int tree_sequence_get_breakpoints(tree_sequence_t *self, uint32_t 
+        *breakpoints);
+int tree_sequence_get_coalescence_records(tree_sequence_t *self, 
+        coalescence_record_t *);
 
 const char * msp_strerror(int err);
 const char * msp_gsl_version(void);

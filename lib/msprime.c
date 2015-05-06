@@ -63,6 +63,8 @@ msp_strerror(int err)
         } else {
             ret = "Unspecified IO error";
         }
+    } else if (err == MSP_ERR_HDF5) {
+       ret = "HDF5 error";
     }
     return ret;
 }
