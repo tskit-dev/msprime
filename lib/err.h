@@ -42,5 +42,7 @@
 #define MSP_ERR_UNSORTED_POP_MODELS -10
 #define MSP_ERR_POPULATION_OVERFLOW -11
 #define MSP_ERR_LINKS_OVERFLOW -12
+#define MSP_ERR_HDF5 -13
+
 
 #endif /*__ERR_H__*/

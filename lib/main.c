@@ -236,6 +236,12 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
+    tree_sequence_free(tree_seq);
+    memset(tree_seq, 0, sizeof(tree_sequence_t));
+    ret = tree_sequence_load(tree_seq, "test.hdf5");
+    if (ret != 0) {
+        goto out;
+    }
 out:
     if (msp != NULL) {
         msp_free(msp);

@@ -42,7 +42,16 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     uint32_t j;
     coalescence_record_t *records = NULL;
 
-    printf("Creating tree_sequence\n");
+    self->num_breakpoints = msp_get_num_breakpoints(sim);
+    self->breakpoints = malloc(self->num_breakpoints * sizeof(uint32_t));
+    if (self->breakpoints == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = msp_get_breakpoints(sim, self->breakpoints);
+    if (ret != 0) {
+        goto out;
+    }
     self->num_records = msp_get_num_coalescence_records(sim);
     self->left = malloc(self->num_records * sizeof(uint32_t));
     self->right = malloc(self->num_records * sizeof(uint32_t));
@@ -69,8 +78,8 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
         self->left[j] = records[j].left;
         self->right[j] = records[j].right;
         self->parent[j] = records[j].parent;
-        self->children[j] = records[j].children[0];
-        self->children[2 * j] = records[j].children[1];
+        self->children[2 * j] = records[j].children[0];
+        self->children[2 * j + 1] = records[j].children[1];
         self->time[j] = records[j].time;
     }
     ret = 0;
@@ -81,127 +90,210 @@ out:
     return ret;
 }
 
+static int
+tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
+{
+    herr_t status = -1;
+    hid_t dataset_id, dataspace_id;
+    int rank;
+    /* hsize_t dims[2]; */
+
+    dataset_id = H5Dopen(file_id, "/breakpoints", H5P_DEFAULT);
+    if (dataset_id < 0) {
+        goto out;
+    }
+    dataspace_id = H5Dget_space(dataset_id);
+    if (dataset_id < 0) {
+        goto out;
+    }
+    rank = H5Sget_simple_extent_ndims(dataspace_id);
+    if (rank != 1) {
+        goto out;
+    }
+    /* TODO finish... */
+    /* status = H5Sget_simple_extent_dims(dataspace_id, dims, */
+   /* } */
+out:
+    return status;
+}
+
+
 int
 tree_sequence_load(tree_sequence_t *self, const char *filename)
 {
-    return 0;
+    int ret = MSP_ERR_HDF5;
+    herr_t status;
+    hid_t file_id;
+
+    file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (file_id < 0) {
+        goto out;
+    }
+    status = tree_sequence_read_hdf5_data(self, file_id);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Fclose(file_id);
+    if (status < 0) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
 }
 
-int
-tree_sequence_dump(tree_sequence_t *self, const char *filename)
+static int
+tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id)
 {
-    int ret = -1;
-    hid_t file_id, group_id, dataset_id, dataspace_id;
-    herr_t status;
-    hsize_t dims = self->num_records;
+    herr_t status = 0;
+    hid_t group_id, dataset_id, dataspace_id;
+    hsize_t dims[2];
 
-    printf("Dumping tree_sequence to %s\n", filename);
-    file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-    if (file_id < 0) {
-        printf("FIXME\n");
+    /* Add the breakpoints dataset */
+    dims[0] = self->num_breakpoints;
+    dataspace_id = H5Screate_simple(1, dims, NULL);
+    if (dataspace_id < 0) {
+        status = dataspace_id;
+        goto out;
+    }
+    dataset_id = H5Dcreate2(file_id, "/breakpoints", H5T_STD_U32LE,
+            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    if (dataset_id < 0) {
+        goto out;
+    }
+    status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
+            H5P_DEFAULT, self->breakpoints);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Dclose(dataset_id);
+    /* left, right, parent and time share the same dimensions and are in the
+     * 'records' group.
+     */
+    dims[0] = self->num_records;
+    dataspace_id = H5Screate_simple(1, dims, NULL);
+    if (dataspace_id < 0) {
         goto out;
     }
     group_id = H5Gcreate(file_id, "/records", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    printf("group created: %d\n", (int) group_id);
     if (group_id < 0) {
-        printf("FIXME\n");
-        goto out;
-    }
-
-    dataspace_id = H5Screate_simple(1, &dims, NULL);
-    if (dataspace_id < 0) {
-        printf("FIXME\n");
         goto out;
     }
     /* left */
     dataset_id = H5Dcreate2(file_id, "/records/left", H5T_STD_U32LE,
             dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     if (dataset_id < 0) {
-        printf("FIXME\n");
         goto out;
     }
     status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
             H5P_DEFAULT, self->left);
     if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
     status = H5Dclose(dataset_id);
     if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
     /* right */
     dataset_id = H5Dcreate2(file_id, "/records/right", H5T_STD_U32LE,
             dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     if (dataset_id < 0) {
-        printf("FIXME\n");
         goto out;
     }
     status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
             H5P_DEFAULT, self->right);
     if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
     status = H5Dclose(dataset_id);
     if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
     /* parent */
     dataset_id = H5Dcreate2(file_id, "/records/parent", H5T_STD_U32LE,
             dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     if (dataset_id < 0) {
-        printf("FIXME\n");
         goto out;
     }
     status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
             H5P_DEFAULT, self->parent);
     if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
     status = H5Dclose(dataset_id);
     if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
     /* time */
     dataset_id = H5Dcreate2(file_id, "/records/time", H5T_IEEE_F64LE,
             dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     if (dataset_id < 0) {
-        printf("FIXME\n");
         goto out;
     }
     status = H5Dwrite(dataset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
             H5P_DEFAULT, self->time);
     if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
     status = H5Dclose(dataset_id);
     if (status < 0) {
-        printf("FIXME\n");
-        goto out;
-    }
-
-
-
-
-    status = H5Gclose(group_id);
-    if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
     status = H5Sclose(dataspace_id);
     if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
+    /* children is a 2D array */
+    dims[0] = self->num_records;
+    dims[1] = 2;
+    dataspace_id = H5Screate_simple(2, dims, NULL);
+    if (dataspace_id < 0) {
+        goto out;
+    }
+    dataset_id = H5Dcreate2(file_id, "/records/children", H5T_STD_U32LE,
+            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    if (dataset_id < 0) {
+        goto out;
+    }
+    status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
+            H5P_DEFAULT, self->children);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Dclose(dataset_id);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Sclose(dataspace_id);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Gclose(group_id);
+    if (status < 0) {
+        goto out;
+    }
+out:
+    return status;
+}
+
+int
+tree_sequence_dump(tree_sequence_t *self, const char *filename)
+{
+    int ret = MSP_ERR_HDF5;
+    herr_t status;
+    hid_t file_id;
+
+    file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+    if (file_id < 0) {
+        goto out;
+    }
+    status = tree_sequence_write_hdf5_data(self, file_id);
+    if (status < 0) {
+        goto out;
+    }
+
     status = H5Fclose(file_id);
     if (status < 0) {
-        printf("FIXME\n");
         goto out;
     }
     ret = 0;
