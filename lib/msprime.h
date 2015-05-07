@@ -137,11 +137,17 @@ typedef struct {
     size_t num_breakpoints;
 } tree_sequence_t;
 
-typedef struct tree_node_list {
+typedef struct tree_node {
     uint32_t parent;
     uint32_t children[2];
     double time;
-    struct tree_node_list *next;
+    struct tree_node *next;
+} tree_node_t;
+
+typedef struct {
+    uint32_t key;
+    tree_node_t *head;
+    tree_node_t *tail;
 } tree_node_list_t;
 
 typedef struct {
@@ -149,8 +155,11 @@ typedef struct {
     uint32_t current_left;
     size_t next_record_index;
     size_t num_records;
-    tree_node_list_t *nodes_in;
+    tree_node_list_t nodes_in;
+    avl_tree_t active_nodes;
+    object_heap_t tree_node_heap;
     object_heap_t tree_node_list_heap;
+    object_heap_t avl_node_heap;
 } tree_diff_iterator_t;
 
 int msp_alloc(msp_t *self);
@@ -187,7 +196,7 @@ int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence, int flags);
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
 int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
-        coalescence_record_t **records_out, coalescence_record_t **records_in);
+        tree_node_t **nodes_out, tree_node_t **nodes_in);
 
 const char * msp_strerror(int err);
 const char * msp_gsl_version(void);
