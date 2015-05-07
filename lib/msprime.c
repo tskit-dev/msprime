@@ -28,6 +28,7 @@
 
 #include "err.h"
 #include "avl.h"
+#include "object_heap.h"
 #include "fenwick.h"
 #include "msprime.h"
 
@@ -57,6 +58,8 @@ msp_strerror(int err)
         ret = "Population Overflow occured.";
     } else if (err == MSP_ERR_LINKS_OVERFLOW) {
         ret = "Links Overflow occured.";
+    } else if (err == MSP_ERR_OUT_OF_BOUNDS) {
+        ret = "Array index out of bounds";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -95,169 +98,6 @@ segment_init(void **obj, size_t index)
 {
     segment_t *seg = (segment_t *) obj;
     seg->index = index + 1;
-}
-
-/* memory heap manager */
-
-static size_t
-object_heap_get_num_allocated(object_heap_t *self)
-{
-    return self->size - self->top;
-}
-
-static void
-object_heap_print_state(object_heap_t *self)
-{
-    printf("object heap %p::\n", (void *) self);
-    printf("\tsize = %d\n", (int) self->size);
-    printf("\ttop = %d\n", (int) self->top);
-    printf("\tblock_size = %d\n", (int) self->block_size);
-    printf("\tnum_blocks = %d\n", (int) self->num_blocks);
-    printf("\ttotal allocated = %d\n",
-            (int) object_heap_get_num_allocated(self));
-}
-
-static void
-object_heap_add_block(object_heap_t *self, char *mem_block)
-{
-    size_t j, index;
-
-    for (j = 0; j < self->block_size; j++) {
-        self->heap[j] = mem_block + j * self->object_size;
-        if (self->init_object != NULL) {
-            index = j + (self->num_blocks - 1) * self->block_size;
-            self->init_object(self->heap[j], index);
-        }
-    }
-    self->top = self->block_size;
-}
-
-static int WARN_UNUSED
-object_heap_expand(object_heap_t *self)
-{
-    int ret = -1;
-    void *p;
-
-    p = realloc(self->mem_blocks, (self->num_blocks + 1) * sizeof(void *));
-    if (p == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->mem_blocks = p;
-    p = malloc(self->block_size * self->object_size);
-    if (p == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->mem_blocks[self->num_blocks] = p;
-    self->num_blocks++;
-    /* Now we increase the size of the heap. Since it is currently empty,
-     * we avoid the copying cost of realloc and free before making a new
-     * heap.
-     */
-    free(self->heap);
-    self->heap = NULL;
-    self->size += self->block_size;
-    self->heap = malloc(self->size * sizeof(void *));
-    if (self->heap == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    object_heap_add_block(self, p);
-    ret = 0;
-out:
-    return ret;
-}
-
-/*
- * Returns the jth object in the memory buffers.
- */
-static inline void * WARN_UNUSED
-object_heap_get_object(object_heap_t *self, size_t index)
-{
-    void *ret = NULL;
-    size_t block, obj;
-
-    block = index / self->block_size;
-    obj = index % self->block_size;
-    if (block < self->num_blocks && obj < self->block_size) {
-        ret = self->mem_blocks[block] + obj * self->object_size;
-    }
-    return ret;
-}
-
-static inline int WARN_UNUSED
-object_heap_empty(object_heap_t *self)
-{
-    return self->top == 0;
-}
-
-static inline void * WARN_UNUSED
-object_heap_alloc_object(object_heap_t *self)
-{
-    void *ret = NULL;
-
-    if (self->top > 0) {
-        self->top--;
-        ret = self->heap[self->top];
-    }
-    return ret;
-}
-
-static inline void
-object_heap_free_object(object_heap_t *self, void *obj)
-{
-    assert(self->top < self->size);
-    self->heap[self->top] = obj;
-    self->top++;
-}
-
-static int WARN_UNUSED
-object_heap_init(object_heap_t *self, size_t object_size, size_t block_size,
-        void (*init_object)(void **, size_t))
-{
-    int ret = -1;
-
-    memset(self, 0, sizeof(object_heap_t));
-    self->block_size = block_size;
-    self->size = block_size;
-    self->object_size = object_size;
-    self->init_object = init_object;
-    self->num_blocks = 1;
-    self->heap = malloc(self->size * sizeof(void *));
-    self->mem_blocks = malloc(sizeof(void *));
-    if (self->heap == NULL || self->mem_blocks == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->mem_blocks[0] = malloc(self->size * self->object_size);
-    if (self->mem_blocks[0] == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->top = 0;
-    object_heap_add_block(self, self->mem_blocks[0]);
-    ret = 0;
-out:
-    return ret;
-}
-
-static void
-object_heap_free(object_heap_t *self)
-{
-    size_t j;
-
-    if (self->mem_blocks != NULL) {
-        for (j = 0; j < self->num_blocks; j++) {
-            if (self->mem_blocks[j] != NULL) {
-                free(self->mem_blocks[j]);
-            }
-        }
-        free(self->mem_blocks);
-    }
-    if (self->heap != NULL) {
-        free(self->heap);
-    }
 }
 
 /* population models */

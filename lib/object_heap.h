@@ -16,34 +16,19 @@
 ** You should have received a copy of the GNU General Public License
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef __ERR_H__
-#define __ERR_H__
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
 
-/* 
- * raise a compiler warning if a potentially error raising function's return
- * value is not used.
- */
-#ifdef __GNUC__
-    #define WARN_UNUSED __attribute__ ((warn_unused_result))
-#else
-    #define WARN_UNUSED
-#endif
+#include "msprime.h"
 
-
-#define MSP_ERR_GENERIC -1
-#define MSP_ERR_NO_MEMORY -2
-#define MSP_ERR_IO -3
-#define MSP_ERR_FILE_FORMAT -4
-#define MSP_ERR_FILE_VERSION -5
-#define MSP_ERR_BAD_MODE -6
-#define MSP_ERR_TOO_MANY_SEG_SITES -7
-#define MSP_ERR_TREE_FILE_NOT_SORTED -8
-#define MSP_ERR_NEWICK_OVERFLOW -9
-#define MSP_ERR_UNSORTED_POP_MODELS -10
-#define MSP_ERR_POPULATION_OVERFLOW -11
-#define MSP_ERR_LINKS_OVERFLOW -12
-#define MSP_ERR_HDF5 -13
-#define MSP_ERR_OUT_OF_BOUNDS -14
-
-
-#endif /*__ERR_H__*/
+size_t object_heap_get_num_allocated(object_heap_t *self); 
+void object_heap_print_state(object_heap_t *self); 
+int object_heap_expand(object_heap_t *self); 
+void * object_heap_get_object(object_heap_t *self, size_t index); 
+int object_heap_empty(object_heap_t *self); 
+void * object_heap_alloc_object(object_heap_t *self); 
+void object_heap_free_object(object_heap_t *self, void *obj); 
+int object_heap_init(object_heap_t *self, size_t object_size, size_t block_size, 
+        void (*init_object)(void **, size_t)); 
+void object_heap_free(object_heap_t *self);

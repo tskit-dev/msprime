@@ -10,8 +10,9 @@ CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -I/usr/include/hdf5/serial -L/usr/lib/x86_64-linux-gnu/hdf5/serial
 # TODO fix the paths here.
 LDFLAGS=-lgsl -lgslcblas -lconfig -lm -lhdf5
-SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c  tree_sequence.c
-COMPILED=msprime.c fenwick.c main.c tree_sequence.c
+SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c tree_sequence.c \
+    object_heap.c object_heap.h
+COMPILED=msprime.c fenwick.c main.c tree_sequence.c object_heap.c
 
 all: main test_fenwick
 

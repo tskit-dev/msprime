@@ -24,6 +24,7 @@
 
 #include "err.h"
 #include "msprime.h"
+#include "object_heap.h"
 
 /*
  * Comparator for coalescence records. Sort by left.
@@ -35,6 +36,57 @@ cmp_coalescence_record(const void *a, const void *b) {
     return (ca->left > cb->left) - (ca->left < cb->left);
 }
 
+/* Allocates the memory required for arrays of values. Assumes that
+ * the num_breakpoints and num_records has been set.
+ */
+static int
+tree_sequence_alloc(tree_sequence_t *self)
+{
+    int ret = MSP_ERR_NO_MEMORY;
+
+    self->breakpoints = malloc(self->num_breakpoints * sizeof(uint32_t));
+    if (self->breakpoints == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    self->left = malloc(self->num_records * sizeof(uint32_t));
+    self->right = malloc(self->num_records * sizeof(uint32_t));
+    self->children = malloc(2 * self->num_records * sizeof(uint32_t));
+    self->parent = malloc(self->num_records * sizeof(uint32_t));
+    self->time = malloc(self->num_records * sizeof(double));
+    if (self->left == NULL || self->right == NULL || self->children == NULL
+            || self->parent == NULL || self->time == NULL) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+int
+tree_sequence_free(tree_sequence_t *self)
+{
+    if (self->breakpoints != NULL) {
+        free(self->breakpoints);
+    }
+    if (self->left != NULL) {
+        free(self->left);
+    }
+    if (self->right != NULL) {
+        free(self->right);
+    }
+    if (self->children != NULL) {
+        free(self->children);
+    }
+    if (self->parent != NULL) {
+        free(self->parent);
+    }
+    if (self->time != NULL) {
+        free(self->time);
+    }
+    return 0;
+}
+
 int
 tree_sequence_create(tree_sequence_t *self, msp_t *sim)
 {
@@ -43,24 +95,10 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     coalescence_record_t *records = NULL;
 
     self->num_breakpoints = msp_get_num_breakpoints(sim);
-    self->breakpoints = malloc(self->num_breakpoints * sizeof(uint32_t));
-    if (self->breakpoints == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
+    self->num_records = msp_get_num_coalescence_records(sim);
+    tree_sequence_alloc(self);
     ret = msp_get_breakpoints(sim, self->breakpoints);
     if (ret != 0) {
-        goto out;
-    }
-    self->num_records = msp_get_num_coalescence_records(sim);
-    self->left = malloc(self->num_records * sizeof(uint32_t));
-    self->right = malloc(self->num_records * sizeof(uint32_t));
-    self->children = malloc(2 * self->num_records * sizeof(uint32_t));
-    self->parent = malloc(self->num_records * sizeof(uint32_t));
-    self->time = malloc(self->num_records * sizeof(double));
-    if (self->left == NULL || self->right == NULL || self->children == NULL
-            || self->parent == NULL || self->time == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     records = malloc(self->num_records * sizeof(coalescence_record_t));
@@ -301,23 +339,167 @@ out:
     return ret;
 }
 
-int
-tree_sequence_free(tree_sequence_t *self)
+
+size_t
+tree_sequence_get_num_breakpoints(tree_sequence_t *self)
 {
-    if (self->left != NULL) {
-        free(self->left);
+    return self->num_breakpoints;
+}
+
+size_t
+tree_sequence_get_num_coalescence_records(tree_sequence_t *self)
+{
+    return self->num_records;
+}
+
+int
+tree_sequence_get_record(tree_sequence_t *self, size_t index,
+        coalescence_record_t *record)
+{
+    int ret = MSP_ERR_OUT_OF_BOUNDS;
+
+    if (index < self->num_records) {
+        record->left = self->left[index];
+        record->right = self->right[index];
+        record->parent = self->parent[index];
+        record->children[0] = self->children[2 * index];
+        record->children[1] = self->children[2 * index + 1];
+        record->time = self->time[index];
+        ret = 0;
     }
-    if (self->right != NULL) {
-        free(self->right);
+    return ret;
+}
+
+/* ======================================================== *
+ * Tree diff iterator.
+ * ======================================================== */
+
+int
+tree_diff_iterator_alloc(tree_diff_iterator_t *self,
+        tree_sequence_t *tree_sequence, int flags)
+{
+    int ret = 0;
+    uint32_t n = tree_sequence->sample_size;
+
+    self->tree_sequence = tree_sequence;
+    self->current_left = 0;
+    self->next_record_index = 0;
+    self->num_records = tree_sequence_get_num_coalescence_records(
+            self->tree_sequence);
+    /* the maximum number of records we can have is n - 1 */
+    ret = object_heap_init(&self->tree_node_list_heap, sizeof(tree_node_list_t),
+           2 * n, NULL);
+    if (ret != 0) {
+        goto out;
     }
-    if (self->children != NULL) {
-        free(self->children);
+    self->nodes_in = NULL;
+out:
+    return ret;
+}
+
+int
+tree_diff_iterator_free(tree_diff_iterator_t *self)
+{
+    int ret = 0;
+
+    return ret;
+}
+
+static inline tree_node_list_t * WARN_UNUSED
+tree_diff_iterator_alloc_tree_node_list(tree_diff_iterator_t *self)
+{
+    tree_node_list_t *ret = NULL;
+
+    if (object_heap_empty(&self->tree_node_list_heap)) {
+        if (object_heap_expand(&self->tree_node_list_heap) != 0) {
+            goto out;
+        }
     }
-    if (self->parent != NULL) {
-        free(self->parent);
+    ret = (tree_node_list_t *) object_heap_alloc_object(
+            &self->tree_node_list_heap);
+out:
+    return ret;
+}
+
+static inline void
+tree_diff_iterator_free_tree_node_list(tree_diff_iterator_t *self,
+        tree_node_list_t *node)
+{
+    object_heap_free_object(&self->tree_node_list_heap, node);
+}
+
+
+static int
+tree_diff_iterator_process_record(tree_diff_iterator_t *self,
+        coalescence_record_t *record)
+{
+    int ret = 0;
+    tree_node_list_t *node = tree_diff_iterator_alloc_tree_node_list(self);
+
+    printf("visit\t%d\t%d\t%d\t%d\t%d\t%f\n", record->left,
+            record->right, record->children[0],
+            record->children[1], record->parent, record->time);
+    if (node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
     }
-    if (self->time != NULL) {
-        free(self->time);
+    node->parent = record->parent;
+    node->children[0] = record->children[0];
+    node->children[1] = record->children[1];
+    node->time = record->time;
+    node->next = NULL;
+    if (self->nodes_in != NULL) {
+        self->nodes_in->next = node;
     }
-    return 0;
+    self->nodes_in = node;
+
+out:
+    return ret;
+}
+
+int
+tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
+        coalescence_record_t **records_out, coalescence_record_t **records_in)
+{
+    int ret = 0;
+    coalescence_record_t cr;
+    int not_done = 1;
+    tree_node_list_t *node = self->nodes_in;
+    tree_node_list_t *next;
+
+    /* first free up the old used nodes */
+    while (node != NULL) {
+        next = node->next;
+        tree_diff_iterator_free_tree_node_list(self, node);
+        node = next;
+    }
+    self->nodes_in = NULL;
+    if (self->next_record_index < self->num_records) {
+        while (not_done) {
+            ret = tree_sequence_get_record(self->tree_sequence,
+                    self->next_record_index, &cr);
+            if (ret != 0) {
+                goto out;
+            }
+            if (cr.left == self->current_left) {
+                ret = tree_diff_iterator_process_record(self, &cr);
+                if (ret != 0) {
+                    goto out;
+                }
+                self->next_record_index++;
+                not_done = self->next_record_index < self->num_records;
+            } else {
+                not_done = 0;
+            }
+        }
+        if (self->next_record_index  == self->num_records) {
+            *length = cr.right - self->current_left;
+        } else {
+            *length = cr.left - self->current_left;
+        }
+        self->current_left = cr.left;
+        ret = 1;
+    }
+out:
+    return ret;
 }
