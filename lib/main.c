@@ -189,7 +189,7 @@ print_tree_sequence(tree_sequence_t *ts)
     size_t j;
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
     uint32_t length;
-    coalescence_record_t *records_out, *records_in;
+    tree_node_t *nodes_out, *nodes_in, *node;
     coalescence_record_t cr;
     tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
 
@@ -206,8 +206,15 @@ print_tree_sequence(tree_sequence_t *ts)
         goto out;
     }
     while ((ret = tree_diff_iterator_next(
-                    iter, &length, &records_out, &records_in)) == 1) {
+                    iter, &length, &nodes_out, &nodes_in)) == 1) {
         printf("New tree: %d\n", length);
+        printf("Nodes In:\n");
+        node = nodes_in;
+        while (node != NULL) {
+            printf("\t%d\t%d\t%d\n", node->parent, node->children[0],
+                    node->children[1]);
+            node = node->next;
+        }
     }
     if (ret != 0) {
         goto out;
