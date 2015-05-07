@@ -137,6 +137,22 @@ typedef struct {
     size_t num_breakpoints;
 } tree_sequence_t;
 
+typedef struct tree_node_list {
+    uint32_t parent;
+    uint32_t children[2];
+    double time;
+    struct tree_node_list *next;
+} tree_node_list_t;
+
+typedef struct {
+    tree_sequence_t *tree_sequence;
+    uint32_t current_left;
+    size_t next_record_index;
+    size_t num_records;
+    tree_node_list_t *nodes_in;
+    object_heap_t tree_node_list_heap;
+} tree_diff_iterator_t;
+
 int msp_alloc(msp_t *self);
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
@@ -145,9 +161,9 @@ int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);
 
-int msp_get_ancestors(msp_t *self, segment_t **);
-int msp_get_breakpoints(msp_t *self, uint32_t *);
-int msp_get_coalescence_records(msp_t *self, coalescence_record_t *);
+int msp_get_ancestors(msp_t *self, segment_t **ancestors);
+int msp_get_breakpoints(msp_t *self, uint32_t *breakpoints);
+int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
 
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
@@ -162,10 +178,16 @@ int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
 int tree_sequence_load(tree_sequence_t *self, const char *filename);
 int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename);
-int tree_sequence_get_breakpoints(tree_sequence_t *self, uint32_t 
-        *breakpoints);
-int tree_sequence_get_coalescence_records(tree_sequence_t *self, 
-        coalescence_record_t *);
+size_t tree_sequence_get_num_breakpoints(tree_sequence_t *self);
+size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
+int tree_sequence_get_record(tree_sequence_t *self, size_t index, 
+        coalescence_record_t *record);
+
+int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
+        tree_sequence_t *tree_sequence, int flags);
+int tree_diff_iterator_free(tree_diff_iterator_t *self);
+int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
+        coalescence_record_t **records_out, coalescence_record_t **records_in);
 
 const char * msp_strerror(int err);
 const char * msp_gsl_version(void);

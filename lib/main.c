@@ -183,6 +183,49 @@ read_config(msp_t *msp, const char *filename)
 }
 
 static void
+print_tree_sequence(tree_sequence_t *ts)
+{
+    int ret = 0;
+    size_t j;
+    size_t num_records = tree_sequence_get_num_coalescence_records(ts);
+    uint32_t length;
+    coalescence_record_t *records_out, *records_in;
+    coalescence_record_t cr;
+    tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
+
+    printf("Records:\n");
+    for (j = 0; j < num_records; j++) {
+        if (tree_sequence_get_record(ts, j, &cr) != 0) {
+            fatal_error("tree sequence out of bounds\n");
+        }
+        printf("\t%d\t%d\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
+                cr.children[1], cr.parent, cr.time);
+    }
+    ret = tree_diff_iterator_alloc(iter, ts, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    while ((ret = tree_diff_iterator_next(
+                    iter, &length, &records_out, &records_in)) == 1) {
+        printf("New tree: %d\n", length);
+    }
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_diff_iterator_free(iter);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    if (iter != NULL) {
+        free(iter);
+    }
+    if (ret != 0) {
+        fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
+    }
+}
+
+static void
 run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
 {
     int ret = -1;
@@ -232,16 +275,17 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_dump(tree_seq, "test.hdf5");
-    if (ret != 0) {
-        goto out;
-    }
-    tree_sequence_free(tree_seq);
-    memset(tree_seq, 0, sizeof(tree_sequence_t));
-    ret = tree_sequence_load(tree_seq, "test.hdf5");
-    if (ret != 0) {
-        goto out;
-    }
+    /* ret = tree_sequence_dump(tree_seq, "test.hdf5"); */
+    /* if (ret != 0) { */
+    /*     goto out; */
+    /* } */
+    /* tree_sequence_free(tree_seq); */
+    /* memset(tree_seq, 0, sizeof(tree_sequence_t)); */
+    /* ret = tree_sequence_load(tree_seq, "test.hdf5"); */
+    /* if (ret != 0) { */
+    /*     goto out; */
+    /* } */
+    print_tree_sequence(tree_seq);
 out:
     if (msp != NULL) {
         msp_free(msp);
