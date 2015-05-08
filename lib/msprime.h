@@ -197,6 +197,7 @@ int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
 int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
         tree_node_t **nodes_out, tree_node_t **nodes_in);
+void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 
 const char * msp_strerror(int err);
 const char * msp_gsl_version(void);

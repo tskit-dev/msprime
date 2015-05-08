@@ -389,7 +389,6 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
 {
     int ret = 0;
     uint32_t n = tree_sequence->sample_size;
-    uint32_t num_breakpoints = tree_sequence_get_num_breakpoints(tree_sequence);
 
     self->tree_sequence = tree_sequence;
     self->current_left = 0;
@@ -397,20 +396,20 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
     self->num_records = tree_sequence_get_num_coalescence_records(
             self->tree_sequence);
     /* Allocate the memory heaps */
-    /* the maximum number of records we can have is n - 1 */
-    ret = object_heap_init(&self->tree_node_heap, sizeof(tree_node_t), n,
-            NULL);
+    /* We can't have more than 2n tree_nodes used at once. */
+    ret = object_heap_init(&self->tree_node_heap, sizeof(tree_node_t),
+            2 * n, NULL);
     if (ret != 0) {
         goto out;
     }
-    /* the maximum number of lists we can have is the number of breakpoints */
+    /* We can have at most n active node lists */
     ret = object_heap_init(&self->tree_node_list_heap, sizeof(tree_node_list_t),
-            num_breakpoints, NULL);
+            n, NULL);
     if (ret != 0) {
         goto out;
     }
     ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t),
-            num_breakpoints, NULL);
+            n, NULL);
     if (ret != 0) {
         goto out;
     }
@@ -430,6 +429,43 @@ tree_diff_iterator_free(tree_diff_iterator_t *self)
     object_heap_free(&self->tree_node_list_heap);
     object_heap_free(&self->avl_node_heap);
     return ret;
+}
+
+void
+tree_diff_iterator_print_state(tree_diff_iterator_t *self)
+{
+    tree_node_t *tree_node;
+    avl_node_t *avl_node;
+    tree_node_list_t *tree_node_list;
+
+    printf("tree_diff_iterator state\n");
+    printf("current_left = %d\n", self->current_left);
+    printf("next_record_index = %d\n", (int) self->next_record_index);
+    printf("nodes_in:\n");
+    tree_node = self->nodes_in.head;
+    while (tree_node != NULL) {
+        printf("\t(%d\t%d)\t%d\n", tree_node->children[0],
+                tree_node->children[1], tree_node->parent);
+        tree_node = tree_node->next;
+    }
+    printf("active_nodes:\n");
+    for (avl_node = self->active_nodes.head; avl_node != NULL; avl_node = avl_node->next) {
+        tree_node_list = (tree_node_list_t *) avl_node->item;
+        printf("\t%d -> \n", tree_node_list->key);
+        tree_node = tree_node_list->head;
+        while (tree_node != NULL) {
+            printf("\t\t(%d\t%d)\t%d\n", tree_node->children[0],
+                    tree_node->children[1], tree_node->parent);
+            tree_node = tree_node->next;
+        }
+    }
+    printf("Memory heaps:\n");
+    printf("tree_node_heap:\n");
+    object_heap_print_state(&self->tree_node_heap);
+    printf("tree_node_list_heap:\n");
+    object_heap_print_state(&self->tree_node_list_heap);
+    printf("avl_node_heap:\n");
+    object_heap_print_state(&self->avl_node_heap);
 }
 
 static inline avl_node_t * WARN_UNUSED
@@ -461,6 +497,17 @@ tree_diff_iterator_alloc_avl_node(tree_diff_iterator_t *self, uint32_t key)
     avl_init_node(ret, l);
 out:
     return ret;
+}
+
+static inline void
+tree_diff_iterator_free_avl_node(tree_diff_iterator_t *self,
+        avl_node_t *avl_node)
+{
+    tree_node_list_t *l = NULL;
+
+    l = (tree_node_list_t *) avl_node->item;
+    object_heap_free_object(&self->tree_node_list_heap, l);
+    object_heap_free_object(&self->avl_node_heap, avl_node);
 }
 
 static inline tree_node_t * WARN_UNUSED
@@ -502,10 +549,6 @@ tree_diff_iterator_process_record(tree_diff_iterator_t *self,
     tree_node_list_t search, *list;
     avl_node_t *avl_node;
 
-    printf("visit\t%d\t%d\t%d\t%d\t%d\t%f\n", record->left,
-            record->right, record->children[0],
-            record->children[1], record->parent, record->time);
-    /* first update for the nodes in */
     tree_node = tree_diff_iterator_alloc_tree_node(self, record);
     if (tree_node == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -518,7 +561,7 @@ tree_diff_iterator_process_record(tree_diff_iterator_t *self,
     }
     self->nodes_in.tail = tree_node;
 
-    /* now, update for the active nodes */
+    /* update for the active nodes */
     search.key = record->right;
     avl_node = avl_search(&self->active_nodes, &search);
     if (avl_node == NULL) {
@@ -554,16 +597,40 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
     int ret = 0;
     coalescence_record_t cr;
     int not_done = 1;
-    tree_node_t *node, *next;
+    avl_node_t *avl_node;
+    tree_node_t *tree_node, *tmp;
+    tree_node_list_t search, *tree_node_list;
 
-    /* first free up the old used nodes */
-    node = self->nodes_in.head;
-    while (node != NULL) {
-        next = node->next;
-        tree_diff_iterator_free_tree_node(self, node);
-        node = next;
+    *nodes_out = NULL;
+    if (self->current_left != 0) {
+        /* first free up the old used nodes */
+        tree_node = self->nodes_in.head;
+        while (tree_node != NULL) {
+            tmp = tree_node->next;
+            tree_diff_iterator_free_tree_node(self, tree_node);
+            tree_node = tmp;
+        }
+        self->nodes_in.head = NULL;
+        /* Set nodes_out from the active_nodes */
+        search.key = self->current_left;
+        avl_node = avl_search(&self->active_nodes, &search);
+        assert(avl_node != NULL);
+        *nodes_out = ((tree_node_list_t *) avl_node->item)->head;
+        /* free up the active nodes that have just been used also */
+        avl_node = avl_node->prev;
+        if (avl_node != NULL) {
+            assert(avl_node != NULL);
+            tree_node_list = (tree_node_list_t *) avl_node->item;
+            tree_node = tree_node_list->head;
+            while (tree_node != NULL) {
+                tmp = tree_node->next;
+                tree_diff_iterator_free_tree_node(self, tree_node);
+                tree_node = tmp;
+            }
+            avl_unlink_node(&self->active_nodes, avl_node);
+            tree_diff_iterator_free_avl_node(self, avl_node);
+        }
     }
-    self->nodes_in.head = NULL;
 
     if (self->next_record_index < self->num_records) {
         while (not_done) {
@@ -589,7 +656,6 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
             *length = cr.left - self->current_left;
         }
         *nodes_in = self->nodes_in.head;
-        *nodes_out = NULL;
         self->current_left = cr.left;
         ret = 1;
     }

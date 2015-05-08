@@ -639,7 +639,7 @@ msp_print_state(msp_t *self)
         }
     }
     printf("Breakpoints = %d\n", avl_count(&self->breakpoints));
-    for (node = (&self->breakpoints)->head; node != NULL; node = node->next) {
+    for (node = self->breakpoints.head; node != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
