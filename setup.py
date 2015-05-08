@@ -7,7 +7,6 @@ except ImportError:
     use_setuptools()
     from setuptools import setup, Extension
 
-
 # Following the recommendations of PEP 396 we parse the version number
 # out of the module.
 def parse_version(module_file):
@@ -28,16 +27,25 @@ msprime_readme = f.read()
 f.close()
 msprime_version = parse_version("msprime/__init__.py")
 
-requirements = ["h5py"] #, "numpy>=1.7.0"]
+requirements = ["pkgconfig"]
+
+# TODO proper pkgconfig setup. We need to try and see if GSL and HDF5
+# are installed and then used pkgconfig to get the paths. If pkg-config
+# isn't available, we make a guess.
+import pkgconfig
+pkg_info = pkgconfig.parse('gsl hdf5')
 
 d = "lib/"
 _msprime_module = Extension('_msprime',
-    sources = [
-        "_msprimemodule.c", d + "msprime.c", d + "fenwick.c", d + "avl.c"],
-    libraries = ["gsl", "gslcblas"],
+    sources=[
+        "_msprimemodule.c", d + "msprime.c", d + "fenwick.c", d + "avl.c",
+        d + "tree_sequence.c", d + "object_heap.c"],
     # Enable asserts by default.
     undef_macros=['NDEBUG'],
-    include_dirs = [d])
+    libraries=list(pkg_info["libraries"]),
+    include_dirs = [d] + list(pkg_info["include_dirs"]),
+    library_dirs = list(pkg_info["library_dirs"]),
+)
 
 setup(
     name="msprime",

@@ -391,6 +391,7 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
     uint32_t n = tree_sequence->sample_size;
 
     self->tree_sequence = tree_sequence;
+    self->flags = flags;
     self->current_left = 0;
     self->next_record_index = 0;
     self->num_records = tree_sequence_get_num_coalescence_records(
@@ -527,6 +528,7 @@ tree_diff_iterator_alloc_tree_node(tree_diff_iterator_t *self,
     ret->parent = record->parent;
     ret->children[0] = record->children[0];
     ret->children[1] = record->children[1];
+    ret->time = record->time;
     ret->next = NULL;
 out:
     return ret;

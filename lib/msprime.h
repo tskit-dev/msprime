@@ -30,6 +30,8 @@
 #define POP_MODEL_CONSTANT 0
 #define POP_MODEL_EXPONENTIAL 1
 
+#define MSP_ALL_BREAKPOINTS 1
+
 /* Using a size_t for index allows us to have an effectively unlimited
  * number of segments. However, we end up wasting 4 bytes of space 
  * per segment because of alignments requirements. This means that 
@@ -155,6 +157,7 @@ typedef struct {
     uint32_t current_left;
     size_t next_record_index;
     size_t num_records;
+    int flags;
     tree_node_list_t nodes_in;
     avl_tree_t active_nodes;
     object_heap_t tree_node_heap;
