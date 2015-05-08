@@ -211,8 +211,15 @@ print_tree_sequence(tree_sequence_t *ts)
         printf("Nodes In:\n");
         node = nodes_in;
         while (node != NULL) {
-            printf("\t%d\t%d\t%d\n", node->parent, node->children[0],
-                    node->children[1]);
+            printf("\t(%d\t%d)\t%d\n", node->children[0],
+                    node->children[1], node->parent);
+            node = node->next;
+        }
+        printf("Nodes Out:\n");
+        node = nodes_out;
+        while (node != NULL) {
+            printf("\t(%d\t%d)\t%d\n", node->children[0],
+                    node->children[1], node->parent);
             node = node->next;
         }
     }
