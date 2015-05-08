@@ -76,6 +76,7 @@ def check_sim(sim):
 def ll_main():
     j = 0
     while True:
+    # if True:
         j += 1
         models = [{"type":_msprime.POP_MODEL_CONSTANT, "start_time":0.3, "size":0.2},
                 {"type":_msprime.POP_MODEL_EXPONENTIAL, "start_time":0.5, "alpha":5}]
@@ -87,15 +88,33 @@ def ll_main():
         for t in [0.001, 0.1, 0.15, 0.5, 1000]:
             before = time.time()
             # print(sim.run())
-            # print(sim.run(t))
+            sim.run(t)
             duration = time.time() - before
             # print("Ran in", duration)
             # print_sim(sim)
             segs = sim.get_ancestors()
-            crs = sim.get_coalescence_records()
+            # crs = sim.get_coalescence_records()
             bps = sim.get_breakpoints()
             # print(len(segs), len(crs), len(bps))
-            check_sim(sim)
+            # check_sim(sim)
+        # crs  sim.get_coalescence_records()
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        iterator = _msprime.TreeSequenceRecordIterator(ts)
+        c = 0
+        for r in iterator:
+            c += 1
+        # print(c)
+        iterator = _msprime.TreeDiffIterator(ts)
+        # for r in iterator:
+        #     print(r)
+
+        # assert c == len(crs[0])
+        # # print(iterator)
+
+        # for r in ts.records():
+        #     print(r)
+        # for length, nodes_out, nodes_in in ts.
 
         # for j in range(tr.get_num_trees()):
         #     breakpoint, pi, tau = tr.get_tree(j)
@@ -609,8 +628,8 @@ if __name__ == "__main__":
     # edit_visualisation()
     # mutation_dev()
     # example1()
-    hl_main()
-    # ll_main()
+    # hl_main()
+    ll_main()
     # print_newick(sys.argv[1])
     # memory_test()
     # large_sim()

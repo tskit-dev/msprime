@@ -40,6 +40,21 @@ typedef struct {
     msp_t *sim;
 } Simulator;
 
+typedef struct {
+    PyObject_HEAD
+    tree_sequence_t *tree_sequence;
+} TreeSequence;
+
+typedef struct {
+    PyObject_HEAD
+    TreeSequence *tree_sequence;
+    size_t record_index;
+} TreeSequenceRecordIterator;
+
+typedef struct {
+    PyObject_HEAD
+    tree_diff_iterator_t *tree_diff_iterator;
+} TreeDiffIterator;
 
 static void
 handle_library_error(int err)
@@ -681,6 +696,9 @@ Simulator_get_coalescence_records(Simulator *self, PyObject *args)
     size_t num_coalescence_records, j;
     int err;
 
+    PyErr_SetString(PyExc_SystemError, "This method leaks memory!");
+    goto out;
+
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
@@ -752,11 +770,11 @@ out:
         PyMem_Free(coalescence_records);
     }
     if (ret == NULL) {
-        Py_DECREF(left);
-        Py_DECREF(right);
-        Py_DECREF(children);
-        Py_DECREF(parent);
-        Py_DECREF(time);
+        Py_XDECREF(left);
+        Py_XDECREF(right);
+        Py_XDECREF(children);
+        Py_XDECREF(parent);
+        Py_XDECREF(time);
     }
     return ret;
 }
@@ -959,6 +977,414 @@ static PyTypeObject SimulatorType = {
 };
 
 /*===================================================================
+ * TreeSequence
+ *===================================================================
+ */
+
+static int
+TreeSequence_check_tree_sequence(TreeSequence *self)
+{
+    int ret = 0;
+    if (self->tree_sequence == NULL) {
+        PyErr_SetString(PyExc_SystemError, "tree_sequence not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+TreeSequence_dealloc(TreeSequence* self)
+{
+    if (self->tree_sequence != NULL) {
+        tree_sequence_free(self->tree_sequence);
+        PyMem_Free(self->tree_sequence);
+        self->tree_sequence = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    self->tree_sequence = NULL;
+    return 0;
+}
+
+static PyObject *
+TreeSequence_create(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Simulator *sim = NULL;
+
+    if (self->tree_sequence != NULL) {
+        PyErr_SetString(PyExc_ValueError, "tree_sequence already created");
+    }
+    if (!PyArg_ParseTuple(args, "O!", &SimulatorType, &sim)) {
+        goto out;
+    }
+    if (Simulator_check_sim(sim) != 0) {
+        goto out;
+    }
+    self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
+    if (self->tree_sequence == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
+    err = tree_sequence_create(self->tree_sequence, sim->sim);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyMemberDef TreeSequence_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef TreeSequence_methods[] = {
+    {"create", (PyCFunction) TreeSequence_create, METH_VARARGS,
+        "Creates a new TreeSequence from the specified simulator."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject TreeSequenceType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.TreeSequence",             /* tp_name */
+    sizeof(TreeSequence),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)TreeSequence_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "TreeSequence objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    TreeSequence_methods,             /* tp_methods */
+    TreeSequence_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)TreeSequence_init,      /* tp_init */
+};
+
+/*===================================================================
+ * TreeSequenceRecordIterator
+ *===================================================================
+ */
+
+static void
+TreeSequenceRecordIterator_dealloc(TreeSequenceRecordIterator* self)
+{
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+TreeSequenceRecordIterator_init(TreeSequenceRecordIterator *self,
+        PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    static char *kwlist[] = {"tree_sequence", NULL};
+    self->tree_sequence = NULL;
+    self->record_index = 0;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &self->tree_sequence)) {
+        goto out;
+    }
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    Py_INCREF(self->tree_sequence);
+    ret = 0;
+out:
+    return ret;
+}
+
+static int
+TreeSequenceRecordIterator_check_state(TreeSequenceRecordIterator *self)
+{
+    int ret = -1;
+
+    if (self->tree_sequence == NULL) {
+        PyErr_SetString(PyExc_SystemError, "tree_sequence not initialised");
+        goto out;
+    }
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequenceRecordIterator_next(TreeSequenceRecordIterator *self)
+{
+    PyObject *ret = NULL;
+    int err;
+    tree_sequence_t *ts = NULL;
+    coalescence_record_t cr;
+
+    if (TreeSequenceRecordIterator_check_state(self) != 0) {
+        goto out;
+    }
+    ts = self->tree_sequence->tree_sequence;
+    if (self->record_index < tree_sequence_get_num_coalescence_records(ts)) {
+        err = tree_sequence_get_record(ts, self->record_index, &cr);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+        self->record_index++;
+        ret = Py_BuildValue("II(II)Id", (unsigned int) cr.left, (unsigned int) cr.right,
+                (unsigned int) cr.children[0], (unsigned int) cr.children[1],
+                (unsigned int) cr.parent, cr.time);
+    }
+out:
+    return ret;
+}
+
+static PyMemberDef TreeSequenceRecordIterator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef TreeSequenceRecordIterator_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject TreeSequenceRecordIteratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.TreeSequenceRecordIterator",             /* tp_name */
+    sizeof(TreeSequenceRecordIterator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)TreeSequenceRecordIterator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "TreeSequenceRecordIterator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                              /* tp_iter */
+    (iternextfunc) TreeSequenceRecordIterator_next, /* tp_iternext */
+    TreeSequenceRecordIterator_methods,             /* tp_methods */
+    TreeSequenceRecordIterator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)TreeSequenceRecordIterator_init,      /* tp_init */
+};
+
+/*===================================================================
+ * TreeDiffIterator
+ *===================================================================
+ */
+
+static int
+TreeDiffIterator_check_state(TreeDiffIterator *self)
+{
+    int ret = 0;
+    if (self->tree_diff_iterator == NULL) {
+        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+TreeDiffIterator_dealloc(TreeDiffIterator* self)
+{
+    if (self->tree_diff_iterator != NULL) {
+        tree_diff_iterator_free(self->tree_diff_iterator);
+        PyMem_Free(self->tree_diff_iterator);
+        self->tree_diff_iterator = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+TreeDiffIterator_init(TreeDiffIterator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", NULL};
+    TreeSequence *ts = NULL;
+
+    self->tree_diff_iterator = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &ts)) {
+        goto out;
+    }
+    if (TreeSequence_check_tree_sequence(ts) != 0) {
+        goto out;
+    }
+    self->tree_diff_iterator = PyMem_Malloc(sizeof(tree_diff_iterator_t));
+    if (self->tree_diff_iterator == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->tree_diff_iterator, 0, sizeof(tree_diff_iterator_t));
+    err = tree_diff_iterator_alloc(self->tree_diff_iterator, ts->tree_sequence,
+            0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+TreeDiffIterator_next(TreeDiffIterator  *self)
+{
+    PyObject *ret = NULL;
+    PyObject *out_list = NULL;
+    /* PyObject *in_tuple = NULL; */
+    PyObject *value = NULL;
+    int err;
+    uint32_t length;
+    size_t list_size, j;
+    tree_node_t *nodes_out, *nodes_in, *node;
+
+    if (TreeDiffIterator_check_state(self) != 0) {
+        goto out;
+    }
+    err = tree_diff_iterator_next(self->tree_diff_iterator, &length,
+            &nodes_out, &nodes_in);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (err == 1) {
+        node = nodes_out;
+        list_size = 0;
+        while (node != NULL) {
+            list_size++;
+            node = node->next;
+        }
+        out_list = PyList_New(list_size);
+        if (out_list == NULL) {
+            goto out;
+        }
+        node = nodes_out;
+        j = 0;
+        while (node != NULL) {
+            value = Py_BuildValue("(II)Id", (unsigned int) node->children[0],
+                    (unsigned int) node->children[1], node->parent, node->time);
+            if (value == NULL) {
+                goto out;
+            }
+            PyList_SET_ITEM(out_list, j, value);
+            node = node->next;
+            j++;
+        }
+        /* node = nodes_out; */
+        /* while (node != NULL) { */
+        /*     printf("\t(%d\t%d)\t%d\n", node->children[0], */
+        /*             node->children[1], node->parent); */
+        /*     node = node->next; */
+        /* } */
+        ret = Py_BuildValue("IO", (unsigned int) length, out_list);
+    }
+out:
+    Py_XDECREF(out_list);
+    return ret;
+}
+
+
+
+static PyMemberDef TreeDiffIterator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef TreeDiffIterator_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject TreeDiffIteratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.TreeDiffIterator",             /* tp_name */
+    sizeof(TreeDiffIterator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)TreeDiffIterator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "TreeDiffIterator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) TreeDiffIterator_next, /* tp_iternext */
+    TreeDiffIterator_methods,             /* tp_methods */
+    TreeDiffIterator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)TreeDiffIterator_init,      /* tp_init */
+};
+
+
+
+/*===================================================================
  * Module level functions
  *===================================================================
  */
@@ -1012,12 +1438,37 @@ init_msprime(void)
     if (module == NULL) {
         INITERROR;
     }
+    /* Simulator type */
     SimulatorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&SimulatorType) < 0) {
         INITERROR;
     }
     Py_INCREF(&SimulatorType);
     PyModule_AddObject(module, "Simulator", (PyObject *) &SimulatorType);
+    /* TreeSequence type */
+    TreeSequenceType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&TreeSequenceType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&TreeSequenceType);
+    PyModule_AddObject(module, "TreeSequence", (PyObject *) &TreeSequenceType);
+    /* TreeSequenceRecordIterator type */
+    TreeSequenceRecordIteratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&TreeSequenceRecordIteratorType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&TreeSequenceRecordIteratorType);
+    PyModule_AddObject(module, "TreeSequenceRecordIterator",
+            (PyObject *) &TreeSequenceRecordIteratorType);
+    /* TreeDiffIterator type */
+    TreeDiffIteratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&TreeDiffIteratorType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&TreeDiffIteratorType);
+    PyModule_AddObject(module, "TreeDiffIterator",
+            (PyObject *) &TreeDiffIteratorType);
+    /* Errors and constants */
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);
