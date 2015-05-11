@@ -34,6 +34,11 @@ requirements = ["pkgconfig"]
 # isn't available, we make a guess.
 import pkgconfig
 pkg_info = pkgconfig.parse('gsl hdf5')
+# On older systems, HDF5 is not supported by pkg-config. This however, we
+# might still be able to compile and run just by making sure we link against
+# hdf5. This works for Debian Wheezy.
+if 'hdf5' not in pkg_info["libraries"]:
+    pkg_info["libraries"].add('hdf5')
 
 d = "lib/"
 _msprime_module = Extension('_msprime',

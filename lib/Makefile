@@ -9,7 +9,9 @@ CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wwrite-strings -Wnested-externs \
   -fshort-enums -fno-common -Dinline= -g -O2\
   ${INCLUDES}
-LDFLAGS:=$(shell pkg-config gsl hdf5 libconfig --libs)
+# LDFLAGS:=$(shell pkg-config gsl hdf5 libconfig --libs)
+LDFLAGS=-lgsl -lgslcblas -lhdf5 -lconfig
+
 
 SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c tree_sequence.c \
     object_heap.c object_heap.h
