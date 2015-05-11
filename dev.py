@@ -93,18 +93,16 @@ def ll_main():
             # print("Ran in", duration)
             # print_sim(sim)
             segs = sim.get_ancestors()
-            # crs = sim.get_coalescence_records()
+            crs = sim.get_coalescence_records()
+            c = 0
+            for r in crs:
+                c += 1
             bps = sim.get_breakpoints()
             # print(len(segs), len(crs), len(bps))
             # check_sim(sim)
         # crs  sim.get_coalescence_records()
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        iterator = _msprime.TreeSequenceRecordIterator(ts)
-        c = 0
-        for r in iterator:
-            c += 1
-        # print(c)
         iterator = _msprime.TreeDiffIterator(ts)
         c = 0
         for r in iterator:

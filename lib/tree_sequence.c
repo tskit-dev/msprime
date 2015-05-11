@@ -105,6 +105,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     self->num_breakpoints = msp_get_num_breakpoints(sim);
     self->num_records = msp_get_num_coalescence_records(sim);
     self->sample_size = sim->sample_size;
+    self->num_loci = sim->num_loci;
     tree_sequence_alloc(self);
     ret = msp_get_breakpoints(sim, self->breakpoints);
     if (ret != 0) {
@@ -398,8 +399,14 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
             self->tree_sequence);
     /* Allocate the memory heaps */
     /* We can't have more than 2n tree_nodes used at once. */
+    /* TODO This should really be 2n plus some small contstant. However,
+     * we seem to hit conditions in tests where this isn't enough. As
+     * a workaround for now, this is increased to 3n which is surely
+     * too much. We should figure out what the real maximum is here and
+     * update this.
+     */
     ret = object_heap_init(&self->tree_node_heap, sizeof(tree_node_t),
-            2 * n + 1, NULL);
+            3 * n, NULL);
     if (ret != 0) {
         goto out;
     }
