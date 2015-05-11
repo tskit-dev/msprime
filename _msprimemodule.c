@@ -1281,7 +1281,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
 {
     PyObject *ret = NULL;
     PyObject *out_list = NULL;
-    /* PyObject *in_tuple = NULL; */
+    PyObject *in_list = NULL;
     PyObject *value = NULL;
     int err;
     uint32_t length;
@@ -1298,6 +1298,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         goto out;
     }
     if (err == 1) {
+        /* out nodes */
         node = nodes_out;
         list_size = 0;
         while (node != NULL) {
@@ -1320,16 +1321,34 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
             node = node->next;
             j++;
         }
-        /* node = nodes_out; */
-        /* while (node != NULL) { */
-        /*     printf("\t(%d\t%d)\t%d\n", node->children[0], */
-        /*             node->children[1], node->parent); */
-        /*     node = node->next; */
-        /* } */
-        ret = Py_BuildValue("IO", (unsigned int) length, out_list);
+        /* in nodes */
+        node = nodes_in;
+        list_size = 0;
+        while (node != NULL) {
+            list_size++;
+            node = node->next;
+        }
+        in_list = PyList_New(list_size);
+        if (in_list == NULL) {
+            goto out;
+        }
+        node = nodes_in;
+        j = 0;
+        while (node != NULL) {
+            value = Py_BuildValue("(II)Id", (unsigned int) node->children[0],
+                    (unsigned int) node->children[1], node->parent, node->time);
+            if (value == NULL) {
+                goto out;
+            }
+            PyList_SET_ITEM(in_list, j, value);
+            node = node->next;
+            j++;
+        }
+        ret = Py_BuildValue("IOO", (unsigned int) length, out_list, in_list);
     }
 out:
     Py_XDECREF(out_list);
+    Py_XDECREF(in_list);
     return ret;
 }
 
