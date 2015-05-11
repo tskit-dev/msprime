@@ -377,6 +377,7 @@ class TestInterface(tests.MsprimeTestCase):
         tree_sequence.create(sim)
         self.verify_iterators(tree_sequence)
         self.verify_tree_diffs(tree_sequence)
+        self.assertEqual(tree_sequence.get_breakpoints(), sim.get_breakpoints())
 
     def test_tree_sequence_interface(self):
         tree_sequence = _msprime.TreeSequence()
