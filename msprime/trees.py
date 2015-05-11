@@ -333,7 +333,7 @@ class TreeSequence(object):
             yield self._ll_tree_sequence.get_record(j)
 
     def diffs(self, all_breaks=False):
-        iterator = _msprime.TreeDiffIterator(self._ll_tree_sequence)
+        iterator = _msprime.TreeDiffIterator(self._ll_tree_sequence, all_breaks)
         return iterator
 
     def sparse_trees(self):

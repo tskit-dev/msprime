@@ -1215,12 +1215,14 @@ TreeDiffIterator_init(TreeDiffIterator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
+    static char *kwlist[] = {"tree_sequence", "all_breakpoints", NULL};
+    int all_breakpoints = 0;
+    int flags = 0;
 
     self->tree_diff_iterator = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &self->tree_sequence)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
+            &TreeSequenceType, &self->tree_sequence, &all_breakpoints)) {
         goto out;
     }
     Py_INCREF(self->tree_sequence);
@@ -1233,8 +1235,11 @@ TreeDiffIterator_init(TreeDiffIterator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     memset(self->tree_diff_iterator, 0, sizeof(tree_diff_iterator_t));
+    if (all_breakpoints) {
+        flags = MSP_ALL_BREAKPOINTS;
+    }
     err = tree_diff_iterator_alloc(self->tree_diff_iterator,
-            self->tree_sequence->tree_sequence, 0);
+            self->tree_sequence->tree_sequence, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;

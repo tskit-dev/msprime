@@ -155,6 +155,8 @@ typedef struct {
 typedef struct {
     tree_sequence_t *tree_sequence;
     uint32_t current_left;
+    uint32_t next_breakpoint;
+    size_t current_breakpoint_index;
     size_t next_record_index;
     size_t num_records;
     int flags;
