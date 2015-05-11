@@ -399,7 +399,7 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
     /* Allocate the memory heaps */
     /* We can't have more than 2n tree_nodes used at once. */
     ret = object_heap_init(&self->tree_node_heap, sizeof(tree_node_t),
-            2 * n, NULL);
+            2 * n + 1, NULL);
     if (ret != 0) {
         goto out;
     }
@@ -442,6 +442,7 @@ tree_diff_iterator_print_state(tree_diff_iterator_t *self)
     printf("tree_diff_iterator state\n");
     printf("current_left = %d\n", self->current_left);
     printf("next_record_index = %d\n", (int) self->next_record_index);
+    printf("num_records = %d\n", (int) self->num_records);
     printf("nodes_in:\n");
     tree_node = self->nodes_in.head;
     while (tree_node != NULL) {

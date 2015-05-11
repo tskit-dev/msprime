@@ -106,8 +106,10 @@ def ll_main():
             c += 1
         # print(c)
         iterator = _msprime.TreeDiffIterator(ts)
-        # for r in iterator:
-        #     print(r)
+        c = 0
+        for r in iterator:
+            c += 1
+            # print(r)
 
         # assert c == len(crs[0])
         # # print(iterator)
