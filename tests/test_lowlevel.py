@@ -40,6 +40,7 @@ class PythonTreeSequence(object):
     def __init__(self, tree_sequence):
         self._tree_sequence = tree_sequence
         self._sample_size = tree_sequence.get_sample_size()
+        self._breakpoints = tree_sequence.get_breakpoints()
 
     def records(self):
         for j in range(self._tree_sequence.get_num_records()):
@@ -339,11 +340,32 @@ class TestInterface(tests.MsprimeTestCase):
                 self.assertRaises(StopIteration, next, iterator)
 
     def verify_tree_diffs(self, tree_sequence):
-        pts = PythonTreeSequence(tree_sequence)
-        python_diffs = list(pts.diffs())
-        self.assertGreaterEqual(len(python_diffs), 0)
-        diffs = list(_msprime.TreeDiffIterator(tree_sequence))
-        self.assertEqual(diffs, python_diffs)
+        n = tree_sequence.get_sample_size()
+        m = tree_sequence.get_num_loci()
+        for all_breakpoints in [False, True]:
+            # Check some basic properties of the diffs.
+            diffs = list(_msprime.TreeDiffIterator(
+                tree_sequence, all_breakpoints))
+            length, records_out, records_in = diffs[0]
+            self.assertGreaterEqual(length, 0)
+            self.assertEqual(len(records_out), 0)
+            self.assertEqual(len(records_in), n - 1)
+            self.assertEqual(sum([l for l, _, _ in diffs]), m)
+            for l, records_out, records_in in diffs[1:]:
+                self.assertGreaterEqual(l, 0)
+                self.assertGreaterEqual(l, 0)
+                self.assertEqual(len(records_out), len(records_in))
+                for children, parent, time in records_out + records_in:
+                    for c in children:
+                        self.assertGreater(c, 0)
+                        self.assertGreater(parent, c)
+                        self.assertGreater(time, 0.0)
+            # Compare with the Python implementation.
+            pts = PythonTreeSequence(tree_sequence)
+            python_diffs = list(pts.diffs(all_breakpoints))
+            self.assertGreaterEqual(len(python_diffs), 0)
+            self.assertEqual(diffs, python_diffs)
+
 
     def verify_simulation(self, n, m, r, models):
         """
@@ -420,6 +442,7 @@ class TestInterface(tests.MsprimeTestCase):
     def test_small_sims(self):
         self.verify_simulation(3, 1, 0.0, [])
         self.verify_simulation(3, 100, 0.0, [])
+        self.verify_simulation(3, 10, 1000.0, [])
         self.verify_simulation(5, 10, 10.0, [])
         self.verify_simulation(10, 100, 1.0, [])
         self.verify_simulation(100, 100, 0.1, [])
