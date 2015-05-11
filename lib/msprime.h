@@ -167,6 +167,33 @@ typedef struct {
     object_heap_t avl_node_heap;
 } tree_diff_iterator_t;
 
+typedef struct {
+    uint32_t sample_size;
+    uint32_t num_loci;
+    size_t precision;
+    tree_diff_iterator_t diff_iterator;
+    /*
+    double *tau;
+    int **children;
+    int *visited;
+    int *stack;
+    size_t stack_size;
+    char *output_buffer;
+    size_t output_buffer_size;
+    int32_t *children_mem;
+    tree_file_t tree_file;
+    uint32_t breakpoint;
+    size_t num_trees;
+    coalescence_record_t next_record;
+    int completed;
+    char **leaf_labels;
+    char *leaf_labels_mem;
+    char **branch_lengths;
+    char *branch_lengths_mem;
+    size_t max_branch_length_size;
+    */
+} newick_converter_t;
+
 int msp_alloc(msp_t *self);
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
@@ -205,6 +232,11 @@ int tree_diff_iterator_free(tree_diff_iterator_t *self);
 int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
         tree_node_t **nodes_out, tree_node_t **nodes_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
+
+int newick_converter_alloc(newick_converter_t *self, 
+        tree_sequence_t *tree_sequence, size_t precision, 
+        int all_breakpoints);
+int newick_converter_free(newick_converter_t *self);
 
 const char * msp_strerror(int err);
 const char * msp_gsl_version(void);

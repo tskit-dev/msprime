@@ -26,6 +26,7 @@
 #include <libconfig.h>
 
 #include "msprime.h"
+#include "err.h"
 
 static void
 fatal_error(const char *msg, ...)
@@ -183,6 +184,26 @@ read_config(msp_t *msp, const char *filename)
 }
 
 static void
+print_newick_trees(tree_sequence_t *ts)
+{
+    int ret = 0;
+    newick_converter_t *nc = calloc(1, sizeof(newick_converter_t));
+
+    printf("converting newick trees\n");
+    if (nc == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+out:
+    if (nc != NULL) {
+        free(nc);
+    }
+    if (ret != 0) {
+        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
+    }
+}
+
+static void
 print_tree_sequence(tree_sequence_t *ts)
 {
     int ret = 0;
@@ -193,6 +214,10 @@ print_tree_sequence(tree_sequence_t *ts)
     coalescence_record_t cr;
     tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
 
+    if (iter == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     printf("Records:\n");
     for (j = 0; j < num_records; j++) {
         if (tree_sequence_get_record(ts, j, &cr) != 0) {
@@ -300,6 +325,7 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     /*     goto out; */
     /* } */
     print_tree_sequence(tree_seq);
+    print_newick_trees(tree_seq);
 out:
     if (msp != NULL) {
         msp_free(msp);
