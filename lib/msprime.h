@@ -194,6 +194,8 @@ size_t tree_sequence_get_num_breakpoints(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
 int tree_sequence_get_record(tree_sequence_t *self, size_t index, 
         coalescence_record_t *record);
+int tree_sequence_get_breakpoints(tree_sequence_t *self, 
+        uint32_t *breakpoints);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
         tree_sequence_t *tree_sequence, int flags);

@@ -88,6 +88,32 @@ out:
     return ret;
 }
 
+static PyObject *
+convert_breakpoints(uint32_t *breakpoints, size_t num_breakpoints)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_int = NULL;
+    size_t j;
+
+    l = PyList_New(num_breakpoints);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_breakpoints; j++) {
+        py_int = Py_BuildValue("I", (unsigned int) breakpoints[j]);
+        if (py_int == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_int);
+    }
+    ret = l;
+out:
+    return ret;
+}
+
+
 /*===================================================================
  * Simulator
  *===================================================================
@@ -636,10 +662,8 @@ static PyObject *
 Simulator_get_breakpoints(Simulator *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *py_int = NULL;
     uint32_t *breakpoints = NULL;
-    size_t num_breakpoints, j;
+    size_t num_breakpoints;
     int err;
 
     if (Simulator_check_sim(self) != 0) {
@@ -656,19 +680,7 @@ Simulator_get_breakpoints(Simulator *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    l = PyList_New(num_breakpoints);
-    if (l == NULL) {
-        goto out;
-    }
-    for (j = 0; j < num_breakpoints; j++) {
-        py_int = Py_BuildValue("I", (unsigned int) breakpoints[j]);
-        if (py_int == NULL) {
-            Py_DECREF(l);
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, py_int);
-    }
-    ret = l;
+    ret = convert_breakpoints(breakpoints, num_breakpoints);
 out:
     if (breakpoints != NULL) {
         PyMem_Free(breakpoints);
@@ -1024,6 +1036,37 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_breakpoints(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    uint32_t *breakpoints = NULL;
+    size_t num_breakpoints;
+    int err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_breakpoints = tree_sequence_get_num_breakpoints(self->tree_sequence);
+    breakpoints = PyMem_Malloc(num_breakpoints * sizeof(uint32_t));
+    if (breakpoints == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = tree_sequence_get_breakpoints(self->tree_sequence, breakpoints);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_breakpoints(breakpoints, num_breakpoints);
+out:
+    if (breakpoints != NULL) {
+        PyMem_Free(breakpoints);
+    }
+    return ret;
+}
+
+
+static PyObject *
 TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
 {
     PyObject *ret = NULL;
@@ -1034,6 +1077,21 @@ TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
     }
     num_records = tree_sequence_get_num_coalescence_records(self->tree_sequence);
     ret = Py_BuildValue("n", (Py_ssize_t) num_records);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_num_breakpoints(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_breakpoints;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_breakpoints = tree_sequence_get_num_breakpoints(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_breakpoints);
 out:
     return ret;
 }
@@ -1072,8 +1130,12 @@ static PyMethodDef TreeSequence_methods[] = {
         "Creates a new TreeSequence from the specified simulator."},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
         "Returns the record at the specified index."},
+    {"get_breakpoints", (PyCFunction) TreeSequence_get_breakpoints,
+        METH_NOARGS, "Returns the list of breakpoints"},
     {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
             METH_NOARGS, "Returns the number of coalescence records." },
+    {"get_num_breakpoints", (PyCFunction) TreeSequence_get_num_breakpoints,
+            METH_NOARGS, "Returns the number of coalescence breakpoints." },
     {"get_num_loci", (PyCFunction) TreeSequence_get_num_loci, METH_NOARGS,
             "Returns the number of loci" },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,

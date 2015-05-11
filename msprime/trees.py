@@ -29,8 +29,6 @@ import platform
 import random
 import sys
 
-import h5py
-import h5py.h5
 import numpy as np
 
 import _msprime
@@ -239,12 +237,9 @@ class TreeSimulator(object):
             node_mapping_block_size=self._node_mapping_block_size,
             coalescence_record_block_size=self._coalescence_record_block_size)
         self._ll_sim.run()
-        records = self._ll_sim.get_coalescence_records()
-        left, right, children, parent, time = records
-        ts = TreeSequence(
-            self._ll_sim.get_breakpoints(),
-            left, right, children, parent, time,
-            self._get_parameters(), self._get_environment(), True)
+        ll_tree_sequence = _msprime.TreeSequence()
+        ll_tree_sequence.create(self._ll_sim)
+        ts = TreeSequence(ll_tree_sequence)
         return ts
 
     def _get_parameters(self):
@@ -290,101 +285,59 @@ class TreeSimulator(object):
 
 class TreeSequence(object):
 
-    def __init__(self, breakpoints, left, right, children, parent, time,
-            parameters, environment, sort_records=False):
-        uint32 = "uint32"
-        # TODO there is a quite a lot of copying going on here. Do
-        # we need to do this?
-        self._breakpoints = np.array(breakpoints, dtype=uint32)
-        self._num_records = len(left)
-        self._left  = np.array(left , dtype=uint32)
-        self._right = np.array(right, dtype=uint32)
-        self._children = np.array(children, dtype=uint32)
-        self._parent = np.array(parent, dtype=uint32)
-        self._time = np.array(time, dtype="double")
-        self._sample_size = parameters["sample_size"]
-        self._num_loci = parameters["num_loci"]
-        self._parameters = dict(parameters)
-        self._environment = dict(environment)
-        if sort_records:
-            # We have to use a stable sort here so that records are output
-            # in increasing time order.
-            p = np.argsort(self._left, kind="mergesort")
-            self._left = self._left[p]
-            self._right = self._right[p]
-            self._children = self._children[p]
-            self._parent = self._parent[p]
-            self._time = self._time[p]
+    def __init__(self, ll_tree_sequence):
+        self._ll_tree_sequence = ll_tree_sequence
 
     def print_state(self):
-        print("parameters = ")
-        print(json.dumps(self._parameters, sort_keys=True, indent=4))
-        print("environment = ")
-        print(json.dumps(self._environment, sort_keys=True, indent=4))
-        for j in range(self._num_records):
-            print(self._left[j], self._right[j], self._children[j],
-                    self._parent[j], self._time[j], sep="\t")
+        print("TODO")
+        # print("parameters = ")
+        # print(json.dumps(self._parameters, sort_keys=True, indent=4))
+        # print("environment = ")
+        # print(json.dumps(self._environment, sort_keys=True, indent=4))
+        # for j in range(self._num_records):
+        #     print(self._left[j], self._right[j], self._children[j],
+        #             self._parent[j], self._time[j], sep="\t")
 
     def dump(self, path):
         """
         Writes the tree sequence to the specified file path.
         """
-        compression = None
-        with h5py.File(path, "w") as f:
-            f.attrs["file_version"] = "0.1"
-            f.attrs["library_version"] = __version__
-            f.attrs["environment"] = json.dumps(self._environment)
-            f.attrs["parameters"] = json.dumps(self._parameters)
-            uint32 = "uint32"
-            f.create_dataset(
-                "breakpoints", data=self._breakpoints, dtype=uint32,
-                compression=compression)
-            records = f.create_group("records")
-            records.create_dataset(
-                "left", data=self._left, dtype=uint32, compression=compression)
-            records.create_dataset(
-                "right", data=self._right, dtype=uint32, compression=compression)
-            records.create_dataset(
-                "children", data=self._children, dtype=uint32, compression=compression)
-            records.create_dataset(
-                "parent", data=self._parent, dtype=uint32, compression=compression)
-            records.create_dataset(
-                "time", data=self._time, dtype="double", compression=compression)
-
+        self._ll_tree_sequence.dump(path)
 
     @classmethod
     def load(cls, path):
-        with h5py.File(path, "r") as f:
-            records = f["records"]
-            parameters = json.loads(f.attrs["parameters"])
-            environment = json.loads(f.attrs["environment"])
-            ret = TreeSequence(
-                f["breakpoints"], records["left"], records["right"],
-                records["children"], records["parent"], records["time"],
-                parameters, environment)
-        return ret
+        ts = _msprime.TreeSequence()
+        ts.load(path)
+        return TreeSequence(ts)
 
     def get_sample_size(self):
-        return self._sample_size
+        return self._ll_tree_sequence.get_sample_size()
 
     def get_num_loci(self):
-        return self._num_loci
+        return self._ll_tree_sequence.get_num_loci()
+
+    def get_num_records(self):
+        return self._ll_tree_sequence.get_num_records()
 
     def get_parameters(self):
-        return self._parameters
+        return {}
 
     def get_environment(self):
-        return self._environment
+        return {}
 
     def get_breakpoints(self):
-        return self._breakpoints
+        return self._ll_tree_sequence.get_breakpoints()
 
     def records(self):
-        return zip(
-            self._left, self._right, self._children, self._parent, self._time)
+        for j in range(self.get_num_records()):
+            yield self._ll_tree_sequence.get_record(j)
+
+    def diffs(self, all_breaks=False):
+        iterator = _msprime.TreeDiffIterator(self._ll_tree_sequence)
+        return iterator
 
     def sparse_trees(self):
-        n = self._sample_size
+        n = self.get_sample_size()
         pi = {}
         tau = {j:0 for j in range(1, n + 1)}
         iterator = self.diffs()
@@ -420,43 +373,6 @@ class TreeSequence(object):
             pi[v] = 0
             yield length, pi, tau
             del pi[v]
-
-    def _diffs(self):
-        n = self._sample_size
-        left = 0
-        used_records = collections.defaultdict(list)
-        records_in = []
-        for l, r, c, parent, t in self.records():
-            # It's a bit wasteful here creating a new tuple, but
-            # we get weird results from comparisons downstream if
-            # we pass back numpy arrays.
-            children = tuple(c)
-            if l != left:
-                yield l - left, used_records[left], records_in
-                del used_records[left]
-                records_in = []
-                left = l
-            used_records[r].append((children, parent, t))
-            records_in.append((children, parent, t))
-        yield r - left, used_records[left], records_in
-
-    def _diffs_with_breaks(self):
-        k = 1
-        x = 0
-        b = self._breakpoints
-        for length, records_out, records_in in self._diffs():
-            x += length
-            yield b[k] - b[k - 1], records_out, records_in
-            while self._breakpoints[k] != x:
-                k += 1
-                yield b[k] - b[k - 1], [], []
-            k += 1
-
-    def diffs(self, all_breaks=False):
-        if all_breaks:
-            return self._diffs_with_breaks()
-        else:
-            return self._diffs()
 
     def newick_trees(self, precision=3, all_breaks=False):
         return NewickGenerator(self, precision, all_breaks)

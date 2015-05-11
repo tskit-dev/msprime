@@ -380,6 +380,16 @@ tree_sequence_get_record(tree_sequence_t *self, size_t index,
     return ret;
 }
 
+int
+tree_sequence_get_breakpoints(tree_sequence_t *self, uint32_t *breakpoints)
+{
+    int ret = 0;
+
+    memcpy(breakpoints, self->breakpoints,
+            self->num_breakpoints * sizeof(uint32_t));
+    return ret;
+}
+
 /* ======================================================== *
  * Tree diff iterator.
  * ======================================================== */
