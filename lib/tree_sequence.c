@@ -695,43 +695,24 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
     size_t num_breakpoints = self->tree_sequence->num_breakpoints;
 
     if (self->flags & MSP_ALL_BREAKPOINTS) {
-        /* printf("all breakpoints\n"); */
-        /* printf("current_breakpoint_index = %d\n", (int) self->current_breakpoint_index); */
-        /* printf("next_breakpoint = %d\n", (int) self->next_breakpoint); */
-        if (self->next_breakpoint == 0) {
-            /* Start the process off */
-            /* printf("initial tree\n"); */
-            ret = tree_diff_iterator_next_tree(self, length, nodes_out, nodes_in);
-            if (ret < 0) {
-                goto out;
-            }
-            self->next_breakpoint = breakpoints[1];
-            self->current_breakpoint_index = 1;
-        } else {
-            if (self->current_breakpoint_index < num_breakpoints - 1) {
-                if (breakpoints[self->current_breakpoint_index]
-                        != self->next_breakpoint) {
-                    /* printf("empty tree\n"); */
-                    *nodes_out = NULL;
-                    *nodes_in = NULL;
-                    *length = breakpoints[self->current_breakpoint_index] -
-                            breakpoints[self->current_breakpoint_index -1];
-                    self->current_breakpoint_index++;
-                    ret = 0;
-                    if (self->current_breakpoint_index < num_breakpoints - 1) {
-                        ret = 1;
-                    }
-                } else {
-                    /* printf("normal tree\n"); */
-                    ret = tree_diff_iterator_next_tree(self, length, nodes_out, nodes_in);
-                    if (ret < 0) {
-                        goto out;
-                    }
-                    self->next_breakpoint += *length;
-                    self->current_breakpoint_index++;
-                    *length = breakpoints[self->current_breakpoint_index];
+        if (self->current_breakpoint_index < num_breakpoints - 1) {
+            if (breakpoints[self->current_breakpoint_index]
+                    != self->next_breakpoint) {
+                *nodes_out = NULL;
+                *nodes_in = NULL;
+            } else {
+                ret = tree_diff_iterator_next_tree(self, length, nodes_out,
+                        nodes_in);
+                if (ret < 0) {
+                    goto out;
                 }
+                assert(ret == 1);
+                self->next_breakpoint += *length;
             }
+            self->current_breakpoint_index++;
+            *length = breakpoints[self->current_breakpoint_index] -
+                    breakpoints[self->current_breakpoint_index - 1];
+            ret = 1;
         }
     } else {
         ret = tree_diff_iterator_next_tree(self, length, nodes_out, nodes_in);
