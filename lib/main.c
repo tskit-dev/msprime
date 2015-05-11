@@ -201,7 +201,7 @@ print_tree_sequence(tree_sequence_t *ts)
         printf("\t%d\t%d\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
                 cr.children[1], cr.parent, cr.time);
     }
-    ret = tree_diff_iterator_alloc(iter, ts, 0);
+    ret = tree_diff_iterator_alloc(iter, ts, MSP_ALL_BREAKPOINTS);
     if (ret != 0) {
         goto out;
     }
