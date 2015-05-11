@@ -323,7 +323,7 @@ main(int argc, char** argv)
         fatal_error("usage: %s CONFIG_FILE SEED <OUTPUT_EVENTS>", argv[0]);
     }
     if (parse_long(argv[2], &seed, 0, LONG_MAX) != 0) {
-        fatal_error("cannot parse seed '%s'", argv[3]);
+        fatal_error("cannot parse seed '%s'", argv[2]);
     }
     if (argc >= 4) {
         if (parse_long(argv[3], &output_events, 0, LONG_MAX) != 0) {

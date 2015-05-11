@@ -103,12 +103,16 @@ def ll_main():
         # crs  sim.get_coalescence_records()
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        iterator = _msprime.TreeDiffIterator(ts)
+        iterator = _msprime.TreeDiffIterator(ts, True)
+        c = 0
+        for r in iterator:
+            c += 1
+        iterator = _msprime.TreeDiffIterator(ts, False)
+        del ts
         c = 0
         for r in iterator:
             c += 1
             # print(r)
-
         # assert c == len(crs[0])
         # # print(iterator)
 
