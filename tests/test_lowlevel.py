@@ -4,6 +4,7 @@ Test cases for the low level C interface to msprime.
 from __future__ import print_function
 from __future__ import division
 
+import collections
 import json
 import heapq
 import random
@@ -31,6 +32,53 @@ def get_random_population_models(n):
             mod["size"] = p
         models.append(mod)
     return models
+
+class PythonTreeSequence(object):
+    """
+    A python implementation of the TreeDiffIterator algorithm.
+    """
+    def __init__(self, tree_sequence):
+        self._tree_sequence = tree_sequence
+        self._sample_size = tree_sequence.get_sample_size()
+
+    def records(self):
+        for j in range(self._tree_sequence.get_num_records()):
+            yield self._tree_sequence.get_record(j)
+
+    def _diffs(self):
+        n = self._sample_size
+        left = 0
+        used_records = collections.defaultdict(list)
+        records_in = []
+        for l, r, children, parent, t in self.records():
+            if l != left:
+                yield l - left, used_records[left], records_in
+                del used_records[left]
+                records_in = []
+                left = l
+            used_records[r].append((children, parent, t))
+            records_in.append((children, parent, t))
+        yield r - left, used_records[left], records_in
+
+    def _diffs_with_breaks(self):
+        k = 1
+        x = 0
+        b = self._breakpoints
+        for length, records_out, records_in in self._diffs():
+            x += length
+            yield b[k] - b[k - 1], records_out, records_in
+            while self._breakpoints[k] != x:
+                k += 1
+                yield b[k] - b[k - 1], [], []
+            k += 1
+
+    def diffs(self, all_breaks=False):
+        if all_breaks:
+            return self._diffs_with_breaks()
+        else:
+            return self._diffs()
+
+
 
 class TestInterface(tests.MsprimeTestCase):
     """
@@ -71,7 +119,7 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertEqual(breakpoints, sorted(breakpoints))
         self.assertEqual(breakpoints[0], 0)
         self.assertEqual(breakpoints[-1], m)
-        records = [t for t in zip(*sim.get_coalescence_records())]
+        records = sim.get_coalescence_records()
         self.assertEqual(len(records), sim.get_num_coalescence_records())
         for l, r, children, p, t in records:
             self.assertEqual(children, tuple(sorted(children)))
@@ -183,7 +231,8 @@ class TestInterface(tests.MsprimeTestCase):
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
         self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
         self.assertGreater(sim.get_used_memory(), 0)
-        records = [t for t in zip(*sim.get_coalescence_records())]
+
+        records = sim.get_coalescence_records()
         self.assertGreater(len(records), 0)
         self.assertEqual(len(records), sim.get_num_coalescence_records())
         # Records should be in nondecreasing time order
@@ -196,6 +245,12 @@ class TestInterface(tests.MsprimeTestCase):
         self.verify_squashed_records(records)
         sorted_records = sorted(records, key=lambda r: r[0])
         self.verify_trees(sim, sorted_records)
+        # Check the TreeSequence
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        records = [ts.get_record(j) for j in range(len(records))]
+        self.assertEqual(records, sorted_records)
+
 
     def verify_random_parameters(self):
         mb = 1024 * 1024
@@ -271,6 +326,25 @@ class TestInterface(tests.MsprimeTestCase):
         pop_models = pop_models[1:-1]
         self.assertEqual(pop_models, models)
 
+    def verify_iterators(self, tree_sequence):
+        """
+        Verifies the iterator protocol is properly implemented for the
+        low-level iterator classes.
+        """
+        iters = [_msprime.TreeDiffIterator(tree_sequence)]
+        for iterator in iters:
+            l = list(iterator)
+            self.assertGreater(len(l), 0)
+            for j in range(10):
+                self.assertRaises(StopIteration, next, iterator)
+
+    def verify_tree_diffs(self, tree_sequence):
+        pts = PythonTreeSequence(tree_sequence)
+        python_diffs = list(pts.diffs())
+        self.assertGreaterEqual(len(python_diffs), 0)
+        diffs = list(_msprime.TreeDiffIterator(tree_sequence))
+        self.assertEqual(diffs, python_diffs)
+
     def verify_simulation(self, n, m, r, models):
         """
         Runs the specified simulation and verifies its state.
@@ -298,6 +372,44 @@ class TestInterface(tests.MsprimeTestCase):
             t += increment
         self.verify_completed_simulation(sim)
         self.verify_population_models(sim, models)
+        # Check the tree sequence.
+        tree_sequence = _msprime.TreeSequence()
+        tree_sequence.create(sim)
+        self.verify_iterators(tree_sequence)
+        self.verify_tree_diffs(tree_sequence)
+
+    def test_tree_sequence_interface(self):
+        tree_sequence = _msprime.TreeSequence()
+        for x in [None, "", {}, [], 1]:
+            self.assertRaises(TypeError, tree_sequence.create, x)
+        # Creating iterators or running method should fail as we
+        # haven't initialised it.
+        self.assertRaises(ValueError, tree_sequence.get_record, 0)
+        self.assertRaises(ValueError, tree_sequence.get_num_records)
+        self.assertRaises(ValueError, _msprime.TreeDiffIterator, tree_sequence)
+        sim = _msprime.Simulator(10, 1)
+        sim.run()
+        tree_sequence.create(sim)
+        self.assertRaises(ValueError, tree_sequence.create, sim)
+        num_records = sim.get_num_coalescence_records()
+        self.assertEqual(num_records, tree_sequence.get_num_records())
+        # We don't accept Python negative indexes here.
+        self.assertRaises(IndexError, tree_sequence.get_record, -1)
+        for j in [0, 10, 10**6]:
+            self.assertRaises(IndexError, tree_sequence.get_record,
+                    num_records + j)
+        # Check out the diff iterator.
+        iterator = _msprime.TreeDiffIterator(tree_sequence)
+        records = list(iterator)
+        self.assertGreater(len(records), 0)
+        # Now we do something horrible. Allocate an iterator, but then delete
+        # the underlying TreeSequence. We should still be able to iterate over
+        # the records, as we should keep a reference to the TreeSequence in
+        # the iterator, preventing it from being freed.
+        iterator = _msprime.TreeDiffIterator(tree_sequence)
+        del tree_sequence
+        new_records = list(iterator)
+        self.assertEqual(new_records, records)
 
     def test_random_sims(self):
         num_random_sims = 10
