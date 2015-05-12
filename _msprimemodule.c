@@ -51,6 +51,12 @@ typedef struct {
     tree_diff_iterator_t *tree_diff_iterator;
 } TreeDiffIterator;
 
+typedef struct {
+    PyObject_HEAD
+    TreeSequence *tree_sequence;
+    newick_converter_t *newick_converter;
+} NewickConverter;
+
 static void
 handle_library_error(int err)
 {
@@ -1372,6 +1378,148 @@ static PyTypeObject TreeDiffIteratorType = {
     (initproc)TreeDiffIterator_init,      /* tp_init */
 };
 
+/*===================================================================
+ * NewickConverter
+ *===================================================================
+ */
+
+static int
+NewickConverter_check_state(NewickConverter *self)
+{
+    int ret = 0;
+    if (self->newick_converter == NULL) {
+        PyErr_SetString(PyExc_SystemError, "converter not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+NewickConverter_dealloc(NewickConverter* self)
+{
+    if (self->newick_converter != NULL) {
+        newick_converter_free(self->newick_converter);
+        PyMem_Free(self->newick_converter);
+        self->newick_converter = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", "precision", "all_breakpoints",
+        NULL};
+    int all_breakpoints = 0;
+    int precision = 3;
+
+    self->newick_converter = NULL;
+    self->tree_sequence = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|ii", kwlist,
+            &TreeSequenceType, &self->tree_sequence, &precision,
+            &all_breakpoints)) {
+        goto out;
+    }
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    if (precision < 0 || precision > 16) {
+        PyErr_SetString(PyExc_ValueError,
+                "precision value out of range (0, 16)");
+        goto out;
+    }
+    self->newick_converter = PyMem_Malloc(sizeof(newick_converter_t));
+    if (self->newick_converter == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->newick_converter, 0, sizeof(newick_converter_t));
+    err = newick_converter_alloc(self->newick_converter,
+            self->tree_sequence->tree_sequence, (size_t) precision,
+            all_breakpoints);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+NewickConverter_next(NewickConverter  *self)
+{
+    PyObject *ret = NULL;
+    uint32_t length;
+    char *tree;
+    int err;
+
+    if (NewickConverter_check_state(self) != 0) {
+        goto out;
+    }
+    err = newick_converter_next(self->newick_converter, &length, &tree);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (err == 1) {
+        ret = Py_BuildValue("Is", (unsigned int) length, tree);
+    }
+out:
+    return ret;
+}
+
+static PyMemberDef NewickConverter_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef NewickConverter_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject NewickConverterType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.NewickConverter",             /* tp_name */
+    sizeof(NewickConverter),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)NewickConverter_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "NewickConverter objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) NewickConverter_next, /* tp_iternext */
+    NewickConverter_methods,             /* tp_methods */
+    NewickConverter_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)NewickConverter_init,      /* tp_init */
+};
+
 
 
 /*===================================================================
@@ -1450,7 +1598,15 @@ init_msprime(void)
     Py_INCREF(&TreeDiffIteratorType);
     PyModule_AddObject(module, "TreeDiffIterator",
             (PyObject *) &TreeDiffIteratorType);
-    /* Errors and constants */
+    /* NewickConverter type */
+    NewickConverterType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&NewickConverterType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&NewickConverterType);
+    PyModule_AddObject(module, "NewickConverter",
+            (PyObject *) &NewickConverterType);
+     /* Errors and constants */
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);
