@@ -75,12 +75,12 @@ def check_sim(sim):
 
 def ll_main():
     j = 0
-    # while True:
-    if True:
+    while True:
+    # if True:
         j += 1
         models = [{"type":_msprime.POP_MODEL_CONSTANT, "start_time":0.3, "size":0.2},
                 {"type":_msprime.POP_MODEL_EXPONENTIAL, "start_time":0.5, "alpha":5}]
-        sim = _msprime.Simulator(sample_size=3, random_seed=j,
+        sim = _msprime.Simulator(sample_size=4, random_seed=j,
                 num_loci=1000, scaled_recombination_rate=0.1,
                 max_memory=1024**3, segment_block_size=10**6,
                 coalescence_record_block_size=1000,
@@ -118,10 +118,11 @@ def ll_main():
         ts = _msprime.TreeSequence()
         ts.create(sim)
         nc = _msprime.NewickConverter(ts, 4, False)
-        print("start")
-        for j, s in enumerate(nc):
-            print(j, s)
-        print("end")
+        c = 0
+        for l, t in nc:
+            c += l + len(t)
+
+
 
         # for r in ts.records():
         #     print(r)
