@@ -32,6 +32,8 @@
 
 #define MSP_ALL_BREAKPOINTS 1
 
+#define MAX_BRANCH_LENGTH_STRING 16
+
 /* Using a size_t for index allows us to have an effectively unlimited
  * number of segments. However, we end up wasting 4 bytes of space 
  * per segment because of alignments requirements. This means that 
@@ -167,11 +169,21 @@ typedef struct {
     object_heap_t avl_node_heap;
 } tree_diff_iterator_t;
 
+
+typedef struct newick_tree_node {
+    uint32_t id;
+    double time;
+    struct newick_tree_node *parent;
+    struct newick_tree_node *children[2];
+    char branch_length[MAX_BRANCH_LENGTH_STRING];
+    char *subtree;
+} newick_tree_node_t;
+
 typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     size_t precision;
-    uint32_t root;
+    newick_tree_node_t *root;
     tree_diff_iterator_t diff_iterator;
     avl_tree_t tree;
     object_heap_t avl_node_heap;
