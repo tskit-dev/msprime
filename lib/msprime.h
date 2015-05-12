@@ -32,7 +32,7 @@
 
 #define MSP_ALL_BREAKPOINTS 1
 
-#define MAX_BRANCH_LENGTH_STRING 16
+#define MAX_BRANCH_LENGTH_STRING 24
 
 /* Using a size_t for index allows us to have an effectively unlimited
  * number of segments. However, we end up wasting 4 bytes of space 

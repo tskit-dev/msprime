@@ -196,7 +196,7 @@ print_newick_trees(tree_sequence_t *ts)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = newick_converter_alloc(nc, ts, 3, 0);
+    ret = newick_converter_alloc(nc, ts, 4, 0);
     if (ret != 0) {
         goto out;
     }
