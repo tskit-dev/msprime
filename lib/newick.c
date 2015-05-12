@@ -63,6 +63,8 @@ newick_converter_print_state(newick_converter_t *self)
     size_t j;
 
     printf("Newick converter state\n");
+    printf("num_nodes = %d\n", avl_count(&self->tree));
+    printf("root = %d\n", self->root == NULL? 0: self->root->id);
     for (avl_node = self->tree.head; avl_node != NULL; avl_node = avl_node->next) {
         node = (newick_tree_node_t *) avl_node->item;
         printf("%d\t", node->id);
@@ -83,6 +85,7 @@ newick_converter_print_state(newick_converter_t *self)
     object_heap_print_state(&self->avl_node_heap);
     newick_converter_check_state(self);
 }
+
 static inline avl_node_t * WARN_UNUSED
 newick_converter_alloc_avl_node(newick_converter_t *self, uint32_t node_id,
         double time)
@@ -237,11 +240,13 @@ newick_converter_update_root(newick_converter_t *self)
     newick_tree_node_t search;
 
     search.id = 1;
-    avl_node = avl_search(&self->tree, &search);
-    assert(avl_node != NULL);
-    node = (newick_tree_node_t *) avl_node->item;
-    while (node->parent != NULL) {
-        node = node->parent;
+    while ((avl_node = avl_search(&self->tree, &search)) != NULL) {
+        node = (newick_tree_node_t *) avl_node->item;
+        search.id = node->parent == NULL? 0 : node->parent->id;
+    }
+    if (node->parent != NULL) {
+        node->parent = NULL;
+        node->branch_length[0] = '\0';
     }
     self->root = node;
     return 0;
@@ -425,6 +430,8 @@ newick_converter_next(newick_converter_t *self, uint32_t *length, char **tree)
             ret = err;
             goto out;
         }
+        assert(self->root->subtree != NULL);
+        assert(avl_count(&self->tree) == 2 * self->sample_size - 1);
         *tree = self->root->subtree;
     }
 out:
