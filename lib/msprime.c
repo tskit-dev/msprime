@@ -647,7 +647,7 @@ msp_print_state(msp_t *self)
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
         printf("\t%d\t%d\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
-                cr->children[1], cr->parent, cr->time);
+                cr->children[1], cr->node, cr->time);
     }
     printf("Memory heaps\n");
     printf("avl_node_heap:");
@@ -716,7 +716,7 @@ msp_copy_breakpoint(msp_t *self, uint32_t k)
 
 static int WARN_UNUSED
 msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
-        uint32_t child1, uint32_t child2, uint32_t parent)
+        uint32_t child1, uint32_t child2, uint32_t node)
 {
     int ret = 0;
     uint32_t c1 = GSL_MIN(child1, child2);
@@ -742,7 +742,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         if (lcr->right == left
                 && lcr->children[0] == c1
                 && lcr->children[1] == c2
-                && lcr->parent == parent) {
+                && lcr->node == node) {
             /* squash this record into the last */
             lcr->right = right;
             cr = NULL;
@@ -753,7 +753,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         cr->right = right;
         cr->children[0] = c1;
         cr->children[1] = c2;
-        cr->parent = parent;
+        cr->node = node;
         cr->time = self->time;
         self->num_coalescence_records++;
     }
