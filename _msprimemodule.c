@@ -722,7 +722,7 @@ Simulator_get_coalescence_records(Simulator *self, PyObject *args)
         cr = &coalescence_records[j];
         py_cr = Py_BuildValue("II(II)Id", (unsigned int) cr->left,
                 (unsigned int) cr->right, (unsigned int) cr->children[0],
-                (unsigned int) cr->children[1], (unsigned int) cr->parent,
+                (unsigned int) cr->children[1], (unsigned int) cr->node,
                 cr->time);
         if (py_cr == NULL) {
             Py_DECREF(l);
@@ -1030,7 +1030,7 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
     }
     ret = Py_BuildValue("II(II)Id", (unsigned int) cr.left, (unsigned int) cr.right,
             (unsigned int) cr.children[0], (unsigned int) cr.children[1],
-            (unsigned int) cr.parent, cr.time);
+            (unsigned int) cr.node, cr.time);
 out:
     return ret;
 }
@@ -1286,7 +1286,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         j = 0;
         while (node != NULL) {
             value = Py_BuildValue("(II)Id", (unsigned int) node->children[0],
-                    (unsigned int) node->children[1], node->parent, node->time);
+                    (unsigned int) node->children[1], node->id, node->time);
             if (value == NULL) {
                 goto out;
             }
@@ -1309,7 +1309,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         j = 0;
         while (node != NULL) {
             value = Py_BuildValue("(II)Id", (unsigned int) node->children[0],
-                    (unsigned int) node->children[1], node->parent, node->time);
+                    (unsigned int) node->children[1], node->id, node->time);
             if (value == NULL) {
                 goto out;
             }
