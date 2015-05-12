@@ -60,10 +60,10 @@ tree_sequence_alloc(tree_sequence_t *self)
     self->left = malloc(self->num_records * sizeof(uint32_t));
     self->right = malloc(self->num_records * sizeof(uint32_t));
     self->children = malloc(2 * self->num_records * sizeof(uint32_t));
-    self->parent = malloc(self->num_records * sizeof(uint32_t));
+    self->node = malloc(self->num_records * sizeof(uint32_t));
     self->time = malloc(self->num_records * sizeof(double));
     if (self->left == NULL || self->right == NULL || self->children == NULL
-            || self->parent == NULL || self->time == NULL) {
+            || self->node == NULL || self->time == NULL) {
         goto out;
     }
     ret = 0;
@@ -86,8 +86,8 @@ tree_sequence_free(tree_sequence_t *self)
     if (self->children != NULL) {
         free(self->children);
     }
-    if (self->parent != NULL) {
-        free(self->parent);
+    if (self->node != NULL) {
+        free(self->node);
     }
     if (self->time != NULL) {
         free(self->time);
@@ -125,7 +125,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     for (j = 0; j < self->num_records; j++) {
         self->left[j] = records[j].left;
         self->right[j] = records[j].right;
-        self->parent[j] = records[j].parent;
+        self->node[j] = records[j].node;
         self->children[2 * j] = records[j].children[0];
         self->children[2 * j + 1] = records[j].children[1];
         self->time[j] = records[j].time;
@@ -215,7 +215,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id)
         goto out;
     }
     status = H5Dclose(dataset_id);
-    /* left, right, parent and time share the same dimensions and are in the
+    /* left, right, node_id and time share the same dimensions and are in the
      * 'records' group.
      */
     dims[0] = self->num_records;
@@ -264,7 +264,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id)
         goto out;
     }
     status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
-            H5P_DEFAULT, self->parent);
+            H5P_DEFAULT, self->node);
     if (status < 0) {
         goto out;
     }
@@ -371,7 +371,7 @@ tree_sequence_get_record(tree_sequence_t *self, size_t index,
     if (index < self->num_records) {
         record->left = self->left[index];
         record->right = self->right[index];
-        record->parent = self->parent[index];
+        record->node = self->node[index];
         record->children[0] = self->children[2 * index];
         record->children[1] = self->children[2 * index + 1];
         record->time = self->time[index];
@@ -467,7 +467,7 @@ tree_diff_iterator_print_state(tree_diff_iterator_t *self)
     tree_node = self->nodes_in.head;
     while (tree_node != NULL) {
         printf("\t(%d\t%d)\t%d\n", tree_node->children[0],
-                tree_node->children[1], tree_node->parent);
+                tree_node->children[1], tree_node->id);
         tree_node = tree_node->next;
     }
     printf("active_nodes:\n");
@@ -477,7 +477,7 @@ tree_diff_iterator_print_state(tree_diff_iterator_t *self)
         tree_node = tree_node_list->head;
         while (tree_node != NULL) {
             printf("\t\t(%d\t%d)\t%d\n", tree_node->children[0],
-                    tree_node->children[1], tree_node->parent);
+                    tree_node->children[1], tree_node->id);
             tree_node = tree_node->next;
         }
     }
@@ -546,7 +546,7 @@ tree_diff_iterator_alloc_tree_node(tree_diff_iterator_t *self,
     if (ret == NULL) {
         goto out;
     }
-    ret->parent = record->parent;
+    ret->id = record->node;
     ret->children[0] = record->children[0];
     ret->children[1] = record->children[1];
     ret->time = record->time;

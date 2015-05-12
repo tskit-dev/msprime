@@ -53,9 +53,9 @@ typedef struct segment_t_t {
 typedef struct {
     uint32_t left;
     uint32_t right;
-    uint32_t children[2];
-    uint32_t parent;
+    uint32_t node;
     double time;
+    uint32_t children[2];
 } coalescence_record_t;
 
 typedef struct {
@@ -131,16 +131,16 @@ typedef struct {
     uint32_t num_loci;
     uint32_t *left;
     uint32_t *right;
-    uint32_t *children;
-    uint32_t *parent;
+    uint32_t *node;
     double *time;
+    uint32_t *children;
     uint32_t *breakpoints;
     size_t num_records;
     size_t num_breakpoints;
 } tree_sequence_t;
 
 typedef struct tree_node {
-    uint32_t parent;
+    uint32_t id;
     uint32_t children[2];
     double time;
     struct tree_node *next;
@@ -171,7 +171,11 @@ typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     size_t precision;
+    uint32_t root;
     tree_diff_iterator_t diff_iterator;
+    avl_tree_t tree;
+    object_heap_t avl_node_heap;
+    
     /*
     double *tau;
     int **children;
@@ -236,7 +240,10 @@ void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 int newick_converter_alloc(newick_converter_t *self, 
         tree_sequence_t *tree_sequence, size_t precision, 
         int all_breakpoints);
+int newick_converter_next(newick_converter_t *self, uint32_t *length, 
+        char **tree);
 int newick_converter_free(newick_converter_t *self);
+void newick_converter_print_state(newick_converter_t *self);
 
 const char * msp_strerror(int err);
 const char * msp_gsl_version(void);

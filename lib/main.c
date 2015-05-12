@@ -188,14 +188,27 @@ print_newick_trees(tree_sequence_t *ts)
 {
     int ret = 0;
     newick_converter_t *nc = calloc(1, sizeof(newick_converter_t));
+    uint32_t length;
+    char *tree;
 
     printf("converting newick trees\n");
     if (nc == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    ret = newick_converter_alloc(nc, ts, 3, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    while ((ret = newick_converter_next(nc, &length, &tree)) == 1) {
+        printf("Tree: %d: %s\n", length, "tree");
+    }
+    if (ret != 0) {
+        goto out;
+    }
 out:
     if (nc != NULL) {
+        newick_converter_free(nc);
         free(nc);
     }
     if (ret != 0) {
@@ -224,7 +237,7 @@ print_tree_sequence(tree_sequence_t *ts)
             fatal_error("tree sequence out of bounds\n");
         }
         printf("\t%d\t%d\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
-                cr.children[1], cr.parent, cr.time);
+                cr.children[1], cr.node, cr.time);
     }
     ret = tree_diff_iterator_alloc(iter, ts, MSP_ALL_BREAKPOINTS);
     if (ret != 0) {
@@ -237,14 +250,14 @@ print_tree_sequence(tree_sequence_t *ts)
         node = nodes_in;
         while (node != NULL) {
             printf("\t(%d\t%d)\t%d\n", node->children[0],
-                    node->children[1], node->parent);
+                    node->children[1], node->id);
             node = node->next;
         }
         printf("Nodes Out:\n");
         node = nodes_out;
         while (node != NULL) {
             printf("\t(%d\t%d)\t%d\n", node->children[0],
-                    node->children[1], node->parent);
+                    node->children[1], node->id);
             node = node->next;
         }
     }
