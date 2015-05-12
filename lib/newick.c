@@ -404,6 +404,18 @@ newick_converter_next(newick_converter_t *self, uint32_t *length, char **tree)
     int err;
     tree_node_t *nodes_out, *nodes_in;
 
+    /* TMP */
+    avl_node_t *avl_node;
+    newick_tree_node_t *node;
+    for (avl_node = self->tree.head; avl_node != NULL;
+            avl_node = avl_node->next) {
+        node = (newick_tree_node_t *) avl_node->item;
+        if (node->subtree != NULL) {
+            free(node->subtree);
+            node->subtree = NULL;
+        }
+    }
+
     ret = tree_diff_iterator_next(&self->diff_iterator, length, &nodes_out,
             &nodes_in);
     if (ret < 0) {
@@ -415,6 +427,7 @@ newick_converter_next(newick_converter_t *self, uint32_t *length, char **tree)
             ret = err;
             goto out;
         }
+        *tree = self->root->subtree;
         newick_converter_print_state(self);
     }
 out:
@@ -465,7 +478,17 @@ out:
 int
 newick_converter_free(newick_converter_t *self)
 {
+    avl_node_t *avl_node;
+    newick_tree_node_t *node;
 
+    /* Clear out any dangling subtree strings. */
+    for (avl_node = self->tree.head; avl_node != NULL;
+            avl_node = avl_node->next) {
+        node = (newick_tree_node_t *) avl_node->item;
+        if (node->subtree != NULL) {
+            free(node->subtree);
+        }
+    }
     tree_diff_iterator_free(&self->diff_iterator);
     object_heap_free(&self->avl_node_heap);
     return 0;

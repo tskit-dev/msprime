@@ -201,8 +201,7 @@ print_newick_trees(tree_sequence_t *ts)
         goto out;
     }
     while ((ret = newick_converter_next(nc, &length, &tree)) == 1) {
-        printf("Tree: %d: %s\n", length, "tree");
-        break;
+        printf("Tree: %d: %s\n", length, tree);
     }
     if (ret != 0) {
         goto out;
