@@ -46,7 +46,10 @@ _msprime_module = Extension('_msprime',
         "_msprimemodule.c", d + "msprime.c", d + "fenwick.c", d + "avl.c",
         d + "tree_sequence.c", d + "object_heap.c", d + "newick.c"],
     # Enable asserts by default.
-    undef_macros=['NDEBUG'],
+    undef_macros=["NDEBUG"],
+    # We define this macro to ensure we're using the v18 versions of the
+    # HDF5 API and not earlier deprecated versions.
+    define_macros=[("H5_NO_DEPRECATED_SYMBOLS", None)],
     libraries=list(pkg_info["libraries"]),
     include_dirs = [d] + list(pkg_info["include_dirs"]),
     library_dirs = list(pkg_info["library_dirs"]),
