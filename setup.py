@@ -50,7 +50,7 @@ _msprime_module = Extension('_msprime',
     # We define this macro to ensure we're using the v18 versions of the
     # HDF5 API and not earlier deprecated versions.
     define_macros=[("H5_NO_DEPRECATED_SYMBOLS", None)],
-    libraries=list(pkg_info["libraries"]),
+    libraries=["gsl", "gslcblas", "hdf5"],
     include_dirs = [d] + list(pkg_info["include_dirs"]),
     library_dirs = list(pkg_info["library_dirs"]),
 )

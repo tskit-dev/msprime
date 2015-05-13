@@ -187,27 +187,6 @@ typedef struct {
     tree_diff_iterator_t diff_iterator;
     avl_tree_t tree;
     object_heap_t avl_node_heap;
-    
-    /*
-    double *tau;
-    int **children;
-    int *visited;
-    int *stack;
-    size_t stack_size;
-    char *output_buffer;
-    size_t output_buffer_size;
-    int32_t *children_mem;
-    tree_file_t tree_file;
-    uint32_t breakpoint;
-    size_t num_trees;
-    coalescence_record_t next_record;
-    int completed;
-    char **leaf_labels;
-    char *leaf_labels_mem;
-    char **branch_lengths;
-    char *branch_lengths_mem;
-    size_t max_branch_length_size;
-    */
 } newick_converter_t;
 
 int msp_alloc(msp_t *self);
