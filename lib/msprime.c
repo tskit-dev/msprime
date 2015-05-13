@@ -34,10 +34,26 @@
 #include "fenwick.h"
 #include "msprime.h"
 
+#define HDF5_ERR_MSG_SIZE 1024
+
+static char _hdf5_error[HDF5_ERR_MSG_SIZE];
+
+static herr_t
+hdf5_error_walker(unsigned n, const H5E_error2_t *err_desc, void *client_data)
+{
+    /* We only copy the message from the first element in the error stack */
+    if (_hdf5_error[0] == '\0') {
+        strncpy(_hdf5_error, err_desc->desc, HDF5_ERR_MSG_SIZE);
+        _hdf5_error[HDF5_ERR_MSG_SIZE - 1] = '\0';
+    }
+    return 0;
+}
+
 const char *
 msp_strerror(int err)
 {
     const char *ret = "Unknown error";
+
     if (err == MSP_ERR_NO_MEMORY) {
         ret = "Out of memory";
     } else if (err == MSP_ERR_GENERIC) {
@@ -69,8 +85,15 @@ msp_strerror(int err)
             ret = "Unspecified IO error";
         }
     } else if (err == MSP_ERR_HDF5) {
-       ret = "HDF5 error";
+        _hdf5_error[0] = '\0';
+        if (H5Ewalk2(H5E_DEFAULT, H5E_WALK_UPWARD, hdf5_error_walker, NULL)
+                != 0) {
+            ret = "Eek! Error handling HDF5 error.";
+            goto out;
+        }
+        ret = _hdf5_error;
     }
+out:
     return ret;
 }
 
