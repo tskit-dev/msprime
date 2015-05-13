@@ -121,7 +121,14 @@ def ll_main():
         c = 0
         for l, t in nc:
             c += l + len(t)
-
+        nc = _msprime.NewickConverter(ts, 4, False)
+        x = next(nc)
+        files = ["/", "/nofile", "/" + "x" * 4192]
+        for f in files:
+            try:
+                ts.dump(f)
+            except _msprime.LibraryError as e:
+                pass
 
 
         # for r in ts.records():

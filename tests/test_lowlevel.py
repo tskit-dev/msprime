@@ -507,14 +507,27 @@ class TestTreeSequence(LowLevelTestCase):
         # Try to dump to files we don't have access to or don't exist.
         for f in ["/", "/test.hdf5", "/dir_does_not_exist/x.hdf5"]:
             self.assertRaises(_msprime.LibraryError, ts.dump, f)
+            try:
+                ts.dump(f)
+            except _msprime.LibraryError as e:
+                message = str(e)
+                self.assertIn(f, message)
+        # use a long filename and make sure we don't overflow error
+        # buffers
+        f = "/" + 4000 * "x"
+        self.assertRaises(_msprime.LibraryError, ts.dump, f)
+        try:
+            ts.dump(f)
+        except _msprime.LibraryError as e:
+            message = str(e)
+            self.assertEqual(len(message), 1023)
         with tempfile.NamedTemporaryFile() as f:
             ts.dump(f.name)
             self.assertTrue(os.path.exists(f.name))
             self.assertGreater(os.path.getsize(f.name), 0)
         # TODO there's a bunch of things we need to do here:
-        # 1. Improve the error reporting from HDF5 IO errors.
-        # 2. Use h5py to verify the structure of the file.
-        # 3. Probably lots more.
+        # 1. Use h5py to verify the structure of the file.
+        # 2. Probably lots more.
 
 
 class TestNewickConverter(LowLevelTestCase):
