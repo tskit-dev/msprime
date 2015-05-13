@@ -24,6 +24,7 @@
 
 #include <gsl/gsl_rng.h>
 
+#include "err.h"
 #include "avl.h"
 #include "fenwick.h"
 

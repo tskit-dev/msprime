@@ -26,6 +26,8 @@
 #include <gsl/gsl_statistics_int.h>
 #include <gsl/gsl_version.h>
 
+#include <hdf5.h>
+
 #include "err.h"
 #include "avl.h"
 #include "object_heap.h"

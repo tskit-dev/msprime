@@ -23,6 +23,8 @@
 #include <structmember.h>
 #include <float.h>
 
+#include <hdf5.h>
+
 #include "msprime.h"
 
 #if PY_MAJOR_VERSION >= 3
@@ -1009,6 +1011,30 @@ out:
 }
 
 static PyObject *
+TreeSequence_dump(TreeSequence *self, PyObject *args)
+{
+    int err;
+    char *path;
+    PyObject *ret = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "s", &path)) {
+        goto out;
+    }
+    err = tree_sequence_dump(self->tree_sequence, path);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+
+static PyObject *
 TreeSequence_get_record(TreeSequence *self, PyObject *args)
 {
     int err;
@@ -1134,6 +1160,8 @@ static PyMemberDef TreeSequence_members[] = {
 static PyMethodDef TreeSequence_methods[] = {
     {"create", (PyCFunction) TreeSequence_create, METH_VARARGS,
         "Creates a new TreeSequence from the specified simulator."},
+    {"dump", (PyCFunction) TreeSequence_dump, METH_VARARGS,
+        "Writes the tree sequence out to the specified path."},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
         "Returns the record at the specified index."},
     {"get_breakpoints", (PyCFunction) TreeSequence_get_breakpoints,
@@ -1622,6 +1650,8 @@ init_msprime(void)
     PyModule_AddIntConstant(module, "POP_MODEL_CONSTANT", POP_MODEL_CONSTANT);
     PyModule_AddIntConstant(module, "POP_MODEL_EXPONENTIAL",
             POP_MODEL_EXPONENTIAL);
+    /* Silence the low-level error reporting HDF5 */
+    H5Eset_auto(H5E_DEFAULT, NULL, NULL);
 
 #ifdef WORDS_BIGENDIAN
     PyErr_Format(PyExc_RuntimeError, "Big Endian systems not currently supported.");
