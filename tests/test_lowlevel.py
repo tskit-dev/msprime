@@ -494,6 +494,29 @@ class TestInterface(LowLevelTestCase):
         # TODO This should really be an input error.
         self.assertRaises(_msprime.LibraryError, f, m)
 
+class TestTreeSequence(LowLevelTestCase):
+    """
+    Tests for the low-level interface for the TreeSequence.
+    """
+
+    def test_dump(self):
+        ts = self.get_tree_sequence()
+        self.assertRaises(TypeError, ts.dump)
+        for bad_type in [1, None, [], {}]:
+            self.assertRaises(TypeError, ts.dump, bad_type)
+        # Try to dump to files we don't have access to or don't exist.
+        for f in ["/", "/test.hdf5", "/dir_does_not_exist/x.hdf5"]:
+            self.assertRaises(_msprime.LibraryError, ts.dump, f)
+        with tempfile.NamedTemporaryFile() as f:
+            ts.dump(f.name)
+            self.assertTrue(os.path.exists(f.name))
+            self.assertGreater(os.path.getsize(f.name), 0)
+        # TODO there's a bunch of things we need to do here:
+        # 1. Improve the error reporting from HDF5 IO errors.
+        # 2. Use h5py to verify the structure of the file.
+        # 3. Probably lots more.
+
+
 class TestNewickConverter(LowLevelTestCase):
     """
     Tests for the low-level newick converter.
