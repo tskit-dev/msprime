@@ -32,7 +32,7 @@ def sparse_tree_to_newick(pi, tau, precision):
                 c[parent] = [child]
             s = "{0:.{1}f}".format(tau[parent] - tau[child], precision)
             branch_lengths[child] = s
-    return _build_newick(root, root, c, branch_lengths).encode()
+    return _build_newick(root, root, c, branch_lengths)
 
 
 def _build_newick(node, root, tree, branch_lengths):

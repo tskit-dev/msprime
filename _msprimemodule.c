@@ -1224,13 +1224,15 @@ TreeDiffIterator_init(TreeDiffIterator *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"tree_sequence", "all_breakpoints", NULL};
     int all_breakpoints = 0;
     int flags = 0;
+    TreeSequence *tree_sequence;
 
     self->tree_diff_iterator = NULL;
     self->tree_sequence = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
-            &TreeSequenceType, &self->tree_sequence, &all_breakpoints)) {
+            &TreeSequenceType, &tree_sequence, &all_breakpoints)) {
         goto out;
     }
+    self->tree_sequence = tree_sequence;
     Py_INCREF(self->tree_sequence);
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
@@ -1415,14 +1417,16 @@ NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
         NULL};
     int all_breakpoints = 0;
     int precision = 3;
+    TreeSequence *tree_sequence;
 
     self->newick_converter = NULL;
     self->tree_sequence = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|ii", kwlist,
-            &TreeSequenceType, &self->tree_sequence, &precision,
+            &TreeSequenceType, &tree_sequence, &precision,
             &all_breakpoints)) {
         goto out;
     }
+    self->tree_sequence = tree_sequence;
     Py_INCREF(self->tree_sequence);
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
