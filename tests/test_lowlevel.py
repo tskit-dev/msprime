@@ -80,8 +80,30 @@ class PythonTreeSequence(object):
             return self._diffs()
 
 
+class LowLevelTestCase(tests.MsprimeTestCase):
+    """
+    Superclass of tests for the low-level interface.
+    """
+    def get_tree_sequence(self, sample_size=10, num_loci=10):
+        sim = _msprime.Simulator(sample_size, num_loci,
+                scaled_recombination_rate=10)
+        sim.run()
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        return ts
 
-class TestInterface(tests.MsprimeTestCase):
+
+    def verify_iterator(self, iterator):
+        """
+        Checks that the specified non-empty iterator implements the
+        iterator protocol correctly.
+        """
+        l = list(iterator)
+        self.assertGreater(len(l), 0)
+        for j in range(10):
+            self.assertRaises(StopIteration, next, iterator)
+
+class TestInterface(LowLevelTestCase):
     """
     Test the low-level interface to make sure it is robust.
     """
@@ -327,18 +349,6 @@ class TestInterface(tests.MsprimeTestCase):
         pop_models = pop_models[1:-1]
         self.assertEqual(pop_models, models)
 
-    def verify_iterators(self, tree_sequence):
-        """
-        Verifies the iterator protocol is properly implemented for the
-        low-level iterator classes.
-        """
-        iters = [_msprime.TreeDiffIterator(tree_sequence)]
-        for iterator in iters:
-            l = list(iterator)
-            self.assertGreater(len(l), 0)
-            for j in range(10):
-                self.assertRaises(StopIteration, next, iterator)
-
     def verify_tree_diffs(self, tree_sequence):
         n = tree_sequence.get_sample_size()
         m = tree_sequence.get_num_loci()
@@ -397,7 +407,6 @@ class TestInterface(tests.MsprimeTestCase):
         # Check the tree sequence.
         tree_sequence = _msprime.TreeSequence()
         tree_sequence.create(sim)
-        self.verify_iterators(tree_sequence)
         self.verify_tree_diffs(tree_sequence)
         self.assertEqual(tree_sequence.get_breakpoints(), sim.get_breakpoints())
 
@@ -484,4 +493,109 @@ class TestInterface(tests.MsprimeTestCase):
         m.reverse()
         # TODO This should really be an input error.
         self.assertRaises(_msprime.LibraryError, f, m)
+
+class TestNewickConverter(LowLevelTestCase):
+    """
+    Tests for the low-level newick converter.
+    """
+
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.NewickConverter)
+        self.assertRaises(TypeError, _msprime.NewickConverter, None)
+        ts = _msprime.TreeSequence()
+        # This hasn't been initialised, so should fail.
+        self.assertRaises(ValueError, _msprime.NewickConverter, ts)
+        sim = _msprime.Simulator(10, 1)
+        sim.run()
+        ts.create(sim)
+        for bad_type in [None, "", 2.3, [], {}]:
+            self.assertRaises(TypeError, _msprime.NewickConverter, ts,
+                    precision=bad_type)
+            self.assertRaises(TypeError, _msprime.NewickConverter, ts,
+                    all_breakpoints=bad_type)
+        before = list(_msprime.NewickConverter(ts))
+        self.assertGreater(len(before), 0)
+        iterator = _msprime.NewickConverter(ts)
+        del ts
+        # We should keep a reference to the tree sequence.
+        after = list(iterator)
+        self.assertEqual(before, after)
+        # make sure the basic form of the output is correct.
+        for length, tree in before:
+            self.assertIsInstance(length, int)
+            self.assertIsInstance(tree, str)
+
+    def test_iterator(self):
+        ts = self.get_tree_sequence()
+        ncs = [
+            _msprime.NewickConverter(ts), _msprime.NewickConverter(ts, 1, False),
+            _msprime.NewickConverter(ts, 0, True)]
+        for nc in ncs:
+            self.verify_iterator(nc)
+
+    def test_precision(self):
+        def get_times(tree):
+            """
+            Returns the time strings from the specified newick tree.
+            """
+            ret = []
+            current_time = None
+            for c in tree:
+                if c == ":":
+                    current_time = ""
+                elif c in [",", ")"]:
+                    ret.append(current_time)
+                    current_time = None
+                elif current_time is not None:
+                    current_time += c
+            return ret
+        ts = self.get_tree_sequence()
+        self.assertRaises(ValueError, _msprime.NewickConverter, ts, -1)
+        self.assertRaises(ValueError, _msprime.NewickConverter, ts, 17)
+        self.assertRaises(ValueError, _msprime.NewickConverter, ts, 100)
+        for precision in range(17):
+            for l, tree in _msprime.NewickConverter(ts, precision=precision):
+                times = get_times(tree)
+                for t in times:
+                    tmp = float(t)
+                    if precision == 0:
+                        self.assertNotIn(".", t)
+                    else:
+                        point = t.find(".")
+                        self.assertEqual(precision, len(t) - point - 1)
+
+
+class TestTreeDiffIterator(LowLevelTestCase):
+    """
+    Tests for the low-level tree diff iterator.
+    """
+
+    # TODO test all_breaks here and in the Newick converter above.
+
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.TreeDiffIterator)
+        self.assertRaises(TypeError, _msprime.TreeDiffIterator, None)
+        ts = _msprime.TreeSequence()
+        # This hasn't been initialised, so should fail.
+        self.assertRaises(ValueError, _msprime.TreeDiffIterator, ts)
+        sim = _msprime.Simulator(10, 1)
+        sim.run()
+        ts.create(sim)
+        for bad_type in [None, "", 2.3, [], {}]:
+            self.assertRaises(TypeError, _msprime.TreeDiffIterator, ts,
+                    all_breakpoints=bad_type)
+        before = list(_msprime.TreeDiffIterator(ts))
+        iterator = _msprime.TreeDiffIterator(ts)
+        del ts
+        # We should keep a reference to the tree sequence.
+        after = list(iterator)
+        self.assertEqual(before, after)
+
+    def test_iterator(self):
+        ts = self.get_tree_sequence()
+        iters = [
+            _msprime.TreeDiffIterator(ts), _msprime.NewickConverter(ts, False),
+            _msprime.NewickConverter(ts, True)]
+        for iterator in iters:
+            self.verify_iterator(iterator)
 
