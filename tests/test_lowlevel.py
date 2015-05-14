@@ -520,7 +520,7 @@ class TestTreeSequence(LowLevelTestCase):
             ts.dump(f)
         except _msprime.LibraryError as e:
             message = str(e)
-            self.assertEqual(len(message), 1023)
+            self.assertLess(len(message), 1024)
         with tempfile.NamedTemporaryFile() as f:
             ts.dump(f.name)
             self.assertTrue(os.path.exists(f.name))
