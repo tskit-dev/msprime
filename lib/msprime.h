@@ -270,7 +270,8 @@ int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
         double mutation_rate, unsigned long random_seed, 
         size_t max_haplotype_length);
 int hapgen_generate(hapgen_t *self);
-int hapgen_get_haplotype(hapgen_t *self, size_t j, char **haplotype);
+int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);
+size_t hapgen_get_num_segregating_sites(hapgen_t *self);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
 

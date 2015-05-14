@@ -288,6 +288,9 @@ class TreeSequence(object):
     def __init__(self, ll_tree_sequence):
         self._ll_tree_sequence = ll_tree_sequence
 
+    def get_ll_tree_sequence(self):
+        return self._ll_tree_sequence
+
     def print_state(self):
         print("TODO")
         # print("parameters = ")
@@ -377,6 +380,28 @@ class TreeSequence(object):
     def newick_trees(self, precision=3, all_breaks=False):
         return _msprime.NewickConverter(
             self._ll_tree_sequence, precision, all_breaks)
+
+class NewHaplotypeGenerator(object):
+
+    def __init__(self, tree_sequence, scaled_mutation_rate, random_seed=None):
+        self._tree_sequence = tree_sequence
+        self._sample_size = tree_sequence.get_sample_size()
+        self._random_seed = random_seed
+        self._scaled_mutation_rate = scaled_mutation_rate
+        if random_seed is None:
+            self._random_seed = random.randint(0, 2**31)
+        self._ll_haplotype_generator = _msprime.HaplotypeGenerator(
+                self._tree_sequence.get_ll_tree_sequence(),
+                self._scaled_mutation_rate, self._random_seed,
+                2**20)
+
+    def get_num_segregating_sites(self):
+        return self._ll_haplotype_generator.get_num_segregating_sites()
+
+    def haplotypes(self):
+        for j in range(1, self._sample_size + 1):
+            yield self._ll_haplotype_generator.get_haplotype(j)
+
 
 
 class HaplotypeGenerator(object):
