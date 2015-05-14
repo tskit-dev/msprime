@@ -22,6 +22,7 @@
 #include <assert.h>
 
 #include <gsl/gsl_math.h>
+#include <gsl/gsl_randist.h>
 
 #include "err.h"
 #include "object_heap.h"
@@ -75,6 +76,7 @@ hapgen_print_state(hapgen_t *self)
 
     printf("Hapgen state\n");
     printf("total branch length = %f\n", self->total_branch_length);
+    printf("segregating sites = %d\n", self->num_segregating_sites);
     printf("num_nodes = %d\n", avl_count(&self->tree));
     printf("root = %d\n", self->root == NULL? 0: self->root->id);
     for (avl_node = self->tree.head; avl_node != NULL; avl_node = avl_node->next) {
@@ -144,6 +146,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
     self->random_seed = random_seed;
     self->max_haplotype_length = max_haplotype_length;
     self->total_branch_length = 0.0;
+    self->num_segregating_sites = 0;
     self->rng = gsl_rng_alloc(gsl_rng_default);
     if (self->rng == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -173,6 +176,24 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
         avl_node = avl_insert_node(&self->tree, avl_node);
         assert(avl_node != NULL);
     }
+    /* set up the haplotypes */
+    self->haplotypes = malloc((n + 1) * sizeof(char *));
+    self->haplotype_mem = malloc(n * self->max_haplotype_length);
+    if (self->haplotypes == NULL || self->haplotype_mem == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    self->haplotypes[0] = NULL;
+    for (j = 1; j <= n; j++) {
+        self->haplotypes[j] = self->haplotype_mem
+            + (j - 1) * self->max_haplotype_length;
+    }
+    /* initialise all haplotypes to '0' */
+    memset(self->haplotype_mem, '0', n * self->max_haplotype_length);
+    self->traversal_stack = malloc(2 * n * sizeof(hapgen_tree_node_t));
+    if (self->traversal_stack == NULL) {
+        goto out;
+    }
     ret = 0;
 out:
     return ret;
@@ -186,6 +207,15 @@ hapgen_free(hapgen_t *self)
     }
     tree_diff_iterator_free(&self->diff_iterator);
     object_heap_free(&self->avl_node_heap);
+    if (self->haplotypes != NULL) {
+        free(self->haplotypes);
+    }
+    if (self->haplotype_mem != NULL) {
+        free(self->haplotype_mem);
+    }
+    if (self->traversal_stack != NULL) {
+        free(self->traversal_stack);
+    }
     return 0;
 }
 
@@ -277,7 +307,6 @@ hapgen_update_branch_lengths(hapgen_t *self, uint32_t node_id)
     avl_node_t *avl_node;
     hapgen_tree_node_t search, *node;
 
-    printf("updating branch lengts for %d\n", node_id);
     search.id = node_id;
     avl_node = avl_search(&self->tree, &search);
     assert(avl_node != NULL);
@@ -312,9 +341,100 @@ hapgen_update_root(hapgen_t *self)
     return 0;
 }
 
+/* Returns a branch chosen with probability equal to its relative length. */
+static hapgen_tree_node_t *
+hapgen_select_branch(hapgen_t *self)
+{
+    avl_node_t *avl_node = self->tree.head;
+    hapgen_tree_node_t *node = NULL;
+    hapgen_tree_node_t *ret = NULL;
+    double lhs = 0.0;
+    double rhs = 0.0;
+    double u = gsl_rng_uniform(self->rng);
+
+    /* Note that this might do better if we performed a top-down traversal
+     * of the tree rather than a random-ish walk around it, since the
+     * longest branches (and hence the most likely to be chosen) are near
+     * the root.
+     */
+    assert(avl_node != NULL);
+    do {
+        node = (hapgen_tree_node_t *) avl_node->item;
+        lhs = rhs;
+        rhs += node->branch_length / self->total_branch_length;
+        if (lhs < u && u < rhs) {
+            ret = node;
+        }
+        avl_node = avl_node->next;
+    } while (avl_node != NULL && ret == NULL);
+    return ret;
+}
+
+/* Adds a mutation on the branch above this node. This means adding
+ * a 1 to the end of all haplotypes below this node.
+ */
 static int
-hapgen_process_tree(hapgen_t *self, tree_node_t *nodes_out,
-        tree_node_t *nodes_in)
+hapgen_add_mutation(hapgen_t *self, hapgen_tree_node_t *node)
+{
+    int ret = -1;
+    hapgen_tree_node_t **stack = self->traversal_stack;
+    int stack_top = 0;
+    unsigned int j;
+    hapgen_tree_node_t *u;
+
+    if (self->num_segregating_sites >= self->max_haplotype_length - 1) {
+        ret = MSP_ERR_TOO_MANY_SEG_SITES;
+        goto out;
+    }
+    stack[0] = node;
+    while (stack_top >= 0) {
+        u = stack[stack_top];
+        stack_top--;
+        if (u->children[0] == NULL) {
+            /* leaf node */
+            assert(u->id >= 1 && u->id <= self->sample_size);
+            self->haplotypes[u->id][self->num_segregating_sites] = '1';
+        } else {
+            for (j = 0; j < 2; j++) {
+                stack_top++;
+                stack[stack_top] = u->children[j];
+            }
+        }
+    }
+    self->num_segregating_sites++;
+    ret = 0;
+out:
+    return ret;
+}
+
+static int
+hapgen_generate_mutations(hapgen_t *self, uint32_t length)
+{
+    int ret = -1;
+    unsigned int j;
+    double mu = (self->total_branch_length * self->mutation_rate * length)
+        / self->num_loci;
+    unsigned int num_mutations = gsl_ran_poisson(self->rng, 1.0 / mu);
+    hapgen_tree_node_t *node;
+
+    for (j = 0; j < num_mutations; j++) {
+        node = hapgen_select_branch(self);
+        if (node == NULL) {
+            goto out;
+        }
+        ret = hapgen_add_mutation(self, node);
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static int
+hapgen_process_tree(hapgen_t *self, uint32_t length,
+        tree_node_t *nodes_out, tree_node_t *nodes_in)
 {
     int ret = 0;
     tree_node_t *tree_node;
@@ -361,8 +481,7 @@ hapgen_process_tree(hapgen_t *self, tree_node_t *nodes_out,
         }
         tree_node = tree_node->next;
     }
-
-    /* ret = hapgen_update_subtrees(self); */
+    ret = hapgen_generate_mutations(self, length);
     if (ret != 0) {
         goto out;
     }
@@ -370,30 +489,40 @@ out:
     return ret;
 }
 
-
 int
-hapgen_next(hapgen_t *self, char **haplotype)
+hapgen_generate(hapgen_t *self)
 {
     int ret = -1;
-    int err;
-    uint32_t length;
+    uint32_t j, length;
     tree_node_t *nodes_out, *nodes_in;
 
-    ret = tree_diff_iterator_next(&self->diff_iterator, &length, &nodes_out,
-            &nodes_in);
-    if (ret < 0) {
-        goto out;
-    }
-    if (ret == 1) {
-        err = hapgen_process_tree(self, nodes_out, nodes_in);
-        if (err != 0) {
-            ret = err;
+    while ((ret = tree_diff_iterator_next(&self->diff_iterator,
+            &length, &nodes_out, &nodes_in)) == 1) {
+        ret = hapgen_process_tree(self, length, nodes_out, nodes_in);
+        if (ret != 0) {
             goto out;
         }
         assert(avl_count(&self->tree) == 2 * self->sample_size - 1);
-        hapgen_print_state(self);
     }
+    /* NULL terminate the haplotype strings. */
+    assert(self->num_segregating_sites < self->max_haplotype_length);
+    for (j = 1; j <= self->sample_size; j++) {
+        self->haplotypes[j][self->num_segregating_sites] = '\0';
+    }
+    ret = 0;
 out:
     return ret;
 }
 
+int
+hapgen_get_haplotype(hapgen_t *self, size_t j, char **haplotype)
+{
+    int ret = 0;
+    if (j < 1 || j > self->sample_size) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    *haplotype = self->haplotypes[j];
+out:
+    return ret;
+}

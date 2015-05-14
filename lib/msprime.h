@@ -208,10 +208,14 @@ typedef struct {
     size_t max_haplotype_length;
     hapgen_tree_node_t *root;
     gsl_rng *rng;
+    size_t num_segregating_sites;
     double total_branch_length;
     tree_diff_iterator_t diff_iterator;
     avl_tree_t tree;
     object_heap_t avl_node_heap;
+    char **haplotypes;
+    char *haplotype_mem;
+    hapgen_tree_node_t **traversal_stack;
 } hapgen_t;
 
 int msp_alloc(msp_t *self);
@@ -265,10 +269,10 @@ void newick_converter_print_state(newick_converter_t *self);
 int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
         double mutation_rate, unsigned long random_seed, 
         size_t max_haplotype_length);
-int hapgen_next(hapgen_t *self, char **haplotype);
+int hapgen_generate(hapgen_t *self);
+int hapgen_get_haplotype(hapgen_t *self, size_t j, char **haplotype);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
-
 
 const char * msp_strerror(int err);
 const char * msp_gsl_version(void);
