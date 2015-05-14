@@ -498,29 +498,43 @@ class TestTreeSequence(LowLevelTestCase):
     """
     Tests for the low-level interface for the TreeSequence.
     """
+    def test_file_errors(self):
+        ts1 = self.get_tree_sequence()
+        def loader(*args):
+            ts2 = _msprime.TreeSequence()
+            ts2.load(*args)
 
-    def test_dump(self):
-        ts = self.get_tree_sequence()
-        self.assertRaises(TypeError, ts.dump)
-        for bad_type in [1, None, [], {}]:
-            self.assertRaises(TypeError, ts.dump, bad_type)
-        # Try to dump to files we don't have access to or don't exist.
-        for f in ["/", "/test.hdf5", "/dir_does_not_exist/x.hdf5"]:
-            self.assertRaises(_msprime.LibraryError, ts.dump, f)
+        for func in [ts1.dump, loader]:
+            self.assertRaises(TypeError, func)
+            for bad_type in [1, None, [], {}]:
+                self.assertRaises(TypeError, func, bad_type)
+            # Try to dump/load files we don't have access to or don't exist.
+            for f in ["/", "/test.hdf5", "/dir_does_not_exist/x.hdf5"]:
+                self.assertRaises(_msprime.LibraryError, func, f)
+                try:
+                    func(f)
+                except _msprime.LibraryError as e:
+                    message = str(e)
+                    self.assertGreater(len(message), 0)
+            # use a long filename and make sure we don't overflow error
+            # buffers
+            f = "/" + 4000 * "x"
+            self.assertRaises(_msprime.LibraryError, func, f)
             try:
-                ts.dump(f)
+                func(f)
             except _msprime.LibraryError as e:
                 message = str(e)
-                self.assertGreater(len(message), 0)
-        # use a long filename and make sure we don't overflow error
-        # buffers
-        f = "/" + 4000 * "x"
-        self.assertRaises(_msprime.LibraryError, ts.dump, f)
-        try:
-            ts.dump(f)
-        except _msprime.LibraryError as e:
-            message = str(e)
-            self.assertLess(len(message), 1024)
+                self.assertLess(len(message), 1024)
+
+    def test_initial_state(self):
+        # Check the initial state for the dump and load operations.
+        ts = _msprime.TreeSequence()
+        self.assertRaises(ValueError, ts.dump, "/tmp/file")
+        ts = self.get_tree_sequence()
+        self.assertRaises(ValueError, ts.load, "/tmp/file")
+
+    def test_dump_format(self):
+        ts = self.get_tree_sequence()
         with tempfile.NamedTemporaryFile() as f:
             ts.dump(f.name)
             self.assertTrue(os.path.exists(f.name))
@@ -529,6 +543,19 @@ class TestTreeSequence(LowLevelTestCase):
         # 1. Use h5py to verify the structure of the file.
         # 2. Probably lots more.
 
+    def test_equality(self):
+        ts1 = self.get_tree_sequence()
+        with tempfile.NamedTemporaryFile() as f:
+            ts1.dump(f.name)
+            ts2 = _msprime.TreeSequence()
+            ts2.load(f.name)
+            self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
+            self.assertEqual(ts1.get_num_loci(), ts2.get_num_loci())
+            records1 = [
+                    ts1.get_record(j) for j in range(ts1.get_num_records())]
+            records2 = [
+                    ts2.get_record(j) for j in range(ts2.get_num_records())]
+            self.assertEqual(records1, records2)
 
 class TestNewickConverter(LowLevelTestCase):
     """

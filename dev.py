@@ -74,6 +74,7 @@ def check_sim(sim):
 
 
 def ll_main():
+
     j = 0
     while True:
     # if True:
@@ -129,6 +130,13 @@ def ll_main():
                 ts.dump(f)
             except _msprime.LibraryError as e:
                 pass
+        f = "tmp__NOBACKUP__/dev.hdf5"
+        ts.dump(f)
+        ts2 = _msprime.TreeSequence()
+        ts2.load(f)
+        records1 = [ts.get_record(j) for j in range(ts.get_num_records())]
+        records2 = [ts2.get_record(j) for j in range(ts2.get_num_records())]
+        assert records1 == records2
 
 
         # for r in ts.records():
