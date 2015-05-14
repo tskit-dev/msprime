@@ -188,6 +188,7 @@ print_haplotypes(tree_sequence_t *ts)
 {
     int ret = 0;
     hapgen_t *hg = calloc(1, sizeof(hapgen_t));
+    uint32_t j;
     char *haplotype;
 
     printf("haplotypes \n");
@@ -195,15 +196,20 @@ print_haplotypes(tree_sequence_t *ts)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = hapgen_alloc(hg, ts, 1.0, 1, 1000);
+    ret = hapgen_alloc(hg, ts, 1.0, 10, 65536);
     if (ret != 0) {
         goto out;
     }
-    while ((ret = hapgen_next(hg, &haplotype)) == 1) {
-        printf("haplotype : %s\n", "haplotype");
-    }
+    ret = hapgen_generate(hg);
     if (ret != 0) {
         goto out;
+    }
+    for (j = 1; j <= ts->sample_size; j++) {
+        ret = hapgen_get_haplotype(hg, j, &haplotype);
+        if (ret < 0) {
+            goto out;
+        }
+        printf("%d:%s\n", j, haplotype);
     }
 out:
     if (hg != NULL) {
