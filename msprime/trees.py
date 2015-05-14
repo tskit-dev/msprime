@@ -298,11 +298,11 @@ class TreeSequence(object):
         #     print(self._left[j], self._right[j], self._children[j],
         #             self._parent[j], self._time[j], sep="\t")
 
-    def dump(self, path):
+    def dump(self, path, zlib_compression=False):
         """
         Writes the tree sequence to the specified file path.
         """
-        self._ll_tree_sequence.dump(path)
+        self._ll_tree_sequence.dump(path, zlib_compression)
 
     @classmethod
     def load(cls, path):

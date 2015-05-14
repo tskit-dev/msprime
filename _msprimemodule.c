@@ -1016,14 +1016,19 @@ TreeSequence_dump(TreeSequence *self, PyObject *args)
     int err;
     char *path;
     PyObject *ret = NULL;
+    int zlib_compression = 0;
+    int flags = 0;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "s", &path)) {
+    if (!PyArg_ParseTuple(args, "s|i", &path, &zlib_compression)) {
         goto out;
     }
-    err = tree_sequence_dump(self->tree_sequence, path);
+    if (zlib_compression) {
+        flags = MSP_ZLIB_COMPRESSION;
+    }
+    err = tree_sequence_dump(self->tree_sequence, path, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1032,6 +1037,37 @@ TreeSequence_dump(TreeSequence *self, PyObject *args)
 out:
     return ret;
 }
+
+static PyObject *
+TreeSequence_load(TreeSequence *self, PyObject *args)
+{
+    int err;
+    char *path;
+    PyObject *ret = NULL;
+
+    if (self->tree_sequence != NULL) {
+        PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "s", &path)) {
+        goto out;
+    }
+    self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
+    if (self->tree_sequence == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
+    err = tree_sequence_load(self->tree_sequence, path);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
 
 
 static PyObject *
@@ -1162,6 +1198,8 @@ static PyMethodDef TreeSequence_methods[] = {
         "Creates a new TreeSequence from the specified simulator."},
     {"dump", (PyCFunction) TreeSequence_dump, METH_VARARGS,
         "Writes the tree sequence out to the specified path."},
+    {"load", (PyCFunction) TreeSequence_load, METH_VARARGS,
+        "Loads a tree sequence from the specified path."},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
         "Returns the record at the specified index."},
     {"get_breakpoints", (PyCFunction) TreeSequence_get_breakpoints,
