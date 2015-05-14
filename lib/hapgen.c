@@ -21,6 +21,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include <gsl/gsl_math.h>
+
 #include "err.h"
 #include "object_heap.h"
 #include "msprime.h"
@@ -40,6 +42,7 @@ hapgen_check_state(hapgen_t *self)
     avl_node_t *avl_node;
     hapgen_tree_node_t *node = NULL;
     hapgen_tree_node_t search;
+    double tbl = 0.0;
 
     assert(avl_count(&self->tree) == 2 * self->sample_size - 1);
     for (j = 1; j <= self->sample_size; j++) {
@@ -53,6 +56,14 @@ hapgen_check_state(hapgen_t *self)
         assert(node != NULL);
         assert(node == self->root);
     }
+    for (avl_node = self->tree.head; avl_node != NULL; avl_node = avl_node->next) {
+        node = (hapgen_tree_node_t *) avl_node->item;
+        tbl += node->branch_length;
+    }
+    if (gsl_fcmp(tbl, self->total_branch_length, 1e-8) != 0) {
+        printf("tbl %f\t%f\n", tbl, self->total_branch_length);
+        assert(tbl == self->total_branch_length);
+    }
 }
 
 void
@@ -63,6 +74,7 @@ hapgen_print_state(hapgen_t *self)
     size_t j;
 
     printf("Hapgen state\n");
+    printf("total branch length = %f\n", self->total_branch_length);
     printf("num_nodes = %d\n", avl_count(&self->tree));
     printf("root = %d\n", self->root == NULL? 0: self->root->id);
     for (avl_node = self->tree.head; avl_node != NULL; avl_node = avl_node->next) {
@@ -131,6 +143,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
     self->mutation_rate = mutation_rate;
     self->random_seed = random_seed;
     self->max_haplotype_length = max_haplotype_length;
+    self->total_branch_length = 0.0;
     self->rng = gsl_rng_alloc(gsl_rng_default);
     if (self->rng == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -215,6 +228,7 @@ hapgen_update_out_node(hapgen_t *self, uint32_t node_id)
     assert(avl_node != NULL);
     node = (hapgen_tree_node_t *) avl_node->item;
     for (j = 0; j < 2; j++) {
+        self->total_branch_length -= node->children[j]->branch_length;
         node->children[j] = NULL;
     }
     return ret;
@@ -249,11 +263,34 @@ hapgen_insert_node(hapgen_t *self, uint32_t node_id, uint32_t *children,
         child_node = (hapgen_tree_node_t *) avl_node->item;
         node->children[j] = child_node;
         child_node->parent = node;
-        child_node->branch_length = time - child_node->time;
     }
 out:
     return ret;
 }
+
+static int
+hapgen_update_branch_lengths(hapgen_t *self, uint32_t node_id)
+{
+    int ret = 0;
+    unsigned int j;
+    double bl;
+    avl_node_t *avl_node;
+    hapgen_tree_node_t search, *node;
+
+    printf("updating branch lengts for %d\n", node_id);
+    search.id = node_id;
+    avl_node = avl_search(&self->tree, &search);
+    assert(avl_node != NULL);
+    node = (hapgen_tree_node_t *) avl_node->item;
+    /* Update the parent pointers for the children */
+    for (j = 0; j < 2; j++) {
+        bl = node->time - node->children[j]->time;
+        node->children[j]->branch_length = bl;
+        self->total_branch_length += bl;
+    }
+    return ret;
+}
+
 
 static int
 hapgen_update_root(hapgen_t *self)
@@ -270,6 +307,7 @@ hapgen_update_root(hapgen_t *self)
     if (node->parent != NULL) {
         node->parent = NULL;
     }
+    node->branch_length = 0.0;
     self->root = node;
     return 0;
 }
@@ -314,6 +352,16 @@ hapgen_process_tree(hapgen_t *self, tree_node_t *nodes_out,
     if (ret != 0) {
         goto out;
     }
+    /* Update the new branch lengths */
+    tree_node = nodes_in;
+    while (tree_node != NULL) {
+        ret = hapgen_update_branch_lengths(self, tree_node->id);
+        if (ret != 0) {
+            goto out;
+        }
+        tree_node = tree_node->next;
+    }
+
     /* ret = hapgen_update_subtrees(self); */
     if (ret != 0) {
         goto out;
