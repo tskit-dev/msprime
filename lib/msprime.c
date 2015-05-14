@@ -34,17 +34,18 @@
 #include "fenwick.h"
 #include "msprime.h"
 
-#define HDF5_ERR_MSG_SIZE 1024
+#define MSP_HDF5_ERR_MSG_SIZE 1024
 
-static char _hdf5_error[HDF5_ERR_MSG_SIZE];
+static char _hdf5_error[MSP_HDF5_ERR_MSG_SIZE];
 
 static herr_t
 hdf5_error_walker(unsigned n, const H5E_error2_t *err_desc, void *client_data)
 {
     /* We only copy the message from the first element in the error stack */
     if (_hdf5_error[0] == '\0') {
-        strncpy(_hdf5_error, err_desc->desc, HDF5_ERR_MSG_SIZE);
-        _hdf5_error[HDF5_ERR_MSG_SIZE - 1] = '\0';
+        snprintf(_hdf5_error, MSP_HDF5_ERR_MSG_SIZE,
+                "HDF5 Error: %d: %d:'%s'",
+                err_desc->maj_num, err_desc->min_num, err_desc->desc);
     }
     return 0;
 }

@@ -32,6 +32,7 @@
 #define POP_MODEL_EXPONENTIAL 1
 
 #define MSP_ALL_BREAKPOINTS 1
+#define MSP_FILE_FORMAT_VERSION 1
 
 #define MAX_BRANCH_LENGTH_STRING 24
 
@@ -214,7 +215,8 @@ size_t msp_get_used_memory(msp_t *self);
 int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
 int tree_sequence_load(tree_sequence_t *self, const char *filename);
 int tree_sequence_free(tree_sequence_t *self);
-int tree_sequence_dump(tree_sequence_t *self, const char *filename);
+int tree_sequence_dump(tree_sequence_t *self, const char *filename, 
+        int flags);
 size_t tree_sequence_get_num_breakpoints(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
 int tree_sequence_get_record(tree_sequence_t *self, size_t index, 

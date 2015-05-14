@@ -138,51 +138,291 @@ out:
     return ret;
 }
 
+/* Reads the metadata for the overall file and updates the basic
+ * information in the tree_sequence.
+ */
 static int
-tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
+tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
 {
-    herr_t status = -1;
-    hid_t dataset_id, dataspace_id;
+    int ret = MSP_ERR_HDF5;
+    hid_t attr_id, dataspace_id;
+    herr_t status;
     int rank;
-    /* hsize_t dims[2]; */
+    hsize_t dims;
+    uint32_t version;
+    const char *prefixes[] = {"/", "/parameters", "/parameters"};
+    const char *names[] = {"format_version", "sample_size", "num_loci"};
+    size_t num_attrs = sizeof(prefixes) / sizeof(char *);
+    void *destinations[num_attrs];
+    unsigned int j;
 
+    destinations[0] = &version;
+    destinations[1] = &self->sample_size;
+    destinations[2] = &self->num_loci;
+    for (j = 0; j < num_attrs; j++) {
+        attr_id = H5Aopen_by_name(file_id, prefixes[j], names[j],
+                H5P_DEFAULT, H5P_DEFAULT);
+        if (attr_id < 0) {
+            goto out;
+        }
+        dataspace_id = H5Aget_space(attr_id);
+        if (dataspace_id < 0) {
+            goto out;
+        }
+        rank = H5Sget_simple_extent_ndims(dataspace_id);
+        if (rank != 1) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        status = H5Sget_simple_extent_dims(dataspace_id, &dims, NULL);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Aread(attr_id, H5T_NATIVE_UINT32, destinations[j]);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Sclose(dataspace_id);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Aclose(attr_id);
+        if (status < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static int
+tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
+{
+    int ret = MSP_ERR_HDF5;
+    hid_t dataset_id, dataspace_id;
+    herr_t status;
+    int rank;
+    hsize_t dims[2];
+    struct _dimension_check {
+        const char *name;
+        int dimensions;
+    };
+    struct _dimension_check fields[] = {
+        {"/records/left", 1},
+        {"/records/right", 1},
+        {"/records/node", 1},
+        {"/records/children", 2},
+        {"/records/time", 1},
+    };
+    size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
+    size_t j;
+
+    for (j = 0; j < num_fields; j++) {
+        dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
+        if (dataset_id < 0) {
+            goto out;
+        }
+        dataspace_id = H5Dget_space(dataset_id);
+        if (dataspace_id < 0) {
+            goto out;
+        }
+        rank = H5Sget_simple_extent_ndims(dataspace_id);
+        if (rank != fields[j].dimensions) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        status = H5Sget_simple_extent_dims(dataspace_id, dims, NULL);
+        if (status < 0) {
+            goto out;
+        }
+        if (dims[0] != self->num_records) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        status = H5Sclose(dataspace_id);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Dclose(dataset_id);
+        if (status < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Reads the dimensions for the breakpoints and records and mallocs
+ * space.
+ */
+static int
+tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
+{
+    int ret = MSP_ERR_HDF5;
+    hid_t dataset_id, dataspace_id;
+    herr_t status;
+    int rank;
+    hsize_t dims[2];
+
+    /* breakpoints */
     dataset_id = H5Dopen(file_id, "/breakpoints", H5P_DEFAULT);
     if (dataset_id < 0) {
         goto out;
     }
     dataspace_id = H5Dget_space(dataset_id);
-    if (dataset_id < 0) {
+    if (dataspace_id < 0) {
         goto out;
     }
     rank = H5Sget_simple_extent_ndims(dataspace_id);
     if (rank != 1) {
+        ret = MSP_ERR_FILE_FORMAT;
         goto out;
     }
-    /* TODO finish... */
-    /* status = H5Sget_simple_extent_dims(dataspace_id, dims, */
-   /* } */
+    status = H5Sget_simple_extent_dims(dataspace_id, dims, NULL);
+    if (status < 0) {
+        goto out;
+    }
+    self->num_breakpoints = (size_t) dims[0];
+    self->breakpoints = malloc(self->num_breakpoints * sizeof(uint32_t));
+    if (self->breakpoints == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    status = H5Sclose(dataspace_id);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Dclose(dataset_id);
+    if (status < 0) {
+        goto out;
+    }
+    /* For the records, we read the dims for left, and base the mallocs
+     * on this. We check the others after to make sure they have the
+     * same dimensions.
+     */
+    dataset_id = H5Dopen(file_id, "/records/left", H5P_DEFAULT);
+    if (dataset_id < 0) {
+        goto out;
+    }
+    dataspace_id = H5Dget_space(dataset_id);
+    if (dataspace_id < 0) {
+        goto out;
+    }
+    rank = H5Sget_simple_extent_ndims(dataspace_id);
+    if (rank != 1) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    status = H5Sget_simple_extent_dims(dataspace_id, dims, NULL);
+    if (status < 0) {
+        goto out;
+    }
+    self->num_records = (size_t) dims[0];
+    self->left = malloc(self->num_records * sizeof(uint32_t));
+    self->right = malloc(self->num_records * sizeof(uint32_t));
+    self->node = malloc(self->num_records * sizeof(uint32_t));
+    self->children = malloc(2 * self->num_records * sizeof(uint32_t));
+    self->time = malloc(self->num_records * sizeof(double));
+    if (self->left == NULL || self->right == NULL || self->node == NULL
+            || self->children == NULL || self->time == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    status = H5Sclose(dataspace_id);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Dclose(dataset_id);
+    if (status < 0) {
+        goto out;
+    }
+    ret = tree_sequence_check_hdf5_dimensions(self, file_id);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = 0;
 out:
-    return status;
+    return ret;
 }
 
+static int
+tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
+{
+    herr_t status;
+    int ret = MSP_ERR_HDF5;
+    hid_t dataset_id;
+    struct _hdf5_field_read {
+        const char *name;
+        hid_t type;
+        void *dest;
+    };
+    struct _hdf5_field_read fields[] = {
+        {"/breakpoints", H5T_NATIVE_UINT32, NULL},
+        {"/records/left", H5T_NATIVE_UINT32, NULL},
+        {"/records/right", H5T_NATIVE_UINT32, NULL},
+        {"/records/node", H5T_NATIVE_UINT32, NULL},
+        {"/records/children", H5T_NATIVE_UINT32, NULL},
+        {"/records/time", H5T_NATIVE_DOUBLE, NULL},
+    };
+    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
+    size_t j;
+
+    fields[0].dest = self->breakpoints;
+    fields[1].dest = self->left;
+    fields[2].dest = self->right;
+    fields[3].dest = self->node;
+    fields[4].dest = self->children;
+    fields[5].dest = self->time;
+
+    for (j = 0; j < num_fields; j++) {
+        dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
+        if (dataset_id < 0) {
+            goto out;
+        }
+        status = H5Dread(dataset_id, fields[j].type, H5S_ALL,
+                H5S_ALL, H5P_DEFAULT, fields[j].dest);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Dclose(dataset_id);
+        if (status < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
 
 int
 tree_sequence_load(tree_sequence_t *self, const char *filename)
 {
-    int ret = MSP_ERR_HDF5;
+    int ret = MSP_ERR_GENERIC;
     herr_t status;
     hid_t file_id;
 
     file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
     if (file_id < 0) {
+        ret = MSP_ERR_HDF5;
         goto out;
     }
-    status = tree_sequence_read_hdf5_data(self, file_id);
+    status = tree_sequence_read_hdf5_metadata(self, file_id);
     if (status < 0) {
+        goto out;
+    }
+    ret = tree_sequence_read_hdf5_dimensions(self, file_id);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_read_hdf5_data(self, file_id);
+    if (ret != 0) {
         goto out;
     }
     status = H5Fclose(file_id);
     if (status < 0) {
+        ret = MSP_ERR_HDF5;
         goto out;
     }
     ret = 0;
@@ -196,127 +436,139 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id)
     herr_t status = 0;
     hid_t group_id, dataset_id, dataspace_id;
     hsize_t dims[2];
+    struct _hdf5_field_read {
+        const char *name;
+        hid_t storage_type;
+        hid_t memory_type;
+        int dimensions;
+        size_t size;
+        void *source;
+    };
+    struct _hdf5_field_read fields[] = {
+        {"/breakpoints", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
+        {"/records/left", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
+        {"/records/right", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
+        {"/records/node", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
+        {"/records/children", H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, 0, NULL},
+        {"/records/time", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
+    };
+    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
+    size_t j;
 
-    /* Add the breakpoints dataset */
-    dims[0] = self->num_breakpoints;
-    dataspace_id = H5Screate_simple(1, dims, NULL);
+    fields[0].source = self->breakpoints;
+    fields[0].size = self->num_breakpoints;
+    fields[1].source = self->left;
+    fields[2].source = self->right;
+    fields[3].source = self->node;
+    fields[4].source = self->children;
+    fields[5].source = self->time;
+    for (j = 1; j < num_fields; j++) {
+        fields[j].size = self->num_records;
+    }
+    /* Create the records group */
+    group_id = H5Gcreate(file_id, "/records", H5P_DEFAULT, H5P_DEFAULT,
+            H5P_DEFAULT);
+    if (group_id < 0) {
+        goto out;
+    }
+    status = H5Gclose(group_id);
+    if (status < 0) {
+        goto out;
+    }
+    for (j = 0; j < num_fields; j++) {
+        dims[0] = fields[j].size;
+        dims[1] = 2; /* unused except for children */
+        dataspace_id = H5Screate_simple(fields[j].dimensions, dims, NULL);
+        if (dataspace_id < 0) {
+            status = dataspace_id;
+            goto out;
+        }
+        dataset_id = H5Dcreate2(file_id, fields[j].name,
+                fields[j].storage_type, dataspace_id, H5P_DEFAULT,
+                H5P_DEFAULT, H5P_DEFAULT);
+        if (dataset_id < 0) {
+            goto out;
+        }
+        status = H5Dwrite(dataset_id, fields[j].memory_type, H5S_ALL,
+                H5S_ALL, H5P_DEFAULT, fields[j].source);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Dclose(dataset_id);
+        if (status < 0) {
+            goto out;
+        }
+    }
+out:
+    return status;
+}
+
+static int
+tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
+{
+    herr_t status = -1;
+    hid_t attr_id, group_id, dataspace_id;
+    hsize_t dims = 1;
+    uint32_t version = MSP_FILE_FORMAT_VERSION;
+
+    struct _hdf5_metadata_write {
+        const char *name;
+        hid_t parent;
+        hid_t storage_type;
+        hid_t memory_type;
+        int dimensions;
+        size_t size;
+        void *source;
+    };
+    struct _hdf5_metadata_write fields[] = {
+        {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 1, NULL},
+        {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 1, NULL},
+        {"num_loci", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 1, NULL},
+    };
+    /* TODO random_seed, population_models, etc. */
+    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_write);
+    size_t j;
+
+    fields[0].source = &version;
+    fields[1].source = &self->sample_size;
+    fields[2].source = &self->num_loci;
+
+    dataspace_id = H5Screate_simple(1, &dims, NULL);
     if (dataspace_id < 0) {
         status = dataspace_id;
         goto out;
     }
-    dataset_id = H5Dcreate2(file_id, "/breakpoints", H5T_STD_U32LE,
-            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    if (dataset_id < 0) {
-        goto out;
-    }
-    status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
-            H5P_DEFAULT, self->breakpoints);
-    if (status < 0) {
-        goto out;
-    }
-    status = H5Dclose(dataset_id);
-    /* left, right, node_id and time share the same dimensions and are in the
-     * 'records' group.
-     */
-    dims[0] = self->num_records;
-    dataspace_id = H5Screate_simple(1, dims, NULL);
-    if (dataspace_id < 0) {
-        goto out;
-    }
-    group_id = H5Gcreate(file_id, "/records", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    /* make a group for the simulation parameters */
+    group_id = H5Gcreate(file_id, "/parameters", H5P_DEFAULT, H5P_DEFAULT,
+            H5P_DEFAULT);
     if (group_id < 0) {
         goto out;
     }
-    /* left */
-    dataset_id = H5Dcreate2(file_id, "/records/left", H5T_STD_U32LE,
-            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    if (dataset_id < 0) {
-        goto out;
+    fields[0].parent = file_id;
+    for (j = 1; j < num_fields; j++) {
+        fields[j].parent = group_id;
     }
-    status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
-            H5P_DEFAULT, self->left);
-    if (status < 0) {
-        goto out;
-    }
-    status = H5Dclose(dataset_id);
-    if (status < 0) {
-        goto out;
-    }
-    /* right */
-    dataset_id = H5Dcreate2(file_id, "/records/right", H5T_STD_U32LE,
-            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    if (dataset_id < 0) {
-        goto out;
-    }
-    status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
-            H5P_DEFAULT, self->right);
-    if (status < 0) {
-        goto out;
-    }
-    status = H5Dclose(dataset_id);
-    if (status < 0) {
-        goto out;
-    }
-    /* parent */
-    dataset_id = H5Dcreate2(file_id, "/records/parent", H5T_STD_U32LE,
-            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    if (dataset_id < 0) {
-        goto out;
-    }
-    status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
-            H5P_DEFAULT, self->node);
-    if (status < 0) {
-        goto out;
-    }
-    status = H5Dclose(dataset_id);
-    if (status < 0) {
-        goto out;
-    }
-    /* time */
-    dataset_id = H5Dcreate2(file_id, "/records/time", H5T_IEEE_F64LE,
-            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    if (dataset_id < 0) {
-        goto out;
-    }
-    status = H5Dwrite(dataset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
-            H5P_DEFAULT, self->time);
-    if (status < 0) {
-        goto out;
-    }
-    status = H5Dclose(dataset_id);
-    if (status < 0) {
-        goto out;
-    }
-    status = H5Sclose(dataspace_id);
-    if (status < 0) {
-        goto out;
-    }
-    /* children is a 2D array */
-    dims[0] = self->num_records;
-    dims[1] = 2;
-    dataspace_id = H5Screate_simple(2, dims, NULL);
-    if (dataspace_id < 0) {
-        goto out;
-    }
-    dataset_id = H5Dcreate2(file_id, "/records/children", H5T_STD_U32LE,
-            dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    if (dataset_id < 0) {
-        goto out;
-    }
-    status = H5Dwrite(dataset_id, H5T_NATIVE_UINT32, H5S_ALL, H5S_ALL,
-            H5P_DEFAULT, self->children);
-    if (status < 0) {
-        goto out;
-    }
-    status = H5Dclose(dataset_id);
-    if (status < 0) {
-        goto out;
-    }
-    status = H5Sclose(dataspace_id);
-    if (status < 0) {
-        goto out;
+    for (j = 0; j < num_fields; j++) {
+        attr_id = H5Acreate(fields[j].parent, fields[j].name,
+                fields[j].storage_type, dataspace_id, H5P_DEFAULT,
+                H5P_DEFAULT);
+        if (attr_id < 0) {
+            goto out;
+        }
+        status = H5Awrite(attr_id, fields[j].memory_type, fields[j].source);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Aclose(attr_id);
+        if (status < 0) {
+            goto out;
+        }
     }
     status = H5Gclose(group_id);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Sclose(dataspace_id);
     if (status < 0) {
         goto out;
     }
@@ -325,7 +577,7 @@ out:
 }
 
 int
-tree_sequence_dump(tree_sequence_t *self, const char *filename)
+tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
 {
     int ret = MSP_ERR_HDF5;
     herr_t status;
@@ -335,11 +587,14 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename)
     if (file_id < 0) {
         goto out;
     }
+    status = tree_sequence_write_hdf5_metadata(self, file_id);
+    if (status < 0) {
+        goto out;
+    }
     status = tree_sequence_write_hdf5_data(self, file_id);
     if (status < 0) {
         goto out;
     }
-
     status = H5Fclose(file_id);
     if (status < 0) {
         goto out;
