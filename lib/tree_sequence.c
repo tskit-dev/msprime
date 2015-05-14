@@ -431,10 +431,11 @@ out:
 }
 
 static int
-tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id)
+tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
 {
-    herr_t status = 0;
-    hid_t group_id, dataset_id, dataspace_id;
+    herr_t ret = -1;
+    herr_t status;
+    hid_t group_id, dataset_id, dataspace_id, plist_id;
     hsize_t dims[2];
     struct _hdf5_field_read {
         const char *name;
@@ -480,12 +481,39 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id)
         dims[1] = 2; /* unused except for children */
         dataspace_id = H5Screate_simple(fields[j].dimensions, dims, NULL);
         if (dataspace_id < 0) {
-            status = dataspace_id;
+            goto out;
+        }
+        plist_id = H5Pcreate(H5P_DATASET_CREATE);
+        if (plist_id < 0) {
+            goto out;
+        }
+        /* Set the chunk size to the full size of the dataset since we
+         * always read the full thing.
+         */
+        status = H5Pset_chunk(plist_id, fields[j].dimensions, dims);
+        if (status < 0) {
+            goto out;
+        }
+        if (flags & MSP_ZLIB_COMPRESSION) {
+            /* Turn on byte shuffling to improve compression */
+            status = H5Pset_shuffle(plist_id);
+            if (status < 0) {
+                goto out;
+            }
+            /* Set zlib compression at level 9 (best compression) */
+            status = H5Pset_deflate(plist_id, 9);
+            if (status < 0) {
+                goto out;
+            }
+        }
+        /* Turn on Fletcher32 checksums for integrity checks */
+        status = H5Pset_fletcher32(plist_id);
+        if (status < 0) {
             goto out;
         }
         dataset_id = H5Dcreate2(file_id, fields[j].name,
                 fields[j].storage_type, dataspace_id, H5P_DEFAULT,
-                H5P_DEFAULT, H5P_DEFAULT);
+                plist_id, H5P_DEFAULT);
         if (dataset_id < 0) {
             goto out;
         }
@@ -498,9 +526,14 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id)
         if (status < 0) {
             goto out;
         }
+        status = H5Pclose(plist_id);
+        if (status < 0) {
+            goto out;
+        }
     }
+    ret = 0;
 out:
-    return status;
+    return ret;
 }
 
 static int
@@ -591,7 +624,7 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
     if (status < 0) {
         goto out;
     }
-    status = tree_sequence_write_hdf5_data(self, file_id);
+    status = tree_sequence_write_hdf5_data(self, file_id, flags);
     if (status < 0) {
         goto out;
     }
