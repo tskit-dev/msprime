@@ -184,6 +184,39 @@ read_config(msp_t *msp, const char *filename)
 }
 
 static void
+print_haplotypes(tree_sequence_t *ts)
+{
+    int ret = 0;
+    hapgen_t *hg = calloc(1, sizeof(hapgen_t));
+    char *haplotype;
+
+    printf("haplotypes \n");
+    if (hg == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = hapgen_alloc(hg, ts, 1.0, 1, 1000);
+    if (ret != 0) {
+        goto out;
+    }
+    while ((ret = hapgen_next(hg, &haplotype)) == 1) {
+        printf("haplotype : %s\n", "haplotype");
+    }
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    if (hg != NULL) {
+        hapgen_free(hg);
+        free(hg);
+    }
+    if (ret != 0) {
+        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
+    }
+}
+
+
+static void
 print_newick_trees(tree_sequence_t *ts)
 {
     int ret = 0;
@@ -327,20 +360,21 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_dump(tree_seq, "test.hdf5", 0);
-    if (ret != 0) {
-        goto out;
-    }
-    tree_sequence_free(tree_seq);
-    memset(tree_seq, 0, sizeof(tree_sequence_t));
-    ret = tree_sequence_load(tree_seq, "test.hdf5");
-    if (ret != 0) {
-        goto out;
-    }
-    print_tree_sequence(tree_seq);
     if (0) {
+        ret = tree_sequence_dump(tree_seq, "test.hdf5", 0);
+        if (ret != 0) {
+            goto out;
+        }
+        tree_sequence_free(tree_seq);
+        memset(tree_seq, 0, sizeof(tree_sequence_t));
+        ret = tree_sequence_load(tree_seq, "test.hdf5");
+        if (ret != 0) {
+            goto out;
+        }
+        print_tree_sequence(tree_seq);
         print_newick_trees(tree_seq);
     }
+    print_haplotypes(tree_seq);
 out:
     if (msp != NULL) {
         msp_free(msp);

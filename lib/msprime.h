@@ -192,6 +192,27 @@ typedef struct {
     object_heap_t avl_node_heap;
 } newick_converter_t;
 
+typedef struct hapgen_tree_node {
+    uint32_t id;
+    double time;
+    struct hapgen_tree_node *parent;
+    struct hapgen_tree_node *children[2];
+    double branch_length;
+} hapgen_tree_node_t;
+
+typedef struct {
+    uint32_t sample_size;
+    uint32_t num_loci;
+    unsigned long random_seed;
+    double mutation_rate;
+    size_t max_haplotype_length;
+    hapgen_tree_node_t *root;
+    gsl_rng *rng;
+    tree_diff_iterator_t diff_iterator;
+    avl_tree_t tree;
+    object_heap_t avl_node_heap;
+} hapgen_t;
+
 int msp_alloc(msp_t *self);
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
@@ -239,6 +260,14 @@ int newick_converter_next(newick_converter_t *self, uint32_t *length,
         char **tree);
 int newick_converter_free(newick_converter_t *self);
 void newick_converter_print_state(newick_converter_t *self);
+
+int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
+        double mutation_rate, unsigned long random_seed, 
+        size_t max_haplotype_length);
+int hapgen_next(hapgen_t *self, char **haplotype);
+int hapgen_free(hapgen_t *self);
+void hapgen_print_state(hapgen_t *self);
+
 
 const char * msp_strerror(int err);
 const char * msp_gsl_version(void);
