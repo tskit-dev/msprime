@@ -44,7 +44,8 @@ d = "lib/"
 _msprime_module = Extension('_msprime',
     sources=[
         "_msprimemodule.c", d + "msprime.c", d + "fenwick.c", d + "avl.c",
-        d + "tree_sequence.c", d + "object_heap.c", d + "newick.c"],
+        d + "tree_sequence.c", d + "object_heap.c", d + "newick.c",
+        d + "hapgen.c"],
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
     # We define this macro to ensure we're using the v18 versions of the

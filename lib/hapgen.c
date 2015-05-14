@@ -515,7 +515,7 @@ out:
 }
 
 int
-hapgen_get_haplotype(hapgen_t *self, size_t j, char **haplotype)
+hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype)
 {
     int ret = 0;
     if (j < 1 || j > self->sample_size) {
@@ -525,4 +525,10 @@ hapgen_get_haplotype(hapgen_t *self, size_t j, char **haplotype)
     *haplotype = self->haplotypes[j];
 out:
     return ret;
+}
+
+size_t
+hapgen_get_num_segregating_sites(hapgen_t *self)
+{
+    return self->num_segregating_sites;
 }

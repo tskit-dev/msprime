@@ -315,7 +315,7 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         ts.set_num_loci(m)
         tree_sequence = ts.run()
         hg = msprime.HaplotypeGenerator(tree_sequence, theta)
-        haplotypes = list(hg.haplotype_strings())
+        haplotypes = list(hg.haplotypes())
         for h in haplotypes:
             self.assertEqual(len(h), hg.get_num_segregating_sites())
         self.verify_haplotypes(n, haplotypes)
