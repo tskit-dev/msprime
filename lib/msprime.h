@@ -208,6 +208,7 @@ typedef struct {
     size_t max_haplotype_length;
     hapgen_tree_node_t *root;
     gsl_rng *rng;
+    double total_branch_length;
     tree_diff_iterator_t diff_iterator;
     avl_tree_t tree;
     object_heap_t avl_node_heap;
