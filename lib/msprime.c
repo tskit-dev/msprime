@@ -79,6 +79,8 @@ msp_strerror(int err)
         ret = "Links Overflow occured.";
     } else if (err == MSP_ERR_OUT_OF_BOUNDS) {
         ret = "Array index out of bounds";
+    } else if (err == MSP_ERR_UNSUPPORTED_FILE_VERSION) {
+        ret = "Unsupported file format version.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);

@@ -149,18 +149,28 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     herr_t status;
     int rank;
     hsize_t dims;
-    uint32_t version;
-    const char *prefixes[] = {"/", "/parameters", "/parameters"};
-    const char *names[] = {"format_version", "sample_size", "num_loci"};
-    size_t num_attrs = sizeof(prefixes) / sizeof(char *);
-    void *destinations[num_attrs];
-    unsigned int j;
+    int32_t version[2];
+    struct _hdf5_metadata_read {
+        const char *prefix;
+        const char *name;
+        hid_t memory_type;
+        int dimensions;
+        size_t size;
+        void *dest;
+    };
+    struct _hdf5_metadata_read fields[] = {
+        {"/", "format_version", H5T_NATIVE_UINT32, 1, 2, NULL},
+        {"/parameters", "sample_size", H5T_NATIVE_UINT32, 1, 1, NULL},
+        {"/parameters", "num_loci", H5T_NATIVE_UINT32, 1, 1, NULL},
+    };
+    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_read);
+    size_t j;
 
-    destinations[0] = &version;
-    destinations[1] = &self->sample_size;
-    destinations[2] = &self->num_loci;
-    for (j = 0; j < num_attrs; j++) {
-        attr_id = H5Aopen_by_name(file_id, prefixes[j], names[j],
+    fields[0].dest = version;
+    fields[1].dest = &self->sample_size;
+    fields[2].dest = &self->num_loci;
+    for (j = 0; j < num_fields; j++) {
+        attr_id = H5Aopen_by_name(file_id, fields[j].prefix, fields[j].name,
                 H5P_DEFAULT, H5P_DEFAULT);
         if (attr_id < 0) {
             goto out;
@@ -178,7 +188,11 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         if (status < 0) {
             goto out;
         }
-        status = H5Aread(attr_id, H5T_NATIVE_UINT32, destinations[j]);
+        if (dims != fields[j].size) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        status = H5Aread(attr_id, H5T_NATIVE_UINT32, fields[j].dest);
         if (status < 0) {
             goto out;
         }
@@ -190,6 +204,11 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         if (status < 0) {
             goto out;
         }
+    }
+    /* Sanity check */
+    if (version[0] != MSP_FILE_FORMAT_VERSION_MAJOR) {
+        ret = MSP_ERR_UNSUPPORTED_FILE_VERSION;
+        goto out;
     }
     ret = 0;
 out:
@@ -542,7 +561,8 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     herr_t status = -1;
     hid_t attr_id, group_id, dataspace_id;
     hsize_t dims = 1;
-    uint32_t version = MSP_FILE_FORMAT_VERSION;
+    uint32_t version[2] = {
+        MSP_FILE_FORMAT_VERSION_MAJOR, MSP_FILE_FORMAT_VERSION_MINOR};
 
     struct _hdf5_metadata_write {
         const char *name;
@@ -554,7 +574,7 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         void *source;
     };
     struct _hdf5_metadata_write fields[] = {
-        {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 1, NULL},
+        {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 2, NULL},
         {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 1, NULL},
         {"num_loci", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 1, NULL},
     };
@@ -562,15 +582,10 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_write);
     size_t j;
 
-    fields[0].source = &version;
+    fields[0].source = version;
     fields[1].source = &self->sample_size;
     fields[2].source = &self->num_loci;
 
-    dataspace_id = H5Screate_simple(1, &dims, NULL);
-    if (dataspace_id < 0) {
-        status = dataspace_id;
-        goto out;
-    }
     /* make a group for the simulation parameters */
     group_id = H5Gcreate(file_id, "/parameters", H5P_DEFAULT, H5P_DEFAULT,
             H5P_DEFAULT);
@@ -582,6 +597,12 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         fields[j].parent = group_id;
     }
     for (j = 0; j < num_fields; j++) {
+        dims = fields[j].size;
+        dataspace_id = H5Screate_simple(1, &dims, NULL);
+        if (dataspace_id < 0) {
+            status = dataspace_id;
+            goto out;
+        }
         attr_id = H5Acreate(fields[j].parent, fields[j].name,
                 fields[j].storage_type, dataspace_id, H5P_DEFAULT,
                 H5P_DEFAULT);
@@ -596,16 +617,16 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         if (status < 0) {
             goto out;
         }
+        status = H5Sclose(dataspace_id);
+        if (status < 0) {
+            goto out;
+        }
     }
     status = H5Gclose(group_id);
     if (status < 0) {
         goto out;
     }
-    status = H5Sclose(dataspace_id);
-    if (status < 0) {
-        goto out;
-    }
-out:
+ out:
     return status;
 }
 

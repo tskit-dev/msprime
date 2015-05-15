@@ -366,7 +366,7 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    if (0) {
+    if (1) {
         ret = tree_sequence_dump(tree_seq, "test.hdf5", 0);
         if (ret != 0) {
             goto out;
