@@ -65,7 +65,6 @@ setup(
         ]
     },
     install_requires=[],
-    test_requires=["numpy", "h5py"],
     ext_modules = [_msprime_module],
     keywords = ["Coalescent simulation", "ms"],
     license = "GNU LGPLv3+",

@@ -344,27 +344,27 @@ class TreeSequence(object):
         iterator = self.diffs()
         length, records_out, records_in = next(iterator)
         assert len(records_out) == 0
-        for children, parent, time in records_in:
-            tau[parent] = time
-            pi[parent] = 0
+        for node, children, time in records_in:
+            tau[node] = time
+            pi[node] = 0
             for c in children:
-                pi[c] = parent
+                pi[c] = node
         yield length, pi, tau
-        root = parent
+        root = node
         del pi[root]
 
         for length, records_out, records_in in iterator:
             # print("ROOT = ", root)
-            for children, parent, time in records_out:
-                # print("OUT:", children, parent,time, sep="\t")
-                del tau[parent]
+            for node, children, time in records_out:
+                # print("OUT:", children, node,time, sep="\t")
+                del tau[node]
                 for c in children:
                     del pi[c]
-            for children, parent, time in records_in:
-                # print("IN :", children, parent,time, sep="\t")
-                tau[parent] = time
+            for node, children, time in records_in:
+                # print("IN :", children, node,time, sep="\t")
+                tau[node] = time
                 for c in children:
-                    pi[c] = parent
+                    pi[c] = node
             # TODO this is a O(h) operation per tree, which seems
             # unneccessary. However, I can't seem to see a clean way to
             # keep track of the root using these records...

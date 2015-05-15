@@ -21,16 +21,16 @@ def sparse_tree_to_newick(pi, tau, precision):
     c = {}
     branch_lengths = {}
     root = 1
-    for child, parent in pi.items():
-        if parent == 0:
+    for child, node in pi.items():
+        if node == 0:
             root = child
         else:
-            if parent in c:
-                c[parent].append(child)
-                c[parent] = sorted(c[parent])
+            if node in c:
+                c[node].append(child)
+                c[node] = sorted(c[node])
             else:
-                c[parent] = [child]
-            s = "{0:.{1}f}".format(tau[parent] - tau[child], precision)
+                c[node] = [child]
+            s = "{0:.{1}f}".format(tau[node] - tau[child], precision)
             branch_lengths[child] = s
     return _build_newick(root, root, c, branch_lengths)
 
@@ -73,7 +73,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         # check the records are in the right form.
         last_l = 0
         last_t = 0
-        for l, r, children, parent, t in tree_sequence.records():
+        for l, r, children, node, t in tree_sequence.records():
             self.assertGreaterEqual(l, last_l)
             if last_l != l:
                 last_t = 0.0
@@ -96,10 +96,10 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         # before we update.
         pi = {}
         tau = {j:0 for j in range(1, n + 1)}
-        for children, parent, t in records_in:
-            pi[children[0]] = parent
-            pi[children[1]] = parent
-            tau[parent] = t
+        for node, children, t in records_in:
+            pi[children[0]] = node
+            pi[children[1]] = node
+            tau[node] = t
         # insert the root
         v = 1
         while v in pi:
@@ -116,14 +116,14 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertGreaterEqual(l, 1)
             self.assertEqual(len(records_out), len(records_in))
             # Update the sparse tree
-            for children, parent, time in records_out:
+            for node, children, time in records_out:
                 for c in children:
                     del pi[c]
-                del tau[parent]
-            for children, parent, time in records_in:
+                del tau[node]
+            for node, children, time in records_in:
                 for c in children:
-                    pi[c] = parent
-                tau[parent] = time
+                    pi[c] = node
+                tau[node] = time
             v = 1
             while v in pi:
                 v = pi[v]

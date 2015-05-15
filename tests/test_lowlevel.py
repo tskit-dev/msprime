@@ -51,14 +51,14 @@ class PythonTreeSequence(object):
         left = 0
         used_records = collections.defaultdict(list)
         records_in = []
-        for l, r, children, parent, t in self.records():
+        for l, r, node, children, t in self.records():
             if l != left:
                 yield l - left, used_records[left], records_in
                 del used_records[left]
                 records_in = []
                 left = l
-            used_records[r].append((children, parent, t))
-            records_in.append((children, parent, t))
+            used_records[r].append((node, children, t))
+            records_in.append((node, children, t))
         yield r - left, used_records[left], records_in
 
     def _diffs_with_breaks(self):
@@ -145,7 +145,7 @@ class TestInterface(LowLevelTestCase):
         self.assertEqual(breakpoints[-1], m)
         records = sim.get_coalescence_records()
         self.assertEqual(len(records), sim.get_num_coalescence_records())
-        for l, r, children, p, t in records:
+        for l, r, p, children, t in records:
             self.assertEqual(children, tuple(sorted(children)))
             self.assertTrue(0 <= l < m)
             self.assertTrue(1 <= r <= m)
@@ -188,7 +188,7 @@ class TestInterface(LowLevelTestCase):
         last_t = 0
         num_trees = 0
         live_segments = []
-        for l, r, children, parent, t in sorted_records:
+        for l, r, node, children, t in sorted_records:
             if last_l != l:
                 last_l = l
                 last_t = 0
@@ -204,15 +204,15 @@ class TestInterface(LowLevelTestCase):
                 num_trees += 1
             else:
                 last_t = t
-            heapq.heappush(live_segments, (r, (children, parent)))
+            heapq.heappush(live_segments, (r, (children, node)))
             while live_segments[0][0] <= l:
                 x, (other_children, p) = heapq.heappop(live_segments)
                 for c in other_children:
                     del pi[c]
                 del tau[p]
-            pi[children[0]] = parent
-            pi[children[1]] = parent
-            tau[parent] = t
+            pi[children[0]] = node
+            pi[children[1]] = node
+            tau[node] = t
             # Ensure that records are sorted by time within a block
             self.assertLessEqual(last_t, t)
         for j in range(1, n + 1):
@@ -260,9 +260,9 @@ class TestInterface(LowLevelTestCase):
         self.assertGreater(len(records), 0)
         self.assertEqual(len(records), sim.get_num_coalescence_records())
         # Records should be in nondecreasing time order
-        times = [t for l, r, children, parent, t in records]
+        times = [t for l, r, node, children, t in records]
         # Children should always be sorted in order.
-        for _, _, children, _, _ in records:
+        for _, _, _, children, _ in records:
             self.assertEqual(children, tuple(sorted(children)))
         self.assertEqual(times, sorted(times))
         self.assertEqual(times[-1], sim.get_time())
@@ -366,10 +366,10 @@ class TestInterface(LowLevelTestCase):
                 self.assertGreaterEqual(l, 0)
                 self.assertGreaterEqual(l, 0)
                 self.assertEqual(len(records_out), len(records_in))
-                for children, parent, time in records_out + records_in:
+                for node, children, time in records_out + records_in:
                     for c in children:
                         self.assertGreater(c, 0)
-                        self.assertGreater(parent, c)
+                        self.assertGreater(node, c)
                         self.assertGreater(time, 0.0)
             # Compare with the Python implementation.
             pts = PythonTreeSequence(tree_sequence)
