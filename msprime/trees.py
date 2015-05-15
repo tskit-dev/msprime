@@ -381,7 +381,7 @@ class TreeSequence(object):
         return _msprime.NewickConverter(
             self._ll_tree_sequence, precision, all_breaks)
 
-class NewHaplotypeGenerator(object):
+class HaplotypeGenerator(object):
 
     def __init__(self, tree_sequence, scaled_mutation_rate, random_seed=None):
         self._tree_sequence = tree_sequence
@@ -404,7 +404,7 @@ class NewHaplotypeGenerator(object):
 
 
 
-class HaplotypeGenerator(object):
+class OldHaplotypeGenerator(object):
     """
     Class that takes a TreeSequence and a recombination rate and builds a set
     of haplotypes consistent with the underlying trees.

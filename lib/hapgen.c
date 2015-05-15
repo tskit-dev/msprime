@@ -76,7 +76,7 @@ hapgen_print_state(hapgen_t *self)
 
     printf("Hapgen state\n");
     printf("total branch length = %f\n", self->total_branch_length);
-    printf("segregating sites = %d\n", self->num_segregating_sites);
+    printf("segregating sites = %d\n", (int) self->num_segregating_sites);
     printf("num_nodes = %d\n", avl_count(&self->tree));
     printf("root = %d\n", self->root == NULL? 0: self->root->id);
     for (avl_node = self->tree.head; avl_node != NULL; avl_node = avl_node->next) {
@@ -414,7 +414,7 @@ hapgen_generate_mutations(hapgen_t *self, uint32_t length)
     unsigned int j;
     double mu = (self->total_branch_length * self->mutation_rate * length)
         / self->num_loci;
-    unsigned int num_mutations = gsl_ran_poisson(self->rng, 1.0 / mu);
+    unsigned int num_mutations = gsl_ran_poisson(self->rng, mu);
     hapgen_tree_node_t *node;
 
     for (j = 0; j < num_mutations; j++) {
