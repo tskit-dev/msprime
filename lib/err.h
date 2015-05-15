@@ -44,6 +44,7 @@
 #define MSP_ERR_LINKS_OVERFLOW -12
 #define MSP_ERR_HDF5 -13
 #define MSP_ERR_OUT_OF_BOUNDS -14
+#define MSP_ERR_UNSUPPORTED_FILE_VERSION -15
 
 
 #endif /*__ERR_H__*/
