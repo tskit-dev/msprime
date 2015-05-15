@@ -350,30 +350,6 @@ def large_sim():
     #     print(l, r, c1, c2, p, t, sep="\t")
     # msprime.sort_tree_file()
 
-def print_tree_records(treefile):
-    tf = msprime.TreeFile(treefile)
-    for l, r, c1, c2, p, t in tf.records():
-        print(l, r, c1, c2, p, t, sep="\t")
-
-def sort_tree(f):
-    tf = msprime.TreeFile(f)
-    print(tf.issorted())
-    msprime.sort_tree_file(f)
-
-def print_tree(f):
-    tf = msprime.TreeFile(f)
-    print(tf.issorted())
-    print(tf.get_metadata())
-    j = 0
-    t = 0
-    for l, pi, tau in tf:
-        j += 1
-        t += l
-        # print(l, pi, tau)
-    print(j)
-    print(t)
-
-
 def memory_test():
     while True:
         n = random.randint(2, 100)
@@ -551,26 +527,20 @@ def make_tree_visualisation(pi, tau, out, max_time):
             print(s, file=out)
             u = pi[u]
 
-def print_tree_file(tree_file_name):
-    tf = msprime.TreeFile(tree_file_name)
-    if not tf.issorted():
-        msprime.sort_tree_file(tree_file_name)
-        tf = msprime.TreeFile(tree_file_name)
-    metadata = json.loads(tf.get_metadata())
-    # print(metadata)
-    n = metadata["sample_size"]
-    # for l, r, c1, c2, p, t in tf.records():
-    #     print(l, r, c1, c2, p, t, sep="\t")
-    count = 0
-    # for l, pi, tau in tf.sparse_trees():
-    for l, r, c1, c2, p, t in tf.records():
-        # print(l, pi, tau)
-        # print(l, len(pi))
-        count += 1
-    print(count)
+def print_tree_file(filename):
+    ts = msprime.TreeSequence.load(filename)
+    for l, r, node, (c1, c2), t in ts.records():
+        print(l, r, node, c1, c2, t, sep="\t")
 
-    # for r in msprime.TreeFile(tree_file_name).records():
-    #     print(r)
+def dump_simulation(filename, n=10, m=100):
+    sim = msprime.TreeSimulator(n)
+    sim.set_num_loci(m)
+    sim.set_scaled_recombination_rate(1)
+    for l, r, node, children, time in sim.records():
+        print(l, r, node, children, time, sep="\t")
+    # ts = sim.run()
+    # ts.dump(filename)
+
 
 class VerifyTrees(unittest.TestCase):
 
@@ -650,17 +620,15 @@ class VerifyTrees(unittest.TestCase):
 
 if __name__ == "__main__":
     # unittest.main()
+    dump_simulation(sys.argv[1])
     # print_tree_file(sys.argv[1])
     # analyse_records(sys.argv[1])
     # edit_visualisation()
     # mutation_dev()
     # example1()
     # hl_main()
-    ll_main()
+    # ll_main()
     # print_newick(sys.argv[1])
     # memory_test()
     # large_sim()
-    # print_tree_records(sys.argv[1])
-    # sort_tree("tmp__NOBACKUP__/large_tree.dat")
-    # print_tree("tmp__NOBACKUP__/large_tree.dat")
 

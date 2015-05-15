@@ -77,6 +77,15 @@ handle_input_error(const char *err)
     PyErr_SetString(MsprimeInputError, err);
 }
 
+static PyObject *
+convert_coalescence_record(coalescence_record_t *cr)
+{
+    return Py_BuildValue("III(II)d",
+            (unsigned int) cr->left, (unsigned int) cr->right,
+            (unsigned int) cr->node, (unsigned int) cr->children[0],
+            (unsigned int) cr->children[1], cr->time);
+}
+
 /*
  * Retrieves a number value with the specified key from the specified
  * dictionary.
@@ -734,10 +743,7 @@ Simulator_get_coalescence_records(Simulator *self, PyObject *args)
     }
     for (j = 0; j < num_coalescence_records; j++) {
         cr = &coalescence_records[j];
-        py_cr = Py_BuildValue("II(II)Id", (unsigned int) cr->left,
-                (unsigned int) cr->right, (unsigned int) cr->children[0],
-                (unsigned int) cr->children[1], (unsigned int) cr->node,
-                cr->time);
+        py_cr = convert_coalescence_record(cr);
         if (py_cr == NULL) {
             Py_DECREF(l);
             goto out;
@@ -1102,9 +1108,7 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    ret = Py_BuildValue("II(II)Id", (unsigned int) cr.left, (unsigned int) cr.right,
-            (unsigned int) cr.children[0], (unsigned int) cr.children[1],
-            (unsigned int) cr.node, cr.time);
+    ret = convert_coalescence_record(&cr);
 out:
     return ret;
 }
@@ -1365,8 +1369,9 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         node = nodes_out;
         j = 0;
         while (node != NULL) {
-            value = Py_BuildValue("(II)Id", (unsigned int) node->children[0],
-                    (unsigned int) node->children[1], node->id, node->time);
+            value = Py_BuildValue("I(II)d", (unsigned int) node->id,
+                    (unsigned int) node->children[0],
+                    (unsigned int) node->children[1], node->time);
             if (value == NULL) {
                 goto out;
             }
@@ -1388,8 +1393,9 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         node = nodes_in;
         j = 0;
         while (node != NULL) {
-            value = Py_BuildValue("(II)Id", (unsigned int) node->children[0],
-                    (unsigned int) node->children[1], node->id, node->time);
+            value = Py_BuildValue("I(II)d", (unsigned int) node->id,
+                    (unsigned int) node->children[0],
+                    (unsigned int) node->children[1], node->time);
             if (value == NULL) {
                 goto out;
             }
