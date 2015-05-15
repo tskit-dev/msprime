@@ -19,6 +19,8 @@ import subprocess
 import numpy as np
 import numpy.random
 
+import statsmodels.api as sm
+
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
@@ -166,7 +168,7 @@ def hl_main():
     n = 5
     sim = msprime.TreeSimulator(n)
     sim.set_random_seed(1)
-    sim.set_num_loci(10000)
+    sim.set_num_loci(100)
     sim.set_scaled_recombination_rate(0.1)
     sim.set_max_memory("10G")
     models = [
@@ -178,35 +180,29 @@ def hl_main():
         sim.add_population_model(m)
 
     tree_sequence = sim.run()
-    # tree_sequence.dump(treefile)
-    # tree_sequence.print_state()
-    # for l, newick in tree_sequence.newick_trees(all_breaks=True):
-    #     print(newick)
-    # for l, records_out, records_in in tree_sequence.diffs(True):
-    #     print("\tlength = ", l)
-    #     print("\tin  = ", records_in)
-    #     print("\tout = ", records_out)
-    # for r in tree_sequence.diffs():
-    #     print(*r, sep="\t")
-    # for l, pi, tau in tree_sequence.sparse_trees():
-    #     # print(l, pi, tau, sep="\t")
-    #     # print(len(pi), len(tau))
-    #     assert len(pi) == len(tau)
-    #     roots = []
-    #     for j in range(1, n + 1):
-    #         v = j
-    #         while pi[v] != 0:
-    #             v = pi[v]
-    #         roots.append(v)
-    #     assert len(set(roots)) == 1
-
-    # # ts = msprime.TreeSequence.load(treefile)
-    # print("after")
-    # ts.print_state()
-    # haplotype_generator = msprime.HaplotypeGenerator(tree_sequence, 116.1)
-    # for h in haplotype_generator.haplotype_strings():
-    #     print(h)
-    ibf = msprime.IdentityBlockFinder(tree_sequence)
+    hg = msprime.HaplotypeGenerator(tree_sequence, 116.1,
+            random_seed=1)
+    for j in range(1, n + 1):
+        print(hg.get_haplotype(j))
+    """
+    N = 10000
+    s = np.zeros(N)
+    cs = np.zeros(N)
+    for j in range(N):
+        hg = msprime.CHaplotypeGenerator(tree_sequence, 116.1,
+                random_seed=j)
+        cs[j] = hg.get_num_segregating_sites()
+        hg = msprime.HaplotypeGenerator(tree_sequence, 116.1,
+                random_seed=j)
+        s[j] = hg.get_num_segregating_sites()
+    print("mean:", np.mean(cs), np.mean(s))
+    print("var :", np.var(cs), np.var(s))
+    sm.graphics.qqplot(s)
+    sm.qqplot_2samples(s, cs, line="45")
+    f = "tmp__NOBACKUP__/s.png"
+    pyplot.savefig(f, dpi=72)
+    pyplot.clf()
+    """
 
 def analyse_records(treefile):
     tree_sequence = msprime.TreeSequence.load(treefile)
@@ -536,9 +532,9 @@ def dump_simulation(filename, n=10, m=100):
     sim = msprime.TreeSimulator(n)
     sim.set_num_loci(m)
     sim.set_scaled_recombination_rate(1)
-    for l, r, node, children, time in sim.records():
+    ts = sim.run()
+    for l, r, node, children, time in ts.records():
         print(l, r, node, children, time, sep="\t")
-    # ts = sim.run()
     # ts.dump(filename)
 
 
@@ -620,13 +616,13 @@ class VerifyTrees(unittest.TestCase):
 
 if __name__ == "__main__":
     # unittest.main()
-    dump_simulation(sys.argv[1])
+    # dump_simulation(sys.argv[1])
     # print_tree_file(sys.argv[1])
     # analyse_records(sys.argv[1])
     # edit_visualisation()
     # mutation_dev()
     # example1()
-    # hl_main()
+    hl_main()
     # ll_main()
     # print_newick(sys.argv[1])
     # memory_test()
