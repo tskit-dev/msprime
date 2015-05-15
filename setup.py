@@ -27,18 +27,13 @@ msprime_readme = f.read()
 f.close()
 msprime_version = parse_version("msprime/__init__.py")
 
-requirements = ["pkgconfig"]
+requirements = []
 
-# TODO proper pkgconfig setup. We need to try and see if GSL and HDF5
-# are installed and then used pkgconfig to get the paths. If pkg-config
-# isn't available, we make a guess.
-import pkgconfig
-pkg_info = pkgconfig.parse('gsl hdf5')
-# On older systems, HDF5 is not supported by pkg-config. This however, we
-# might still be able to compile and run just by making sure we link against
-# hdf5. This works for Debian Wheezy.
-if 'hdf5' not in pkg_info["libraries"]:
-    pkg_info["libraries"].add('hdf5')
+try:
+    import pkgconfig
+    pkg_info = pkgconfig.parse('gsl hdf5')
+except ImportError:
+    pkg_info = {"include_dirs":[], "library_dirs":[]}
 
 d = "lib/"
 _msprime_module = Extension('_msprime',
@@ -69,7 +64,8 @@ setup(
             'mspms=msprime.cli:msp_ms_main',
         ]
     },
-    install_requires=requirements,
+    install_requires=[],
+    test_requires=["numpy", "h5py"],
     ext_modules = [_msprime_module],
     keywords = ["Coalescent simulation", "ms"],
     license = "GNU LGPLv3+",

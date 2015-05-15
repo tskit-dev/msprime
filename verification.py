@@ -336,7 +336,7 @@ def main():
     # verify_simple()
     # verify_zero_growth_example()
     # verify_scrm_example()
-    # verify_mutations()
+    verify_mutations()
 
 
 def verify_human_demographics():
