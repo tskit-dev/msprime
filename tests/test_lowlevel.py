@@ -85,8 +85,9 @@ class LowLevelTestCase(tests.MsprimeTestCase):
     Superclass of tests for the low-level interface.
     """
     def get_tree_sequence(self, sample_size=10, num_loci=100):
-        sim = _msprime.Simulator(sample_size, num_loci,
-                scaled_recombination_rate=10.0)
+        sim = _msprime.Simulator(sample_size, random_seed=1,
+                num_loci=num_loci,
+                scaled_recombination_rate=1)
         sim.run()
         ts = _msprime.TreeSequence()
         ts.create(sim)
@@ -673,7 +674,7 @@ class TestHaplotypeGenerator(LowLevelTestCase):
         ts = _msprime.TreeSequence()
         # This hasn't been initialised, so should fail.
         self.assertRaises(ValueError, _msprime.HaplotypeGenerator, ts, 0, 0)
-        ts = self.get_tree_sequence()
+        ts = self.get_tree_sequence(num_loci=10)
         for bad_type in [None, "", [], {}]:
             self.assertRaises(TypeError, _msprime.HaplotypeGenerator, ts,
                     bad_type, 1)
@@ -683,9 +684,7 @@ class TestHaplotypeGenerator(LowLevelTestCase):
                     1, 1, max_haplotype_length=bad_type)
 
         n = ts.get_sample_size()
-        for t in _msprime.TreeDiffIterator(ts):
-            print(t)
-        mu = 1e3
+        mu = 10
         seed = 10
         hg = _msprime.HaplotypeGenerator(ts, mu, seed)
         before = list(hg.get_haplotype(j) for j in range(1, n + 1))
@@ -695,13 +694,7 @@ class TestHaplotypeGenerator(LowLevelTestCase):
         after = list(hg.get_haplotype(j) for j in range(1, n + 1))
         self.assertEqual(before, after)
         # make sure the basic form of the output is correct.
-        print("FIXME!")
-        # There are two problems here: (1) we don't seem to handle
-        # single tree mutations correctly and (2) we always seem to
-        # return a single tree from get_tree_sequence.
         for h in before:
-            # self.assertGreater(len(h), 0)
+            self.assertGreater(len(h), 0)
             self.assertIsInstance(h, str)
             self.assertEqual(len(h), hg.get_num_segregating_sites())
-
-
