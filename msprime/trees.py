@@ -388,13 +388,12 @@ class TreeSequence(object):
         for _, pi, _ in self.sparse_trees():
             j = sample_id
             while j != 0:
-                if j not in nodes:
-                    nodes.add(j)
+                nodes.add(j)
                 j = pi[j]
         return nodes
 
 
-class CHaplotypeGenerator(object):
+class HaplotypeGenerator(object):
 
     def __init__(self, tree_sequence, scaled_mutation_rate, random_seed=None):
         self._tree_sequence = tree_sequence
@@ -416,7 +415,7 @@ class CHaplotypeGenerator(object):
             yield self._ll_haplotype_generator.get_haplotype(j)
 
 
-class HaplotypeGenerator(object):
+class NewHaplotypeGenerator(object):
     """
     Class that takes a TreeSequence and a recombination rate and builds a set
     of haplotypes consistent with the underlying trees.
@@ -436,8 +435,38 @@ class HaplotypeGenerator(object):
         self._branch_length = {}
         self._children = {}
         self._time = {j: 0 for j in range(1, self._sample_size + 1)}
+        # new
         self._mutations = collections.defaultdict(list)
-        self._generate_haplotypes()
+        self._generate_mutations()
+
+        # Old
+        # self._haplotype = np.empty(
+        #     (self._sample_size, self._max_segregating_sites),
+        #     dtype=(bytes, 1))
+        # self._haplotype.fill(b"0")
+
+        # self._generate_haplotypes()
+
+    def get_num_segregating_sites(self):
+        return self._num_segregating_sites
+
+
+    def _generate_mutations(self):
+        tau = {j:0 for j in range(1, self._tree_sequence.get_sample_size() + 1)}
+        for l, r, node, children, time in self._tree_sequence.records():
+            distance = (r - l) / self._tree_sequence.get_num_loci()
+            tau[node] = time
+            for c in children:
+                branch_length = time - tau[c]
+                mu = branch_length * distance * self._scaled_mutation_rate
+                num_mutations = self._rng.poisson(mu)
+                sites = np.random.random_integers(l, r + 1, num_mutations)
+                self._mutations[c].extend(sites)
+        self._num_segregating_sites = 0
+        for site_list in self._mutations.values():
+            self._num_segregating_sites += len(site_list)
+            site_list.sort()
+
 
     def _generate_haplotypes(self):
         branches = np.zeros(2 * self._sample_size - 2, dtype="uint32")
@@ -475,28 +504,75 @@ class HaplotypeGenerator(object):
                 mutation_branches = self._rng.choice(
                     branches, num_mutations, p=probabilities)
                 self._apply_mutations(mutation_branches)
+                # self._apply_mutations(mutation_branches)
 
-    def _apply_mutations(self, branches):
+    def _apply_mutations_old(self, branches):
         """
         Adds a single mutation on each of the branches between the specified
-        nodes and its parent.
+        nodes and its parent. Add a 1 to the end of each leaf node
+        below this node.
+        """
+        # First grow our memory if we need to
+        new_s = self._num_segregating_sites + len(branches)
+        if new_s >= self._max_segregating_sites:
+            old_haplotypes = self._haplotype
+            n = self._sample_size
+            k = self._max_segregating_sites
+            self._max_segregating_sites = max(2 * k, new_s + 1)
+            self._haplotype = np.empty(
+                (self._sample_size, self._max_segregating_sites),
+                dtype=(bytes, 1))
+            self._haplotype.fill(b"0")
+            self._haplotype[0:n, 0:k] = old_haplotypes
+        # TODO detect the case of common mutations and deal with them
+        # using a different algorithm.
+        self._apply_rare_mutations(branches)
+
+
+    def _apply_rare_mutations(self, branches):
+        """
+        Apply mutations using an algorithm optimised for when we have only
+        a few mutations distributed around the tree.
         """
         for node in branches:
-            self._mutations[node].append(self._num_segregating_sites)
+            # print("Applying mutation to", node)
+            stack = [node]
+            while len(stack) > 0:
+                u = stack.pop()
+                # print("visit", u)
+                if u <= self._sample_size:
+                    self._haplotype[u - 1, self._num_segregating_sites] = b"1"
+                else:
+                    stack.extend(self._children[u])
             self._num_segregating_sites += 1
 
-    def get_num_segregating_sites(self):
-        return self._num_segregating_sites
+
+    # def haplotypes(self):
+    #     for h in self._haplotype:
+    #         yield "".join(h[:self._num_segregating_sites])
+
 
     def get_haplotype(self, sample_id):
-        # print("get_haplotype", sample_id)
+        print("get_haplotype", sample_id)
         # for k, v in self._mutations.items():
         #     print(k, v)
         haplotype = ["0" for j in range(self._num_segregating_sites)]
-        for node in self._tree_sequence.sample_nodes(sample_id):
-            # print("GOT: ", node)
-            for site in self._mutations[node]:
-                haplotype[site] = "1"
+        print("s = ", self._num_segregating_sites)
+        left = 0
+        s = 0
+        for length, pi, _ in self._tree_sequence.sparse_trees():
+            right = left + length
+            u = sample_id
+            while u != 0:
+                mutations = self._mutations[u]
+                for site in mutations:
+                    if left <= site < right:
+                        haplotype[s] = "1"
+                        s += 1
+                print("getting mutations in", left, right, mutations)
+                u = pi[u]
+
+            left += length
         return "".join(haplotype)
 
     def haplotypes(self):
