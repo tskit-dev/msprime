@@ -1,1 +1,3 @@
 pkgconfig
+numpy
+h5py

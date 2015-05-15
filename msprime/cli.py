@@ -125,7 +125,7 @@ class SimulationRunner(object):
                 if s != 0:
                     print("positions: ", end="")
                     print("0.0 " * s)
-                    for h in hg.haplotype_strings():
+                    for h in hg.haplotypes():
                         print(h)
                 else:
                     print()
