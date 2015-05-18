@@ -180,6 +180,8 @@ def hl_main():
         sim.add_population_model(m)
 
     tree_sequence = sim.run()
+    for record in tree_sequence.records():
+        print(*record, sep="\t")
     # for _, pi, _ in tree_sequence.sparse_trees():
     #     print(pi)
     #     path = []
@@ -192,11 +194,12 @@ def hl_main():
     # for j in range(1, n + 1):
     #     print(j, ":", tree_sequence.sample_nodes(j))
 
-    hg = msprime.NewHaplotypeGenerator(tree_sequence, 116.1,
+    hg = msprime.HaplotypeGenerator(tree_sequence, 116.1,
             random_seed=1)
     for h in hg.haplotypes():
         print(h)
     print()
+    print("locations:", hg.get_locations())
     # hg = msprime.CHaplotypeGenerator(tree_sequence, 116.1,
     #         random_seed=1)
     # for h in hg.haplotypes():

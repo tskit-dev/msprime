@@ -331,7 +331,7 @@ def verify_mutations():
 
 def main():
     # verify_recombination_events()
-    # verify_random(10)
+    verify_random(10)
     # verify_exponential_models()
     # verify_simple()
     # verify_zero_growth_example()
