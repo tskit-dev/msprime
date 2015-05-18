@@ -117,6 +117,9 @@ def ll_main():
             c += 1
             # print(r)
         # assert c == len(crs[0])
+
+
+
         # # print(iterator)
         ts = _msprime.TreeSequence()
         ts.create(sim)
@@ -157,6 +160,33 @@ def ll_main():
     # for length, pi, tau in tv:
     #     print(length, pi, tau)
 
+def new_sparse_trees(tree_sequence):
+    """
+    prototype implementation of list-based sparse trees.
+    """
+    R = tree_sequence.get_num_records()
+    tau  = [0.0 for j in range(R + 1)]
+    pi = [0 for j in range(R + 1)]
+    used = collections.defaultdict(list)
+    position = 0
+    for l, r, node, children, time in tree_sequence.records():
+        print(l, r, node, children, time, sep="\t")
+        if position != l:
+            print("Tree @ position", position)
+            for j in range(1, R + 1):
+                print(j, "\t", pi[j])
+            yield 0, pi, tau
+            position = l
+            for j in used[position]:
+                pi[j] = 0
+            print("used:", used[position])
+        tau[node] = time
+        for c in children:
+            pi[c] = node
+            used[r].append(c)
+    yield 0, pi, tau
+
+
 def hl_main():
 
     random.seed(1)
@@ -165,12 +195,13 @@ def hl_main():
     # for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
     #     print(l, pi, tau)
     treefile = "tmp__NOBACKUP__/tmp.hdf5"
-    n = 5
+    n = 3
     sim = msprime.TreeSimulator(n)
     sim.set_random_seed(1)
     sim.set_num_loci(100)
     sim.set_scaled_recombination_rate(0.1)
     sim.set_max_memory("10G")
+
     models = [
             msprime.ExponentialPopulationModel(0, 1),
             msprime.ExponentialPopulationModel(0.1, 2),
@@ -180,9 +211,25 @@ def hl_main():
         sim.add_population_model(m)
 
     tree_sequence = sim.run()
-    for record in tree_sequence.records():
-        print(*record, sep="\t")
-    # for _, pi, _ in tree_sequence.sparse_trees():
+    st = tree_sequence.sparse_trees()
+    for l, pi, tau in new_sparse_trees(tree_sequence):
+        l2, pi2, tau2 = next(st)
+        for j in range(1, n + 1):
+            path1, path2 = [], []
+            u = j
+            while u != 0:
+                path1.append(u)
+                u = pi[u]
+            u = j
+            while u != 0:
+                path2.append(u)
+                u = pi2[u]
+            print("new", path1)
+            print("old", path2)
+            assert path1 == path2
+
+
+      # for _, pi, _ in tree_sequence.sparse_trees():
     #     print(pi)
     #     path = []
     #     j = 1
@@ -194,16 +241,16 @@ def hl_main():
     # for j in range(1, n + 1):
     #     print(j, ":", tree_sequence.sample_nodes(j))
 
-    hg = msprime.HaplotypeGenerator(tree_sequence, 116.1,
-            random_seed=1)
-    for h in hg.haplotypes():
-        print(h)
-    print()
-    print("locations:", hg.get_locations())
-    # hg = msprime.CHaplotypeGenerator(tree_sequence, 116.1,
+    # hg = msprime.HaplotypeGenerator(tree_sequence, 116.1,
     #         random_seed=1)
     # for h in hg.haplotypes():
     #     print(h)
+    # print()
+    # print("locations:", hg.get_locations())
+    # # hg = msprime.CHaplotypeGenerator(tree_sequence, 116.1,
+    # #         random_seed=1)
+    # # for h in hg.haplotypes():
+    # #     print(h)
 
     """
     N = 10000
@@ -546,8 +593,12 @@ def make_tree_visualisation(pi, tau, out, max_time):
 
 def print_tree_file(filename):
     ts = msprime.TreeSequence.load(filename)
+    max_node = 0
     for l, r, node, (c1, c2), t in ts.records():
-        print(l, r, node, c1, c2, t, sep="\t")
+        if node > max_node:
+            max_node = node
+        # print(l, r, node, c1, c2, t, sep="\t")
+    print(max_node)
 
 def dump_simulation(filename, n=10, m=100):
     sim = msprime.TreeSimulator(n)

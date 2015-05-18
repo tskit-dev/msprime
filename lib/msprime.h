@@ -175,7 +175,6 @@ typedef struct {
     object_heap_t avl_node_heap;
 } tree_diff_iterator_t;
 
-
 typedef struct newick_tree_node {
     uint32_t id;
     double time;
@@ -195,12 +194,17 @@ typedef struct {
     object_heap_t avl_node_heap;
 } newick_converter_t;
 
+typedef struct {
+    double position;
+    size_t site;
+} mutation_t;
+
 typedef struct hapgen_tree_node {
     uint32_t id;
     double time;
     struct hapgen_tree_node *parent;
-    struct hapgen_tree_node *children[2];
     double branch_length;
+    avl_tree_t mutations;
 } hapgen_tree_node_t;
 
 typedef struct {
@@ -208,17 +212,14 @@ typedef struct {
     uint32_t num_loci;
     unsigned long random_seed;
     double mutation_rate;
-    size_t max_haplotype_length;
-    hapgen_tree_node_t *root;
+    uint32_t num_nodes;
+    tree_sequence_t *tree_sequence;
     gsl_rng *rng;
-    size_t num_segregating_sites;
-    double total_branch_length;
-    tree_diff_iterator_t diff_iterator;
-    avl_tree_t tree;
+    avl_tree_t *mutations;
+    size_t num_mutations;
+    double *positions;
+    char *haplotype;
     object_heap_t avl_node_heap;
-    char **haplotypes;
-    char *haplotype_mem;
-    hapgen_tree_node_t **traversal_stack;
 } hapgen_t;
 
 int msp_alloc(msp_t *self);
@@ -249,6 +250,10 @@ int tree_sequence_dump(tree_sequence_t *self, const char *filename,
         int flags);
 size_t tree_sequence_get_num_breakpoints(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
+uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
+uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
+uint32_t tree_sequence_get_num_loci(tree_sequence_t *self);
+
 int tree_sequence_get_record(tree_sequence_t *self, size_t index, 
         coalescence_record_t *record);
 int tree_sequence_get_breakpoints(tree_sequence_t *self, 
@@ -270,11 +275,10 @@ int newick_converter_free(newick_converter_t *self);
 void newick_converter_print_state(newick_converter_t *self);
 
 int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
-        double mutation_rate, unsigned long random_seed, 
-        size_t max_haplotype_length);
-int hapgen_generate(hapgen_t *self);
+        double mutation_rate, unsigned long random_seed);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);
 size_t hapgen_get_num_segregating_sites(hapgen_t *self);
+int hapget_get_locations(hapgen_t *self, double *);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
 
