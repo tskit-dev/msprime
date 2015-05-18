@@ -196,11 +196,7 @@ print_haplotypes(tree_sequence_t *ts)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = hapgen_alloc(hg, ts, 1.0, 10, 65536);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = hapgen_generate(hg);
+    ret = hapgen_alloc(hg, ts, 100, 10);
     if (ret != 0) {
         goto out;
     }
@@ -209,7 +205,7 @@ print_haplotypes(tree_sequence_t *ts)
         if (ret < 0) {
             goto out;
         }
-        printf("%d:%s\n", j, haplotype);
+        /* printf("%d:%s\n", j, haplotype); */
     }
 out:
     if (hg != NULL) {
@@ -366,7 +362,7 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    if (1) {
+    if (0) {
         ret = tree_sequence_dump(tree_seq, "test.hdf5", 0);
         if (ret != 0) {
             goto out;

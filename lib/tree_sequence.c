@@ -659,6 +659,32 @@ out:
 }
 
 
+uint32_t
+tree_sequence_get_num_loci(tree_sequence_t *self)
+{
+    return self->num_loci;
+}
+
+uint32_t
+tree_sequence_get_sample_size(tree_sequence_t *self)
+{
+    return self->sample_size;
+}
+
+uint32_t
+tree_sequence_get_num_nodes(tree_sequence_t *self)
+{
+    uint32_t max = 0;
+    size_t j = 0;
+
+    for (j = 0; j < self->num_records; j++) {
+        if (self->node[j] > max) {
+            max = self->node[j];
+        }
+    }
+    return max;
+}
+
 size_t
 tree_sequence_get_num_breakpoints(tree_sequence_t *self)
 {
