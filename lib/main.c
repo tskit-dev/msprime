@@ -205,7 +205,7 @@ print_haplotypes(tree_sequence_t *ts)
         if (ret < 0) {
             goto out;
         }
-        /* printf("%d:%s\n", j, haplotype); */
+        printf("%d\t%s\n", j, haplotype);
     }
 out:
     if (hg != NULL) {
@@ -315,7 +315,6 @@ print_tree_sequence(tree_sequence_t *ts)
         printf("New tree: %d (%d)\n", length, (int) tree->num_nodes);
         sparse_tree_iterator_print_state(sparse_iter);
     }
-
     sparse_tree_iterator_free(sparse_iter);
 out:
     if (iter != NULL) {
@@ -391,9 +390,9 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
             goto out;
         }
         print_newick_trees(tree_seq);
-        print_haplotypes(tree_seq);
+        print_tree_sequence(tree_seq);
     }
-    print_tree_sequence(tree_seq);
+    print_haplotypes(tree_seq);
 out:
     if (msp != NULL) {
         msp_free(msp);

@@ -239,6 +239,7 @@ typedef struct {
     double *positions;
     char *haplotype;
     object_heap_t avl_node_heap;
+    sparse_tree_iterator_t tree_iterator;
 } hapgen_t;
 
 int msp_alloc(msp_t *self);
@@ -290,6 +291,7 @@ int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
 int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
 int sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
         sparse_tree_t **tree);
+int sparse_tree_iterator_reset(sparse_tree_iterator_t *self);
 void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
 
 int newick_converter_alloc(newick_converter_t *self, 

@@ -1066,6 +1066,13 @@ out:
 /* ======================================================== *
  * sparse tree iterator
  * ======================================================== */
+int
+sparse_tree_iterator_reset(sparse_tree_iterator_t *self)
+{
+    self->position = 0;
+    self->next_record_index = 0;
+    return 0;
+}
 
 int
 sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
@@ -1080,8 +1087,6 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
     self->num_records = tree_sequence_get_num_coalescence_records(
             tree_sequence);
     self->tree_sequence = tree_sequence;
-    self->position = 0;
-    self->next_record_index = 0;
     self->tree.sample_size = self->sample_size;
     self->tree.num_nodes = self->num_nodes;
     self->tree.parent = calloc(self->num_nodes + 1, sizeof(uint32_t));
@@ -1103,6 +1108,7 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
     }
     qsort(self->right_sorted_records, self->num_records,
             sizeof(coalescence_record_t), cmp_coalescence_record_right);
+    sparse_tree_iterator_reset(self);
     ret = 0;
 out:
     return ret;
