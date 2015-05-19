@@ -283,8 +283,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
     if (ret != 0) {
         goto out;
     }
-
-    hapgen_print_state(self);
+    /* hapgen_print_state(self); */
     ret = 0;
 out:
     return ret;
@@ -310,20 +309,34 @@ hapgen_free(hapgen_t *self)
     return 0;
 }
 
-static inline double
-_get_position(avl_node_t *node)
-{
-    mutation_t *mut;
-    assert(node != NULL);
-    mut = (mutation_t *) node->item;
-    assert(mut != NULL);
-    return mut->position;
-}
+/* static inline double */
+/* _get_position(avl_node_t *node) */
+/* { */
+/*     mutation_t *mut; */
+/*     assert(node != NULL); */
+/*     mut = (mutation_t *) node->item; */
+/*     assert(mut != NULL); */
+/*     return mut->position; */
+/* } */
 
 static int
 hapgen_apply_node_mutations(hapgen_t *self, uint32_t node, uint32_t left,
         uint32_t right)
 {
+    avl_node_t *avl_node;
+    mutation_t *mut;
+
+
+    for (avl_node = self->mutations[node].head; avl_node != NULL;
+            avl_node = avl_node->next) {
+        mut = (mutation_t *) avl_node->item;
+        assert(mut != NULL);
+        if (left <= mut->position && mut->position < right) {
+            self->haplotype[mut->site] = '1';
+        }
+    }
+    return 0;
+#if 0
     int ret = 0;
     int where;
     avl_node_t *avl_node, *found;
@@ -358,6 +371,7 @@ hapgen_apply_node_mutations(hapgen_t *self, uint32_t node, uint32_t left,
     }
 
     return ret;
+#endif
 }
 
 static int
