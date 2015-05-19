@@ -404,9 +404,11 @@ class HaplotypeGenerator(object):
         self._scaled_mutation_rate = scaled_mutation_rate
         if random_seed is None:
             self._random_seed = random.randint(0, 2**31)
-        self._ll_haplotype_generator = _msprime.HaplotypeGenerator(
-                self._tree_sequence.get_ll_tree_sequence(),
-                self._scaled_mutation_rate, self._random_seed)
+        # This is temporary until we move the mutation generation
+        # into TreeSequence.
+        ts = self._tree_sequence.get_ll_tree_sequence()
+        ts.generate_mutations(scaled_mutation_rate, self._random_seed)
+        self._ll_haplotype_generator = _msprime.HaplotypeGenerator(ts)
 
     def get_num_segregating_sites(self):
         return self._ll_haplotype_generator.get_num_segregating_sites()

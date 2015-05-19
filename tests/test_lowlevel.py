@@ -91,6 +91,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         sim.run()
         ts = _msprime.TreeSequence()
         ts.create(sim)
+        ts.generate_mutations(10, 1)
         return ts
 
 
@@ -673,22 +674,13 @@ class TestHaplotypeGenerator(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.HaplotypeGenerator, None)
         ts = _msprime.TreeSequence()
         # This hasn't been initialised, so should fail.
-        self.assertRaises(ValueError, _msprime.HaplotypeGenerator, ts, 0, 0)
+        self.assertRaises(ValueError, _msprime.HaplotypeGenerator, ts)
         ts = self.get_tree_sequence(num_loci=10)
-        for bad_type in [None, "", [], {}]:
-            self.assertRaises(TypeError, _msprime.HaplotypeGenerator, ts,
-                    bad_type, 1)
-            self.assertRaises(TypeError, _msprime.HaplotypeGenerator, ts,
-                    1, bad_type)
-            self.assertRaises(TypeError, _msprime.HaplotypeGenerator, ts,
-                    1, 1, max_haplotype_length=bad_type)
 
         n = ts.get_sample_size()
-        mu = 10
-        seed = 10
-        hg = _msprime.HaplotypeGenerator(ts, mu, seed)
+        hg = _msprime.HaplotypeGenerator(ts)
         before = list(hg.get_haplotype(j) for j in range(1, n + 1))
-        hg = _msprime.HaplotypeGenerator(ts, mu, seed)
+        hg = _msprime.HaplotypeGenerator(ts)
         del ts
         # We should keep a reference to the tree sequence.
         after = list(hg.get_haplotype(j) for j in range(1, n + 1))

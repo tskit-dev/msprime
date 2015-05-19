@@ -22,6 +22,9 @@
 
 #include <hdf5.h>
 
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_randist.h>
+
 #include "err.h"
 #include "msprime.h"
 #include "object_heap.h"
@@ -53,7 +56,7 @@ cmp_tree_node_list(const void *a, const void *b) {
 
 
 /* Allocates the memory required for arrays of values. Assumes that
- * the num_breakpoints and num_records has been set.
+ * the num_breakpoints, num_records and num_mutations have been set.
  */
 static int
 tree_sequence_alloc(tree_sequence_t *self)
@@ -73,6 +76,14 @@ tree_sequence_alloc(tree_sequence_t *self)
     if (self->left == NULL || self->right == NULL || self->children == NULL
             || self->node == NULL || self->time == NULL) {
         goto out;
+    }
+    if (self->num_mutations > 0) {
+        self->mutation_nodes = malloc(self->num_mutations * sizeof(uint32_t));
+        self->mutation_positions = malloc(
+                self->num_mutations * sizeof(double));
+        if (self->mutation_nodes == NULL || self->mutation_positions == NULL) {
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -100,7 +111,26 @@ tree_sequence_free(tree_sequence_t *self)
     if (self->time != NULL) {
         free(self->time);
     }
+    if (self->mutation_nodes != NULL) {
+        free(self->mutation_nodes);
+    }
+    if (self->mutation_positions != NULL) {
+        free(self->mutation_positions);
+    }
     return 0;
+}
+
+static inline void
+tree_sequence_calculate_num_nodes(tree_sequence_t *self)
+{
+    size_t j = 0;
+
+    self->num_nodes = 0;
+    for (j = 0; j < self->num_records; j++) {
+        if (self->node[j] > self->num_nodes) {
+            self->num_nodes = self->node[j];
+        }
+    }
 }
 
 int
@@ -114,6 +144,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     self->num_records = msp_get_num_coalescence_records(sim);
     self->sample_size = sim->sample_size;
     self->num_loci = sim->num_loci;
+    self->num_mutations = 0;
     tree_sequence_alloc(self);
     ret = msp_get_breakpoints(sim, self->breakpoints);
     if (ret != 0) {
@@ -127,6 +158,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     if (ret != 0) {
         goto out;
     }
+
     /* Sort the records by the left coordinate*/
     qsort(records, self->num_records, sizeof(coalescence_record_t),
             cmp_coalescence_record_left);
@@ -138,6 +170,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
         self->children[2 * j + 1] = records[j].children[1];
         self->time[j] = records[j].time;
     }
+    tree_sequence_calculate_num_nodes(self);
     ret = 0;
 out:
     if (records != NULL) {
@@ -452,6 +485,7 @@ tree_sequence_load(tree_sequence_t *self, const char *filename)
         ret = MSP_ERR_HDF5;
         goto out;
     }
+    tree_sequence_calculate_num_nodes(self);
     ret = 0;
 out:
     return ret;
@@ -682,15 +716,7 @@ tree_sequence_get_sample_size(tree_sequence_t *self)
 uint32_t
 tree_sequence_get_num_nodes(tree_sequence_t *self)
 {
-    uint32_t max = 0;
-    size_t j = 0;
-
-    for (j = 0; j < self->num_records; j++) {
-        if (self->node[j] > max) {
-            max = self->node[j];
-        }
-    }
-    return max;
+    return self->num_nodes;
 }
 
 size_t
@@ -703,6 +729,12 @@ size_t
 tree_sequence_get_num_coalescence_records(tree_sequence_t *self)
 {
     return self->num_records;
+}
+
+size_t
+tree_sequence_get_num_mutations(tree_sequence_t *self)
+{
+    return self->num_mutations;
 }
 
 int
@@ -732,6 +764,124 @@ tree_sequence_get_breakpoints(tree_sequence_t *self, uint32_t *breakpoints)
             self->num_breakpoints * sizeof(uint32_t));
     return ret;
 }
+
+int
+tree_sequence_get_mutations(tree_sequence_t *self, uint32_t *nodes,
+        double *positions)
+{
+    int ret = 0;
+
+    if (nodes != NULL) {
+        memcpy(nodes, self->mutation_nodes,
+                self->num_mutations * sizeof(uint32_t));
+    }
+    if (positions != NULL) {
+        memcpy(positions, self->mutation_positions,
+                self->num_mutations * sizeof(double));
+    }
+    return ret;
+}
+
+static int
+tree_sequence_extend_mutation_buffers(tree_sequence_t *self, size_t buffer_size)
+{
+    int ret = MSP_ERR_NO_MEMORY;
+    void *p;
+
+    p = realloc(self->mutation_nodes, buffer_size * sizeof(uint32_t));
+    if (p == NULL) {
+        goto out;
+    }
+    self->mutation_nodes = p;
+    p = realloc(self->mutation_positions, buffer_size * sizeof(double));
+    if (p == NULL) {
+        goto out;
+    }
+    self->mutation_positions = p;
+    ret = 0;
+out:
+    return ret;
+}
+
+int
+tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
+        unsigned long random_seed)
+{
+    int ret = -1;
+    coalescence_record_t cr;
+    uint32_t j, k, l, child;
+    gsl_rng *rng = NULL;
+    double branch_length, distance, mu, position;
+    unsigned int num_mutations;
+    double *times = NULL;
+    size_t buffer_size;
+    size_t block_size = 2 << 10; /* alloc in blocks of 1M */
+
+    if (self->num_mutations > 0) {
+        /* any mutations that were there previously are overwritten. */
+        if (self->mutation_nodes != NULL) {
+            free(self->mutation_nodes);
+        }
+        if (self->mutation_positions != NULL) {
+            free(self->mutation_positions);
+        }
+    }
+    buffer_size = 0;
+    self->num_mutations = 0;
+    self->mutation_positions = NULL;
+    self->mutation_nodes = NULL;
+
+    rng = gsl_rng_alloc(gsl_rng_default);
+    if (rng == NULL) {
+        goto out;
+    }
+    gsl_rng_set(rng, random_seed);
+    times = calloc(self->num_nodes + 1, sizeof(double));
+    if (times == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < self->num_records; j++) {
+        ret = tree_sequence_get_record(self, j, &cr);
+        if (ret != 0) {
+            goto out;
+        }
+        times[cr.node] = cr.time;
+        /* TODO Remove the num_loci bit here and change the mutation
+         * rate to being unscaled by distance */
+        distance = (cr.right - cr.left) / (double) self->num_loci;
+        for (k = 0; k < 2; k++) {
+            child = cr.children[k];
+            branch_length = cr.time - times[child];
+            mu = branch_length * distance * mutation_rate;
+            num_mutations = gsl_ran_poisson(rng, mu);
+            for (l = 0; l < num_mutations; l++) {
+                position = gsl_ran_flat(rng, cr.left, cr.right);
+                if (self->num_mutations >= buffer_size) {
+                    buffer_size += block_size;
+                    ret = tree_sequence_extend_mutation_buffers(self,
+                            buffer_size);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                }
+                self->mutation_nodes[self->num_mutations] = child;
+                self->mutation_positions[self->num_mutations] = position;
+                self->num_mutations++;
+            }
+        }
+    }
+    ret = 0;
+out:
+    if (times != NULL) {
+        free(times);
+    }
+    if (rng != NULL) {
+        gsl_rng_free(rng);
+    }
+    return ret;
+}
+
 
 /* ======================================================== *
  * Tree diff iterator.
@@ -1224,3 +1374,4 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
 out:
     return ret;
 }
+
