@@ -394,6 +394,8 @@ class TreeSequence(object):
 
 
 class HaplotypeGenerator(object):
+    # TODO we use the length scaled mutation rate here, but the non-length
+    # scaled version for recombination rate. This is very confusing!
 
     def __init__(self, tree_sequence, scaled_mutation_rate, random_seed=None):
         self._tree_sequence = tree_sequence
