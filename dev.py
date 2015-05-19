@@ -164,27 +164,51 @@ def new_sparse_trees(tree_sequence):
     """
     prototype implementation of list-based sparse trees.
     """
-    R = tree_sequence.get_num_records()
+    # TODO add get num node to tree sequence
+    n = tree_sequence.get_sample_size()
+    R = max(node for _, _, node, _, _ in tree_sequence.records())
     tau  = [0.0 for j in range(R + 1)]
     pi = [0 for j in range(R + 1)]
-    used = collections.defaultdict(list)
     position = 0
-    for l, r, node, children, time in tree_sequence.records():
-        print(l, r, node, children, time, sep="\t")
-        if position != l:
-            print("Tree @ position", position)
-            for j in range(1, R + 1):
-                print(j, "\t", pi[j])
-            yield 0, pi, tau
-            position = l
-            for j in used[position]:
-                pi[j] = 0
-            print("used:", used[position])
+    records = list(tree_sequence.records())
+    right_sorted = sorted(records, key=lambda x: x[1])
+    j = 0
+    # for t1, t2 in zip(records, right_sorted):
+    #     print(t1[:-1], "|", t2[:-1], sep="\t")
+    for j in range(n - 1):
+        l, r, node, children, time = records[j]
+        assert l == 0
         tau[node] = time
         for c in children:
             pi[c] = node
-            used[r].append(c)
-    yield 0, pi, tau
+    position = right_sorted[0][1]
+    yield position, pi, tau
+    j += 1
+    while j < len(records):
+        # print("j = ", j, j - n + 1)
+        k = j - n + 1
+        while right_sorted[k][1] == position:
+            # print("Removing", right_sorted[k])
+            for c in right_sorted[k][3]:
+                pi[c] = 0
+            k += 1
+        while j < len(records) and records[j][0] == position:
+
+            _, _, node, children, time = records[j]
+            # print("inserting ", records[j])
+            tau[node] = time
+            for c in children:
+                pi[c] = node
+            j += 1
+        yield right_sorted[k][1] - position, pi, tau
+        position = right_sorted[k][1]
+        # print("Tree @ position", position)
+        # for x in range(1, R + 1):
+        #     print(x, "\t", pi[x])
+        # print("yielding", pi)
+        # print("unsetting", j - n, right_sorted[j - n])
+        # for c in right_sorted[j - n][3]:
+        #     pi[c] = 0
 
 
 def hl_main():
@@ -195,10 +219,10 @@ def hl_main():
     # for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
     #     print(l, pi, tau)
     treefile = "tmp__NOBACKUP__/tmp.hdf5"
-    n = 3
+    n = 3000
     sim = msprime.TreeSimulator(n)
     sim.set_random_seed(1)
-    sim.set_num_loci(100)
+    sim.set_num_loci(1000)
     sim.set_scaled_recombination_rate(0.1)
     sim.set_max_memory("10G")
 
@@ -224,9 +248,12 @@ def hl_main():
             while u != 0:
                 path2.append(u)
                 u = pi2[u]
-            print("new", path1)
-            print("old", path2)
+            # print("new", path1)
+            # print("old", path2)
             assert path1 == path2
+            if l != l2:
+                print(l, l2)
+            assert l == l2
 
 
       # for _, pi, _ in tree_sequence.sparse_trees():

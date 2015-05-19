@@ -30,11 +30,19 @@
  * Comparator for coalescence records. Sort by left.
  */
 static int
-cmp_coalescence_record(const void *a, const void *b) {
+cmp_coalescence_record_left(const void *a, const void *b) {
     const coalescence_record_t *ca = (const coalescence_record_t *) a;
     const coalescence_record_t *cb = (const coalescence_record_t *) b;
     return (ca->left > cb->left) - (ca->left < cb->left);
 }
+
+static int
+cmp_coalescence_record_right(const void *a, const void *b) {
+    const coalescence_record_t *ca = (const coalescence_record_t *) a;
+    const coalescence_record_t *cb = (const coalescence_record_t *) b;
+    return (ca->right > cb->right) - (ca->right < cb->right);
+}
+
 
 static int
 cmp_tree_node_list(const void *a, const void *b) {
@@ -121,7 +129,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     }
     /* Sort the records by the left coordinate*/
     qsort(records, self->num_records, sizeof(coalescence_record_t),
-            cmp_coalescence_record);
+            cmp_coalescence_record_left);
     for (j = 0; j < self->num_records; j++) {
         self->left[j] = records[j].left;
         self->right[j] = records[j].right;
@@ -1051,6 +1059,161 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
         }
     } else {
         ret = tree_diff_iterator_next_tree(self, length, nodes_out, nodes_in);
+    }
+out:
+    return ret;
+}
+/* ======================================================== *
+ * sparse tree iterator
+ * ======================================================== */
+
+int
+sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
+        tree_sequence_t *tree_sequence)
+{
+    int ret = MSP_ERR_NO_MEMORY;
+    size_t j;
+
+    assert(tree_sequence != NULL);
+    self->sample_size = tree_sequence_get_sample_size(tree_sequence);
+    self->num_nodes = tree_sequence_get_num_nodes(tree_sequence);
+    self->num_records = tree_sequence_get_num_coalescence_records(
+            tree_sequence);
+    self->tree_sequence = tree_sequence;
+    self->position = 0;
+    self->next_record_index = 0;
+    self->tree.sample_size = self->sample_size;
+    self->tree.num_nodes = self->num_nodes;
+    self->tree.parent = calloc(self->num_nodes + 1, sizeof(uint32_t));
+    self->tree.time = calloc(self->num_nodes + 1, sizeof(double));
+    if (self->tree.time == NULL || self->tree.parent == NULL) {
+        goto out;
+    }
+    self->right_sorted_records = malloc(self->num_records
+            * sizeof(coalescence_record_t));
+    if (self->right_sorted_records == NULL) {
+        goto out;
+    }
+    for (j = 0; j < self->num_records; j++) {
+        ret = tree_sequence_get_record(self->tree_sequence, j,
+                self->right_sorted_records + j);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    qsort(self->right_sorted_records, self->num_records,
+            sizeof(coalescence_record_t), cmp_coalescence_record_right);
+    ret = 0;
+out:
+    return ret;
+}
+
+int
+sparse_tree_iterator_free(sparse_tree_iterator_t *self)
+{
+    int ret = 0;
+
+    if (self->tree.parent != NULL) {
+        free(self->tree.parent);
+    }
+    if (self->tree.time != NULL) {
+        free(self->tree.time);
+    }
+    if (self->right_sorted_records != NULL) {
+        free(self->right_sorted_records);
+    }
+    return ret;
+}
+
+static void
+sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
+{
+    uint32_t root, u, j;
+
+    root = 1;
+    while (self->tree.parent[root] != 0) {
+        root = self->tree.parent[root];
+    }
+    for (j = 1; j < self->sample_size + 1; j++) {
+        u = j;
+        assert(self->tree.time[u] == 0.0);
+        while (self->tree.parent[u] != 0) {
+            u = self->tree.parent[u];
+            assert(self->tree.time[u] > 0.0);
+        }
+        assert(u == root);
+    }
+}
+
+void
+sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
+{
+    size_t j;
+
+    printf("sparse_tree_iterator state\n");
+    printf("position = %d\n", self->position);
+    printf("next_record_index = %d\n", (int) self->next_record_index);
+    printf("num_records = %d\n", (int) self->num_records);
+    for (j = 0; j < self->tree.num_nodes + 1; j++) {
+        printf("\t%d\t%d\t%f\n", (int) j, self->tree.parent[j],
+                self->tree.time[j]);
+    }
+    sparse_tree_iterator_check_state(self);
+}
+
+int
+sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
+        sparse_tree_t **tree)
+{
+    int ret = 0;
+    coalescence_record_t cr, *out;
+    uint32_t n = self->sample_size;
+    size_t j, c, k;
+
+    if (self->next_record_index < self->num_records) {
+        if (self->next_record_index == 0) {
+            for (j = 0; j < n - 1; j++) {
+                ret = tree_sequence_get_record(self->tree_sequence, j, &cr);
+                if (ret != 0) {
+                    goto out;
+                }
+                self->tree.time[cr.node] = cr.time;
+                for (c = 0; c < 2; c++) {
+                    self->tree.parent[cr.children[c]] = cr.node;
+                }
+            }
+            self->next_record_index = n - 1;
+            self->position = self->right_sorted_records[0].right;
+            *length = self->position;
+        } else {
+            k = self->next_record_index - n + 1;
+            j = self->next_record_index;
+            while (self->right_sorted_records[k].right == self->position) {
+                out = &self->right_sorted_records[k];
+                self->tree.time[out->node] = 0.0;
+                for (c = 0; c < 2; c++) {
+                    self->tree.parent[out->children[c]] = 0;
+                }
+                k++;
+            }
+            ret = tree_sequence_get_record(self->tree_sequence, j, &cr);
+            if (ret != 0) {
+                goto out;
+            }
+            while (j < self->num_records && cr.left == self->position) {
+                self->tree.time[cr.node] = cr.time;
+                for (c = 0; c < 2; c++) {
+                    self->tree.parent[cr.children[c]] = cr.node;
+                }
+                j++;
+                tree_sequence_get_record(self->tree_sequence, j, &cr);
+            }
+            self->next_record_index = j;
+            *length = self->right_sorted_records[k].right - self->position;
+            self->position = self->right_sorted_records[k].right;
+        }
+        *tree = &self->tree;
+        ret = 1;
     }
 out:
     return ret;
