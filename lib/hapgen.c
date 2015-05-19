@@ -106,7 +106,9 @@ hapgen_alloc_avl_node(hapgen_t *self, double position)
     char *p;
 
     if (object_heap_empty(&self->avl_node_heap)) {
-        goto out;
+        if (object_heap_expand(&self->avl_node_heap) != 0) {
+            goto out;
+        }
     }
     p = object_heap_alloc_object(&self->avl_node_heap);
     if (p == NULL) {
@@ -128,7 +130,6 @@ static int
 hapgen_add_mutation(hapgen_t *self, uint32_t node, double position)
 {
     int ret = -1;
-    /* mutation_t *u; */
     avl_node_t *avl_node = hapgen_alloc_avl_node(self, position);
 
     if (avl_node == NULL) {
@@ -160,7 +161,6 @@ hapgen_generate_mutations(hapgen_t *self)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    printf("Generate mutations\n");
     num_records = tree_sequence_get_num_coalescence_records(
             self->tree_sequence);
     for (j = 0; j < num_records; j++) {
@@ -234,6 +234,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
         double mutation_rate, unsigned long random_seed)
 {
     int ret = MSP_ERR_NO_MEMORY;
+    size_t avl_node_block_size = 65536;
     uint32_t j;
 
     assert(tree_sequence != NULL);
@@ -250,7 +251,13 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
     }
     gsl_rng_set(self->rng, self->random_seed);
     ret = object_heap_init(&self->avl_node_heap,
-            sizeof(avl_node_t) + sizeof(mutation_t), 1025, NULL);
+            sizeof(avl_node_t) + sizeof(mutation_t),
+            avl_node_block_size, NULL);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = sparse_tree_iterator_alloc(&self->tree_iterator,
+            self->tree_sequence);
     if (ret != 0) {
         goto out;
     }
@@ -267,10 +274,11 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
     }
     /* allocate the list of positions and the haplotype */
     self->positions = malloc(self->num_mutations * sizeof(double));
-    self->haplotype = malloc(self->num_mutations * sizeof(char));
+    self->haplotype = malloc((self->num_mutations + 1) * sizeof(char));
     if (self->positions == NULL || self->haplotype == NULL) {
         goto out;
     }
+    self->haplotype[self->num_mutations] = '\0';
     ret = hapgen_assign_mutation_sites(self);
     if (ret != 0) {
         goto out;
@@ -298,19 +306,113 @@ hapgen_free(hapgen_t *self)
         free(self->haplotype);
     }
     object_heap_free(&self->avl_node_heap);
+    sparse_tree_iterator_free(&self->tree_iterator);
     return 0;
 }
 
-int
-hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype)
+static inline double
+_get_position(avl_node_t *node)
+{
+    mutation_t *mut;
+    assert(node != NULL);
+    mut = (mutation_t *) node->item;
+    assert(mut != NULL);
+    return mut->position;
+}
+
+static int
+hapgen_apply_node_mutations(hapgen_t *self, uint32_t node, uint32_t left,
+        uint32_t right)
 {
     int ret = 0;
+    int where;
+    avl_node_t *avl_node, *found;
+    mutation_t *mut, search;
+    search.position = (double) left;
 
-    if (j < 1 || j > self->sample_size) {
+    /* printf("considering %d (%d-%d)\n", node, left, right); */
+    where = avl_search_closest(&self->mutations[node], &search, &found);
+    assert(found != NULL);
+    avl_node = found;
+    mut = (mutation_t *) avl_node->item;
+    /* printf("found %d: %f\n", where, mut->position); */
+    if (where < 0) {
+        /* The closest position is > left, so we start from there */
+        assert(_get_position(avl_node) >= left);
+    } else {
+        /* the closest position is <= left, so we start from either the
+         * current node or the next one. */
+        assert(_get_position(avl_node) <= left);
+        if (_get_position(avl_node) > left) {
+            avl_node = avl_node->next;
+        }
+    }
+    while (avl_node != NULL
+            && _get_position(avl_node) >= left
+            && _get_position(avl_node) < right) {
+        mut = (mutation_t *) avl_node->item;
+        /* printf("applying %f \n", mut->position); */
+        self->haplotype[mut->site] = '1';
+        assert(left <= mut->position && mut->position < right);
+        avl_node = avl_node->next;
+    }
+
+    return ret;
+}
+
+static int
+hapgen_apply_tree_mutations(hapgen_t *self, uint32_t sample_id,
+        sparse_tree_t *tree, uint32_t left, uint32_t right)
+{
+    int ret = 0;
+    uint32_t u;
+
+    /* printf("mutations in tree: %d-%d\n", left, right); */
+    /* sparse_tree_iterator_print_state(&self->tree_iterator); */
+
+    u = sample_id;
+    while (u != 0) {
+        if (avl_count(&self->mutations[u]) > 0) {
+            ret = hapgen_apply_node_mutations(self, u, left, right);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        u = tree->parent[u];
+    }
+out:
+    return ret;
+}
+
+int
+hapgen_get_haplotype(hapgen_t *self, uint32_t sample_id, char **haplotype)
+{
+    int ret = 0;
+    uint32_t length, left;
+    sparse_tree_t *tree;
+
+    if (sample_id < 1 || sample_id> self->sample_size) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
     memset(self->haplotype, '0', self->num_mutations);
+    sparse_tree_iterator_reset(&self->tree_iterator);
+
+    left = 0;
+    while ((ret = sparse_tree_iterator_next(
+                    &self->tree_iterator, &length, &tree)) == 1) {
+        ret = hapgen_apply_tree_mutations(self, sample_id, tree,
+                left, left + length);
+        if (ret != 0) {
+            goto out;
+        }
+        left += length;
+    }
+
+    if (ret != 0) {
+        goto out;
+    }
+
     *haplotype = self->haplotype;
 out:
     return ret;
