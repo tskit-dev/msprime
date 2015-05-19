@@ -393,7 +393,7 @@ class TreeSequence(object):
         return nodes
 
 
-class CHaplotypeGenerator(object):
+class HaplotypeGenerator(object):
 
     def __init__(self, tree_sequence, scaled_mutation_rate, random_seed=None):
         self._tree_sequence = tree_sequence
@@ -404,8 +404,7 @@ class CHaplotypeGenerator(object):
             self._random_seed = random.randint(0, 2**31)
         self._ll_haplotype_generator = _msprime.HaplotypeGenerator(
                 self._tree_sequence.get_ll_tree_sequence(),
-                self._scaled_mutation_rate, self._random_seed,
-                2**20)
+                self._scaled_mutation_rate, self._random_seed)
 
     def get_num_segregating_sites(self):
         return self._ll_haplotype_generator.get_num_segregating_sites()
@@ -415,7 +414,7 @@ class CHaplotypeGenerator(object):
             yield self._ll_haplotype_generator.get_haplotype(j)
 
 
-class HaplotypeGenerator(object):
+class NewHaplotypeGenerator(object):
     """
     Class that takes a TreeSequence and a recombination rate and builds a set
     of haplotypes consistent with the underlying trees.
