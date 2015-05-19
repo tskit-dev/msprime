@@ -258,11 +258,13 @@ print_tree_sequence(tree_sequence_t *ts)
     size_t j;
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
     uint32_t length;
+    sparse_tree_t *tree;
     tree_node_t *nodes_out, *nodes_in, *node;
     coalescence_record_t cr;
     tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
+    sparse_tree_iterator_t *sparse_iter = calloc(1, sizeof(sparse_tree_iterator_t));
 
-    if (iter == NULL) {
+    if (iter == NULL || sparse_iter == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -303,9 +305,24 @@ print_tree_sequence(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
+    /* sparse trees */
+    ret = sparse_tree_iterator_alloc(sparse_iter, ts);
+    if (ret != 0) {
+        goto out;
+    }
+    while ((ret = sparse_tree_iterator_next(
+                    sparse_iter, &length, &tree)) == 1) {
+        printf("New tree: %d (%d)\n", length, (int) tree->num_nodes);
+        sparse_tree_iterator_print_state(sparse_iter);
+    }
+
+    sparse_tree_iterator_free(sparse_iter);
 out:
     if (iter != NULL) {
         free(iter);
+    }
+    if (sparse_iter != NULL) {
+        free(sparse_iter);
     }
     if (ret != 0) {
         fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
@@ -373,10 +390,10 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
         if (ret != 0) {
             goto out;
         }
-        print_tree_sequence(tree_seq);
         print_newick_trees(tree_seq);
+        print_haplotypes(tree_seq);
     }
-    print_haplotypes(tree_seq);
+    print_tree_sequence(tree_seq);
 out:
     if (msp != NULL) {
         msp_free(msp);

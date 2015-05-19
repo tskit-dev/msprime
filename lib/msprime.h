@@ -175,6 +175,25 @@ typedef struct {
     object_heap_t avl_node_heap;
 } tree_diff_iterator_t;
 
+typedef struct {
+    uint32_t sample_size;
+    size_t num_nodes;
+    uint32_t *parent;
+    double *time;
+} sparse_tree_t;
+
+typedef struct {
+    uint32_t sample_size;
+    uint32_t num_loci;
+    size_t num_nodes;
+    tree_sequence_t *tree_sequence;
+    sparse_tree_t tree;
+    uint32_t position;
+    size_t next_record_index;
+    size_t num_records;
+    coalescence_record_t *right_sorted_records;
+} sparse_tree_iterator_t;
+
 typedef struct newick_tree_node {
     uint32_t id;
     double time;
@@ -265,6 +284,13 @@ int tree_diff_iterator_free(tree_diff_iterator_t *self);
 int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
         tree_node_t **nodes_out, tree_node_t **nodes_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
+
+int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
+        tree_sequence_t *tree_sequence);
+int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
+int sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
+        sparse_tree_t **tree);
+void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
 
 int newick_converter_alloc(newick_converter_t *self, 
         tree_sequence_t *tree_sequence, size_t precision, 
