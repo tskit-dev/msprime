@@ -309,41 +309,33 @@ hapgen_free(hapgen_t *self)
     return 0;
 }
 
-/* static inline double */
-/* _get_position(avl_node_t *node) */
-/* { */
-/*     mutation_t *mut; */
-/*     assert(node != NULL); */
-/*     mut = (mutation_t *) node->item; */
-/*     assert(mut != NULL); */
-/*     return mut->position; */
-/* } */
+static inline double
+_get_position(avl_node_t *node)
+{
+    mutation_t *mut;
+    assert(node != NULL);
+    mut = (mutation_t *) node->item;
+    assert(mut != NULL);
+    return mut->position;
+}
 
 static int
 hapgen_apply_node_mutations(hapgen_t *self, uint32_t node, uint32_t left,
         uint32_t right)
 {
-    avl_node_t *avl_node;
-    mutation_t *mut;
-
-
-    for (avl_node = self->mutations[node].head; avl_node != NULL;
-            avl_node = avl_node->next) {
-        mut = (mutation_t *) avl_node->item;
-        assert(mut != NULL);
-        if (left <= mut->position && mut->position < right) {
-            self->haplotype[mut->site] = '1';
-        }
-    }
-    return 0;
-#if 0
     int ret = 0;
     int where;
     avl_node_t *avl_node, *found;
     mutation_t *mut, search;
     search.position = (double) left;
 
-    /* printf("considering %d (%d-%d)\n", node, left, right); */
+    /* printf("considering node %d (%d-%d)\n", node, left, right); */
+    /* for (avl_node = self->mutations[node].head; avl_node != NULL; */
+    /*         avl_node = avl_node->next) { */
+    /*     mut = (mutation_t *) avl_node->item; */
+    /*     printf("\t%f -> %d\n", mut->position, (int) mut->site); */
+    /* } */
+
     where = avl_search_closest(&self->mutations[node], &search, &found);
     assert(found != NULL);
     avl_node = found;
@@ -356,7 +348,7 @@ hapgen_apply_node_mutations(hapgen_t *self, uint32_t node, uint32_t left,
         /* the closest position is <= left, so we start from either the
          * current node or the next one. */
         assert(_get_position(avl_node) <= left);
-        if (_get_position(avl_node) > left) {
+        if (_get_position(avl_node) < left) {
             avl_node = avl_node->next;
         }
     }
@@ -364,14 +356,25 @@ hapgen_apply_node_mutations(hapgen_t *self, uint32_t node, uint32_t left,
             && _get_position(avl_node) >= left
             && _get_position(avl_node) < right) {
         mut = (mutation_t *) avl_node->item;
-        /* printf("applying %f \n", mut->position); */
+        /* printf("\tapplying %f \n", mut->position); */
         self->haplotype[mut->site] = '1';
         assert(left <= mut->position && mut->position < right);
         avl_node = avl_node->next;
     }
 
+/*     /1* TMP: check that this has been done properly *1/ */
+/*     for (avl_node = self->mutations[node].head; avl_node != NULL; */
+/*             avl_node = avl_node->next) { */
+/*         mut = (mutation_t *) avl_node->item; */
+/*         assert(mut != NULL); */
+/*         if (left <= mut->position && mut->position < right) { */
+/*             if (self->haplotype[mut->site] != '1') { */
+/*                 printf("Error at site %d: %f\n", (int) mut->site, mut->position); */
+/*                 assert(1 == 0); */
+/*             } */
+/*         } */
+/*     } */
     return ret;
-#endif
 }
 
 static int
