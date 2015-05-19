@@ -1080,7 +1080,33 @@ out:
     return ret;
 }
 
+static PyObject *
+TreeSequence_generate_mutations(TreeSequence *self,
+        PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    static char *kwlist[] = {"mutation_rate", "random_seed", NULL};
+    double mutation_rate;
+    unsigned long random_seed;
 
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dk", kwlist,
+            &mutation_rate, &random_seed)) {
+        goto out;
+    }
+    err = tree_sequence_generate_mutations(self->tree_sequence,
+            mutation_rate, random_seed);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
 
 static PyObject *
 TreeSequence_get_record(TreeSequence *self, PyObject *args)
@@ -1210,6 +1236,8 @@ static PyMethodDef TreeSequence_methods[] = {
         "Writes the tree sequence out to the specified path."},
     {"load", (PyCFunction) TreeSequence_load, METH_VARARGS,
         "Loads a tree sequence from the specified path."},
+    {"generate_mutations", (PyCFunction) TreeSequence_generate_mutations,
+        METH_VARARGS, "Generates mutations under the infinite sites model"},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
         "Returns the record at the specified index."},
     {"get_breakpoints", (PyCFunction) TreeSequence_get_breakpoints,
@@ -1635,17 +1663,13 @@ HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "mutation_rate", "random_seed",
-            NULL};
+    static char *kwlist[] = {"tree_sequence", NULL};
     TreeSequence *tree_sequence;
-    double mutation_rate;
-    unsigned long random_seed;
 
     self->haplotype_generator = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!dk", kwlist,
-            &TreeSequenceType, &tree_sequence, &mutation_rate,
-            &random_seed)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -1660,7 +1684,7 @@ HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds
     }
     memset(self->haplotype_generator, 0, sizeof(hapgen_t));
     err = hapgen_alloc(self->haplotype_generator,
-            self->tree_sequence->tree_sequence, mutation_rate, random_seed);
+            self->tree_sequence->tree_sequence);
     if (err != 0) {
         handle_library_error(err);
         goto out;

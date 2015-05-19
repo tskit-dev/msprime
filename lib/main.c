@@ -191,12 +191,18 @@ print_haplotypes(tree_sequence_t *ts)
     uint32_t j;
     char *haplotype;
 
+    ret = tree_sequence_generate_mutations(ts, 100, 10);
+    if (ret != 0) {
+        goto out;
+    }
+    printf("num_mutation = %d\n", (int) tree_sequence_get_num_mutations(ts));
+
     printf("haplotypes \n");
     if (hg == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = hapgen_alloc(hg, ts, 100, 10);
+    ret = hapgen_alloc(hg, ts);
     if (ret != 0) {
         goto out;
     }

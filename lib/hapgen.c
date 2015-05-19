@@ -21,9 +21,6 @@
 #include <string.h>
 #include <assert.h>
 
-#include <gsl/gsl_math.h>
-#include <gsl/gsl_randist.h>
-
 #include "err.h"
 #include "object_heap.h"
 #include "msprime.h"
@@ -106,9 +103,7 @@ hapgen_alloc_avl_node(hapgen_t *self, double position)
     char *p;
 
     if (object_heap_empty(&self->avl_node_heap)) {
-        if (object_heap_expand(&self->avl_node_heap) != 0) {
-            goto out;
-        }
+        goto out;
     }
     p = object_heap_alloc_object(&self->avl_node_heap);
     if (p == NULL) {
@@ -139,52 +134,40 @@ hapgen_add_mutation(hapgen_t *self, uint32_t node, double position)
     avl_node = avl_insert_node(&self->mutations[node], avl_node);
     /* We assume that we never generate conflicting positions. */
     assert(avl_node != NULL);
-    self->num_mutations++;
     ret = 0;
 out:
     return ret;
 }
 
 static int
-hapgen_generate_mutations(hapgen_t *self)
+hapgen_initialise_mutations(hapgen_t *self)
 {
     int ret = -1;
-    coalescence_record_t cr;
-    uint32_t j, k, l, child;
-    size_t num_records;
-    double branch_length, distance, mu, position;
-    unsigned int num_mutations;
-    double *times = NULL;
+    size_t j;
+    uint32_t *nodes = NULL;
+    double *positions = NULL;
 
-    times = calloc(self->num_nodes + 1, sizeof(double));
-    if (times == NULL) {
+    nodes = malloc(self->num_mutations * sizeof(uint32_t));
+    positions = malloc(self->num_mutations * sizeof(double));
+    if (nodes == NULL || positions == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    num_records = tree_sequence_get_num_coalescence_records(
-            self->tree_sequence);
-    for (j = 0; j < num_records; j++) {
-        ret = tree_sequence_get_record(self->tree_sequence, j, &cr);
-        if (ret != 0) {
-            goto out;
-        }
-        times[cr.node] = cr.time;
-        distance = (cr.right - cr.left) / (double) self->num_loci;
-        for (k = 0; k < 2; k++) {
-            child = cr.children[k];
-            branch_length = cr.time - times[child];
-            mu = branch_length * distance * self->mutation_rate;
-            num_mutations = gsl_ran_poisson(self->rng, mu);
-            for (l = 0; l < num_mutations; l++) {
-                position = gsl_ran_flat(self->rng, cr.left, cr.right);
-                hapgen_add_mutation(self, child, position);
-            }
-        }
+    ret = tree_sequence_get_mutations(self->tree_sequence, nodes,
+            positions);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_mutations; j++) {
+        hapgen_add_mutation(self, nodes[j], positions[j]);
     }
     ret = 0;
 out:
-    if (times != NULL) {
-        free(times);
+    if (nodes != NULL) {
+        free(nodes);
+    }
+    if (positions != NULL) {
+        free(positions);
     }
     return ret;
 }
@@ -230,11 +213,9 @@ out:
 }
 
 int
-hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
-        double mutation_rate, unsigned long random_seed)
+hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
 {
     int ret = MSP_ERR_NO_MEMORY;
-    size_t avl_node_block_size = 65536;
     uint32_t j;
 
     assert(tree_sequence != NULL);
@@ -242,17 +223,12 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->num_nodes = tree_sequence_get_num_nodes(tree_sequence);
     self->num_loci = tree_sequence_get_num_loci(tree_sequence);
+    self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->tree_sequence = tree_sequence;
-    self->mutation_rate = mutation_rate;
-    self->random_seed = random_seed;
-    self->rng = gsl_rng_alloc(gsl_rng_default);
-    if (self->rng == NULL) {
-        goto out;
-    }
-    gsl_rng_set(self->rng, self->random_seed);
+
     ret = object_heap_init(&self->avl_node_heap,
-            sizeof(avl_node_t) + sizeof(mutation_t),
-            avl_node_block_size, NULL);
+            sizeof(avl_node_t) + sizeof(mutation_t), self->num_mutations,
+            NULL);
     if (ret != 0) {
         goto out;
     }
@@ -268,7 +244,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence,
     for (j = 1; j <= self->num_nodes; j++) {
         avl_init_tree(&self->mutations[j], cmp_mutation, NULL);
     }
-    ret = hapgen_generate_mutations(self);
+    ret = hapgen_initialise_mutations(self);
     if (ret != 0) {
         goto out;
     }
@@ -292,9 +268,6 @@ out:
 int
 hapgen_free(hapgen_t *self)
 {
-    if (self->rng != NULL) {
-        gsl_rng_free(self->rng);
-    }
     if (self->mutations != NULL) {
         free(self->mutations);
     }
