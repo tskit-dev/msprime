@@ -137,17 +137,21 @@ typedef struct {
 typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
-    uint32_t *left;
-    uint32_t *right;
-    uint32_t *node;
-    double *time;
-    uint32_t *children;
-    uint32_t *mutation_nodes;
-    double *mutation_positions;
+    struct {
+        uint32_t *left;
+        uint32_t *right;
+        uint32_t *node;
+        double *time;
+        uint32_t *children;
+    } trees;
+    struct {
+        uint32_t *node;
+        double *position;
+    } mutations;
     uint32_t *breakpoints;
+    uint32_t num_nodes;
     size_t num_records;
     size_t num_breakpoints;
-    size_t num_nodes;
     size_t num_mutations;
 } tree_sequence_t;
 
