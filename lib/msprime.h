@@ -38,6 +38,10 @@
 #define MSP_FILE_FORMAT_VERSION_MAJOR 0
 #define MSP_FILE_FORMAT_VERSION_MINOR 1
 
+#define MSP_ORDER_TIME 0
+#define MSP_ORDER_LEFT 1
+#define MSP_ORDER_RIGHT 2
+
 #define MAX_BRANCH_LENGTH_STRING 24
 
 /* Using a size_t for index allows us to have an effectively unlimited
@@ -143,6 +147,8 @@ typedef struct {
         uint32_t *node;
         double *time;
         uint32_t *children;
+        uint32_t *left_sorting;
+        uint32_t *right_sorting;
     } trees;
     struct {
         uint32_t *node;
@@ -260,6 +266,7 @@ size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_coalescence_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
 
+void tree_sequence_print_state(tree_sequence_t *self);
 int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
 int tree_sequence_load(tree_sequence_t *self, const char *filename);
 int tree_sequence_free(tree_sequence_t *self);
@@ -275,7 +282,7 @@ uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
 uint32_t tree_sequence_get_num_loci(tree_sequence_t *self);
 
 int tree_sequence_get_record(tree_sequence_t *self, size_t index, 
-        coalescence_record_t *record);
+        coalescence_record_t *record, int order);
 int tree_sequence_get_breakpoints(tree_sequence_t *self, 
         uint32_t *breakpoints);
 int tree_sequence_get_mutations(tree_sequence_t *self, uint32_t *nodes,

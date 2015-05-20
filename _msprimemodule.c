@@ -1129,7 +1129,7 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
         goto out;
     }
     err = tree_sequence_get_record(self->tree_sequence,
-            (size_t) record_index, &cr);
+            (size_t) record_index, &cr, MSP_ORDER_LEFT);
     if (err != 0) {
         handle_library_error(err);
         goto out;

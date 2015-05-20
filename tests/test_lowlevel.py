@@ -681,6 +681,7 @@ class TestHaplotypeGenerator(LowLevelTestCase):
         hg = _msprime.HaplotypeGenerator(ts)
         before = list(hg.get_haplotype(j) for j in range(1, n + 1))
         hg = _msprime.HaplotypeGenerator(ts)
+        num_mutations = ts.get_num_mutations()
         del ts
         # We should keep a reference to the tree sequence.
         after = list(hg.get_haplotype(j) for j in range(1, n + 1))
@@ -689,4 +690,4 @@ class TestHaplotypeGenerator(LowLevelTestCase):
         for h in before:
             self.assertGreater(len(h), 0)
             self.assertIsInstance(h, str)
-            self.assertEqual(len(h), hg.get_num_segregating_sites())
+            self.assertEqual(len(h), num_mutations)

@@ -29,15 +29,28 @@
 #include "msprime.h"
 #include "object_heap.h"
 
+
+typedef struct {
+    uint32_t value;
+    uint32_t index;
+} index_sort_t;
+
+static int
+cmp_index_sort(const void *a, const void *b) {
+    const index_sort_t *ca = (const index_sort_t *) a;
+    const index_sort_t *cb = (const index_sort_t *) b;
+    return (ca->value > cb->value) - (ca->value < cb->value);
+}
+
 /*
  * Comparator for coalescence records. Sort by left.
  */
-static int
-cmp_coalescence_record_left(const void *a, const void *b) {
-    const coalescence_record_t *ca = (const coalescence_record_t *) a;
-    const coalescence_record_t *cb = (const coalescence_record_t *) b;
-    return (ca->left > cb->left) - (ca->left < cb->left);
-}
+/* static int */
+/* cmp_coalescence_record_left(const void *a, const void *b) { */
+/*     const coalescence_record_t *ca = (const coalescence_record_t *) a; */
+/*     const coalescence_record_t *cb = (const coalescence_record_t *) b; */
+/*     return (ca->left > cb->left) - (ca->left < cb->left); */
+/* } */
 
 static int
 cmp_coalescence_record_right(const void *a, const void *b) {
@@ -51,6 +64,33 @@ cmp_tree_node_list(const void *a, const void *b) {
     const tree_node_list_t *ia = (const tree_node_list_t *) a;
     const tree_node_list_t *ib = (const tree_node_list_t *) b;
     return (ia->key > ib->key) - (ia->key < ib->key);
+}
+
+void
+tree_sequence_print_state(tree_sequence_t *self)
+{
+    size_t j;
+
+    printf("tree_sequence state\n");
+    printf("trees = (%d records)\n", (int) self->num_records);
+    for (j = 0; j < self->num_records; j++) {
+        printf("\t%d\t%d\t%d\t%d\t%d\t%d\t%f\t|\t%d\t%d\n",
+                (int) j,
+                (int) self->trees.left[j],
+                (int) self->trees.right[j],
+                (int) self->trees.node[j],
+                (int) self->trees.children[2 * j],
+                (int) self->trees.children[2 * j + 1],
+                self->trees.time[j],
+                (int) self->trees.left_sorting[j],
+                (int) self->trees.right_sorting[j]);
+    }
+    printf("mutations = (%d records)\n", (int) self->num_mutations);
+    for (j = 0; j < self->num_mutations; j++) {
+        printf("\t%d\t%f\n", (int) self->mutations.node[j],
+                self->mutations.position[j]);
+    }
+
 }
 
 /* Allocates the memory required for arrays of values. Assumes that
@@ -71,9 +111,12 @@ tree_sequence_alloc(tree_sequence_t *self)
     self->trees.children = malloc(2 * self->num_records * sizeof(uint32_t));
     self->trees.node = malloc(self->num_records * sizeof(uint32_t));
     self->trees.time = malloc(self->num_records * sizeof(double));
+    self->trees.left_sorting = malloc(self->num_records * sizeof(uint32_t));
+    self->trees.right_sorting = malloc(self->num_records * sizeof(uint32_t));
     if (self->trees.left == NULL || self->trees.right == NULL
             || self->trees.children == NULL || self->trees.node == NULL
-            || self->trees.time == NULL) {
+            || self->trees.time == NULL || self->trees.left_sorting == NULL
+            || self->trees.right_sorting == NULL) {
         goto out;
     }
     if (self->num_mutations > 0) {
@@ -110,6 +153,12 @@ tree_sequence_free(tree_sequence_t *self)
     if (self->trees.time != NULL) {
         free(self->trees.time);
     }
+    if (self->trees.left_sorting != NULL) {
+        free(self->trees.left_sorting);
+    }
+    if (self->trees.right_sorting != NULL) {
+        free(self->trees.right_sorting);
+    }
     if (self->mutations.node != NULL) {
         free(self->mutations.node);
     }
@@ -130,6 +179,44 @@ tree_sequence_calculate_num_nodes(tree_sequence_t *self)
             self->num_nodes = self->trees.node[j];
         }
     }
+}
+
+static int
+tree_sequence_make_indexes(tree_sequence_t *self)
+{
+    int ret = 0;
+    uint32_t j;
+    index_sort_t *sort_buff = NULL;
+
+    sort_buff = malloc(self->num_records * sizeof(index_sort_t));
+    if (sort_buff == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* sort by left */
+    for (j = 0; j < self->num_records; j++) {
+        sort_buff[j].index = j;
+        sort_buff[j].value = self->trees.left[j];
+    }
+    qsort(sort_buff, self->num_records, sizeof(index_sort_t), cmp_index_sort);
+    for (j = 0; j < self->num_records; j++) {
+        self->trees.left_sorting[j] = sort_buff[j].index;
+    }
+    /* sort by right */
+    for (j = 0; j < self->num_records; j++) {
+        sort_buff[j].index = j;
+        sort_buff[j].value = self->trees.right[j];
+    }
+    qsort(sort_buff, self->num_records, sizeof(index_sort_t), cmp_index_sort);
+    for (j = 0; j < self->num_records; j++) {
+        self->trees.right_sorting[j] = sort_buff[j].index;
+    }
+
+out:
+    if (sort_buff != NULL) {
+        free(sort_buff);
+    }
+    return ret;
 }
 
 int
@@ -157,10 +244,6 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     if (ret != 0) {
         goto out;
     }
-
-    /* Sort the records by the left coordinate*/
-    qsort(records, self->num_records, sizeof(coalescence_record_t),
-            cmp_coalescence_record_left);
     for (j = 0; j < self->num_records; j++) {
         self->trees.left[j] = records[j].left;
         self->trees.right[j] = records[j].right;
@@ -170,6 +253,10 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
         self->trees.time[j] = records[j].time;
     }
     tree_sequence_calculate_num_nodes(self);
+    ret = tree_sequence_make_indexes(self);
+    if (ret != 0) {
+        goto out;
+    }
     ret = 0;
 out:
     if (records != NULL) {
@@ -473,6 +560,10 @@ tree_sequence_load(tree_sequence_t *self, const char *filename)
         goto out;
     }
     tree_sequence_calculate_num_nodes(self);
+    ret = tree_sequence_make_indexes(self);
+    if (ret != 0) {
+        goto out;
+    }
     ret = 0;
 out:
     return ret;
@@ -739,19 +830,36 @@ tree_sequence_get_num_mutations(tree_sequence_t *self)
 
 int
 tree_sequence_get_record(tree_sequence_t *self, size_t index,
-        coalescence_record_t *record)
+        coalescence_record_t *record, int order)
 {
-    int ret = MSP_ERR_OUT_OF_BOUNDS;
+    int ret = 0;
+    size_t j;
 
-    if (index < self->num_records) {
-        record->left = self->trees.left[index];
-        record->right = self->trees.right[index];
-        record->node = self->trees.node[index];
-        record->children[0] = self->trees.children[2 * index];
-        record->children[1] = self->trees.children[2 * index + 1];
-        record->time = self->trees.time[index];
-        ret = 0;
+    if (index >= self->num_records) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
     }
+    switch (order) {
+        case MSP_ORDER_TIME:
+            j = index;
+            break;
+        case MSP_ORDER_LEFT:
+            j = self->trees.left_sorting[index];
+            break;
+        case MSP_ORDER_RIGHT:
+            j = self->trees.right_sorting[index];
+            break;
+        default:
+            ret = MSP_ERR_BAD_ORDERING;
+            goto out;
+    }
+    record->left = self->trees.left[j];
+    record->right = self->trees.right[j];
+    record->node = self->trees.node[j];
+    record->children[0] = self->trees.children[2 * j];
+    record->children[1] = self->trees.children[2 * j + 1];
+    record->time = self->trees.time[j];
+out:
     return ret;
 }
 
@@ -842,7 +950,7 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
         goto out;
     }
     for (j = 0; j < self->num_records; j++) {
-        ret = tree_sequence_get_record(self, j, &cr);
+        ret = tree_sequence_get_record(self, j, &cr, MSP_ORDER_TIME);
         if (ret != 0) {
             goto out;
         }
@@ -1149,7 +1257,7 @@ tree_diff_iterator_next_tree(tree_diff_iterator_t *self, uint32_t *length,
     if (self->next_record_index < self->num_records) {
         while (not_done) {
             ret = tree_sequence_get_record(self->tree_sequence,
-                    self->next_record_index, &cr);
+                    self->next_record_index, &cr, MSP_ORDER_LEFT);
             if (ret != 0) {
                 goto out;
             }
@@ -1249,7 +1357,7 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
     }
     for (j = 0; j < self->num_records; j++) {
         ret = tree_sequence_get_record(self->tree_sequence, j,
-                self->right_sorted_records + j);
+                self->right_sorted_records + j, MSP_ORDER_LEFT);
         if (ret != 0) {
             goto out;
         }
@@ -1327,7 +1435,8 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
     if (self->next_record_index < self->num_records) {
         if (self->next_record_index == 0) {
             for (j = 0; j < n - 1; j++) {
-                ret = tree_sequence_get_record(self->tree_sequence, j, &cr);
+                ret = tree_sequence_get_record(self->tree_sequence, j, &cr,
+                        MSP_ORDER_LEFT);
                 if (ret != 0) {
                     goto out;
                 }
@@ -1350,7 +1459,8 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
                 }
                 k++;
             }
-            ret = tree_sequence_get_record(self->tree_sequence, j, &cr);
+            ret = tree_sequence_get_record(self->tree_sequence, j, &cr,
+                    MSP_ORDER_LEFT);
             if (ret != 0) {
                 goto out;
             }
@@ -1360,7 +1470,8 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
                     self->tree.parent[cr.children[c]] = cr.node;
                 }
                 j++;
-                tree_sequence_get_record(self->tree_sequence, j, &cr);
+                tree_sequence_get_record(self->tree_sequence, j, &cr,
+                        MSP_ORDER_LEFT);
             }
             self->next_record_index = j;
             *length = self->right_sorted_records[k].right - self->position;
