@@ -304,6 +304,7 @@ class TestHaplotypeGenerator(HighLevelTestCase):
                 b = haplotype_strings[j][k]
                 zeros += b == '0'
                 ones += b == '1'
+            self.assertGreater(zeros, 0)
             self.assertEqual(zeros + ones, n)
 
     def verify_simulation(self, n, m, r, theta):
@@ -314,10 +315,11 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         ts.set_scaled_recombination_rate(r)
         ts.set_num_loci(m)
         tree_sequence = ts.run()
-        hg = msprime.HaplotypeGenerator(tree_sequence, theta)
+        tree_sequence.generate_mutations(theta)
+        hg = msprime.HaplotypeGenerator(tree_sequence)
         haplotypes = list(hg.haplotypes())
         for h in haplotypes:
-            self.assertEqual(len(h), hg.get_num_segregating_sites())
+            self.assertEqual(len(h), tree_sequence.get_num_mutations())
         self.verify_haplotypes(n, haplotypes)
 
     def test_random_parameters(self):
