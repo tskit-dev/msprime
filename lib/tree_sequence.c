@@ -847,9 +847,7 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
             goto out;
         }
         times[cr.node] = cr.time;
-        /* TODO Remove the num_loci bit here and change the mutation
-         * rate to being unscaled by distance */
-        distance = (cr.right - cr.left) / (double) self->num_loci;
+        distance = cr.right - cr.left;
         for (k = 0; k < 2; k++) {
             child = cr.children[k];
             branch_length = cr.time - times[child];

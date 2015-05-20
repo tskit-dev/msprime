@@ -118,11 +118,16 @@ class SimulationRunner(object):
                         print("[{0}]".format(l), end="")
                         print(ns)
             if self.mutation_rate is not None:
-                hg = msprime.HaplotypeGenerator(tree_sequence,
-                        self.mutation_rate, self.simulator.get_random_seed())
-                s = hg.get_num_segregating_sites()
+                # The mutation rate in ms is multiplied by the size of the
+                # region
+                mu = self.mutation_rate / self.num_loci
+                seed = self.simulator.get_random_seed()
+                tree_sequence.generate_mutations(mu, seed)
+                hg = msprime.HaplotypeGenerator(tree_sequence)
+                s = tree_sequence.get_num_mutations()
                 print("segsites:", s)
                 if s != 0:
+                    # TODO put in positions from mutations.
                     print("positions: ", end="")
                     print("0.0 " * s)
                     for h in hg.haplotypes():

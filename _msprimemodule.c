@@ -1204,10 +1204,12 @@ static PyObject *
 TreeSequence_get_num_loci(TreeSequence  *self)
 {
     PyObject *ret = NULL;
+    size_t num_loci = tree_sequence_get_num_loci(self->tree_sequence);
+
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->tree_sequence->num_loci);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_loci);
 out:
     return ret;
 }
@@ -1216,13 +1218,30 @@ static PyObject *
 TreeSequence_get_sample_size(TreeSequence  *self)
 {
     PyObject *ret = NULL;
+    size_t sample_size = tree_sequence_get_sample_size(self->tree_sequence);
+
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->tree_sequence->sample_size);
+    ret = Py_BuildValue("n", (Py_ssize_t) sample_size);
 out:
     return ret;
 }
+
+static PyObject *
+TreeSequence_get_num_mutations(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    size_t num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) num_mutations);
+out:
+    return ret;
+}
+
 
 
 static PyMemberDef TreeSequence_members[] = {
@@ -1247,6 +1266,8 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_num_breakpoints", (PyCFunction) TreeSequence_get_num_breakpoints,
             METH_NOARGS, "Returns the number of coalescence breakpoints." },
     {"get_num_loci", (PyCFunction) TreeSequence_get_num_loci, METH_NOARGS,
+            "Returns the number of loci" },
+    {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
             "Returns the number of loci" },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
@@ -1719,22 +1740,6 @@ out:
     return ret;
 }
 
-static PyObject *
-HaplotypeGenerator_get_num_segregating_sites(HaplotypeGenerator *self)
-{
-    PyObject *ret = NULL;
-
-    if (HaplotypeGenerator_check_state(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) hapgen_get_num_segregating_sites(
-            self->haplotype_generator));
-out:
-    return ret;
-}
-
-
 static PyMemberDef HaplotypeGenerator_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -1742,9 +1747,6 @@ static PyMemberDef HaplotypeGenerator_members[] = {
 static PyMethodDef HaplotypeGenerator_methods[] = {
     {"get_haplotype", (PyCFunction) HaplotypeGenerator_get_haplotype,
         METH_VARARGS, "Returns the haplotype for the specified sample"},
-    {"get_num_segregating_sites",
-        (PyCFunction) HaplotypeGenerator_get_num_segregating_sites, METH_NOARGS,
-        "Returns the number of segregating sites in the haplotypes."},
     {NULL}  /* Sentinel */
 };
 
