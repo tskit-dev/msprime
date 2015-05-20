@@ -29,8 +29,6 @@ import platform
 import random
 import sys
 
-import numpy as np
-
 import _msprime
 from _msprime import InputError
 from _msprime import LibraryError
