@@ -265,10 +265,10 @@ int tree_sequence_generate_mutations(tree_sequence_t *self,
         double mutation_rate, unsigned long random_seed);
 size_t tree_sequence_get_num_breakpoints(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
+size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
 uint32_t tree_sequence_get_num_loci(tree_sequence_t *self);
-uint32_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 
 int tree_sequence_get_record(tree_sequence_t *self, size_t index, 
         coalescence_record_t *record);
