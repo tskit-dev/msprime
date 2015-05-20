@@ -42,16 +42,6 @@ cmp_index_sort(const void *a, const void *b) {
     return (ca->value > cb->value) - (ca->value < cb->value);
 }
 
-/*
- * Comparator for coalescence records. Sort by left.
- */
-/* static int */
-/* cmp_coalescence_record_left(const void *a, const void *b) { */
-/*     const coalescence_record_t *ca = (const coalescence_record_t *) a; */
-/*     const coalescence_record_t *cb = (const coalescence_record_t *) b; */
-/*     return (ca->left > cb->left) - (ca->left < cb->left); */
-/* } */
-
 static int
 cmp_coalescence_record_right(const void *a, const void *b) {
     const coalescence_record_t *ca = (const coalescence_record_t *) a;
@@ -568,16 +558,16 @@ tree_sequence_load(tree_sequence_t *self, const char *filename)
     if (ret != 0) {
         goto out;
     }
-    ret = 0;
-out:
-    /* Calling H5close here should free all HDF5 resources, even in
-     * error conditions */
+    /* Note: we don't call H5close in error conditions because we need to
+     * keep the error messages alive.
+     */
     status = H5close();
     if (status < 0) {
-        if (ret == 0) {
-            ret = MSP_ERR_HDF5;
-        }
+        ret = MSP_ERR_HDF5;
+        goto out;
     }
+    ret = 0;
+out:
     return ret;
 }
 
@@ -802,16 +792,15 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
     if (status < 0) {
         goto out;
     }
-    ret = 0;
-out:
-    /* Calling H5close here should free all HDF5 resources, even in
-     * error conditions */
+    /* Note: we don't call H5close in error conditions because we need to
+     * keep the error messages alive.
+     */
     status = H5close();
     if (status < 0) {
-        if (ret == 0) {
-            ret = MSP_ERR_HDF5;
-        }
+        goto out;
     }
+    ret = 0;
+out:
     return ret;
 }
 
