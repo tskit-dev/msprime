@@ -14,8 +14,6 @@ import tempfile
 import tests
 import _msprime
 
-# TMP
-from nose.tools import nottest
 
 def get_random_population_models(n):
     """
@@ -672,7 +670,6 @@ class TestHaplotypeGenerator(LowLevelTestCase):
     Tests for the low-level haplotype generator.
     """
 
-    @nottest
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.HaplotypeGenerator)
         self.assertRaises(TypeError, _msprime.HaplotypeGenerator, None)

@@ -533,6 +533,10 @@ tree_sequence_load(tree_sequence_t *self, const char *filename)
     herr_t status;
     hid_t file_id;
 
+    status = H5open();
+    if (status < 0) {
+        goto out;
+    }
     file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
     if (file_id < 0) {
         ret = MSP_ERR_HDF5;
@@ -566,6 +570,14 @@ tree_sequence_load(tree_sequence_t *self, const char *filename)
     }
     ret = 0;
 out:
+    /* Calling H5close here should free all HDF5 resources, even in
+     * error conditions */
+    status = H5close();
+    if (status < 0) {
+        if (ret == 0) {
+            ret = MSP_ERR_HDF5;
+        }
+    }
     return ret;
 }
 
@@ -770,6 +782,10 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
     herr_t status;
     hid_t file_id;
 
+    status = H5open();
+    if (status < 0) {
+        goto out;
+    }
     file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
     if (file_id < 0) {
         goto out;
@@ -788,9 +804,16 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
     }
     ret = 0;
 out:
+    /* Calling H5close here should free all HDF5 resources, even in
+     * error conditions */
+    status = H5close();
+    if (status < 0) {
+        if (ret == 0) {
+            ret = MSP_ERR_HDF5;
+        }
+    }
     return ret;
 }
-
 
 uint32_t
 tree_sequence_get_num_loci(tree_sequence_t *self)
