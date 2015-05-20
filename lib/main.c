@@ -383,7 +383,8 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
         goto out;
     }
     tree_sequence_print_state(tree_seq);
-    if (0) {
+    int j;
+    for (j = 0; j < 10; j++) {
         ret = tree_sequence_dump(tree_seq, "test.hdf5", 0);
         if (ret != 0) {
             goto out;
@@ -394,6 +395,9 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
         if (ret != 0) {
             goto out;
         }
+        tree_sequence_print_state(tree_seq);
+    }
+    if (0) {
         print_haplotypes(tree_seq);
         print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
