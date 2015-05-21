@@ -12,7 +12,6 @@ import random
 import os.path
 import tempfile
 
-import h5py
 
 import tests
 import _msprime
@@ -553,7 +552,11 @@ class TestTreeSequence(LowLevelTestCase):
     def verify_tree_dump_format(self, ts, outfile):
         uint32 = "uint32"
         float64 = "float64"
-        ts.dump(outfile.name)
+        # This is an ugly hack here, but we have to do it to
+        # be able to use h5py, as it keeps some global state
+        # open, and we nuke this when we call h5close() to clean up.
+        import h5py
+        ts.dump(outfile.name, skip_h5close=True)
         self.assertTrue(os.path.exists(outfile.name))
         self.assertGreater(os.path.getsize(outfile.name), 0)
         root = h5py.File(outfile.name, "r")
@@ -612,6 +615,19 @@ class TestTreeSequence(LowLevelTestCase):
         for ts in self.get_test_tree_sequences():
             with tempfile.NamedTemporaryFile() as f:
                 self.verify_dump_equality(ts, f)
+
+    def test_mutations(self):
+        ts = _msprime.TreeSequence()
+        # This hasn't been initialised, so should fail.
+        self.assertRaises(ValueError, ts.generate_mutations, ts)
+        sim = _msprime.Simulator(10, 1)
+        sim.run()
+        ts.create(sim)
+        self.assertRaises(TypeError, ts.generate_mutations)
+        self.assertRaises(TypeError, ts.generate_mutations, mutation_rate=1.0)
+        self.assertRaises(TypeError, ts.generate_mutations, random_seed=1.0)
+        self.assertRaises(TypeError, ts.generate_mutations, mutation_rate=10,
+                random_seed=1.0, invalid_param=7)
 
 
 class TestNewickConverter(LowLevelTestCase):

@@ -1024,22 +1024,29 @@ out:
 }
 
 static PyObject *
-TreeSequence_dump(TreeSequence *self, PyObject *args)
+TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
     char *path;
     PyObject *ret = NULL;
     int zlib_compression = 0;
+    int skip_h5close = 0;
     int flags = 0;
+    static char *kwlist[] = {"path", "zlib_compression", "skip_h5close",
+        NULL};
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "s|i", &path, &zlib_compression)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ii", kwlist,
+                &path, &zlib_compression, &skip_h5close)) {
         goto out;
     }
     if (zlib_compression) {
         flags = MSP_ZLIB_COMPRESSION;
+    }
+    if (skip_h5close) {
+        flags |= MSP_SKIP_H5CLOSE;
     }
     err = tree_sequence_dump(self->tree_sequence, path, flags);
     if (err != 0) {
@@ -1052,17 +1059,21 @@ out:
 }
 
 static PyObject *
-TreeSequence_load(TreeSequence *self, PyObject *args)
+TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
     char *path;
+    int flags = 0;
+    int skip_h5close = 0;
     PyObject *ret = NULL;
+    static char *kwlist[] = {"path", "skip_h5close", NULL};
 
     if (self->tree_sequence != NULL) {
         PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "s", &path)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
+                &path, &skip_h5close)) {
         goto out;
     }
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
@@ -1071,7 +1082,10 @@ TreeSequence_load(TreeSequence *self, PyObject *args)
         goto out;
     }
     memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
-    err = tree_sequence_load(self->tree_sequence, path);
+    if (skip_h5close) {
+        flags |= MSP_SKIP_H5CLOSE;
+    }
+    err = tree_sequence_load(self->tree_sequence, path, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1305,12 +1319,15 @@ static PyMemberDef TreeSequence_members[] = {
 static PyMethodDef TreeSequence_methods[] = {
     {"create", (PyCFunction) TreeSequence_create, METH_VARARGS,
         "Creates a new TreeSequence from the specified simulator."},
-    {"dump", (PyCFunction) TreeSequence_dump, METH_VARARGS,
+    {"dump", (PyCFunction) TreeSequence_dump,
+        METH_VARARGS|METH_KEYWORDS,
         "Writes the tree sequence out to the specified path."},
-    {"load", (PyCFunction) TreeSequence_load, METH_VARARGS,
+    {"load", (PyCFunction) TreeSequence_load,
+        METH_VARARGS|METH_KEYWORDS,
         "Loads a tree sequence from the specified path."},
     {"generate_mutations", (PyCFunction) TreeSequence_generate_mutations,
-        METH_VARARGS, "Generates mutations under the infinite sites model"},
+        METH_VARARGS|METH_KEYWORDS,
+        "Generates mutations under the infinite sites model"},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
         "Returns the record at the specified index."},
     {"get_breakpoints", (PyCFunction) TreeSequence_get_breakpoints,
