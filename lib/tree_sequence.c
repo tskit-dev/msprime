@@ -346,15 +346,16 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         const char *name;
         int dimensions;
         size_t size;
+        int required;
     };
     struct _dimension_check fields[] = {
-        {"/trees/left", 1, 0},
-        {"/trees/right", 1, 0},
-        {"/trees/node", 1, 0},
-        {"/trees/children", 2, 0},
-        {"/trees/time", 1, 0},
-        {"/mutations/node", 1, 0},
-        {"/mutations/position", 1, 0},
+        {"/trees/left", 1, 0, 1},
+        {"/trees/right", 1, 0, 1},
+        {"/trees/node", 1, 0, 1},
+        {"/trees/children", 2, 0, 1},
+        {"/trees/time", 1, 0, 1},
+        {"/mutations/node", 1, 0, 1},
+        {"/mutations/position", 1, 0, 1},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
@@ -364,36 +365,39 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     }
     for (j = 5; j < 7; j++) {
         fields[j].size = self->num_mutations;
+        fields[j].required = self->num_mutations > 0;
     }
     for (j = 0; j < num_fields; j++) {
-        dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
-        if (dataset_id < 0) {
-            goto out;
-        }
-        dataspace_id = H5Dget_space(dataset_id);
-        if (dataspace_id < 0) {
-            goto out;
-        }
-        rank = H5Sget_simple_extent_ndims(dataspace_id);
-        if (rank != fields[j].dimensions) {
-            ret = MSP_ERR_FILE_FORMAT;
-            goto out;
-        }
-        status = H5Sget_simple_extent_dims(dataspace_id, dims, NULL);
-        if (status < 0) {
-            goto out;
-        }
-        if (dims[0] != fields[j].size) {
-            ret = MSP_ERR_FILE_FORMAT;
-            goto out;
-        }
-        status = H5Sclose(dataspace_id);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Dclose(dataset_id);
-        if (status < 0) {
-            goto out;
+        if (fields[j].required) {
+            dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
+            if (dataset_id < 0) {
+                goto out;
+            }
+            dataspace_id = H5Dget_space(dataset_id);
+            if (dataspace_id < 0) {
+                goto out;
+            }
+            rank = H5Sget_simple_extent_ndims(dataspace_id);
+            if (rank != fields[j].dimensions) {
+                ret = MSP_ERR_FILE_FORMAT;
+                goto out;
+            }
+            status = H5Sget_simple_extent_dims(dataspace_id, dims, NULL);
+            if (status < 0) {
+                goto out;
+            }
+            if (dims[0] != fields[j].size) {
+                ret = MSP_ERR_FILE_FORMAT;
+                goto out;
+            }
+            status = H5Sclose(dataspace_id);
+            if (status < 0) {
+                goto out;
+            }
+            status = H5Dclose(dataset_id);
+            if (status < 0) {
+                goto out;
+            }
         }
     }
     ret = 0;
@@ -410,16 +414,18 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     int ret = MSP_ERR_HDF5;
     hid_t dataset_id, dataspace_id;
     herr_t status;
+    htri_t exists;
     int rank;
     hsize_t dims[2];
     struct _dimension_read {
         const char *name;
         size_t *dest;
+        int included;
     };
     struct _dimension_read fields[] = {
-        {"/breakpoints", NULL},
-        {"/trees/left", NULL},
-        {"/mutations/node", NULL},
+        {"/breakpoints", NULL, 1},
+        {"/trees/left", NULL, 1},
+        {"/mutations/node", NULL, 0},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_read);
     size_t j;
@@ -427,33 +433,43 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     fields[0].dest = &self->num_breakpoints;
     fields[1].dest = &self->num_records;
     fields[2].dest = &self->num_mutations;
-
+    /* check if the mutations group exists */
+    exists = H5Lexists(file_id, "/mutations", H5P_DEFAULT);
+    if (exists < 0) {
+        goto out;
+    }
+    self->num_mutations = 0;
+    if (exists) {
+        fields[2].included = 1;
+    }
     for (j = 0; j < num_fields; j++) {
-        dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
-        if (dataset_id < 0) {
-            goto out;
-        }
-        dataspace_id = H5Dget_space(dataset_id);
-        if (dataspace_id < 0) {
-            goto out;
-        }
-        rank = H5Sget_simple_extent_ndims(dataspace_id);
-        if (rank != 1) {
-            ret = MSP_ERR_FILE_FORMAT;
-            goto out;
-        }
-        status = H5Sget_simple_extent_dims(dataspace_id, dims, NULL);
-        if (status < 0) {
-            goto out;
-        }
-        *fields[j].dest = (size_t) dims[0];
-        status = H5Sclose(dataspace_id);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Dclose(dataset_id);
-        if (status < 0) {
-            goto out;
+        if (fields[j].included) {
+            dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
+            if (dataset_id < 0) {
+                goto out;
+            }
+            dataspace_id = H5Dget_space(dataset_id);
+            if (dataspace_id < 0) {
+                goto out;
+            }
+            rank = H5Sget_simple_extent_ndims(dataspace_id);
+            if (rank != 1) {
+                ret = MSP_ERR_FILE_FORMAT;
+                goto out;
+            }
+            status = H5Sget_simple_extent_dims(dataspace_id, dims, NULL);
+            if (status < 0) {
+                goto out;
+            }
+            *fields[j].dest = (size_t) dims[0];
+            status = H5Sclose(dataspace_id);
+            if (status < 0) {
+                goto out;
+            }
+            status = H5Dclose(dataset_id);
+            if (status < 0) {
+                goto out;
+            }
         }
     }
     ret = tree_sequence_check_hdf5_dimensions(self, file_id);
@@ -503,9 +519,8 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         fields[7].empty = 1;
     }
     for (j = 0; j < num_fields; j++) {
-        /* don't try to read empty datasets to work around limitations
-         * in older version of HDF5. */
         if (!fields[j].empty) {
+            printf("Reading %s\n", fields[j].name);
             dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
             if (dataset_id < 0) {
                 goto out;
@@ -542,6 +557,7 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     if (status < 0) {
         goto out;
     }
+    printf("reading dimensions\n");
     ret = tree_sequence_read_hdf5_dimensions(self, file_id);
     if (ret != 0) {
         goto out;
@@ -550,6 +566,7 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
+    printf("reading data\n");
     ret = tree_sequence_read_hdf5_data(self, file_id);
     if (ret != 0) {
         goto out;
@@ -582,7 +599,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     herr_t status;
     hid_t group_id, dataset_id, dataspace_id, plist_id;
     hsize_t dims[2];
-    struct _hdf5_field_read {
+    struct _hdf5_field_write {
         const char *name;
         hid_t storage_type;
         hid_t memory_type;
@@ -590,7 +607,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         size_t size;
         void *source;
     };
-    struct _hdf5_field_read fields[] = {
+    struct _hdf5_field_write fields[] = {
         {"/breakpoints", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/left", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/right", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
@@ -600,10 +617,17 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/mutations/node", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/mutations/position", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
     };
-    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
+    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
+    struct _hdf5_group_write {
+        const char *name;
+        int included;
+    };
+    struct _hdf5_group_write groups[] = {
+        {"/trees", 1},
+        {"/mutations", 1},
+    };
+    size_t num_groups = sizeof(groups) / sizeof(struct _hdf5_group_write);
     size_t j;
-    const char *groups[] = {"/trees", "/mutations", NULL};
-    const char **group_name;
 
     fields[0].source = self->breakpoints;
     fields[0].size = self->num_breakpoints;
@@ -619,31 +643,36 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     }
     fields[6].size = self->num_mutations;
     fields[7].size = self->num_mutations;
+    if (self->num_mutations == 0) {
+        groups[1].included = 0;
+    }
     /* Create the groups */
-    for (group_name = groups; *group_name != NULL; group_name++) {
-        group_id = H5Gcreate(file_id, *group_name, H5P_DEFAULT, H5P_DEFAULT,
-                H5P_DEFAULT);
-        if (group_id < 0) {
-            goto out;
-        }
-        status = H5Gclose(group_id);
-        if (status < 0) {
-            goto out;
+    for (j = 0; j < num_groups; j++) {
+        if (groups[j].included) {
+            group_id = H5Gcreate(file_id, groups[j].name, H5P_DEFAULT, H5P_DEFAULT,
+                    H5P_DEFAULT);
+            if (group_id < 0) {
+                goto out;
+            }
+            status = H5Gclose(group_id);
+            if (status < 0) {
+                goto out;
+            }
         }
     }
     /* now write the datasets */
     for (j = 0; j < num_fields; j++) {
-        dims[0] = fields[j].size;
-        dims[1] = 2; /* unused except for children */
-        dataspace_id = H5Screate_simple(fields[j].dimensions, dims, NULL);
-        if (dataspace_id < 0) {
-            goto out;
-        }
-        plist_id = H5Pcreate(H5P_DATASET_CREATE);
-        if (plist_id < 0) {
-            goto out;
-        }
         if (fields[j].size > 0) {
+            dims[0] = fields[j].size;
+            dims[1] = 2; /* unused except for children */
+            dataspace_id = H5Screate_simple(fields[j].dimensions, dims, NULL);
+            if (dataspace_id < 0) {
+                goto out;
+            }
+            plist_id = H5Pcreate(H5P_DATASET_CREATE);
+            if (plist_id < 0) {
+                goto out;
+            }
             /* Set the chunk size to the full size of the dataset since we
              * always read the full thing.
              */
@@ -668,29 +697,29 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
             if (status < 0) {
                 goto out;
             }
-        }
-        dataset_id = H5Dcreate2(file_id, fields[j].name,
-                fields[j].storage_type, dataspace_id, H5P_DEFAULT,
-                plist_id, H5P_DEFAULT);
-        if (dataset_id < 0) {
-            goto out;
-        }
-        if (fields[j].size > 0) {
-            /* Don't write zero sized datasets to work-around problems
-             * with older versions of hdf5. */
-            status = H5Dwrite(dataset_id, fields[j].memory_type, H5S_ALL,
-                    H5S_ALL, H5P_DEFAULT, fields[j].source);
+            dataset_id = H5Dcreate2(file_id, fields[j].name,
+                    fields[j].storage_type, dataspace_id, H5P_DEFAULT,
+                    plist_id, H5P_DEFAULT);
+            if (dataset_id < 0) {
+                goto out;
+            }
+            if (fields[j].size > 0) {
+                /* Don't write zero sized datasets to work-around problems
+                 * with older versions of hdf5. */
+                status = H5Dwrite(dataset_id, fields[j].memory_type, H5S_ALL,
+                        H5S_ALL, H5P_DEFAULT, fields[j].source);
+                if (status < 0) {
+                    goto out;
+                }
+            }
+            status = H5Dclose(dataset_id);
             if (status < 0) {
                 goto out;
             }
-        }
-        status = H5Dclose(dataset_id);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Pclose(plist_id);
-        if (status < 0) {
-            goto out;
+            status = H5Pclose(plist_id);
+            if (status < 0) {
+                goto out;
+            }
         }
     }
     ret = 0;
