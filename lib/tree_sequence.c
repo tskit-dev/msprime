@@ -520,7 +520,6 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     }
     for (j = 0; j < num_fields; j++) {
         if (!fields[j].empty) {
-            printf("Reading %s\n", fields[j].name);
             dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
             if (dataset_id < 0) {
                 goto out;
@@ -557,7 +556,6 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     if (status < 0) {
         goto out;
     }
-    printf("reading dimensions\n");
     ret = tree_sequence_read_hdf5_dimensions(self, file_id);
     if (ret != 0) {
         goto out;
@@ -566,7 +564,6 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
-    printf("reading data\n");
     ret = tree_sequence_read_hdf5_data(self, file_id);
     if (ret != 0) {
         goto out;

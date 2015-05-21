@@ -560,8 +560,16 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertTrue(os.path.exists(outfile.name))
         self.assertGreater(os.path.getsize(outfile.name), 0)
         root = h5py.File(outfile.name, "r")
-        self.assertEqual(set(root.keys()),
+        keys = set(root.keys())
+        self.assertLessEqual(keys,
             set(['breakpoints', 'mutations', 'parameters', 'trees']))
+        self.assertIn("breakpoints", keys)
+        self.assertIn("parameters", keys)
+        self.assertIn("trees", keys)
+        if ts.get_num_mutations() == 0:
+            self.assertNotIn("mutations", keys)
+        else:
+            self.assertIn("mutations", keys)
         # We should have a file format attribute.
         format_version = root.attrs['format_version']
         self.assertEqual(format_version[0], 0)
@@ -570,13 +578,14 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertEqual(len(breakpoints.shape), 1)
         self.assertEqual(breakpoints.shape[0], ts.get_num_breakpoints())
         self.assertEqual(breakpoints.dtype, uint32)
-        g = root["mutations"]
-        fields = [("node", uint32), ("position", float64)]
-        self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
-        for name, dtype in fields:
-            self.assertEqual(len(g[name].shape), 1)
-            self.assertEqual(g[name].shape[0], ts.get_num_mutations())
-            self.assertEqual(g[name].dtype, dtype)
+        if ts.get_num_mutations() > 0:
+            g = root["mutations"]
+            fields = [("node", uint32), ("position", float64)]
+            self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
+            for name, dtype in fields:
+                self.assertEqual(len(g[name].shape), 1)
+                self.assertEqual(g[name].shape[0], ts.get_num_mutations())
+                self.assertEqual(g[name].dtype, dtype)
         g = root["trees"]
         fields = [("left", uint32, 1), ("right", uint32, 1),
                 ("node", uint32, 1), ("children", uint32, 2),
