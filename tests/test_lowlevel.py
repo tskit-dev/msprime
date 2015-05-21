@@ -112,10 +112,16 @@ class TestInterface(LowLevelTestCase):
     """
     Test the low-level interface to make sure it is robust.
     """
-    def test_gsl_version(self):
-        s = _msprime.get_gsl_version()
-        self.assertGreater(len(s), 0)
-        self.assertIsInstance(s, str)
+    def test_library_versions(self):
+        major, minor = _msprime.get_gsl_version()
+        self.assertIsInstance(major, int)
+        self.assertGreater(major, 0)
+        self.assertIsInstance(minor, int)
+        major, minor, revision = _msprime.get_hdf5_version()
+        self.assertIsInstance(major, int)
+        self.assertGreater(major, 0)
+        self.assertIsInstance(minor, int)
+        self.assertIsInstance(revision, int)
 
     def verify_running_simulation(self, sim):
         """

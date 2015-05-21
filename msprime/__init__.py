@@ -25,4 +25,7 @@ from __future__ import division
 
 __version__ = '0.1.1a1'
 
+from _msprime import get_gsl_version
+from _msprime import get_hdf5_version
+
 from msprime.trees import *

@@ -319,5 +319,4 @@ int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
 
 const char * msp_strerror(int err);
-const char * msp_gsl_version(void);
 #endif /*__MSPRIME_H__*/

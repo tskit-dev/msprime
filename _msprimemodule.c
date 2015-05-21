@@ -24,6 +24,7 @@
 #include <float.h>
 
 #include <hdf5.h>
+#include <gsl/gsl_version.h>
 
 #include "msprime.h"
 
@@ -1852,12 +1853,31 @@ static PyTypeObject HaplotypeGeneratorType = {
 static PyObject *
 msprime_get_gsl_version(PyObject *self)
 {
-    return Py_BuildValue("s", msp_gsl_version());
+    return Py_BuildValue("ii", GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
+}
+
+static PyObject *
+msprime_get_hdf5_version(PyObject *self)
+{
+    herr_t status;
+    PyObject *ret = NULL;
+    unsigned int major, minor, release;
+
+    status = H5get_libversion(&major, &minor, &release);
+    if (status != 0) {
+        PyErr_SetString(PyExc_SystemError, "Error getting HDF5 version");
+        goto out;
+    }
+    ret = Py_BuildValue("III", major, minor, release);
+out:
+    return ret;
 }
 
 static PyMethodDef msprime_methods[] = {
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
+    {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,
+            "Returns the version of HDF5 we are linking against." },
     {NULL}        /* Sentinel */
 };
 
