@@ -1297,6 +1297,21 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_num_nodes(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    size_t num_nodes = tree_sequence_get_num_nodes(self->tree_sequence);
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) num_nodes);
+out:
+    return ret;
+}
+
+
+static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
 {
     PyObject *ret = NULL;
@@ -1342,6 +1357,8 @@ static PyMethodDef TreeSequence_methods[] = {
             "Returns the number of loci" },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
             "Returns the number of loci" },
+    {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
+            "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
     {NULL}  /* Sentinel */

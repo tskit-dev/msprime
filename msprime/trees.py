@@ -239,41 +239,6 @@ class TreeSimulator(object):
         ts = TreeSequence(ll_tree_sequence)
         return ts
 
-    def _get_parameters(self):
-        """
-        Returns a dictionary of all the parameters required to run precisely
-        this simulation again in the future. That is, only the parameters
-        required to deterministically recreate the same result are included.
-        """
-        models = [m.get_ll_model() for m in self._population_models]
-        parameters = {
-            "sample_size": self._sample_size,
-            "num_loci": self._num_loci,
-            "scaled_recombination_rate": self._scaled_recombination_rate,
-            "population_models": models,
-            "random_seed": self._random_seed
-        }
-        return parameters
-
-    def _get_environment(self):
-        """
-        Returns a dictionary of information on the simulation environment
-        that is relevant for reproducing the results of a given simulation.
-        """
-        return {
-            "python_version": platform.python_version(),
-            "python_implementation": platform.python_implementation(),
-            "byteorder": sys.byteorder,
-            "platform": sys.platform,
-            "machine": platform.machine(),
-            "processor": platform.processor(),
-            "word_size": "64" if sys.maxsize > 2**32 else "32",
-            "numpy_version": np.__version__,
-            "h5py_version": h5py.__version__,
-            "hdf5_version": "{}.{}.{}".format(*h5py.h5.get_libversion()),
-            "gsl_version": _msprime.get_gsl_version(),
-        }
-
     def reset(self):
         """
         Resets the simulation so that we can perform another replicate.
@@ -322,14 +287,11 @@ class TreeSequence(object):
     def get_num_mutations(self):
         return self._ll_tree_sequence.get_num_mutations()
 
-    def get_parameters(self):
-        return {}
-
-    def get_environment(self):
-        return {}
-
     def get_breakpoints(self):
         return self._ll_tree_sequence.get_breakpoints()
+
+    def get_mutations(self):
+        return self._ll_tree_sequence.get_mutations()
 
     def records(self):
         for j in range(self.get_num_records()):

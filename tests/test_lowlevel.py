@@ -606,19 +606,34 @@ class TestTreeSequence(LowLevelTestCase):
             with tempfile.NamedTemporaryFile() as f:
                 self.verify_tree_dump_format(ts, f)
 
+    def test_num_nodes(self):
+        for ts in self.get_test_tree_sequences():
+            with tempfile.NamedTemporaryFile() as f:
+                num_nodes = 0
+                for j in range(ts.get_num_records()):
+                    _, _, node, _, _ = ts.get_record(j)
+                    if node > num_nodes:
+                        num_nodes = node
+                self.assertEqual(num_nodes, ts.get_num_nodes())
+
     def verify_dump_equality(self, ts, outfile):
-            ts.dump(outfile.name)
-            ts2 = _msprime.TreeSequence()
-            ts2.load(outfile.name)
-            self.assertEqual(ts.get_sample_size(), ts2.get_sample_size())
-            self.assertEqual(ts.get_num_loci(), ts2.get_num_loci())
-            self.assertEqual(ts.get_num_mutations(), ts2.get_num_mutations())
-            records1 = [
-                    ts.get_record(j) for j in range(ts.get_num_records())]
-            records2 = [
-                    ts2.get_record(j) for j in range(ts2.get_num_records())]
-            self.assertEqual(records1, records2)
-            self.assertEqual(ts.get_mutations(), ts2.get_mutations())
+        """
+        Verifies that we can dump a copy of the specified tree sequence
+        to the specified file, and load an identical copy.
+        """
+        ts.dump(outfile.name)
+        ts2 = _msprime.TreeSequence()
+        ts2.load(outfile.name)
+        self.assertEqual(ts.get_sample_size(), ts2.get_sample_size())
+        self.assertEqual(ts.get_num_loci(), ts2.get_num_loci())
+        self.assertEqual(ts.get_num_mutations(), ts2.get_num_mutations())
+        self.assertEqual(ts.get_num_nodes(), ts2.get_num_nodes())
+        records1 = [
+                ts.get_record(j) for j in range(ts.get_num_records())]
+        records2 = [
+                ts2.get_record(j) for j in range(ts2.get_num_records())]
+        self.assertEqual(records1, records2)
+        self.assertEqual(ts.get_mutations(), ts2.get_mutations())
 
     def test_dump_equality(self):
         for ts in self.get_test_tree_sequences():
@@ -637,6 +652,38 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(TypeError, ts.generate_mutations, random_seed=1.0)
         self.assertRaises(TypeError, ts.generate_mutations, mutation_rate=10,
                 random_seed=1.0, invalid_param=7)
+        # A mutation rate of 0 should give 0 mutations
+        ts.generate_mutations(0.0, random_seed=1)
+        for j in range(3):
+            self.assertEqual(ts.get_num_mutations(), 0)
+            self.assertEqual(len(ts.get_mutations()), 0)
+        # A non-zero mutation rate will give more than 0 mutations.
+        ts.generate_mutations(10.0, random_seed=1)
+        mutations = ts.get_mutations()
+        self.assertGreater(ts.get_num_mutations(), 0)
+        self.assertEqual(len(mutations), ts.get_num_mutations())
+        # Check the form of the mutations
+        for node, position in mutations:
+            self.assertIsInstance(node, int)
+            self.assertGreater(node, 0)
+            self.assertLessEqual(node, ts.get_num_nodes())
+            self.assertIsInstance(position, float)
+            self.assertGreater(position, 0)
+            self.assertLess(position, ts.get_num_loci())
+        for j in range(3):
+            self.assertEqual(mutations, ts.get_mutations())
+
+    def test_mutation_persistence(self):
+        ts = self.get_tree_sequence(mutation_rate=0.0)
+        self.assertEqual(ts.get_num_mutations(), 0)
+        last_mutations = ts.get_mutations()
+        # We should be able to over-write mutations as many times as we like.
+        for j in range(10):
+            ts.generate_mutations(10, j)
+            mutations = ts.get_mutations()
+            self.assertNotEqual(mutations, last_mutations)
+            last_mutations = mutations
+
 
 
 class TestNewickConverter(LowLevelTestCase):

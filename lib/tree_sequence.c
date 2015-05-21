@@ -160,19 +160,6 @@ tree_sequence_free(tree_sequence_t *self)
     return 0;
 }
 
-static inline void
-tree_sequence_calculate_num_nodes(tree_sequence_t *self)
-{
-    size_t j = 0;
-
-    self->num_nodes = 0;
-    for (j = 0; j < self->num_records; j++) {
-        if (self->trees.node[j] > self->num_nodes) {
-            self->num_nodes = self->trees.node[j];
-        }
-    }
-}
-
 static int
 tree_sequence_make_indexes(tree_sequence_t *self)
 {
@@ -203,7 +190,8 @@ tree_sequence_make_indexes(tree_sequence_t *self)
     for (j = 0; j < self->num_records; j++) {
         self->trees.right_sorting[j] = sort_buff[j].index;
     }
-
+    /* set the num_nodes value */
+    self->num_nodes = self->trees.node[self->num_records - 1];
 out:
     if (sort_buff != NULL) {
         free(sort_buff);
@@ -244,7 +232,6 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
         self->trees.children[2 * j + 1] = records[j].children[1];
         self->trees.time[j] = records[j].time;
     }
-    tree_sequence_calculate_num_nodes(self);
     ret = tree_sequence_make_indexes(self);
     if (ret != 0) {
         goto out;
@@ -579,7 +566,6 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
             goto out;
         }
     }
-    tree_sequence_calculate_num_nodes(self);
     ret = tree_sequence_make_indexes(self);
     if (ret != 0) {
         goto out;
