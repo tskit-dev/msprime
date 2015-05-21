@@ -127,9 +127,10 @@ class SimulationRunner(object):
                 s = tree_sequence.get_num_mutations()
                 print("segsites:", s)
                 if s != 0:
-                    # TODO put in positions from mutations.
                     print("positions: ", end="")
-                    print("0.0 " * s)
+                    for node, position in tree_sequence.get_mutations():
+                        print("{0:.{1}f}".format(position, self.precision), end=" ")
+                    print()
                     for h in hg.haplotypes():
                         print(h)
                 else:
