@@ -5,15 +5,17 @@ python:
   - "3.3"
   - "3.4"
 
+virtualenv:
+    system_site_packages: true
+
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install -qq libgsl0-dev libhdf5-serial-dev pkg-config cython
+  - sudo apt-get install -qq libgsl0-dev libhdf5-serial-dev python-h5py
 
 install:
 # disabling pip until problems with ez_setup are sorted.
 #  - "pip install ."
   - python setup.py install
-  - pip install -r requirements.txt
 
 script: nosetests -vs
 
