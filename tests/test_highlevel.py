@@ -13,8 +13,6 @@ import msprime
 
 import tests
 
-#tmp
-from nose.tools import nottest
 
 def sparse_tree_to_newick(pi, tau, precision):
     """
@@ -324,7 +322,6 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             self.assertEqual(len(h), tree_sequence.get_num_mutations())
         self.verify_haplotypes(n, haplotypes)
 
-    @nottest
     def test_random_parameters(self):
         num_random_sims = 10
         for j in range(num_random_sims):
