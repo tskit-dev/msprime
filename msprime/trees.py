@@ -105,6 +105,9 @@ class TreeSimulator(object):
     def get_num_breakpoints(self):
         return self._ll_sim.get_num_breakpoints()
 
+    def get_breakpoints(self):
+        return self._ll_sim.get_breakpoints()
+
     def get_used_memory(self):
         return self._ll_sim.get_used_memory()
 
@@ -339,9 +342,20 @@ class TreeSequence(object):
             yield length, pi, tau
             del pi[v]
 
-    def newick_trees(self, precision=3, all_breaks=False):
-        return _msprime.NewickConverter(
-            self._ll_tree_sequence, precision, all_breaks)
+    def newick_trees(self, precision=3, breakpoints=None):
+        iterator = _msprime.NewickConverter(self._ll_tree_sequence, precision)
+        if breakpoints is None:
+            for length, tree in iterator:
+                yield length, tree
+        else:
+            trees_covered = 0
+            j = 0
+            for length, tree in iterator:
+                trees_covered += length
+                while breakpoints[j] < trees_covered:
+                    j += 1
+                    yield breakpoints[j] - breakpoints[j - 1], tree
+
 
     def generate_mutations(self, scaled_mutation_rate, random_seed=None):
         """
