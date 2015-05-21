@@ -1169,6 +1169,59 @@ out:
     return ret;
 }
 
+static PyObject *
+TreeSequence_get_mutations(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_mutation = NULL;
+    uint32_t *nodes = NULL;
+    double *positions = NULL;
+    size_t j, num_mutations;
+    int err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
+    nodes = PyMem_Malloc(num_mutations * sizeof(uint32_t));
+    if (nodes == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    positions = PyMem_Malloc(num_mutations * sizeof(double));
+    if (positions == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = tree_sequence_get_mutations(self->tree_sequence, nodes, positions);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    l = PyList_New(num_mutations);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_mutations; j++) {
+        py_mutation = Py_BuildValue("Id", (unsigned int) nodes[j],
+                positions[j]);
+        if (py_mutation == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_mutation);
+    }
+    ret = l;
+out:
+    if (nodes != NULL) {
+        PyMem_Free(nodes);
+    }
+    if (positions != NULL) {
+        PyMem_Free(positions);
+    }
+    return ret;
+}
 
 static PyObject *
 TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
@@ -1261,6 +1314,8 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the record at the specified index."},
     {"get_breakpoints", (PyCFunction) TreeSequence_get_breakpoints,
         METH_NOARGS, "Returns the list of breakpoints"},
+    {"get_mutations", (PyCFunction) TreeSequence_get_mutations,
+        METH_NOARGS, "Returns the list of mutations"},
     {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
             METH_NOARGS, "Returns the number of coalescence records." },
     {"get_num_breakpoints", (PyCFunction) TreeSequence_get_num_breakpoints,

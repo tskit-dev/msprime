@@ -11,11 +11,10 @@ import random
 import os.path
 import tempfile
 
+import h5py
+
 import tests
 import _msprime
-
-#tmp
-from nose.tools import nottest
 
 def get_random_population_models(n):
     """
@@ -87,16 +86,16 @@ class LowLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests for the low-level interface.
     """
-    def get_tree_sequence(self, sample_size=10, num_loci=100):
+    def get_tree_sequence(self, sample_size=10, num_loci=100,
+            mutation_rate=10):
         sim = _msprime.Simulator(sample_size, random_seed=1,
                 num_loci=num_loci,
                 scaled_recombination_rate=1)
         sim.run()
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        # ts.generate_mutations(10, 1)
+        ts.generate_mutations(mutation_rate, 1)
         return ts
-
 
     def verify_iterator(self, iterator):
         """
@@ -503,6 +502,12 @@ class TestTreeSequence(LowLevelTestCase):
     """
     Tests for the low-level interface for the TreeSequence.
     """
+    def get_test_tree_sequences(self):
+        for n in [2, 3, 100]:
+            for m in [1, 2, 100]:
+                for mu in [0, 10]:
+                    yield self.get_tree_sequence(n, m, mu)
+
     def test_file_errors(self):
         ts1 = self.get_tree_sequence()
         def loader(*args):
@@ -538,29 +543,39 @@ class TestTreeSequence(LowLevelTestCase):
         ts = self.get_tree_sequence()
         self.assertRaises(ValueError, ts.load, "/tmp/file")
 
-    def test_dump_format(self):
-        ts = self.get_tree_sequence()
-        with tempfile.NamedTemporaryFile() as f:
-            ts.dump(f.name)
-            self.assertTrue(os.path.exists(f.name))
-            self.assertGreater(os.path.getsize(f.name), 0)
-        # TODO there's a bunch of things we need to do here:
-        # 1. Use h5py to verify the structure of the file.
-        # 2. Probably lots more.
+    def verify_tree_dump_format(self, ts, outfile):
+        ts.dump(outfile.name)
+        self.assertTrue(os.path.exists(outfile.name))
+        self.assertGreater(os.path.getsize(outfile.name), 0)
+        f = h5py.File(outfile.name, "r")
+        groups = set(f.keys())
+        self.assertEqual(groups,
+            set([u'breakpoints', u'mutations', u'parameters', u'trees']))
 
-    def test_equality(self):
-        ts1 = self.get_tree_sequence()
-        with tempfile.NamedTemporaryFile() as f:
-            ts1.dump(f.name)
+    def test_dump_format(self):
+        for ts in self.get_test_tree_sequences():
+            with tempfile.NamedTemporaryFile() as f:
+                self.verify_tree_dump_format(ts, f)
+
+    def verify_dump_equality(self, ts, outfile):
+            ts.dump(outfile.name)
             ts2 = _msprime.TreeSequence()
-            ts2.load(f.name)
-            self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
-            self.assertEqual(ts1.get_num_loci(), ts2.get_num_loci())
+            ts2.load(outfile.name)
+            self.assertEqual(ts.get_sample_size(), ts2.get_sample_size())
+            self.assertEqual(ts.get_num_loci(), ts2.get_num_loci())
+            self.assertEqual(ts.get_num_mutations(), ts2.get_num_mutations())
             records1 = [
-                    ts1.get_record(j) for j in range(ts1.get_num_records())]
+                    ts.get_record(j) for j in range(ts.get_num_records())]
             records2 = [
                     ts2.get_record(j) for j in range(ts2.get_num_records())]
             self.assertEqual(records1, records2)
+            self.assertEqual(ts.get_mutations(), ts2.get_mutations())
+
+    def test_dump_equality(self):
+        for ts in self.get_test_tree_sequences():
+            with tempfile.NamedTemporaryFile() as f:
+                self.verify_dump_equality(ts, f)
+
 
 class TestNewickConverter(LowLevelTestCase):
     """
@@ -593,7 +608,6 @@ class TestNewickConverter(LowLevelTestCase):
             self.assertIsInstance(length, int)
             self.assertIsInstance(tree, str)
 
-    @nottest
     def test_iterator(self):
         ts = self.get_tree_sequence()
         ncs = [
@@ -672,7 +686,6 @@ class TestHaplotypeGenerator(LowLevelTestCase):
     """
     Tests for the low-level haplotype generator.
     """
-    @nottest
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.HaplotypeGenerator)
         self.assertRaises(TypeError, _msprime.HaplotypeGenerator, None)

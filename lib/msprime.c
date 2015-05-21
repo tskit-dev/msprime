@@ -97,8 +97,6 @@ msp_strerror(int err)
             goto out;
         }
         ret = _hdf5_error;
-        /* free up all the HDF5 stuff lying around */
-        H5close();
     }
 out:
     return ret;
