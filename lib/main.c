@@ -378,13 +378,13 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_generate_mutations(tree_seq, 0.1, 10);
+    /* ret = tree_sequence_generate_mutations(tree_seq, 0.1, 10); */
     if (ret != 0) {
         goto out;
     }
     tree_sequence_print_state(tree_seq);
     int j;
-    for (j = 0; j < 10; j++) {
+    for (j = 0; j < 1; j++) {
         ret = tree_sequence_dump(tree_seq, "test.hdf5", 0);
         if (ret != 0) {
             goto out;
