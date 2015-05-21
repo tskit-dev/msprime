@@ -474,17 +474,18 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     struct _hdf5_field_read {
         const char *name;
         hid_t type;
+        int empty;
         void *dest;
     };
     struct _hdf5_field_read fields[] = {
-        {"/breakpoints", H5T_NATIVE_UINT32, NULL},
-        {"/trees/left", H5T_NATIVE_UINT32, NULL},
-        {"/trees/right", H5T_NATIVE_UINT32, NULL},
-        {"/trees/node", H5T_NATIVE_UINT32, NULL},
-        {"/trees/children", H5T_NATIVE_UINT32, NULL},
-        {"/trees/time", H5T_NATIVE_DOUBLE, NULL},
-        {"/mutations/node", H5T_NATIVE_UINT32, NULL},
-        {"/mutations/position", H5T_NATIVE_DOUBLE, NULL},
+        {"/breakpoints", H5T_NATIVE_UINT32, 0, NULL},
+        {"/trees/left", H5T_NATIVE_UINT32, 0, NULL},
+        {"/trees/right", H5T_NATIVE_UINT32, 0, NULL},
+        {"/trees/node", H5T_NATIVE_UINT32, 0, NULL},
+        {"/trees/children", H5T_NATIVE_UINT32, 0, NULL},
+        {"/trees/time", H5T_NATIVE_DOUBLE, 0, NULL},
+        {"/mutations/node", H5T_NATIVE_UINT32, 0, NULL},
+        {"/mutations/position", H5T_NATIVE_DOUBLE, 0, NULL},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
     size_t j;
@@ -497,20 +498,27 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     fields[5].dest = self->trees.time;
     fields[6].dest = self->mutations.node;
     fields[7].dest = self->mutations.position;
-
+    if (self->num_mutations == 0) {
+        fields[6].empty = 1;
+        fields[7].empty = 1;
+    }
     for (j = 0; j < num_fields; j++) {
-        dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
-        if (dataset_id < 0) {
-            goto out;
-        }
-        status = H5Dread(dataset_id, fields[j].type, H5S_ALL,
-                H5S_ALL, H5P_DEFAULT, fields[j].dest);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Dclose(dataset_id);
-        if (status < 0) {
-            goto out;
+        /* don't try to read empty datasets to work around limitations
+         * in older version of HDF5. */
+        if (!fields[j].empty) {
+            dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
+            if (dataset_id < 0) {
+                goto out;
+            }
+            status = H5Dread(dataset_id, fields[j].type, H5S_ALL,
+                    H5S_ALL, H5P_DEFAULT, fields[j].dest);
+            if (status < 0) {
+                goto out;
+            }
+            status = H5Dclose(dataset_id);
+            if (status < 0) {
+                goto out;
+            }
         }
     }
     ret = 0;
@@ -667,10 +675,14 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         if (dataset_id < 0) {
             goto out;
         }
-        status = H5Dwrite(dataset_id, fields[j].memory_type, H5S_ALL,
-                H5S_ALL, H5P_DEFAULT, fields[j].source);
-        if (status < 0) {
-            goto out;
+        if (fields[j].size > 0) {
+            /* Don't write zero sized datasets to work-around problems
+             * with older versions of hdf5. */
+            status = H5Dwrite(dataset_id, fields[j].memory_type, H5S_ALL,
+                    H5S_ALL, H5P_DEFAULT, fields[j].source);
+            if (status < 0) {
+                goto out;
+            }
         }
         status = H5Dclose(dataset_id);
         if (status < 0) {
