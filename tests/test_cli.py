@@ -6,6 +6,8 @@ from __future__ import division
 
 import os
 import random
+import sys
+import tempfile
 import unittest
 
 import tests
@@ -31,3 +33,34 @@ class TestRandomSeeds(unittest.TestCase):
             self.assertEqual(python_seed, python_seed2)
         self.assertEqual(len(generated_seeds),
                 len(set(generated_seeds.keys())))
+
+
+class TestMspmsOutput(unittest.TestCase):
+    """
+    Tests the output of the ms compatible CLI.
+    """
+    def verify_output(self,
+            sample_size, num_replicates, print_trees=False, num_loci=None,
+            recombination_rate=None, mutation_rate=None):
+        """
+        Runs the UI for the specified parameters, and parses the output
+        to ensure it's consistent.
+        """
+        cmdLine = [str(sample_size), str(num_replicates)]
+        if print_trees:
+            cmdLine.append("-T")
+
+        stdout = sys.stdout
+        try:
+            with tempfile.TemporaryFile() as f:
+                sys.stdout = f
+                cli.mspms_main(cmdLine)
+                f.seek(0)
+                output = f.readlines()
+        finally:
+            sys.stdout = stdout
+        # TODO write the tests...
+
+
+    def test_tree_output(self):
+        self.verify_output(10, 1, True)

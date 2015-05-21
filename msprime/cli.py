@@ -103,11 +103,12 @@ class SimulationRunner(object):
         for j in range(self.num_replicates):
             self.simulator.set_random_seed(random.randint(0, 2**30))
             tree_sequence = self.simulator.run()
+            breakpoints = self.simulator.get_breakpoints()
             print()
             print("//")
             if self.print_trees:
                 iterator = tree_sequence.newick_trees(
-                    self.precision, all_breaks=True)
+                        self.precision, breakpoints)
                 if self.num_loci == 1:
                     for l, ns in iterator:
                         print(ns)
@@ -128,7 +129,12 @@ class SimulationRunner(object):
                 print("segsites:", s)
                 if s != 0:
                     print("positions: ", end="")
-                    for node, position in tree_sequence.get_mutations():
+                    m = self.num_loci
+                    positions = [
+                        p  / self.num_loci for _, p in
+                            tree_sequence.get_mutations()]
+                    positions.sort()
+                    for position in positions:
                         print("{0:.{1}f}".format(position, self.precision), end=" ")
                     print()
                     for h in hg.haplotypes():
@@ -145,7 +151,7 @@ def positive_int(value):
         raise argparse.ArgumentTypeError(msg)
     return int_value
 
-def msp_ms_main():
+def mspms_main(cmd_line=None):
     parser = argparse.ArgumentParser(description=mscompat_description)
     parser.add_argument("sample_size", type=positive_int, help="Sample size")
     parser.add_argument("num_replicates", type=positive_int,
@@ -177,7 +183,8 @@ def msp_ms_main():
             help="Number of values after decimal place to print")
     group.add_argument("--max-memory", "-M", default="100M",
             help="Maximum memory used. Supports K,M and G suffixes")
-    args = parser.parse_args()
+
+    args = parser.parse_args(cmd_line)
     if args.mutation_rate is None and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
     sr = SimulationRunner(args)

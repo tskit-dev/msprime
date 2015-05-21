@@ -229,41 +229,43 @@ def hl_main():
     # for l, pi, tau in msprime.simulate_trees(3, 100, 0.1):
     #     print(l, pi, tau)
     treefile = "tmp__NOBACKUP__/tmp.hdf5"
-    n = 3000
+    n = 3
     sim = msprime.TreeSimulator(n)
     sim.set_random_seed(1)
     sim.set_num_loci(1000)
     sim.set_scaled_recombination_rate(0.1)
-    sim.set_max_memory("10G")
-
-    models = [
-            msprime.ExponentialPopulationModel(0, 1),
-            msprime.ExponentialPopulationModel(0.1, 2),
-            msprime.ConstantPopulationModel(0.5, 2.0),
-    ]
-    for m in models:
-        sim.add_population_model(m)
+    # sim.set_max_memory("10G")
+    # models = [
+    #         msprime.ExponentialPopulationModel(0, 1),
+    #         msprime.ExponentialPopulationModel(0.1, 2),
+    #         msprime.ConstantPopulationModel(0.5, 2.0),
+    # ]
+    # for m in models:
+    #     sim.add_population_model(m)
 
     tree_sequence = sim.run()
-    st = tree_sequence.sparse_trees()
-    for l, pi, tau in new_sparse_trees(tree_sequence):
-        l2, pi2, tau2 = next(st)
-        for j in range(1, n + 1):
-            path1, path2 = [], []
-            u = j
-            while u != 0:
-                path1.append(u)
-                u = pi[u]
-            u = j
-            while u != 0:
-                path2.append(u)
-                u = pi2[u]
-            # print("new", path1)
-            # print("old", path2)
-            assert path1 == path2
-            if l != l2:
-                print(l, l2)
-            assert l == l2
+    for l, s in tree_sequence.newick_trees(3, sim.get_breakpoints()):
+        print(l, s)
+
+    # st = tree_sequence.sparse_trees()
+    # for l, pi, tau in new_sparse_trees(tree_sequence):
+    #     l2, pi2, tau2 = next(st)
+    #     for j in range(1, n + 1):
+    #         path1, path2 = [], []
+    #         u = j
+    #         while u != 0:
+    #             path1.append(u)
+    #             u = pi[u]
+    #         u = j
+    #         while u != 0:
+    #             path2.append(u)
+    #             u = pi2[u]
+    #         # print("new", path1)
+    #         # print("old", path2)
+    #         assert path1 == path2
+    #         if l != l2:
+    #             print(l, l2)
+    #         assert l == l2
 
 
       # for _, pi, _ in tree_sequence.sparse_trees():
@@ -731,8 +733,8 @@ if __name__ == "__main__":
     # edit_visualisation()
     # mutation_dev()
     # example1()
-    # hl_main()
-    ll_main()
+    hl_main()
+    # ll_main()
     # print_newick(sys.argv[1])
     # memory_test()
     # large_sim()
