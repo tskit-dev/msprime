@@ -32,8 +32,9 @@
 #define POP_MODEL_EXPONENTIAL 1
 
 #define MSP_ALL_BREAKPOINTS 1
-/* Flags for tree sequence dump */
+/* Flags for tree sequence dump/load */
 #define MSP_ZLIB_COMPRESSION 1
+#define MSP_SKIP_H5CLOSE 2
 
 #define MSP_FILE_FORMAT_VERSION_MAJOR 0
 #define MSP_FILE_FORMAT_VERSION_MINOR 1
@@ -268,7 +269,8 @@ size_t msp_get_used_memory(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self);
 int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
-int tree_sequence_load(tree_sequence_t *self, const char *filename);
+int tree_sequence_load(tree_sequence_t *self, const char *filename,
+        int flags);
 int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, 
         int flags);
