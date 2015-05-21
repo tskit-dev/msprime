@@ -3,6 +3,7 @@ Test cases for the low level C interface to msprime.
 """
 from __future__ import print_function
 from __future__ import division
+from __future__ import unicode_literals
 
 import collections
 import json
@@ -544,13 +545,43 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(ValueError, ts.load, "/tmp/file")
 
     def verify_tree_dump_format(self, ts, outfile):
+        uint32 = "uint32"
+        float64 = "float64"
         ts.dump(outfile.name)
         self.assertTrue(os.path.exists(outfile.name))
         self.assertGreater(os.path.getsize(outfile.name), 0)
-        f = h5py.File(outfile.name, "r")
-        groups = set(f.keys())
-        self.assertEqual(groups,
-            set([u'breakpoints', u'mutations', u'parameters', u'trees']))
+        root = h5py.File(outfile.name, "r")
+        self.assertEqual(set(root.keys()),
+            set(['breakpoints', 'mutations', 'parameters', 'trees']))
+        # We should have a file format attribute.
+        format_version = root.attrs['format_version']
+        self.assertEqual(format_version[0], 0)
+        self.assertEqual(format_version[1], 1)
+        breakpoints = root["breakpoints"]
+        self.assertEqual(len(breakpoints.shape), 1)
+        self.assertEqual(breakpoints.shape[0], ts.get_num_breakpoints())
+        self.assertEqual(breakpoints.dtype, uint32)
+        g = root["mutations"]
+        fields = [("node", uint32), ("position", float64)]
+        self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
+        for name, dtype in fields:
+            self.assertEqual(len(g[name].shape), 1)
+            self.assertEqual(g[name].shape[0], ts.get_num_mutations())
+            self.assertEqual(g[name].dtype, dtype)
+        g = root["trees"]
+        fields = [("left", uint32, 1), ("right", uint32, 1),
+                ("node", uint32, 1), ("children", uint32, 2),
+                ("time", float64, 1)]
+        self.assertEqual(set(g.keys()), set([name for name, _, _ in fields]))
+        for name, dtype, dims in fields:
+            self.assertEqual(len(g[name].shape), dims)
+            self.assertEqual(g[name].shape[0], ts.get_num_records())
+            if dims == 2:
+                self.assertEqual(g[name].shape[1], 2)
+            self.assertEqual(g[name].dtype, dtype)
+        g = root["parameters"]
+        self.assertEqual(g.attrs["sample_size"][0], ts.get_sample_size())
+        self.assertEqual(g.attrs["num_loci"][0], ts.get_num_loci())
 
     def test_dump_format(self):
         for ts in self.get_test_tree_sequences():

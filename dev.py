@@ -106,51 +106,51 @@ def ll_main():
         # crs  sim.get_coalescence_records()
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        iterator = _msprime.TreeDiffIterator(ts, True)
-        c = 0
-        for r in iterator:
-            c += 1
-        iterator = _msprime.TreeDiffIterator(ts, False)
-        del ts
-        c = 0
-        for r in iterator:
-            c += 1
-            # print(r)
+        # iterator = _msprime.TreeDiffIterator(ts, True)
+        # c = 0
+        # for r in iterator:
+        #     c += 1
+        # iterator = _msprime.TreeDiffIterator(ts, False)
+        # del ts
+        # c = 0
+        # for r in iterator:
+        #     c += 1
+        #     # print(r)
         # assert c == len(crs[0])
         # # print(iterator)
-        ts = _msprime.TreeSequence()
-        ts.create(sim)
-        nc = _msprime.NewickConverter(ts, 4, False)
-        c = 0
-        for l, t in nc:
-            c += l + len(t)
-        nc = _msprime.NewickConverter(ts, 4, False)
-        x = next(nc)
-        files = ["/", "/nofile", "/" + "x" * 4192]
-        for f in files:
-            try:
-                ts.dump(f)
-            except _msprime.LibraryError as e:
-                pass
+        # ts = _msprime.TreeSequence()
+        # ts.create(sim)
+        # nc = _msprime.NewickConverter(ts, 4, False)
+        # c = 0
+        # for l, t in nc:
+        #     c += l + len(t)
+        # nc = _msprime.NewickConverter(ts, 4, False)
+        # x = next(nc)
+        # files = ["/", "/nofile", "/" + "x" * 4192]
+        # for f in files:
+        #     try:
+        #         ts.dump(f)
+        #     except _msprime.LibraryError as e:
+        #         pass
         f = "tmp__NOBACKUP__/dev.hdf5"
         ts.dump(f)
-        ts2 = _msprime.TreeSequence()
-        ts2.load(f)
-        records1 = [ts.get_record(j) for j in range(ts.get_num_records())]
-        records2 = [ts2.get_record(j) for j in range(ts2.get_num_records())]
-        assert records1 == records2
-        ts.generate_mutations(10, 1)
-        f = "tmp__NOBACKUP__/dev-mutaions.hdf5"
-        ts.dump(f)
-        n = ts.get_sample_size()
-        hg = _msprime.HaplotypeGenerator(ts)
-        h1 = [hg.get_haplotype(j) for j in range(1, n + 1)]
-        ts2 = _msprime.TreeSequence()
-        ts2.load(f)
-        ts2 = ts
-        hg = _msprime.HaplotypeGenerator(ts2)
-        h2 = [hg.get_haplotype(j) for j in range(1, n + 1)]
-        assert h1 == h2
+        # ts2 = _msprime.TreeSequence()
+        # ts2.load(f)
+        # records1 = [ts.get_record(j) for j in range(ts.get_num_records())]
+        # records2 = [ts2.get_record(j) for j in range(ts2.get_num_records())]
+        # assert records1 == records2
+        # ts.generate_mutations(10, 1)
+        # f = "tmp__NOBACKUP__/dev-mutaions.hdf5"
+        # ts.dump(f)
+        # n = ts.get_sample_size()
+        # hg = _msprime.HaplotypeGenerator(ts)
+        # h1 = [hg.get_haplotype(j) for j in range(1, n + 1)]
+        # ts2 = _msprime.TreeSequence()
+        # ts2.load(f)
+        # ts2 = ts
+        # hg = _msprime.HaplotypeGenerator(ts2)
+        # h2 = [hg.get_haplotype(j) for j in range(1, n + 1)]
+        # assert h1 == h2
 
         # for r in ts.records():
         #     print(r)
