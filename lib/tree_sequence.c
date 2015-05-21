@@ -109,6 +109,8 @@ tree_sequence_alloc(tree_sequence_t *self)
             || self->trees.right_sorting == NULL) {
         goto out;
     }
+    self->mutations.node = NULL;
+    self->mutations.position = NULL;
     if (self->num_mutations > 0) {
         self->mutations.node = malloc(self->num_mutations * sizeof(uint32_t));
         self->mutations.position = malloc(
@@ -363,8 +365,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     for (j = 5; j < 7; j++) {
         fields[j].size = self->num_mutations;
     }
-    // TMP don't include mutations to check segfault.
-    for (j = 0; j < num_fields - 2; j++) {
+    for (j = 0; j < num_fields; j++) {
         dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
         if (dataset_id < 0) {
             goto out;
@@ -427,8 +428,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     fields[1].dest = &self->num_records;
     fields[2].dest = &self->num_mutations;
 
-    // TMP don't include mutations to check segfault.
-    for (j = 0; j < num_fields - 1; j++) {
+    for (j = 0; j < num_fields; j++) {
         dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
         if (dataset_id < 0) {
             goto out;
@@ -498,8 +498,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     fields[6].dest = self->mutations.node;
     fields[7].dest = self->mutations.position;
 
-    // TMP don't include mutations to check segfault.
-    for (j = 0; j < num_fields - 2; j++) {
+    for (j = 0; j < num_fields; j++) {
         dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
         if (dataset_id < 0) {
             goto out;
@@ -559,14 +558,6 @@ tree_sequence_load(tree_sequence_t *self, const char *filename)
     tree_sequence_calculate_num_nodes(self);
     ret = tree_sequence_make_indexes(self);
     if (ret != 0) {
-        goto out;
-    }
-    /* Note: we don't call H5close in error conditions because we need to
-     * keep the error messages alive.
-     */
-    status = H5close();
-    if (status < 0) {
-        ret = MSP_ERR_HDF5;
         goto out;
     }
     ret = 0;
@@ -631,8 +622,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         }
     }
     /* now write the datasets */
-    // TMP don't include mutations to check segfault.
-    for (j = 0; j < num_fields - 2; j++) {
+    for (j = 0; j < num_fields; j++) {
         dims[0] = fields[j].size;
         dims[1] = 2; /* unused except for children */
         dataspace_id = H5Screate_simple(fields[j].dimensions, dims, NULL);
@@ -796,13 +786,6 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
     if (status < 0) {
         goto out;
     }
-    /* Note: we don't call H5close in error conditions because we need to
-     * keep the error messages alive.
-     */
-    status = H5close();
-    if (status < 0) {
-        goto out;
-    }
     ret = 0;
 out:
     return ret;
@@ -935,9 +918,9 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
     coalescence_record_t cr;
     uint32_t j, k, l, child;
     gsl_rng *rng = NULL;
+    double *times = NULL;
     double branch_length, distance, mu, position;
     unsigned int num_mutations;
-    double *times = NULL;
     size_t buffer_size;
     size_t block_size = 2 << 10; /* alloc in blocks of 1M */
 
