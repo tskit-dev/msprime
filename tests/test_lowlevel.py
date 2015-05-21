@@ -593,6 +593,7 @@ class TestNewickConverter(LowLevelTestCase):
             self.assertIsInstance(length, int)
             self.assertIsInstance(tree, str)
 
+    @nottest
     def test_iterator(self):
         ts = self.get_tree_sequence()
         ncs = [
