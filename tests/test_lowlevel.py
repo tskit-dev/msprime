@@ -94,7 +94,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         sim.run()
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        ts.generate_mutations(10, 1)
+        # ts.generate_mutations(10, 1)
         return ts
 
 
