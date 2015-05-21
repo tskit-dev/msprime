@@ -363,7 +363,8 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     for (j = 5; j < 7; j++) {
         fields[j].size = self->num_mutations;
     }
-    for (j = 0; j < num_fields; j++) {
+    // TMP don't include mutations to check segfault.
+    for (j = 0; j < num_fields - 2; j++) {
         dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
         if (dataset_id < 0) {
             goto out;
@@ -426,7 +427,8 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     fields[1].dest = &self->num_records;
     fields[2].dest = &self->num_mutations;
 
-    for (j = 0; j < num_fields; j++) {
+    // TMP don't include mutations to check segfault.
+    for (j = 0; j < num_fields - 1; j++) {
         dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
         if (dataset_id < 0) {
             goto out;
@@ -496,7 +498,8 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     fields[6].dest = self->mutations.node;
     fields[7].dest = self->mutations.position;
 
-    for (j = 0; j < num_fields; j++) {
+    // TMP don't include mutations to check segfault.
+    for (j = 0; j < num_fields - 2; j++) {
         dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
         if (dataset_id < 0) {
             goto out;
@@ -628,7 +631,8 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         }
     }
     /* now write the datasets */
-    for (j = 0; j < num_fields; j++) {
+    // TMP don't include mutations to check segfault.
+    for (j = 0; j < num_fields - 2; j++) {
         dims[0] = fields[j].size;
         dims[1] = 2; /* unused except for children */
         dataspace_id = H5Screate_simple(fields[j].dimensions, dims, NULL);
