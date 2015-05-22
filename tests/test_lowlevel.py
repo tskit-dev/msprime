@@ -522,8 +522,8 @@ class TestTreeSequence(LowLevelTestCase):
         format_version = root.attrs['format_version']
         self.assertEqual(format_version[0], 0)
         self.assertEqual(format_version[1], 1)
-        self.assertEqual(root.attrs["sample_size"][0], ts.get_sample_size())
-        self.assertEqual(root.attrs["num_loci"][0], ts.get_num_loci())
+        self.assertEqual(root.attrs["sample_size"], ts.get_sample_size())
+        self.assertEqual(root.attrs["num_loci"], ts.get_num_loci())
 
         if ts.get_num_mutations() > 0:
             g = root["mutations"]

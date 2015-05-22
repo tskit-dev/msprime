@@ -249,14 +249,13 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         const char *prefix;
         const char *name;
         hid_t memory_type;
-        int dimensions;
         size_t size;
         void *dest;
     };
     struct _hdf5_metadata_read fields[] = {
-        {"/", "format_version", H5T_NATIVE_UINT32, 1, 2, NULL},
-        {"/", "sample_size", H5T_NATIVE_UINT32, 1, 1, NULL},
-        {"/", "num_loci", H5T_NATIVE_UINT32, 1, 1, NULL},
+        {"/", "format_version", H5T_NATIVE_UINT32, 2, NULL},
+        {"/", "sample_size", H5T_NATIVE_UINT32, 0, NULL},
+        {"/", "num_loci", H5T_NATIVE_UINT32, 0, NULL},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_read);
     size_t j;
@@ -275,17 +274,25 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
             goto out;
         }
         rank = H5Sget_simple_extent_ndims(dataspace_id);
-        if (rank != 1) {
-            ret = MSP_ERR_FILE_FORMAT;
-            goto out;
-        }
-        status = H5Sget_simple_extent_dims(dataspace_id, &dims, NULL);
-        if (status < 0) {
-            goto out;
-        }
-        if (dims != fields[j].size) {
-            ret = MSP_ERR_FILE_FORMAT;
-            goto out;
+        if (fields[j].size == 0) {
+            /* SCALAR's have rank 0 */
+            if (rank != 0) {
+                ret = MSP_ERR_FILE_FORMAT;
+                goto out;
+            }
+        } else {
+            if (rank != 1) {
+                ret = MSP_ERR_FILE_FORMAT;
+                goto out;
+            }
+            status = H5Sget_simple_extent_dims(dataspace_id, &dims, NULL);
+            if (status < 0) {
+                goto out;
+            }
+            if (dims != fields[j].size) {
+                ret = MSP_ERR_FILE_FORMAT;
+                goto out;
+            }
         }
         status = H5Aread(attr_id, H5T_NATIVE_UINT32, fields[j].dest);
         if (status < 0) {
@@ -707,14 +714,13 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         hid_t parent;
         hid_t storage_type;
         hid_t memory_type;
-        int dimensions;
         size_t size;
         void *source;
     };
     struct _hdf5_metadata_write fields[] = {
-        {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 2, NULL},
-        {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 1, NULL},
-        {"num_loci", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 1, NULL},
+        {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, NULL},
+        {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 0, NULL},
+        {"num_loci", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 0, NULL},
     };
     /* TODO random_seed, population_models, etc. */
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_write);
@@ -725,8 +731,12 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     fields[2].source = &self->num_loci;
 
     for (j = 0; j < num_fields; j++) {
-        dims = fields[j].size;
-        dataspace_id = H5Screate_simple(1, &dims, NULL);
+        if (fields[j].size == 0) {
+            dataspace_id = H5Screate(H5S_SCALAR);
+        } else {
+            dims = fields[j].size;
+            dataspace_id = H5Screate_simple(1, &dims, NULL);
+        }
         if (dataspace_id < 0) {
             status = dataspace_id;
             goto out;
