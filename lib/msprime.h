@@ -154,10 +154,8 @@ typedef struct {
         uint32_t *node;
         double *position;
     } mutations;
-    uint32_t *breakpoints;
     uint32_t num_nodes;
     size_t num_records;
-    size_t num_breakpoints;
     size_t num_mutations;
 } tree_sequence_t;
 
