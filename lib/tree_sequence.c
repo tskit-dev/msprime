@@ -62,6 +62,8 @@ tree_sequence_print_state(tree_sequence_t *self)
     size_t j;
 
     printf("tree_sequence state\n");
+    printf("sample_size = %d\n", self->sample_size);
+    printf("num_loci = %d\n", self->num_loci);
     printf("trees = (%d records)\n", (int) self->num_records);
     for (j = 0; j < self->num_records; j++) {
         printf("\t%d\t%d\t%d\t%d\t%d\t%d\t%f\t|\t%d\t%d\n",
@@ -84,18 +86,13 @@ tree_sequence_print_state(tree_sequence_t *self)
 }
 
 /* Allocates the memory required for arrays of values. Assumes that
- * the num_breakpoints, num_records and num_mutations have been set.
+ * the num_records and num_mutations have been set.
  */
 static int
 tree_sequence_alloc(tree_sequence_t *self)
 {
     int ret = MSP_ERR_NO_MEMORY;
 
-    self->breakpoints = malloc(self->num_breakpoints * sizeof(uint32_t));
-    if (self->breakpoints == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     self->trees.left = malloc(self->num_records * sizeof(uint32_t));
     self->trees.right = malloc(self->num_records * sizeof(uint32_t));
     self->trees.children = malloc(2 * self->num_records * sizeof(uint32_t));
@@ -127,9 +124,6 @@ out:
 int
 tree_sequence_free(tree_sequence_t *self)
 {
-    if (self->breakpoints != NULL) {
-        free(self->breakpoints);
-    }
     if (self->trees.left != NULL) {
         free(self->trees.left);
     }
@@ -206,16 +200,11 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     uint32_t j;
     coalescence_record_t *records = NULL;
 
-    self->num_breakpoints = msp_get_num_breakpoints(sim);
     self->num_records = msp_get_num_coalescence_records(sim);
     self->sample_size = sim->sample_size;
     self->num_loci = sim->num_loci;
     self->num_mutations = 0;
     tree_sequence_alloc(self);
-    ret = msp_get_breakpoints(sim, self->breakpoints);
-    if (ret != 0) {
-        goto out;
-    }
     records = malloc(self->num_records * sizeof(coalescence_record_t));
     if (records == NULL) {
         goto out;
@@ -266,8 +255,8 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     };
     struct _hdf5_metadata_read fields[] = {
         {"/", "format_version", H5T_NATIVE_UINT32, 1, 2, NULL},
-        {"/parameters", "sample_size", H5T_NATIVE_UINT32, 1, 1, NULL},
-        {"/parameters", "num_loci", H5T_NATIVE_UINT32, 1, 1, NULL},
+        {"/", "sample_size", H5T_NATIVE_UINT32, 1, 1, NULL},
+        {"/", "num_loci", H5T_NATIVE_UINT32, 1, 1, NULL},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_read);
     size_t j;
@@ -392,7 +381,7 @@ out:
     return ret;
 }
 
-/* Reads the dimensions for the breakpoints and records and mallocs
+/* Reads the dimensions for the records and mutations and mallocs
  * space.
  */
 static int
@@ -410,16 +399,14 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         int included;
     };
     struct _dimension_read fields[] = {
-        {"/breakpoints", NULL, 1},
         {"/trees/left", NULL, 1},
         {"/mutations/node", NULL, 0},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_read);
     size_t j;
 
-    fields[0].dest = &self->num_breakpoints;
-    fields[1].dest = &self->num_records;
-    fields[2].dest = &self->num_mutations;
+    fields[0].dest = &self->num_records;
+    fields[1].dest = &self->num_mutations;
     /* check if the mutations group exists */
     exists = H5Lexists(file_id, "/mutations", H5P_DEFAULT);
     if (exists < 0) {
@@ -427,7 +414,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     }
     self->num_mutations = 0;
     if (exists) {
-        fields[2].included = 1;
+        fields[1].included = 1;
     }
     for (j = 0; j < num_fields; j++) {
         if (fields[j].included) {
@@ -481,7 +468,6 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         void *dest;
     };
     struct _hdf5_field_read fields[] = {
-        {"/breakpoints", H5T_NATIVE_UINT32, 0, NULL},
         {"/trees/left", H5T_NATIVE_UINT32, 0, NULL},
         {"/trees/right", H5T_NATIVE_UINT32, 0, NULL},
         {"/trees/node", H5T_NATIVE_UINT32, 0, NULL},
@@ -493,17 +479,16 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
     size_t j;
 
-    fields[0].dest = self->breakpoints;
-    fields[1].dest = self->trees.left;
-    fields[2].dest = self->trees.right;
-    fields[3].dest = self->trees.node;
-    fields[4].dest = self->trees.children;
-    fields[5].dest = self->trees.time;
-    fields[6].dest = self->mutations.node;
-    fields[7].dest = self->mutations.position;
+    fields[0].dest = self->trees.left;
+    fields[1].dest = self->trees.right;
+    fields[2].dest = self->trees.node;
+    fields[3].dest = self->trees.children;
+    fields[4].dest = self->trees.time;
+    fields[5].dest = self->mutations.node;
+    fields[6].dest = self->mutations.position;
     if (self->num_mutations == 0) {
+        fields[5].empty = 1;
         fields[6].empty = 1;
-        fields[7].empty = 1;
     }
     for (j = 0; j < num_fields; j++) {
         if (!fields[j].empty) {
@@ -591,7 +576,6 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         void *source;
     };
     struct _hdf5_field_write fields[] = {
-        {"/breakpoints", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/left", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/right", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/node", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
@@ -612,20 +596,19 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     size_t num_groups = sizeof(groups) / sizeof(struct _hdf5_group_write);
     size_t j;
 
-    fields[0].source = self->breakpoints;
-    fields[0].size = self->num_breakpoints;
-    fields[1].source = self->trees.left;
-    fields[2].source = self->trees.right;
-    fields[3].source = self->trees.node;
-    fields[4].source = self->trees.children;
-    fields[5].source = self->trees.time;
-    fields[6].source = self->mutations.node;
-    fields[7].source = self->mutations.position;
-    for (j = 1; j < 6; j++) {
+    fields[0].source = self->trees.left;
+    fields[1].source = self->trees.right;
+    fields[2].source = self->trees.node;
+    fields[3].source = self->trees.children;
+    fields[4].source = self->trees.time;
+    fields[5].source = self->mutations.node;
+    fields[6].source = self->mutations.position;
+    for (j = 0; j < 5; j++) {
         fields[j].size = self->num_records;
     }
-    fields[6].size = self->num_mutations;
-    fields[7].size = self->num_mutations;
+    for (j = 5; j < 7; j++) {
+        fields[j].size = self->num_mutations;
+    }
     if (self->num_mutations == 0) {
         groups[1].included = 0;
     }
@@ -714,7 +697,7 @@ static int
 tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
 {
     herr_t status = -1;
-    hid_t attr_id, group_id, dataspace_id;
+    hid_t attr_id, dataspace_id;
     hsize_t dims = 1;
     uint32_t version[2] = {
         MSP_FILE_FORMAT_VERSION_MAJOR, MSP_FILE_FORMAT_VERSION_MINOR};
@@ -741,16 +724,6 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     fields[1].source = &self->sample_size;
     fields[2].source = &self->num_loci;
 
-    /* make a group for the simulation parameters */
-    group_id = H5Gcreate(file_id, "/parameters", H5P_DEFAULT, H5P_DEFAULT,
-            H5P_DEFAULT);
-    if (group_id < 0) {
-        goto out;
-    }
-    fields[0].parent = file_id;
-    for (j = 1; j < num_fields; j++) {
-        fields[j].parent = group_id;
-    }
     for (j = 0; j < num_fields; j++) {
         dims = fields[j].size;
         dataspace_id = H5Screate_simple(1, &dims, NULL);
@@ -758,7 +731,7 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
             status = dataspace_id;
             goto out;
         }
-        attr_id = H5Acreate(fields[j].parent, fields[j].name,
+        attr_id = H5Acreate(file_id, fields[j].name,
                 fields[j].storage_type, dataspace_id, H5P_DEFAULT,
                 H5P_DEFAULT);
         if (attr_id < 0) {
@@ -776,10 +749,6 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         if (status < 0) {
             goto out;
         }
-    }
-    status = H5Gclose(group_id);
-    if (status < 0) {
-        goto out;
     }
  out:
     return status;
@@ -838,12 +807,6 @@ tree_sequence_get_num_nodes(tree_sequence_t *self)
 }
 
 size_t
-tree_sequence_get_num_breakpoints(tree_sequence_t *self)
-{
-    return self->num_breakpoints;
-}
-
-size_t
 tree_sequence_get_num_coalescence_records(tree_sequence_t *self)
 {
     return self->num_records;
@@ -887,16 +850,6 @@ tree_sequence_get_record(tree_sequence_t *self, size_t index,
     record->children[1] = self->trees.children[2 * j + 1];
     record->time = self->trees.time[j];
 out:
-    return ret;
-}
-
-int
-tree_sequence_get_breakpoints(tree_sequence_t *self, uint32_t *breakpoints)
-{
-    int ret = 0;
-
-    memcpy(breakpoints, self->breakpoints,
-            self->num_breakpoints * sizeof(uint32_t));
     return ret;
 }
 

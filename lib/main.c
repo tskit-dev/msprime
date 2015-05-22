@@ -378,7 +378,7 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
     if (ret != 0) {
         goto out;
     }
-    /* ret = tree_sequence_generate_mutations(tree_seq, 0.1, 10); */
+    ret = tree_sequence_generate_mutations(tree_seq, 0.1, 10);
     if (ret != 0) {
         goto out;
     }
