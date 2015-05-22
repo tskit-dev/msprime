@@ -290,9 +290,6 @@ class TreeSequence(object):
     def get_num_mutations(self):
         return self._ll_tree_sequence.get_num_mutations()
 
-    def get_breakpoints(self):
-        return self._ll_tree_sequence.get_breakpoints()
-
     def get_mutations(self):
         return self._ll_tree_sequence.get_mutations()
 
@@ -300,9 +297,8 @@ class TreeSequence(object):
         for j in range(self.get_num_records()):
             yield self._ll_tree_sequence.get_record(j)
 
-    def diffs(self, all_breaks=False):
-        iterator = _msprime.TreeDiffIterator(self._ll_tree_sequence, all_breaks)
-        return iterator
+    def diffs(self):
+        return _msprime.TreeDiffIterator(self._ll_tree_sequence)
 
     def sparse_trees(self):
         n = self.get_sample_size()
