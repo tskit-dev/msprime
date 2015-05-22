@@ -31,7 +31,6 @@
 #define POP_MODEL_CONSTANT 0
 #define POP_MODEL_EXPONENTIAL 1
 
-#define MSP_ALL_BREAKPOINTS 1
 /* Flags for tree sequence dump/load */
 #define MSP_ZLIB_COMPRESSION 1
 #define MSP_SKIP_H5CLOSE 2
@@ -182,7 +181,6 @@ typedef struct {
     size_t current_breakpoint_index;
     size_t next_record_index;
     size_t num_records;
-    int flags;
     tree_node_list_t nodes_in;
     avl_tree_t active_nodes;
     object_heap_t tree_node_heap;
@@ -291,7 +289,7 @@ int tree_sequence_get_mutations(tree_sequence_t *self, uint32_t *nodes,
         double *positions);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
-        tree_sequence_t *tree_sequence, int flags);
+        tree_sequence_t *tree_sequence);
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
 int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
         tree_node_t **nodes_out, tree_node_t **nodes_in);
@@ -306,8 +304,7 @@ int sparse_tree_iterator_reset(sparse_tree_iterator_t *self);
 void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
 
 int newick_converter_alloc(newick_converter_t *self, 
-        tree_sequence_t *tree_sequence, size_t precision, 
-        int all_breakpoints);
+        tree_sequence_t *tree_sequence, size_t precision);
 int newick_converter_next(newick_converter_t *self, uint32_t *length, 
         char **tree);
 int newick_converter_free(newick_converter_t *self);

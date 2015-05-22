@@ -440,10 +440,9 @@ out:
 
 int
 newick_converter_alloc(newick_converter_t *self,
-        tree_sequence_t *tree_sequence, size_t precision, int all_breakpoints)
+        tree_sequence_t *tree_sequence, size_t precision)
 {
     int ret = -1;
-    int flags = 0;
     uint32_t j;
     uint32_t n = tree_sequence->sample_size;
     avl_node_t *avl_node;
@@ -452,10 +451,7 @@ newick_converter_alloc(newick_converter_t *self,
     self->num_loci = tree_sequence->num_loci;
     self->precision = precision;
     memset(&self->diff_iterator, 0, sizeof(tree_diff_iterator_t));
-    if (all_breakpoints) {
-        flags = MSP_ALL_BREAKPOINTS;
-    }
-    ret = tree_diff_iterator_alloc(&self->diff_iterator, tree_sequence, flags);
+    ret = tree_diff_iterator_alloc(&self->diff_iterator, tree_sequence);
     if (ret != 0) {
         goto out;
     }

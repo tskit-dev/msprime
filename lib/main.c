@@ -231,7 +231,7 @@ print_newick_trees(tree_sequence_t *ts)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = newick_converter_alloc(nc, ts, 4, 0);
+    ret = newick_converter_alloc(nc, ts, 4);
     if (ret != 0) {
         goto out;
     }
@@ -276,7 +276,7 @@ print_tree_sequence(tree_sequence_t *ts)
         printf("\t%d\t%d\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
                 cr.children[1], cr.node, cr.time);
     }
-    ret = tree_diff_iterator_alloc(iter, ts, MSP_ALL_BREAKPOINTS);
+    ret = tree_diff_iterator_alloc(iter, ts);
     if (ret != 0) {
         goto out;
     }
