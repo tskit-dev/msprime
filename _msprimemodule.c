@@ -1155,36 +1155,6 @@ out:
 }
 
 static PyObject *
-TreeSequence_get_breakpoints(TreeSequence *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    uint32_t *breakpoints = NULL;
-    size_t num_breakpoints;
-    int err;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    num_breakpoints = tree_sequence_get_num_breakpoints(self->tree_sequence);
-    breakpoints = PyMem_Malloc(num_breakpoints * sizeof(uint32_t));
-    if (breakpoints == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = tree_sequence_get_breakpoints(self->tree_sequence, breakpoints);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = convert_breakpoints(breakpoints, num_breakpoints);
-out:
-    if (breakpoints != NULL) {
-        PyMem_Free(breakpoints);
-    }
-    return ret;
-}
-
-static PyObject *
 TreeSequence_get_mutations(TreeSequence *self, PyObject *args)
 {
     PyObject *ret = NULL;
@@ -1249,21 +1219,6 @@ TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
     }
     num_records = tree_sequence_get_num_coalescence_records(self->tree_sequence);
     ret = Py_BuildValue("n", (Py_ssize_t) num_records);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_num_breakpoints(TreeSequence *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    size_t num_breakpoints;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    num_breakpoints = tree_sequence_get_num_breakpoints(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) num_breakpoints);
 out:
     return ret;
 }
@@ -1345,14 +1300,10 @@ static PyMethodDef TreeSequence_methods[] = {
         "Generates mutations under the infinite sites model"},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
         "Returns the record at the specified index."},
-    {"get_breakpoints", (PyCFunction) TreeSequence_get_breakpoints,
-        METH_NOARGS, "Returns the list of breakpoints"},
     {"get_mutations", (PyCFunction) TreeSequence_get_mutations,
         METH_NOARGS, "Returns the list of mutations"},
     {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
             METH_NOARGS, "Returns the number of coalescence records." },
-    {"get_num_breakpoints", (PyCFunction) TreeSequence_get_num_breakpoints,
-            METH_NOARGS, "Returns the number of coalescence breakpoints." },
     {"get_num_loci", (PyCFunction) TreeSequence_get_num_loci, METH_NOARGS,
             "Returns the number of loci" },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
@@ -1436,15 +1387,13 @@ TreeDiffIterator_init(TreeDiffIterator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "all_breakpoints", NULL};
-    int all_breakpoints = 0;
-    int flags = 0;
+    static char *kwlist[] = {"tree_sequence", NULL};
     TreeSequence *tree_sequence;
 
     self->tree_diff_iterator = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
-            &TreeSequenceType, &tree_sequence, &all_breakpoints)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -1458,11 +1407,8 @@ TreeDiffIterator_init(TreeDiffIterator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     memset(self->tree_diff_iterator, 0, sizeof(tree_diff_iterator_t));
-    if (all_breakpoints) {
-        flags = MSP_ALL_BREAKPOINTS;
-    }
     err = tree_diff_iterator_alloc(self->tree_diff_iterator,
-            self->tree_sequence->tree_sequence, flags);
+            self->tree_sequence->tree_sequence);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1630,17 +1576,14 @@ NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "precision", "all_breakpoints",
-        NULL};
-    int all_breakpoints = 0;
+    static char *kwlist[] = {"tree_sequence", "precision", NULL};
     int precision = 3;
     TreeSequence *tree_sequence;
 
     self->newick_converter = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|ii", kwlist,
-            &TreeSequenceType, &tree_sequence, &precision,
-            &all_breakpoints)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
+            &TreeSequenceType, &tree_sequence, &precision)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -1660,8 +1603,7 @@ NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
     }
     memset(self->newick_converter, 0, sizeof(newick_converter_t));
     err = newick_converter_alloc(self->newick_converter,
-            self->tree_sequence->tree_sequence, (size_t) precision,
-            all_breakpoints);
+            self->tree_sequence->tree_sequence, (size_t) precision);
     if (err != 0) {
         handle_library_error(err);
         goto out;

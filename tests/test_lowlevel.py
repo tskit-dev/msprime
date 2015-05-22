@@ -39,10 +39,10 @@ class PythonTreeSequence(object):
     """
     A python implementation of the TreeDiffIterator algorithm.
     """
-    def __init__(self, tree_sequence):
+    def __init__(self, tree_sequence, breakpoints=None):
         self._tree_sequence = tree_sequence
         self._sample_size = tree_sequence.get_sample_size()
-        self._breakpoints = tree_sequence.get_breakpoints()
+        self._breakpoints = breakpoints
 
     def records(self):
         for j in range(self._tree_sequence.get_num_records()):
@@ -362,29 +362,27 @@ class TestInterface(LowLevelTestCase):
     def verify_tree_diffs(self, tree_sequence):
         n = tree_sequence.get_sample_size()
         m = tree_sequence.get_num_loci()
-        for all_breakpoints in [False, True]:
-            # Check some basic properties of the diffs.
-            diffs = list(_msprime.TreeDiffIterator(
-                tree_sequence, all_breakpoints))
-            length, records_out, records_in = diffs[0]
-            self.assertGreaterEqual(length, 0)
-            self.assertEqual(len(records_out), 0)
-            self.assertEqual(len(records_in), n - 1)
-            self.assertEqual(sum([l for l, _, _ in diffs]), m)
-            for l, records_out, records_in in diffs[1:]:
-                self.assertGreaterEqual(l, 0)
-                self.assertGreaterEqual(l, 0)
-                self.assertEqual(len(records_out), len(records_in))
-                for node, children, time in records_out + records_in:
-                    for c in children:
-                        self.assertGreater(c, 0)
-                        self.assertGreater(node, c)
-                        self.assertGreater(time, 0.0)
-            # Compare with the Python implementation.
-            pts = PythonTreeSequence(tree_sequence)
-            python_diffs = list(pts.diffs(all_breakpoints))
-            self.assertGreaterEqual(len(python_diffs), 0)
-            self.assertEqual(diffs, python_diffs)
+        # Check some basic properties of the diffs.
+        diffs = list(_msprime.TreeDiffIterator(tree_sequence))
+        length, records_out, records_in = diffs[0]
+        self.assertGreaterEqual(length, 0)
+        self.assertEqual(len(records_out), 0)
+        self.assertEqual(len(records_in), n - 1)
+        self.assertEqual(sum([l for l, _, _ in diffs]), m)
+        for l, records_out, records_in in diffs[1:]:
+            self.assertGreaterEqual(l, 0)
+            self.assertGreaterEqual(l, 0)
+            self.assertEqual(len(records_out), len(records_in))
+            for node, children, time in records_out + records_in:
+                for c in children:
+                    self.assertGreater(c, 0)
+                    self.assertGreater(node, c)
+                    self.assertGreater(time, 0.0)
+        # Compare with the Python implementation.
+        pts = PythonTreeSequence(tree_sequence)
+        python_diffs = list(pts.diffs())
+        self.assertGreaterEqual(len(python_diffs), 0)
+        self.assertEqual(diffs, python_diffs)
 
 
     def verify_simulation(self, n, m, r, models):
@@ -418,7 +416,6 @@ class TestInterface(LowLevelTestCase):
         tree_sequence = _msprime.TreeSequence()
         tree_sequence.create(sim)
         self.verify_tree_diffs(tree_sequence)
-        self.assertEqual(tree_sequence.get_breakpoints(), sim.get_breakpoints())
 
     def test_tree_sequence_interface(self):
         tree_sequence = _msprime.TreeSequence()
@@ -561,23 +558,19 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertGreater(os.path.getsize(outfile.name), 0)
         root = h5py.File(outfile.name, "r")
         keys = set(root.keys())
-        self.assertLessEqual(keys,
-            set(['breakpoints', 'mutations', 'parameters', 'trees']))
-        self.assertIn("breakpoints", keys)
-        self.assertIn("parameters", keys)
+        self.assertLessEqual(keys, set(["mutations", "trees"]))
         self.assertIn("trees", keys)
         if ts.get_num_mutations() == 0:
             self.assertNotIn("mutations", keys)
         else:
             self.assertIn("mutations", keys)
-        # We should have a file format attribute.
+        # Check the basic root attributes
         format_version = root.attrs['format_version']
         self.assertEqual(format_version[0], 0)
         self.assertEqual(format_version[1], 1)
-        breakpoints = root["breakpoints"]
-        self.assertEqual(len(breakpoints.shape), 1)
-        self.assertEqual(breakpoints.shape[0], ts.get_num_breakpoints())
-        self.assertEqual(breakpoints.dtype, uint32)
+        self.assertEqual(root.attrs["sample_size"][0], ts.get_sample_size())
+        self.assertEqual(root.attrs["num_loci"][0], ts.get_num_loci())
+
         if ts.get_num_mutations() > 0:
             g = root["mutations"]
             fields = [("node", uint32), ("position", float64)]
@@ -597,9 +590,6 @@ class TestTreeSequence(LowLevelTestCase):
             if dims == 2:
                 self.assertEqual(g[name].shape[1], 2)
             self.assertEqual(g[name].dtype, dtype)
-        g = root["parameters"]
-        self.assertEqual(g.attrs["sample_size"][0], ts.get_sample_size())
-        self.assertEqual(g.attrs["num_loci"][0], ts.get_num_loci())
 
     def test_dump_format(self):
         for ts in self.get_test_tree_sequences():
@@ -703,8 +693,6 @@ class TestNewickConverter(LowLevelTestCase):
         for bad_type in [None, "", 2.3, [], {}]:
             self.assertRaises(TypeError, _msprime.NewickConverter, ts,
                     precision=bad_type)
-            self.assertRaises(TypeError, _msprime.NewickConverter, ts,
-                    all_breakpoints=bad_type)
         before = list(_msprime.NewickConverter(ts))
         self.assertGreater(len(before), 0)
         iterator = _msprime.NewickConverter(ts)
@@ -720,8 +708,8 @@ class TestNewickConverter(LowLevelTestCase):
     def test_iterator(self):
         ts = self.get_tree_sequence()
         ncs = [
-            _msprime.NewickConverter(ts), _msprime.NewickConverter(ts, 1, False),
-            _msprime.NewickConverter(ts, 0, True)]
+            _msprime.NewickConverter(ts), _msprime.NewickConverter(ts, 1),
+            _msprime.NewickConverter(ts, 0)]
         for nc in ncs:
             self.verify_iterator(nc)
 
@@ -762,8 +750,6 @@ class TestTreeDiffIterator(LowLevelTestCase):
     Tests for the low-level tree diff iterator.
     """
 
-    # TODO test all_breaks here and in the Newick converter above.
-
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.TreeDiffIterator)
         self.assertRaises(TypeError, _msprime.TreeDiffIterator, None)
@@ -773,9 +759,6 @@ class TestTreeDiffIterator(LowLevelTestCase):
         sim = _msprime.Simulator(10, 1)
         sim.run()
         ts.create(sim)
-        for bad_type in [None, "", 2.3, [], {}]:
-            self.assertRaises(TypeError, _msprime.TreeDiffIterator, ts,
-                    all_breakpoints=bad_type)
         before = list(_msprime.TreeDiffIterator(ts))
         iterator = _msprime.TreeDiffIterator(ts)
         del ts
@@ -785,11 +768,7 @@ class TestTreeDiffIterator(LowLevelTestCase):
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
-        iters = [
-            _msprime.TreeDiffIterator(ts), _msprime.NewickConverter(ts, False),
-            _msprime.NewickConverter(ts, True)]
-        for iterator in iters:
-            self.verify_iterator(iterator)
+        self.verify_iterator(_msprime.TreeDiffIterator(ts))
 
 class TestHaplotypeGenerator(LowLevelTestCase):
     """
