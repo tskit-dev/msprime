@@ -1022,13 +1022,12 @@ out:
 
 int
 tree_diff_iterator_alloc(tree_diff_iterator_t *self,
-        tree_sequence_t *tree_sequence, int flags)
+        tree_sequence_t *tree_sequence)
 {
     int ret = 0;
     uint32_t n = tree_sequence->sample_size;
 
     self->tree_sequence = tree_sequence;
-    self->flags = flags;
     self->current_left = 0;
     self->next_record_index = 0;
     /* These two are only used when we are iterating over all records */
@@ -1239,8 +1238,8 @@ out:
     return ret;
 }
 
-static int
-tree_diff_iterator_next_tree(tree_diff_iterator_t *self, uint32_t *length,
+int
+tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
         tree_node_t **nodes_out, tree_node_t **nodes_in)
 {
     int ret = 0;
@@ -1312,40 +1311,7 @@ out:
     return ret;
 }
 
-int
-tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
-        tree_node_t **nodes_out, tree_node_t **nodes_in)
-{
-    int ret = 0;
-    uint32_t *breakpoints = self->tree_sequence->breakpoints;
-    size_t num_breakpoints = self->tree_sequence->num_breakpoints;
 
-    if (self->flags & MSP_ALL_BREAKPOINTS) {
-        if (self->current_breakpoint_index < num_breakpoints - 1) {
-            if (breakpoints[self->current_breakpoint_index]
-                    != self->next_breakpoint) {
-                *nodes_out = NULL;
-                *nodes_in = NULL;
-            } else {
-                ret = tree_diff_iterator_next_tree(self, length, nodes_out,
-                        nodes_in);
-                if (ret < 0) {
-                    goto out;
-                }
-                assert(ret == 1);
-                self->next_breakpoint += *length;
-            }
-            self->current_breakpoint_index++;
-            *length = breakpoints[self->current_breakpoint_index] -
-                    breakpoints[self->current_breakpoint_index - 1];
-            ret = 1;
-        }
-    } else {
-        ret = tree_diff_iterator_next_tree(self, length, nodes_out, nodes_in);
-    }
-out:
-    return ret;
-}
 /* ======================================================== *
  * sparse tree iterator
  * ======================================================== */
