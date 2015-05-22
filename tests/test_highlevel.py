@@ -56,14 +56,11 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests on the high level interface.
     """
-
-
     def verify_tree_sequence(self, sim, tree_sequence):
         """
         Verify that varoius ways of looking at the specified tree sequence
         are equivalent.
         """
-        self.verify_breakpoints(tree_sequence)
         n = tree_sequence.get_sample_size()
         m = tree_sequence.get_num_loci()
         self.assertEqual(sim.get_sample_size(), n)
@@ -135,40 +132,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             del pi[v]
             j += 1
 
-    def verify_breakpoints(self, tree_sequence):
-        n = tree_sequence.get_sample_size()
-        m = tree_sequence.get_num_loci()
-        all_breaks = tree_sequence.diffs(all_breaks=True)
-        distinct_trees = tree_sequence.diffs(all_breaks=False)
-        x_all = 0
-        x_distinct = 0
-        for l1, out1, in1 in distinct_trees:
-            x_distinct += l1
-            l2, out2, in2 = next(all_breaks)
-            x_all += l2
-            self.assertEqual(out1, out2)
-            self.assertEqual(in1, in2)
-            while x_distinct != x_all:
-                l2, out2, in2 = next(all_breaks)
-                self.assertEqual(0, len(out2))
-                self.assertEqual(0, len(in2))
-                x_all += l2
-        total = 0
-        num_breaks = 0
-        breakpoints = tree_sequence.get_breakpoints()
-        for l, records_out, records_in in tree_sequence.diffs(all_breaks=True):
-            num_breaks += 1
-            total += l
-        self.assertEqual(num_breaks, len(breakpoints) - 1)
-        self.assertEqual(num_breaks, len(breakpoints) - 1)
-        self.assertEqual(total,  m)
-        total = 0
-        num_breaks = 0
-        for l, records_out, records_in in tree_sequence.diffs(all_breaks=False):
-            total += l
-            num_breaks += 1
-        self.assertEqual(total,  m)
-        self.assertLessEqual(num_breaks, len(breakpoints) - 1)
 
 
 
@@ -335,7 +298,7 @@ class TestNewickConversion(HighLevelTestCase):
     """
     Test the newick tree generation code.
     """
-    def verify_trees(self, tree_sequence):
+    def verify_trees(self, tree_sequence, breakpoints):
         """
         Verifies that the specified tree is converted to Newick correctly.
         """
@@ -358,6 +321,34 @@ class TestNewickConversion(HighLevelTestCase):
         for (l1, t1), (l2, t2) in zip(new_trees, old_trees):
             self.assertEqual(l1, l2)
             self.assertEqual(strip_tree(t1), strip_tree(t2))
+        # TODO test the form of the trees when we're using breakpoints.
+
+
+
+    def verify_all_breakpoints(self, tree_sequence, breakpoints):
+        """
+        Verifies that we get the correct list of trees when we use
+        the all_breakpoints option for newick generation.
+        """
+        trees = list(tree_sequence.newick_trees(2, breakpoints))
+        self.assertEqual(len(trees), len(breakpoints) - 1)
+        j = 0
+        s = 0
+        for length, _ in trees:
+            self.assertGreater(length, 0)
+            self.assertEqual(s, breakpoints[j])
+            s += length
+            j += 1
+        self.assertEqual(s, tree_sequence.get_num_loci())
+        pts = tests.PythonTreeSequence(
+                tree_sequence.get_ll_tree_sequence(), breakpoints)
+        diffs = list(pts.diffs(all_breaks=True))
+        self.assertEqual(len(diffs), len(trees))
+        for j in range(1, len(diffs)):
+            if len(diffs[j][1]) == 0:
+                # If the list of diffs is empty, we should have the
+                # same tree as the last one.
+                self.assertEqual(trees[j][1], trees[j - 1][1])
 
     def test_simple_cases(self):
         cases = [
@@ -375,8 +366,10 @@ class TestNewickConversion(HighLevelTestCase):
             ts.set_scaled_recombination_rate(r)
             ts.set_num_loci(m)
             tree_sequence = ts.run()
+            breakpoints = ts.get_breakpoints()
             self.verify_tree_sequence(ts, tree_sequence)
-            self.verify_trees(tree_sequence)
+            self.verify_trees(tree_sequence, breakpoints)
+            self.verify_all_breakpoints(tree_sequence, breakpoints)
 
     def test_random_parameters(self):
         num_random_sims = 10
@@ -388,7 +381,10 @@ class TestNewickConversion(HighLevelTestCase):
             ts.set_scaled_recombination_rate(r)
             ts.set_num_loci(m)
             tree_sequence = ts.run()
+            breakpoints = ts.get_breakpoints()
             self.verify_tree_sequence(ts, tree_sequence)
-            self.verify_trees(tree_sequence)
+            self.verify_trees(tree_sequence, breakpoints)
+            self.verify_all_breakpoints(tree_sequence, breakpoints)
+
 
 

@@ -15,6 +15,51 @@ def setUp():
     # Make random tests reproducible.
     random.seed(210)
 
+class PythonTreeSequence(object):
+    """
+    A python implementation of the TreeDiffIterator algorithm.
+    """
+    def __init__(self, tree_sequence, breakpoints=None):
+        self._tree_sequence = tree_sequence
+        self._sample_size = tree_sequence.get_sample_size()
+        self._breakpoints = breakpoints
+
+    def records(self):
+        for j in range(self._tree_sequence.get_num_records()):
+            yield self._tree_sequence.get_record(j)
+
+    def _diffs(self):
+        n = self._sample_size
+        left = 0
+        used_records = collections.defaultdict(list)
+        records_in = []
+        for l, r, node, children, t in self.records():
+            if l != left:
+                yield l - left, used_records[left], records_in
+                del used_records[left]
+                records_in = []
+                left = l
+            used_records[r].append((node, children, t))
+            records_in.append((node, children, t))
+        yield r - left, used_records[left], records_in
+
+    def _diffs_with_breaks(self):
+        k = 1
+        x = 0
+        b = self._breakpoints
+        for length, records_out, records_in in self._diffs():
+            x += length
+            yield b[k] - b[k - 1], records_out, records_in
+            while self._breakpoints[k] != x:
+                k += 1
+                yield b[k] - b[k - 1], [], []
+            k += 1
+
+    def diffs(self, all_breaks=False):
+        if all_breaks:
+            return self._diffs_with_breaks()
+        else:
+            return self._diffs()
 
 class MsprimeTestCase(unittest.TestCase):
     """
