@@ -230,13 +230,26 @@ class TestInterface(LowLevelTestCase):
         self.assertEqual(times, sorted(times))
         self.assertEqual(times[-1], sim.get_time())
         self.verify_squashed_records(records)
-        sorted_records = sorted(records, key=lambda r: r[0])
-        self.verify_trees(sim, sorted_records)
-        # Check the TreeSequence
+        left_sorted_records = sorted(records, key=lambda r: r[0])
+        right_sorted_records = sorted(records, key=lambda r: r[1])
+        self.verify_trees(sim, left_sorted_records)
+        # Check the TreeSequence. Ensure we get the records back in the
+        # correct orders.
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        records = [ts.get_record(j) for j in range(len(records))]
-        self.assertEqual(records, sorted_records)
+        ts_records = [
+            ts.get_record(j, _msprime.MSP_ORDER_TIME)
+                for j in range(len(records))]
+        self.assertEqual(ts_records, records)
+        ts_records = [
+            ts.get_record(j, _msprime.MSP_ORDER_LEFT)
+                for j in range(len(records))]
+        self.assertEqual(ts_records, left_sorted_records)
+        ts_records = [
+            ts.get_record(j, _msprime.MSP_ORDER_RIGHT)
+                for j in range(len(records))]
+        self.assertEqual(ts_records, right_sorted_records)
+
 
 
     def verify_random_parameters(self):
@@ -371,38 +384,6 @@ class TestInterface(LowLevelTestCase):
         tree_sequence.create(sim)
         self.verify_tree_diffs(tree_sequence)
 
-    def test_tree_sequence_interface(self):
-        tree_sequence = _msprime.TreeSequence()
-        for x in [None, "", {}, [], 1]:
-            self.assertRaises(TypeError, tree_sequence.create, x)
-        # Creating iterators or running method should fail as we
-        # haven't initialised it.
-        self.assertRaises(ValueError, tree_sequence.get_record, 0)
-        self.assertRaises(ValueError, tree_sequence.get_num_records)
-        self.assertRaises(ValueError, _msprime.TreeDiffIterator, tree_sequence)
-        sim = _msprime.Simulator(10, 1)
-        sim.run()
-        tree_sequence.create(sim)
-        self.assertRaises(ValueError, tree_sequence.create, sim)
-        num_records = sim.get_num_coalescence_records()
-        self.assertEqual(num_records, tree_sequence.get_num_records())
-        # We don't accept Python negative indexes here.
-        self.assertRaises(IndexError, tree_sequence.get_record, -1)
-        for j in [0, 10, 10**6]:
-            self.assertRaises(IndexError, tree_sequence.get_record,
-                    num_records + j)
-        # Check out the diff iterator.
-        iterator = _msprime.TreeDiffIterator(tree_sequence)
-        records = list(iterator)
-        self.assertGreater(len(records), 0)
-        # Now we do something horrible. Allocate an iterator, but then delete
-        # the underlying TreeSequence. We should still be able to iterate over
-        # the records, as we should keep a reference to the TreeSequence in
-        # the iterator, preventing it from being freed.
-        iterator = _msprime.TreeDiffIterator(tree_sequence)
-        del tree_sequence
-        new_records = list(iterator)
-        self.assertEqual(new_records, records)
 
     def test_random_sims(self):
         num_random_sims = 10
@@ -459,7 +440,7 @@ class TestTreeSequence(LowLevelTestCase):
     """
     Tests for the low-level interface for the TreeSequence.
     """
-    def get_test_tree_sequences(self):
+    def get_example_tree_sequences(self):
         for n in [2, 3, 100]:
             for m in [1, 2, 100]:
                 for mu in [0, 10]:
@@ -546,19 +527,18 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertEqual(g[name].dtype, dtype)
 
     def test_dump_format(self):
-        for ts in self.get_test_tree_sequences():
+        for ts in self.get_example_tree_sequences():
             with tempfile.NamedTemporaryFile() as f:
                 self.verify_tree_dump_format(ts, f)
 
     def test_num_nodes(self):
-        for ts in self.get_test_tree_sequences():
-            with tempfile.NamedTemporaryFile() as f:
-                num_nodes = 0
-                for j in range(ts.get_num_records()):
-                    _, _, node, _, _ = ts.get_record(j)
-                    if node > num_nodes:
-                        num_nodes = node
-                self.assertEqual(num_nodes, ts.get_num_nodes())
+        for ts in self.get_example_tree_sequences():
+            num_nodes = 0
+            for j in range(ts.get_num_records()):
+                _, _, node, _, _ = ts.get_record(j)
+                if node > num_nodes:
+                    num_nodes = node
+            self.assertEqual(num_nodes, ts.get_num_nodes())
 
     def verify_dump_equality(self, ts, outfile):
         """
@@ -580,7 +560,7 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertEqual(ts.get_mutations(), ts2.get_mutations())
 
     def test_dump_equality(self):
-        for ts in self.get_test_tree_sequences():
+        for ts in self.get_example_tree_sequences():
             with tempfile.NamedTemporaryFile() as f:
                 self.verify_dump_equality(ts, f)
 
@@ -629,6 +609,51 @@ class TestTreeSequence(LowLevelTestCase):
             last_mutations = mutations
 
 
+    def test_constructor_interface(self):
+        tree_sequence = _msprime.TreeSequence()
+        for x in [None, "", {}, [], 1]:
+            self.assertRaises(TypeError, tree_sequence.create, x)
+        # Creating iterators or running method should fail as we
+        # haven't initialised it.
+        self.assertRaises(ValueError, tree_sequence.get_record, 0)
+        self.assertRaises(ValueError, tree_sequence.get_num_records)
+        self.assertRaises(ValueError, _msprime.TreeDiffIterator, tree_sequence)
+        sim = _msprime.Simulator(10, 1)
+        sim.run()
+        tree_sequence.create(sim)
+        self.assertRaises(ValueError, tree_sequence.create, sim)
+        num_records = sim.get_num_coalescence_records()
+        self.assertEqual(num_records, tree_sequence.get_num_records())
+        sim_records = sim.get_coalescence_records()
+        ts_records = [tree_sequence.get_record(j) for j in range(num_records)]
+        self.assertEqual(sim_records, ts_records)
+
+    def verify_get_record_interface(self, ts):
+        num_records = ts.get_num_records()
+        # We don't accept Python negative indexes here.
+        self.assertRaises(IndexError, ts.get_record, -1)
+        for j in [0, 10, 10**6]:
+            self.assertRaises(IndexError, ts.get_record, num_records + j)
+            self.assertRaises(
+                IndexError, ts.get_record, num_records + j,
+                _msprime.MSP_ORDER_TIME)
+            self.assertRaises(
+                IndexError, ts.get_record, num_records + j,
+                _msprime.MSP_ORDER_LEFT)
+            self.assertRaises(
+                IndexError, ts.get_record, num_records + j,
+                _msprime.MSP_ORDER_RIGHT)
+        # Make sure we don't accept bad values for order or index.
+        for x in [None, "", {}, []]:
+            self.assertRaises(TypeError, ts.get_record, x)
+            self.assertRaises(TypeError, ts.get_record, 0, x)
+        for x in [-1, 3, 5, 10**6]:
+            self.assertRaises(_msprime.LibraryError, ts.get_record, 0, x)
+
+
+    def test_get_record_interface(self):
+        for ts in self.get_example_tree_sequences():
+            self.verify_get_record_interface(ts)
 
 class TestNewickConverter(LowLevelTestCase):
     """

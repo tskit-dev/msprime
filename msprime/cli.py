@@ -93,7 +93,8 @@ class SimulationRunner(object):
         print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
         for j in range(self._num_replicates):
             self._simulator.set_random_seed(random.randint(0, 2**30))
-            tree_sequence = self._simulator.run()
+            self._simulator.run()
+            tree_sequence = self._simulator.get_tree_sequence()
             breakpoints = self._simulator.get_breakpoints()
             print(file=output)
             print("//", file=output)
