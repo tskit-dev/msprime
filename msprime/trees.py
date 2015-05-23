@@ -439,10 +439,13 @@ class TreeSequence(object):
 
 class HaplotypeGenerator(object):
 
-    def __init__(self, tree_sequence):
+    def __init__(self, tree_sequence, low_memory=False):
         self._tree_sequence = tree_sequence
         ts = self._tree_sequence.get_ll_tree_sequence()
-        self._ll_haplotype_generator = _msprime.HaplotypeGenerator(ts)
+        mode = _msprime.MSP_HAPGEN_MODE_ALL
+        if low_memory:
+            mode = _msprime.MSP_HAPGEN_MODE_SINGLE
+        self._ll_haplotype_generator = _msprime.HaplotypeGenerator(ts, mode)
 
     def get_haplotype(self, sample_id):
         return self._ll_haplotype_generator.get_haplotype(sample_id)

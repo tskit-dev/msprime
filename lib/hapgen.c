@@ -352,8 +352,9 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence, int mode)
 
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(hapgen_t));
-    if (mode != MSP_HAPGEN_MODE_SINGLE || mode != MSP_HAPGEN_MODE_ALL) {
+    if (mode != MSP_HAPGEN_MODE_SINGLE && mode != MSP_HAPGEN_MODE_ALL) {
         ret = MSP_ERR_BAD_MODE;
+        goto out;
     }
     self->mode = mode;
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
