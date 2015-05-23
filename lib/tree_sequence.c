@@ -1303,7 +1303,9 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
     self->tree.num_nodes = self->num_nodes;
     self->tree.parent = calloc(self->num_nodes + 1, sizeof(uint32_t));
     self->tree.time = calloc(self->num_nodes + 1, sizeof(double));
-    if (self->tree.time == NULL || self->tree.parent == NULL) {
+    self->tree.children = calloc(2 * (self->num_nodes + 1), sizeof(uint32_t));
+    if (self->tree.time == NULL || self->tree.parent == NULL
+            || self->tree.children == NULL) {
         goto out;
     }
     self->right_sorted_records = malloc(self->num_records
@@ -1337,6 +1339,9 @@ sparse_tree_iterator_free(sparse_tree_iterator_t *self)
     if (self->tree.time != NULL) {
         free(self->tree.time);
     }
+    if (self->tree.children != NULL) {
+        free(self->tree.children);
+    }
     if (self->right_sorted_records != NULL) {
         free(self->right_sorted_records);
     }
@@ -1346,20 +1351,21 @@ sparse_tree_iterator_free(sparse_tree_iterator_t *self)
 static void
 sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
 {
-    uint32_t root, u, j;
+    uint32_t u, v, j;
 
-    root = 1;
-    while (self->tree.parent[root] != 0) {
-        root = self->tree.parent[root];
-    }
     for (j = 1; j < self->sample_size + 1; j++) {
         u = j;
         assert(self->tree.time[u] == 0.0);
+        assert(self->tree.children[2 * j] == 0);
+        assert(self->tree.children[2 * j + 1] == 0);
         while (self->tree.parent[u] != 0) {
-            u = self->tree.parent[u];
+            v = self->tree.parent[u];
+            assert(self->tree.children[2 * v] == u
+                    || self->tree.children[2 * v + 1] == u);
+            u = v;
             assert(self->tree.time[u] > 0.0);
         }
-        assert(u == root);
+        assert(u == self->tree.root);
     }
 }
 
@@ -1373,7 +1379,8 @@ sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
     printf("next_record_index = %d\n", (int) self->next_record_index);
     printf("num_records = %d\n", (int) self->num_records);
     for (j = 0; j < self->tree.num_nodes + 1; j++) {
-        printf("\t%d\t%d\t%f\n", (int) j, self->tree.parent[j],
+        printf("\t%d\t%d\t%d\t%d\t%f\n", (int) j, self->tree.parent[j],
+                self->tree.children[2 * j], self->tree.children[2 * j + 1],
                 self->tree.time[j]);
     }
     sparse_tree_iterator_check_state(self);
@@ -1399,6 +1406,7 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
                 self->tree.time[cr.node] = cr.time;
                 for (c = 0; c < 2; c++) {
                     self->tree.parent[cr.children[c]] = cr.node;
+                    self->tree.children[2 * cr.node + c] = cr.children[c];
                 }
             }
             self->next_record_index = n - 1;
@@ -1412,6 +1420,7 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
                 self->tree.time[out->node] = 0.0;
                 for (c = 0; c < 2; c++) {
                     self->tree.parent[out->children[c]] = 0;
+                    self->tree.children[2 * out->node + c] = 0;
                 }
                 k++;
             }
@@ -1424,6 +1433,7 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
                 self->tree.time[cr.node] = cr.time;
                 for (c = 0; c < 2; c++) {
                     self->tree.parent[cr.children[c]] = cr.node;
+                    self->tree.children[2 * cr.node + c] = cr.children[c];
                 }
                 j++;
                 tree_sequence_get_record(self->tree_sequence, j, &cr,
@@ -1432,6 +1442,11 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
             self->next_record_index = j;
             *length = self->right_sorted_records[k].right - self->position;
             self->position = self->right_sorted_records[k].right;
+        }
+        /* Calculate the root. TODO: this should not need to be a loop. */
+        self->tree.root = 1;
+        while (self->tree.parent[self->tree.root] != 0) {
+            self->tree.root = self->tree.parent[self->tree.root];
         }
         *tree = &self->tree;
         ret = 1;
