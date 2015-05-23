@@ -1129,13 +1129,14 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
     int err;
     PyObject *ret = NULL;
     size_t num_records;
+    int order = MSP_ORDER_TIME;
     Py_ssize_t record_index;
     coalescence_record_t cr;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+    if (!PyArg_ParseTuple(args, "n|i", &record_index, &order)) {
         goto out;
     }
     num_records = tree_sequence_get_num_coalescence_records(self->tree_sequence);
@@ -1144,7 +1145,7 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
         goto out;
     }
     err = tree_sequence_get_record(self->tree_sequence,
-            (size_t) record_index, &cr, MSP_ORDER_LEFT);
+            (size_t) record_index, &cr, order);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1944,6 +1945,9 @@ init_msprime(void)
     PyModule_AddIntConstant(module, "POP_MODEL_CONSTANT", POP_MODEL_CONSTANT);
     PyModule_AddIntConstant(module, "POP_MODEL_EXPONENTIAL",
             POP_MODEL_EXPONENTIAL);
+    PyModule_AddIntConstant(module, "MSP_ORDER_TIME", MSP_ORDER_TIME);
+    PyModule_AddIntConstant(module, "MSP_ORDER_LEFT", MSP_ORDER_LEFT);
+    PyModule_AddIntConstant(module, "MSP_ORDER_RIGHT", MSP_ORDER_RIGHT);
     /* Silence the low-level error reporting HDF5 */
     H5Eset_auto(H5E_DEFAULT, NULL, NULL);
 

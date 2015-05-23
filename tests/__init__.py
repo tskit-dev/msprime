@@ -11,6 +11,9 @@ import random
 import tempfile
 import unittest
 
+import msprime
+import _msprime
+
 def setUp():
     # Make random tests reproducible.
     random.seed(210)
@@ -26,7 +29,7 @@ class PythonTreeSequence(object):
 
     def records(self):
         for j in range(self._tree_sequence.get_num_records()):
-            yield self._tree_sequence.get_record(j)
+            yield self._tree_sequence.get_record(j, _msprime.MSP_ORDER_LEFT)
 
     def _diffs(self):
         n = self._sample_size
@@ -60,6 +63,29 @@ class PythonTreeSequence(object):
             return self._diffs_with_breaks()
         else:
             return self._diffs()
+
+
+    def sparse_trees(self):
+        st = msprime.SparseTree(
+                self._sample_size, self._tree_sequence.get_num_nodes())
+        st.left = 0
+        for length, records_out, records_in in self.diffs():
+            for node, children, t in records_out:
+                st.time[node] = 0.0
+                for k in range(2):
+                    st.children[k][node] = 0
+                    st.parent[children[k]] = 0
+            for node, children, t in records_in:
+                st.time[node] = t
+                for k in range(2):
+                    st.children[k][node] = children[k]
+                    st.parent[children[k]] = node
+            st.root = 1
+            while st.parent[st.root] != 0:
+                st.root = st.parent[st.root]
+            st.right += length
+            yield st
+            st.left = st.right
 
 class MsprimeTestCase(unittest.TestCase):
     """

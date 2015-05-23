@@ -21,8 +21,8 @@ Module responsible to generating and reading tree files.
 """
 from __future__ import division
 from __future__ import print_function
-from __future__ import unicode_literals
 
+import array
 import collections
 import json
 import platform
@@ -35,39 +35,88 @@ from _msprime import LibraryError
 from . import __version__
 
 
+class SparseTree(object):
+    """
+    A sparse tree is a single tree in a TreeSequence. In a sparse tree,
+    each node is a positive integer, with 1 to sample_size being the
+    leaves of the tree.
+    """
+    def __init__(self, sample_size, num_nodes):
+        self.num_nodes = num_nodes
+        self.sample_size = sample_size
+        zeros = [0 for _ in range(num_nodes + 1)]
+        self.parent = array.array("I", zeros)
+        self.children = array.array("I", zeros), array.array("I", zeros)
+        self.time = array.array("d", zeros)
+        self.root = 0
+        self.left = 0
+        self.right = 0
+
+    def print_state(self):
+        """
+        Prints out a representation of this sparse tree to stdout.
+        """
+        print("sample_size = ", self.sample_size)
+        print("num_nodes = ", self.num_nodes)
+        print("root = ", self.root)
+        print("left = ", self.left)
+        print("right = ", self.right)
+        print("node\tparent\tchildren\ttime\t")
+        for j in range(1, self.num_nodes + 1):
+            print(j, self.parent[j], self.children[0][j],
+                    self.children[1][j], self.time[j], sep="\t")
+
+    def __eq__(self, other):
+        return (
+            self.num_nodes == other.num_nodes and
+            self.sample_size == other.sample_size and
+            self.parent == other.parent and
+            self.children[0] == other.children[0] and
+            self.children[1] == other.children[1] and
+            self.time == other.time and
+            self.left == other.left and
+            self.right == other.right and
+            self.root == other.root)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
 def harmonic_number(n):
     """
     Returns the nth Harmonic number.
     """
     return sum(1 / k for k in range(1, n + 1))
 
-def simulate_trees(sample_size, num_loci, scaled_recombination_rate,
+
+def generate_tree_sequence(
+        sample_size, num_loci=1, scaled_recombination_rate=0.0,
         population_models=[], random_seed=None, max_memory="10M"):
     """
     Simulates the coalescent with recombination under the specified model
-    parameters and returns an iterator over the resulting trees.
+    parameters and returns the resulting TreeSequence.
     """
     sim = TreeSimulator(sample_size)
     sim.set_num_loci(num_loci)
     sim.set_scaled_recombination_rate(scaled_recombination_rate)
-    if random_seed is not None:
-        sim.set_random_seed(random_seed)
+    sim.set_random_seed(random_seed)
     sim.set_max_memory(max_memory)
     for m in population_models:
         sim.add_population_model(m)
-    tree_sequence = sim.run()
-    return tree_sequence.sparse_trees()
+    sim.run()
+    return sim.get_tree_sequence()
 
-def simulate_tree(sample_size, population_models=[], random_seed=None,
+
+def generate_tree(sample_size, population_models=[], random_seed=None,
         max_memory="10M"):
     """
     Simulates the coalescent at a single locus for the specified sample size
-    under the specified list of population models.
+    under the specified list of population models. Returns a SparseTree
+    representing the results.
     """
-    iterator = simulate_trees(sample_size, 1, 0, population_models,
-            random_seed, max_memory)
-    l, pi, tau = next(iterator)
-    return pi, tau
+    tree_sequence = generate_tree_sequence(
+        sample_size, 1, 0, population_models, random_seed, max_memory)
+    return next(tree_sequence.sparse_trees())
 
 class TreeSimulator(object):
     """
@@ -237,10 +286,14 @@ class TreeSimulator(object):
             node_mapping_block_size=self._node_mapping_block_size,
             coalescence_record_block_size=self._coalescence_record_block_size)
         self._ll_sim.run()
+
+    def get_tree_sequence(self):
+        """
+        Returns a TreeSequence representing the state of the simulation.
+        """
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.create(self._ll_sim)
-        ts = TreeSequence(ll_tree_sequence)
-        return ts
+        return TreeSequence(ll_tree_sequence)
 
     def reset(self):
         """
@@ -290,6 +343,9 @@ class TreeSequence(object):
     def get_num_mutations(self):
         return self._ll_tree_sequence.get_num_mutations()
 
+    def get_num_nodes(self):
+        return self._ll_tree_sequence.get_num_nodes()
+
     def get_mutations(self):
         return self._ll_tree_sequence.get_mutations()
 
@@ -302,41 +358,57 @@ class TreeSequence(object):
 
     def sparse_trees(self):
         n = self.get_sample_size()
-        pi = {}
-        tau = {j:0 for j in range(1, n + 1)}
-        iterator = self.diffs()
-        length, records_out, records_in = next(iterator)
-        assert len(records_out) == 0
-        for node, children, time in records_in:
-            tau[node] = time
-            pi[node] = 0
-            for c in children:
-                pi[c] = node
-        yield length, pi, tau
-        root = node
-        del pi[root]
+        R = self.get_num_records()
+        st = SparseTree(n, self.get_num_nodes())
+        ts = self._ll_tree_sequence
+        j = 0
+        st.right = ts.get_num_loci()
+        while j < n - 1:
+            l, r, node, children, time = ts.get_record(
+                    j, _msprime.MSP_ORDER_LEFT)
+            st.time[node] = time
+            for c in range(2):
+                st.children[c][node] = children[c]
+                st.parent[children[c]] = node
+            st.right = min(st.right, r)
+            assert l == 0
+            j += 1
+        st.root = node
+        yield st
+        k = j - n + 1
+        while j < R:
+            _, r, node, children, _ = ts.get_record(
+                    k, _msprime.MSP_ORDER_RIGHT)
+            while r == st.right:
+                st.time[node] = 0
+                for c in range(2):
+                    st.children[c][node] = 0
+                    st.parent[children[c]] = 0
+                k += 1
+                _, r, node, children, _ = ts.get_record(
+                        k, _msprime.MSP_ORDER_RIGHT)
+            l, _, node, children, time = ts.get_record(
+                    j, _msprime.MSP_ORDER_LEFT)
+            while j < R and l == st.right:
+                st.time[node] = time
+                for c in range(2):
+                    st.children[c][node] = children[c]
+                    st.parent[children[c]] = node
+                j += 1
+                if j < R:
+                    l, _, node, children, time = ts.get_record(
+                            j, _msprime.MSP_ORDER_LEFT)
+            st.left = st.right
+            st.right = r
+            # Get the root. TODO we should be able to do this
+            # in constant time by looking at the out and in
+            # records.
+            st.root = 1
+            while st.parent[st.root] != 0:
+                st.root = st.parent[st.root]
+            yield st
 
-        for length, records_out, records_in in iterator:
-            # print("ROOT = ", root)
-            for node, children, time in records_out:
-                # print("OUT:", children, node,time, sep="\t")
-                del tau[node]
-                for c in children:
-                    del pi[c]
-            for node, children, time in records_in:
-                # print("IN :", children, node,time, sep="\t")
-                tau[node] = time
-                for c in children:
-                    pi[c] = node
-            # TODO this is a O(h) operation per tree, which seems
-            # unneccessary. However, I can't seem to see a clean way to
-            # keep track of the root using these records...
-            v = 1
-            while v in pi:
-                v = pi[v]
-            pi[v] = 0
-            yield length, pi, tau
-            del pi[v]
+
 
     def newick_trees(self, precision=3, breakpoints=None):
         iterator = _msprime.NewickConverter(self._ll_tree_sequence, precision)

@@ -244,8 +244,10 @@ def hl_main():
     #     sim.add_population_model(m)
 
     tree_sequence = sim.run()
-    for l, s in tree_sequence.newick_trees(3, sim.get_breakpoints()):
-        print(l, s)
+    # for l, s in tree_sequence.newick_trees(3, sim.get_breakpoints()):
+    #     print(l, s)
+    for st in tree_sequence.sparse_trees():
+        st.print_state()
 
     # st = tree_sequence.sparse_trees()
     # for l, pi, tau in new_sparse_trees(tree_sequence):
