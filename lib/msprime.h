@@ -235,6 +235,11 @@ typedef struct {
 } mutation_t;
 
 typedef struct {
+    mutation_t *mutation;
+    uint32_t node;
+} mutation_node_pair_t;
+
+typedef struct {
     int mode;
     uint32_t sample_size;
     uint32_t num_loci;
@@ -247,6 +252,7 @@ typedef struct {
     char *haplotype_mem;
     object_heap_t avl_node_heap;
     sparse_tree_iterator_t tree_iterator;
+    mutation_t **mutation_stack;
 } hapgen_t;
 
 int msp_alloc(msp_t *self);

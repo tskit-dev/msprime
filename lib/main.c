@@ -196,8 +196,8 @@ print_haplotypes(tree_sequence_t *ts)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = hapgen_alloc(hg, ts, MSP_HAPGEN_MODE_SINGLE);
-    /* ret = hapgen_alloc(hg, ts, MSP_HAPGEN_MODE_ALL); */
+    /* ret = hapgen_alloc(hg, ts, MSP_HAPGEN_MODE_SINGLE); */
+    ret = hapgen_alloc(hg, ts, MSP_HAPGEN_MODE_ALL);
     if (ret != 0) {
         goto out;
     }
