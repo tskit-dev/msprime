@@ -34,7 +34,15 @@ from _msprime import InputError
 from _msprime import LibraryError
 from . import __version__
 
-
+# TODO: the sparse tree needs a full, Pythonic API to provide easy
+# access to common tree operations. E.g.:
+# - Pre, post, and inorder traversals of the nodes as iterators.
+# - get_tmrca
+# - get_mrca
+# - get_branch_length, get_total_branch_length
+# - get_parent, get_children, get_root, etc.
+# - Pickle support
+# The current attribute based approach is a bad idea.
 class SparseTree(object):
     """
     A sparse tree is a single tree in a TreeSequence. In a sparse tree,
@@ -63,8 +71,9 @@ class SparseTree(object):
         print("right = ", self.right)
         print("node\tparent\tchildren\ttime\t")
         for j in range(1, self.num_nodes + 1):
-            print(j, self.parent[j], self.children[0][j],
-                    self.children[1][j], self.time[j], sep="\t")
+            if self.parent[j] != 0 or self.children[0][j] != 0:
+                print(j, self.parent[j], self.children[0][j],
+                        self.children[1][j], self.time[j], sep="\t")
 
     def __eq__(self, other):
         return (
@@ -82,15 +91,9 @@ class SparseTree(object):
         return not self.__eq__(other)
 
 
-def harmonic_number(n):
-    """
-    Returns the nth Harmonic number.
-    """
-    return sum(1 / k for k in range(1, n + 1))
-
-
-def generate_tree_sequence(
+def simulate(
         sample_size, num_loci=1, scaled_recombination_rate=0.0,
+        scaled_mutation_rate=None,
         population_models=[], random_seed=None, max_memory="10M"):
     """
     Simulates the coalescent with recombination under the specified model
@@ -104,19 +107,29 @@ def generate_tree_sequence(
     for m in population_models:
         sim.add_population_model(m)
     sim.run()
-    return sim.get_tree_sequence()
+    tree_sequence = sim.get_tree_sequence()
+    if scaled_mutation_rate is not None:
+        tree_sequence.simulate_mutations(scaled_mutation_rate)
+    return tree_sequence
 
 
-def generate_tree(sample_size, population_models=[], random_seed=None,
+def simulate_tree(sample_size, population_models=[], random_seed=None,
         max_memory="10M"):
     """
     Simulates the coalescent at a single locus for the specified sample size
     under the specified list of population models. Returns a SparseTree
     representing the results.
     """
-    tree_sequence = generate_tree_sequence(
-        sample_size, 1, 0, population_models, random_seed, max_memory)
+    tree_sequence = simulate(
+        sample_size, population_models=population_models,
+        random_seed=random_seed, max_memory=max_memory)
     return next(tree_sequence.sparse_trees())
+
+def load(path):
+    """
+    Loads a tree sequence file from the specified path.
+    """
+    return TreeSequence.load(path)
 
 class TreeSimulator(object):
     """
@@ -436,14 +449,20 @@ class TreeSequence(object):
             seed = random.randint(0, 2**31)
         self._ll_tree_sequence.generate_mutations(scaled_mutation_rate, seed)
 
+    def haplotypes(self, online=False):
+        """
+        Returns an iterator over the haplotypes resulting from the trees
+        and mutations in this tree sequence as a string of '1's and '0's.
+        """
+        return HaplotypeGenerator(self, online).haplotypes()
 
 class HaplotypeGenerator(object):
 
-    def __init__(self, tree_sequence, low_memory=False):
+    def __init__(self, tree_sequence, online=False):
         self._tree_sequence = tree_sequence
         ts = self._tree_sequence.get_ll_tree_sequence()
         mode = _msprime.MSP_HAPGEN_MODE_ALL
-        if low_memory:
+        if online:
             mode = _msprime.MSP_HAPGEN_MODE_SINGLE
         self._ll_haplotype_generator = _msprime.HaplotypeGenerator(ts, mode)
 
@@ -491,3 +510,8 @@ class ExponentialPopulationModel(PopulationModel):
         self.type = _msprime.POP_MODEL_EXPONENTIAL
 
 
+def harmonic_number(n):
+    """
+    Returns the nth Harmonic number.
+    """
+    return sum(1 / k for k in range(1, n + 1))
