@@ -369,20 +369,29 @@ static int
 hapgen_generate_all_haplotypes(hapgen_t *self)
 {
     int ret = 0;
-    uint32_t length, left;
+    uint32_t length, left, right;
     sparse_tree_t *tree;
+    size_t j, num_mutations;
 
     sparse_tree_iterator_reset(&self->tree_iterator);
     left = 0;
+    j = 0;
     while ((ret = sparse_tree_iterator_next(
                     &self->tree_iterator, &length, &tree)) == 1) {
-        /* sparse_tree_iterator_print_state(&self->tree_iterator); */
-        ret = hapgen_apply_all_tree_mutations(self, tree, left,
-                left + length);
-        if (ret != 0) {
-            goto out;
+        right = left + length;
+        num_mutations = 0;
+        while (j < self->num_mutations && self->positions[j] < right) {
+            num_mutations++;
+            j++;
         }
-        left += length;
+        if (num_mutations > 0) {
+            /* iterate over all the mutations in this interval*/
+            ret = hapgen_apply_all_tree_mutations(self, tree, left, right);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        left = right;
     }
     if (ret != 0) {
         goto out;
