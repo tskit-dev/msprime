@@ -127,17 +127,17 @@ class TestSingleLocusSimulation(HighLevelTestCase):
     """
     def test_simple_cases(self):
         for n in range(2, 10):
-            st = msprime.generate_tree(n)
+            st = msprime.simulate_tree(n)
             self.verify_sparse_tree(st)
         for n in [11, 13, 19, 101]:
-            st = msprime.generate_tree(n)
+            st = msprime.simulate_tree(n)
             self.verify_sparse_tree(st)
 
     def test_error_cases(self):
         for n in [-100, -1, 0, 1]:
-            self.assertRaises(ValueError, msprime.generate_tree, n)
+            self.assertRaises(ValueError, msprime.simulate_tree, n)
         for n in ["", None, "2", 2.2, 1e5]:
-            self.assertRaises(TypeError, msprime.generate_tree, n)
+            self.assertRaises(TypeError, msprime.simulate_tree, n)
 
     def test_models(self):
         # Exponential growth of 0 and constant model should be identical.
@@ -146,9 +146,9 @@ class TestSingleLocusSimulation(HighLevelTestCase):
         for n in [2, 10, 100]:
             # TODO this _should_ be the same as running with no population
             # models, but it's not. need to investigate.
-            st1 = msprime.generate_tree(
+            st1 = msprime.simulate_tree(
                 n, random_seed=1, population_models=[m1])
-            st2 = msprime.generate_tree(
+            st2 = msprime.simulate_tree(
                 n, random_seed=1, population_models=[m2])
             self.assertEqual(st1, st2)
         # TODO add more tests!
@@ -164,17 +164,17 @@ class TestMultiLocusSimulation(HighLevelTestCase):
         m = 1
         r = 0.1
         for n in range(2, 10):
-            self.verify_sparse_trees(msprime.generate_tree_sequence(n, m, r))
+            self.verify_sparse_trees(msprime.simulate(n, m, r))
         n = 4
         for m in range(1, 10):
-            self.verify_sparse_trees(msprime.generate_tree_sequence(n, m, r))
+            self.verify_sparse_trees(msprime.simulate(n, m, r))
         m = 100
         for r in [0.001, 0.01]:
-            self.verify_sparse_trees(msprime.generate_tree_sequence(n, m, r))
+            self.verify_sparse_trees(msprime.simulate(n, m, r))
 
     def test_error_cases(self):
         def f(n, m, r):
-            return msprime.generate_tree_sequence(n, m, r)
+            return msprime.simulate(n, m, r)
         for n in [-100, -1, 0, 1]:
             self.assertRaises(ValueError, f, n, 1, 1.0)
         for n in ["", None, "2", 2.2, 1e5]:
@@ -382,8 +382,7 @@ class TestTreeSequence(HighLevelTestCase):
         for n in [2, 3, 10, 100]:
             for m in [1, 2, 10, 100]:
                 for rho in [0, 0.1, 10]:
-                    ts = msprime.generate_tree_sequence(n, m, rho)
-                    yield ts
+                    yield msprime.simulate(n, m, rho)
 
     def test_sparse_trees(self):
         for ts in self.get_example_tree_sequences():

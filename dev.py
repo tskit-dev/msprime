@@ -473,96 +473,53 @@ def memory_test():
         l = [t for t in tf]
 
 
-def example1():
-    treefile = "tmp__NOBACKUP__/treefile.dat"
-    # TODO add some different n and m values here.
-    ts = msprime.TreeSimulator(5, treefile)
-    ts.set_scaled_recombination_rate(0.1)
-    ts.set_num_loci(60)
-    ts.set_random_seed(10)
-    ts.set_squash_records(True)
-    ts.run()
-    msprime.sort_tree_file(treefile)
-    tf = msprime.TreeFile(treefile)
-    for l, pi, tau in tf.sparse_trees():
-        print(l, pi, tau)
-    # for l, records_in, records_out in tf.get_tree_diffs():
-    #     print(l, records_in, records_out, sep="\t")
+def haplotype_example():
+    tree_sequence = msprime.simulate(
+            sample_size=10, num_loci=100,
+            scaled_recombination_rate=1,
+            scaled_mutation_rate=1)
+    # print_out the haplotypes as Python strings.
+    for h in tree_sequence.haplotypes():
+        print(h)
 
-    # pi = {}
-    # tau = {}
-    # for l, records_in, records_out in tf.get_tree_diffs():
-    #     for c1, c2, p in records_out:
-    #         del pi[c1]
-    #         del pi[c2]
-    #         del tau[p]
-    #     for c1, c2, p, t in records_in:
-    #         pi[c1] = p
-    #         pi[c2] = p
-    #         tau[p] = t
-    #     print(l, pi, tau, sep="\t")
-    # print()
-    # tf = msprime.TreeFile(treefile)
-    # for l, pi, tau in tf.trees():
-    #     print(l, pi, tau, sep="\t")
-    # # for l, newick in tf.newick_trees():
-    #     print(l, ":", newick)
-    # models = [
-    #     msprime.ConstantPopulationModel(0.5, 2.0),
-    #     msprime.ConstantPopulationModel(1.0, 0.5)
-    # ]
-    # pi, tau = msprime.simulate_tree(10, models)
-
-def isdescendent(u, v, pi):
+def get_total_branch_length(sparse_tree):
     """
-    Returns True if the node u is a descendent of the node v in the
-    specified oriented forest pi.
+    Compute the total branch length of the specified tree using
+    a top-down traversal.
     """
-    j = u
-    while j != v and j != 0:
-        j = pi[j]
-    return j == v
+    stack = [sparse_tree.root]
+    total_branch_length = 0
+    while len(stack) > 0:
+        u = stack.pop()
+        if sparse_tree.children[0][u] != 0:
+            for j in range(2):
+                stack.append(sparse_tree.children[j][u])
+        parent = sparse_tree.parent[u]
+        if sparse_tree.parent[u] != 0:
+            total_branch_length += (
+                sparse_tree.time[parent] - sparse_tree.time[u])
+    return total_branch_length
 
-def mutation_dev():
-    random.seed(1)
-    np.random.seed(1)
-    n = 4
-    m = 100
-    r = 0.1
-    mu = 2.0
-    treefile = "tmp__NOBACKUP__/treefile.dat"
-    ts = msprime.TreeSimulator(n, treefile)
-    ts.set_scaled_recombination_rate(r)
-    ts.set_num_loci(m)
-    ts.run()
-    msprime.sort_tree_file(treefile)
-    tf = msprime.TreeFile(treefile)
-    pi = [0 for j in range(2 * n)]
-    tau = [0 for j in range(2 * n)]
-    b = 1
-    sequences = ["" for j in range(n + 1)]
-    # This algorithm basically works, we just need to actually prove
-    # it. It'll all hang on the fact that records are sorted in time
-    # order, so that we never get the wrong time in between trees.
-    for l, c1, c2, p, t in tf.records():
-        print(l, c1, c2, p, t)
-        for c in [c1, c2]:
-            k = np.random.poisson(mu * (t - tau[c]))
-            if k > 0:
-                print(k, "mutations happened on ", c, "->", p)
-                for j in range(1, n + 1):
-                    v = str(int(isdescendent(j, c, pi)))
-                    sequences[j] += v
 
-        if l != b:
-            print("new tree:",  l - b, pi, tau)
-            b = l
-        pi[c1] = p
-        pi[c2] = p
-        tau[p] = t
+def tree_processing_example():
+    tree_sequence = msprime.simulate(
+            sample_size=10, num_loci=100,
+            scaled_recombination_rate=1)
+    # we can now access the trees in this tree sequence sequentially.
+    for sparse_tree in tree_sequence.sparse_trees():
+        print("TMCRA for interval [{}, {}) = {}".format(
+            sparse_tree.left, sparse_tree.right,
+            sparse_tree.time[sparse_tree.root]))
+        print(
+            "\ttotal_branch_length = ", get_total_branch_length(sparse_tree))
 
-    for s in sequences:
-        print(s)
+def dump_load_example():
+    tree_sequence = msprime.simulate(
+            sample_size=10, num_loci=10,
+            scaled_recombination_rate=1)
+    filename = "tmp__NOBACKUP__/dump.hdf5"
+    tree_sequence.dump(filename)
+    copy = msprime.load(filename)
 
 def edit_visualisation():
     """
@@ -651,91 +608,16 @@ def dump_simulation(filename, n=10, m=100):
     # ts.dump(filename)
 
 
-class VerifyTrees(unittest.TestCase):
-
-    def verify_sparse_tree(self, n, pi, tau):
-        """
-        Verifies that the specified sparse_tree is a consistent coalescent history
-        for a sample of size n.
-        """
-        self.assertEqual(set(pi.keys()), set(tau.keys()))
-        self.assertEqual(len(pi), 2 * n - 1)
-        self.assertEqual(len(tau), 2 * n - 1)
-        # Zero should not be a node
-        self.assertNotIn(0, pi)
-        self.assertNotIn(0, tau)
-        # 1 to n inclusive should always be nodes
-        for j in range(1, n + 1):
-            self.assertIn(j, pi)
-            self.assertIn(j, tau)
-        num_children = collections.defaultdict(int)
-        roots = 0
-        for j in pi.keys():
-            num_children[pi[j]] += 1
-            roots += pi[j] == 0
-        if roots != 1:
-            print(pi)
-        self.assertEqual(roots, 1)
-        # nodes 1 to n are leaves.
-        for j in range(1, n + 1):
-            self.assertNotEqual(pi[j], 0)
-            self.assertEqual(tau[j], 0)
-            self.assertEqual(num_children[j], 0)
-        # All non-leaf nodes should be binary with non-zero times.
-        taup = {}
-        for j in pi.keys():
-            if j > n:
-                self.assertEqual(num_children[j], 2)
-                self.assertGreater(tau[j], 0.0)
-                taup[j] = tau[j]
-        # times of non leaves should be distinct
-        self.assertEqual(len(set(taup)), len(taup))
-        self.verify_general_tree(n, pi, tau)
-
-    def verify_general_tree(self, n, pi, tau):
-        """
-        Verifies properties that should hold for both sparse and
-        dense trees.
-        """
-        # Times of leaves should be zero, and increasing up the tree
-        for j in range(1, n + 1):
-            self.assertEqual(tau[j], 0.0)
-            last_time = -1
-            k = j
-            while k != 0:
-                self.assertNotEqual(k, pi[k])
-                self.assertGreater(tau[k], last_time)
-                last_time = tau[k]
-                k = pi[k]
-
-    def test_large_tree(self):
-        tree_file_name = "tmp__NOBACKUP__/human-treefile-squashed-5-5.dat"
-        tf = msprime.TreeFile(tree_file_name)
-        if not tf.issorted():
-            msprime.sort_tree_file(tree_file_name)
-            tf = msprime.TreeFile(tree_file_name)
-        metadata = json.loads(tf.get_metadata())
-        n = metadata["sample_size"]
-        count = 0
-        for l, pi, tau in tf.sparse_trees():
-            count += 1
-            self.verify_sparse_tree(n, pi, tau)
-            if count % 10 == 0:
-                print(".", end="")
-                sys.stdout.flush()
-        print()
-        print("Checked", count, "trees")
-
 
 if __name__ == "__main__":
-    # unittest.main()
     # dump_simulation(sys.argv[1])
     # print_tree_file(sys.argv[1])
     # analyse_records(sys.argv[1])
     # edit_visualisation()
-    # mutation_dev()
-    # example1()
-    hl_main()
+    # haplotype_example()
+    # tree_processing_example()
+    dump_load_example()
+    # hl_main()
     # ll_main()
     # print_newick(sys.argv[1])
     # memory_test()
