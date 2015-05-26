@@ -47,19 +47,17 @@ class PathConfigurator(object):
         pkgconfig = "pkg-config"
         packages = ["gsl", "hdf5"]
         cmd = [pkgconfig] + cmd + packages
-        return subprocess.check_output(cmd).split()
+        output = subprocess.check_output(cmd).split()
+        # Strip off the leading -I or -L
+        return [arg[2:].decode() for arg in output]
 
     def _attempt_pkgconfig(self):
         try:
-            args = self._run_pkgconfig(["--libs-only-L"])
-            # strip off the leading -L
-            self.library_dirs = [arg[2:] for arg in args]
+            self.library_dirs = self._run_pkgconfig(["--libs-only-L"])
         except subprocess.CalledProcessError as e:
             print("pkg-config failed:", e)
         try:
-            args = self._run_pkgconfig(["--cflags-only-I"])
-            # strip off leading -I
-            self.include_dirs = [arg[2:] for arg in args]
+            self.include_dirs = self._run_pkgconfig(["--cflags-only-I"])
         except subprocess.CalledProcessError as e:
             print("pkg-config failed:", e)
 

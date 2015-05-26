@@ -22,7 +22,7 @@ and `HDF5 <https://www.hdfgroup.org/HDF5/>`_,
 which are available for all major platforms. For example, to install on
 Debian/Ubuntu use::
 
-    # apt-get install python-dev libgsl0-dev libhdf5-serial-dev
+    # apt-get install python-dev libgsl0-dev libhdf5-serial-dev pkg-config
 
 ----
 TODO
@@ -39,7 +39,7 @@ Installation
 
 The simplest method of installation is to use PyPI and pip::
 
-    $ pip install msprime --user
+    $ pip install msprime --user --pre
 
 will install msprime your user Python installation. This should
 work in most cases (but see the `Requirements`_ section).
