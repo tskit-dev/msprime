@@ -394,6 +394,26 @@ def analyse_subtrees(records):
     print("leaves = ", leaves)
     print("roots = ", list(subtrees.keys()))
 
+def analyse_mutations(filename):
+    ts = msprime.load(filename)
+    mutations = ts.get_mutations()
+    positions = sorted([position for _, position in mutations])
+    j = 0
+    total_trees = 0
+    empty_trees = 0
+    for tree in ts.sparse_trees():
+        total_trees += 1
+        # print(tree.left, tree.right)
+        num_mutations = 0
+        while j < len(positions) and positions[j] < tree.right:
+            # print("\t", positions[j])
+            j += 1
+            num_mutations += 1
+        if num_mutations == 0:
+            empty_trees += 1
+            # print("EMPTY TREE")
+    print(empty_trees / total_trees)
+
 
 def print_newick(filename):
     ts = msprime.TreeSequence.load(filename)
@@ -616,7 +636,8 @@ if __name__ == "__main__":
     # edit_visualisation()
     # haplotype_example()
     # tree_processing_example()
-    dump_load_example()
+    # dump_load_example()
+    analyse_mutations("tmp__NOBACKUP__/quinlan-mutations.hdf5")
     # hl_main()
     # ll_main()
     # print_newick(sys.argv[1])
