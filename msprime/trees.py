@@ -110,7 +110,7 @@ def simulate(
     sim.run()
     tree_sequence = sim.get_tree_sequence()
     if scaled_mutation_rate is not None:
-        tree_sequence.simulate_mutations(scaled_mutation_rate)
+        tree_sequence.generate_mutations(scaled_mutation_rate, random_seed)
     return tree_sequence
 
 
