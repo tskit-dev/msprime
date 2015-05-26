@@ -234,12 +234,8 @@ typedef struct {
 typedef struct {
     double position;
     size_t site;
-} mutation_t;
-
-typedef struct {
-    mutation_t *mutation;
     uint32_t node;
-} mutation_node_pair_t;
+} mutation_t;
 
 typedef struct {
     int mode;
@@ -249,12 +245,12 @@ typedef struct {
     size_t num_mutations;
     tree_sequence_t *tree_sequence;
     avl_tree_t *mutations;
-    double *positions;
+    mutation_t **sorted_mutations;
     char **haplotypes;
     char *haplotype_mem;
     object_heap_t avl_node_heap;
     sparse_tree_iterator_t tree_iterator;
-    mutation_t **mutation_stack;
+    uint32_t *traversal_stack;
 } hapgen_t;
 
 int msp_alloc(msp_t *self);
