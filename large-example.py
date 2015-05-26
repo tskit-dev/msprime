@@ -26,10 +26,14 @@ def main():
     print("Simulated 100k genomes in {0:.3f} seconds.".format(duration))
 
     # Write the results to file, which is small and can be quickly reloaded
-    # to avoid the cost of re-running the simulation.
+    # to avoid the cost of re-running the simulation. We can reload the
+    # file in a few seconds using msprime.load(filename).
     tree_sequence.dump("large-example.hdf5")
 
     # Now write the haplotypes to a file.
+    # WARNING! This takes a lot of memory (>100G), so make sure you don't
+    # crash your server. This memory requirement will be drastically reduced
+    # in future versions.
     before = time.clock()
     with open("large-example-haplotypes.txt", "w") as f:
         for h in tree_sequence.haplotypes():
