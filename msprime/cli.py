@@ -213,7 +213,7 @@ def mspms_main():
             help="Maximum memory used. Supports K,M and G suffixes")
 
     args = parser.parse_args()
-    if args.mutation_rate is None and not args.trees:
+    if args.mutation_rate == 0 and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
     sr = create_simulation_runner(args)
     sr.run(sys.stdout)
