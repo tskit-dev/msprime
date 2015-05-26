@@ -701,6 +701,92 @@ out:
 }
 
 static int
+tree_sequence_write_hdf5_env_params(tree_sequence_t *self, hid_t file_id)
+{
+    herr_t ret = -1;
+    herr_t status;
+    hid_t group_id, dataspace_id, attr_id, type_id;
+    struct _hdf5_string_write {
+        const char *group;
+        const char *name;
+        const char *value;
+        int included;
+    };
+    struct _hdf5_string_write fields[] = {
+        {"trees", "/environment", "TODO", 1},
+        {"trees", "/parameters", "TODO", 1},
+        {"mutations", "/environment", "TODO", 0},
+        {"mutations", "/parameters", "TODO", 0},
+    };
+    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_string_write);
+    size_t j;
+
+    /*
+     * TODO update the parameters and environment pointers above to
+     * contain strings holding a JSON encoding of provenance data.
+     * The parameters string must hold enough information in terms of
+     * model parameters to reporoduce the simulation exactly. The
+     * environment string should hold relevant information about the
+     * execution environment (library versions, etc) to make the
+     * original results reproducable.
+     */
+    if (self->num_mutations > 0) {
+        fields[2].included = 1;
+        fields[3].included = 1;
+    }
+
+    for (j = 0; j < num_fields; j++) {
+        if (fields[j].included) {
+            group_id = H5Gopen(file_id, fields[j].group, H5P_DEFAULT);
+            if (group_id < 0) {
+                goto out;
+            }
+            dataspace_id = H5Screate(H5S_SCALAR);
+            if (dataspace_id < 0) {
+                goto out;
+            }
+            type_id = H5Tcopy(H5T_C_S1);
+            if (type_id < 0) {
+                goto out;
+            }
+            status = H5Tset_size(type_id, strlen(fields[j].value));
+            if (status < 0) {
+                goto out;
+            }
+            attr_id = H5Acreate(group_id, fields[j].name, type_id,
+                    dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+            if (attr_id < 0) {
+                goto out;
+            }
+            status = H5Awrite(attr_id, type_id, fields[j].value);
+            if (status < 0) {
+                goto out;
+            }
+            status = H5Aclose(attr_id);
+            if (status < 0) {
+                goto out;
+            }
+            status = H5Tclose(type_id);
+            if (status < 0) {
+                goto out;
+            }
+            status = H5Sclose(dataspace_id);
+            if (status < 0) {
+                goto out;
+            }
+            status = H5Gclose(group_id);
+            if (status < 0) {
+                goto out;
+            }
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+
+static int
 tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
 {
     herr_t status = -1;
@@ -780,6 +866,10 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
         goto out;
     }
     status = tree_sequence_write_hdf5_data(self, file_id, flags);
+    if (status < 0) {
+        goto out;
+    }
+    status = tree_sequence_write_hdf5_env_params(self, file_id);
     if (status < 0) {
         goto out;
     }
@@ -923,11 +1013,15 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
         if (self->mutations.position != NULL) {
             free(self->mutations.position);
         }
+        if (self->mutations.parameters != NULL) {
+            free(self->mutations.parameters);
+        }
     }
     buffer_size = 0;
     self->num_mutations = 0;
     self->mutations.position = NULL;
     self->mutations.node = NULL;
+    self->mutations.parameters = NULL;
 
     rng = gsl_rng_alloc(gsl_rng_default);
     if (rng == NULL) {
@@ -1308,6 +1402,9 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
             || self->tree.children == NULL) {
         goto out;
     }
+    /* TODO remove this - we don't need it any more. Use the left and
+     * right ranking arrays in the tree sequence instead.
+     */
     self->right_sorted_records = malloc(self->num_records
             * sizeof(coalescence_record_t));
     if (self->right_sorted_records == NULL) {
@@ -1395,6 +1492,11 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
     uint32_t n = self->sample_size;
     size_t j, c, k;
 
+    /* TODO change the use of get_record here to directly accessing the
+     * arrays within the parent tree sequence. It's fine to tightly couple
+     * these two objects, since this iterator is really just a thin shell
+     * to allow us to quickly access the sparse trees.
+     */
     if (self->next_record_index < self->num_records) {
         if (self->next_record_index == 0) {
             for (j = 0; j < n - 1; j++) {
