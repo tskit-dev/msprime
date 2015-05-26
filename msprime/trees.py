@@ -25,6 +25,7 @@ from __future__ import print_function
 import array
 import collections
 import json
+import math
 import platform
 import random
 import sys
@@ -261,8 +262,9 @@ class TreeSimulator(object):
         b = 10 # Baseline maximum
         num_trees = max(b, int(num_trees))
         num_avl_nodes = max(b, 4 * n + num_trees)
-        # TODO This is probably much too large now.
-        num_segments = max(b, int(0.0125 * n  * rho))
+        # TODO This is total guesswork. We need to plot this for a range
+        # of values and see what a good approximation is.
+        num_segments = max(b, int(math.log(n)  * rho))
         if self._avl_node_block_size is None:
             self._avl_node_block_size = num_avl_nodes
         if self._segment_block_size is None:
