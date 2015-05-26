@@ -426,7 +426,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence, int mode)
     }
     self->traversal_stack = NULL;
     if (self->mode == MSP_HAPGEN_MODE_ALL) {
-        self->traversal_stack = malloc(self->num_mutations * sizeof(uint32_t));
+        self->traversal_stack = malloc(self->sample_size * sizeof(uint32_t));
         if (self->traversal_stack == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
