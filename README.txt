@@ -12,18 +12,26 @@ use msprime to gain full advantage of its internal structures.
 
 Full documentation is forthcoming.
 
-
 *************
 Requirements
 *************
 
 Msprime requires Python 2.7+ (Python 3 versions are fully supported from
-3.1 onwards), the `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_,
-and `HDF5 <https://www.hdfgroup.org/HDF5/>`_
+3.1 onwards), the `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_
+and `HDF5 <https://www.hdfgroup.org/HDF5/>`_,
 which are available for all major platforms. For example, to install on
 Debian/Ubuntu use::
 
     # apt-get install python-dev libgsl0-dev libhdf5-serial-dev
+
+----
+TODO
+----
+
+- Need installation instructions for an RPM based distribution,
+  HomeBrew/MacPorts and possibly a linux distro where we are missing
+  root access.
+
 
 *************
 Installation
