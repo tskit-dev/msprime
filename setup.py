@@ -1,11 +1,67 @@
+#
+# Copyright (C) 2014 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+#
+# This file is part of msprime.
+#
+# msprime is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# msprime is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
+#
+from __future__ import division
+from __future__ import print_function
+
 import re
 import sys
+import subprocess
+
+# First, we try to use setuptools. If it's not available locally,
+# we fall back on ez_setup.
 try:
     from setuptools import setup, Extension
 except ImportError:
     from ez_setup import use_setuptools
     use_setuptools()
     from setuptools import setup, Extension
+
+class PathConfigurator(object):
+    """
+    A class to attempt configuration of the compile search paths
+    on various platforms.
+    """
+    def __init__(self):
+        # TODO: make some other guesses for this...
+        self.include_dirs = []
+        self.library_dirs = []
+        self._attempt_pkgconfig()
+
+    def _run_pkgconfig(self, cmd):
+        pkgconfig = "pkg-config"
+        packages = ["gsl", "hdf5"]
+        cmd = [pkgconfig] + cmd + packages
+        return subprocess.check_output(cmd).split()
+
+    def _attempt_pkgconfig(self):
+        try:
+            args = self._run_pkgconfig(["--libs-only-L"])
+            # strip off the leading -L
+            self.library_dirs = [arg[2:] for arg in args]
+        except subprocess.CalledProcessError as e:
+            print("pkg-config failed:", e)
+        try:
+            args = self._run_pkgconfig(["--cflags-only-I"])
+            # strip off leading -I
+            self.include_dirs = [arg[2:] for arg in args]
+        except subprocess.CalledProcessError as e:
+            print("pkg-config failed:", e)
 
 # Following the recommendations of PEP 396 we parse the version number
 # out of the module.
@@ -22,19 +78,8 @@ def parse_version(module_file):
     match = re.findall("__version__ = '([^']+)'", s)
     return match[0]
 
-f = open("README.txt")
-msprime_readme = f.read()
-f.close()
-msprime_version = parse_version("msprime/__init__.py")
-
-requirements = []
-
-try:
-    import pkgconfig
-    pkg_info = pkgconfig.parse('gsl hdf5')
-except ImportError:
-    pkg_info = {"include_dirs":[], "library_dirs":[]}
-
+# Now, setup the extension module.
+configurator = PathConfigurator()
 d = "lib/"
 _msprime_module = Extension('_msprime',
     sources=[
@@ -47,13 +92,19 @@ _msprime_module = Extension('_msprime',
     # HDF5 API and not earlier deprecated versions.
     define_macros=[("H5_NO_DEPRECATED_SYMBOLS", None)],
     libraries=["gsl", "gslcblas", "hdf5"],
-    include_dirs = [d] + list(pkg_info["include_dirs"]),
-    library_dirs = list(pkg_info["library_dirs"]),
+    include_dirs=[d] + configurator.include_dirs,
+    library_dirs=configurator.library_dirs,
 )
+
+f = open("README.txt")
+msprime_readme = f.read()
+f.close()
+msprime_version = parse_version("msprime/__init__.py")
 
 setup(
     name="msprime",
     version=msprime_version,
+    description="A fast and accurate coalescent simulator.",
     long_description=msprime_readme,
     packages=["msprime"],
     author="Jerome Kelleher",
