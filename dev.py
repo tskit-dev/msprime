@@ -401,6 +401,7 @@ def analyse_mutations(filename):
     j = 0
     total_trees = 0
     empty_trees = 0
+    N = []
     for tree in ts.sparse_trees():
         total_trees += 1
         # print(tree.left, tree.right)
@@ -409,11 +410,15 @@ def analyse_mutations(filename):
             # print("\t", positions[j])
             j += 1
             num_mutations += 1
+        N.append(num_mutations)
         if num_mutations == 0:
             empty_trees += 1
             # print("EMPTY TREE")
-    print(empty_trees / total_trees)
-
+    # print(empty_trees / total_trees)
+    pyplot.hist(N, range(1, 10), normed=True)
+    f = "tmp__NOBACKUP__/mutations.png"
+    pyplot.savefig(f, dpi=72)
+    pyplot.clf()
 
 def print_newick(filename):
     ts = msprime.TreeSequence.load(filename)
