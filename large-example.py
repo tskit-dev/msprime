@@ -15,25 +15,27 @@ def main():
     before = time.clock()
     # Run the actual simulations
     tree_sequence = msprime.simulate(
-        sample_size=10**1,
+        sample_size=10**5,
         num_loci=100 * 10**6,
         scaled_recombination_rate=0.001,
         scaled_mutation_rate=0.001,
-        max_memory="10G",
-        random_seed=1  # Arbitrary - make this reproducable.
+        max_memory="5G",
+        random_seed=1  # Arbitrary - make this reproducible.
     )
     duration = time.clock() - before
-    print("Simulated 100k genomes in {.3f} seconds.".format(duration))
+    print("Simulated 100k genomes in {0:.3f} seconds.".format(duration))
+
     # Write the results to file, which is small and can be quickly reloaded
     # to avoid the cost of re-running the simulation.
     tree_sequence.dump("large-example.hdf5")
+
     # Now write the haplotypes to a file.
     before = time.clock()
     with open("large-example-haplotypes.txt", "w") as f:
         for h in tree_sequence.haplotypes():
             print(h, file=f)
     duration = time.clock() - before
-    print("Wrote 100k haplotypes to file in {.3f} seconds".format(duration))
+    print("Wrote 100k haplotypes to file in {0:.3f} seconds".format(duration))
 
 
 if __name__ == "__main__":
