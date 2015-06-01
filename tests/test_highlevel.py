@@ -48,7 +48,7 @@ def sparse_tree_to_newick(st, precision):
                 child = st.children[c][node]
                 stack.append(child)
                 s = "{0:.{1}f}".format(
-                        st.time[node] - st.time[child], precision)
+                    st.time[node] - st.time[child], precision)
                 branch_lengths[child] = s
     return _build_newick(st.root, st.root, st, branch_lengths)
 
@@ -338,7 +338,7 @@ class TestNewickConversion(HighLevelTestCase):
             j += 1
         self.assertEqual(s, tree_sequence.get_num_loci())
         pts = tests.PythonTreeSequence(
-                tree_sequence.get_ll_tree_sequence(), breakpoints)
+            tree_sequence.get_ll_tree_sequence(), breakpoints)
         diffs = list(pts.diffs(all_breaks=True))
         self.assertEqual(len(diffs), len(trees))
         for j in range(1, len(diffs)):

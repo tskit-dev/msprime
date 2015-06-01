@@ -83,7 +83,7 @@ class PythonTreeSequence(object):
 
     def sparse_trees(self):
         st = msprime.SparseTree(
-                self._sample_size, self._tree_sequence.get_num_nodes())
+            self._sample_size, self._tree_sequence.get_num_nodes())
         st.left = 0
         for length, records_out, records_in in self.diffs():
             for node, children, t in records_out:

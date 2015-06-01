@@ -573,9 +573,9 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertEqual(ts.get_num_mutations(), ts2.get_num_mutations())
         self.assertEqual(ts.get_num_nodes(), ts2.get_num_nodes())
         records1 = [
-                ts.get_record(j) for j in range(ts.get_num_records())]
+            ts.get_record(j) for j in range(ts.get_num_records())]
         records2 = [
-                ts2.get_record(j) for j in range(ts2.get_num_records())]
+            ts2.get_record(j) for j in range(ts2.get_num_records())]
         self.assertEqual(records1, records2)
         self.assertEqual(ts.get_mutations(), ts2.get_mutations())
 
