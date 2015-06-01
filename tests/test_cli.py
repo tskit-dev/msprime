@@ -1,15 +1,33 @@
+#
+# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+#
+# This file is part of msprime.
+#
+# msprime is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# msprime is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
+#
 """
 Test cases for the command line interfaces to msprime
 """
 from __future__ import print_function
 from __future__ import division
 
-import collections
-import os
 import random
 import sys
 import tempfile
 import unittest
+
+import msprime.cli as cli
 
 # We're forced to do this because dendropy doesn't support Python 3.
 _dendropy_available = True
@@ -18,8 +36,6 @@ try:
 except ImportError:
     _dendropy_available = False
 
-import tests
-import msprime.cli as cli
 
 class TestRandomSeeds(unittest.TestCase):
     """
@@ -29,7 +45,7 @@ class TestRandomSeeds(unittest.TestCase):
         num_random_tests = 100
         max_seed = 2**16 - 1
         generated_seeds = {}
-        for j in range(100):
+        for j in range(num_random_tests):
             seeds = [random.randint(1, max_seed) for k in range(3)]
             python_seed, ms_seeds = cli.get_seeds(seeds)
             self.assertEqual(ms_seeds, seeds)
@@ -39,8 +55,8 @@ class TestRandomSeeds(unittest.TestCase):
             python_seed2, ms_seeds2 = cli.get_seeds(seeds)
             self.assertEqual(ms_seeds, ms_seeds2)
             self.assertEqual(python_seed, python_seed2)
-        self.assertEqual(len(generated_seeds),
-                len(set(generated_seeds.keys())))
+        self.assertEqual(
+            len(generated_seeds), len(set(generated_seeds.keys())))
 
 
 class TestMspmsOutput(unittest.TestCase):
@@ -61,8 +77,8 @@ class TestMspmsOutput(unittest.TestCase):
                 self.assertGreater(parsed_tree.length(), 0)
         # TODO test the branch length precision output.
 
-    def verify_output(self,
-            sample_size=2, num_loci=1, recombination_rate=0,
+    def verify_output(
+            self, sample_size=2, num_loci=1, recombination_rate=0,
             num_replicates=1, mutation_rate=0.0, print_trees=True,
             max_memory="16M", precision=3, population_models=[],
             random_seeds=[1, 2, 3]):
@@ -118,7 +134,8 @@ class TestMspmsOutput(unittest.TestCase):
                     self.verify_newick_tree(tree, sample_size, precision)
                     line = next(f, None)
                 self.assertEqual(total_length, num_loci)
-                # if we have a non-zero mutation rate, we should have more output.
+                # if we have a non-zero mutation rate, we should have more
+                # output.
                 if mutation_rate > 0:
                     self.assertTrue(line.startswith("segsites: "))
                     s = int(line.split(":")[1])
@@ -181,10 +198,12 @@ class TestMspmsOutput(unittest.TestCase):
     def test_tree_output(self):
         for n in [2, 3, 10]:
             self.verify_output(sample_size=n, print_trees=True)
-            self.verify_output(sample_size=n, num_loci=10, recombination_rate=10,
-                    print_trees=True)
-            self.verify_output(sample_size=n, num_loci=100, recombination_rate=10,
-                    print_trees=True)
+            self.verify_output(
+                sample_size=n, num_loci=10, recombination_rate=10,
+                print_trees=True)
+            self.verify_output(
+                sample_size=n, num_loci=100, recombination_rate=10,
+                print_trees=True)
 
     def test_seeds_output(self):
         self.verify_output(random_seeds=None)

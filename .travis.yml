@@ -11,12 +11,14 @@ before_install:
   - sudo apt-get install -qq libgsl0-dev libhdf5-serial-dev python-h5py 
 
 install:
-# disabling pip until problems with ez_setup are sorted.
-#  - "pip install ."
   - pip install -r requirements.txt
-  - python setup.py install
+  - pip install .
 
-script: nosetests -vs
+script: 
+  - flake8 setup.py msprime tests
+  - nosetests -v --with-coverage --cover-package msprime
+              --cover-inclusive --cover-min-percentage 80
+  - make -C docs 
 
 env:
   global:

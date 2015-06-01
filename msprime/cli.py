@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -22,21 +22,22 @@ Command line interfaces to the msprime library.
 from __future__ import division
 from __future__ import print_function
 
-import os
-import sys
-import struct
-import random
 import argparse
+import random
+import struct
+import sys
 
 import msprime
+
 
 mscompat_description = """\
 An ms-compatible interface to the msprime library. Supports a
 subset of the functionality available in ms."""
-mscompat_recombination_help="""\
+mscompat_recombination_help = """\
 Recombination at rate rho=4*N0*r where r is the rate of recombination
 between the ends of the region being simulated; num_loci is the number
 of sites between which recombination can occur"""
+
 
 def get_seeds(random_seeds):
     """
@@ -60,8 +61,8 @@ class SimulationRunner(object):
     """
     Class to run msprime simulation and output the results.
     """
-    def __init__(self,
-            sample_size=1, num_loci=1, recombination_rate=0,
+    def __init__(
+            self, sample_size=1, num_loci=1, recombination_rate=0,
             num_replicates=1, mutation_rate=0, print_trees=False,
             max_memory="16M", precision=3, population_models=[],
             random_seeds=None):
@@ -121,12 +122,13 @@ class SimulationRunner(object):
                 if s != 0:
                     print("positions: ", end="", file=output)
                     positions = [
-                        p  / self._num_loci for _, p in
-                            tree_sequence.get_mutations()]
+                        p / self._num_loci for _, p in
+                        tree_sequence.get_mutations()]
                     positions.sort()
                     for position in positions:
-                        print("{0:.{1}f}".format(position, self._precision),
-                                end=" ", file=output)
+                        print(
+                            "{0:.{1}f}".format(position, self._precision),
+                            end=" ", file=output)
                     print(file=output)
                     for h in hg.haplotypes():
                         print(h, file=output)
@@ -142,11 +144,12 @@ def positive_int(value):
         raise argparse.ArgumentTypeError(msg)
     return int_value
 
+
 def create_simulation_runner(args):
     """
     Parses the arguments and returns a SimulationRunner instance.
     """
-    num_loci=int(args.recombination[1])
+    num_loci = int(args.recombination[1])
     r = 0.0
     # We don't scale recombination or mutation rates by the size
     # of the region.
@@ -180,37 +183,47 @@ def create_simulation_runner(args):
 
 
 def mspms_main():
+    # TODO create a get_parser function and unit test it.
     parser = argparse.ArgumentParser(description=mscompat_description)
     parser.add_argument("sample_size", type=positive_int, help="Sample size")
-    parser.add_argument("num_replicates", type=positive_int,
-            help="Number of independent replicates")
+    parser.add_argument(
+        "num_replicates", type=positive_int,
+        help="Number of independent replicates")
 
     group = parser.add_argument_group("Behaviour")
-    group.add_argument("--mutation-rate", "-t", type=float, metavar="theta",
-            help="Mutation rate theta=4*N0*mu", default=0)
-    group.add_argument("--trees", "-T", action="store_true",
-            help="Print out trees in Newick format")
-    group.add_argument("--recombination", "-r", type=float, nargs=2,
-            default=(0, 1), metavar=("rho", "num_loci"),
-            help=mscompat_recombination_help)
+    group.add_argument(
+        "--mutation-rate", "-t", type=float, metavar="theta",
+        help="Mutation rate theta=4*N0*mu", default=0)
+    group.add_argument(
+        "--trees", "-T", action="store_true",
+        help="Print out trees in Newick format")
+    group.add_argument(
+        "--recombination", "-r", type=float, nargs=2, default=(0, 1),
+        metavar=("rho", "num_loci"), help=mscompat_recombination_help)
 
     group = parser.add_argument_group("Demography")
-    group.add_argument("--growth-rate", "-G", metavar="alpha", type=float,
-            help="Population growth rate alpha.")
-    group.add_argument("--growth-event", "-eG", nargs=2, action="append",
-            type=float, default=[], metavar=("t", "alpha"),
-            help="Set the growth rate to alpha at time t")
-    group.add_argument("--size-event", "-eN", nargs=2, action="append",
-            type=float, default=[], metavar=("t", "x"),
-            help="Set the population size to x * N0 at time t")
+    group.add_argument(
+        "--growth-rate", "-G", metavar="alpha", type=float,
+        help="Population growth rate alpha.")
+    group.add_argument(
+        "--growth-event", "-eG", nargs=2, action="append",
+        type=float, default=[], metavar=("t", "alpha"),
+        help="Set the growth rate to alpha at time t")
+    group.add_argument(
+        "--size-event", "-eN", nargs=2, action="append",
+        type=float, default=[], metavar=("t", "x"),
+        help="Set the population size to x * N0 at time t")
     group = parser.add_argument_group("Miscellaneous")
-    group.add_argument("--random-seeds", "-seeds", nargs=3, type=positive_int,
-            metavar=("x1", "x2", "x3"),
-            help="Random seeds (must be three integers)")
-    group.add_argument("--precision", "-p", type=positive_int, default=3,
-            help="Number of values after decimal place to print")
-    group.add_argument("--max-memory", "-M", default="100M",
-            help="Maximum memory used. Supports K,M and G suffixes")
+    group.add_argument(
+        "--random-seeds", "-seeds", nargs=3, type=positive_int,
+        metavar=("x1", "x2", "x3"),
+        help="Random seeds (must be three integers)")
+    group.add_argument(
+        "--precision", "-p", type=positive_int, default=3,
+        help="Number of values after decimal place to print")
+    group.add_argument(
+        "--max-memory", "-M", default="100M",
+        help="Maximum memory used. Supports K,M and G suffixes")
 
     args = parser.parse_args()
     if args.mutation_rate == 0 and not args.trees:

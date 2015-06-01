@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -20,7 +20,6 @@ from __future__ import division
 from __future__ import print_function
 
 import re
-import sys
 import subprocess
 
 # First, we try to use setuptools. If it's not available locally,
@@ -31,6 +30,7 @@ except ImportError:
     from ez_setup import use_setuptools
     use_setuptools()
     from setuptools import setup, Extension
+
 
 class PathConfigurator(object):
     """
@@ -61,6 +61,7 @@ class PathConfigurator(object):
         except subprocess.CalledProcessError as e:
             print("pkg-config failed:", e)
 
+
 # Following the recommendations of PEP 396 we parse the version number
 # out of the module.
 def parse_version(module_file):
@@ -79,7 +80,8 @@ def parse_version(module_file):
 # Now, setup the extension module.
 configurator = PathConfigurator()
 d = "lib/"
-_msprime_module = Extension('_msprime',
+_msprime_module = Extension(
+    '_msprime',
     sources=[
         "_msprimemodule.c", d + "msprime.c", d + "fenwick.c", d + "avl.c",
         d + "tree_sequence.c", d + "object_heap.c", d + "newick.c",
@@ -114,11 +116,11 @@ setup(
         ]
     },
     install_requires=[],
-    ext_modules = [_msprime_module],
-    keywords = ["Coalescent simulation", "ms"],
-    license = "GNU LGPLv3+",
-    platforms = ["POSIX"],
-    classifiers = [
+    ext_modules=[_msprime_module],
+    keywords=["Coalescent simulation", "ms"],
+    license="GNU LGPLv3+",
+    platforms=["POSIX"],
+    classifiers=[
         "Programming Language :: C",
         "Programming Language :: Python",
         "Programming Language :: Python :: 2",
@@ -130,7 +132,10 @@ setup(
         "Development Status :: 4 - Beta",
         "Environment :: Other Environment",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+        (
+            "License :: OSI Approved :: GNU Lesser General Public License "
+            "v3 or later (LGPLv3+)"
+        ),
         "Operating System :: POSIX",
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Bio-Informatics",

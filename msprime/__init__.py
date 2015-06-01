@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -23,9 +23,9 @@ modern datasets.
 from __future__ import print_function
 from __future__ import division
 
+from _msprime import get_gsl_version  # NOQA
+from _msprime import get_hdf5_version  # NOQA
+
+from msprime.trees import *  # NOQA
+
 __version__ = '0.1.1a4'
-
-from _msprime import get_gsl_version
-from _msprime import get_hdf5_version
-
-from msprime.trees import *
