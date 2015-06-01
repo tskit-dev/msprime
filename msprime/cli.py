@@ -101,7 +101,7 @@ class SimulationRunner(object):
             print("//", file=output)
             if self._print_trees:
                 iterator = tree_sequence.newick_trees(
-                        self._precision, breakpoints)
+                    self._precision, breakpoints)
                 if self._num_loci == 1:
                     for l, ns in iterator:
                         print(ns, file=output)
@@ -163,22 +163,22 @@ def create_simulation_runner(args):
     # same start time. We should resolve this.
     if args.growth_rate is not None:
         models.append(
-                msprime.ExponentialPopulationModel(0.0, args.growth_rate))
+            msprime.ExponentialPopulationModel(0.0, args.growth_rate))
     for t, alpha in args.growth_event:
         models.append(msprime.ExponentialPopulationModel(t, alpha))
     for t, x in args.size_event:
         models.append(msprime.ConstantPopulationModel(t, x))
     runner = SimulationRunner(
-            sample_size=args.sample_size,
-            num_loci=num_loci,
-            num_replicates=args.num_replicates,
-            recombination_rate=r,
-            mutation_rate=mu,
-            precision=args.precision,
-            max_memory=args.max_memory,
-            print_trees=args.trees,
-            population_models=models,
-            random_seeds=args.random_seeds)
+        sample_size=args.sample_size,
+        num_loci=num_loci,
+        num_replicates=args.num_replicates,
+        recombination_rate=r,
+        mutation_rate=mu,
+        precision=args.precision,
+        max_memory=args.max_memory,
+        print_trees=args.trees,
+        population_models=models,
+        random_seeds=args.random_seeds)
     return runner
 
 

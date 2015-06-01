@@ -378,7 +378,7 @@ class TreeSequence(object):
         st.right = ts.get_num_loci()
         while j < n - 1:
             l, r, node, children, time = ts.get_record(
-                    j, _msprime.MSP_ORDER_LEFT)
+                j, _msprime.MSP_ORDER_LEFT)
             st.time[node] = time
             for c in range(2):
                 st.children[c][node] = children[c]
@@ -391,7 +391,7 @@ class TreeSequence(object):
         k = j - n + 1
         while j < R:
             _, r, node, children, _ = ts.get_record(
-                    k, _msprime.MSP_ORDER_RIGHT)
+                k, _msprime.MSP_ORDER_RIGHT)
             while r == st.right:
                 st.time[node] = 0
                 for c in range(2):
@@ -399,9 +399,9 @@ class TreeSequence(object):
                     st.parent[children[c]] = 0
                 k += 1
                 _, r, node, children, _ = ts.get_record(
-                        k, _msprime.MSP_ORDER_RIGHT)
+                    k, _msprime.MSP_ORDER_RIGHT)
             l, _, node, children, time = ts.get_record(
-                    j, _msprime.MSP_ORDER_LEFT)
+                j, _msprime.MSP_ORDER_LEFT)
             while j < R and l == st.right:
                 st.time[node] = time
                 for c in range(2):
@@ -410,7 +410,7 @@ class TreeSequence(object):
                 j += 1
                 if j < R:
                     l, _, node, children, time = ts.get_record(
-                            j, _msprime.MSP_ORDER_LEFT)
+                        j, _msprime.MSP_ORDER_LEFT)
             st.left = st.right
             st.right = r
             # Get the root. TODO we should be able to do this
