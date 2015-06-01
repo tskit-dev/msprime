@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -23,17 +23,11 @@ from __future__ import division
 from __future__ import print_function
 
 import array
-import collections
-import json
 import math
-import platform
 import random
-import sys
 
 import _msprime
-from _msprime import InputError
-from _msprime import LibraryError
-from . import __version__
+
 
 # TODO: the sparse tree needs a full, Pythonic API to provide easy
 # access to common tree operations. E.g.:
@@ -73,8 +67,9 @@ class SparseTree(object):
         print("node\tparent\tchildren\ttime\t")
         for j in range(1, self.num_nodes + 1):
             if self.parent[j] != 0 or self.children[0][j] != 0:
-                print(j, self.parent[j], self.children[0][j],
-                        self.children[1][j], self.time[j], sep="\t")
+                print(
+                    j, self.parent[j], self.children[0][j],
+                    self.children[1][j], self.time[j], sep="\t")
 
     def __eq__(self, other):
         return (
@@ -114,8 +109,8 @@ def simulate(
     return tree_sequence
 
 
-def simulate_tree(sample_size, population_models=[], random_seed=None,
-        max_memory="10M"):
+def simulate_tree(
+        sample_size, population_models=[], random_seed=None, max_memory="10M"):
     """
     Simulates the coalescent at a single locus for the specified sample size
     under the specified list of population models. Returns a SparseTree
@@ -126,11 +121,13 @@ def simulate_tree(sample_size, population_models=[], random_seed=None,
         random_seed=random_seed, max_memory=max_memory)
     return next(tree_sequence.sparse_trees())
 
+
 def load(path):
     """
     Loads a tree sequence file from the specified path.
     """
     return TreeSequence.load(path)
+
 
 class TreeSimulator(object):
     """
@@ -232,7 +229,7 @@ class TreeSimulator(object):
         K, M or G to specify units of Kibibytes, Mibibytes or Gibibytes.
         """
         s = max_memory
-        d = {"K":2**10, "M":2**20, "G":2**30}
+        d = {"K": 2**10, "M": 2**20, "G": 2**30}
         multiplier = 1
         value = s
         if s.endswith(tuple(d.keys())):
@@ -259,12 +256,12 @@ class TreeSimulator(object):
             raise ValueError("Postive number of loci required")
         rho = 4 * self._scaled_recombination_rate * (m - 1)
         num_trees = min(m // 2, rho * harmonic_number(n - 1))
-        b = 10 # Baseline maximum
+        b = 10  # Baseline maximum
         num_trees = max(b, int(num_trees))
         num_avl_nodes = max(b, 4 * n + num_trees)
         # TODO This is total guesswork. We need to plot this for a range
         # of values and see what a good approximation is.
-        num_segments = max(b, int(math.log(n)  * rho))
+        num_segments = max(b, int(math.log(n) * rho))
         if self._avl_node_block_size is None:
             self._avl_node_block_size = num_avl_nodes
         if self._segment_block_size is None:
@@ -278,7 +275,7 @@ class TreeSimulator(object):
         if self._random_seed is None:
             self._random_seed = random.randint(0, 2**31 - 1)
         if self._max_memory is None:
-            self._max_memory = 10 * 1024 * 1024 # 10MiB by default
+            self._max_memory = 10 * 1024 * 1024  # 10MiB by default
 
     def run(self):
         """
@@ -315,6 +312,7 @@ class TreeSimulator(object):
         Resets the simulation so that we can perform another replicate.
         """
         self._ll_sim = None
+
 
 class TreeSequence(object):
 
@@ -423,8 +421,6 @@ class TreeSequence(object):
                 st.root = st.parent[st.root]
             yield st
 
-
-
     def newick_trees(self, precision=3, breakpoints=None):
         iterator = _msprime.NewickConverter(self._ll_tree_sequence, precision)
         if breakpoints is None:
@@ -438,7 +434,6 @@ class TreeSequence(object):
                 while breakpoints[j] < trees_covered:
                     j += 1
                     yield breakpoints[j] - breakpoints[j - 1], tree
-
 
     def generate_mutations(self, scaled_mutation_rate, random_seed=None):
         """
@@ -457,6 +452,7 @@ class TreeSequence(object):
         and mutations in this tree sequence as a string of '1's and '0's.
         """
         return HaplotypeGenerator(self, online).haplotypes()
+
 
 class HaplotypeGenerator(object):
 
@@ -489,6 +485,7 @@ class PopulationModel(object):
         model.
         """
         return self.__dict__
+
 
 class ConstantPopulationModel(PopulationModel):
     """

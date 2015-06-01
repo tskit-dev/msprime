@@ -416,7 +416,7 @@ def analyse_mutations(filename):
             # print("EMPTY TREE")
     # print(empty_trees / total_trees)
     pyplot.hist(N, range(1, 10), normed=True)
-    f = "tmp__NOBACKUP__/mutations.png"
+    f = "tmp__NOBACKUP__/num_records.png"
     pyplot.savefig(f, dpi=72)
     pyplot.clf()
 

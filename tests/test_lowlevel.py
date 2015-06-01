@@ -1,3 +1,21 @@
+#
+# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+#
+# This file is part of msprime.
+#
+# msprime is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# msprime is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
+#
 """
 Test cases for the low level C interface to msprime.
 """
@@ -5,16 +23,14 @@ from __future__ import print_function
 from __future__ import division
 from __future__ import unicode_literals
 
-import collections
-import json
 import heapq
 import random
 import os.path
 import tempfile
 
-
 import tests
 import _msprime
+
 
 def get_random_population_models(n):
     """
@@ -40,11 +56,11 @@ class LowLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests for the low-level interface.
     """
-    def get_tree_sequence(self, sample_size=10, num_loci=100,
-            mutation_rate=10):
-        sim = _msprime.Simulator(sample_size, random_seed=1,
-                num_loci=num_loci,
-                scaled_recombination_rate=1)
+    def get_tree_sequence(
+            self, sample_size=10, num_loci=100, mutation_rate=10):
+        sim = _msprime.Simulator(
+            sample_size, random_seed=1, num_loci=num_loci,
+            scaled_recombination_rate=1)
         sim.run()
         ts = _msprime.TreeSequence()
         ts.create(sim)
@@ -66,6 +82,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         self.assertGreater(len(l), 0)
         for j in range(10):
             self.assertRaises(StopIteration, next, iterator)
+
 
 class TestInterface(LowLevelTestCase):
     """
@@ -150,9 +167,8 @@ class TestInterface(LowLevelTestCase):
         corresponds to correct trees for the specified simulation.
         """
         n = sim.get_sample_size()
-        m = sim.get_num_loci()
         pi = {}
-        tau = {j:0 for j in range(1, n + 1)}
+        tau = {j: 0 for j in range(1, n + 1)}
         last_l = 0
         last_t = 0
         num_trees = 0
@@ -245,18 +261,16 @@ class TestInterface(LowLevelTestCase):
         ts.create(sim)
         ts_records = [
             ts.get_record(j, _msprime.MSP_ORDER_TIME)
-                for j in range(len(records))]
+            for j in range(len(records))]
         self.assertEqual(ts_records, records)
         ts_records = [
             ts.get_record(j, _msprime.MSP_ORDER_LEFT)
-                for j in range(len(records))]
+            for j in range(len(records))]
         self.assertEqual(ts_records, left_sorted_records)
         ts_records = [
             ts.get_record(j, _msprime.MSP_ORDER_RIGHT)
-                for j in range(len(records))]
+            for j in range(len(records))]
         self.assertEqual(ts_records, right_sorted_records)
-
-
 
     def verify_random_parameters(self):
         mb = 1024 * 1024
@@ -271,14 +285,14 @@ class TestInterface(LowLevelTestCase):
         node_mapping_block_size = random.randint(1, 100)
         avl_node_block_size = random.randint(1, 100)
         coalescence_record_block_size = random.randint(1, 100)
-        sim = _msprime.Simulator(sample_size=n, num_loci=m,
-                population_models=models,
-                scaled_recombination_rate=rho,
-                random_seed=random_seed, max_memory=max_memory,
-                segment_block_size=segment_block_size,
-                avl_node_block_size=avl_node_block_size,
-                node_mapping_block_size=node_mapping_block_size,
-                coalescence_record_block_size=coalescence_record_block_size)
+        sim = _msprime.Simulator(
+            sample_size=n, num_loci=m, population_models=models,
+            scaled_recombination_rate=rho,
+            random_seed=random_seed, max_memory=max_memory,
+            segment_block_size=segment_block_size,
+            avl_node_block_size=avl_node_block_size,
+            node_mapping_block_size=node_mapping_block_size,
+            coalescence_record_block_size=coalescence_record_block_size)
         # Check initial state
         self.assertEqual(2, sim.get_num_breakpoints())
         self.assertEqual(0.0, sim.get_time())
@@ -310,10 +324,13 @@ class TestInterface(LowLevelTestCase):
             self.assertEqual(random_seed, sim.get_random_seed())
             self.assertEqual(max_memory, sim.get_max_memory())
             self.assertEqual(segment_block_size, sim.get_segment_block_size())
-            self.assertEqual(avl_node_block_size, sim.get_avl_node_block_size())
-            self.assertEqual(node_mapping_block_size, sim.get_node_mapping_block_size())
-            self.assertEqual(coalescence_record_block_size,
-                    sim.get_coalescence_record_block_size())
+            self.assertEqual(
+                avl_node_block_size, sim.get_avl_node_block_size())
+            self.assertEqual(
+                node_mapping_block_size, sim.get_node_mapping_block_size())
+            self.assertEqual(
+                coalescence_record_block_size,
+                sim.get_coalescence_record_block_size())
             self.verify_population_models(sim, models)
             # Run this for a tiny amount of time and check the state
             self.assertFalse(sim.run(1e-8))
@@ -357,7 +374,6 @@ class TestInterface(LowLevelTestCase):
         self.assertGreaterEqual(len(python_diffs), 0)
         self.assertEqual(diffs, python_diffs)
 
-
     def verify_simulation(self, n, m, r, models):
         """
         Runs the specified simulation and verifies its state.
@@ -366,12 +382,12 @@ class TestInterface(LowLevelTestCase):
         assert n > 2
         mb = 1024 * 1024
         random_seed = random.randint(0, 2**31)
-        sim = _msprime.Simulator(sample_size=n, num_loci=m,
-                population_models=models, scaled_recombination_rate=r,
-                random_seed=random_seed,
-                max_memory=10 * mb, segment_block_size=1000,
-                avl_node_block_size=1000, node_mapping_block_size=1000,
-                coalescence_record_block_size=1000)
+        sim = _msprime.Simulator(
+            sample_size=n, num_loci=m, population_models=models,
+            scaled_recombination_rate=r, random_seed=random_seed,
+            max_memory=10 * mb, segment_block_size=1000,
+            avl_node_block_size=1000, node_mapping_block_size=1000,
+            coalescence_record_block_size=1000)
         self.verify_population_models(sim, models)
         # Run the sim for a tiny amount of time and check.
         # self.assertFalse(sim.run(1e-8))
@@ -390,7 +406,6 @@ class TestInterface(LowLevelTestCase):
         tree_sequence.create(sim)
         self.verify_tree_diffs(tree_sequence)
 
-
     def test_random_sims(self):
         num_random_sims = 10
         for j in range(num_random_sims):
@@ -403,12 +418,11 @@ class TestInterface(LowLevelTestCase):
         self.verify_simulation(5, 10, 10.0, [])
         self.verify_simulation(10, 100, 1.0, [])
         self.verify_simulation(100, 100, 0.1, [])
-        const_model = _msprime.POP_MODEL_CONSTANT
 
     def test_population_models(self):
         exp_model = _msprime.POP_MODEL_EXPONENTIAL
-        m1 = {"alpha":0.0, "start_time":0.0, "type":exp_model}
-        m2 = {"alpha":1.0, "start_time":0.5, "type":exp_model}
+        m1 = {"alpha": 0.0, "start_time": 0.0, "type": exp_model}
+        m2 = {"alpha": 1.0, "start_time": 0.5, "type": exp_model}
         # TODO add constant pop models here too.
         for n in [5, 10, 100]:
             self.verify_simulation(n, 1, 0.0, [m1])
@@ -425,22 +439,25 @@ class TestInterface(LowLevelTestCase):
 
     def test_bad_population_models(self):
         def f(population_models):
-            return _msprime.Simulator(2, 1,
-                    population_models=population_models)
+            return _msprime.Simulator(
+                2, 1, population_models=population_models)
         self.assertRaises(TypeError, f, "")
         self.assertRaises(TypeError, f, [""])
         self.assertRaises(_msprime.InputError, f, [{}])
-        self.assertRaises(_msprime.InputError, f, [{"start_time":1}])
-        self.assertRaises(_msprime.InputError, f,
-                [{"start_time":1, "type":-1000}])
-        self.assertRaises(_msprime.InputError, f,
-                [{"start_time":1, "type":_msprime.POP_MODEL_EXPONENTIAL}])
-        self.assertRaises(_msprime.InputError, f,
-                [{"start_time":1, "type":_msprime.POP_MODEL_CONSTANT}])
+        self.assertRaises(_msprime.InputError, f, [{"start_time": 1}])
+        self.assertRaises(
+            _msprime.InputError, f, [{"start_time": 1, "type": -1000}])
+        self.assertRaises(
+            _msprime.InputError, f,
+            [{"start_time": 1, "type": _msprime.POP_MODEL_EXPONENTIAL}])
+        self.assertRaises(
+            _msprime.InputError, f,
+            [{"start_time": 1, "type": _msprime.POP_MODEL_CONSTANT}])
         m = get_random_population_models(10)
         m.reverse()
         # TODO This should really be an input error.
         self.assertRaises(_msprime.LibraryError, f, m)
+
 
 class TestTreeSequence(LowLevelTestCase):
     """
@@ -449,6 +466,7 @@ class TestTreeSequence(LowLevelTestCase):
 
     def test_file_errors(self):
         ts1 = self.get_tree_sequence()
+
         def loader(*args):
             ts2 = _msprime.TreeSequence()
             ts2.load(*args)
@@ -516,9 +534,10 @@ class TestTreeSequence(LowLevelTestCase):
                 self.assertEqual(g[name].shape[0], ts.get_num_mutations())
                 self.assertEqual(g[name].dtype, dtype)
         g = root["trees"]
-        fields = [("left", uint32, 1), ("right", uint32, 1),
-                ("node", uint32, 1), ("children", uint32, 2),
-                ("time", float64, 1)]
+        fields = [
+            ("left", uint32, 1), ("right", uint32, 1),
+            ("node", uint32, 1), ("children", uint32, 2),
+            ("time", float64, 1)]
         self.assertEqual(set(g.keys()), set([name for name, _, _ in fields]))
         for name, dtype, dims in fields:
             self.assertEqual(len(g[name].shape), dims)
@@ -575,8 +594,9 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(TypeError, ts.generate_mutations)
         self.assertRaises(TypeError, ts.generate_mutations, mutation_rate=1.0)
         self.assertRaises(TypeError, ts.generate_mutations, random_seed=1.0)
-        self.assertRaises(TypeError, ts.generate_mutations, mutation_rate=10,
-                random_seed=1.0, invalid_param=7)
+        self.assertRaises(
+            TypeError, ts.generate_mutations, mutation_rate=10,
+            random_seed=1.0, invalid_param=7)
         # A mutation rate of 0 should give 0 mutations
         ts.generate_mutations(0.0, random_seed=1)
         for j in range(3):
@@ -608,7 +628,6 @@ class TestTreeSequence(LowLevelTestCase):
             mutations = ts.get_mutations()
             self.assertNotEqual(mutations, last_mutations)
             last_mutations = mutations
-
 
     def test_constructor_interface(self):
         tree_sequence = _msprime.TreeSequence()
@@ -651,10 +670,10 @@ class TestTreeSequence(LowLevelTestCase):
         for x in [-1, 3, 5, 10**6]:
             self.assertRaises(_msprime.LibraryError, ts.get_record, 0, x)
 
-
     def test_get_record_interface(self):
         for ts in self.get_example_tree_sequences():
             self.verify_get_record_interface(ts)
+
 
 class TestNewickConverter(LowLevelTestCase):
     """
@@ -671,8 +690,8 @@ class TestNewickConverter(LowLevelTestCase):
         sim.run()
         ts.create(sim)
         for bad_type in [None, "", 2.3, [], {}]:
-            self.assertRaises(TypeError, _msprime.NewickConverter, ts,
-                    precision=bad_type)
+            self.assertRaises(
+                TypeError, _msprime.NewickConverter, ts, precision=bad_type)
         before = list(_msprime.NewickConverter(ts))
         self.assertGreater(len(before), 0)
         iterator = _msprime.NewickConverter(ts)
@@ -717,7 +736,6 @@ class TestNewickConverter(LowLevelTestCase):
             for l, tree in _msprime.NewickConverter(ts, precision=precision):
                 times = get_times(tree)
                 for t in times:
-                    tmp = float(t)
                     if precision == 0:
                         self.assertNotIn(".", t)
                     else:
@@ -750,6 +768,7 @@ class TestTreeDiffIterator(LowLevelTestCase):
         ts = self.get_tree_sequence()
         self.verify_iterator(_msprime.TreeDiffIterator(ts))
 
+
 class TestHaplotypeGenerator(LowLevelTestCase):
     """
     Tests for the low-level haplotype generator.
@@ -763,13 +782,14 @@ class TestHaplotypeGenerator(LowLevelTestCase):
         ts = self.get_tree_sequence(num_loci=10)
 
         for bad_type in ["", {}, [], None]:
-            self.assertRaises(TypeError, _msprime.HaplotypeGenerator,
-                    ts, bad_type)
-            self.assertRaises(TypeError, _msprime.HaplotypeGenerator,
-                    ts, mode=bad_type)
+            self.assertRaises(
+                TypeError, _msprime.HaplotypeGenerator, ts, bad_type)
+            self.assertRaises(
+                TypeError, _msprime.HaplotypeGenerator, ts, mode=bad_type)
         for bad_mode in [-1, 2, 3, 100]:
-            self.assertRaises(_msprime.LibraryError,
-                    _msprime.HaplotypeGenerator, ts, mode=bad_mode)
+            self.assertRaises(
+                _msprime.LibraryError, _msprime.HaplotypeGenerator, ts,
+                mode=bad_mode)
         n = ts.get_sample_size()
         hg = _msprime.HaplotypeGenerator(ts)
         before = list(hg.get_haplotype(j) for j in range(1, n + 1))

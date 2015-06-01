@@ -1,4 +1,22 @@
-"""
+#
+# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+#
+# This file is part of msprime.
+#
+# msprime is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# msprime is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
+#
+""""
 Common code for the msprime test cases.
 """
 from __future__ import print_function
@@ -6,17 +24,17 @@ from __future__ import unicode_literals
 from __future__ import division
 
 import collections
-import os
 import random
-import tempfile
 import unittest
 
 import msprime
 import _msprime
 
+
 def setUp():
     # Make random tests reproducible.
     random.seed(210)
+
 
 class PythonTreeSequence(object):
     """
@@ -32,7 +50,6 @@ class PythonTreeSequence(object):
             yield self._tree_sequence.get_record(j, _msprime.MSP_ORDER_LEFT)
 
     def _diffs(self):
-        n = self._sample_size
         left = 0
         used_records = collections.defaultdict(list)
         records_in = []
@@ -64,7 +81,6 @@ class PythonTreeSequence(object):
         else:
             return self._diffs()
 
-
     def sparse_trees(self):
         st = msprime.SparseTree(
                 self._sample_size, self._tree_sequence.get_num_nodes())
@@ -87,6 +103,7 @@ class PythonTreeSequence(object):
             yield st
             st.left = st.right
 
+
 class MsprimeTestCase(unittest.TestCase):
     """
     Superclass of all tests msprime simulator test cases.
@@ -94,8 +111,8 @@ class MsprimeTestCase(unittest.TestCase):
 
     def verify_sparse_tree(self, n, pi, tau):
         """
-        Verifies that the specified sparse_tree is a consistent coalescent history
-        for a sample of size n.
+        Verifies that the specified sparse_tree is a consistent coalescent
+        history for a sample of size n.
         """
         self.assertEqual(set(pi.keys()), set(tau.keys()))
         self.assertEqual(len(pi), 2 * n - 1)
@@ -151,8 +168,8 @@ class MsprimeTestCase(unittest.TestCase):
 
     def verify_sparse_trees(self, n, m, trees):
         """
-        Verifies that the specified set of sparse trees is consistent with the specified
-        paramters.
+        Verifies that the specified set of sparse trees is consistent with the
+        specified paramters.
         """
         s = 0
         for l, pi, tau in trees:
@@ -160,5 +177,3 @@ class MsprimeTestCase(unittest.TestCase):
             self.assertTrue(l > 0)
             s += l
         self.assertEqual(s, m)
-
-

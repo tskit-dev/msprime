@@ -1,3 +1,6 @@
+coverage
+flake8
 h5py
 nose
 numpy
+sphinx

@@ -1,3 +1,21 @@
+#
+# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+#
+# This file is part of msprime.
+#
+# msprime is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# msprime is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
+#
 """
 Test cases for the high level interface to msprime.
 """
@@ -11,14 +29,9 @@ except ImportError:
     # This fails for Python 3.x, but that's fine.
     pass
 
-import os
 import random
-import re
-import itertools
-import unittest
 
 import msprime
-
 import tests
 
 
@@ -38,6 +51,7 @@ def sparse_tree_to_newick(st, precision):
                         st.time[node] - st.time[child], precision)
                 branch_lengths[child] = s
     return _build_newick(st.root, st.root, st, branch_lengths)
+
 
 def _build_newick(node, root, tree, branch_lengths):
     c1 = tree.children[0][node]
@@ -119,8 +133,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertRaises(StopIteration, next, iter2)
 
 
-
-
 class TestSingleLocusSimulation(HighLevelTestCase):
     """
     Tests on the single locus simulations.
@@ -154,7 +166,6 @@ class TestSingleLocusSimulation(HighLevelTestCase):
         # TODO add more tests!
 
 
-
 class TestMultiLocusSimulation(HighLevelTestCase):
     """
     Tests on the single locus simulations.
@@ -179,6 +190,7 @@ class TestMultiLocusSimulation(HighLevelTestCase):
             self.assertRaises(ValueError, f, n, 1, 1.0)
         for n in ["", None, "2", 2.2, 1e5]:
             self.assertRaises(TypeError, f, n, 1, 1.0)
+
 
 class TestTreeSimulator(HighLevelTestCase):
     """
@@ -231,7 +243,6 @@ class TestTreeSimulator(HighLevelTestCase):
             self.verify_simulation(n, m, r)
 
 
-
 class TestHaplotypeGenerator(HighLevelTestCase):
     """
     Tests the haplotype generation code.
@@ -278,7 +289,8 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             m = random.randint(10, 1000)
             r = random.random()
             theta = random.uniform(0, 2)
-            self.verify_simulation(n, m, r,theta)
+            self.verify_simulation(n, m, r, theta)
+
 
 class TestNewickConversion(HighLevelTestCase):
     """
@@ -302,15 +314,13 @@ class TestNewickConversion(HighLevelTestCase):
         precision = 0
         old_trees = [
             (st.right - st.left, sparse_tree_to_newick(st, precision))
-                for st in tree_sequence.sparse_trees()]
+            for st in tree_sequence.sparse_trees()]
         new_trees = list(tree_sequence.newick_trees(precision))
         self.assertEqual(len(new_trees), len(old_trees))
         for (l1, t1), (l2, t2) in zip(new_trees, old_trees):
             self.assertEqual(l1, l2)
             self.assertEqual(strip_tree(t1), strip_tree(t2))
         # TODO test the form of the trees when we're using breakpoints.
-
-
 
     def verify_all_breakpoints(self, tree_sequence, breakpoints):
         """
@@ -388,7 +398,6 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in self.get_example_tree_sequences():
             self.verify_sparse_trees(ts)
 
-
     def verify_tree_diffs(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
         iter1 = ts.diffs()
@@ -397,7 +406,6 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(t1, t2)
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
-
 
     def test_tree_diffs(self):
         for ts in self.get_example_tree_sequences():
