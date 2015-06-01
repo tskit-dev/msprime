@@ -12,19 +12,18 @@ import json
 import time
 import random
 import tempfile
-import unittest
 import collections
 import subprocess
 
-import numpy as np
-import numpy.random
+# import numpy as np
+# import numpy.random
 
-import statsmodels.api as sm
+# import statsmodels.api as sm
 
-import matplotlib
-# Force matplotlib to not use any Xwindows backend.
-matplotlib.use('Agg')
-from matplotlib import pyplot
+# import matplotlib
+# # Force matplotlib to not use any Xwindows backend.
+# matplotlib.use('Agg')
+# from matplotlib import pyplot
 
 import _msprime
 import msprime
