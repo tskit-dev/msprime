@@ -17,7 +17,7 @@ install:
 script: 
   - flake8 setup.py msprime tests
   - nosetests -v --with-coverage --cover-package msprime
-              --cover-inclusive --cover-min-percentage 80
+              --cover-inclusive --cover-min-percentage 80 tests
   - make -C docs 
 
 env:
