@@ -652,7 +652,7 @@ Simulator_get_ancestors(Simulator *self)
         goto out;
     }
     num_ancestors = msp_get_num_ancestors(self->sim);
-    ancestors = PyMem_Malloc(num_ancestors * sizeof(segment_t **));
+    ancestors = PyMem_Malloc(num_ancestors * sizeof(segment_t *));
     if (ancestors == NULL) {
         PyErr_NoMemory();
         goto out;
@@ -838,10 +838,6 @@ Simulator_run(Simulator *self, PyObject *args)
         }
     }
     coalesced = status == 0;
-    if (status < 0) {
-        handle_library_error(status);
-        goto out;
-    }
     /* return True if complete coalescence has occured */
     ret = coalesced ? Py_True : Py_False;
     Py_INCREF(ret);
