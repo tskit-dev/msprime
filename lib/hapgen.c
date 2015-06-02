@@ -495,7 +495,7 @@ hapgen_get_haplotype(hapgen_t *self, uint32_t sample_id, char **haplotype)
 {
     int ret = 0;
 
-    if (sample_id < 1 || sample_id> self->sample_size) {
+    if (sample_id < 1 || sample_id > self->sample_size) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }

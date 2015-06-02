@@ -1538,11 +1538,11 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
                     self->tree.children[2 * cr.node + c] = cr.children[c];
                 }
                 j++;
-                ret = tree_sequence_get_record(self->tree_sequence, j, &cr,
-                        MSP_ORDER_LEFT);
-                if (ret != 0) {
-                    goto out;
-                }
+                /* we don't check this here because we know it'll return out
+                 * of bounds on the last check. This method is much too complicated!
+                 */
+                tree_sequence_get_record(self->tree_sequence, j, &cr,
+                    MSP_ORDER_LEFT);
             }
             self->next_record_index = j;
             *length = self->right_sorted_records[k].right - self->position;
