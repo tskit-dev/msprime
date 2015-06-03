@@ -33,13 +33,19 @@
 typedef struct {
     uint32_t value;
     uint32_t index;
+    double time;
 } index_sort_t;
 
 static int
 cmp_index_sort(const void *a, const void *b) {
     const index_sort_t *ca = (const index_sort_t *) a;
     const index_sort_t *cb = (const index_sort_t *) b;
-    return (ca->value > cb->value) - (ca->value < cb->value);
+    int ret = (ca->value > cb->value) - (ca->value < cb->value);
+    /* When comparing equal values, we sort by time */
+    if (ret == 0) {
+        ret = (ca->time > cb->time) - (ca->time < cb->time);
+    }
+    return ret;
 }
 
 static int
@@ -170,6 +176,7 @@ tree_sequence_make_indexes(tree_sequence_t *self)
     for (j = 0; j < self->num_records; j++) {
         sort_buff[j].index = j;
         sort_buff[j].value = self->trees.left[j];
+        sort_buff[j].time = self->trees.time[j];
     }
     qsort(sort_buff, self->num_records, sizeof(index_sort_t), cmp_index_sort);
     for (j = 0; j < self->num_records; j++) {
@@ -179,6 +186,7 @@ tree_sequence_make_indexes(tree_sequence_t *self)
     for (j = 0; j < self->num_records; j++) {
         sort_buff[j].index = j;
         sort_buff[j].value = self->trees.right[j];
+        sort_buff[j].time = self->trees.time[j];
     }
     qsort(sort_buff, self->num_records, sizeof(index_sort_t), cmp_index_sort);
     for (j = 0; j < self->num_records; j++) {
