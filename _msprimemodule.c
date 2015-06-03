@@ -1044,6 +1044,11 @@ TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (skip_h5close) {
         flags |= MSP_SKIP_H5CLOSE;
     }
+    /* Silence the low-level error reporting HDF5 */
+    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
+        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
+        goto out;
+    }
     err = tree_sequence_dump(self->tree_sequence, path, flags);
     if (err != 0) {
         handle_library_error(err);
@@ -1080,6 +1085,11 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
     if (skip_h5close) {
         flags |= MSP_SKIP_H5CLOSE;
+    }
+    /* Silence the low-level error reporting HDF5 */
+    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
+        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
+        goto out;
     }
     err = tree_sequence_load(self->tree_sequence, path, flags);
     if (err != 0) {
@@ -1949,9 +1959,6 @@ init_msprime(void)
             MSP_HAPGEN_MODE_SINGLE);
     PyModule_AddIntConstant(module, "MSP_HAPGEN_MODE_ALL",
             MSP_HAPGEN_MODE_ALL);
-    /* Silence the low-level error reporting HDF5 */
-    H5Eset_auto(H5E_DEFAULT, NULL, NULL);
-
 #ifdef WORDS_BIGENDIAN
     PyErr_Format(PyExc_RuntimeError, "Big Endian systems not currently supported.");
     INITERROR;

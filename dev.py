@@ -105,11 +105,11 @@ def ll_main():
         # crs  sim.get_coalescence_records()
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        iterator = _msprime.TreeDiffIterator(ts, True)
+        iterator = _msprime.TreeDiffIterator(ts)
         c = 0
         for r in iterator:
             c += 1
-        iterator = _msprime.TreeDiffIterator(ts, False)
+        iterator = _msprime.TreeDiffIterator(ts)
         del ts
         c = 0
         for r in iterator:
@@ -119,11 +119,11 @@ def ll_main():
         # print(iterator)
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        nc = _msprime.NewickConverter(ts, 4, False)
+        nc = _msprime.NewickConverter(ts, 4)
         c = 0
         for l, t in nc:
             c += l + len(t)
-        nc = _msprime.NewickConverter(ts, 4, False)
+        nc = _msprime.NewickConverter(ts, 4)
         x = next(nc)
         files = ["/", "/nofile", "/" + "x" * 4192]
         for f in files:
@@ -641,9 +641,9 @@ if __name__ == "__main__":
     # haplotype_example()
     # tree_processing_example()
     # dump_load_example()
-    analyse_mutations("tmp__NOBACKUP__/quinlan-mutations.hdf5")
+    # analyse_mutations("tmp__NOBACKUP__/quinlan-mutations.hdf5")
     # hl_main()
-    # ll_main()
+    ll_main()
     # print_newick(sys.argv[1])
     # memory_test()
     # large_sim()
