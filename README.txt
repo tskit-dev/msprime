@@ -18,11 +18,13 @@ Requirements
 
 Msprime requires Python 2.7+ (Python 3 versions are fully supported from
 3.1 onwards), the `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_
-and `HDF5 <https://www.hdfgroup.org/HDF5/>`_,
+and `HDF5 <https://www.hdfgroup.org/HDF5/>`_ version 1.8 or later,
 which are available for all major platforms. For example, to install on
 Debian/Ubuntu use::
 
     # apt-get install python-dev libgsl0-dev libhdf5-serial-dev pkg-config
+
+
 
 ----
 TODO
