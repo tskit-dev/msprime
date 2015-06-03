@@ -463,7 +463,8 @@ msp_alloc_node_mapping(msp_t *self)
         }
     }
     p = self->node_mapping_blocks[self->num_node_mapping_blocks - 1];
-    ret = (node_mapping_t *) (p +
+    /* cast to void * here to avoid alignment warnings from clang. */
+    ret = (void *)(p +
             self->next_node_mapping * sizeof(node_mapping_t));
     self->next_node_mapping++;
 out:

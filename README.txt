@@ -34,6 +34,16 @@ TODO
   HomeBrew/MacPorts and possibly a linux distro where we are missing
   root access.
 
+------------
+FreeBSD 10.0
+------------
+
+To install on FreeBSD, install the gsl and hdf5-18 packages as 
+follows::
+
+    # pkg install gsl hdf5-18
+
+**TODO** Finish installation instructions.
 
 *************
 Installation
