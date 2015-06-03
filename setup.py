@@ -48,7 +48,7 @@ class PathConfigurator(object):
         try:
             output = subprocess.check_output(["h5ls", "-V"]).split()
             version_str = output[2]
-            version = map(int, version_str.split(".")[:2])
+            version = list(map(int, version_str.split(b".")[:2]))
             if version < [1, 8]:
                 # TODO is there a better exception to raise here?
                 raise ValueError(
