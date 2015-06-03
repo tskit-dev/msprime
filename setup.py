@@ -51,15 +51,19 @@ class PathConfigurator(object):
         # Strip off the leading -I or -L
         return [arg[2:].decode() for arg in output]
 
+    def _get_pkgconfig_list(self, option):
+        ret = []
+        try:
+            ret = self._run_pkgconfig([option])
+        except OSError as e:
+            print("pkg-config error (not installed?):", e)
+        except subprocess.CalledProcessError as e:
+            print("pkg-config failed:", e)
+        return ret
+
     def _attempt_pkgconfig(self):
-        try:
-            self.library_dirs = self._run_pkgconfig(["--libs-only-L"])
-        except subprocess.CalledProcessError as e:
-            print("pkg-config failed:", e)
-        try:
-            self.include_dirs = self._run_pkgconfig(["--cflags-only-I"])
-        except subprocess.CalledProcessError as e:
-            print("pkg-config failed:", e)
+        self.library_dirs = self._get_pkgconfig_list("--libs-only-L")
+        self.include_dirs = self._get_pkgconfig_list("--cflags-only-I")
 
 
 # Following the recommendations of PEP 396 we parse the version number
