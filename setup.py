@@ -41,7 +41,24 @@ class PathConfigurator(object):
         # TODO: make some other guesses for this...
         self.include_dirs = []
         self.library_dirs = []
+        self._check_hdf5_version()
         self._attempt_pkgconfig()
+
+    def _check_hdf5_version(self):
+        try:
+            output = subprocess.check_output(["h5ls", "-V"]).split()
+            version_str = output[2]
+            version = map(int, version_str.split("."))
+            if version[:2] < [1, 8]:
+                # TODO is there a better exception to raise here?
+                raise ValueError(
+                    "hdf5 version {} found; we need 1.8.0 or greater".format(
+                        version_str))
+        except OSError as e:
+            if e.errno == 2:
+                print("Cannot find h5ls: is HDF5 installed?:")
+            else:
+                print("Error occured running h5ls:", e)
 
     def _run_pkgconfig(self, cmd):
         pkgconfig = "pkg-config"
