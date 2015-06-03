@@ -104,8 +104,9 @@ newick_converter_alloc_avl_node(newick_converter_t *self, uint32_t node_id,
     /* We have alloced two objects at once: the avl_node and the
      * newick_tree_node that goes with it.
      */
-    ret = (avl_node_t *) p;
-    node = (newick_tree_node_t *) (p + sizeof(avl_node_t));
+    /* cast to void * here to avoid alignment warnings from clang. */
+    ret = (void *) p;
+    node = (void *) (p + sizeof(avl_node_t));
 
     node->id = node_id;
     node->children[0] = NULL;

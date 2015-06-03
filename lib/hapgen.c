@@ -112,8 +112,9 @@ hapgen_alloc_avl_node(hapgen_t *self, uint32_t node, double position)
     /* We have alloced two objects at once: the avl_node and the
      * mutation that goes with it.
      */
-    ret = (avl_node_t *) p;
-    u = (mutation_t *) (p + sizeof(avl_node_t));
+    /* cast to void * here to avoid alignment warnings from clang. */
+    ret = (void *) p;
+    u = (void *) (p + sizeof(avl_node_t));
     u->node = node;
     u->position = position;
     u->site = 0;

@@ -1,6 +1,5 @@
-CFLAGS=-Wall -g -O3
 CC=h5cc
-#CFLAGS=-Wall -g -O3 -march=native 
+# CC=clang
 # INCLUDES:=$(shell pkg-config gsl hdf5 libconfig --cflags)
 CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wno-unused-parameter\
@@ -9,7 +8,7 @@ CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wcast-qual -Wcast-align \
   -Wwrite-strings -Wnested-externs \
   -fshort-enums -fno-common -Dinline= -g -O2\
-  -DH5_NO_DEPRECATED_SYMBOLS
+  -DH5_NO_DEPRECATED_SYMBOLS\
   ${INCLUDES}
 # LDFLAGS:=$(shell pkg-config gsl hdf5 libconfig --libs)
 LDFLAGS=-lgsl -lgslcblas -lhdf5 -lconfig
