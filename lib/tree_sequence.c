@@ -65,18 +65,25 @@ cmp_tree_node_list(const void *a, const void *b) {
 
 
 static int
-encode_mutation_parameters(double mutation_rate, char **result)
+encode_mutation_parameters(double mutation_rate, unsigned long random_seed,
+        char **result)
 {
     int ret = -1;
-    const char *pattern = "{\"scaled_mutation_rate\"=\"%.15f\"}";
-    size_t size = (size_t) snprintf(NULL, 0, pattern, mutation_rate);
+    const char *pattern = "{"
+        "\"random_seed\"=\"%lu\","
+        "\"scaled_mutation_rate\"=\"%.15f\"}";
+    size_t size = (size_t) snprintf(NULL, 0, pattern,
+            random_seed,
+            mutation_rate);
     char *str = malloc(size + 1);
 
     if (str == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    snprintf(str, size + 1, pattern, mutation_rate);
+    snprintf(str, size + 1, pattern,
+            random_seed,
+            mutation_rate);
     *result = str;
     ret = 0;
 out:
@@ -88,12 +95,16 @@ encode_simulation_parameters(msp_t *sim, char **result)
 {
     int ret = -1;
     const char *pattern = "{"
+        "\"random_seed\"=\"%lu\","
         "\"sample_size\"=\"%d\","
         "\"num_loci\"=\"%d\","
         "\"scaled_recombination_rate\"=\"%.15f\""
         "}";
     size_t size = (size_t) snprintf(NULL, 0, pattern,
-            sim->sample_size, sim->num_loci, sim->scaled_recombination_rate);
+            sim->random_seed,
+            sim->sample_size,
+            sim->num_loci,
+            sim->scaled_recombination_rate);
     char *str = malloc(size + 1);
     /* TODO add in support for population models. */
 
@@ -102,7 +113,10 @@ encode_simulation_parameters(msp_t *sim, char **result)
         goto out;
     }
     snprintf(str, size + 1, pattern,
-            sim->sample_size, sim->num_loci, sim->scaled_recombination_rate);
+            sim->random_seed,
+            sim->sample_size,
+            sim->num_loci,
+            sim->scaled_recombination_rate);
     *result = str;
     ret = 0;
 out:
@@ -1227,7 +1241,7 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
     self->num_mutations = 0;
     self->mutations.position = NULL;
     self->mutations.node = NULL;
-    ret = encode_mutation_parameters(mutation_rate,
+    ret = encode_mutation_parameters(mutation_rate, random_seed,
             &self->mutations.parameters);
     if (ret != 0) {
         goto out;
