@@ -24,6 +24,7 @@
 
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_version.h>
 
 #include "err.h"
 #include "msprime.h"
@@ -62,6 +63,86 @@ cmp_tree_node_list(const void *a, const void *b) {
     return (ia->key > ib->key) - (ia->key < ib->key);
 }
 
+
+static int
+encode_mutation_parameters(double mutation_rate, char **result)
+{
+    int ret = -1;
+    const char *pattern = "{\"scaled_mutation_rate\"=\"%.15f\"}";
+    size_t size = (size_t) snprintf(NULL, 0, pattern, mutation_rate);
+    char *str = malloc(size + 1);
+
+    if (str == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    snprintf(str, size + 1, pattern, mutation_rate);
+    *result = str;
+    ret = 0;
+out:
+    return ret;
+}
+
+static int
+encode_simulation_parameters(msp_t *sim, char **result)
+{
+    int ret = -1;
+    const char *pattern = "{"
+        "\"sample_size\"=\"%d\","
+        "\"num_loci\"=\"%d\","
+        "\"scaled_recombination_rate\"=\"%.15f\""
+        "}";
+    size_t size = (size_t) snprintf(NULL, 0, pattern,
+            sim->sample_size, sim->num_loci, sim->scaled_recombination_rate);
+    char *str = malloc(size + 1);
+    /* TODO add in support for population models. */
+
+    if (str == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    snprintf(str, size + 1, pattern,
+            sim->sample_size, sim->num_loci, sim->scaled_recombination_rate);
+    *result = str;
+    ret = 0;
+out:
+    return ret;
+}
+
+static int
+encode_environment(char **result)
+{
+    int ret = -1;
+    /* TODO add more environment: endianess, and word size at a minimum */
+    const char *pattern = "{"
+        "\"hdf5_version\"=\"%d.%d.%d\", "
+        "\"gsl_version\"=\"%d.%d\""
+        "}";
+    herr_t status;
+    unsigned int major, minor, release;
+    size_t size;
+    char *str;
+
+    status = H5get_libversion(&major, &minor, &release);
+    if (status != 0) {
+        goto out;
+    }
+    size = (size_t) snprintf(NULL, 0, pattern,
+            major, minor, release,
+            GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
+    str = malloc(size + 1);
+    if (str == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    snprintf(str, size + 1, pattern,
+            major, minor, release);
+    *result = str;
+    ret = 0;
+out:
+    return ret;
+}
+
 void
 tree_sequence_print_state(tree_sequence_t *self)
 {
@@ -71,6 +152,8 @@ tree_sequence_print_state(tree_sequence_t *self)
     printf("sample_size = %d\n", self->sample_size);
     printf("num_loci = %d\n", self->num_loci);
     printf("trees = (%d records)\n", (int) self->num_records);
+    printf("\tparameters = '%s'\n", self->trees.parameters);
+    printf("\tenvironment = '%s'\n", self->trees.environment);
     for (j = 0; j < self->num_records; j++) {
         printf("\t%d\t%d\t%d\t%d\t%d\t%d\t%f\t|\t%d\t%d\n",
                 (int) j,
@@ -84,6 +167,8 @@ tree_sequence_print_state(tree_sequence_t *self)
                 (int) self->trees.right_sorting[j]);
     }
     printf("mutations = (%d records)\n", (int) self->num_mutations);
+    printf("\tparameters = '%s'\n", self->mutations.parameters);
+    printf("\tenvironment = '%s'\n", self->mutations.environment);
     for (j = 0; j < self->num_mutations; j++) {
         printf("\t%d\t%f\n", (int) self->mutations.node[j],
                 self->mutations.position[j]);
@@ -112,8 +197,6 @@ tree_sequence_alloc(tree_sequence_t *self)
             || self->trees.right_sorting == NULL) {
         goto out;
     }
-    self->mutations.node = NULL;
-    self->mutations.position = NULL;
     if (self->num_mutations > 0) {
         self->mutations.node = malloc(self->num_mutations * sizeof(uint32_t));
         self->mutations.position = malloc(
@@ -151,11 +234,23 @@ tree_sequence_free(tree_sequence_t *self)
     if (self->trees.right_sorting != NULL) {
         free(self->trees.right_sorting);
     }
+    if (self->trees.parameters != NULL) {
+        free(self->trees.parameters);
+    }
+    if (self->trees.environment != NULL) {
+        free(self->trees.environment);
+    }
     if (self->mutations.node != NULL) {
         free(self->mutations.node);
     }
     if (self->mutations.position != NULL) {
         free(self->mutations.position);
+    }
+    if (self->mutations.parameters != NULL) {
+        free(self->mutations.parameters);
+    }
+    if (self->mutations.environment != NULL) {
+        free(self->mutations.environment);
     }
     return 0;
 }
@@ -208,11 +303,15 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     uint32_t j;
     coalescence_record_t *records = NULL;
 
+    memset(self, 0, sizeof(tree_sequence_t));
     self->num_records = msp_get_num_coalescence_records(sim);
     self->sample_size = sim->sample_size;
     self->num_loci = sim->num_loci;
     self->num_mutations = 0;
-    tree_sequence_alloc(self);
+    ret = tree_sequence_alloc(self);
+    if (ret != 0) {
+        goto out;
+    }
     records = malloc(self->num_records * sizeof(coalescence_record_t));
     if (records == NULL) {
         goto out;
@@ -230,6 +329,15 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
         self->trees.time[j] = records[j].time;
     }
     ret = tree_sequence_make_indexes(self);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Set the environment and parameter metadata */
+    ret = encode_environment(&self->trees.environment);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = encode_simulation_parameters(sim, &self->trees.parameters);
     if (ret != 0) {
         goto out;
     }
@@ -527,6 +635,90 @@ out:
     return ret;
 }
 
+static int
+tree_sequence_read_hdf5_provenance(tree_sequence_t *self, hid_t file_id)
+{
+    int ret = MSP_ERR_HDF5;
+    hid_t attr_id, atype, type_class, atype_mem;
+    herr_t status;
+    size_t size;
+    struct _hdf5_string_read {
+        const char *prefix;
+        const char *name;
+        char **dest;
+        int included;
+    };
+    struct _hdf5_string_read fields[] = {
+        {"trees", "environment", NULL, 1},
+        {"trees", "parameters", NULL, 1},
+        {"mutations", "environment", NULL, 0},
+        {"mutations", "parameters", NULL, 0},
+    };
+    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_string_read);
+    size_t j;
+    char *str;
+
+    fields[0].dest = &self->trees.parameters;
+    fields[1].dest = &self->trees.environment;
+    if (self->num_mutations > 0) {
+        fields[2].included = 1;
+        fields[3].included = 1;
+        fields[2].dest = &self->mutations.parameters;
+        fields[3].dest = &self->mutations.environment;
+    }
+
+    for (j = 0; j < num_fields; j++) {
+        attr_id = H5Aopen_by_name(file_id, fields[j].prefix, fields[j].name,
+                H5P_DEFAULT, H5P_DEFAULT);
+        if (attr_id < 0) {
+            goto out;
+        }
+        atype = H5Aget_type(attr_id);
+        if (atype < 0) {
+            goto out;
+        }
+        type_class = H5Tget_class(atype);
+        if (type_class < 0) {
+            goto out;
+        }
+        if (type_class != H5T_STRING) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        atype_mem = H5Tget_native_type(atype, H5T_DIR_ASCEND);
+        if (atype_mem < 0) {
+            goto out;
+        }
+        size = H5Tget_size(atype_mem);
+        str = malloc(size + 1);
+        if (str == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        status = H5Aread(attr_id, atype_mem, str);
+        if (status < 0) {
+            goto out;
+        }
+        str[size] = '\0';
+        *fields[j].dest = str;
+        status = H5Tclose(atype);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Tclose(atype_mem);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Aclose(attr_id);
+        if (status < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 int
 tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
 {
@@ -534,6 +726,7 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     herr_t status;
     hid_t file_id;
 
+    memset(self, 0, sizeof(tree_sequence_t));
     file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
     if (file_id < 0) {
         ret = MSP_ERR_HDF5;
@@ -553,6 +746,11 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     }
     ret = tree_sequence_read_hdf5_data(self, file_id);
     if (ret != 0) {
+        goto out;
+    }
+    status = tree_sequence_read_hdf5_provenance(self, file_id);
+    if (status < 0) {
+        ret = MSP_ERR_HDF5;
         goto out;
     }
     status = H5Fclose(file_id);
@@ -709,7 +907,7 @@ out:
 }
 
 static int
-tree_sequence_write_hdf5_env_params(tree_sequence_t *self, hid_t file_id)
+tree_sequence_write_hdf5_provenance(tree_sequence_t *self, hid_t file_id)
 {
     herr_t ret = -1;
     herr_t status;
@@ -721,30 +919,25 @@ tree_sequence_write_hdf5_env_params(tree_sequence_t *self, hid_t file_id)
         int included;
     };
     struct _hdf5_string_write fields[] = {
-        {"trees", "/environment", "TODO", 1},
-        {"trees", "/parameters", "TODO", 1},
-        {"mutations", "/environment", "TODO", 0},
-        {"mutations", "/parameters", "TODO", 0},
+        {"trees", "environment", NULL, 1},
+        {"trees", "parameters", NULL, 1},
+        {"mutations", "environment", NULL, 0},
+        {"mutations", "parameters", NULL, 0},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_string_write);
     size_t j;
 
-    /*
-     * TODO update the parameters and environment pointers above to
-     * contain strings holding a JSON encoding of provenance data.
-     * The parameters string must hold enough information in terms of
-     * model parameters to reporoduce the simulation exactly. The
-     * environment string should hold relevant information about the
-     * execution environment (library versions, etc) to make the
-     * original results reproducable.
-     */
+    fields[0].value = self->trees.environment;
+    fields[1].value = self->trees.parameters;
     if (self->num_mutations > 0) {
         fields[2].included = 1;
+        fields[2].value = self->mutations.environment;
         fields[3].included = 1;
+        fields[3].value = self->mutations.parameters;
     }
-
     for (j = 0; j < num_fields; j++) {
         if (fields[j].included) {
+            assert(fields[j].value != NULL);
             group_id = H5Gopen(file_id, fields[j].group, H5P_DEFAULT);
             if (group_id < 0) {
                 goto out;
@@ -877,7 +1070,7 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
     if (status < 0) {
         goto out;
     }
-    status = tree_sequence_write_hdf5_env_params(self, file_id);
+    status = tree_sequence_write_hdf5_provenance(self, file_id);
     if (status < 0) {
         goto out;
     }
@@ -999,6 +1192,8 @@ out:
     return ret;
 }
 
+/* TODO mutations generation should be spun out into a separate class.
+ */
 int
 tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
         unsigned long random_seed)
@@ -1024,12 +1219,23 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
         if (self->mutations.parameters != NULL) {
             free(self->mutations.parameters);
         }
+        if (self->mutations.environment != NULL) {
+            free(self->mutations.environment);
+        }
     }
     buffer_size = 0;
     self->num_mutations = 0;
     self->mutations.position = NULL;
     self->mutations.node = NULL;
-    self->mutations.parameters = NULL;
+    ret = encode_mutation_parameters(mutation_rate,
+            &self->mutations.parameters);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = encode_environment(&self->mutations.environment);
+    if (ret != 0) {
+        goto out;
+    }
 
     rng = gsl_rng_alloc(gsl_rng_default);
     if (rng == NULL) {

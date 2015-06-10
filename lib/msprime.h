@@ -153,11 +153,13 @@ typedef struct {
         uint32_t *left_sorting;
         uint32_t *right_sorting;
         char *parameters;
+        char *environment;
     } trees;
     struct {
         uint32_t *node;
         double *position;
         char *parameters;
+        char *environment;
     } mutations;
     uint32_t num_nodes;
     size_t num_records;
