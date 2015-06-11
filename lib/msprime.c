@@ -64,10 +64,6 @@ msp_strerror(int err)
         ret = "Unsupported file format version";
     } else if (err == MSP_ERR_BAD_MODE) {
         ret = "Bad tree file mode";
-    } else if (err == MSP_ERR_TOO_MANY_SEG_SITES) {
-        ret = "Too many segregating sites";
-    } else if (err == MSP_ERR_TREE_FILE_NOT_SORTED) {
-        ret = "Tree file not sorted.";
     } else if (err == MSP_ERR_NEWICK_OVERFLOW) {
         ret = "Newick string generation overflow.";
     } else if (err == MSP_ERR_UNSORTED_POP_MODELS) {
@@ -82,6 +78,8 @@ msp_strerror(int err)
         ret = "Unsupported file format version.";
     } else if (err == MSP_ERR_BAD_ORDERING) {
         ret = "Bad record ordering requested";
+    } else if (err == MSP_ERR_BAD_PARAM_VALUE) {
+        ret = "Bad parameter value provided";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -168,10 +166,11 @@ exponential_population_model_get_waiting_time(population_model_t *self,
 }
 
 /* Extends the list of population models by one and increments the
- * num_population_models counter.
+ * num_population_models counter. Also make sure the models are
+ * inserted in time sorted order.
  */
 static int WARN_UNUSED
-msp_add_population_model(msp_t *self)
+msp_add_population_model(msp_t *self, double start_time)
 {
     int ret = -1;
     population_model_t *m;
@@ -184,6 +183,13 @@ msp_add_population_model(msp_t *self)
         goto out;
     }
     self->population_models = m;
+    if (self->num_population_models >= 2) {
+        m = &self->population_models[self->num_population_models - 2];
+        if (start_time <= m->start_time) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+    }
     ret = 0;
 out:
     return ret;
@@ -195,15 +201,15 @@ msp_add_constant_population_model(msp_t *self, double start_time, double size)
     int ret = -1;
     population_model_t *model;
 
-    ret = msp_add_population_model(self);
+    ret = msp_add_population_model(self, start_time);
     if (ret < 0) {
         goto out;
     }
+    if (size == 0.0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     model = &self->population_models[self->num_population_models - 1];
-    /* TODO check for model specific restrictions */
-    /* NOTE: we can't actually do any checking here right now because of
-     * memory mangement issues. See the note at the end of initialise.
-     */
     model->start_time = start_time;
     model->param = size;
     model->type = POP_MODEL_CONSTANT;
@@ -220,15 +226,11 @@ msp_add_exponential_population_model(msp_t *self, double start_time, double alph
     int ret = -1;
     population_model_t *model;
 
-    ret = msp_add_population_model(self);
+    ret = msp_add_population_model(self, start_time);
     if (ret < 0) {
         goto out;
     }
     model = &self->population_models[self->num_population_models - 1];
-    /* NOTE: we can't actually do any checking here right now because of
-     * memory mangement issues. See the note at the end of initialise.
-     */
-    /* TODO check for model specific restrictions. */
     model->start_time = start_time;
     model->param = alpha;
     model->type = POP_MODEL_EXPONENTIAL;
@@ -327,47 +329,89 @@ msp_set_random_seed(msp_t *self, unsigned long random_seed)
 int
 msp_set_num_loci(msp_t *self, uint32_t num_loci)
 {
+    int ret = 0;
+    if (num_loci < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->num_loci = num_loci;
-    return 0;
+out:
+    return ret;
 }
 
 int
 msp_set_scaled_recombination_rate(msp_t *self,
         double scaled_recombination_rate)
 {
+    int ret = 0;
+    if (scaled_recombination_rate < 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->scaled_recombination_rate = scaled_recombination_rate;
-    return 0;
+out:
+    return ret;
 }
 
 int
 msp_set_max_memory(msp_t *self, size_t max_memory)
 {
+    int ret = 0;
+    if (max_memory < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->max_memory = max_memory;
-    return 0;
+out:
+    return ret;
 }
 
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size)
 {
+    int ret = 0;
+    if (block_size < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->node_mapping_block_size = block_size;
-    return 0;
+out:
+    return ret;
 }
 
 int msp_set_segment_block_size(msp_t *self, size_t block_size)
 {
+    int ret = 0;
+    if (block_size < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->segment_block_size = block_size;
-    return 0;
+out:
+    return ret;
 }
 
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size)
 {
+    int ret = 0;
+    if (block_size < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->avl_node_block_size = block_size;
-    return 0;
+out:
+    return ret;
 }
 
 int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size)
 {
+    int ret = 0;
+    if (block_size < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->coalescence_record_block_size = block_size;
-    return 0;
+out:
+    return ret;
 }
 
 int
@@ -1217,7 +1261,7 @@ out:
 size_t
 msp_get_num_population_models(msp_t *self)
 {
-    return 0;
+    return self->num_population_models - 1;
 }
 
 size_t
@@ -1275,5 +1319,14 @@ msp_get_coalescence_records(msp_t *self, coalescence_record_t *coalescence_recor
 {
     memcpy(coalescence_records, self->coalescence_records,
             self->num_coalescence_records * sizeof(coalescence_record_t));
+    return 0;
+}
+
+int
+msp_get_population_models(msp_t *self, population_model_t *population_models)
+{
+    /* We do not send back the base population model */
+    memcpy(population_models, self->population_models + 1,
+            (self->num_population_models - 1) * sizeof(population_model_t));
     return 0;
 }

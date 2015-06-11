@@ -342,11 +342,7 @@ class TestInterface(LowLevelTestCase):
         Verifies that the population models returned by the simulator
         match the specified list.
         """
-        # TODO fix this API!
         pop_models = sim.get_population_models()
-        # Exclude first and last elements.
-        self.assertGreater(len(pop_models), 1)
-        pop_models = pop_models[1:-1]
         self.assertEqual(pop_models, models)
 
     def verify_tree_diffs(self, tree_sequence):

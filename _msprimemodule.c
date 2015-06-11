@@ -73,9 +73,9 @@ handle_library_error(int err)
 }
 
 static void
-handle_input_error(const char *err)
+handle_input_error(int err)
 {
-    PyErr_SetString(MsprimeInputError, err);
+    PyErr_SetString(MsprimeInputError, msp_strerror(err));
 }
 
 static PyObject *
@@ -224,53 +224,6 @@ Simulator_dealloc(Simulator* self)
 }
 
 static int
-Simulator_check_input(Simulator *self)
-{
-    int ret = -1;
-    msp_t *sim = self->sim;
-
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    if (sim->num_loci == 0) {
-        handle_input_error("must have num_loci > 0");
-        goto out;
-    }
-    if (sim->scaled_recombination_rate < 0) {
-        handle_input_error("must have 0 <= recombination_rate");
-        goto out;
-    }
-    if (sim->sample_size < 2) {
-        handle_input_error("sample_size must be > 1");
-        goto out;
-    }
-    if (sim->max_memory == 0) {
-        handle_input_error("max_memory must be > 0");
-        goto out;
-    }
-    if (sim->avl_node_block_size == 0) {
-        handle_input_error("avl_node_block_size must be > 0");
-        goto out;
-    }
-    if (sim->segment_block_size == 0) {
-        handle_input_error("segment_block_size must be > 0");
-        goto out;
-    }
-    if (sim->node_mapping_block_size == 0) {
-        handle_input_error("node_mapping_block_size must be > 0");
-        goto out;
-    }
-    if (sim->coalescence_record_block_size == 0) {
-        handle_input_error("coalescence_record_block_size must be > 0");
-        goto out;
-    }
-    /* TODO more checks! */
-    ret = 0;
-out:
-    return ret;
-}
-
-static int
 Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
@@ -305,46 +258,59 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    memset(self->sim, 0, sizeof(msp_t));
-    self->sim->sample_size = (uint32_t) sample_size;
-    self->sim->num_loci = (uint32_t) num_loci;
-    self->sim->random_seed = random_seed;
-    self->sim->scaled_recombination_rate = scaled_recombination_rate;
-    self->sim->max_memory = (size_t) max_memory;
-    self->sim->avl_node_block_size = (size_t) avl_node_block_size;
-    self->sim->segment_block_size = (size_t) segment_block_size;
-    self->sim->node_mapping_block_size = (size_t) node_mapping_block_size;
-    self->sim->coalescence_record_block_size =
-        (size_t) coalescence_record_block_size;
-    if (Simulator_check_input(self) != 0) {
-        goto out;
-    }
-    /* TODO this is very nasty and must be moved into the msprime
-     * code when the refactoring is done.
-     */
-    sim_ret = msp_add_constant_population_model(self->sim, -1.0, 1.0);
+    sim_ret = msp_alloc(self->sim, sample_size);
     if (sim_ret != 0) {
-        handle_library_error(sim_ret);
+        handle_input_error(sim_ret);
         goto out;
     }
-    /* We don't actually check the population models on the way in because
-     * the memory management is too tricky. We instead check during
-     * initialise. This  population models API really must be fixed!
-     */
+    sim_ret = msp_set_num_loci(self->sim, (uint32_t) num_loci);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_random_seed(self->sim, (unsigned long) random_seed);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_scaled_recombination_rate(self->sim, scaled_recombination_rate);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_max_memory(self->sim, (size_t) max_memory);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_avl_node_block_size(self->sim,
+            (size_t) avl_node_block_size);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_segment_block_size(self->sim,
+            (size_t) segment_block_size);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_node_mapping_block_size(self->sim,
+            (size_t) node_mapping_block_size);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_coalescence_record_block_size(self->sim,
+            (size_t) coalescence_record_block_size);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
     if (population_models != NULL) {
         if (Simulator_parse_population_models(self, population_models) != 0) {
             goto out;
         }
-    }
-    sim_ret = msp_alloc(self->sim);
-    if (sim_ret != 0) {
-        handle_library_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_initialise(self->sim);
-    if (sim_ret != 0) {
-        handle_library_error(sim_ret);
-        goto out;
     }
     ret = 0;
 out:
@@ -765,26 +731,33 @@ Simulator_get_population_models(Simulator *self)
     PyObject *ret = NULL;
     PyObject *l = NULL;
     PyObject *d = NULL;
+    population_model_t *models = NULL;
     population_model_t *m;
     const char *param_name;
     size_t j = 0;
+    size_t num_models;
+    int sim_ret = 0;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    /* TODO this is poor API, need to abstract this somehow. */
-    m = self->sim->population_models;
-    while (m != NULL) {
-        j++;
-        m = m ->next;
+    num_models = msp_get_num_population_models(self->sim);
+    models = PyMem_Malloc(num_models * sizeof(population_model_t));
+    if (models == NULL) {
+        ret = PyErr_NoMemory();
+        goto out;
     }
-    l = PyList_New(j);
+    sim_ret = msp_get_population_models(self->sim, models);
+    if (sim_ret != 0) {
+        handle_library_error(sim_ret);
+        goto out;
+    }
+    l = PyList_New(num_models);
     if (l == NULL) {
         goto out;
     }
-    m = self->sim->population_models;
-    j = 0;
-    while (m != NULL) {
+    for (j = 0; j < num_models; j++) {
+        m = &models[j];
         if (m->type == POP_MODEL_CONSTANT) {
             param_name = "size";
         } else if (m->type == POP_MODEL_EXPONENTIAL) {
@@ -799,13 +772,14 @@ Simulator_get_population_models(Simulator *self)
             goto out;
         }
         PyList_SET_ITEM(l, j, d);
-        j++;
-        m = m ->next;
     }
     ret = l;
     l = NULL;
 out:
     Py_XDECREF(l);
+    if (models != NULL) {
+        PyMem_Free(models);
+    }
     return ret;
 }
 
