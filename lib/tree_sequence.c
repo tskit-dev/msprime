@@ -319,6 +319,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
 
     memset(self, 0, sizeof(tree_sequence_t));
     self->num_records = msp_get_num_coalescence_records(sim);
+    assert(self->num_records > 0);
     self->sample_size = sim->sample_size;
     self->num_loci = sim->num_loci;
     self->num_mutations = 0;

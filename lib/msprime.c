@@ -167,21 +167,25 @@ exponential_population_model_get_waiting_time(population_model_t *self,
     return ret;
 }
 
+/* Extends the list of population models by one and increments the
+ * num_population_models counter.
+ */
 static int WARN_UNUSED
-msp_add_population_model(msp_t *self, population_model_t *model)
+msp_add_population_model(msp_t *self)
 {
     int ret = -1;
-    population_model_t *m = self->population_models;
+    population_model_t *m;
+
+    self->num_population_models++;
+    m = realloc(self->population_models,
+            self->num_population_models * sizeof(population_model_t));
     if (m == NULL) {
-        self->population_models = model;
-    } else {
-        while (m->next != NULL) {
-            m = m->next;
-        }
-        m->next = model;
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
     }
-    model->next = NULL;
+    self->population_models = m;
     ret = 0;
+out:
     return ret;
 }
 
@@ -189,25 +193,23 @@ int
 msp_add_constant_population_model(msp_t *self, double start_time, double size)
 {
     int ret = -1;
-    population_model_t *model = malloc(sizeof(population_model_t));
+    population_model_t *model;
 
+    ret = msp_add_population_model(self);
+    if (ret < 0) {
+        goto out;
+    }
+    model = &self->population_models[self->num_population_models - 1];
     /* TODO check for model specific restrictions */
     /* NOTE: we can't actually do any checking here right now because of
      * memory mangement issues. See the note at the end of initialise.
      */
-    if (model == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     model->start_time = start_time;
     model->param = size;
     model->type = POP_MODEL_CONSTANT;
     model->get_size = constant_population_model_get_size;
     model->get_waiting_time = constant_population_model_get_waiting_time;
-    ret = msp_add_population_model(self, model);
-    if (ret != 0) {
-        free(model);
-    }
+    ret = 0;
 out:
     return ret;
 }
@@ -216,25 +218,23 @@ int
 msp_add_exponential_population_model(msp_t *self, double start_time, double alpha)
 {
     int ret = -1;
-    population_model_t *model = malloc(sizeof(population_model_t));
+    population_model_t *model;
 
+    ret = msp_add_population_model(self);
+    if (ret < 0) {
+        goto out;
+    }
+    model = &self->population_models[self->num_population_models - 1];
     /* NOTE: we can't actually do any checking here right now because of
      * memory mangement issues. See the note at the end of initialise.
      */
     /* TODO check for model specific restrictions. */
-    if (model == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     model->start_time = start_time;
     model->param = alpha;
     model->type = POP_MODEL_EXPONENTIAL;
     model->get_size = exponential_population_model_get_size;
     model->get_waiting_time = exponential_population_model_get_waiting_time;
-    ret = msp_add_population_model(self, model);
-    if (ret != 0) {
-        free(model);
-    }
+    ret = 0;
 out:
     return ret;
 }
@@ -317,25 +317,98 @@ msp_get_used_memory(msp_t *self)
 }
 
 int
-msp_alloc(msp_t *self)
+msp_set_random_seed(msp_t *self, unsigned long random_seed)
+{
+    self->random_seed = random_seed;
+    gsl_rng_set(self->rng, self->random_seed);
+    return 0;
+}
+
+int
+msp_set_num_loci(msp_t *self, uint32_t num_loci)
+{
+    self->num_loci = num_loci;
+    return 0;
+}
+
+int
+msp_set_scaled_recombination_rate(msp_t *self,
+        double scaled_recombination_rate)
+{
+    self->scaled_recombination_rate = scaled_recombination_rate;
+    return 0;
+}
+
+int
+msp_set_max_memory(msp_t *self, size_t max_memory)
+{
+    self->max_memory = max_memory;
+    return 0;
+}
+
+int msp_set_node_mapping_block_size(msp_t *self, size_t block_size)
+{
+    self->node_mapping_block_size = block_size;
+    return 0;
+}
+
+int msp_set_segment_block_size(msp_t *self, size_t block_size)
+{
+    self->segment_block_size = block_size;
+    return 0;
+}
+
+int msp_set_avl_node_block_size(msp_t *self, size_t block_size)
+{
+    self->avl_node_block_size = block_size;
+    return 0;
+}
+
+int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size)
+{
+    self->coalescence_record_block_size = block_size;
+    return 0;
+}
+
+int
+msp_alloc(msp_t *self, uint32_t sample_size)
 {
     int ret = -1;
-    /* TODO add arguments for the essential parameters and then zero the
-     * memory to make sure we don't do something silly when we try to
-     * free embedded objects
-     */
 
-    /* turn off GSL error handler so we don't abort on memory error */
-    gsl_set_error_handler_off();
+    memset(self, 0, sizeof(msp_t));
+    self->sample_size = sample_size;
     self->rng = gsl_rng_alloc(gsl_rng_default);
     if (self->rng == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    gsl_rng_set(self->rng, self->random_seed);
-    self->used_memory = msp_get_avl_node_mem_increment(self) +
-        msp_get_segment_mem_increment(self) +
-        msp_get_node_mapping_mem_increment(self);
+    /* Set the parameter defaults */
+    msp_set_random_seed(self, 1);
+    self->num_loci = 1;
+    self->scaled_recombination_rate = 0.0;
+    /* Set the memory defaults */
+    self->avl_node_block_size = 1024;
+    self->node_mapping_block_size = 1024;
+    self->segment_block_size = 1024;
+    self->max_memory = 1024 * 1024 * 1024; /* 1MiB */
+    self->coalescence_record_block_size = 1024;
+    /* set up the AVL trees */
+    avl_init_tree(&self->ancestral_population, cmp_individual, NULL);
+    avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
+    /* Add the base population model */
+    ret = msp_add_constant_population_model(self, -1.0, 1.0);
+out:
+    return ret;
+}
+
+static int
+msp_alloc_memory_blocks(msp_t *self)
+{
+    int ret = 0;
+
+    self->used_memory = msp_get_avl_node_mem_increment(self)
+        + msp_get_segment_mem_increment(self)
+        + msp_get_node_mapping_mem_increment(self);
     if (self->used_memory > self->max_memory) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -370,9 +443,6 @@ msp_alloc(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    /* set up the AVL trees */
-    avl_init_tree(&self->ancestral_population, cmp_individual, NULL);
-    avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
     /* Allocate the coalescence records */
     self->coalescence_records = malloc(
             self->coalescence_record_block_size * sizeof(coalescence_record_t));
@@ -387,18 +457,20 @@ out:
     return ret;
 }
 
+static int
+msp_is_initialised(msp_t *self)
+{
+    return self->used_memory != 0;
+}
+
 int
 msp_free(msp_t *self)
 {
     int ret = -1;
     size_t j;
-    population_model_t *u, *v;
 
-    u = self->population_models;
-    while (u != NULL) {
-        v = u->next;
-        free(u);
-        u = v;
+    if (self->population_models != NULL) {
+        free(self->population_models);
     }
     if (self->rng != NULL) {
         gsl_rng_free(self->rng);
@@ -991,21 +1063,40 @@ out:
 }
 
 
-/*
- * Sets up the initial population and trees.
+
+/* Given the value of the current_population_model, return the next one,
+ * or NULL if none exists.
  */
-int WARN_UNUSED
+static population_model_t *
+msp_get_next_population_model(msp_t *self)
+{
+    population_model_t *ret = NULL;
+
+    assert(self->current_population_model < self->num_population_models);
+    if (self->current_population_model < self->num_population_models - 1) {
+        ret = &self->population_models[self->current_population_model + 1];
+    }
+    return ret;
+}
+
+/*
+ * Sets up the memory heaps, initial population and trees.
+ */
+static int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
-    unsigned int j;
-    int ret = 0;
-    population_model_t *m;
+    int ret = -1;
     segment_t *u;
+    unsigned int j;
+    /* These should really be proper checks with a return value */
+    assert(self->sample_size > 1);
+    assert(self->num_loci >= 1);
 
-    /* zero the counters */
-    self->num_re_events = 0;
-    self->num_ca_events = 0;
-    self->num_trapped_re_events = 0;
+    ret = msp_alloc_memory_blocks(self);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Set up the initial segments and algorithm state */
     for (j = 1; j <= self->sample_size; j++) {
         u = msp_alloc_segment(self, 0, self->num_loci, j, NULL, NULL);
         if (u == NULL) {
@@ -1027,41 +1118,35 @@ msp_initialise(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    /* insert the sentinel population model */
-    ret = msp_add_constant_population_model(self, DBL_MAX, 0.0);
-    if (ret != 0) {
-        goto out;
-    }
-    self->current_population_model = self->population_models;
+    self->current_population_model = 0;
     self->time = 0.0;
     self->num_coalescence_records = 0;
-    /* Check the population models to make sure they are ordered. This should
-     * be done when they are being inserted, but it was too tricky. This
-     * API is really awful and needs fixing!
-     */
-    m = self->population_models;
-    while (m->next != NULL) {
-        if (m->start_time > m->next->start_time) {
-            ret = MSP_ERR_UNSORTED_POP_MODELS;
-            goto out;
-        }
-        m = m->next;
-    }
 out:
     return ret;
 }
+
 
 int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda_c, lambda_r, t_c, t_r, t_wait, pop_size;
+    double lambda_c, lambda_r, t_c, t_r, t_wait;
     int64_t num_links;
-    uint32_t n = avl_count(&self->ancestral_population);
+    uint32_t n;
     int (*event_method)(msp_t *);
-    population_model_t *pop_model = self->current_population_model;
+    population_model_t *model, *next_model;
     unsigned long events = 0;
 
+    if (!msp_is_initialised(self)) {
+        ret = msp_initialise(self);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    model = &self->population_models[self->current_population_model];
+    assert(model != NULL);
+    next_model = msp_get_next_population_model(self);
+    n = avl_count(&self->ancestral_population);
     while (n > 1 && self->time <= max_time && events < max_events) {
         events++;
         num_links = fenwick_get_total(&self->links);
@@ -1087,8 +1172,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         }
         /* Need to perform n * (n - 1) as a double due to overflow */
         lambda_c = n * ((double) n - 1.0);
-        t_c = pop_model->get_waiting_time(pop_model, lambda_c, self->time,
-                self->rng);
+        t_c = model->get_waiting_time(model, lambda_c, self->time, self->rng);
         if (t_r < t_c) {
             t_wait = t_r;
             event_method = msp_recombination_event;
@@ -1098,17 +1182,18 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         }
         /* TODO check for infinite waiting time and return error. */
         assert(t_wait != DBL_MAX);
-        if (self->time + t_wait >= pop_model->next->start_time) {
+        if (next_model != NULL
+                && self->time + t_wait >= next_model->start_time) {
             /* We skip ahead to the start time for the next demographic
-             * model. The intial size of the population for the next
+             * model. The initial size of the population for the next
              * model is the size at this time for the current model.
              */
-            self->time = pop_model->next->start_time;
-            pop_size = pop_model->get_size(pop_model, self->time);
-            pop_model = pop_model->next;
-            pop_model->initial_size = pop_size;
-            self->current_population_model = pop_model;
-            assert(pop_model->next != NULL);
+            self->time = next_model->start_time;
+            next_model->initial_size = model->get_size(model, self->time);
+            self->current_population_model++;
+            model = next_model;
+            assert(model != NULL);
+            next_model = msp_get_next_population_model(self);
         } else {
             self->time += t_wait;
             ret = event_method(self);
@@ -1126,6 +1211,13 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
 out:
     return ret;
+}
+
+/* Returns the number of population models added by the user. */
+size_t
+msp_get_num_population_models(msp_t *self)
+{
+    return 0;
 }
 
 size_t
