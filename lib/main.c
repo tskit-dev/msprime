@@ -28,6 +28,11 @@
 #include "msprime.h"
 #include "err.h"
 
+typedef struct {
+    double mutation_rate;
+    unsigned long random_seed;
+} mutation_params_t;
+
 static void
 fatal_error(const char *msg, ...)
 {
@@ -39,31 +44,6 @@ fatal_error(const char *msg, ...)
     fprintf(stderr, "\n");
     exit(EXIT_FAILURE);
 }
-
-/*
- * Parses the specified string into a long and assigns the value into
- * the specified pointer. Returns EINVAL if the string cannot be
- * converted to double or if min <= x <= max does not hold; returns 0 if
- * the value is converted successfully.
- */
-static int
-parse_long(const char *str, long *value, const long min,
-        const long max)
-{
-    int ret = 0;
-    long x;
-    char *tail;
-    x = strtol(str, &tail, 10);
-    if (tail[0] != '\0') {
-        ret = EINVAL;
-    } else if (min > x || max < x) {
-        ret = EINVAL;
-    } else {
-        *value = x;
-    }
-    return ret;
-}
-
 
 static int
 read_population_models(msp_t *msp, config_t *config)
@@ -125,11 +105,13 @@ out:
 }
 
 static int
-read_config(msp_t *msp, const char *filename)
+get_configuration(msp_t *msp, mutation_params_t *mutation_params,
+        const char *filename)
 {
     int ret = 0;
     int err;
-    int tmp;
+    int int_tmp;
+    double double_tmp;
     config_t *config = malloc(sizeof(config_t));
 
     if (config == NULL) {
@@ -142,41 +124,57 @@ read_config(msp_t *msp, const char *filename)
                 config_error_text(config), config_error_line(config),
                 filename);
     }
-    if (config_lookup_int(config, "sample_size", &tmp) == CONFIG_FALSE) {
+    if (config_lookup_int(config, "sample_size", &int_tmp) == CONFIG_FALSE) {
         fatal_error("sample_size is a required parameter");
     }
-    msp->sample_size = (uint32_t) tmp;
-    if (config_lookup_int(config, "num_loci", &tmp) == CONFIG_FALSE) {
+    ret = msp_alloc(msp, (uint32_t) int_tmp);
+    if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
-    msp->num_loci = (uint32_t) tmp;
-    if (config_lookup_int(config, "avl_node_block_size", &tmp) == CONFIG_FALSE) {
+    msp_set_num_loci(msp, (uint32_t) int_tmp);
+    if (config_lookup_int(config, "random_seed", &int_tmp) == CONFIG_FALSE) {
+        fatal_error("random_seed is a required parameter");
+    }
+    msp_set_random_seed(msp, (unsigned long) int_tmp);
+    /* Set the random seed for mutations to the same value */
+    mutation_params->random_seed = (unsigned long) int_tmp;
+    if (config_lookup_float(config, "recombination_rate", &double_tmp)
+            == CONFIG_FALSE) {
+        fatal_error("recombination_rate is a required parameter");
+    }
+    msp_set_scaled_recombination_rate(msp, double_tmp);
+
+    /* Set the mutation rate */
+    if (config_lookup_float(config,
+            "mutation_rate", &mutation_params->mutation_rate)
+            == CONFIG_FALSE) {
+        fatal_error("mutation_rate is a required parameter");
+    }
+    if (config_lookup_int(config, "avl_node_block_size", &int_tmp)
+            == CONFIG_FALSE) {
         fatal_error("avl_node_block_size is a required parameter");
     }
-    msp->avl_node_block_size = (size_t) tmp;
-    if (config_lookup_int(config, "segment_block_size", &tmp) == CONFIG_FALSE) {
+    msp_set_avl_node_block_size(msp, (size_t) int_tmp);
+    if (config_lookup_int(config, "segment_block_size", &int_tmp)
+            == CONFIG_FALSE) {
         fatal_error("segment_block_size is a required parameter");
     }
-    msp->segment_block_size = (size_t) tmp;
-    if (config_lookup_int(config, "node_mapping_block_size", &tmp)
+    msp_set_segment_block_size(msp, (size_t) int_tmp);
+    if (config_lookup_int(config, "node_mapping_block_size", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("node_mapping_block_size is a required parameter");
     }
-    msp->node_mapping_block_size = (size_t) tmp;
-    if (config_lookup_int(config, "coalescence_record_block_size", &tmp)
+    msp_set_node_mapping_block_size(msp, (size_t) int_tmp);
+    if (config_lookup_int(config, "coalescence_record_block_size", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("coalescence_record_block_size is a required parameter");
     }
-    msp->coalescence_record_block_size = (size_t) tmp;
-    if (config_lookup_int(config, "max_memory", &tmp)
+    msp_set_coalescence_record_block_size(msp, (size_t) int_tmp);
+    if (config_lookup_int(config, "max_memory", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("max_memory is a required parameter");
     }
-    msp->max_memory = (size_t) tmp * 1024 * 1024;
-    if (config_lookup_float(config, "recombination_rate",
-            &msp->scaled_recombination_rate) == CONFIG_FALSE) {
-        fatal_error("recombination_rate is a required parameter");
-    }
+    msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
     ret = read_population_models(msp, config);
     config_destroy(config);
     free(config);
@@ -330,59 +328,41 @@ out:
 }
 
 static void
-run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
+run_simulate(char *conf_file)
 {
     int ret = -1;
     int result;
-    msp_t *msp = calloc(1, sizeof(msp_t));
+    mutation_params_t mutation_params;
+    msp_t *msp = malloc(sizeof(msp_t));
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
 
     if (msp == NULL || tree_seq == NULL) {
         goto out;
     }
-    msp->random_seed = (long unsigned int) seed;
-    ret = msp_add_constant_population_model(msp, -1.0, 1.0);
+    ret = get_configuration(msp, &mutation_params, conf_file);
     if (ret != 0) {
         goto out;
     }
-    ret = read_config(msp, conf_file);
-    if (ret != 0) {
-        /* we haven't alloc'd yet, so we must skip the free. This API really
-         * is nasty and needs to be fixed!
-         */
-        free(msp);
-        msp = NULL;
+    result = msp_run(msp, DBL_MAX, ULONG_MAX);
+    if (result < 0) {
+        ret = result;
         goto out;
     }
-    ret = msp_alloc(msp);
+    ret = msp_print_state(msp);
     if (ret != 0) {
         goto out;
     }
-    ret = msp_initialise(msp);
-    if (ret != 0) {
-        goto out;
-    }
-    do {
-        result = msp_run(msp, DBL_MAX, output_events);
-        if (result < 0) {
-            ret = result;
-            goto out;
-        }
-        printf("STATE\n");
-        ret = msp_print_state(msp);
-        if (ret != 0) {
-            goto out;
-        }
-    } while (result > 0);
     /* Create the tree_sequence from the state of the simulator. */
     ret = tree_sequence_create(tree_seq, msp);
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_generate_mutations(tree_seq, 0.1, 10);
+    ret = tree_sequence_generate_mutations(tree_seq,
+            mutation_params.mutation_rate, mutation_params.random_seed);
     if (ret != 0) {
         goto out;
     }
+    if (0) {
         int j;
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, "test.hdf5", 0);
@@ -397,12 +377,11 @@ run_simulate(char *conf_file, unsigned long seed, unsigned long output_events)
             }
             tree_sequence_print_state(tree_seq);
         }
-    if (0) {
         print_newick_trees(tree_seq);
         print_haplotypes(tree_seq);
         print_tree_sequence(tree_seq);
-        tree_sequence_print_state(tree_seq);
     }
+    tree_sequence_print_state(tree_seq);
 out:
     if (msp != NULL) {
         msp_free(msp);
@@ -420,19 +399,9 @@ out:
 int
 main(int argc, char** argv)
 {
-    long seed;
-    long output_events = LONG_MAX;
-    if (argc < 3) {
-        fatal_error("usage: %s CONFIG_FILE SEED <OUTPUT_EVENTS>", argv[0]);
+    if (argc != 2) {
+        fatal_error("usage: %s CONFIG_FILE", argv[0]);
     }
-    if (parse_long(argv[2], &seed, 0, LONG_MAX) != 0) {
-        fatal_error("cannot parse seed '%s'", argv[2]);
-    }
-    if (argc >= 4) {
-        if (parse_long(argv[3], &output_events, 0, LONG_MAX) != 0) {
-            fatal_error("cannot parse seed '%s'", argv[4]);
-        }
-    }
-    run_simulate(argv[1], (unsigned long) seed, (unsigned long) output_events);
+    run_simulate(argv[1]);
     return EXIT_SUCCESS;
 }

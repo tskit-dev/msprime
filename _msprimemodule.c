@@ -1959,10 +1959,9 @@ init_msprime(void)
             MSP_HAPGEN_MODE_SINGLE);
     PyModule_AddIntConstant(module, "MSP_HAPGEN_MODE_ALL",
             MSP_HAPGEN_MODE_ALL);
-#ifdef WORDS_BIGENDIAN
-    PyErr_Format(PyExc_RuntimeError, "Big Endian systems not currently supported.");
-    INITERROR;
-#endif
+
+    /* turn off GSL error handler so we don't abort on memory error */
+    gsl_set_error_handler_off();
 
 #if PY_MAJOR_VERSION >= 3
     return module;

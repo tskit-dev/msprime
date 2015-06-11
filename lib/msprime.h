@@ -86,7 +86,6 @@ typedef struct population_model_t_t {
     double (*get_size)(struct population_model_t_t *, double);
     double (*get_waiting_time)(struct population_model_t_t *, double, double,
             gsl_rng*);
-    struct population_model_t_t *next;
 } population_model_t;
 
 typedef struct {
@@ -113,12 +112,13 @@ typedef struct {
     size_t max_memory;
     /* population models */
     population_model_t *population_models;
-    population_model_t *current_population_model;
+    size_t current_population_model;
+    size_t num_population_models;
     /* Counters for statistics */
     uint64_t num_re_events;
     uint64_t num_ca_events;
     uint64_t num_trapped_re_events;
-    /* state */
+    /* algorithm state */
     size_t used_memory;
     double time;
     uint32_t next_node;
@@ -255,18 +255,29 @@ typedef struct {
     uint32_t *traversal_stack;
 } hapgen_t;
 
-int msp_alloc(msp_t *self);
+int msp_alloc(msp_t *self, uint32_t sample_size);
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
-int msp_initialise(msp_t *self);
+int msp_set_random_seed(msp_t *self, unsigned long random_seed);
+int msp_set_num_loci(msp_t *self, uint32_t num_loci);
+int msp_set_scaled_recombination_rate(msp_t *self, 
+        double scaled_recombination_rate);
+int msp_set_max_memory(msp_t *self, size_t max_memory);
+int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
+int msp_set_segment_block_size(msp_t *self, size_t block_size);
+int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
+int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size);
+
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);
 
+int msp_get_population_models(msp_t *self, population_model_t *models);
 int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, uint32_t *breakpoints);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
 
+size_t msp_get_num_population_models(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
 size_t msp_get_num_coalescence_records(msp_t *self);
