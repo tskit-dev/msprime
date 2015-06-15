@@ -683,50 +683,52 @@ tree_sequence_read_hdf5_provenance(tree_sequence_t *self, hid_t file_id)
     }
 
     for (j = 0; j < num_fields; j++) {
-        attr_id = H5Aopen_by_name(file_id, fields[j].prefix, fields[j].name,
-                H5P_DEFAULT, H5P_DEFAULT);
-        if (attr_id < 0) {
-            goto out;
-        }
-        atype = H5Aget_type(attr_id);
-        if (atype < 0) {
-            goto out;
-        }
-        type_class = H5Tget_class(atype);
-        if (type_class < 0) {
-            goto out;
-        }
-        if (type_class != H5T_STRING) {
-            ret = MSP_ERR_FILE_FORMAT;
-            goto out;
-        }
-        atype_mem = H5Tget_native_type(atype, H5T_DIR_ASCEND);
-        if (atype_mem < 0) {
-            goto out;
-        }
-        size = H5Tget_size(atype_mem);
-        str = malloc(size + 1);
-        if (str == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        status = H5Aread(attr_id, atype_mem, str);
-        if (status < 0) {
-            goto out;
-        }
-        str[size] = '\0';
-        *fields[j].dest = str;
-        status = H5Tclose(atype);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Tclose(atype_mem);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Aclose(attr_id);
-        if (status < 0) {
-            goto out;
+        if (fields[j].included) {
+            attr_id = H5Aopen_by_name(file_id, fields[j].prefix, fields[j].name,
+                    H5P_DEFAULT, H5P_DEFAULT);
+            if (attr_id < 0) {
+                goto out;
+            }
+            atype = H5Aget_type(attr_id);
+            if (atype < 0) {
+                goto out;
+            }
+            type_class = H5Tget_class(atype);
+            if (type_class < 0) {
+                goto out;
+            }
+            if (type_class != H5T_STRING) {
+                ret = MSP_ERR_FILE_FORMAT;
+                goto out;
+            }
+            atype_mem = H5Tget_native_type(atype, H5T_DIR_ASCEND);
+            if (atype_mem < 0) {
+                goto out;
+            }
+            size = H5Tget_size(atype_mem);
+            str = malloc(size + 1);
+            if (str == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            status = H5Aread(attr_id, atype_mem, str);
+            if (status < 0) {
+                goto out;
+            }
+            str[size] = '\0';
+            *fields[j].dest = str;
+            status = H5Tclose(atype);
+            if (status < 0) {
+                goto out;
+            }
+            status = H5Tclose(atype_mem);
+            if (status < 0) {
+                goto out;
+            }
+            status = H5Aclose(attr_id);
+            if (status < 0) {
+                goto out;
+            }
         }
     }
     ret = 0;

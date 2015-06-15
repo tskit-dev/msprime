@@ -203,7 +203,7 @@ Simulator_parse_population_models(Simulator *self, PyObject *py_pop_models)
             goto out;
         }
         if (err != 0) {
-            handle_library_error(err);
+            handle_input_error(err);
             goto out;
         }
     }
