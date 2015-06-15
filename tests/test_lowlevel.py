@@ -24,6 +24,7 @@ from __future__ import division
 from __future__ import unicode_literals
 
 import heapq
+import json
 import random
 import os.path
 import tempfile
@@ -74,9 +75,10 @@ class LowLevelTestCase(tests.MsprimeTestCase):
     """
     def get_tree_sequence(
             self, sample_size=10, num_loci=100, mutation_rate=10):
+        models = get_random_population_models(3)
         sim = _msprime.Simulator(
             sample_size, random_seed=1, num_loci=num_loci,
-            scaled_recombination_rate=1)
+            scaled_recombination_rate=1, population_models=models)
         sim.run()
         ts = _msprime.TreeSequence()
         ts.create(sim)
@@ -539,6 +541,46 @@ class TestTreeSequence(LowLevelTestCase):
         ts = self.get_tree_sequence()
         self.assertRaises(ValueError, ts.load, "/tmp/file")
 
+    def verify_mutation_parameters_json(self, json_str):
+        parameters = json.loads(json_str)
+        self.assertIn("scaled_mutation_rate", parameters)
+        self.assertIn("random_seed", parameters)
+        self.assertIsInstance(parameters["scaled_mutation_rate"], float)
+        self.assertIsInstance(parameters["random_seed"], int)
+
+    def verify_tree_parameters_json(self, json_str):
+        parameters = json.loads(json_str)
+        self.assertIn("scaled_recombination_rate", parameters)
+        self.assertIn("random_seed", parameters)
+        self.assertIn("sample_size", parameters)
+        self.assertIn("num_loci", parameters)
+        self.assertIn("population_models", parameters)
+        self.assertIsInstance(parameters["scaled_recombination_rate"], float)
+        self.assertIsInstance(parameters["random_seed"], int)
+        self.assertIsInstance(parameters["sample_size"], int)
+        self.assertIsInstance(parameters["num_loci"], int)
+        self.assertIsInstance(parameters["population_models"], list)
+        for m in parameters["population_models"]:
+            self.assertIsInstance(m, dict)
+            self.assertIn("start_time", m)
+            self.assertIn("type", m)
+            self.assertIsInstance(m["start_time"], float)
+            t = m["type"]
+            self.assertIsInstance(t, int)
+            self.assertIn(t, [
+                _msprime.POP_MODEL_EXPONENTIAL, _msprime.POP_MODEL_CONSTANT])
+            if t == _msprime.POP_MODEL_EXPONENTIAL:
+                self.assertIn("alpha", m)
+                self.assertIsInstance(m["alpha"], float)
+            else:
+                self.assertIn("size", m)
+                self.assertIsInstance(m["size"], float)
+
+    def verify_environment_json(self, json_str):
+        environment = json.loads(json_str)
+        self.assertIn("hdf5_version", environment)
+        self.assertIn("gsl_version", environment)
+
     def verify_tree_dump_format(self, ts, outfile):
         uint32 = "uint32"
         float64 = "float64"
@@ -566,6 +608,9 @@ class TestTreeSequence(LowLevelTestCase):
 
         if ts.get_num_mutations() > 0:
             g = root["mutations"]
+            # Check the parameters and environment attributes
+            self.verify_mutation_parameters_json(g.attrs["parameters"])
+            self.verify_environment_json(g.attrs["environment"])
             fields = [("node", uint32), ("position", float64)]
             self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
             for name, dtype in fields:
@@ -573,6 +618,8 @@ class TestTreeSequence(LowLevelTestCase):
                 self.assertEqual(g[name].shape[0], ts.get_num_mutations())
                 self.assertEqual(g[name].dtype, dtype)
         g = root["trees"]
+        self.verify_tree_parameters_json(g.attrs["parameters"])
+        self.verify_environment_json(g.attrs["environment"])
         fields = [
             ("left", uint32, 1), ("right", uint32, 1),
             ("node", uint32, 1), ("children", uint32, 2),
