@@ -70,8 +70,8 @@ encode_mutation_parameters(double mutation_rate, unsigned long random_seed,
 {
     int ret = -1;
     const char *pattern = "{"
-        "\"random_seed\"=\"%lu\","
-        "\"scaled_mutation_rate\"=\"%.15f\"}";
+        "\"random_seed\":%lu,"
+        "\"scaled_mutation_rate\":%.15f}";
     size_t size = (size_t) snprintf(NULL, 0, pattern,
             random_seed,
             mutation_rate);
@@ -124,7 +124,7 @@ encode_population_models(msp_t *sim, char **result)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    buffer[0] = '{';
+    buffer[0] = '[';
     offset = 1;
     for (j = 0; j < num_models; j++) {
         m = &models[j];
@@ -150,7 +150,7 @@ encode_population_models(msp_t *sim, char **result)
         }
     }
     assert(offset < buffer_size - 2);
-    buffer[offset] = '}';
+    buffer[offset] = ']';
     buffer[offset + 1] = '\0';
     *result = buffer;
 out:
@@ -165,11 +165,11 @@ encode_simulation_parameters(msp_t *sim, char **result)
 {
     int ret = -1;
     const char *pattern = "{"
-        "\"random_seed\"=%lu,"
-        "\"sample_size\"=%d,"
-        "\"num_loci\"=%d,"
-        "\"scaled_recombination_rate\"=%.15f,"
-        "\"population_models\"=%s"
+        "\"random_seed\":%lu,"
+        "\"sample_size\":%d,"
+        "\"num_loci\":%d,"
+        "\"scaled_recombination_rate\":%.15f,"
+        "\"population_models\":%s"
         "}";
     size_t size;
     char *str = NULL;
@@ -211,8 +211,8 @@ encode_environment(char **result)
     int ret = -1;
     /* TODO add more environment: endianess, and word size at a minimum */
     const char *pattern = "{"
-        "\"hdf5_version\"=\"%d.%d.%d\", "
-        "\"gsl_version\"=\"%d.%d\""
+        "\"hdf5_version\":\"%d.%d.%d\", "
+        "\"gsl_version\":\"%d.%d\""
         "}";
     herr_t status;
     unsigned int major, minor, release;
