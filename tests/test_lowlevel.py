@@ -32,6 +32,22 @@ import tests
 import _msprime
 
 
+class TestModule(tests.MsprimeTestCase):
+    """
+    Tests for module level stuff.
+    """
+    def test_library_versions(self):
+        major, minor = _msprime.get_gsl_version()
+        self.assertIsInstance(major, int)
+        self.assertGreater(major, 0)
+        self.assertIsInstance(minor, int)
+        major, minor, revision = _msprime.get_hdf5_version()
+        self.assertIsInstance(major, int)
+        self.assertGreater(major, 0)
+        self.assertIsInstance(minor, int)
+        self.assertIsInstance(revision, int)
+
+
 def get_random_population_models(n):
     """
     Returns n random population models.
@@ -84,21 +100,11 @@ class LowLevelTestCase(tests.MsprimeTestCase):
             self.assertRaises(StopIteration, next, iterator)
 
 
-class TestInterface(LowLevelTestCase):
+class TestSimulationState(LowLevelTestCase):
     """
-    Test the low-level interface to make sure it is robust.
+    Longer running tests that examine the simulation state in detail for a
+    variety of parameters.
     """
-    def test_library_versions(self):
-        major, minor = _msprime.get_gsl_version()
-        self.assertIsInstance(major, int)
-        self.assertGreater(major, 0)
-        self.assertIsInstance(minor, int)
-        major, minor, revision = _msprime.get_hdf5_version()
-        self.assertIsInstance(major, int)
-        self.assertGreater(major, 0)
-        self.assertIsInstance(minor, int)
-        self.assertIsInstance(revision, int)
-
     def verify_running_simulation(self, sim):
         """
         Verifies the state of the specified simulation that has run
@@ -294,17 +300,20 @@ class TestInterface(LowLevelTestCase):
             node_mapping_block_size=node_mapping_block_size,
             coalescence_record_block_size=coalescence_record_block_size)
         # Check initial state
-        self.assertEqual(2, sim.get_num_breakpoints())
+        self.assertEqual(0, sim.get_num_breakpoints())
         self.assertEqual(0.0, sim.get_time())
-        self.assertEqual(n, sim.get_num_ancestors())
+        self.assertEqual(0, sim.get_num_ancestors())
         self.assertEqual(0, sim.get_num_coancestry_events())
         self.assertEqual(0, sim.get_num_recombination_events())
-        self.assertGreater(sim.get_num_avl_node_blocks(), 0)
-        self.assertGreater(sim.get_num_segment_blocks(), 0)
-        self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
-        self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
+        self.assertEqual(sim.get_num_avl_node_blocks(), 0)
+        self.assertEqual(sim.get_num_segment_blocks(), 0)
+        self.assertEqual(sim.get_num_node_mapping_blocks(), 0)
+        self.assertEqual(sim.get_num_coalescence_record_blocks(), 0)
         self.assertEqual(sim.get_sample_size(), n)
         self.assertEqual(sim.get_num_loci(), m)
+        self.assertEqual(0, len(sim.get_ancestors()))
+        # Force initialisaton of the simulation by running for 0 events.
+        sim.run(-1.0)
         a = 0
         nodes = set()
         for ind in sim.get_ancestors():
@@ -425,13 +434,42 @@ class TestInterface(LowLevelTestCase):
             self.verify_simulation(n, 1, 0.0, [m2])
             self.verify_simulation(n, 1, 0.0, [m1, m2])
 
+
+class TestSimulator(LowLevelTestCase):
+    """
+    Tests for the low-level interface to the simulator.
+    """
     def test_bad_parameters(self):
-        def f(n=2, m=1, **kwargs):
-            return _msprime.Simulator(n, m, **kwargs)
-        self.assertRaises(TypeError, f, n=None)
-        self.assertRaises(TypeError, f, m=None)
+        def f(sample_size=10, random_seed=1, **kwargs):
+            return _msprime.Simulator(sample_size, random_seed, **kwargs)
+        # sample_size and random_seed are mandatory
+        self.assertRaises(TypeError, _msprime.Simulator)
+        self.assertRaises(TypeError, _msprime.Simulator, sample_size=10)
+        self.assertRaises(TypeError, _msprime.Simulator, random_seed=10)
+        # check types
+        for bad_type in ["1", None, [], {}, int]:
+            self.assertRaises(TypeError, f, sample_size=bad_type)
+            self.assertRaises(TypeError, f, random_seed=bad_type)
+            self.assertRaises(TypeError, f, scaled_recombination_rate=bad_type)
+            self.assertRaises(TypeError, f, max_memory=bad_type)
+            self.assertRaises(TypeError, f, avl_node_block_size=bad_type)
+            self.assertRaises(TypeError, f, segment_block_size=bad_type)
+            self.assertRaises(TypeError, f, node_mapping_block_size=bad_type)
+            self.assertRaises(
+                TypeError, f, coalescence_record_block_size=bad_type)
+        # Check for bad values.
+        self.assertRaises(_msprime.InputError, f, sample_size=0)
+        self.assertRaises(_msprime.InputError, f, sample_size=1)
+        self.assertRaises(_msprime.InputError, f, num_loci=0)
+        self.assertRaises(_msprime.InputError, f, scaled_recombination_rate=-1)
+        self.assertRaises(_msprime.InputError, f, max_memory=0)
+        self.assertRaises(_msprime.InputError, f, avl_node_block_size=0)
+        self.assertRaises(_msprime.InputError, f, segment_block_size=0)
+        self.assertRaises(_msprime.InputError, f, node_mapping_block_size=0)
+        self.assertRaises(
+            _msprime.InputError, f, coalescence_record_block_size=0)
+        # Check for other type specific errors.
         self.assertRaises(OverflowError, f, max_memory=2**65)
-        # TODO add more tests!
 
     def test_bad_population_models(self):
         def f(population_models):
@@ -449,10 +487,15 @@ class TestInterface(LowLevelTestCase):
         self.assertRaises(
             _msprime.InputError, f,
             [{"start_time": 1, "type": _msprime.POP_MODEL_CONSTANT}])
+        m = [{
+            "start_time": -1.0, "type": _msprime.POP_MODEL_EXPONENTIAL,
+            "alpha": 1.0}]
+        self.assertRaises(_msprime.InputError, f, m)
         m = get_random_population_models(10)
+        sim = f(m)
+        self.assertIsNot(sim, None)
         m.reverse()
-        # TODO This should really be an input error.
-        self.assertRaises(_msprime.LibraryError, f, m)
+        self.assertRaises(_msprime.InputError, f, m)
 
 
 class TestTreeSequence(LowLevelTestCase):

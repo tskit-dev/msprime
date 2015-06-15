@@ -420,6 +420,10 @@ msp_alloc(msp_t *self, uint32_t sample_size)
     int ret = -1;
 
     memset(self, 0, sizeof(msp_t));
+    if (sample_size < 2) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->sample_size = sample_size;
     self->rng = gsl_rng_alloc(gsl_rng_default);
     if (self->rng == NULL) {
