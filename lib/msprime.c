@@ -64,6 +64,8 @@ msp_strerror(int err)
         ret = "Unsupported file format version";
     } else if (err == MSP_ERR_BAD_MODE) {
         ret = "Bad tree file mode";
+    } else if (err == MSP_ERR_BAD_POP_MODEL) {
+        ret = "Bad population model type";
     } else if (err == MSP_ERR_NEWICK_OVERFLOW) {
         ret = "Newick string generation overflow.";
     } else if (err == MSP_ERR_UNSORTED_POP_MODELS) {
@@ -747,6 +749,7 @@ msp_print_state(msp_t *self)
     node_mapping_t *nm;
     segment_t *u;
     coalescence_record_t *cr;
+    population_model_t *m;
     int64_t v;
     uint32_t j;
     double gig = 1024.0 * 1024;
@@ -768,6 +771,12 @@ msp_print_state(msp_t *self)
     printf("random seed = %ld\n", self->random_seed);
     printf("num_links = %ld\n", (long) fenwick_get_total(&self->links));
     printf("population = %d\n", avl_count(&self->ancestral_population));
+    printf("population models = %d\n", self->num_population_models - 1);
+    for (j = 1; j < self->num_population_models; j++) {
+        m = &self->population_models[j];
+        printf("\t start_time=%f, type=%d, param=%f\n", m->start_time,
+                m->type, m->param);
+    }
     printf("time = %f\n", self->time);
     for (j = 0; j < msp_get_num_ancestors(self); j++) {
         printf("\t");
