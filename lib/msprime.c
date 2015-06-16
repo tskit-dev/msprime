@@ -771,7 +771,7 @@ msp_print_state(msp_t *self)
     printf("random seed = %ld\n", self->random_seed);
     printf("num_links = %ld\n", (long) fenwick_get_total(&self->links));
     printf("population = %d\n", avl_count(&self->ancestral_population));
-    printf("population models = %d\n", self->num_population_models - 1);
+    printf("population models = %d\n", (int) self->num_population_models - 1);
     for (j = 1; j < self->num_population_models; j++) {
         m = &self->population_models[j];
         printf("\t start_time=%f, type=%d, param=%f\n", m->start_time,

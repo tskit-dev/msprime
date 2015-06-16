@@ -542,14 +542,14 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(ValueError, ts.load, "/tmp/file")
 
     def verify_mutation_parameters_json(self, json_str):
-        parameters = json.loads(json_str)
+        parameters = json.loads(json_str.decode())
         self.assertIn("scaled_mutation_rate", parameters)
         self.assertIn("random_seed", parameters)
         self.assertIsInstance(parameters["scaled_mutation_rate"], float)
         self.assertIsInstance(parameters["random_seed"], int)
 
     def verify_tree_parameters_json(self, json_str):
-        parameters = json.loads(json_str)
+        parameters = json.loads(json_str.decode())
         self.assertIn("scaled_recombination_rate", parameters)
         self.assertIn("random_seed", parameters)
         self.assertIn("sample_size", parameters)
@@ -577,9 +577,13 @@ class TestTreeSequence(LowLevelTestCase):
                 self.assertIsInstance(m["size"], float)
 
     def verify_environment_json(self, json_str):
-        environment = json.loads(json_str)
+        environment = json.loads(json_str.decode())
         self.assertIn("hdf5_version", environment)
+        version = list(map(int, environment["hdf5_version"].split(".")))
+        self.assertEqual(len(version), 3)
         self.assertIn("gsl_version", environment)
+        version = list(map(int, environment["gsl_version"].split(".")))
+        self.assertEqual(len(version), 2)
 
     def verify_tree_dump_format(self, ts, outfile):
         uint32 = "uint32"
