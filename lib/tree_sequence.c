@@ -1237,6 +1237,25 @@ tree_sequence_get_num_mutations(tree_sequence_t *self)
     return self->num_mutations;
 }
 
+/* Returns the parameters for the trees encoded as JSON. This string
+ * should NOT be freed by client code.
+ */
+char *
+tree_sequence_get_simulation_parameters(tree_sequence_t *self)
+{
+    return self->trees.parameters;
+}
+
+/* Returns the parameters for the mutations encoded as JSON. This string
+ * should NOT be freed by client code. This is NULL if mutations have
+ * not been generated.
+ */
+char *
+tree_sequence_get_mutation_parameters(tree_sequence_t *self)
+{
+    return self->mutations.parameters;
+}
+
 int
 tree_sequence_get_record(tree_sequence_t *self, size_t index,
         coalescence_record_t *record, int order)
@@ -1345,15 +1364,8 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
     self->num_mutations = 0;
     self->mutations.position = NULL;
     self->mutations.node = NULL;
-    ret = encode_mutation_parameters(mutation_rate, random_seed,
-            &self->mutations.parameters);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = encode_environment(&self->mutations.environment);
-    if (ret != 0) {
-        goto out;
-    }
+    self->mutations.parameters = NULL;
+    self->mutations.environment = NULL;
 
     rng = gsl_rng_alloc(gsl_rng_default);
     if (rng == NULL) {
@@ -1391,6 +1403,17 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
                 self->mutations.position[self->num_mutations] = position;
                 self->num_mutations++;
             }
+        }
+    }
+    if (self->num_mutations > 0) {
+        ret = encode_mutation_parameters(mutation_rate, random_seed,
+                &self->mutations.parameters);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = encode_environment(&self->mutations.environment);
+        if (ret != 0) {
+            goto out;
         }
     }
     ret = 0;

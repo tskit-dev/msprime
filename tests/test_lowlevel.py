@@ -279,6 +279,18 @@ class TestSimulationState(LowLevelTestCase):
             ts.get_record(j, _msprime.MSP_ORDER_RIGHT)
             for j in range(len(records))]
         self.assertEqual(ts_records, right_sorted_records)
+        # Check the simulation parameters
+        json_str = ts.get_simulation_parameters()
+        parameters = json.loads(json_str)
+        self.assertEqual(parameters["random_seed"], sim.get_random_seed())
+        self.assertEqual(parameters["sample_size"], sim.get_sample_size())
+        self.assertEqual(parameters["num_loci"], sim.get_num_loci())
+        self.assertEqual(
+            parameters["scaled_recombination_rate"],
+            sim.get_scaled_recombination_rate())
+        models = parameters["population_models"]
+        sim_models = sim.get_population_models()
+        self.assertEqual(models, sim_models)
 
     def verify_random_parameters(self):
         mb = 1024 * 1024
@@ -668,6 +680,11 @@ class TestTreeSequence(LowLevelTestCase):
             ts2.get_record(j) for j in range(ts2.get_num_records())]
         self.assertEqual(records1, records2)
         self.assertEqual(ts.get_mutations(), ts2.get_mutations())
+        self.assertEqual(
+            ts.get_simulation_parameters(), ts2.get_simulation_parameters())
+        self.assertEqual(
+            ts.get_mutation_parameters(), ts2.get_mutation_parameters())
+
 
     def test_dump_equality(self):
         for ts in self.get_example_tree_sequences():
@@ -687,13 +704,20 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(
             TypeError, ts.generate_mutations, mutation_rate=10,
             random_seed=1.0, invalid_param=7)
+        self.assertIsNone(ts.get_mutation_parameters())
         # A mutation rate of 0 should give 0 mutations
         ts.generate_mutations(0.0, random_seed=1)
         for j in range(3):
             self.assertEqual(ts.get_num_mutations(), 0)
             self.assertEqual(len(ts.get_mutations()), 0)
+            self.assertIsNone(ts.get_mutation_parameters())
         # A non-zero mutation rate will give more than 0 mutations.
-        ts.generate_mutations(10.0, random_seed=1)
+        ts.generate_mutations(10.0, random_seed=2)
+        json_str = ts.get_mutation_parameters()
+        self.assertIsNotNone(json_str)
+        params = json.loads(json_str)
+        self.assertEqual(params["scaled_mutation_rate"], 10.0)
+        self.assertEqual(params["random_seed"], 2)
         mutations = ts.get_mutations()
         self.assertGreater(ts.get_num_mutations(), 0)
         self.assertEqual(len(mutations), ts.get_num_mutations())

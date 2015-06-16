@@ -157,6 +157,17 @@ class StressTester(object):
         h2 = [hg2.get_haplotype(j) for j in range(1, n + 1)]
         assert h1 != h2
 
+    def check_provenance_strings(self, sim):
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        s = ts.get_simulation_parameters()
+        assert s is not None
+        s = ts.get_mutation_parameters()
+        assert s is None
+        ts.generate_mutations(10, 1)
+        s = ts.get_mutation_parameters()
+        assert s is not None
+
     def run(self):
         self.run_module_functions()
         self.check_simulator_errors()
@@ -174,6 +185,7 @@ class StressTester(object):
         self.check_tree_sequence_file_errors(sim)
         self.check_tree_sequence_dump_equality(sim)
         self.check_haplotype_generator(sim)
+        self.check_provenance_strings(sim)
 
 
 def main():
