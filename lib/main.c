@@ -37,7 +37,7 @@ static void
 fatal_error(const char *msg, ...)
 {
     va_list argp;
-    fprintf(stderr, "sms:");
+    fprintf(stderr, "main:");
     va_start(argp, msg);
     vfprintf(stderr, msg, argp);
     va_end(argp);
@@ -106,12 +106,14 @@ out:
 
 static int
 get_configuration(msp_t *msp, mutation_params_t *mutation_params,
-        const char *filename)
+        char **output_file, const char *filename)
 {
     int ret = 0;
     int err;
     int int_tmp;
     double double_tmp;
+    char *str;
+    const char *str_tmp;
     config_t *config = malloc(sizeof(config_t));
 
     if (config == NULL) {
@@ -176,6 +178,17 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     }
     msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
     ret = read_population_models(msp, config);
+    if (config_lookup_string(config, "output_file", &str_tmp)
+            == CONFIG_FALSE) {
+        fatal_error("output_file is a required parameter");
+    }
+    /* Create a copy of output_file to return */
+    str = malloc(strlen(str_tmp) + 1);
+    if (str == NULL) {
+        fatal_error("Out of memory");
+    }
+    strcpy(str, str_tmp);
+    *output_file = str;
     config_destroy(config);
     free(config);
     return ret;
@@ -334,12 +347,13 @@ run_simulate(char *conf_file)
     int result;
     mutation_params_t mutation_params;
     msp_t *msp = malloc(sizeof(msp_t));
+    char *output_file = NULL;
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
 
     if (msp == NULL || tree_seq == NULL) {
         goto out;
     }
-    ret = get_configuration(msp, &mutation_params, conf_file);
+    ret = get_configuration(msp, &mutation_params, &output_file, conf_file);
     if (ret != 0) {
         goto out;
     }
@@ -364,13 +378,13 @@ run_simulate(char *conf_file)
     }
     int j;
     for (j = 0; j < 1; j++) {
-        ret = tree_sequence_dump(tree_seq, "test.hdf5", 0);
+        ret = tree_sequence_dump(tree_seq, output_file, 0);
         if (ret != 0) {
             goto out;
         }
         tree_sequence_free(tree_seq);
         memset(tree_seq, 0, sizeof(tree_sequence_t));
-        ret = tree_sequence_load(tree_seq, "test.hdf5", 0);
+        ret = tree_sequence_load(tree_seq, output_file, 0);
         if (ret != 0) {
             goto out;
         }
@@ -390,6 +404,9 @@ out:
     if (tree_seq != NULL) {
         tree_sequence_free(tree_seq);
         free(tree_seq);
+    }
+    if (output_file != NULL) {
+        free(output_file);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));

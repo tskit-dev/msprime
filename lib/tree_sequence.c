@@ -72,18 +72,24 @@ encode_mutation_parameters(double mutation_rate, unsigned long random_seed,
     const char *pattern = "{"
         "\"random_seed\":%lu,"
         "\"scaled_mutation_rate\":%.15f}";
-    size_t size = (size_t) snprintf(NULL, 0, pattern,
+    int written;
+    size_t size = 1 + (size_t) snprintf(NULL, 0, pattern,
             random_seed,
             mutation_rate);
-    char *str = malloc(size + 1);
+    char *str = malloc(size);
 
     if (str == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    snprintf(str, size + 1, pattern,
+    written = snprintf(str, size, pattern,
             random_seed,
             mutation_rate);
+    if (written < 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    assert(written == (int) size - 1);
     *result = str;
     ret = 0;
 out:
@@ -172,6 +178,7 @@ encode_simulation_parameters(msp_t *sim, char **result)
         "\"population_models\":%s"
         "}";
     size_t size;
+    int written;
     char *str = NULL;
     char *models = NULL;
 
@@ -179,23 +186,28 @@ encode_simulation_parameters(msp_t *sim, char **result)
     if (ret != 0) {
         goto out;
     }
-    size = (size_t) snprintf(NULL, 0, pattern,
+    size = 1 + (size_t) snprintf(NULL, 0, pattern,
             sim->random_seed,
             sim->sample_size,
             sim->num_loci,
             sim->scaled_recombination_rate,
             models);
-    str = malloc(size + 1);
+    str = malloc(size);
     if (str == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    snprintf(str, size + 1, pattern,
+    written = snprintf(str, size, pattern,
             sim->random_seed,
             sim->sample_size,
             sim->num_loci,
             sim->scaled_recombination_rate,
             models);
+    if (written < 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    assert(written == (int) size - 1);
     *result = str;
     ret = 0;
 out:
@@ -216,6 +228,7 @@ encode_environment(char **result)
         "}";
     herr_t status;
     unsigned int major, minor, release;
+    int written;
     size_t size;
     char *str;
 
@@ -223,16 +236,22 @@ encode_environment(char **result)
     if (status != 0) {
         goto out;
     }
-    size = (size_t) snprintf(NULL, 0, pattern,
+    size = 1 + (size_t) snprintf(NULL, 0, pattern,
             major, minor, release,
             GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
-    str = malloc(size + 1);
+    str = malloc(size);
     if (str == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    snprintf(str, size + 1, pattern,
-            major, minor, release);
+    written = snprintf(str, size, pattern,
+            major, minor, release,
+            GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
+    if (written < 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    assert(written == (int) size - 1);
     *result = str;
     ret = 0;
 out:
