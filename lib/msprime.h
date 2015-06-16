@@ -309,6 +309,8 @@ int tree_sequence_get_breakpoints(tree_sequence_t *self,
         uint32_t *breakpoints);
 int tree_sequence_get_mutations(tree_sequence_t *self, uint32_t *nodes,
         double *positions);
+char * tree_sequence_get_simulation_parameters(tree_sequence_t *self);
+char * tree_sequence_get_mutation_parameters(tree_sequence_t *self);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
         tree_sequence_t *tree_sequence);

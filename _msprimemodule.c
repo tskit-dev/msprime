@@ -1208,11 +1208,12 @@ static PyObject *
 TreeSequence_get_num_loci(TreeSequence  *self)
 {
     PyObject *ret = NULL;
-    size_t num_loci = tree_sequence_get_num_loci(self->tree_sequence);
+    size_t num_loci;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
+    num_loci = tree_sequence_get_num_loci(self->tree_sequence);
     ret = Py_BuildValue("n", (Py_ssize_t) num_loci);
 out:
     return ret;
@@ -1222,11 +1223,12 @@ static PyObject *
 TreeSequence_get_sample_size(TreeSequence  *self)
 {
     PyObject *ret = NULL;
-    size_t sample_size = tree_sequence_get_sample_size(self->tree_sequence);
+    size_t sample_size;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
+    sample_size = tree_sequence_get_sample_size(self->tree_sequence);
     ret = Py_BuildValue("n", (Py_ssize_t) sample_size);
 out:
     return ret;
@@ -1236,11 +1238,12 @@ static PyObject *
 TreeSequence_get_num_nodes(TreeSequence  *self)
 {
     PyObject *ret = NULL;
-    size_t num_nodes = tree_sequence_get_num_nodes(self->tree_sequence);
+    size_t num_nodes;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
+    num_nodes = tree_sequence_get_num_nodes(self->tree_sequence);
     ret = Py_BuildValue("n", (Py_ssize_t) num_nodes);
 out:
     return ret;
@@ -1251,16 +1254,46 @@ static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
 {
     PyObject *ret = NULL;
-    size_t num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
+    size_t num_mutations;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
+    num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
     ret = Py_BuildValue("n", (Py_ssize_t) num_mutations);
 out:
     return ret;
 }
 
+static PyObject *
+TreeSequence_get_simulation_parameters(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    char *str = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    str = tree_sequence_get_simulation_parameters(self->tree_sequence);
+    ret = Py_BuildValue("s", str);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_mutation_parameters(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    char *str = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    str = tree_sequence_get_mutation_parameters(self->tree_sequence);
+    ret = Py_BuildValue("s", str);
+out:
+    return ret;
+}
 
 
 static PyMemberDef TreeSequence_members[] = {
@@ -1293,6 +1326,12 @@ static PyMethodDef TreeSequence_methods[] = {
             "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
+    {"get_simulation_parameters",
+            (PyCFunction) TreeSequence_get_simulation_parameters, METH_NOARGS,
+            "Returns the simulation parameters encoded as JSON." },
+    {"get_mutation_parameters",
+            (PyCFunction) TreeSequence_get_mutation_parameters, METH_NOARGS,
+            "Returns the mutation parameters encoded as JSON." },
     {NULL}  /* Sentinel */
 };
 
