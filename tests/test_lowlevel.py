@@ -685,7 +685,6 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertEqual(
             ts.get_mutation_parameters(), ts2.get_mutation_parameters())
 
-
     def test_dump_equality(self):
         for ts in self.get_example_tree_sequences():
             with tempfile.NamedTemporaryFile() as f:
