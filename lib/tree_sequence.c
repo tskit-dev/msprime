@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/utsname.h>
 
 #include <hdf5.h>
 
@@ -224,21 +225,32 @@ encode_environment(char **result)
     /* TODO add more environment: endianess, and word size at a minimum */
     const char *pattern = "{"
         "\"hdf5_version\":\"%d.%d.%d\", "
-        "\"gsl_version\":\"%d.%d\""
+        "\"gsl_version\":\"%d.%d\", "
+        "\"kernel_name\":\"%s\", "
+        "\"kernel_release\":\"%s\", "
+        "\"kernel_version\":\"%s\", "
+        "\"hardware_identifier\":\"%s\""
         "}";
     herr_t status;
     unsigned int major, minor, release;
     int written;
     size_t size;
     char *str;
+    struct utsname system_info;
 
+    if (uname(&system_info) < 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
     status = H5get_libversion(&major, &minor, &release);
     if (status != 0) {
         goto out;
     }
     size = 1 + (size_t) snprintf(NULL, 0, pattern,
             major, minor, release,
-            GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
+            GSL_MAJOR_VERSION, GSL_MINOR_VERSION,
+            system_info.sysname, system_info.release, system_info.version,
+            system_info.machine);
     str = malloc(size);
     if (str == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -246,7 +258,9 @@ encode_environment(char **result)
     }
     written = snprintf(str, size, pattern,
             major, minor, release,
-            GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
+            GSL_MAJOR_VERSION, GSL_MINOR_VERSION,
+            system_info.sysname, system_info.release, system_info.version,
+            system_info.machine);
     if (written < 0) {
         ret = MSP_ERR_IO;
         goto out;

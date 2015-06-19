@@ -596,6 +596,11 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertIn("gsl_version", environment)
         version = list(map(int, environment["gsl_version"].split(".")))
         self.assertEqual(len(version), 2)
+        uname_keys = [
+            "kernel_name", "kernel_release", "kernel_version",
+            "hardware_identifier"]
+        for key in uname_keys:
+            self.assertIn(key, environment)
 
     def verify_tree_dump_format(self, ts, outfile):
         uint32 = "uint32"
