@@ -893,7 +893,6 @@ class TestHaplotypeGenerator(LowLevelTestCase):
     """
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.HaplotypeGenerator)
-        self.assertRaises(TypeError, _msprime.HaplotypeGenerator, None)
         ts = _msprime.TreeSequence()
         # This hasn't been initialised, so should fail.
         self.assertRaises(ValueError, _msprime.HaplotypeGenerator, ts)
@@ -902,12 +901,6 @@ class TestHaplotypeGenerator(LowLevelTestCase):
         for bad_type in ["", {}, [], None]:
             self.assertRaises(
                 TypeError, _msprime.HaplotypeGenerator, ts, bad_type)
-            self.assertRaises(
-                TypeError, _msprime.HaplotypeGenerator, ts, mode=bad_type)
-        for bad_mode in [-1, 2, 3, 100]:
-            self.assertRaises(
-                _msprime.LibraryError, _msprime.HaplotypeGenerator, ts,
-                mode=bad_mode)
         n = ts.get_sample_size()
         hg = _msprime.HaplotypeGenerator(ts)
         before = list(hg.get_haplotype(j) for j in range(1, n + 1))
@@ -923,14 +916,3 @@ class TestHaplotypeGenerator(LowLevelTestCase):
             self.assertIsInstance(h, str)
             self.assertEqual(len(h), num_mutations)
 
-    def verify_modes(self, ts):
-        n = ts.get_sample_size()
-        hg1 = _msprime.HaplotypeGenerator(ts, _msprime.MSP_HAPGEN_MODE_SINGLE)
-        hg2 = _msprime.HaplotypeGenerator(ts, _msprime.MSP_HAPGEN_MODE_ALL)
-        h1 = list(hg1.get_haplotype(j) for j in range(1, n + 1))
-        h2 = list(hg2.get_haplotype(j) for j in range(1, n + 1))
-        self.assertEqual(h1, h2)
-
-    def test_modes(self):
-        for ts in self.get_example_tree_sequences():
-            self.verify_modes(ts)
