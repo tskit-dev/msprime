@@ -25,6 +25,8 @@
 #include "object_heap.h"
 #include "msprime.h"
 
+#define HG_WORD_SIZE 64
+
 static int
 cmp_mutation(const void *a, const void *b) {
     const mutation_t *ia = (const mutation_t *) a;
@@ -49,16 +51,38 @@ hapgen_check_state(hapgen_t *self)
 void
 hapgen_print_state(hapgen_t *self)
 {
-    size_t j;
+    size_t j, k;
     mutation_t *u;
 
     printf("Hapgen state\n");
     printf("num_mutations = %d\n", (int) self->num_mutations);
+    printf("words_per_row = %d\n", (int) self->words_per_row);
     for (j = 0; j < self->num_mutations; j++) {
         u = self->mutations[j];
         printf("\t\t%f @ %d\n", u->position, (int) u->site);
     }
+    printf("haplotype matrix\n");
+    for (j = 0; j < self->sample_size; j++) {
+        for (k = 0; k < self->words_per_row; k++) {
+            printf("%llu ", (unsigned long long)
+                    self->haplotype_matrix[j * self->words_per_row + k]);
+        }
+        printf("\n");
+    }
     hapgen_check_state(self);
+}
+
+
+static inline int
+hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
+{
+    /* get the word that column falls in */
+    size_t word = column / HG_WORD_SIZE;
+    size_t bit = column % HG_WORD_SIZE;
+
+    assert(word < self->words_per_row);
+    self->haplotype_matrix[row * self->words_per_row + word] |= 1UL << bit;
+    return 0;
 }
 
 static int
@@ -119,7 +143,7 @@ hapgen_apply_tree_mutation(hapgen_t *self, sparse_tree_t *tree,
         u = stack[stack_top];
         stack_top--;
         if (tree->children[2 * u] == 0) {
-            self->haplotypes[u - 1][mut->site] = '1';
+            hapgen_set_bit(self, u - 1, mut->site);
         } else {
             for (c = 0; c < 2; c++) {
                 stack_top++;
@@ -167,7 +191,6 @@ int
 hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
 {
     int ret = MSP_ERR_NO_MEMORY;
-    uint32_t j;
 
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(hapgen_t));
@@ -190,19 +213,14 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     if (self->mutations == NULL || self->mutation_mem == NULL) {
         goto out;
     }
-    self->haplotype_mem = malloc(
-            self->sample_size * (self->num_mutations + 1) * sizeof(char));
-    self->haplotypes = malloc(self->sample_size * sizeof(char *));
-    if (self->haplotype_mem == NULL || self->haplotypes == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
+    /* set up the haplotype binary matrix */
+    /* The number of words per row is the number of mutations divided by 64 */
+    self->words_per_row = (self->num_mutations / HG_WORD_SIZE) + 1;
+    self->haplotype_matrix = calloc(self->words_per_row * self->sample_size,
+            sizeof(uint64_t));
+    self->haplotype = malloc(self->words_per_row * HG_WORD_SIZE + 1);
+    if (self->haplotype_matrix == NULL || self->haplotype == NULL) {
         goto out;
-    }
-    memset(self->haplotype_mem, '0',
-            self->sample_size * (self->num_mutations + 1) * sizeof(char));
-    for (j = 0; j < self->sample_size; j++) {
-        self->haplotypes[j] = self->haplotype_mem
-            + j * (self->num_mutations + 1);
-        self->haplotypes[j][self->num_mutations] = '\0';
     }
     ret = hapgen_initialise_mutations(self);
     if (ret != 0) {
@@ -226,11 +244,11 @@ hapgen_free(hapgen_t *self)
     if (self->mutation_mem != NULL) {
         free(self->mutation_mem);
     }
-    if (self->haplotypes != NULL) {
-        free(self->haplotypes);
+    if (self->haplotype_matrix != NULL) {
+        free(self->haplotype_matrix);
     }
-    if (self->haplotype_mem != NULL) {
-        free(self->haplotype_mem);
+    if (self->haplotype != NULL) {
+        free(self->haplotype);
     }
     if (self->traversal_stack != NULL) {
         free(self->traversal_stack);
@@ -244,12 +262,23 @@ int
 hapgen_get_haplotype(hapgen_t *self, uint32_t sample_id, char **haplotype)
 {
     int ret = 0;
+    size_t j, k, l;
+    uint64_t word;
 
     if (sample_id < 1 || sample_id > self->sample_size) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    *haplotype = self->haplotypes[sample_id - 1];
+    l = 0;
+    for (j = 0; j < self->words_per_row; j++) {
+        word = self->haplotype_matrix[(sample_id - 1) * self->words_per_row + j];
+        for (k = 0; k < HG_WORD_SIZE; k++) {
+            self->haplotype[l] = (word >> k) & 1UL ? '1': '0';
+            l++;
+        }
+    }
+    self->haplotype[self->num_mutations] = '\0';
+    *haplotype = self->haplotype;
 out:
     return ret;
 }

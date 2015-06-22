@@ -243,8 +243,10 @@ typedef struct {
     tree_sequence_t *tree_sequence;
     mutation_t **mutations;
     mutation_t *mutation_mem;
-    char **haplotypes;
-    char *haplotype_mem;
+    /* the haplotype binary matrix */
+    size_t words_per_row;
+    uint64_t *haplotype_matrix;
+    char *haplotype;
     sparse_tree_iterator_t tree_iterator;
     uint32_t *traversal_stack;
 } hapgen_t;
