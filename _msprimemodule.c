@@ -1736,14 +1736,13 @@ HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "mode", NULL};
-    int mode = MSP_HAPGEN_MODE_SINGLE;
+    static char *kwlist[] = {"tree_sequence", NULL};
     TreeSequence *tree_sequence;
 
     self->haplotype_generator = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
-            &TreeSequenceType, &tree_sequence, &mode)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -1758,7 +1757,7 @@ HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds
     }
     memset(self->haplotype_generator, 0, sizeof(hapgen_t));
     err = hapgen_alloc(self->haplotype_generator,
-            self->tree_sequence->tree_sequence, mode);
+            self->tree_sequence->tree_sequence);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1968,11 +1967,6 @@ init_msprime(void)
     PyModule_AddIntConstant(module, "MSP_ORDER_TIME", MSP_ORDER_TIME);
     PyModule_AddIntConstant(module, "MSP_ORDER_LEFT", MSP_ORDER_LEFT);
     PyModule_AddIntConstant(module, "MSP_ORDER_RIGHT", MSP_ORDER_RIGHT);
-    PyModule_AddIntConstant(module, "MSP_HAPGEN_MODE_SINGLE",
-            MSP_HAPGEN_MODE_SINGLE);
-    PyModule_AddIntConstant(module, "MSP_HAPGEN_MODE_ALL",
-            MSP_HAPGEN_MODE_ALL);
-
     /* turn off GSL error handler so we don't abort on memory error */
     gsl_set_error_handler_off();
 

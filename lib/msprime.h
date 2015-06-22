@@ -42,9 +42,6 @@
 #define MSP_ORDER_LEFT 1
 #define MSP_ORDER_RIGHT 2
 
-#define MSP_HAPGEN_MODE_SINGLE 0
-#define MSP_HAPGEN_MODE_ALL 1
-
 #define MAX_BRANCH_LENGTH_STRING 24
 
 /* Using a size_t for index allows us to have an effectively unlimited
@@ -240,17 +237,14 @@ typedef struct {
 } mutation_t;
 
 typedef struct {
-    int mode;
     uint32_t sample_size;
     uint32_t num_loci;
-    uint32_t num_nodes;
     size_t num_mutations;
     tree_sequence_t *tree_sequence;
-    avl_tree_t *mutations;
-    mutation_t **sorted_mutations;
+    mutation_t **mutations;
+    mutation_t *mutation_mem;
     char **haplotypes;
     char *haplotype_mem;
-    object_heap_t avl_node_heap;
     sparse_tree_iterator_t tree_iterator;
     uint32_t *traversal_stack;
 } hapgen_t;
@@ -334,7 +328,7 @@ int newick_converter_next(newick_converter_t *self, uint32_t *length,
 int newick_converter_free(newick_converter_t *self);
 void newick_converter_print_state(newick_converter_t *self);
 
-int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence, int mode);
+int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);
 size_t hapgen_get_num_segregating_sites(hapgen_t *self);
 int hapget_get_locations(hapgen_t *self, double *);
