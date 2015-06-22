@@ -446,22 +446,20 @@ class TreeSequence(object):
             seed = random.randint(0, 2**31)
         self._ll_tree_sequence.generate_mutations(scaled_mutation_rate, seed)
 
-    def haplotypes(self, online=False):
+    def haplotypes(self):
         """
         Returns an iterator over the haplotypes resulting from the trees
         and mutations in this tree sequence as a string of '1's and '0's.
         """
-        return HaplotypeGenerator(self, online).haplotypes()
+        return HaplotypeGenerator(self).haplotypes()
 
 
 class HaplotypeGenerator(object):
 
-    def __init__(self, tree_sequence, online=False):
+    def __init__(self, tree_sequence):
         self._tree_sequence = tree_sequence
         ts = self._tree_sequence.get_ll_tree_sequence()
         mode = _msprime.MSP_HAPGEN_MODE_ALL
-        if online:
-            mode = _msprime.MSP_HAPGEN_MODE_SINGLE
         self._ll_haplotype_generator = _msprime.HaplotypeGenerator(ts, mode)
 
     def get_haplotype(self, sample_id):
