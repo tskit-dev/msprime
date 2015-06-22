@@ -915,4 +915,3 @@ class TestHaplotypeGenerator(LowLevelTestCase):
             self.assertGreater(len(h), 0)
             self.assertIsInstance(h, str)
             self.assertEqual(len(h), num_mutations)
-
