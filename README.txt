@@ -8,6 +8,15 @@ and are not fully documented, but the command line interface ``mspms`` is
 reliable and ready for use. This program provides a fully ``ms`` compatible
 interface, and can be used as a drop-in replacement in existing workflows.
 
+Msprime can simulate the coalescent with recombination much
+faster than programs based on the Sequentially Markov Coalescent
+for large sample sizes and has very reasonable memory requirements. Msprime
+makes it possible to simulate chromosome sized regions with hundreds of
+thousands of samples.
+
+Please see the `documentation <https://msprime.readthedocs.org/en/latest/>`_
+for further details.
+
 ***********
 Quick Start
 ***********
@@ -64,16 +73,16 @@ TODO
 
 - Add instructions for HomeBrew/MacPorts.
 
-*************
+************
 Installation
-*************
+************
 
 The simplest method of installation is to use PyPI and pip::
+
     # pip install msprime
 
-will install msprime your Python installation. This will
-work in most cases (but see the `Requirements`_ section). See
-below for platform specific build instructions when this
+This will work in most cases, once the `Requirements`_ have been
+satisfied. See below for platform specific build instructions when this
 fails.
 
 If you do not have root access to your machine, you can install
@@ -81,8 +90,8 @@ If you do not have root access to your machine, you can install
 
     $ pip install msprime --user
 
-To use the ``mspms`` you must ensure
-that the ``~/.local/bin/`` directory is in your ``PATH``, or
+To use the ``mspms`` program you must ensure
+that the ``~/.local/bin`` directory is in your ``PATH``, or
 simply run it using::
 
     $ ~/.local/bin/mspms
@@ -95,7 +104,7 @@ To uninstall ``msprime``, simply run::
 Platform specific installation
 ------------------------------
 
-This section contains instructions to build on specific platforms
+This section contains instructions to build on platforms
 that require build time flags for GSL and HDF5.
 
 ++++++++++++
@@ -108,7 +117,7 @@ Install the prerequisitites, and build ``msprime`` as follows::
     # CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib pip install msprime
 
 This assumes that root is logged in using a bash shell. For other shells,
-different methods are need to get the ``CFLAGS`` and ``LDFLAGS`` environment
+different methods are need to set the ``CFLAGS`` and ``LDFLAGS`` environment
 variables.
 
 ---
