@@ -11,6 +11,10 @@ before_install:
   - sudo apt-get install -qq libgsl0-dev libhdf5-serial-dev python-h5py
 
 install:
+  # We install these requirements here rather than through the requirements.txt
+  # file because of issues on readthedocs.
+  - pip install numpy
+  - pip install h5py 
   - pip install -r requirements.txt
   - pip install .
 

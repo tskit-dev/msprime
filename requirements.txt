@@ -1,7 +1,6 @@
 coverage
 flake8
-h5py
+mock
 nose
-numpy
 sphinx
 sphinx-argparse
