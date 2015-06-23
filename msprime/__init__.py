@@ -28,4 +28,4 @@ from _msprime import get_hdf5_version  # NOQA
 
 from msprime.trees import *  # NOQA
 
-__version__ = '0.1.1b1'
+__version__ = '0.1.1'
