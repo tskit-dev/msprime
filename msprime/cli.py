@@ -30,13 +30,16 @@ import sys
 import msprime
 
 
-mscompat_description = """\
-An ms-compatible interface to the msprime library. Supports a
-subset of the functionality available in ms."""
-mscompat_recombination_help = """\
-Recombination at rate rho=4*N0*r where r is the rate of recombination
-between the ends of the region being simulated; num_loci is the number
-of sites between which recombination can occur"""
+mscompat_description = (
+    "mspms is an ms-compatible interface to the msprime library. "
+    "It simulates the coalescent with recombination for a variety of "
+    "demographic models and outputs the results in a text-based format. "
+    "It supports a subset of the functionality available in ms and aims "
+    "for full compatibility.")
+mscompat_recombination_help = (
+    "Recombination at rate rho=4*N0*r where r is the rate of recombination "
+    "between the ends of the region being simulated; num_loci is the number "
+    "of sites between which recombination can occur")
 
 
 def get_seeds(random_seeds):
@@ -182,13 +185,15 @@ def create_simulation_runner(args):
     return runner
 
 
-def mspms_main():
-    # TODO create a get_parser function and unit test it.
+def get_parser():
     parser = argparse.ArgumentParser(description=mscompat_description)
     parser.add_argument("sample_size", type=positive_int, help="Sample size")
     parser.add_argument(
         "num_replicates", type=positive_int,
         help="Number of independent replicates")
+    parser.add_argument(
+        "-V", "--version", action='version',
+        version='%(prog)s {}'.format(msprime.__version__))
 
     group = parser.add_argument_group("Behaviour")
     group.add_argument(
@@ -223,8 +228,14 @@ def mspms_main():
         help="Number of values after decimal place to print")
     group.add_argument(
         "--max-memory", "-M", default="100M",
-        help="Maximum memory used. Supports K,M and G suffixes")
+        help=(
+            "Maximum memory to use. If the simulation exceeds this limit "
+            "exit with error status. Supports K,M and G suffixes"))
+    return parser
 
+
+def mspms_main():
+    parser = get_parser()
     args = parser.parse_args()
     if args.mutation_rate == 0 and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
