@@ -4,12 +4,4 @@
 API Documentation
 =================
 
-.. automodule:: msprime
-    :members:
-
-.. autofunction:: simulate
-.. autofunction:: load
-
-.. autoclass:: TreeSequence
-
-.. autoclass:: SparseTree
+*Under construction*

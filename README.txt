@@ -3,23 +3,19 @@ msprime
 =======
 
 Msprime is a reimplementation of Hudson's classical ms program for modern
-datasets. It is under heavy development at the moment, and the present
-code should be considered beta quality. Bugs may be present,
-and the API might change considerably. We provide an ms-compatible
-command line interface ``mspms``, which should be useful to fit into
-existing workflows. However, the Python API is the recommended way to
-use msprime to gain full advantage of its internal structures.
-
-Full documentation is forthcoming.
+datasets. The Python API and storage format are currently under development
+and are not fully documented, but the command line interface ``mspms`` is
+reliable and ready for use. This program provides a fully ``ms`` compatible
+interface, and can be used as a drop-in replacement in existing workflows.
 
 *************
 Requirements
 *************
 
 Msprime requires Python 2.7+ (Python 3 versions are fully supported from
-3.1 onwards), the `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_
-and `HDF5 <https://www.hdfgroup.org/HDF5/>`_ version 1.8 or later,
-which are available for all major platforms. For example, to install on
+3.1 onwards), the `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_,
+and `HDF5 <https://www.hdfgroup.org/HDF5/>`_ version 1.8 or later. These
+packages are available for all major platforms. For example, to install on
 Debian/Ubuntu use::
 
     # apt-get install python-dev libgsl0-dev libhdf5-serial-dev pkg-config
@@ -38,7 +34,7 @@ TODO
 FreeBSD 10.0
 ------------
 
-To install on FreeBSD, install the gsl and hdf5-18 packages as 
+To install on FreeBSD, install the gsl and hdf5-18 packages as
 follows::
 
     # pkg install gsl hdf5-18
