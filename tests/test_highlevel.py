@@ -264,6 +264,7 @@ class TestHaplotypeGenerator(HighLevelTestCase):
                 zeros += b == '0'
                 ones += b == '1'
             self.assertGreater(zeros, 0)
+            self.assertGreater(ones, 0)
             self.assertEqual(zeros + ones, n)
 
     def verify_simulation(self, n, m, r, theta):
