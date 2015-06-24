@@ -985,6 +985,8 @@ TreeSequence_create(TreeSequence *self, PyObject *args)
     memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
     err = tree_sequence_create(self->tree_sequence, sim->sim);
     if (err != 0) {
+        PyMem_Free(self->tree_sequence);
+        self->tree_sequence = NULL;
         handle_library_error(err);
         goto out;
     }
@@ -1067,6 +1069,8 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     }
     err = tree_sequence_load(self->tree_sequence, path, flags);
     if (err != 0) {
+        PyMem_Free(self->tree_sequence);
+        self->tree_sequence = NULL;
         handle_library_error(err);
         goto out;
     }
