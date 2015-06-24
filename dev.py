@@ -28,6 +28,15 @@ def dump_example():
     assert haplotypes == other_haplotypes
 
 
+def tree_example():
+    tree_sequence = msprime.simulate(
+        sample_size=10, num_loci=1000, scaled_recombination_rate=0.1,
+        random_seed=1)
+    for tree in tree_sequence.sparse_trees():
+        print(tree)
+
+
 if __name__ == "__main__":
     # haplotype_example()
-    dump_example()
+    # dump_example()
+    tree_example()
