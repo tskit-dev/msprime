@@ -25,8 +25,8 @@ from __future__ import unicode_literals
 
 import heapq
 import json
-import random
 import os.path
+import random
 import tempfile
 
 import tests
@@ -626,7 +626,6 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertEqual(format_version[1], 1)
         self.assertEqual(root.attrs["sample_size"], ts.get_sample_size())
         self.assertEqual(root.attrs["num_loci"], ts.get_num_loci())
-
         if ts.get_num_mutations() > 0:
             g = root["mutations"]
             # Check the parameters and environment attributes
@@ -657,6 +656,42 @@ class TestTreeSequence(LowLevelTestCase):
         for ts in self.get_example_tree_sequences():
             with tempfile.NamedTemporaryFile() as f:
                 self.verify_tree_dump_format(ts, f)
+
+    def test_load_malformed_hdf5(self):
+        # See above for why we import h5py here.
+        import h5py
+        ts = _msprime.TreeSequence()
+        with tempfile.NamedTemporaryFile() as f:
+            hfile = h5py.File(f.name, "w")
+            # First try the empty hdf5 file.
+            hfile.flush()
+            self.assertRaises(
+                _msprime.LibraryError, ts.load, f.name, skip_h5close=True)
+            # TODO create a legitimate hdf5 file and copy parts of
+            # it to a local hdf5 file. Try opening this then.
+
+    def test_load_bad_formats(self):
+        # try loading a bunch of files in various formats.
+        ts = _msprime.TreeSequence()
+        with tempfile.NamedTemporaryFile() as f:
+            # First, check the emtpy file.
+            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
+            # Now some ascii text
+            f.write("Some ASCII text")
+            f.flush()
+            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
+            f.seek(0)
+            # Now write 8k of random bytes
+            f.write(os.urandom(8192))
+            f.flush()
+            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
+
+    def test_not_initialised_after_init_error(self):
+        ts = _msprime.TreeSequence()
+        self.assertRaises(TypeError, ts.create)
+        self.assertRaises(ValueError, ts.dump, "filename")
+        self.assertRaises(_msprime.LibraryError, ts.load, "/dev/null")
+        self.assertRaises(ValueError, ts.dump, "filename")
 
     def test_num_nodes(self):
         for ts in self.get_example_tree_sequences():
