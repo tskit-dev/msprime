@@ -375,21 +375,21 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    if (0) {
-        int j;
-        for (j = 0; j < 1; j++) {
-            ret = tree_sequence_dump(tree_seq, output_file, 0);
-            if (ret != 0) {
-                goto out;
-            }
-            tree_sequence_free(tree_seq);
-            memset(tree_seq, 0, sizeof(tree_sequence_t));
-            ret = tree_sequence_load(tree_seq, output_file, 0);
-            if (ret != 0) {
-                goto out;
-            }
-            tree_sequence_print_state(tree_seq);
+    int j;
+    for (j = 0; j < 1; j++) {
+        ret = tree_sequence_dump(tree_seq, output_file, 0);
+        if (ret != 0) {
+            goto out;
         }
+        tree_sequence_free(tree_seq);
+        memset(tree_seq, 0, sizeof(tree_sequence_t));
+        ret = tree_sequence_load(tree_seq, output_file, 0);
+        if (ret != 0) {
+            goto out;
+        }
+        tree_sequence_print_state(tree_seq);
+    }
+    if (0) {
         print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
         tree_sequence_print_state(tree_seq);
