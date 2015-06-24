@@ -30,6 +30,7 @@ except ImportError:
     pass
 
 import random
+import unittest
 
 import msprime
 import tests
@@ -69,6 +70,18 @@ def _build_newick(node, root, tree, branch_lengths):
         # Leaf node
         s = "{0}:{1}".format(node, branch_lengths[node])
     return s
+
+
+class TestHarmonicNumber(unittest.TestCase):
+    """
+    Tests for the harmonic number calculation.
+    """
+
+    def test_harmonic_number(self):
+        def H(n):
+            return sum(1 / k for k in range(1, n + 1))
+        for n in range(10, 1000, 100):
+            self.assertAlmostEqual(msprime.harmonic_number(n), H(n), 1)
 
 
 class HighLevelTestCase(tests.MsprimeTestCase):
