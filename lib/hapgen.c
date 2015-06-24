@@ -81,7 +81,7 @@ hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
     size_t bit = column % HG_WORD_SIZE;
 
     assert(word < self->words_per_row);
-    self->haplotype_matrix[row * self->words_per_row + word] |= 1UL << bit;
+    self->haplotype_matrix[row * self->words_per_row + word] |= 1ULL << bit;
     return 0;
 }
 
@@ -273,7 +273,7 @@ hapgen_get_haplotype(hapgen_t *self, uint32_t sample_id, char **haplotype)
     for (j = 0; j < self->words_per_row; j++) {
         word = self->haplotype_matrix[(sample_id - 1) * self->words_per_row + j];
         for (k = 0; k < HG_WORD_SIZE; k++) {
-            self->haplotype[l] = (word >> k) & 1UL ? '1': '0';
+            self->haplotype[l] = (word >> k) & 1ULL ? '1': '0';
             l++;
         }
     }
