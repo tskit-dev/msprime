@@ -123,5 +123,22 @@ variables.
 ---
 OSX
 ---
-
 *TODO*
+
+****************
+Tested platforms
+****************
+
+Msprime is highly portable, and has been successfully built and tested
+on the following platforms:
+
+====================    ========        ======          ===========
+Operating system        Platform        Python          Compiler
+====================    ========        ======          ===========
+Debian jessie           x86-64          2.7.9           gcc 4.9.2
+Debian jessie           x86-64          3.4.2           gcc 4.9.2
+Debian wheezy           i686            2.7.3           gcc 4.7.2
+Fedora 20               x86-64          2.7.5           gcc 4.8.3
+FreeBSD 10              x86-64          2.7.6           clang 3.4.1
+SunOS 5.10              SPARC           3.4.1           gcc 3.4.3
+====================    ========        ======          ===========

@@ -36,7 +36,14 @@ def tree_example():
         print(tree)
 
 
+def dump_file(filename):
+    tree_sequence = msprime.load(filename)
+    for r in tree_sequence.records():
+        print(r)
+
+
 if __name__ == "__main__":
     # haplotype_example()
     # dump_example()
-    tree_example()
+    # tree_example()
+    dump_file("example.hdf5")
