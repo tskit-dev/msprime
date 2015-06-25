@@ -673,11 +673,11 @@ class TestTreeSequence(LowLevelTestCase):
     def test_load_bad_formats(self):
         # try loading a bunch of files in various formats.
         ts = _msprime.TreeSequence()
-        with tempfile.NamedTemporaryFile() as f:
+        with tempfile.NamedTemporaryFile("wb") as f:
             # First, check the emtpy file.
             self.assertRaises(_msprime.LibraryError, ts.load, f.name)
             # Now some ascii text
-            f.write("Some ASCII text")
+            f.write(b"Some ASCII text")
             f.flush()
             self.assertRaises(_msprime.LibraryError, ts.load, f.name)
             f.seek(0)
