@@ -172,7 +172,8 @@ class TestMspmsOutput(unittest.TestCase):
         self.assertEqual(tree[-1], ";")
         if _dendropy_available:
             parsed_tree = dendropy.Tree.get_from_string(tree, schema="newick")
-            leaf_labels = set(int(ts.label) for ts in parsed_tree.taxon_set)
+            leaf_labels = set(
+                int(ts.label) for ts in parsed_tree.taxon_namespace)
             self.assertEqual(leaf_labels, set(range(1, sample_size + 1)))
             if precision > 0:
                 self.assertGreater(parsed_tree.length(), 0)
