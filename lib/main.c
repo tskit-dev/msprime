@@ -321,9 +321,9 @@ print_tree_sequence(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    while ((ret = sparse_tree_iterator_next(
-                    sparse_iter, &length, &tree)) == 1) {
-        printf("New tree: %d (%d)\n", length, (int) tree->num_nodes);
+    while ((ret = sparse_tree_iterator_next(sparse_iter, &tree)) == 1) {
+        printf("New tree: %d (%d)\n", tree->right - tree->left,
+                (int) tree->num_nodes);
         sparse_tree_iterator_print_state(sparse_iter);
     }
     sparse_tree_iterator_free(sparse_iter);
@@ -388,13 +388,13 @@ run_simulate(char *conf_file)
             goto out;
         }
         tree_sequence_print_state(tree_seq);
+        print_haplotypes(tree_seq);
     }
     if (0) {
         print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
         tree_sequence_print_state(tree_seq);
     }
-    print_haplotypes(tree_seq);
 out:
     if (msp != NULL) {
         msp_free(msp);

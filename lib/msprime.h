@@ -147,8 +147,8 @@ typedef struct {
         uint32_t *node;
         double *time;
         uint32_t *children;
-        uint32_t *left_sorting;
-        uint32_t *right_sorting;
+        uint32_t *insertion_order;
+        uint32_t *removal_order;
         char *parameters;
         char *environment;
     } trees;
@@ -194,6 +194,8 @@ typedef struct {
     uint32_t sample_size;
     size_t num_nodes;
     uint32_t root;
+    uint32_t left;
+    uint32_t right;
     uint32_t *parent;
     uint32_t *children;
     double *time;
@@ -203,12 +205,11 @@ typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     size_t num_nodes;
+    size_t num_records;
     tree_sequence_t *tree_sequence;
     sparse_tree_t tree;
-    uint32_t position;
-    size_t next_record_index;
-    size_t num_records;
-    coalescence_record_t *right_sorted_records;
+    size_t insertion_index;
+    size_t removal_index;
 } sparse_tree_iterator_t;
 
 typedef struct newick_tree_node {
@@ -318,9 +319,8 @@ void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
         tree_sequence_t *tree_sequence);
 int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
-int sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
+int sparse_tree_iterator_next(sparse_tree_iterator_t *self, 
         sparse_tree_t **tree);
-int sparse_tree_iterator_reset(sparse_tree_iterator_t *self);
 void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
 
 int newick_converter_alloc(newick_converter_t *self, 
