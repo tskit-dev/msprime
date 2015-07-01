@@ -260,8 +260,8 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(times, sorted(times))
         self.assertEqual(times[-1], sim.get_time())
         self.verify_squashed_records(records)
-        left_sorted_records = sorted(records, key=lambda r: r[0])
-        right_sorted_records = sorted(records, key=lambda r: r[1])
+        left_sorted_records = sorted(records, key=lambda r: (r[0], r[-1]))
+        right_sorted_records = sorted(records, key=lambda r: (r[1], -r[-1]))
         self.verify_trees(sim, left_sorted_records)
         # Check the TreeSequence. Ensure we get the records back in the
         # correct orders.

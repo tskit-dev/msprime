@@ -51,13 +51,6 @@ cmp_index_sort(const void *a, const void *b) {
 }
 
 static int
-cmp_coalescence_record_right(const void *a, const void *b) {
-    const coalescence_record_t *ca = (const coalescence_record_t *) a;
-    const coalescence_record_t *cb = (const coalescence_record_t *) b;
-    return (ca->right > cb->right) - (ca->right < cb->right);
-}
-
-static int
 cmp_tree_node_list(const void *a, const void *b) {
     const tree_node_list_t *ia = (const tree_node_list_t *) a;
     const tree_node_list_t *ib = (const tree_node_list_t *) b;
@@ -292,8 +285,8 @@ tree_sequence_print_state(tree_sequence_t *self)
                 (int) self->trees.children[2 * j],
                 (int) self->trees.children[2 * j + 1],
                 self->trees.time[j],
-                (int) self->trees.left_sorting[j],
-                (int) self->trees.right_sorting[j]);
+                (int) self->trees.insertion_order[j],
+                (int) self->trees.removal_order[j]);
     }
     printf("mutations = (%d records)\n", (int) self->num_mutations);
     printf("\tparameters = '%s'\n", self->mutations.parameters);
@@ -318,12 +311,12 @@ tree_sequence_alloc(tree_sequence_t *self)
     self->trees.children = malloc(2 * self->num_records * sizeof(uint32_t));
     self->trees.node = malloc(self->num_records * sizeof(uint32_t));
     self->trees.time = malloc(self->num_records * sizeof(double));
-    self->trees.left_sorting = malloc(self->num_records * sizeof(uint32_t));
-    self->trees.right_sorting = malloc(self->num_records * sizeof(uint32_t));
+    self->trees.insertion_order = malloc(self->num_records * sizeof(uint32_t));
+    self->trees.removal_order = malloc(self->num_records * sizeof(uint32_t));
     if (self->trees.left == NULL || self->trees.right == NULL
             || self->trees.children == NULL || self->trees.node == NULL
-            || self->trees.time == NULL || self->trees.left_sorting == NULL
-            || self->trees.right_sorting == NULL) {
+            || self->trees.time == NULL || self->trees.insertion_order == NULL
+            || self->trees.removal_order == NULL) {
         goto out;
     }
     if (self->num_mutations > 0) {
@@ -357,11 +350,11 @@ tree_sequence_free(tree_sequence_t *self)
     if (self->trees.time != NULL) {
         free(self->trees.time);
     }
-    if (self->trees.left_sorting != NULL) {
-        free(self->trees.left_sorting);
+    if (self->trees.insertion_order != NULL) {
+        free(self->trees.insertion_order);
     }
-    if (self->trees.right_sorting != NULL) {
-        free(self->trees.right_sorting);
+    if (self->trees.removal_order != NULL) {
+        free(self->trees.removal_order);
     }
     if (self->trees.parameters != NULL) {
         free(self->trees.parameters);
@@ -396,7 +389,8 @@ tree_sequence_make_indexes(tree_sequence_t *self)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    /* sort by left */
+    /* sort by left and increasing time to give us the order in which
+     * records should be inserted */
     for (j = 0; j < self->num_records; j++) {
         sort_buff[j].index = j;
         sort_buff[j].value = self->trees.left[j];
@@ -404,17 +398,18 @@ tree_sequence_make_indexes(tree_sequence_t *self)
     }
     qsort(sort_buff, self->num_records, sizeof(index_sort_t), cmp_index_sort);
     for (j = 0; j < self->num_records; j++) {
-        self->trees.left_sorting[j] = sort_buff[j].index;
+        self->trees.insertion_order[j] = sort_buff[j].index;
     }
-    /* sort by right */
+    /* sort by right and decreasing time to give us the order in which
+     * records should be removed. */
     for (j = 0; j < self->num_records; j++) {
         sort_buff[j].index = j;
         sort_buff[j].value = self->trees.right[j];
-        sort_buff[j].time = self->trees.time[j];
+        sort_buff[j].time = -self->trees.time[j];
     }
     qsort(sort_buff, self->num_records, sizeof(index_sort_t), cmp_index_sort);
     for (j = 0; j < self->num_records; j++) {
-        self->trees.right_sorting[j] = sort_buff[j].index;
+        self->trees.removal_order[j] = sort_buff[j].index;
     }
     /* set the num_nodes value */
     self->num_nodes = self->trees.node[self->num_records - 1];
@@ -1286,10 +1281,10 @@ tree_sequence_get_record(tree_sequence_t *self, size_t index,
             j = index;
             break;
         case MSP_ORDER_LEFT:
-            j = self->trees.left_sorting[index];
+            j = self->trees.insertion_order[index];
             break;
         case MSP_ORDER_RIGHT:
-            j = self->trees.right_sorting[index];
+            j = self->trees.removal_order[index];
             break;
         default:
             ret = MSP_ERR_BAD_ORDERING;
@@ -1741,22 +1736,15 @@ out:
 /* ======================================================== *
  * sparse tree iterator
  * ======================================================== */
-int
-sparse_tree_iterator_reset(sparse_tree_iterator_t *self)
-{
-    self->position = 0;
-    self->next_record_index = 0;
-    return 0;
-}
 
 int
 sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
         tree_sequence_t *tree_sequence)
 {
     int ret = MSP_ERR_NO_MEMORY;
-    size_t j;
 
     assert(tree_sequence != NULL);
+    memset(self, 0, sizeof(sparse_tree_iterator_t));
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->num_nodes = tree_sequence_get_num_nodes(tree_sequence);
     self->num_records = tree_sequence_get_num_coalescence_records(
@@ -1771,24 +1759,11 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
             || self->tree.children == NULL) {
         goto out;
     }
-    /* TODO remove this - we don't need it any more. Use the left and
-     * right ranking arrays in the tree sequence instead.
-     */
-    self->right_sorted_records = malloc(self->num_records
-            * sizeof(coalescence_record_t));
-    if (self->right_sorted_records == NULL) {
-        goto out;
-    }
-    for (j = 0; j < self->num_records; j++) {
-        ret = tree_sequence_get_record(self->tree_sequence, j,
-                self->right_sorted_records + j, MSP_ORDER_LEFT);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    qsort(self->right_sorted_records, self->num_records,
-            sizeof(coalescence_record_t), cmp_coalescence_record_right);
-    sparse_tree_iterator_reset(self);
+    self->insertion_index = 0;
+    self->removal_index = 0;
+    self->tree.left = 0;
+    self->tree.right = 0;
+    self->tree.root = 0;
     ret = 0;
 out:
     return ret;
@@ -1808,9 +1783,6 @@ sparse_tree_iterator_free(sparse_tree_iterator_t *self)
     if (self->tree.children != NULL) {
         free(self->tree.children);
     }
-    if (self->right_sorted_records != NULL) {
-        free(self->right_sorted_records);
-    }
     return ret;
 }
 
@@ -1819,6 +1791,7 @@ sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
 {
     uint32_t u, v, j;
 
+    assert(self->tree.num_nodes == self->num_nodes);
     for (j = 1; j < self->sample_size + 1; j++) {
         u = j;
         assert(self->tree.time[u] == 0.0);
@@ -1841,9 +1814,11 @@ sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
     size_t j;
 
     printf("sparse_tree_iterator state\n");
-    printf("position = %d\n", self->position);
-    printf("next_record_index = %d\n", (int) self->next_record_index);
+    printf("insertion_index = %d\n", (int) self->insertion_index);
+    printf("removal_index = %d\n", (int) self->removal_index);
     printf("num_records = %d\n", (int) self->num_records);
+    printf("tree.left = %d\n", self->tree.left);
+    printf("tree.right = %d\n", self->tree.right);
     for (j = 0; j < self->tree.num_nodes + 1; j++) {
         printf("\t%d\t%d\t%d\t%d\t%f\n", (int) j, self->tree.parent[j],
                 self->tree.children[2 * j], self->tree.children[2 * j + 1],
@@ -1853,79 +1828,56 @@ sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
 }
 
 int
-sparse_tree_iterator_next(sparse_tree_iterator_t *self, uint32_t *length,
-        sparse_tree_t **tree)
+sparse_tree_iterator_next(sparse_tree_iterator_t *self, sparse_tree_t **tree)
 {
     int ret = 0;
-    coalescence_record_t cr, *out;
-    uint32_t n = self->sample_size;
-    size_t j, c, k;
+    uint32_t j, k, u, c[2];
+    tree_sequence_t *s = self->tree_sequence;
+    sparse_tree_t *t = &self->tree;
 
-    /* TODO change the use of get_record here to directly accessing the
-     * arrays within the parent tree sequence. It's fine to tightly couple
-     * these two objects, since this iterator is really just a thin shell
-     * to allow us to quickly access the sparse trees.
-     */
-    if (self->next_record_index < self->num_records) {
-        if (self->next_record_index == 0) {
-            for (j = 0; j < n - 1; j++) {
-                ret = tree_sequence_get_record(self->tree_sequence, j, &cr,
-                        MSP_ORDER_LEFT);
-                if (ret != 0) {
-                    goto out;
-                }
-                self->tree.time[cr.node] = cr.time;
-                for (c = 0; c < 2; c++) {
-                    self->tree.parent[cr.children[c]] = cr.node;
-                    self->tree.children[2 * cr.node + c] = cr.children[c];
-                }
+    assert(t != NULL && s != NULL);
+    if (self->insertion_index < self->num_records) {
+        /* First we remove the stale records */
+        while (s->trees.right[s->trees.removal_order[self->removal_index]]
+                == t->right) {
+            k = s->trees.removal_order[self->removal_index];
+            u = s->trees.node[k];
+            c[0] = s->trees.children[2 * k];
+            c[1] = s->trees.children[2 * k + 1];
+            for (j = 0; j < 2; j++) {
+                t->parent[c[j]] = 0;
+                t->children[2 * u + j] = 0;
             }
-            self->next_record_index = n - 1;
-            self->position = self->right_sorted_records[0].right;
-            *length = self->position;
-        } else {
-            k = self->next_record_index - n + 1;
-            j = self->next_record_index;
-            while (self->right_sorted_records[k].right == self->position) {
-                out = &self->right_sorted_records[k];
-                self->tree.time[out->node] = 0.0;
-                for (c = 0; c < 2; c++) {
-                    self->tree.parent[out->children[c]] = 0;
-                    self->tree.children[2 * out->node + c] = 0;
-                }
-                k++;
+            t->time[u] = 0;
+            if (u == t->root) {
+                t->root = GSL_MAX(c[0], c[1]);
             }
-            ret = tree_sequence_get_record(self->tree_sequence, j, &cr,
-                    MSP_ORDER_LEFT);
-            if (ret != 0) {
-                goto out;
-            }
-            while (j < self->num_records && cr.left == self->position) {
-                self->tree.time[cr.node] = cr.time;
-                for (c = 0; c < 2; c++) {
-                    self->tree.parent[cr.children[c]] = cr.node;
-                    self->tree.children[2 * cr.node + c] = cr.children[c];
-                }
-                j++;
-                /* we don't check this here because we know it'll return out
-                 * of bounds on the last check. This method is much too complicated!
-                 */
-                tree_sequence_get_record(self->tree_sequence, j, &cr,
-                    MSP_ORDER_LEFT);
-            }
-            self->next_record_index = j;
-            *length = self->right_sorted_records[k].right - self->position;
-            self->position = self->right_sorted_records[k].right;
+            self->removal_index++;
         }
-        /* Calculate the root. TODO: this should not need to be a loop. */
-        self->tree.root = 1;
-        while (self->tree.parent[self->tree.root] != 0) {
-            self->tree.root = self->tree.parent[self->tree.root];
+        /* Update the interval */
+        t->left = t->right;
+        t->right = s->trees.right[s->trees.removal_order[self->removal_index]];
+        /* Now insert the new records */
+        while (self->insertion_index < self->num_records &&
+                s->trees.left[s->trees.insertion_order[self->insertion_index]]
+                == t->left) {
+            k = s->trees.insertion_order[self->insertion_index];
+            u = s->trees.node[k];
+            c[0] = s->trees.children[2 * k];
+            c[1] = s->trees.children[2 * k + 1];
+            for (j = 0; j < 2; j++) {
+                t->parent[c[j]] = u;
+                t->children[2 * u + j] = c[j];
+            }
+            t->time[u] = s->trees.time[k];
+            if (u >t->root) {
+                t->root = u;
+            }
+            self->insertion_index++;
         }
-        *tree = &self->tree;
         ret = 1;
     }
-out:
+    *tree = t;
     return ret;
 }
 
