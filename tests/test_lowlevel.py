@@ -950,3 +950,36 @@ class TestHaplotypeGenerator(LowLevelTestCase):
             self.assertGreater(len(h), 0)
             self.assertIsInstance(h, str)
             self.assertEqual(len(h), num_mutations)
+
+
+class TestSparseTree(LowLevelTestCase):
+    """
+    Tests on the low-level sparse tree interface.
+    """
+
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.SparseTree)
+        for bad_type in ["", {}, [], None]:
+            self.assertRaises(
+                TypeError, _msprime.SparseTree, bad_type)
+        self.assertRaises(_msprime.LibraryError, _msprime.SparseTree, 0)
+        for n in range(1, 10):
+            st = _msprime.SparseTree(n)
+            self.assertEqual(st.get_num_nodes(), n)
+            # An uninitialised sparse tree should always be zero.
+            self.assertEqual(st.get_sample_size(), 0)
+            self.assertEqual(st.get_root(), 0)
+            self.assertEqual(st.get_left(), 0)
+            self.assertEqual(st.get_right(), 0)
+            for j in range(n + 1):
+                self.assertEqual(st.get_parent(j), 0)
+                self.assertEqual(st.get_children(j), (0, 0))
+                self.assertEqual(st.get_time(j), 0)
+
+    def test_bounds_checking(self):
+        for n in range(1, 10):
+            st = _msprime.SparseTree(n)
+            for v in [-100, -1, n + 1, n + 100, n * 100]:
+                self.assertRaises(ValueError, st.get_parent, v)
+                self.assertRaises(ValueError, st.get_children, v)
+                self.assertRaises(ValueError, st.get_time, v)

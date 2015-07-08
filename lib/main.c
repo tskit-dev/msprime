@@ -269,7 +269,7 @@ print_tree_sequence(tree_sequence_t *ts)
     size_t j;
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
     uint32_t length;
-    sparse_tree_t *tree;
+    sparse_tree_t tree;
     tree_node_t *nodes_out, *nodes_in, *node;
     coalescence_record_t cr;
     tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
@@ -317,16 +317,21 @@ print_tree_sequence(tree_sequence_t *ts)
         goto out;
     }
     /* sparse trees */
-    ret = sparse_tree_iterator_alloc(sparse_iter, ts);
+    ret = sparse_tree_alloc(&tree, tree_sequence_get_num_nodes(ts));
     if (ret != 0) {
         goto out;
     }
-    while ((ret = sparse_tree_iterator_next(sparse_iter, &tree)) == 1) {
-        printf("New tree: %d (%d)\n", tree->right - tree->left,
-                (int) tree->num_nodes);
+    ret = sparse_tree_iterator_alloc(sparse_iter, ts, &tree);
+    if (ret != 0) {
+        goto out;
+    }
+    while ((ret = sparse_tree_iterator_next(sparse_iter)) == 1) {
+        printf("New tree: %d (%d)\n", tree.right - tree.left,
+                (int) tree.num_nodes);
         sparse_tree_iterator_print_state(sparse_iter);
     }
     sparse_tree_iterator_free(sparse_iter);
+    sparse_tree_free(&tree);
 out:
     if (iter != NULL) {
         free(iter);
@@ -391,8 +396,8 @@ run_simulate(char *conf_file)
         print_haplotypes(tree_seq);
     }
     if (0) {
-        print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
+        print_newick_trees(tree_seq);
         tree_sequence_print_state(tree_seq);
     }
 out:

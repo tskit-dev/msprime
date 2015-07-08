@@ -168,6 +168,20 @@ class StressTester(object):
         s = ts.get_mutation_parameters()
         assert s is not None
 
+    def check_sparse_tree(self):
+        try:
+            _msprime.SparseTree()
+            assert False
+        except TypeError:
+            pass
+        try:
+            _msprime.SparseTree(0)
+            assert False
+        except _msprime.LibraryError:
+            pass
+
+        st = _msprime.SparseTree(10)
+
     def run(self):
         self.run_module_functions()
         self.check_simulator_errors()
@@ -181,6 +195,7 @@ class StressTester(object):
             bps = list(sim.get_breakpoints())
             assert len(bps) == sim.get_num_breakpoints()
         self.check_uninitialised_tree_sequence()
+        self.check_sparse_tree()
         self.check_tree_sequence_iterators(sim)
         self.check_tree_sequence_file_errors(sim)
         self.check_tree_sequence_dump_equality(sim)

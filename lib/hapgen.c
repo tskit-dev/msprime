@@ -130,10 +130,10 @@ out:
 
 
 static int
-hapgen_apply_tree_mutation(hapgen_t *self, sparse_tree_t *tree,
-        mutation_t *mut)
+hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
 {
     int ret = 0;
+    sparse_tree_t *tree = &self->tree;
     uint32_t *stack = self->traversal_stack;
     uint32_t u, c;
     int stack_top = 0;
@@ -158,16 +158,14 @@ static int
 hapgen_generate_all_haplotypes(hapgen_t *self)
 {
     int ret = 0;
-    sparse_tree_t *tree;
     size_t j;
+    sparse_tree_t *tree = &self->tree;
 
     j = 0;
-    while ((ret = sparse_tree_iterator_next(
-            &self->tree_iterator, &tree)) == 1) {
+    while ((ret = sparse_tree_iterator_next(&self->tree_iterator)) == 1) {
         while (j < self->num_mutations
                 && self->mutations[j]->position < tree->right) {
-            ret = hapgen_apply_tree_mutation(self, tree,
-                    self->mutations[j]);
+            ret = hapgen_apply_tree_mutation(self, self->mutations[j]);
             if (ret != 0) {
                 goto out;
             }
@@ -193,8 +191,13 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->tree_sequence = tree_sequence;
 
+    ret = sparse_tree_alloc(&self->tree,
+            tree_sequence_get_num_nodes(self->tree_sequence));
+    if (ret != 0) {
+        goto out;
+    }
     ret = sparse_tree_iterator_alloc(&self->tree_iterator,
-            self->tree_sequence);
+            self->tree_sequence, &self->tree);
     if (ret != 0) {
         goto out;
     }
@@ -247,6 +250,7 @@ hapgen_free(hapgen_t *self)
     if (self->traversal_stack != NULL) {
         free(self->traversal_stack);
     }
+    sparse_tree_free(&self->tree);
     sparse_tree_iterator_free(&self->tree_iterator);
     return 0;
 }

@@ -1441,6 +1441,11 @@ out:
  * Tree diff iterator.
  * ======================================================== */
 
+
+/* TODO this implementation is unnecessarily complicated. We should
+ * use the same approach as the sparse tree iterator and use the
+ * sorted lists of records.
+ */
 int
 tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence)
@@ -1451,9 +1456,6 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
     self->tree_sequence = tree_sequence;
     self->current_left = 0;
     self->next_record_index = 0;
-    /* These two are only used when we are iterating over all records */
-    self->current_breakpoint_index = 0;
-    self->next_breakpoint = 0;
     self->num_records = tree_sequence_get_num_coalescence_records(
             self->tree_sequence);
     /* Allocate the memory heaps */
@@ -1732,6 +1734,62 @@ out:
     return ret;
 }
 
+/* ======================================================== *
+ * sparse tree
+ * ======================================================== */
+
+int
+sparse_tree_alloc(sparse_tree_t *self, size_t num_nodes)
+{
+    int ret = MSP_ERR_NO_MEMORY;
+
+    memset(self, 0, sizeof(sparse_tree_t));
+    if (num_nodes <= 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->num_nodes = num_nodes;
+    self->parent = malloc((self->num_nodes + 1) * sizeof(uint32_t));
+    self->time = malloc((self->num_nodes + 1) * sizeof(double));
+    self->children = malloc(2 * (self->num_nodes + 1) * sizeof(uint32_t));
+    if (self->time == NULL || self->parent == NULL || self->children == NULL) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+int
+sparse_tree_free(sparse_tree_t *self)
+{
+    if (self->parent != NULL) {
+        free(self->parent);
+    }
+    if (self->time != NULL) {
+        free(self->time);
+    }
+    if (self->children != NULL) {
+        free(self->children);
+    }
+    return 0;
+}
+
+int
+sparse_tree_clear(sparse_tree_t *self)
+{
+    int ret = 0;
+    size_t n = self->num_nodes + 1;
+
+    self->left = 0;
+    self->right = 0;
+    self->root = 0;
+    memset(self->parent, 0, n * sizeof(uint32_t));
+    memset(self->time, 0, n * sizeof(double));
+    memset(self->children, 0, 2 * n * sizeof(uint32_t));
+    return ret;
+}
+
 
 /* ======================================================== *
  * sparse tree iterator
@@ -1739,32 +1797,29 @@ out:
 
 int
 sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
-        tree_sequence_t *tree_sequence)
+        tree_sequence_t *tree_sequence, sparse_tree_t *tree)
 {
     int ret = MSP_ERR_NO_MEMORY;
 
     assert(tree_sequence != NULL);
+    assert(tree != NULL);
+    assert(tree->time != NULL && tree->parent != NULL
+            && tree->children != NULL);
+    if (tree_sequence_get_num_nodes(tree_sequence) != tree->num_nodes) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     memset(self, 0, sizeof(sparse_tree_iterator_t));
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->num_nodes = tree_sequence_get_num_nodes(tree_sequence);
     self->num_records = tree_sequence_get_num_coalescence_records(
             tree_sequence);
     self->tree_sequence = tree_sequence;
-    self->tree.sample_size = self->sample_size;
-    self->tree.num_nodes = self->num_nodes;
-    self->tree.parent = calloc(self->num_nodes + 1, sizeof(uint32_t));
-    self->tree.time = calloc(self->num_nodes + 1, sizeof(double));
-    self->tree.children = calloc(2 * (self->num_nodes + 1), sizeof(uint32_t));
-    if (self->tree.time == NULL || self->tree.parent == NULL
-            || self->tree.children == NULL) {
-        goto out;
-    }
+    self->tree = tree;
+    self->tree->sample_size = self->sample_size;
     self->insertion_index = 0;
     self->removal_index = 0;
-    self->tree.left = 0;
-    self->tree.right = 0;
-    self->tree.root = 0;
-    ret = 0;
+    ret = sparse_tree_clear(self->tree);
 out:
     return ret;
 }
@@ -1773,16 +1828,6 @@ int
 sparse_tree_iterator_free(sparse_tree_iterator_t *self)
 {
     int ret = 0;
-
-    if (self->tree.parent != NULL) {
-        free(self->tree.parent);
-    }
-    if (self->tree.time != NULL) {
-        free(self->tree.time);
-    }
-    if (self->tree.children != NULL) {
-        free(self->tree.children);
-    }
     return ret;
 }
 
@@ -1791,20 +1836,20 @@ sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
 {
     uint32_t u, v, j;
 
-    assert(self->tree.num_nodes == self->num_nodes);
+    assert(self->tree->num_nodes == self->num_nodes);
     for (j = 1; j < self->sample_size + 1; j++) {
         u = j;
-        assert(self->tree.time[u] == 0.0);
-        assert(self->tree.children[2 * j] == 0);
-        assert(self->tree.children[2 * j + 1] == 0);
-        while (self->tree.parent[u] != 0) {
-            v = self->tree.parent[u];
-            assert(self->tree.children[2 * v] == u
-                    || self->tree.children[2 * v + 1] == u);
+        assert(self->tree->time[u] == 0.0);
+        assert(self->tree->children[2 * j] == 0);
+        assert(self->tree->children[2 * j + 1] == 0);
+        while (self->tree->parent[u] != 0) {
+            v = self->tree->parent[u];
+            assert(self->tree->children[2 * v] == u
+                    || self->tree->children[2 * v + 1] == u);
             u = v;
-            assert(self->tree.time[u] > 0.0);
+            assert(self->tree->time[u] > 0.0);
         }
-        assert(u == self->tree.root);
+        assert(u == self->tree->root);
     }
 }
 
@@ -1817,23 +1862,23 @@ sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
     printf("insertion_index = %d\n", (int) self->insertion_index);
     printf("removal_index = %d\n", (int) self->removal_index);
     printf("num_records = %d\n", (int) self->num_records);
-    printf("tree.left = %d\n", self->tree.left);
-    printf("tree.right = %d\n", self->tree.right);
-    for (j = 0; j < self->tree.num_nodes + 1; j++) {
-        printf("\t%d\t%d\t%d\t%d\t%f\n", (int) j, self->tree.parent[j],
-                self->tree.children[2 * j], self->tree.children[2 * j + 1],
-                self->tree.time[j]);
+    printf("tree.left = %d\n", self->tree->left);
+    printf("tree.right = %d\n", self->tree->right);
+    for (j = 0; j < self->tree->num_nodes + 1; j++) {
+        printf("\t%d\t%d\t%d\t%d\t%f\n", (int) j, self->tree->parent[j],
+                self->tree->children[2 * j], self->tree->children[2 * j + 1],
+                self->tree->time[j]);
     }
     sparse_tree_iterator_check_state(self);
 }
 
 int
-sparse_tree_iterator_next(sparse_tree_iterator_t *self, sparse_tree_t **tree)
+sparse_tree_iterator_next(sparse_tree_iterator_t *self)
 {
     int ret = 0;
     uint32_t j, k, u, c[2];
     tree_sequence_t *s = self->tree_sequence;
-    sparse_tree_t *t = &self->tree;
+    sparse_tree_t *t = self->tree;
 
     assert(t != NULL && s != NULL);
     if (self->insertion_index < self->num_records) {
@@ -1877,7 +1922,5 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self, sparse_tree_t **tree)
         }
         ret = 1;
     }
-    *tree = t;
     return ret;
 }
-
