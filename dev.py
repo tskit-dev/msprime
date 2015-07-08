@@ -113,6 +113,9 @@ def tree_algorithm():
         assert t1.right == t2.right
         assert t1.root == t2.root
 
+def large_example():
+    msprime.simulate(10**6, 100 * 10**6, scaled_recombination_rate=0.001,
+            random_seed=1, max_memory="10G")
 
 
 if __name__ == "__main__":
@@ -121,4 +124,5 @@ if __name__ == "__main__":
     # newick_example()
     # tree_example()
     # dump_file("example.hdf5")
-    tree_algorithm()
+    # tree_algorithm()
+    large_example()

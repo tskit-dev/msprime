@@ -207,7 +207,7 @@ typedef struct {
     size_t num_nodes;
     size_t num_records;
     tree_sequence_t *tree_sequence;
-    sparse_tree_t tree;
+    sparse_tree_t *tree;
     size_t insertion_index;
     size_t removal_index;
 } sparse_tree_iterator_t;
@@ -248,6 +248,7 @@ typedef struct {
     size_t words_per_row;
     uint64_t *haplotype_matrix;
     char *haplotype;
+    sparse_tree_t tree;
     sparse_tree_iterator_t tree_iterator;
     uint32_t *traversal_stack;
 } hapgen_t;
@@ -316,11 +317,14 @@ int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
         tree_node_t **nodes_out, tree_node_t **nodes_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 
+int sparse_tree_alloc(sparse_tree_t *self, size_t num_nodes);
+int sparse_tree_free(sparse_tree_t *self);
+int sparse_tree_clear(sparse_tree_t *self);
+
 int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
-        tree_sequence_t *tree_sequence);
+        tree_sequence_t *tree_sequence, sparse_tree_t *tree);
 int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
-int sparse_tree_iterator_next(sparse_tree_iterator_t *self, 
-        sparse_tree_t **tree);
+int sparse_tree_iterator_next(sparse_tree_iterator_t *self);
 void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
 
 int newick_converter_alloc(newick_converter_t *self, 

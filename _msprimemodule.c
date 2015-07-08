@@ -50,6 +50,11 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    sparse_tree_t *sparse_tree;
+} SparseTree;
+
+typedef struct {
+    PyObject_HEAD
     TreeSequence *tree_sequence;
     tree_diff_iterator_t *tree_diff_iterator;
 } TreeDiffIterator;
@@ -1379,6 +1384,279 @@ static PyTypeObject TreeSequenceType = {
 };
 
 /*===================================================================
+ * SparseTree
+ *===================================================================
+ */
+
+static int
+SparseTree_check_sparse_tree(SparseTree *self)
+{
+    int ret = 0;
+    if (self->sparse_tree == NULL) {
+        PyErr_SetString(PyExc_ValueError, "sparse_tree not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static int
+SparseTree_check_bounds(SparseTree *self, unsigned int node)
+{
+    int ret = 0;
+    if (node > self->sparse_tree->num_nodes) {
+        PyErr_SetString(PyExc_ValueError, "Node index out of bounds");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+SparseTree_dealloc(SparseTree* self)
+{
+    if (self->sparse_tree != NULL) {
+        sparse_tree_free(self->sparse_tree);
+        PyMem_Free(self->sparse_tree);
+        self->sparse_tree = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"num_nodes", NULL};
+    Py_ssize_t num_nodes;
+
+    self->sparse_tree = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "n", kwlist, &num_nodes)) {
+        goto out;
+    }
+    self->sparse_tree = PyMem_Malloc(sizeof(sparse_tree_t));
+    if (self->sparse_tree == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = sparse_tree_alloc(self->sparse_tree, (size_t) num_nodes);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    err = sparse_tree_clear(self->sparse_tree);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+
+
+
+static PyObject *
+SparseTree_get_sample_size(SparseTree  *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->sample_size);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_num_nodes(SparseTree  *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->num_nodes);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_root(SparseTree  *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->root);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_left(SparseTree  *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->left);
+out:
+    return ret;
+}
+
+
+static PyObject *
+SparseTree_get_right(SparseTree  *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->right);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_parent(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int parent;
+    unsigned int node;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    parent = self->sparse_tree->parent[node];
+    ret = Py_BuildValue("I", parent);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_time(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double time;
+    unsigned int node;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    time = self->sparse_tree->time[node];
+    ret = Py_BuildValue("d", time);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_children(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int children[2];
+    unsigned int node;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    children[0] = self->sparse_tree->children[2 * node];
+    children[1] = self->sparse_tree->children[2 * node + 1];
+    ret = Py_BuildValue("II", children[0], children[1]);
+out:
+    return ret;
+}
+
+
+
+static PyMemberDef SparseTree_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef SparseTree_methods[] = {
+    {"get_num_nodes", (PyCFunction) SparseTree_get_num_nodes, METH_NOARGS,
+            "Returns the number of nodes in the sparse tree." },
+    {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
+            "Returns the sample size" },
+    {"get_root", (PyCFunction) SparseTree_get_root, METH_NOARGS,
+            "Returns the root of the tree." },
+    {"get_left", (PyCFunction) SparseTree_get_left, METH_NOARGS,
+            "Returns the left-most coordinate (inclusive)." },
+    {"get_right", (PyCFunction) SparseTree_get_right, METH_NOARGS,
+            "Returns the right-most coordinate (exclusive)." },
+    {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
+            "Returns the parent of node u" },
+    {"get_time", (PyCFunction) SparseTree_get_time, METH_VARARGS,
+            "Returns the time of node u" },
+    {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
+            "Returns the children of node u" },
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject SparseTreeType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.SparseTree",             /* tp_name */
+    sizeof(SparseTree),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)SparseTree_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "SparseTree objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    SparseTree_methods,             /* tp_methods */
+    SparseTree_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)SparseTree_init,      /* tp_init */
+};
+
+
+
+/*===================================================================
  * TreeDiffIterator
  *===================================================================
  */
@@ -1932,6 +2210,13 @@ init_msprime(void)
     }
     Py_INCREF(&TreeSequenceType);
     PyModule_AddObject(module, "TreeSequence", (PyObject *) &TreeSequenceType);
+    /* SparseTree type */
+    SparseTreeType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&SparseTreeType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&SparseTreeType);
+    PyModule_AddObject(module, "SparseTree", (PyObject *) &SparseTreeType);
     /* TreeDiffIterator type */
     TreeDiffIteratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&TreeDiffIteratorType) < 0) {

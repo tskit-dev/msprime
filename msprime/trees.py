@@ -55,6 +55,30 @@ class SparseTree(object):
         self.left = 0
         self.right = 0
 
+    # TODO this is the new recommended API for accessing values in the
+    # sparse tree. These should be implemented with a pass-through
+    # to the low-level API in the future.
+    def get_parent(self, node):
+        return self.parent[node]
+
+    def get_children(self, node):
+        return self.children[0][node], self.children[1][node]
+
+    def get_time(self, node):
+        return self.time[node]
+
+    def get_interval(self):
+        return self.left, self.right
+
+    def get_root(self):
+        return self.root
+
+    def get_sample_size(self):
+        return self.sample_size
+
+    def get_num_nodes(self):
+        return self.num_nodes
+
     def print_state(self):
         """
         Prints out a representation of this sparse tree to stdout.
