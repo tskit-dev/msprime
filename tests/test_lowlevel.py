@@ -448,6 +448,33 @@ class TestSimulationState(LowLevelTestCase):
             self.verify_simulation(n, 1, 0.0, [m2])
             self.verify_simulation(n, 1, 0.0, [m1, m2])
 
+    def test_event_by_event(self):
+        n = 10
+        m = 100
+        sim = _msprime.Simulator(
+            sample_size=n, num_loci=m, scaled_recombination_rate=1,
+            random_seed=1)
+        # We run until time -1 to for initialisation
+        sim.run(-1)
+        self.assertEqual(sim.get_time(), 0)
+        ancestors = sim.get_ancestors()
+        self.assertEqual(len(ancestors), n)
+        nodes = []
+        for ancestor in ancestors:
+            self.assertEqual(len(ancestor), 1)
+            for l, r, node in ancestor:
+                self.assertEqual(l, 0)
+                self.assertEqual(r, m)
+                nodes.append(node)
+        self.assertEqual(sorted(nodes), list(range(1, n + 1)))
+        events = 0
+        while not sim.run_event():
+            events += 1
+            total_events = (
+                sim.get_num_coancestry_events() +
+                sim.get_num_recombination_events())
+            self.assertEqual(events, total_events)
+
 
 class TestSimulator(LowLevelTestCase):
     """

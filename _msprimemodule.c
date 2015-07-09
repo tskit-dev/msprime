@@ -824,6 +824,29 @@ out:
     return ret;
 }
 
+static PyObject *
+Simulator_run_event(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int status, coalesced;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    status = msp_run(self->sim, DBL_MAX, 1);
+    if (status < 0) {
+        handle_library_error(status);
+        goto out;
+    }
+    coalesced = status == 0;
+    /* return True if complete coalescence has occured */
+    ret = coalesced ? Py_True : Py_False;
+    Py_INCREF(ret);
+out:
+    return ret;
+}
+
+
 static PyMethodDef Simulator_methods[] = {
     {"get_num_loci", (PyCFunction) Simulator_get_num_loci, METH_NOARGS,
             "Returns the number of loci" },
@@ -887,6 +910,9 @@ static PyMethodDef Simulator_methods[] = {
             METH_VARARGS, "Returns the population models"},
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\
+            if sample has coalesced and False otherwise." },
+    {"run_event", (PyCFunction) Simulator_run_event, METH_NOARGS,
+            "Simulates exactly one event. Returns True\
             if sample has coalesced and False otherwise." },
     {NULL}  /* Sentinel */
 };
