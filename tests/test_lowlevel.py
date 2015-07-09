@@ -818,6 +818,10 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(ValueError, tree_sequence.get_record, 0)
         self.assertRaises(ValueError, tree_sequence.get_num_records)
         self.assertRaises(ValueError, _msprime.TreeDiffIterator, tree_sequence)
+        sparse_tree = _msprime.SparseTree(2)
+        self.assertRaises(
+                ValueError, _msprime.SparseTreeIterator, tree_sequence,
+                sparse_tree)
         sim = _msprime.Simulator(10, 1)
         sim.run()
         tree_sequence.create(sim)
@@ -947,6 +951,53 @@ class TestTreeDiffIterator(LowLevelTestCase):
     def test_iterator(self):
         ts = self.get_tree_sequence()
         self.verify_iterator(_msprime.TreeDiffIterator(ts))
+
+
+class TestSparseTreeIterator(LowLevelTestCase):
+    """
+    Tests for the low-level sparse tree iterator.
+    """
+
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.SparseTreeIterator)
+        self.assertRaises(TypeError, _msprime.SparseTreeIterator, None)
+        ts = _msprime.TreeSequence()
+        # This hasn't been initialised, so should fail.
+        tree = _msprime.SparseTree(2)
+        self.assertRaises(ValueError, _msprime.SparseTreeIterator, ts, tree)
+        sim = _msprime.Simulator(10, 1)
+        sim.run()
+        ts.create(sim)
+        tree = _msprime.SparseTree(ts.get_num_nodes())
+        n_before = 0
+        parents_before = []
+        for t in _msprime.SparseTreeIterator(ts, tree):
+            n_before += 1
+            self.assertIs(t, tree)
+            pi = {}
+            for j in range(t.get_num_nodes()):
+                pi[j] = t.get_parent(j)
+            parents_before.append(pi)
+        self.assertEqual(n_before, len(list(_msprime.TreeDiffIterator(ts))))
+        # If we remove the objects, we should get the same results.
+        iterator = _msprime.SparseTreeIterator(ts, tree)
+        del tree
+        del ts
+        n_after = 0
+        parents_after = []
+        for t in iterator:
+            n_after += 1
+            self.assertIsInstance(t, _msprime.SparseTree)
+            pi = {}
+            for j in range(t.get_num_nodes()):
+                pi[j] = t.get_parent(j)
+            parents_after.append(pi)
+        self.assertEqual(parents_before, parents_after)
+
+    def test_iterator(self):
+        ts = self.get_tree_sequence()
+        tree = _msprime.SparseTree(ts.get_num_nodes())
+        self.verify_iterator(_msprime.SparseTreeIterator(ts, tree))
 
 
 class TestHaplotypeGenerator(LowLevelTestCase):

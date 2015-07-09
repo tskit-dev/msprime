@@ -76,10 +76,12 @@ class StressTester(object):
 
     def check_uninitialised_tree_sequence(self):
         ts = _msprime.TreeSequence()
+        tree = _msprime.SparseTree(1)
         functions = [
             ts.dump, ts.generate_mutations,
             lambda: _msprime.NewickConverter(ts),
             lambda: _msprime.TreeDiffIterator(ts),
+            lambda: _msprime.SparseTreeIterator(ts, tree),
             lambda: _msprime.HaplotypeGenerator(ts)]
         for f in functions:
             try:
@@ -103,6 +105,27 @@ class StressTester(object):
         iterator = _msprime.NewickConverter(ts, 4)
         del ts
         assert list(iterator) == trees
+        # Check the SparseTreeIterator
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        tree = _msprime.SparseTree(ts.get_num_nodes())
+        parents_before = []
+        for t in _msprime.SparseTreeIterator(ts, tree):
+            pi = {}
+            for j in range(tree.get_num_nodes()):
+                pi[j] = tree.get_parent(j)
+            parents_before.append(pi)
+        iterator = _msprime.SparseTreeIterator(ts, tree)
+        del tree
+        del ts
+        parents_after = []
+        for t in iterator:
+            pi = {}
+            for j in range(t.get_num_nodes()):
+                pi[j] = t.get_parent(j)
+            parents_after.append(pi)
+        assert parents_before == parents_after
+
 
     def check_tree_sequence_file_errors(self, sim):
         ts = _msprime.TreeSequence()
