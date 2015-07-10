@@ -487,6 +487,18 @@ out:
 }
 
 static PyObject *
+Simulator_get_num_multiple_recombination_events(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_multiple_re_events);
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_get_num_avl_node_blocks(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -881,6 +893,11 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_recombination_events",
             (PyCFunction) Simulator_get_num_recombination_events, METH_NOARGS,
             "Returns the number of recombination_events" },
+    {"get_num_multiple_recombination_events",
+            (PyCFunction) Simulator_get_num_multiple_recombination_events,
+            METH_NOARGS,
+            "Returns the number of recombination_events that occur at an "
+            "existing breakpoint" },
     {"get_num_avl_node_blocks",
             (PyCFunction) Simulator_get_num_avl_node_blocks, METH_NOARGS,
             "Returns the number of avl_node memory blocks"},
