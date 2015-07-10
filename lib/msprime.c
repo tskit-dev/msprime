@@ -954,6 +954,8 @@ msp_recombination_event(msp_t *self)
             if (ret != 0) {
                 goto out;
             }
+        } else {
+            self->num_multiple_re_events++;
         }
     } else {
         assert(x != NULL);
