@@ -23,6 +23,7 @@ from __future__ import print_function
 from __future__ import division
 from __future__ import unicode_literals
 
+import collections
 import heapq
 import json
 import os.path
@@ -73,6 +74,75 @@ class LowLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests for the low-level interface.
     """
+    def verify_sparse_tree_dict(self, n, pi, tau):
+        """
+        Verifies that the specified sparse tree in dict format is a
+        consistent coalescent history for a sample of size n.
+        """
+        self.assertEqual(set(pi.keys()), set(tau.keys()))
+        self.assertEqual(len(pi), 2 * n - 1)
+        self.assertEqual(len(tau), 2 * n - 1)
+        # Zero should not be a node
+        self.assertNotIn(0, pi)
+        self.assertNotIn(0, tau)
+        # verify the root is equal for all leaves
+        root = 1
+        while pi[root] != 0:
+            root = pi[root]
+        for j in range(1, n + 1):
+            k = j
+            while pi[k] != 0:
+                k = pi[k]
+            if k != root:
+                print("ERROR!!")
+                print(pi)
+                print(j)
+            self.assertEqual(k, root)
+        self.assertIn(root, tau)
+        # 1 to n inclusive should always be nodes
+        for j in range(1, n + 1):
+            self.assertIn(j, pi)
+            self.assertIn(j, tau)
+        num_children = collections.defaultdict(int)
+        for j in pi.keys():
+            num_children[pi[j]] += 1
+        # nodes 1 to n are leaves.
+        for j in range(1, n + 1):
+            self.assertNotEqual(pi[j], 0)
+            self.assertEqual(tau[j], 0)
+            self.assertEqual(num_children[j], 0)
+        # All non-leaf nodes should be binary with non-zero times.
+        taup = {}
+        for j in pi.keys():
+            if j > n:
+                self.assertEqual(num_children[j], 2)
+                self.assertGreater(tau[j], 0.0)
+                taup[j] = tau[j]
+        # times of non leaves should be distinct
+        self.assertEqual(len(set(taup)), len(taup))
+        # Times of leaves should be zero, and increasing up the tree
+        for j in range(1, n + 1):
+            self.assertEqual(tau[j], 0.0)
+            last_time = -1
+            k = j
+            while k in pi:
+                self.assertNotEqual(k, pi[k])
+                self.assertGreater(tau[k], last_time)
+                last_time = tau[k]
+                k = pi[k]
+
+    def verify_sparse_trees(self, n, m, trees):
+        """
+        Verifies that the specified set of sparse trees is consistent with the
+        specified paramters.
+        """
+        s = 0
+        for l, pi, tau in trees:
+            self.verify_sparse_tree(n, pi, tau)
+            self.assertTrue(l > 0)
+            s += l
+        self.assertEqual(s, m)
+
     def get_tree_sequence(
             self, sample_size=10, num_loci=100, mutation_rate=10):
         models = get_random_population_models(3)
@@ -169,11 +239,33 @@ class TestSimulationState(LowLevelTestCase):
             else:
                 self.assertEqual(segment_am + record_am, n)
 
+    def verify_trees_equal(self, n, pi, tau, sparse_tree):
+        """
+        Verifies that the specified maps are equivalent to the specified
+        sparse tree object.
+        """
+        self.assertEqual(n, sparse_tree.get_sample_size())
+        pi_p = {}
+        tau_p = {}
+        for j in range(1, n + 1):
+            u = j
+            while u != 0 and u not in pi_p:
+                pi_p[u] = sparse_tree.get_parent(u)
+                tau_p[u] = sparse_tree.get_time(u)
+                u = pi_p[u]
+        self.assertEqual(pi_p, pi)
+        self.assertEqual(tau_p, tau)
+        self.assertEqual(pi_p[sparse_tree.get_root()], 0)
+
     def verify_trees(self, sim, sorted_records):
         """
         Verifies that the specified set of sorted coalescence records
         corresponds to correct trees for the specified simulation.
         """
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        st = _msprime.SparseTree(ts.get_num_nodes())
+        st_iter = _msprime.SparseTreeIterator(ts, st)
         n = sim.get_sample_size()
         pi = {}
         tau = {j: 0 for j in range(1, n + 1)}
@@ -192,7 +284,11 @@ class TestSimulationState(LowLevelTestCase):
                 while v in pi:
                     v = pi[v]
                 pi[v] = 0
-                self.verify_sparse_tree(n, pi, tau)
+                self.verify_sparse_tree_dict(n, pi, tau)
+                # Make sure this is equal to the sparse tree we get from
+                # the iterator.
+                st = next(st_iter)
+                self.verify_trees_equal(n, pi, tau, st)
                 del pi[v]
                 num_trees += 1
             else:
@@ -215,9 +311,12 @@ class TestSimulationState(LowLevelTestCase):
         while v in pi:
             v = pi[v]
         pi[v] = 0
-        self.verify_sparse_tree(n, pi, tau)
+        self.verify_sparse_tree_dict(n, pi, tau)
+        st = next(st_iter)
+        self.verify_trees_equal(n, pi, tau, st)
         num_trees += 1
         self.assertLessEqual(num_trees, sim.get_num_breakpoints())
+        self.assertRaises(StopIteration, next, st_iter)
 
     def verify_squashed_records(self, sorted_records):
         """
