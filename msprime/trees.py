@@ -36,7 +36,6 @@ import _msprime
 # - get_branch_length, get_total_branch_length
 # - get_parent, get_children, get_root, etc.
 # - Pickle support
-# The current attribute based approach is a bad idea.
 class SparseTree(object):
     """
     A sparse tree is a single tree in a TreeSequence. In a sparse tree,
@@ -56,7 +55,7 @@ class SparseTree(object):
         return self._ll_sparse_tree.get_time(node)
 
     def is_internal(self, node):
-        return not self.is_leaf()
+        return not self.is_leaf(node)
 
     def is_leaf(self, node):
         return 1 <= node <= self.get_sample_size()
@@ -76,36 +75,40 @@ class SparseTree(object):
     def get_num_nodes(self):
         return self._ll_sparse_tree.get_num_nodes()
 
-    # def print_state(self):
-    #     """
-    #     Prints out a representation of this sparse tree to stdout.
-    #     """
-    #     print("sample_size = ", self.sample_size)
-    #     print("num_nodes = ", self.num_nodes)
-    #     print("root = ", self.root)
-    #     print("left = ", self.left)
-    #     print("right = ", self.right)
-    #     print("node\tparent\tchildren\ttime\t")
-    #     for j in range(1, self.num_nodes + 1):
-    #         if self.parent[j] != 0 or self.children[0][j] != 0:
-    #             print(
-    #                 j, self.parent[j], self.children[0][j],
-    #                 self.children[1][j], self.time[j], sep="\t")
+    def get_parent_dict(self):
+        pi = {}
+        for j in range(1, self.get_sample_size() + 1):
+            u = j
+            while u != 0 and u not in pi:
+                pi[u] = self.get_parent(u)
+                u = pi[u]
+        return pi
 
-    # def __eq__(self, other):
-    #     return (
-    #         self.num_nodes == other.num_nodes and
-    #         self.sample_size == other.sample_size and
-    #         self.parent == other.parent and
-    #         self.children[0] == other.children[0] and
-    #         self.children[1] == other.children[1] and
-    #         self.time == other.time and
-    #         self.left == other.left and
-    #         self.right == other.right and
-    #         self.root == other.root)
+    def get_time_dict(self):
+        tau = {}
+        for j in range(1, self.get_sample_size() + 1):
+            u = j
+            while u != 0 and u not in tau:
+                tau[u] = self.get_time(u)
+                u = self.get_parent(u)
+        return tau
 
-    # def __ne__(self, other):
-    #     return not self.__eq__(other)
+    def __str__(self):
+        return "({},{}):{}".format(
+            self.get_left(), self.get_right(), self.get_parent_dict())
+
+    def __eq__(self, other):
+        return (
+            self.get_num_nodes() == other.get_num_nodes() and
+            self.get_sample_size() == other.get_sample_size() and
+            self.get_parent_dict() == other.get_parent_dict() and
+            self.get_time_dict() == other.get_time_dict() and
+            self.get_left() == other.get_left() and
+            self.get_right() == other.get_right() and
+            self.get_root() == other.get_root())
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 def simulate(

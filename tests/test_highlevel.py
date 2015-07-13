@@ -127,6 +127,12 @@ class HighLevelTestCase(tests.MsprimeTestCase):
                     stack.append(c)
         self.assertEqual(
             sorted(leaves), list(range(1, st.get_sample_size() + 1)))
+        # Check the parent dict
+        pi = st.get_parent_dict()
+        self.assertEqual(len(pi), 2 * st.get_sample_size() - 1)
+        self.assertEqual(pi[st.get_root()], 0)
+        for k, v in pi.items():
+            self.assertEqual(st.get_parent(k), v)
 
     def verify_sparse_trees(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
@@ -135,8 +141,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         length = 0
         for st1, st2 in zip(iter1, iter2):
             self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
-            # self.assertEqual(st1, st2)
-            # FIXME
+            self.assertEqual(st1, st2)
             self.assertEqual(st1.get_left(), length)
             self.assertGreaterEqual(st1.get_left(), 0)
             self.assertGreater(st1.get_right(), st1.get_left())
