@@ -27,13 +27,58 @@ import collections
 import random
 import unittest
 
-import msprime
 import _msprime
 
 
 def setUp():
     # Make random tests reproducible.
     random.seed(210)
+
+
+class PythonSparseTree(object):
+    """
+    Presents the same interface as the SparseTree object for testing. This
+    is tightly coupled with the PythonTreeSequence object below which updates
+    the internal structures during iteration.
+    """
+    def __init__(self, num_nodes):
+        self.num_nodes = num_nodes
+        self.parent = {}
+        self.children = {}
+        self.time = {}
+        self.left = 0
+        self.right = 0
+        self.root = 0
+
+    def get_num_nodes(self):
+        return self.num_nodes
+
+    def get_sample_size(self):
+        return self.sample_size
+
+    def get_left(self):
+        return self.left
+
+    def get_right(self):
+        return self.right
+
+    def get_parent(self, node):
+        return self.parent[node]
+
+    def get_children(self, node):
+        return self.children[node]
+
+    def get_time(self, node):
+        return self.time[node]
+
+    def get_root(self):
+        return self.root
+
+    def get_parent_dict(self):
+        return self.parent
+
+    def get_time_dict(self):
+        return self.time
 
 
 class PythonTreeSequence(object):
@@ -82,25 +127,31 @@ class PythonTreeSequence(object):
             return self._diffs()
 
     def sparse_trees(self):
-        st = msprime.SparseTree(
-            self._sample_size, self._tree_sequence.get_num_nodes())
+        st = PythonSparseTree(self._tree_sequence.get_num_nodes())
+        st.sample_size = self._tree_sequence.get_sample_size()
         st.left = 0
+        st.time = {j: 0 for j in range(1, st.sample_size + 1)}
         for length, records_out, records_in in self.diffs():
             for node, children, t in records_out:
-                st.time[node] = 0.0
-                for k in range(2):
-                    st.children[k][node] = 0
-                    st.parent[children[k]] = 0
+                del st.time[node]
+                del st.children[node]
+                for c in children:
+                    del st.parent[c]
             for node, children, t in records_in:
                 st.time[node] = t
-                for k in range(2):
-                    st.children[k][node] = children[k]
-                    st.parent[children[k]] = node
-            st.root = 1
-            while st.parent[st.root] != 0:
-                st.root = st.parent[st.root]
+                st.children[node] = children
+                for c in children:
+                    st.parent[c] = node
+            # Insert the root
+            root = 1
+            while root in st.parent:
+                root = st.parent[root]
+            st.parent[root] = 0
+            st.root = root
             st.right += length
+            assert len(st.parent) == 2 * st.sample_size - 1
             yield st
+            del st.parent[root]
             st.left = st.right
 
 
@@ -108,72 +159,3 @@ class MsprimeTestCase(unittest.TestCase):
     """
     Superclass of all tests msprime simulator test cases.
     """
-
-    def verify_sparse_tree(self, n, pi, tau):
-        """
-        Verifies that the specified sparse_tree is a consistent coalescent
-        history for a sample of size n.
-        """
-        self.assertEqual(set(pi.keys()), set(tau.keys()))
-        self.assertEqual(len(pi), 2 * n - 1)
-        self.assertEqual(len(tau), 2 * n - 1)
-        # Zero should not be a node
-        self.assertNotIn(0, pi)
-        self.assertNotIn(0, tau)
-        # verify the root is equal for all leaves
-        root = 1
-        while pi[root] != 0:
-            root = pi[root]
-        for j in range(1, n + 1):
-            k = j
-            while pi[k] != 0:
-                k = pi[k]
-            if k != root:
-                print("ERROR!!")
-                print(pi)
-                print(j)
-            self.assertEqual(k, root)
-        self.assertIn(root, tau)
-        # 1 to n inclusive should always be nodes
-        for j in range(1, n + 1):
-            self.assertIn(j, pi)
-            self.assertIn(j, tau)
-        num_children = collections.defaultdict(int)
-        for j in pi.keys():
-            num_children[pi[j]] += 1
-        # nodes 1 to n are leaves.
-        for j in range(1, n + 1):
-            self.assertNotEqual(pi[j], 0)
-            self.assertEqual(tau[j], 0)
-            self.assertEqual(num_children[j], 0)
-        # All non-leaf nodes should be binary with non-zero times.
-        taup = {}
-        for j in pi.keys():
-            if j > n:
-                self.assertEqual(num_children[j], 2)
-                self.assertGreater(tau[j], 0.0)
-                taup[j] = tau[j]
-        # times of non leaves should be distinct
-        self.assertEqual(len(set(taup)), len(taup))
-        # Times of leaves should be zero, and increasing up the tree
-        for j in range(1, n + 1):
-            self.assertEqual(tau[j], 0.0)
-            last_time = -1
-            k = j
-            while k in pi:
-                self.assertNotEqual(k, pi[k])
-                self.assertGreater(tau[k], last_time)
-                last_time = tau[k]
-                k = pi[k]
-
-    def verify_sparse_trees(self, n, m, trees):
-        """
-        Verifies that the specified set of sparse trees is consistent with the
-        specified paramters.
-        """
-        s = 0
-        for l, pi, tau in trees:
-            self.verify_sparse_tree(n, pi, tau)
-            self.assertTrue(l > 0)
-            s += l
-        self.assertEqual(s, m)

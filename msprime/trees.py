@@ -22,7 +22,6 @@ Module responsible to generating and reading tree files.
 from __future__ import division
 from __future__ import print_function
 
-import array
 import math
 import random
 
@@ -37,75 +36,76 @@ import _msprime
 # - get_branch_length, get_total_branch_length
 # - get_parent, get_children, get_root, etc.
 # - Pickle support
-# The current attribute based approach is a bad idea.
 class SparseTree(object):
     """
     A sparse tree is a single tree in a TreeSequence. In a sparse tree,
     each node is a positive integer, with 1 to sample_size being the
     leaves of the tree.
     """
-    def __init__(self, sample_size, num_nodes):
-        self.num_nodes = num_nodes
-        self.sample_size = sample_size
-        zeros = [0 for _ in range(num_nodes + 1)]
-        self.parent = array.array("I", zeros)
-        self.children = array.array("I", zeros), array.array("I", zeros)
-        self.time = array.array("d", zeros)
-        self.root = 0
-        self.left = 0
-        self.right = 0
+    def __init__(self, ll_sparse_tree):
+        self._ll_sparse_tree = ll_sparse_tree
 
-    # TODO this is the new recommended API for accessing values in the
-    # sparse tree. These should be implemented with a pass-through
-    # to the low-level API in the future.
     def get_parent(self, node):
-        return self.parent[node]
+        return self._ll_sparse_tree.get_parent(node)
 
     def get_children(self, node):
-        return self.children[0][node], self.children[1][node]
+        return self._ll_sparse_tree.get_children(node)
 
     def get_time(self, node):
-        return self.time[node]
+        return self._ll_sparse_tree.get_time(node)
 
-    def get_interval(self):
-        return self.left, self.right
+    def is_internal(self, node):
+        return not self.is_leaf(node)
+
+    def is_leaf(self, node):
+        return 1 <= node <= self.get_sample_size()
 
     def get_root(self):
-        return self.root
+        return self._ll_sparse_tree.get_root()
+
+    def get_left(self):
+        return self._ll_sparse_tree.get_left()
+
+    def get_right(self):
+        return self._ll_sparse_tree.get_right()
 
     def get_sample_size(self):
-        return self.sample_size
+        return self._ll_sparse_tree.get_sample_size()
 
     def get_num_nodes(self):
-        return self.num_nodes
+        return self._ll_sparse_tree.get_num_nodes()
 
-    def print_state(self):
-        """
-        Prints out a representation of this sparse tree to stdout.
-        """
-        print("sample_size = ", self.sample_size)
-        print("num_nodes = ", self.num_nodes)
-        print("root = ", self.root)
-        print("left = ", self.left)
-        print("right = ", self.right)
-        print("node\tparent\tchildren\ttime\t")
-        for j in range(1, self.num_nodes + 1):
-            if self.parent[j] != 0 or self.children[0][j] != 0:
-                print(
-                    j, self.parent[j], self.children[0][j],
-                    self.children[1][j], self.time[j], sep="\t")
+    def get_parent_dict(self):
+        pi = {}
+        for j in range(1, self.get_sample_size() + 1):
+            u = j
+            while u != 0 and u not in pi:
+                pi[u] = self.get_parent(u)
+                u = pi[u]
+        return pi
+
+    def get_time_dict(self):
+        tau = {}
+        for j in range(1, self.get_sample_size() + 1):
+            u = j
+            while u != 0 and u not in tau:
+                tau[u] = self.get_time(u)
+                u = self.get_parent(u)
+        return tau
+
+    def __str__(self):
+        return "({},{}):{}".format(
+            self.get_left(), self.get_right(), self.get_parent_dict())
 
     def __eq__(self, other):
         return (
-            self.num_nodes == other.num_nodes and
-            self.sample_size == other.sample_size and
-            self.parent == other.parent and
-            self.children[0] == other.children[0] and
-            self.children[1] == other.children[1] and
-            self.time == other.time and
-            self.left == other.left and
-            self.right == other.right and
-            self.root == other.root)
+            self.get_num_nodes() == other.get_num_nodes() and
+            self.get_sample_size() == other.get_sample_size() and
+            self.get_parent_dict() == other.get_parent_dict() and
+            self.get_time_dict() == other.get_time_dict() and
+            self.get_left() == other.get_left() and
+            self.get_right() == other.get_right() and
+            self.get_root() == other.get_root())
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -397,56 +397,12 @@ class TreeSequence(object):
         return _msprime.TreeDiffIterator(self._ll_tree_sequence)
 
     def sparse_trees(self):
-        n = self.get_sample_size()
-        R = self.get_num_records()
-        st = SparseTree(n, self.get_num_nodes())
-        ts = self._ll_tree_sequence
-        j = 0
-        st.right = ts.get_num_loci()
-        while j < n - 1:
-            l, r, node, children, time = ts.get_record(
-                j, _msprime.MSP_ORDER_LEFT)
-            st.time[node] = time
-            for c in range(2):
-                st.children[c][node] = children[c]
-                st.parent[children[c]] = node
-            st.right = min(st.right, r)
-            assert l == 0
-            j += 1
-        st.root = node
-        yield st
-        k = j - n + 1
-        while j < R:
-            _, r, node, children, _ = ts.get_record(
-                k, _msprime.MSP_ORDER_RIGHT)
-            while r == st.right:
-                st.time[node] = 0
-                for c in range(2):
-                    st.children[c][node] = 0
-                    st.parent[children[c]] = 0
-                k += 1
-                _, r, node, children, _ = ts.get_record(
-                    k, _msprime.MSP_ORDER_RIGHT)
-            l, _, node, children, time = ts.get_record(
-                j, _msprime.MSP_ORDER_LEFT)
-            while j < R and l == st.right:
-                st.time[node] = time
-                for c in range(2):
-                    st.children[c][node] = children[c]
-                    st.parent[children[c]] = node
-                j += 1
-                if j < R:
-                    l, _, node, children, time = ts.get_record(
-                        j, _msprime.MSP_ORDER_LEFT)
-            st.left = st.right
-            st.right = r
-            # Get the root. TODO we should be able to do this
-            # in constant time by looking at the out and in
-            # records.
-            st.root = 1
-            while st.parent[st.root] != 0:
-                st.root = st.parent[st.root]
-            yield st
+        ll_sparse_tree = _msprime.SparseTree(self.get_num_nodes())
+        iterator = _msprime.SparseTreeIterator(
+            self._ll_tree_sequence, ll_sparse_tree)
+        sparse_tree = SparseTree(ll_sparse_tree)
+        for _ in iterator:
+            yield sparse_tree
 
     def newick_trees(self, precision=3, breakpoints=None):
         iterator = _msprime.NewickConverter(self._ll_tree_sequence, precision)

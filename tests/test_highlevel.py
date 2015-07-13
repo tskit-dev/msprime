@@ -41,22 +41,21 @@ def sparse_tree_to_newick(st, precision):
     Converts the specified sparse tree to an ms-compatible Newick tree.
     """
     branch_lengths = {}
-    stack = [st.root]
+    root = st.get_root()
+    stack = [root]
     while len(stack) > 0:
         node = stack.pop()
-        if st.children[0][node] != 0:
-            for c in range(2):
-                child = st.children[c][node]
+        if st.is_internal(node):
+            for child in st.get_children(node):
                 stack.append(child)
                 s = "{0:.{1}f}".format(
-                    st.time[node] - st.time[child], precision)
+                    st.get_time(node) - st.get_time(child), precision)
                 branch_lengths[child] = s
-    return _build_newick(st.root, st.root, st, branch_lengths)
+    return _build_newick(root, root, st, branch_lengths)
 
 
 def _build_newick(node, root, tree, branch_lengths):
-    c1 = tree.children[0][node]
-    c2 = tree.children[1][node]
+    c1, c2 = tree.get_children(node)
     if c1 != 0:
         s1 = _build_newick(c1, root, tree, branch_lengths)
         s2 = _build_newick(c2, root, tree, branch_lengths)
@@ -90,42 +89,50 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     """
     def verify_sparse_tree(self, st):
         used_nodes = set()
-        for j in range(1, st.sample_size + 1):
-            self.assertEqual(st.time[j], 0)
+        for j in range(1, st.get_sample_size() + 1):
+            self.assertEqual(st.get_time(j), 0)
             # verify the path to root
             u = j
             times = []
-            while st.parent[u] != 0:
+            while st.get_parent(u) != 0:
                 used_nodes.add(u)
-                v = st.parent[u]
-                times.append(st.time[v])
-                self.assertGreaterEqual(st.time[v], 0.0)
-                self.assertIn(u, [st.children[c][v] for c in range(2)])
+                v = st.get_parent(u)
+                times.append(st.get_time(v))
+                self.assertGreaterEqual(st.get_time(v), 0.0)
+                self.assertIn(u, st.get_children(v))
                 u = v
-            self.assertEqual(u, st.root)
+            self.assertEqual(u, st.get_root())
             self.assertEqual(times, sorted(times))
-        used_nodes.add(st.root)
-        self.assertEqual(len(used_nodes), 2 * st.sample_size - 1)
+        used_nodes.add(st.get_root())
+        self.assertEqual(len(used_nodes), 2 * st.get_sample_size() - 1)
         # for every entry other than used_nodes we should have an empty row
-        for j in range(st.num_nodes):
+        for j in range(st.get_num_nodes()):
             if j not in used_nodes:
-                self.assertEqual(st.parent[j], 0)
-                self.assertEqual(st.time[j], 0)
-                for c in range(2):
-                    self.assertEqual(st.children[c][j], 0)
+                self.assertEqual(st.get_parent(j), 0)
+                self.assertEqual(st.get_time(j), 0)
+                for c in st.get_children(j):
+                    self.assertEqual(c, 0)
         # To a top-down traversal, and make sure we meet all the leaves.
-        stack = [st.root]
+        stack = [st.get_root()]
         leaves = []
         while len(stack) > 0:
             u = stack.pop()
             self.assertNotEqual(u, 0)
-            if st.children[0][u] == 0:
+            if st.is_leaf(u):
                 leaves.append(u)
-                self.assertEqual(st.children[1][u], 0)
+                self.assertEqual(st.get_children(u)[0], 0)
+                self.assertEqual(st.get_children(u)[1], 0)
             else:
-                for c in range(2):
-                    stack.append(st.children[c][u])
-        self.assertEqual(sorted(leaves), list(range(1, st.sample_size + 1)))
+                for c in st.get_children(u):
+                    stack.append(c)
+        self.assertEqual(
+            sorted(leaves), list(range(1, st.get_sample_size() + 1)))
+        # Check the parent dict
+        pi = st.get_parent_dict()
+        self.assertEqual(len(pi), 2 * st.get_sample_size() - 1)
+        self.assertEqual(pi[st.get_root()], 0)
+        for k, v in pi.items():
+            self.assertEqual(st.get_parent(k), v)
 
     def verify_sparse_trees(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
@@ -133,13 +140,13 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         iter2 = pts.sparse_trees()
         length = 0
         for st1, st2 in zip(iter1, iter2):
-            self.assertEqual(st1.sample_size, ts.get_sample_size())
+            self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
             self.assertEqual(st1, st2)
-            self.assertEqual(st1.left, length)
-            self.assertGreaterEqual(st1.left, 0)
-            self.assertGreater(st1.right, st1.left)
-            self.assertLessEqual(st1.right, ts.get_num_loci())
-            length += st1.right - st1.left
+            self.assertEqual(st1.get_left(), length)
+            self.assertGreaterEqual(st1.get_left(), 0)
+            self.assertGreater(st1.get_right(), st1.get_left())
+            self.assertLessEqual(st1.get_right(), ts.get_num_loci())
+            length += st1.get_right() - st1.get_left()
             self.verify_sparse_tree(st1)
         self.assertEqual(length, ts.get_num_loci())
         self.assertRaises(StopIteration, next, iter1)
@@ -327,7 +334,8 @@ class TestNewickConversion(HighLevelTestCase):
         # structure of the trees.
         precision = 0
         old_trees = [
-            (st.right - st.left, sparse_tree_to_newick(st, precision))
+            (st.get_right() - st.get_left(),
+                sparse_tree_to_newick(st, precision))
             for st in tree_sequence.sparse_trees()]
         new_trees = list(tree_sequence.newick_trees(precision))
         self.assertEqual(len(new_trees), len(old_trees))
