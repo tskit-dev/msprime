@@ -1476,11 +1476,12 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"num_nodes", NULL};
-    Py_ssize_t num_nodes;
+    static char *kwlist[] = {"sample_size", "num_nodes", NULL};
+    unsigned int num_nodes, sample_size;
 
     self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "n", kwlist, &num_nodes)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "II", kwlist,
+                &sample_size, &num_nodes)) {
         goto out;
     }
     self->sparse_tree = PyMem_Malloc(sizeof(sparse_tree_t));
@@ -1488,7 +1489,8 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = sparse_tree_alloc(self->sparse_tree, (size_t) num_nodes);
+    err = sparse_tree_alloc(self->sparse_tree, (uint32_t) sample_size,
+            (uint32_t) num_nodes);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1502,8 +1504,6 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 out:
     return ret;
 }
-
-
 
 
 static PyObject *
@@ -1639,7 +1639,36 @@ out:
     return ret;
 }
 
+static PyObject *
+SparseTree_get_mrca(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int err;
+    uint32_t mrca;
+    unsigned int u, v;
 
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "II", &u, &v)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, u)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, v)) {
+        goto out;
+    }
+    err = sparse_tree_get_mrca(self->sparse_tree, (uint32_t) u,
+            (uint32_t) v, &mrca);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("I", mrca);
+out:
+    return ret;
+}
 
 static PyMemberDef SparseTree_members[] = {
     {NULL}  /* Sentinel */
@@ -1662,6 +1691,8 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the time of node u" },
     {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
             "Returns the children of node u" },
+    {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
+            "Returns the MRCA of nodes u and v" },
     {NULL}  /* Sentinel */
 };
 

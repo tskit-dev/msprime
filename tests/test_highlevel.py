@@ -87,7 +87,29 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests on the high level interface.
     """
-    def verify_sparse_tree(self, st):
+
+    def verify_sparse_tree_mrcas(self, st):
+        # Check the mrcas
+        oriented_forest = [st.get_parent(j) for j in range(
+            st.get_num_nodes() + 1)]
+        mrca_calc = tests.MRCACalculator(oriented_forest)
+        # We've done exhaustive tests elsewhere, no need to go
+        # through the combinations.
+        for j in range(1, st.get_num_nodes() + 1):
+            mrca = st.get_mrca(1, j)
+            self.assertEqual(mrca, mrca_calc.get_mrca(1, j))
+            self.assertEqual(st.get_time(mrca), st.get_tmrca(1, j))
+
+    def verify_sparse_tree_branch_lengths(self, st):
+        for j in range(1, st.get_sample_size() + 1):
+            u = j
+            while st.get_parent(u) != 0:
+                l = st.get_time(st.get_parent(u)) - st.get_time(u)
+                self.assertGreater(l, 0.0)
+                self.assertEqual(st.get_branch_length(u), l)
+                u = st.get_parent(u)
+
+    def verify_sparse_tree_structure(self, st):
         used_nodes = set()
         for j in range(1, st.get_sample_size() + 1):
             self.assertEqual(st.get_time(j), 0)
@@ -133,6 +155,11 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertEqual(pi[st.get_root()], 0)
         for k, v in pi.items():
             self.assertEqual(st.get_parent(k), v)
+
+    def verify_sparse_tree(self, st):
+        self.verify_sparse_tree_mrcas(st)
+        self.verify_sparse_tree_branch_lengths(st)
+        self.verify_sparse_tree_structure(st)
 
     def verify_sparse_trees(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())

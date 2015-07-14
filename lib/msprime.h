@@ -200,6 +200,9 @@ typedef struct {
     uint32_t *parent;
     uint32_t *children;
     double *time;
+    /* traversal stacks */
+    uint32_t *stack1;
+    uint32_t *stack2;
 } sparse_tree_t;
 
 typedef struct {
@@ -318,9 +321,12 @@ int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
         tree_node_t **nodes_out, tree_node_t **nodes_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 
-int sparse_tree_alloc(sparse_tree_t *self, size_t num_nodes);
+int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, 
+        uint32_t num_nodes);
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_clear(sparse_tree_t *self);
+int sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
+        uint32_t *mrca);
 
 int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
         tree_sequence_t *tree_sequence, sparse_tree_t *tree);

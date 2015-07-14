@@ -25,13 +25,88 @@ from __future__ import unicode_literals
 
 import collections
 import heapq
+import itertools
 import json
 import os.path
 import random
+import unittest
 import tempfile
 
 import tests
 import _msprime
+
+
+def oriented_forests(n):
+    """
+    Implementation of Algorithm O from TAOCP section 7.2.1.6.
+    Generates all canonical n-node oriented forests.
+    """
+    p = [k - 1 for k in range(0, n + 1)]
+    k = 1
+    while k != 0:
+        yield p
+        if p[n] > 0:
+            p[n] = p[p[n]]
+            yield p
+        k = n
+        while k > 0 and p[k] == 0:
+            k -= 1
+        if k != 0:
+            j = p[k]
+            d = k - j
+            not_done = True
+            while not_done:
+                if p[k - d] == p[j]:
+                    p[k] = p[j]
+                else:
+                    p[k] = p[k - d] + d
+                if k == n:
+                    not_done = False
+                else:
+                    k += 1
+
+
+def get_mrca(pi, x, y):
+    """
+    Returns the most recent common ancestor of nodes x and y in the
+    oriented forest pi.
+    """
+    x_parents = [x]
+    j = x
+    while j != 0:
+        j = pi[j]
+        x_parents.append(j)
+    y_parents = {y: None}
+    j = y
+    while j != 0:
+        j = pi[j]
+        y_parents[j] = None
+    # We have the complete list of parents for x and y back to root.
+    mrca = 0
+    j = 0
+    while x_parents[j] not in y_parents:
+        j += 1
+    mrca = x_parents[j]
+    return mrca
+
+
+class TestMRCACalculator(unittest.TestCase):
+    """
+    Class to test the Schieber-Vishkin algorithm.
+
+    These tests are included here as we use the MRCA calculator below in
+    our tests.
+    """
+    def test_all_oriented_forsts(self):
+        # Runs through all possible oriented forests and checks all possible
+        # node pairs using an inferior algorithm.
+        for n in range(2, 9):
+            for pi in oriented_forests(n):
+                sv = tests.MRCACalculator(pi)
+                for j in range(1, n + 1):
+                    for k in range(1, j + 1):
+                        mrca = get_mrca(pi, j, k)
+                        self.assertEqual(mrca, sv.get_mrca(j, k))
 
 
 class TestModule(tests.MsprimeTestCase):
@@ -130,18 +205,6 @@ class LowLevelTestCase(tests.MsprimeTestCase):
                 self.assertGreater(tau[k], last_time)
                 last_time = tau[k]
                 k = pi[k]
-
-    def verify_sparse_trees(self, n, m, trees):
-        """
-        Verifies that the specified set of sparse trees is consistent with the
-        specified paramters.
-        """
-        s = 0
-        for l, pi, tau in trees:
-            self.verify_sparse_tree(n, pi, tau)
-            self.assertTrue(l > 0)
-            s += l
-        self.assertEqual(s, m)
 
     def get_tree_sequence(
             self, sample_size=10, num_loci=100, mutation_rate=10):
@@ -257,6 +320,21 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(tau_p, tau)
         self.assertEqual(pi_p[sparse_tree.get_root()], 0)
 
+    def verify_mrcas(self, sparse_tree):
+        """
+        Verifies that the MRCAs for the specified tree are computed correctly.
+        """
+        oriented_forest = [sparse_tree.get_parent(j) for j in range(
+            sparse_tree.get_num_nodes() + 1)]
+        self.assertEqual(
+            sum(j > 0 for j in oriented_forest),
+            2 * sparse_tree.get_sample_size() - 2)
+        mrca_calc = tests.MRCACalculator(oriented_forest)
+        nodes = range(1, sparse_tree.get_num_nodes() + 1)
+        for u, v in itertools.combinations(nodes, 2):
+            self.assertEqual(
+                mrca_calc.get_mrca(u, v), sparse_tree.get_mrca(u, v))
+
     def verify_trees(self, sim, sorted_records):
         """
         Verifies that the specified set of sorted coalescence records
@@ -264,7 +342,7 @@ class TestSimulationState(LowLevelTestCase):
         """
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        st = _msprime.SparseTree(ts.get_num_nodes())
+        st = _msprime.SparseTree(ts.get_sample_size(), ts.get_num_nodes())
         st_iter = _msprime.SparseTreeIterator(ts, st)
         n = sim.get_sample_size()
         pi = {}
@@ -289,6 +367,7 @@ class TestSimulationState(LowLevelTestCase):
                 # the iterator.
                 st = next(st_iter)
                 self.verify_trees_equal(n, pi, tau, st)
+                self.verify_mrcas(st)
                 del pi[v]
                 num_trees += 1
             else:
@@ -917,7 +996,7 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(ValueError, tree_sequence.get_record, 0)
         self.assertRaises(ValueError, tree_sequence.get_num_records)
         self.assertRaises(ValueError, _msprime.TreeDiffIterator, tree_sequence)
-        sparse_tree = _msprime.SparseTree(2)
+        sparse_tree = _msprime.SparseTree(2, 2)
         self.assertRaises(
             ValueError, _msprime.SparseTreeIterator, tree_sequence,
             sparse_tree)
@@ -1062,12 +1141,12 @@ class TestSparseTreeIterator(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.SparseTreeIterator, None)
         ts = _msprime.TreeSequence()
         # This hasn't been initialised, so should fail.
-        tree = _msprime.SparseTree(2)
+        tree = _msprime.SparseTree(2, 2)
         self.assertRaises(ValueError, _msprime.SparseTreeIterator, ts, tree)
         sim = _msprime.Simulator(10, 1)
         sim.run()
         ts.create(sim)
-        tree = _msprime.SparseTree(ts.get_num_nodes())
+        tree = _msprime.SparseTree(ts.get_sample_size(), ts.get_num_nodes())
         n_before = 0
         parents_before = []
         for t in _msprime.SparseTreeIterator(ts, tree):
@@ -1095,7 +1174,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
-        tree = _msprime.SparseTree(ts.get_num_nodes())
+        tree = _msprime.SparseTree(ts.get_sample_size(), ts.get_num_nodes())
         self.verify_iterator(_msprime.SparseTreeIterator(ts, tree))
 
 
@@ -1136,15 +1215,16 @@ class TestSparseTree(LowLevelTestCase):
 
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.SparseTree)
+        self.assertRaises(TypeError, _msprime.SparseTree, 0)
         for bad_type in ["", {}, [], None]:
             self.assertRaises(
-                TypeError, _msprime.SparseTree, bad_type)
-        self.assertRaises(_msprime.LibraryError, _msprime.SparseTree, 0)
+                TypeError, _msprime.SparseTree, bad_type, bad_type)
+        self.assertRaises(_msprime.LibraryError, _msprime.SparseTree, 0, 0)
         for n in range(1, 10):
-            st = _msprime.SparseTree(n)
-            self.assertEqual(st.get_num_nodes(), n)
+            st = _msprime.SparseTree(n, 2 * n)
+            self.assertEqual(st.get_num_nodes(), 2 * n)
+            self.assertEqual(st.get_sample_size(), n)
             # An uninitialised sparse tree should always be zero.
-            self.assertEqual(st.get_sample_size(), 0)
             self.assertEqual(st.get_root(), 0)
             self.assertEqual(st.get_left(), 0)
             self.assertEqual(st.get_right(), 0)
@@ -1155,8 +1235,27 @@ class TestSparseTree(LowLevelTestCase):
 
     def test_bounds_checking(self):
         for n in range(1, 10):
-            st = _msprime.SparseTree(n)
+            st = _msprime.SparseTree(n, n)
             for v in [-100, -1, n + 1, n + 100, n * 100]:
                 self.assertRaises(ValueError, st.get_parent, v)
                 self.assertRaises(ValueError, st.get_children, v)
                 self.assertRaises(ValueError, st.get_time, v)
+
+    def test_mrca_interface(self):
+        for num_nodes in range(1, 10):
+            for sample_size in range(2, 5):
+                st = _msprime.SparseTree(sample_size, num_nodes)
+                v = 0
+                self.assertRaises(
+                    _msprime.LibraryError, st.get_mrca, v, v)
+                self.assertRaises(
+                    _msprime.LibraryError, st.get_mrca, v, 1)
+                self.assertRaises(
+                    _msprime.LibraryError, st.get_mrca, 1, v)
+                for v in [num_nodes + 1, 10**6]:
+                    self.assertRaises(ValueError, st.get_mrca, v, v)
+                    self.assertRaises(ValueError, st.get_mrca, v, 1)
+                    self.assertRaises(ValueError, st.get_mrca, 1, v)
+                # All the mrcas for an uninitialised tree should be 0
+                for u, v in itertools.combinations(range(1, num_nodes + 1), 2):
+                    self.assertEqual(st.get_mrca(u, v), 0)
