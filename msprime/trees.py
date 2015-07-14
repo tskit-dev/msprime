@@ -28,13 +28,10 @@ import random
 import _msprime
 
 
-# TODO: the sparse tree needs a full, Pythonic API to provide easy
-# access to common tree operations. E.g.:
+# TODO:
 # - Pre, post, and inorder traversals of the nodes as iterators.
-# - get_tmrca
-# - get_mrca
-# - get_branch_length, get_total_branch_length
-# - Pickle support
+# - get_total_branch_length
+# - Pickle and copy support
 class SparseTree(object):
     """
     A sparse tree is a single tree in a TreeSequence. In a sparse tree,
@@ -44,12 +41,16 @@ class SparseTree(object):
     def __init__(self, ll_sparse_tree):
         self._ll_sparse_tree = ll_sparse_tree
 
-    def get_branch_length(self, node):
+    def get_branch_length(self, u):
         """
         Returns the length of the branch joining the specified node
         to its parent.
+
+        :param int u: The node in question.
+        :return: The branch length from u to its parent.
+        :rtype: int
         """
-        return self.get_time(self.get_parent(node)) - self.get_time(node)
+        return self.get_time(self.get_parent(u)) - self.get_time(u)
 
     def get_mrca(self, u, v):
         """
@@ -64,20 +65,20 @@ class SparseTree(object):
         """
         return self.get_time(self.get_mrca(u, v))
 
-    def get_parent(self, node):
-        return self._ll_sparse_tree.get_parent(node)
+    def get_parent(self, u):
+        return self._ll_sparse_tree.get_parent(u)
 
-    def get_children(self, node):
-        return self._ll_sparse_tree.get_children(node)
+    def get_children(self, u):
+        return self._ll_sparse_tree.get_children(u)
 
-    def get_time(self, node):
-        return self._ll_sparse_tree.get_time(node)
+    def get_time(self, u):
+        return self._ll_sparse_tree.get_time(u)
 
-    def is_internal(self, node):
-        return not self.is_leaf(node)
+    def is_internal(self, u):
+        return not self.is_leaf(u)
 
-    def is_leaf(self, node):
-        return 1 <= node <= self.get_sample_size()
+    def is_leaf(self, u):
+        return 1 <= u <= self.get_sample_size()
 
     def get_root(self):
         return self._ll_sparse_tree.get_root()
