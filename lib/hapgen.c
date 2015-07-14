@@ -192,6 +192,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     self->tree_sequence = tree_sequence;
 
     ret = sparse_tree_alloc(&self->tree,
+            tree_sequence_get_sample_size(self->tree_sequence),
             tree_sequence_get_num_nodes(self->tree_sequence));
     if (ret != 0) {
         goto out;

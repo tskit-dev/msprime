@@ -34,7 +34,6 @@ import _msprime
 # - get_tmrca
 # - get_mrca
 # - get_branch_length, get_total_branch_length
-# - get_parent, get_children, get_root, etc.
 # - Pickle support
 class SparseTree(object):
     """
@@ -44,6 +43,26 @@ class SparseTree(object):
     """
     def __init__(self, ll_sparse_tree):
         self._ll_sparse_tree = ll_sparse_tree
+
+    def get_branch_length(self, node):
+        """
+        Returns the length of the branch joining the specified node
+        to its parent.
+        """
+        return self.get_time(self.get_parent(node)) - self.get_time(node)
+
+    def get_mrca(self, u, v):
+        """
+        Returns the most recent common ancestor of the specified nodes.
+        """
+        return self._ll_sparse_tree.get_mrca(u, v)
+
+    def get_tmrca(self, u, v):
+        """
+        Returns the time of the most recent common ancestor of the specified
+        nodes.
+        """
+        return self.get_time(self.get_mrca(u, v))
 
     def get_parent(self, node):
         return self._ll_sparse_tree.get_parent(node)
@@ -397,7 +416,8 @@ class TreeSequence(object):
         return _msprime.TreeDiffIterator(self._ll_tree_sequence)
 
     def sparse_trees(self):
-        ll_sparse_tree = _msprime.SparseTree(self.get_num_nodes())
+        ll_sparse_tree = _msprime.SparseTree(
+            self.get_sample_size(), self.get_num_nodes())
         iterator = _msprime.SparseTreeIterator(
             self._ll_tree_sequence, ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree)

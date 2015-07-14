@@ -155,6 +155,134 @@ class PythonTreeSequence(object):
             st.left = st.right
 
 
+class MRCACalculator(object):
+    """
+    Class to that allows us to compute the nearest common ancestor of arbitrary
+    nodes in an oriented forest.
+
+    This is an implementation of Schieber and Vishkin's nearest common ancestor
+    algorithm from TAOCP volume 4A, pg.164-167 [K11]_. Preprocesses the
+    input tree into a sideways heap in O(n) time and processes queries for the
+    nearest common ancestor between an arbitary pair of nodes in O(1) time.
+
+    :param oriented_forest: the input oriented forest
+    :type oriented_forest: list of integers
+    """
+    LAMBDA = 0
+
+    def __init__(self, oriented_forest):
+        self.__preprocess(oriented_forest)
+
+    def __preprocess(self, oriented_forest):
+        """
+        Preprocess the oriented forest, so that we can answer mrca queries
+        in constant time.
+        """
+        n = len(oriented_forest)
+        child = [self.LAMBDA for i in range(n)]
+        parent = [self.LAMBDA for i in range(n)]
+        sib = [self.LAMBDA for i in range(n)]
+        self.__lambda = [0 for i in range(n)]
+        self.__pi = [0 for i in range(n)]
+        self.__tau = [0 for i in range(n)]
+        self.__beta = [0 for i in range(n)]
+        self.__alpha = [0 for i in range(n)]
+        for u in range(n):
+            v = oriented_forest[u]
+            sib[u] = child[v]
+            child[v] = u
+            parent[u] = v
+        p = child[self.LAMBDA]
+        n = 0
+        self.__lambda[0] = -1
+        while p != self.LAMBDA:
+            notDone = True
+            while notDone:
+                n += 1
+                self.__pi[p] = n
+                self.__tau[n] = self.LAMBDA
+                self.__lambda[n] = 1 + self.__lambda[n >> 1]
+                if child[p] != self.LAMBDA:
+                    p = child[p]
+                else:
+                    notDone = False
+            self.__beta[p] = n
+            notDone = True
+            while notDone:
+                self.__tau[self.__beta[p]] = parent[p]
+                if sib[p] != self.LAMBDA:
+                    p = sib[p]
+                    notDone = False
+                else:
+                    p = parent[p]
+                    if p != self.LAMBDA:
+                        h = self.__lambda[n & -self.__pi[p]]
+                        self.__beta[p] = ((n >> h) | 1) << h
+                    else:
+                        notDone = False
+        # Begin the second traversal
+        self.__lambda[0] = self.__lambda[n]
+        self.__pi[self.LAMBDA] = 0
+        self.__beta[self.LAMBDA] = 0
+        self.__alpha[self.LAMBDA] = 0
+        p = child[self.LAMBDA]
+        while p != self.LAMBDA:
+            notDone = True
+            while notDone:
+                a = (
+                    self.__alpha[parent[p]] |
+                    (self.__beta[p] & -self.__beta[p])
+                )
+                self.__alpha[p] = a
+                if child[p] != self.LAMBDA:
+                    p = child[p]
+                else:
+                    notDone = False
+            notDone = True
+            while notDone:
+                if sib[p] != self.LAMBDA:
+                    p = sib[p]
+                    notDone = False
+                else:
+                    p = parent[p]
+                    notDone = p != self.LAMBDA
+
+    def get_mrca(self, x, y):
+        """
+        Returns the most recent common ancestor of the nodes x and y,
+        or 0 if the nodes belong to different trees.
+
+        :param x: the first node
+        :type x: positive integer
+        :param y: the second node
+        :type y: positive integer
+        :return: the MRCA of nodes x and y
+        :type: non-negative integer
+        """
+        if self.__beta[x] <= self.__beta[y]:
+            h = self.__lambda[self.__beta[y] & -self.__beta[x]]
+        else:
+            h = self.__lambda[self.__beta[x] & -self.__beta[y]]
+        k = self.__alpha[x] & self.__alpha[y] & -(1 << h)
+        h = self.__lambda[k & -k]
+        j = ((self.__beta[x] >> h) | 1) << h
+        if j == self.__beta[x]:
+            xhat = x
+        else:
+            l = self.__lambda[self.__alpha[x] & ((1 << h) - 1)]
+            xhat = self.__tau[((self.__beta[x] >> l) | 1) << l]
+        if j == self.__beta[y]:
+            yhat = y
+        else:
+            l = self.__lambda[self.__alpha[y] & ((1 << h) - 1)]
+            yhat = self.__tau[((self.__beta[y] >> l) | 1) << l]
+        if self.__pi[xhat] <= self.__pi[yhat]:
+            z = xhat
+        else:
+            z = yhat
+        return z
+
+
 class MsprimeTestCase(unittest.TestCase):
     """
     Superclass of all tests msprime simulator test cases.
