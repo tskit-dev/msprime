@@ -20,6 +20,7 @@ Contents:
    tutorial
    api
    cli
+   file-format
 
 Indices and tables
 ==================
