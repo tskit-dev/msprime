@@ -56,11 +56,8 @@ class PythonSparseTree(object):
     def get_sample_size(self):
         return self.sample_size
 
-    def get_left(self):
-        return self.left
-
-    def get_right(self):
-        return self.right
+    def get_interval(self):
+        return self.left, self.right
 
     def get_parent(self, node):
         return self.parent[node]

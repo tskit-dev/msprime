@@ -90,12 +90,11 @@ class HighLevelTestCase(tests.MsprimeTestCase):
 
     def verify_sparse_tree_mrcas(self, st):
         # Check the mrcas
-        oriented_forest = [st.get_parent(j) for j in range(
-            st.get_num_nodes() + 1)]
+        oriented_forest = [st.get_parent(j) for j in range(st.get_root() + 1)]
         mrca_calc = tests.MRCACalculator(oriented_forest)
         # We've done exhaustive tests elsewhere, no need to go
         # through the combinations.
-        for j in range(1, st.get_num_nodes() + 1):
+        for j in range(1, st.get_root() + 1):
             mrca = st.get_mrca(1, j)
             self.assertEqual(mrca, mrca_calc.get_mrca(1, j))
             self.assertEqual(st.get_time(mrca), st.get_tmrca(1, j))
@@ -128,7 +127,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         used_nodes.add(st.get_root())
         self.assertEqual(len(used_nodes), 2 * st.get_sample_size() - 1)
         # for every entry other than used_nodes we should have an empty row
-        for j in range(st.get_num_nodes()):
+        for j in range(st.get_root()):
             if j not in used_nodes:
                 self.assertEqual(st.get_parent(j), 0)
                 self.assertEqual(st.get_time(j), 0)
@@ -169,11 +168,12 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         for st1, st2 in zip(iter1, iter2):
             self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
             self.assertEqual(st1, st2)
-            self.assertEqual(st1.get_left(), length)
-            self.assertGreaterEqual(st1.get_left(), 0)
-            self.assertGreater(st1.get_right(), st1.get_left())
-            self.assertLessEqual(st1.get_right(), ts.get_num_loci())
-            length += st1.get_right() - st1.get_left()
+            l, r = st1.get_interval()
+            self.assertEqual(l, length)
+            self.assertGreaterEqual(l, 0)
+            self.assertGreater(r, l)
+            self.assertLessEqual(r, ts.get_num_loci())
+            length += r - l
             self.verify_sparse_tree(st1)
         self.assertEqual(length, ts.get_num_loci())
         self.assertRaises(StopIteration, next, iter1)
@@ -361,8 +361,7 @@ class TestNewickConversion(HighLevelTestCase):
         # structure of the trees.
         precision = 0
         old_trees = [
-            (st.get_right() - st.get_left(),
-                sparse_tree_to_newick(st, precision))
+            (st.get_length(), sparse_tree_to_newick(st, precision))
             for st in tree_sequence.sparse_trees()]
         new_trees = list(tree_sequence.newick_trees(precision))
         self.assertEqual(len(new_trees), len(old_trees))

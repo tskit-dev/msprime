@@ -34,19 +34,38 @@ import _msprime
 # - Pickle and copy support
 class SparseTree(object):
     """
-    A sparse tree is a single tree in a TreeSequence. In a sparse tree,
-    each node is a positive integer, with 1 to sample_size being the
-    leaves of the tree.
+    A SparseTree is a single tree in a :class:`.TreeSequence`. In a sparse tree
+    for a sample of size :math:`n`, the leaves are nodes :math:`1` to :math:`n`
+    inclusive and internal nodes are integers :math:`> n`. The value of these
+    nodes is strictly increasing as we ascend the tree and the root of the tree
+    is the node with the largest value that is reachable from  the leaves.
+    Each node in the tree has a parent, which is non-zero for all non-root
+    nodes reachable from the leaves. This value is obtained using the
+    :meth:`.get_parent` method. The parent of the root node is 0. Similarly,
+    each internal node has a pair of children, which are obtained using
+    the :meth:`.get_children` method. Each node in the tree has a time
+    associated with it in coalescent time units. This value is obtained using
+    the :meth:`.get_time` method.
+
+    Sparse trees are not intended to be instantiated directly, and are
+    obtained as part of a :class:`.TreeSequence` using the
+    :meth:`.sparse_trees` method.
     """
     def __init__(self, ll_sparse_tree):
         self._ll_sparse_tree = ll_sparse_tree
 
     def get_branch_length(self, u):
         """
-        Returns the length of the branch joining the specified node
-        to its parent.
+        Returns the length of the branch (in time units) joining the
+        specified node to its parent. This is equivalent to
 
-        :param int u: The node in question.
+        >>> tree.get_time(tree.get_parent(u)) - tree.get_time(u)
+
+        Note that this is not related to the value returned by
+        :meth:`.get_length`, which describes the length of the interval
+        covered by the tree in genomic coordinates.
+
+        :param int u: The node of interest.
         :return: The branch length from u to its parent.
         :rtype: int
         """
@@ -55,45 +74,130 @@ class SparseTree(object):
     def get_mrca(self, u, v):
         """
         Returns the most recent common ancestor of the specified nodes.
+
+        :param int u: The first node.
+        :param int v: The second node.
+        :return: The most recent common ancestor of u and v.
+        :rtype: int
         """
         return self._ll_sparse_tree.get_mrca(u, v)
 
     def get_tmrca(self, u, v):
         """
         Returns the time of the most recent common ancestor of the specified
-        nodes.
+        nodes. This is equivalent to::
+
+            tree.get_time(tree.get_mrca(u, v))
+
+        :param int u: The first node.
+        :param int v: The second node.
+        :return: The time of the most recent common ancestor of u and v.
+        :rtype: float
         """
         return self.get_time(self.get_mrca(u, v))
 
     def get_parent(self, u):
+        """
+        Returns the parent of the specified node. Returns 0 if u is the
+        root or is not a node in the current tree.
+
+        :param int u: The node of interest.
+        :return: The parent of u.
+        :rtype: int
+        """
         return self._ll_sparse_tree.get_parent(u)
 
     def get_children(self, u):
+        """
+        Returns the children of the specified node as a tuple (v, w). Returns
+        the tuple (0, 0) if u is a leaf or is not a node in the current tree.
+
+        :param int u: The node of interest.
+        :return: The children of u as a pair of integers
+        :rtype: tuple
+        """
         return self._ll_sparse_tree.get_children(u)
 
     def get_time(self, u):
+        """
+        Returns the time of the specified node. Returns 0 if u is a leaf
+        or is not a node in the current tree.
+
+        :param int u: The node of interest.
+        :return: The time of u.
+        :rtype: float
+        """
         return self._ll_sparse_tree.get_time(u)
 
     def is_internal(self, u):
+        """
+        Returns True if the specified node is not a leaf.
+
+        :param int u: The node of interest.
+        :return: True if u is not a leaf node.
+        :rtype: bool
+        """
         return not self.is_leaf(u)
 
     def is_leaf(self, u):
+        """
+        Returns True if the specified node is a leaf. A node :math:`u` is a
+        leaf if :math:`1 \leq u \leq n` for a sample size :math:`n`.
+
+        :param int u: The node of interest.
+        :return: True if u is a leaf node.
+        :rtype: bool
+        """
         return 1 <= u <= self.get_sample_size()
 
     def get_root(self):
+        """
+        Returns the root of this tree.
+
+        :return: The root node.
+        :rtype: int
+        """
         return self._ll_sparse_tree.get_root()
 
-    def get_left(self):
-        return self._ll_sparse_tree.get_left()
+    def get_interval(self):
+        """
+        Returns the coordinates of the genomic interval that this tree
+        represents the history of. The interval is returned as a tuple
+        :math:`(l, r)` and is a half-open interval such that the left
+        coordinate is inclusive and the right coordinate is exclusive. This
+        tree therefore applies to all genomic locations :math:`x` such that
+        :math:`l \leq x < r`.
 
-    def get_right(self):
-        return self._ll_sparse_tree.get_right()
+        :return: A tuple (l, r) representing the left-most (inclusive)
+            and right-most (exclusive) coordinates of the genomic region
+            covered by this tree.
+        :rtype: tuple
+        """
+        return (
+            self._ll_sparse_tree.get_left(), self._ll_sparse_tree.get_right()
+        )
+
+    def get_length(self):
+        """
+        Returns the length of the genomic interval that this tree represents.
+        This is defined as :math:`r - l`, where :math:`(l, r)` is the genomic
+        interval returned by :meth:`.get_interval`.
+
+        :return: The length of the genomic interval covered by this tree.
+        :rtype: int
+        """
+        l, r = self.get_interval()
+        return r - l
 
     def get_sample_size(self):
-        return self._ll_sparse_tree.get_sample_size()
+        """
+        Returns the sample size for this tree. This is the number of leaf
+        nodes in the tree.
 
-    def get_num_nodes(self):
-        return self._ll_sparse_tree.get_num_nodes()
+        :return: The number of leaf nodes in the tree.
+        :rtype: int
+        """
+        return self._ll_sparse_tree.get_sample_size()
 
     def get_parent_dict(self):
         pi = {}
@@ -114,17 +218,14 @@ class SparseTree(object):
         return tau
 
     def __str__(self):
-        return "({},{}):{}".format(
-            self.get_left(), self.get_right(), self.get_parent_dict())
+        return "{}:{}".format(self.get_interval(), self.get_parent_dict())
 
     def __eq__(self, other):
         return (
-            self.get_num_nodes() == other.get_num_nodes() and
             self.get_sample_size() == other.get_sample_size() and
             self.get_parent_dict() == other.get_parent_dict() and
             self.get_time_dict() == other.get_time_dict() and
-            self.get_left() == other.get_left() and
-            self.get_right() == other.get_right() and
+            self.get_interval() == other.get_interval() and
             self.get_root() == other.get_root())
 
     def __ne__(self, other):
@@ -132,15 +233,38 @@ class SparseTree(object):
 
 
 def simulate(
-        sample_size, num_loci=1, scaled_recombination_rate=0.0,
+        sample_size, sequence_length=1, scaled_recombination_rate=0.0,
         scaled_mutation_rate=None,
-        population_models=[], random_seed=None, max_memory="10M"):
+        population_models=[], random_seed=None, max_memory="1G"):
     """
     Simulates the coalescent with recombination under the specified model
-    parameters and returns the resulting TreeSequence.
+    parameters and returns the resulting :class:`.TreeSequence`.
+
+    **TODO** concise description of the model parameters and how we
+    can run the simulations we are interested in.
+
+    :param int sample_size: The number of individuals in our sample.
+    :param int sequence_length: The length of the simulated region in
+        bases.
+    :param float scaled_recombination_rate: The rate of recombination
+        between adjacent bases per :math:`4N` generations.
+    :param float scaled_mutation_rate: The rate of mutation
+        per site per :math:`4N` generations.
+    :param list population_models: The list of :class:`.PopulationModel`
+        instances describing the demographic history of the population.
+    :param int random_seed: The random seed. If this is `None`, a
+        random seed will be automatically generated.
+    :param int,str max_memory: The maximum amount of memory used
+        during the simulation. If this is exceeded, the simulation will
+        terminate with a :class:`LibraryError` exception.
+    :return: The :class:`.TreeSequence` object representing the results
+        of the simulation.
+    :rtype: :class:`.TreeSequence`
     """
     sim = TreeSimulator(sample_size)
-    sim.set_num_loci(num_loci)
+    # TODO choose one: num_loci or sequence length and make this
+    # consistent throughout.
+    sim.set_num_loci(sequence_length)
     sim.set_scaled_recombination_rate(scaled_recombination_rate)
     sim.set_random_seed(random_seed)
     sim.set_max_memory(max_memory)
@@ -362,6 +486,11 @@ class TreeSimulator(object):
 
 
 class TreeSequence(object):
+    """
+    A TreeSequence represents the information generated in a coalescent
+    simulation. This includes all the trees across the simulated region,
+    along with the mutations (if any are present).
+    """
 
     def __init__(self, ll_tree_sequence):
         self._ll_tree_sequence = ll_tree_sequence
@@ -369,19 +498,15 @@ class TreeSequence(object):
     def get_ll_tree_sequence(self):
         return self._ll_tree_sequence
 
-    def print_state(self):
-        print("TODO")
-        # print("parameters = ")
-        # print(json.dumps(self._parameters, sort_keys=True, indent=4))
-        # print("environment = ")
-        # print(json.dumps(self._environment, sort_keys=True, indent=4))
-        # for j in range(self._num_records):
-        #     print(self._left[j], self._right[j], self._children[j],
-        #             self._parent[j], self._time[j], sep="\t")
-
     def dump(self, path, zlib_compression=False):
         """
         Writes the tree sequence to the specified file path.
+
+        :param str path: The file path to write the TreeSequence to.
+        :param bool zlib_compression: If True, use HDF5's native
+            compression when storing the data leading to smaller
+            file size. When loading, data will be decompressed
+            transparently, but load times will be significantly slower.
         """
         self._ll_tree_sequence.dump(path, zlib_compression)
 
@@ -417,6 +542,10 @@ class TreeSequence(object):
         return _msprime.TreeDiffIterator(self._ll_tree_sequence)
 
     def sparse_trees(self):
+        """
+        Returns an iterator over the sparse trees in this tree
+        sequence.
+        """
         ll_sparse_tree = _msprime.SparseTree(
             self.get_sample_size(), self.get_num_nodes())
         iterator = _msprime.SparseTreeIterator(
@@ -490,8 +619,14 @@ class PopulationModel(object):
 
 class ConstantPopulationModel(PopulationModel):
     """
-    Class representing a constant-size population model. The size of this
-    is expressed relative to the size of the population at sampling time.
+    A population model in which the size of the population
+    is a fixed multiple ``size`` of the size at time 0, which
+    starts at the specified time.
+
+    :param float start_time: The time (in coalescent units) at which
+        this population model begins.
+    :param float size: The size of the population under this model
+        relative to its size at time 0.
     """
     def __init__(self, start_time, size):
         super(ConstantPopulationModel, self).__init__(start_time)
