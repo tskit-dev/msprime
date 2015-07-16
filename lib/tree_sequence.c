@@ -217,6 +217,7 @@ encode_environment(char **result)
     int ret = -1;
     /* TODO add more environment: endianess, and word size at a minimum */
     const char *pattern = "{"
+        "\"msprime_version\":\"%s\", "
         "\"hdf5_version\":\"%d.%d.%d\", "
         "\"gsl_version\":\"%d.%d\", "
         "\"kernel_name\":\"%s\", "
@@ -240,6 +241,7 @@ encode_environment(char **result)
         goto out;
     }
     size = 1 + (size_t) snprintf(NULL, 0, pattern,
+            MSP_LIBRARY_VERSION_STR,
             major, minor, release,
             GSL_MAJOR_VERSION, GSL_MINOR_VERSION,
             system_info.sysname, system_info.release, system_info.version,
@@ -250,6 +252,7 @@ encode_environment(char **result)
         goto out;
     }
     written = snprintf(str, size, pattern,
+            MSP_LIBRARY_VERSION_STR,
             major, minor, release,
             GSL_MAJOR_VERSION, GSL_MINOR_VERSION,
             system_info.sysname, system_info.release, system_info.version,

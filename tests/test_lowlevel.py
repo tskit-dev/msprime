@@ -34,6 +34,9 @@ import tempfile
 
 import tests
 import _msprime
+# We don't want to import all of the high-level library
+# here. All we need is the version.
+from msprime import __version__ as _library_version
 
 
 def oriented_forests(n):
@@ -795,6 +798,9 @@ class TestTreeSequence(LowLevelTestCase):
 
     def verify_environment_json(self, json_str):
         environment = json.loads(json_str.decode())
+        self.assertIn("msprime_version", environment)
+        version = environment["msprime_version"]
+        self.assertEqual(version, _library_version)
         self.assertIn("hdf5_version", environment)
         version = list(map(int, environment["hdf5_version"].split(".")))
         self.assertEqual(len(version), 3)

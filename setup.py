@@ -99,6 +99,7 @@ def parse_version(module_file):
     return match[0]
 
 # Now, setup the extension module.
+msprime_version = parse_version("msprime/__init__.py")
 configurator = PathConfigurator()
 d = "lib/"
 _msprime_module = Extension(
@@ -111,7 +112,10 @@ _msprime_module = Extension(
     undef_macros=["NDEBUG"],
     # We define this macro to ensure we're using the v18 versions of the
     # HDF5 API and not earlier deprecated versions.
-    define_macros=[("H5_NO_DEPRECATED_SYMBOLS", None)],
+    define_macros=[
+        ("H5_NO_DEPRECATED_SYMBOLS", None),
+        ("MSP_LIBRARY_VERSION_STR", '"{}"'.format(msprime_version)),
+    ],
     libraries=["gsl", "gslcblas", "hdf5"],
     include_dirs=[d] + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
@@ -120,7 +124,6 @@ _msprime_module = Extension(
 f = open("README.txt")
 msprime_readme = f.read()
 f.close()
-msprime_version = parse_version("msprime/__init__.py")
 
 setup(
     name="msprime",
