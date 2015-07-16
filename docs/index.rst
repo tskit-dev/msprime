@@ -7,16 +7,15 @@ Welcome to msprime's documentation!
 ===================================
 
 This is the documentation for ``msprime``, a reimplementation of Hudson's
-classical :command:`ms` simulator. For the initial beta release, only the
-:command:`ms` compatible :ref:`command line interface <sec-cli>` is supported.
-However, full documentation for the Python API and tree storage file format
-are under development, and will be completed soon.
+classical :command:`ms` simulator.
 
 Contents:
+=========
 
 .. toctree::
    :maxdepth: 2
 
+   introduction
    tutorial
    api
    cli
