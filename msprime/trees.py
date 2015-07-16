@@ -25,7 +25,77 @@ from __future__ import print_function
 import math
 import random
 
+import svgwrite
+
 import _msprime
+
+
+class TreeDrawer(object):
+    """
+    A class to draw sparse trees in SVG format.
+    """
+    def __init__(self, tree, width, height):
+        self._width = width
+        self._height = height
+        self._x_scale = width / (tree.get_sample_size() + 1)
+        t = tree.get_time(tree.get_root())
+        # Leave a margin of 20px top and bottom
+        y_padding = 20
+        self._y_scale = (height - 2 * y_padding) / t
+        self._tree = tree
+        self._x_coords = {}
+        self._y_coords = {}
+        for u in tree.nodes():
+            scaled_t = tree.get_time(u) * self._y_scale
+            self._y_coords[u] = height - scaled_t - y_padding
+        self._leaf_x = 1
+        self._assign_x_coordinates(self._tree.get_root())
+
+    def write(self, path):
+        """
+        Writes the SVG description of this tree to the specified
+        path.
+        """
+        dwg = svgwrite.Drawing(
+            path, size=(self._width, self._height), debug=True)
+        lines = dwg.add(dwg.g(id='lines', stroke='black'))
+        labels = dwg.add(dwg.g(font_size=14))
+        for u in self._tree.nodes():
+            v = self._tree.get_parent(u)
+            x = self._x_coords[u], self._y_coords[u]
+            dwg.add(dwg.circle(center=x, r=3))
+            dx = None
+            dy = None
+            if self._tree.is_leaf(u):
+                dy = [20]
+                dx = [-4]
+            elif v == 0:
+                dy = [-5]
+            else:
+                dx = [-20]
+            labels.add(dwg.text(str(u), x, dx=dx, dy=dy))
+            if v != 0:
+                y = self._x_coords[v], self._y_coords[v]
+                lines.add(dwg.line(x, y))
+        dwg.save()
+
+    def _assign_x_coordinates(self, node):
+        """
+        Assign x coordinates to all nodes underneath this node.
+        """
+        if self._tree.is_internal(node):
+            children = self._tree.get_children(node)
+            for c in children:
+                self._assign_x_coordinates(c)
+            # We now have x coords for both children
+            c1 = self._x_coords[children[0]]
+            c2 = self._x_coords[children[1]]
+            a = min(c1, c2)
+            b = max(c1, c2)
+            self._x_coords[node] = (a + (b - a) / 2)
+        else:
+            self._x_coords[node] = self._leaf_x * self._x_scale
+            self._leaf_x += 1
 
 
 # TODO:
@@ -199,6 +269,21 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_sample_size()
 
+    def draw(self, path, width=200, height=200):
+        """
+        Draws a representation of this tree to the specified path in SVG
+        format.
+
+        :param str path: The path to the file to write the SVG.
+        :param int width: The width of the image in pixels.
+        :param int height: The height of the image in pixels.
+        """
+        td = TreeDrawer(self, width, height)
+        td.write(path)
+
+    def nodes(self):
+        return self.get_parent_dict().keys()
+
     def get_parent_dict(self):
         pi = {}
         for j in range(1, self.get_sample_size() + 1):
@@ -218,7 +303,7 @@ class SparseTree(object):
         return tau
 
     def __str__(self):
-        return "{}:{}".format(self.get_interval(), self.get_parent_dict())
+        return str(self.get_parent_dict())
 
     def __eq__(self, other):
         return (

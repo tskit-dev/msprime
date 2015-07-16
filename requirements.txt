@@ -4,3 +4,4 @@ mock
 nose
 sphinx
 sphinx-argparse
+svgwrite
