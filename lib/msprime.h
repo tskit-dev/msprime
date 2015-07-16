@@ -20,6 +20,10 @@
 #ifndef __MSPRIME_H__
 #define __MSPRIME_H__
 
+#ifndef MSP_LIBRARY_VERSION_STR
+#define MSP_LIBRARY_VERSION_STR "undefined"
+#endif
+
 #include <stdio.h>
 
 #include <gsl/gsl_rng.h>
