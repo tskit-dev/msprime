@@ -30,28 +30,29 @@ document describes version 0.1.
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
 ================    ==============      ======      ===========
-/format_version     H5T_STD_U32LE       2           The file format version (major, minor).
+/format_version     H5T_STD_U32LE       2           The (major, minor) file format version.
 /sample_size        H5T_STD_U32LE       Scalar      The simulated sample size :math:`n`.
-/sequence_length    H5T_STD_U32LE       Scalar      The simulated sequence length :math:`m`.
+/num_loci           H5T_STD_U32LE       Scalar      The simulated number of loci :math:`m`.
 ================    ==============      ======      ===========
 
 +++++++++++
 Trees group
 +++++++++++
 
-The ``trees`` group is mandatory, and describes the tree sequence. A tree
-sequence is a sequence of coalescent records, and each record consists of
+The ``trees`` group is mandatory, and describes the tree sequence.
+This is composed of a sequence of coalescent records, and each
+record consists of
 five fields. The ``left`` and ``right`` fields define the genomic interval
 over which the record applies. The interval is half-open, so that the
 left coordinate is inclusive and the right coordinate is exclusive. Every
 genomic coordinate :math:`x` must lie in the range :math:`0 \leq x < m`,
-where :math:`m` is the sequence length defined in the root attribute
-``sequence_length``.
+where :math:`m` is the number of loci defined in the root attribute
+``num_loci``.
 
 The ``node`` and ``children`` fields in a coalescence record define the
 event of the given node becoming the parent of the given pair of
 children. Every node is a positive integer. The ``time`` field in a
-coalescence record then defined the time at which this event occured.
+coalescence record then defines the time at which this event occured.
 
 The ``trees`` group contains these coalescence records. The records are
 stored in the form of a seperate vector for each field for efficiency reasons.
@@ -71,7 +72,7 @@ Path                Type                Dim
 ===============     ==============      =====
 
 The ``trees`` group also contains some attributes defining provenance
-information required to replicated the simulations.
+information required to replicate simulations.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
@@ -82,14 +83,42 @@ Path                Type                Dim         Description
 
 These attributes are implementation defined strings. No internal format
 is required, other than that the original implementation should be
-able to reproduce the precise simulation given these values. In the
-current version of ``msprime``, the ``parameters`` value is a JSON
-object describing all the simulation parameters and the ``environment``
-value is a JSON object giving platform and library version information.
+able to reproduce the exact simulation given these values. In the
+current version of ``msprime`` this provenance information is encoded
+as JSON. The ``parameters`` attribute contains all parameters used to
+run the simulation, and the ``environment``
+value contains platform and library version information.
 
 +++++++++++++++
 Mutations group
 +++++++++++++++
 
 The ``mutations`` group is optional, and describes the location of mutations
-with respect to tree nodes and their positions along the sequence.
+with respect to tree nodes and their positions along the sequence. Each mutation
+consists of a node (which must be defined in the ``trees`` group) and a
+position. Positions are defined as a floating point value to allow us to
+express infinite sites mutations. A mutation position :math:`x` is defined on the same
+scale as the genomic coordinates for trees, and so we must have
+:math:`0 \leq x < m`.
+
+As for the coalescence records in the `trees` group, mutation records are
+stored as seperate vectors for efficiency reasons. The ordering of the mutation
+records is not defined, and should not be relied on.
+
+===================     ==============      =====
+Path                    Type                Dim
+===================     ==============      =====
+/mutations/node         H5T_STD_U32LE       M
+/mutations/position     H5T_IEEE_F64LE      M
+===================     ==============      =====
+
+As for the ``trees`` group, the ``mutations`` also contains attributes
+defining provenance information required to replicate simulations. The
+definitions of these attributes are identical.
+
+================    ==============      ======      ===========
+Path                Type                Dim         Description
+================    ==============      ======      ===========
+/parameters         H5T_STRING          Scalar      The parameters used to simulate the trees.
+/environment        H5T_STRING          Scalar      The simulation environment.
+================    ==============      ======      ===========
