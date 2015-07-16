@@ -29,8 +29,11 @@ except ImportError:
     # This fails for Python 3.x, but that's fine.
     pass
 
+import os
 import random
+import tempfile
 import unittest
+import xml.etree
 
 import msprime
 import tests
@@ -458,3 +461,32 @@ class TestTreeSequence(HighLevelTestCase):
     def test_tree_diffs(self):
         for ts in self.get_example_tree_sequences():
             self.verify_tree_diffs(ts)
+
+
+class TestSparseTree(HighLevelTestCase):
+    """
+    Some simple tests on the API for the sparse tree.
+    """
+    def get_tree(self):
+        return msprime.simulate_tree(10, random_seed=1)
+
+    def test_str(self):
+        t = self.get_tree()
+        self.assertIsInstance(str(t), str)
+        self.assertEqual(str(t), str(t.get_parent_dict()))
+
+    def test_draw(self):
+        t = self.get_tree()
+        with tempfile.NamedTemporaryFile() as f:
+            w = 123
+            h = 456
+            t.draw(f.name, w, h)
+            self.assertGreater(os.path.getsize(f.name), 0)
+            # Check some basic stuff about the SVG output.
+            f.seek(0)
+            root = xml.etree.ElementTree.fromstring(f.read())
+            self.assertEqual(root.tag, "{http://www.w3.org/2000/svg}svg")
+            width = int(root.attrib["width"])
+            self.assertEqual(w, width)
+            height = int(root.attrib["height"])
+            self.assertEqual(h, height)

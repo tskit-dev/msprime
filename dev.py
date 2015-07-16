@@ -118,6 +118,10 @@ def large_example():
             random_seed=1, max_memory="10G")
 
 
+def draw_tree():
+    tree = msprime.simulate_tree(5, random_seed=1)
+    tree.draw("example.svg")
+
 if __name__ == "__main__":
     # haplotype_example()
     # dump_example()
@@ -125,4 +129,5 @@ if __name__ == "__main__":
     # tree_example()
     # dump_file("example.hdf5")
     # tree_algorithm()
-    large_example()
+    # large_example()
+    draw_tree()
