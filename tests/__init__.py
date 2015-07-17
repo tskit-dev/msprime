@@ -49,6 +49,8 @@ class PythonSparseTree(object):
         self.left = 0
         self.right = 0
         self.root = 0
+        # We need a mutations function, so this name is taken.
+        self.mutation_list = []
 
     def get_num_nodes(self):
         return self.num_nodes
@@ -77,6 +79,9 @@ class PythonSparseTree(object):
     def get_time_dict(self):
         return self.time
 
+    def mutations(self):
+        return iter(self.mutation_list)
+
 
 class PythonTreeSequence(object):
     """
@@ -86,6 +91,7 @@ class PythonTreeSequence(object):
         self._tree_sequence = tree_sequence
         self._sample_size = tree_sequence.get_sample_size()
         self._breakpoints = breakpoints
+        self._mutations = tree_sequence.get_mutations()
 
     def records(self):
         for j in range(self._tree_sequence.get_num_records()):
@@ -147,6 +153,11 @@ class PythonTreeSequence(object):
             st.root = root
             st.right += length
             assert len(st.parent) == 2 * st.sample_size - 1
+            # Add in all the mutations
+            st.mutation_list = [
+                (p, u) for (p, u) in self._mutations
+                if st.left <= p < st.right
+            ]
             yield st
             del st.parent[root]
             st.left = st.right

@@ -224,6 +224,18 @@ class StressTester(object):
         r2 = [t2.get_record(j) for j in range(t2.get_num_records())]
         assert r1 == r2
 
+    def check_mutations(self, sim):
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        ts.generate_mutations(10, 1)
+        st = _msprime.SparseTree(ts)
+        all_mutations = ts.get_mutations()
+        all_tree_mutations = []
+        for st in _msprime.SparseTreeIterator(ts, st):
+            tree_mutations = st.get_mutations()
+            all_tree_mutations.extend(tree_mutations)
+        assert all_tree_mutations == all_mutations
+
     def run(self):
         self.run_module_functions()
         self.check_simulator_errors()
@@ -244,6 +256,7 @@ class StressTester(object):
         self.check_haplotype_generator(sim)
         self.check_provenance_strings(sim)
         self.check_multiple_tree_sequences()
+        self.check_mutations(sim)
 
 
 def main():

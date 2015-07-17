@@ -281,6 +281,26 @@ class SparseTree(object):
         td = TreeDrawer(self, width, height)
         td.write(path)
 
+    def get_num_mutations(self):
+        """
+        Returns the number of mutations on this tree.
+
+        :return: The number of mutations on this tree.
+        :rtype: int
+        """
+        return self._ll_sparse_tree.get_num_mutations()
+
+    def mutations(self):
+        """
+        Returns an iterator over the mutations on this tree. Each mutation
+        is represented as a tuple (position, node), and mutations
+        returned in increasing order of position.
+
+        :return: The mutations in this tree.
+        :rtype: iter
+        """
+        return iter(self._ll_sparse_tree.get_mutations())
+
     def nodes(self):
         return self.get_parent_dict().keys()
 
@@ -311,7 +331,8 @@ class SparseTree(object):
             self.get_parent_dict() == other.get_parent_dict() and
             self.get_time_dict() == other.get_time_dict() and
             self.get_interval() == other.get_interval() and
-            self.get_root() == other.get_root())
+            self.get_root() == other.get_root() and
+            list(self.mutations()) == list(other.mutations()))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -625,6 +646,17 @@ class TreeSequence(object):
 
     def diffs(self):
         return _msprime.TreeDiffIterator(self._ll_tree_sequence)
+
+    def mutations(self):
+        """
+        Returns an iterator over the mutations on this tree. Each mutation
+        is represented as a tuple (position, node), and mutations
+        returned in increasing order of position.
+
+        :return: The mutations in this tree.
+        :rtype: iter
+        """
+        return iter(self._ll_tree_sequence.get_mutations())
 
     def sparse_trees(self):
         """

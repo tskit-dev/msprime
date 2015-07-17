@@ -316,8 +316,7 @@ int tree_sequence_get_record(tree_sequence_t *self, size_t index,
         coalescence_record_t *record, int order);
 int tree_sequence_get_breakpoints(tree_sequence_t *self, 
         uint32_t *breakpoints);
-int tree_sequence_get_mutations(tree_sequence_t *self, uint32_t *nodes,
-        double *positions);
+int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations);
 char * tree_sequence_get_simulation_parameters(tree_sequence_t *self);
 char * tree_sequence_get_mutation_parameters(tree_sequence_t *self);
 int tree_sequence_alloc_sparse_tree(tree_sequence_t *self, 

@@ -170,6 +170,10 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         length = 0
         for st1, st2 in zip(iter1, iter2):
             self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
+            root = 1
+            while st1.get_parent(root) != 0:
+                root = st1.get_parent(root)
+            self.assertEqual(root, st1.get_root())
             self.assertEqual(st1, st2)
             l, r = st1.get_interval()
             self.assertEqual(l, length)
@@ -181,6 +185,31 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertEqual(length, ts.get_num_loci())
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
+
+    def verify_mutations(self, ts):
+        """
+        Verify the mutations on this tree sequence make sense.
+        """
+        all_mutations = list(ts.mutations())
+        # Mutations must be sorted by position
+        self.assertEqual(
+            all_mutations, sorted(all_mutations, key=lambda x: x[0]))
+        self.assertEqual(len(all_mutations), ts.get_num_mutations())
+        all_tree_mutations = []
+        for st in ts.sparse_trees():
+            tree_mutations = list(st.mutations())
+            self.assertEqual(st.get_num_mutations(), len(tree_mutations))
+            all_tree_mutations.extend(tree_mutations)
+            for position, node in tree_mutations:
+                left, right = st.get_interval()
+                self.assertTrue(left <= position < right)
+                self.assertNotEqual(st.get_parent(node), 0)
+        self.assertEqual(all_tree_mutations, all_mutations)
+        pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
+        iter1 = ts.sparse_trees()
+        iter2 = pts.sparse_trees()
+        for st1, st2 in zip(iter1, iter2):
+            self.assertEqual(st1, st2)
 
 
 class TestSingleLocusSimulation(HighLevelTestCase):
@@ -448,6 +477,16 @@ class TestTreeSequence(HighLevelTestCase):
     def test_sparse_trees(self):
         for ts in self.get_example_tree_sequences():
             self.verify_sparse_trees(ts)
+
+    def test_mutations(self):
+        for ts in self.get_example_tree_sequences():
+            ts.generate_mutations(0)
+            self.assertEqual(ts.get_num_mutations(), 0)
+            for st in ts.sparse_trees():
+                self.assertEqual(st.get_num_mutations(), 0)
+            ts.generate_mutations(100)
+            self.assertGreater(ts.get_num_mutations(), 0)
+            self.verify_mutations(ts)
 
     def verify_tree_diffs(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
