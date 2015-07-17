@@ -514,6 +514,31 @@ class TestSparseTree(HighLevelTestCase):
         self.assertIsInstance(str(t), str)
         self.assertEqual(str(t), str(t.get_parent_dict()))
 
+    def test_leaves(self):
+        t = self.get_tree()
+        n = t.get_sample_size()
+        all_leaves = list(t.leaves(t.get_root()))
+        self.assertEqual(sorted(all_leaves), list(range(1, n + 1)))
+        for j in range(1, n + 1):
+            self.assertEqual(list(t.leaves(j)), [j])
+
+        def test_func(t, u):
+            """
+            Simple test definition of the traversal.
+            """
+            stack = [u]
+            while len(stack) > 0:
+                v = stack.pop()
+                if t.is_internal(v):
+                    for c in t.get_children(v):
+                        stack.append(c)
+                else:
+                    yield v
+        for u in t.nodes():
+            l1 = list(t.leaves(u))
+            l2 = list(test_func(t, u))
+            self.assertEqual(l1, l2)
+
     def test_draw(self):
         t = self.get_tree()
         with tempfile.NamedTemporaryFile() as f:

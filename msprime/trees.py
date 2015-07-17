@@ -301,6 +301,23 @@ class SparseTree(object):
         """
         return iter(self._ll_sparse_tree.get_mutations())
 
+    def leaves(self, u):
+        """
+        Returns an iterator over all the leaves in this tree underneath
+        the specified node.
+
+        :param int u: The node of interest.
+        :return: An iterator over all leaves in the subtree of u.
+        :rtype: iter
+        """
+        stack = [u]
+        while len(stack) > 0:
+            v = stack.pop()
+            if self.is_leaf(v):
+                yield v
+            else:
+                stack.extend(self.get_children(v))
+
     def nodes(self):
         return self.get_parent_dict().keys()
 
