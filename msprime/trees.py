@@ -339,7 +339,7 @@ class SparseTree(object):
 
 
 def simulate(
-        sample_size, sequence_length=1, scaled_recombination_rate=0.0,
+        sample_size, num_loci=1, scaled_recombination_rate=0.0,
         scaled_mutation_rate=None,
         population_models=[], random_seed=None, max_memory="1G"):
     """
@@ -350,7 +350,7 @@ def simulate(
     can run the simulations we are interested in.
 
     :param int sample_size: The number of individuals in our sample.
-    :param int sequence_length: The length of the simulated region in
+    :param int num_loci: The length of the simulated region in
         bases.
     :param float scaled_recombination_rate: The rate of recombination
         between adjacent bases per :math:`4N` generations.
@@ -368,9 +368,7 @@ def simulate(
     :rtype: :class:`.TreeSequence`
     """
     sim = TreeSimulator(sample_size)
-    # TODO choose one: num_loci or sequence length and make this
-    # consistent throughout.
-    sim.set_num_loci(sequence_length)
+    sim.set_num_loci(num_loci)
     sim.set_scaled_recombination_rate(scaled_recombination_rate)
     sim.set_random_seed(random_seed)
     sim.set_max_memory(max_memory)
