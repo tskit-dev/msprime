@@ -182,6 +182,11 @@ typedef struct {
 } tree_node_list_t;
 
 typedef struct {
+    double position;
+    uint32_t node;
+} mutation_t;
+
+typedef struct {
     tree_sequence_t *tree_sequence;
     uint32_t current_left;
     uint32_t next_breakpoint;
@@ -207,6 +212,10 @@ typedef struct {
     /* traversal stacks */
     uint32_t *stack1;
     uint32_t *stack2;
+    /* mutation storage */
+    mutation_t *mutations;
+    size_t num_mutations;
+    size_t max_mutations;
 } sparse_tree_t;
 
 typedef struct {
@@ -218,6 +227,7 @@ typedef struct {
     sparse_tree_t *tree;
     size_t insertion_index;
     size_t removal_index;
+    size_t mutation_index;
 } sparse_tree_iterator_t;
 
 typedef struct newick_tree_node {
@@ -240,18 +250,10 @@ typedef struct {
 } newick_converter_t;
 
 typedef struct {
-    double position;
-    size_t site;
-    uint32_t node;
-} mutation_t;
-
-typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     size_t num_mutations;
     tree_sequence_t *tree_sequence;
-    mutation_t **mutations;
-    mutation_t *mutation_mem;
     /* the haplotype binary matrix */
     size_t words_per_row;
     uint64_t *haplotype_matrix;
@@ -282,6 +284,7 @@ int msp_get_population_models(msp_t *self, population_model_t *models);
 int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, uint32_t *breakpoints);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
+int msp_is_completed(msp_t *self);
 
 size_t msp_get_num_population_models(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
@@ -317,6 +320,8 @@ int tree_sequence_get_mutations(tree_sequence_t *self, uint32_t *nodes,
         double *positions);
 char * tree_sequence_get_simulation_parameters(tree_sequence_t *self);
 char * tree_sequence_get_mutation_parameters(tree_sequence_t *self);
+int tree_sequence_alloc_sparse_tree(tree_sequence_t *self, 
+        sparse_tree_t *tree);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
         tree_sequence_t *tree_sequence);
@@ -326,7 +331,7 @@ int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 
 int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, 
-        uint32_t num_nodes);
+        uint32_t num_nodes, size_t max_mutations);
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_clear(sparse_tree_t *self);
 int sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
