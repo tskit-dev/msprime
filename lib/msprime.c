@@ -513,6 +513,16 @@ msp_is_initialised(msp_t *self)
     return self->used_memory != 0;
 }
 
+/*
+ * Returns true if the simulation has completed.
+ */
+int
+msp_is_completed(msp_t *self)
+{
+    size_t n = avl_count(&self->ancestral_population);
+    return msp_is_initialised(self) && n == 0;
+}
+
 int
 msp_free(msp_t *self)
 {

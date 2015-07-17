@@ -76,7 +76,11 @@ class StressTester(object):
 
     def check_uninitialised_tree_sequence(self):
         ts = _msprime.TreeSequence()
-        tree = _msprime.SparseTree(1)
+        sim = _msprime.Simulator(sample_size=5, random_seed=2)
+        sim.run()
+        other_ts = _msprime.TreeSequence()
+        other_ts.create(sim)
+        tree = _msprime.SparseTree(other_ts)
         functions = [
             ts.dump, ts.generate_mutations,
             lambda: _msprime.NewickConverter(ts),
@@ -108,7 +112,7 @@ class StressTester(object):
         # Check the SparseTreeIterator
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        tree = _msprime.SparseTree(ts.get_num_nodes())
+        tree = _msprime.SparseTree(ts)
         parents_before = []
         for t in _msprime.SparseTreeIterator(ts, tree):
             pi = {}
@@ -125,7 +129,6 @@ class StressTester(object):
                 pi[j] = t.get_parent(j)
             parents_after.append(pi)
         assert parents_before == parents_after
-
 
     def check_tree_sequence_file_errors(self, sim):
         ts = _msprime.TreeSequence()
@@ -191,19 +194,35 @@ class StressTester(object):
         s = ts.get_mutation_parameters()
         assert s is not None
 
-    def check_sparse_tree(self):
+    def check_sparse_tree(self, sim):
         try:
             _msprime.SparseTree()
             assert False
         except TypeError:
             pass
+        ts = _msprime.TreeSequence()
         try:
-            _msprime.SparseTree(0)
+            _msprime.SparseTree(ts)
             assert False
-        except _msprime.LibraryError:
+        except ValueError:
             pass
+        ts.create(sim)
+        st = _msprime.SparseTree(ts)
 
-        st = _msprime.SparseTree(10)
+    def check_multiple_tree_sequences(self):
+        params = {"sample_size":10, "random_seed":1}
+        sim1 = _msprime.Simulator(**params)
+        sim2 = _msprime.Simulator(**params)
+        sim1.run()
+        sim2.run()
+        t1 = _msprime.TreeSequence()
+        t2 = _msprime.TreeSequence()
+        t1.create(sim1)
+        t2.create(sim1)
+        assert t1.get_num_records() == t2.get_num_records()
+        r1 = [t1.get_record(j) for j in range(t1.get_num_records())]
+        r2 = [t2.get_record(j) for j in range(t2.get_num_records())]
+        assert r1 == r2
 
     def run(self):
         self.run_module_functions()
@@ -218,12 +237,13 @@ class StressTester(object):
             bps = list(sim.get_breakpoints())
             assert len(bps) == sim.get_num_breakpoints()
         self.check_uninitialised_tree_sequence()
-        self.check_sparse_tree()
+        self.check_sparse_tree(sim)
         self.check_tree_sequence_iterators(sim)
         self.check_tree_sequence_file_errors(sim)
         self.check_tree_sequence_dump_equality(sim)
         self.check_haplotype_generator(sim)
         self.check_provenance_strings(sim)
+        self.check_multiple_tree_sequences()
 
 
 def main():

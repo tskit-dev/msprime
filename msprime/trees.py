@@ -631,8 +631,7 @@ class TreeSequence(object):
         Returns an iterator over the sparse trees in this tree
         sequence.
         """
-        ll_sparse_tree = _msprime.SparseTree(
-            self.get_sample_size(), self.get_num_nodes())
+        ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence)
         iterator = _msprime.SparseTreeIterator(
             self._ll_tree_sequence, ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree)

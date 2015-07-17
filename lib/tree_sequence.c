@@ -39,6 +39,20 @@ typedef struct {
 } index_sort_t;
 
 static int
+cmp_mutation(const void *a, const void *b) {
+    const mutation_t *ia = (const mutation_t *) a;
+    const mutation_t *ib = (const mutation_t *) b;
+    return (ia->position > ib->position) - (ia->position < ib->position);
+}
+
+static int
+cmp_mutation_pointer(const void *a, const void *b) {
+    mutation_t *const*ia = (mutation_t *const*) a;
+    mutation_t *const*ib = (mutation_t *const*) b;
+    return cmp_mutation(*ia, *ib);
+}
+
+static int
 cmp_index_sort(const void *a, const void *b) {
     const index_sort_t *ca = (const index_sort_t *) a;
     const index_sort_t *cb = (const index_sort_t *) b;
@@ -1320,28 +1334,21 @@ tree_sequence_get_mutations(tree_sequence_t *self, uint32_t *nodes,
     return ret;
 }
 
-static int
-tree_sequence_extend_mutation_buffers(tree_sequence_t *self, size_t buffer_size)
-{
-    int ret = MSP_ERR_NO_MEMORY;
-    void *p;
 
-    p = realloc(self->mutations.node, buffer_size * sizeof(uint32_t));
-    if (p == NULL) {
-        goto out;
-    }
-    self->mutations.node = p;
-    p = realloc(self->mutations.position, buffer_size * sizeof(double));
-    if (p == NULL) {
-        goto out;
-    }
-    self->mutations.position = p;
-    ret = 0;
-out:
-    return ret;
+/*
+ * This is a convenience short cut for sparse tree alloc in the common
+ * case where we're allocating it for a given sequence.
+ */
+int
+tree_sequence_alloc_sparse_tree(tree_sequence_t *self, sparse_tree_t *tree)
+{
+    return sparse_tree_alloc(tree, self->sample_size, self->num_nodes,
+            self->num_mutations);
 }
 
 /* TODO mutations generation should be spun out into a separate class.
+ * We should really just do this in Python and send the resulting
+ * mutation objects here for storage. It's not an expensive operation.
  */
 int
 tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
@@ -1352,10 +1359,14 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
     uint32_t j, k, l, child;
     gsl_rng *rng = NULL;
     double *times = NULL;
+    mutation_t *mutations = NULL;
+    mutation_t **mutation_ptrs = NULL;
+    unsigned int branch_mutations;
+    size_t num_mutations;
     double branch_length, distance, mu, position;
-    unsigned int num_mutations;
     size_t buffer_size;
     size_t block_size = 2 << 10; /* alloc in blocks of 1M */
+    void *p;
 
     if (self->num_mutations > 0) {
         /* any mutations that were there previously are overwritten. */
@@ -1372,20 +1383,22 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
             free(self->mutations.environment);
         }
     }
-    buffer_size = 0;
     self->num_mutations = 0;
     self->mutations.position = NULL;
     self->mutations.node = NULL;
     self->mutations.parameters = NULL;
     self->mutations.environment = NULL;
 
+    buffer_size = block_size;
+    num_mutations = 0;
     rng = gsl_rng_alloc(gsl_rng_default);
     if (rng == NULL) {
         goto out;
     }
     gsl_rng_set(rng, random_seed);
     times = calloc(self->num_nodes + 1, sizeof(double));
-    if (times == NULL) {
+    mutations = malloc(buffer_size * sizeof(mutation_t));
+    if (times == NULL || mutations == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -1400,24 +1413,45 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
             child = cr.children[k];
             branch_length = cr.time - times[child];
             mu = branch_length * distance * mutation_rate;
-            num_mutations = gsl_ran_poisson(rng, mu);
-            for (l = 0; l < num_mutations; l++) {
+            branch_mutations = gsl_ran_poisson(rng, mu);
+            for (l = 0; l < branch_mutations; l++) {
                 position = gsl_ran_flat(rng, cr.left, cr.right);
-                if (self->num_mutations >= buffer_size) {
+                if (num_mutations >= buffer_size) {
                     buffer_size += block_size;
-                    ret = tree_sequence_extend_mutation_buffers(self,
-                            buffer_size);
-                    if (ret != 0) {
+                    p = realloc(mutations, buffer_size * sizeof(mutation_t));
+                    if (p == NULL) {
+                        ret = MSP_ERR_NO_MEMORY;
                         goto out;
                     }
+                    mutations = p;
                 }
-                self->mutations.node[self->num_mutations] = child;
-                self->mutations.position[self->num_mutations] = position;
-                self->num_mutations++;
+                mutations[num_mutations].node = child;
+                mutations[num_mutations].position = position;
+                num_mutations++;
             }
         }
     }
-    if (self->num_mutations > 0) {
+    if (num_mutations > 0) {
+        /* Allocate the storage we need to keep the mutations. */
+        mutation_ptrs = malloc(num_mutations * sizeof(mutation_t *));
+        self->mutations.node = malloc(num_mutations * sizeof(uint32_t));
+        self->mutations.position = malloc(num_mutations * sizeof(double));
+        if (mutation_ptrs == NULL || self->mutations.node == NULL
+                || self->mutations.position == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        for (j = 0; j < num_mutations; j++) {
+            mutation_ptrs[j] = mutations + j;
+        }
+        /* Mutations are required to be sorted in position order. */
+        qsort(mutation_ptrs, num_mutations, sizeof(mutation_t *),
+                cmp_mutation_pointer);
+        self->num_mutations = num_mutations;
+        for (j = 0; j < num_mutations; j++) {
+            self->mutations.node[j] = mutation_ptrs[j]->node;
+            self->mutations.position[j] = mutation_ptrs[j]->position;
+        }
         ret = encode_mutation_parameters(mutation_rate, random_seed,
                 &self->mutations.parameters);
         if (ret != 0) {
@@ -1432,6 +1466,12 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
 out:
     if (times != NULL) {
         free(times);
+    }
+    if (mutations != NULL) {
+        free(mutations);
+    }
+    if (mutation_ptrs != NULL) {
+        free(mutation_ptrs);
     }
     if (rng != NULL) {
         gsl_rng_free(rng);
@@ -1742,7 +1782,8 @@ out:
  * ======================================================== */
 
 int
-sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, uint32_t num_nodes)
+sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, uint32_t num_nodes,
+        size_t max_mutations)
 {
     int ret = MSP_ERR_NO_MEMORY;
 
@@ -1766,6 +1807,9 @@ sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, uint32_t num_nodes)
     if (self->stack1 == NULL || self->stack2 == NULL) {
         goto out;
     }
+    self->max_mutations = max_mutations;
+    self->num_mutations = 0;
+    self->mutations = malloc(max_mutations * sizeof(mutation_t));
     ret = 0;
 out:
     return ret;
@@ -1788,6 +1832,9 @@ sparse_tree_free(sparse_tree_t *self)
     }
     if (self->stack2 != NULL) {
         free(self->stack2);
+    }
+    if (self->mutations != NULL) {
+        free(self->mutations);
     }
     return 0;
 }
@@ -1866,7 +1913,10 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
     assert(tree->time != NULL && tree->parent != NULL
             && tree->children != NULL);
     if (tree_sequence_get_num_nodes(tree_sequence) != tree->num_nodes ||
-            tree_sequence_get_sample_size(tree_sequence) != tree->sample_size) {
+            tree_sequence_get_sample_size(tree_sequence)
+                != tree->sample_size ||
+            tree_sequence_get_num_mutations(tree_sequence)
+                != tree->max_mutations) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -1880,6 +1930,7 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
     self->tree->sample_size = self->sample_size;
     self->insertion_index = 0;
     self->removal_index = 0;
+    self->mutation_index = 0;
     ret = sparse_tree_clear(self->tree);
 out:
     return ret;
@@ -1922,6 +1973,7 @@ sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
     printf("sparse_tree_iterator state\n");
     printf("insertion_index = %d\n", (int) self->insertion_index);
     printf("removal_index = %d\n", (int) self->removal_index);
+    printf("mutation_index = %d\n", (int) self->mutation_index);
     printf("num_records = %d\n", (int) self->num_records);
     printf("tree.left = %d\n", self->tree->left);
     printf("tree.right = %d\n", self->tree->right);
@@ -1930,6 +1982,11 @@ sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
         printf("\t%d\t%d\t%d\t%d\t%f\n", (int) j, self->tree->parent[j],
                 self->tree->children[2 * j], self->tree->children[2 * j + 1],
                 self->tree->time[j]);
+    }
+    printf("mutations = \n");
+    for (j = 0; j < self->tree->num_mutations; j++) {
+        printf("\t%d @ %f\n", self->tree->mutations[j].node,
+                self->tree->mutations[j].position);
     }
     sparse_tree_iterator_check_state(self);
 }
@@ -1983,6 +2040,18 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
             self->insertion_index++;
         }
         ret = 1;
+        /* now update the mutations */
+        t->num_mutations = 0;
+        while (self->mutation_index < s->num_mutations
+                && s->mutations.position[self->mutation_index] < t->right) {
+            assert(t->num_mutations < t->max_mutations);
+            t->mutations[t->num_mutations].position =
+                s->mutations.position[self->mutation_index];
+            t->mutations[t->num_mutations].node =
+                s->mutations.node[self->mutation_index];
+            self->mutation_index++;
+            t->num_mutations++;
+        }
     }
     return ret;
 }

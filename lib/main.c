@@ -317,8 +317,7 @@ print_tree_sequence(tree_sequence_t *ts)
         goto out;
     }
     /* sparse trees */
-    ret = sparse_tree_alloc(&tree, tree_sequence_get_sample_size(ts),
-            tree_sequence_get_num_nodes(ts));
+    ret = tree_sequence_alloc_sparse_tree(ts, &tree);
     if (ret != 0) {
         goto out;
     }
@@ -403,9 +402,9 @@ run_simulate(char *conf_file)
         }
         tree_sequence_print_state(tree_seq);
     }
+    print_haplotypes(tree_seq);
     print_tree_sequence(tree_seq);
     if (0) {
-        print_haplotypes(tree_seq);
         print_newick_trees(tree_seq);
         tree_sequence_print_state(tree_seq);
     }

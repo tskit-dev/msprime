@@ -210,15 +210,15 @@ class LowLevelTestCase(tests.MsprimeTestCase):
                 k = pi[k]
 
     def get_tree_sequence(
-            self, sample_size=10, num_loci=100, mutation_rate=10):
-        models = get_random_population_models(3)
+            self, sample_size=10, num_loci=100, mutation_rate=10,
+            random_seed=1):
         sim = _msprime.Simulator(
-            sample_size, random_seed=1, num_loci=num_loci,
-            scaled_recombination_rate=1, population_models=models)
+            sample_size, random_seed=random_seed, num_loci=num_loci,
+            scaled_recombination_rate=1.0)
         sim.run()
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        ts.generate_mutations(mutation_rate, 1)
+        ts.generate_mutations(mutation_rate, random_seed)
         return ts
 
     def get_example_tree_sequences(self):
@@ -345,7 +345,7 @@ class TestSimulationState(LowLevelTestCase):
         """
         ts = _msprime.TreeSequence()
         ts.create(sim)
-        st = _msprime.SparseTree(ts.get_sample_size(), ts.get_num_nodes())
+        st = _msprime.SparseTree(ts)
         st_iter = _msprime.SparseTreeIterator(ts, st)
         n = sim.get_sample_size()
         pi = {}
@@ -719,11 +719,69 @@ class TestSimulator(LowLevelTestCase):
         m.reverse()
         self.assertRaises(_msprime.InputError, f, m)
 
+    def test_seed_equality(self):
+        simulations = [
+            {"sample_size": 10, "random_seed": 1},
+            {
+                "sample_size": 10, "num_loci": 100,
+                "scaled_recombination_rate": 0.1, "random_seed": 10
+            },
+        ]
+        for params in simulations:
+            sim1 = _msprime.Simulator(**params)
+            sim2 = _msprime.Simulator(**params)
+            sim1.run()
+            sim2.run()
+            self.assertEqual(
+                sim1.get_num_coalescence_records(),
+                sim2.get_num_coalescence_records())
+            self.assertEqual(
+                sim1.get_coalescence_records(),
+                sim2.get_coalescence_records())
+            self.assertEqual(sim1.get_breakpoints(), sim2.get_breakpoints())
+
 
 class TestTreeSequence(LowLevelTestCase):
     """
     Tests for the low-level interface for the TreeSequence.
     """
+
+    def test_seed_equality(self):
+        simulations = [
+            {"sample_size": 10, "random_seed": 1},
+            {
+                "sample_size": 10, "num_loci": 100,
+                "scaled_recombination_rate": 0.1, "random_seed": 10
+            },
+        ]
+        for params in simulations:
+            sim1 = _msprime.Simulator(**params)
+            sim2 = _msprime.Simulator(**params)
+            sim1.run()
+            sim2.run()
+            t1 = _msprime.TreeSequence()
+            t2 = _msprime.TreeSequence()
+            t1.create(sim1)
+            t2.create(sim1)
+            self.assertEqual(t1.get_num_records(), t2.get_num_records())
+            r1 = [t1.get_record(j) for j in range(t1.get_num_records())]
+            r2 = [t2.get_record(j) for j in range(t2.get_num_records())]
+            self.assertEqual(r1, r2)
+            self.assertEqual(t1.get_mutations(), t2.get_mutations())
+            t1.generate_mutations(1, 1)
+            t2.generate_mutations(1, 1)
+            self.assertEqual(t1.get_mutations(), t2.get_mutations())
+
+    def test_create_empty_tree_sequence(self):
+        sim = _msprime.Simulator(sample_size=10, random_seed=1)
+        ts = _msprime.TreeSequence()
+        self.assertRaises(ValueError, ts.create, sim)
+        sim.run(0.001)
+        self.assertRaises(ValueError, ts.create, sim)
+        sim.run()
+        ts.create(sim)
+        self.assertEqual(
+            sim.get_num_coalescence_records(), ts.get_num_records())
 
     def test_file_errors(self):
         ts1 = self.get_tree_sequence()
@@ -1002,7 +1060,8 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(ValueError, tree_sequence.get_record, 0)
         self.assertRaises(ValueError, tree_sequence.get_num_records)
         self.assertRaises(ValueError, _msprime.TreeDiffIterator, tree_sequence)
-        sparse_tree = _msprime.SparseTree(2, 2)
+        self.assertRaises(ValueError, _msprime.SparseTree, tree_sequence)
+        sparse_tree = _msprime.SparseTree(self.get_tree_sequence(2))
         self.assertRaises(
             ValueError, _msprime.SparseTreeIterator, tree_sequence,
             sparse_tree)
@@ -1147,12 +1206,13 @@ class TestSparseTreeIterator(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.SparseTreeIterator, None)
         ts = _msprime.TreeSequence()
         # This hasn't been initialised, so should fail.
-        tree = _msprime.SparseTree(2, 2)
+        other_ts = self.get_tree_sequence(10)
+        tree = _msprime.SparseTree(other_ts)
         self.assertRaises(ValueError, _msprime.SparseTreeIterator, ts, tree)
         sim = _msprime.Simulator(10, 1)
         sim.run()
         ts.create(sim)
-        tree = _msprime.SparseTree(ts.get_sample_size(), ts.get_num_nodes())
+        tree = _msprime.SparseTree(ts)
         n_before = 0
         parents_before = []
         for t in _msprime.SparseTreeIterator(ts, tree):
@@ -1180,7 +1240,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
-        tree = _msprime.SparseTree(ts.get_sample_size(), ts.get_num_nodes())
+        tree = _msprime.SparseTree(ts)
         self.verify_iterator(_msprime.SparseTreeIterator(ts, tree))
 
 
@@ -1219,17 +1279,44 @@ class TestSparseTree(LowLevelTestCase):
     Tests on the low-level sparse tree interface.
     """
 
+    def test_wrong_size(self):
+        ts1 = self.get_tree_sequence(sample_size=10)
+        ts2 = self.get_tree_sequence(sample_size=2)
+        st1 = _msprime.SparseTree(ts1)
+        st2 = _msprime.SparseTree(ts2)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.SparseTreeIterator, ts1, st2)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.SparseTreeIterator, ts2, st1)
+        ts1 = self.get_tree_sequence(sample_size=10, num_loci=100)
+        ts2 = self.get_tree_sequence(sample_size=10, num_loci=1)
+        st1 = _msprime.SparseTree(ts1)
+        st2 = _msprime.SparseTree(ts2)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.SparseTreeIterator, ts1, st2)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.SparseTreeIterator, ts2, st1)
+        ts1 = self.get_tree_sequence(
+            sample_size=10, num_loci=10, mutation_rate=0)
+        ts2 = self.get_tree_sequence(
+            sample_size=10, num_loci=10, mutation_rate=10)
+        st1 = _msprime.SparseTree(ts1)
+        st2 = _msprime.SparseTree(ts2)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.SparseTreeIterator, ts1, st2)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.SparseTreeIterator, ts2, st1)
+
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.SparseTree)
-        self.assertRaises(TypeError, _msprime.SparseTree, 0)
-        for bad_type in ["", {}, [], None]:
+        for bad_type in ["", {}, [], None, 0]:
             self.assertRaises(
-                TypeError, _msprime.SparseTree, bad_type, bad_type)
-        self.assertRaises(_msprime.LibraryError, _msprime.SparseTree, 0, 0)
+                TypeError, _msprime.SparseTree, bad_type, bad_type, bad_type)
         for n in range(1, 10):
-            st = _msprime.SparseTree(n, 2 * n)
-            self.assertEqual(st.get_num_nodes(), 2 * n)
-            self.assertEqual(st.get_sample_size(), n)
+            ts = self.get_tree_sequence(num_loci=n)
+            st = _msprime.SparseTree(ts)
+            self.assertEqual(st.get_num_nodes(), ts.get_num_nodes())
+            self.assertEqual(st.get_sample_size(), ts.get_sample_size())
             # An uninitialised sparse tree should always be zero.
             self.assertEqual(st.get_root(), 0)
             self.assertEqual(st.get_left(), 0)
@@ -1240,17 +1327,22 @@ class TestSparseTree(LowLevelTestCase):
                 self.assertEqual(st.get_time(j), 0)
 
     def test_bounds_checking(self):
-        for n in range(1, 10):
-            st = _msprime.SparseTree(n, n)
+        for m in range(1, 10):
+            ts = self.get_tree_sequence(num_loci=m)
+            n = ts.get_num_nodes()
+            st = _msprime.SparseTree(ts)
             for v in [-100, -1, n + 1, n + 100, n * 100]:
                 self.assertRaises(ValueError, st.get_parent, v)
                 self.assertRaises(ValueError, st.get_children, v)
                 self.assertRaises(ValueError, st.get_time, v)
 
     def test_mrca_interface(self):
-        for num_nodes in range(1, 10):
+        for num_loci in range(1, 10):
             for sample_size in range(2, 5):
-                st = _msprime.SparseTree(sample_size, num_nodes)
+                ts = self.get_tree_sequence(
+                    num_loci=num_loci, sample_size=sample_size)
+                num_nodes = ts.get_num_nodes()
+                st = _msprime.SparseTree(ts)
                 v = 0
                 self.assertRaises(
                     _msprime.LibraryError, st.get_mrca, v, v)

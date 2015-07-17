@@ -1032,6 +1032,10 @@ TreeSequence_create(TreeSequence *self, PyObject *args)
     if (Simulator_check_sim(sim) != 0) {
         goto out;
     }
+    if (!msp_is_completed(sim->sim)) {
+        PyErr_SetString(PyExc_ValueError, "Simulation not completed");
+        goto out;
+    }
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
     if (self->tree_sequence == NULL) {
         PyErr_NoMemory();
@@ -1476,12 +1480,15 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"sample_size", "num_nodes", NULL};
-    unsigned int num_nodes, sample_size;
+    static char *kwlist[] = {"tree_sequence", NULL};
+    TreeSequence *tree_sequence = NULL;
 
     self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "II", kwlist,
-                &sample_size, &num_nodes)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
+        goto out;
+    }
+    if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
         goto out;
     }
     self->sparse_tree = PyMem_Malloc(sizeof(sparse_tree_t));
@@ -1489,8 +1496,8 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = sparse_tree_alloc(self->sparse_tree, (uint32_t) sample_size,
-            (uint32_t) num_nodes);
+    err = tree_sequence_alloc_sparse_tree(tree_sequence->tree_sequence,
+            self->sparse_tree);
     if (err != 0) {
         handle_library_error(err);
         goto out;
