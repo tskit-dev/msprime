@@ -307,7 +307,7 @@ class SparseTree(object):
         the specified node.
 
         :param int u: The node of interest.
-        :return: An iterator over all leaves in the subtree of u.
+        :return: An iterator over all leaves in the subtree rooted at u.
         :rtype: iter
         """
         stack = [u]
