@@ -112,7 +112,7 @@ encode_population_models(msp_t *sim, char **result)
 {
     int ret = -1;
     size_t num_models = msp_get_num_population_models(sim);
-    size_t buffer_size = num_models * 1024; /* 1K per model - should be plenty */
+    size_t buffer_size = (num_models + 1) * 1024; /* 1K per model - should be plenty */
     size_t j, offset;
     int written;
     population_model_t *models = NULL;
@@ -1318,22 +1318,18 @@ out:
 }
 
 int
-tree_sequence_get_mutations(tree_sequence_t *self, uint32_t *nodes,
-        double *positions)
+tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations)
 {
     int ret = 0;
+    size_t j;
 
-    if (nodes != NULL) {
-        memcpy(nodes, self->mutations.node,
-                self->num_mutations * sizeof(uint32_t));
-    }
-    if (positions != NULL) {
-        memcpy(positions, self->mutations.position,
-                self->num_mutations * sizeof(double));
+    assert(mutations != NULL);
+    for (j = 0; j < self->num_mutations; j++) {
+        mutations[j].position = self->mutations.position[j];
+        mutations[j].node = self->mutations.node[j];
     }
     return ret;
 }
-
 
 /*
  * This is a convenience short cut for sparse tree alloc in the common
@@ -2038,6 +2034,12 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
                 t->root = u;
             }
             self->insertion_index++;
+        }
+        /* In very rare situations, we have to traverse upwards to find the
+         * new root.
+         */
+        while (t->parent[t->root] != 0) {
+            t->root = t->parent[t->root];
         }
         ret = 1;
         /* now update the mutations */

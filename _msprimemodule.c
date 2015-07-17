@@ -149,6 +149,31 @@ out:
     return ret;
 }
 
+static PyObject *
+convert_mutations(mutation_t *mutations, size_t num_mutations)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_mutation = NULL;
+    size_t j;
+
+    l = PyList_New(num_mutations);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_mutations; j++) {
+        py_mutation = Py_BuildValue("dI", mutations[j].position,
+                (unsigned int) mutations[j].node);
+        if (py_mutation == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_mutation);
+    }
+    ret = l;
+out:
+    return ret;
+}
 
 /*===================================================================
  * Simulator
@@ -1202,52 +1227,28 @@ static PyObject *
 TreeSequence_get_mutations(TreeSequence *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *py_mutation = NULL;
-    uint32_t *nodes = NULL;
-    double *positions = NULL;
-    size_t j, num_mutations;
+    mutation_t *mutations = NULL;
+    size_t num_mutations;
     int err;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
     num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
-    nodes = PyMem_Malloc(num_mutations * sizeof(uint32_t));
-    if (nodes == NULL) {
+    mutations = PyMem_Malloc(num_mutations * sizeof(mutation_t));
+    if (mutations == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    positions = PyMem_Malloc(num_mutations * sizeof(double));
-    if (positions == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = tree_sequence_get_mutations(self->tree_sequence, nodes, positions);
+    err = tree_sequence_get_mutations(self->tree_sequence, mutations);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    l = PyList_New(num_mutations);
-    if (l == NULL) {
-        goto out;
-    }
-    for (j = 0; j < num_mutations; j++) {
-        py_mutation = Py_BuildValue("Id", (unsigned int) nodes[j],
-                positions[j]);
-        if (py_mutation == NULL) {
-            Py_DECREF(l);
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, py_mutation);
-    }
-    ret = l;
+    ret = convert_mutations(mutations, num_mutations);
 out:
-    if (nodes != NULL) {
-        PyMem_Free(nodes);
-    }
-    if (positions != NULL) {
-        PyMem_Free(positions);
+    if (mutations != NULL) {
+        PyMem_Free(mutations);
     }
     return ret;
 }
@@ -1512,7 +1513,6 @@ out:
     return ret;
 }
 
-
 static PyObject *
 SparseTree_get_sample_size(SparseTree  *self)
 {
@@ -1677,6 +1677,34 @@ out:
     return ret;
 }
 
+static PyObject *
+SparseTree_get_mutations(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = convert_mutations(self->sparse_tree->mutations,
+            self->sparse_tree->num_mutations);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_num_mutations(SparseTree  *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->num_mutations);
+out:
+    return ret;
+}
+
+
 static PyMemberDef SparseTree_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -1692,6 +1720,10 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the left-most coordinate (inclusive)." },
     {"get_right", (PyCFunction) SparseTree_get_right, METH_NOARGS,
             "Returns the right-most coordinate (exclusive)." },
+    {"get_mutations", (PyCFunction) SparseTree_get_mutations, METH_NOARGS,
+            "Returns the list of mutations on this tree." },
+    {"get_num_mutations", (PyCFunction) SparseTree_get_num_mutations, METH_NOARGS,
+            "Returns the number of mutations on this tree." },
     {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
             "Returns the parent of node u" },
     {"get_time", (PyCFunction) SparseTree_get_time, METH_VARARGS,

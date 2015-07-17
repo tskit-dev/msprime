@@ -171,10 +171,6 @@ class LowLevelTestCase(tests.MsprimeTestCase):
             k = j
             while pi[k] != 0:
                 k = pi[k]
-            if k != root:
-                print("ERROR!!")
-                print(pi)
-                print(j)
             self.assertEqual(k, root)
         self.assertIn(root, tau)
         # 1 to n inclusive should always be nodes
@@ -1030,7 +1026,7 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertGreater(ts.get_num_mutations(), 0)
         self.assertEqual(len(mutations), ts.get_num_mutations())
         # Check the form of the mutations
-        for node, position in mutations:
+        for position, node in mutations:
             self.assertIsInstance(node, int)
             self.assertGreater(node, 0)
             self.assertLessEqual(node, ts.get_num_nodes())
@@ -1039,6 +1035,8 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertLess(position, ts.get_num_loci())
         for j in range(3):
             self.assertEqual(mutations, ts.get_mutations())
+        # mutations must be sorted by position order.
+        self.assertEqual(mutations, sorted(mutations, key=lambda x: x[0]))
 
     def test_mutation_persistence(self):
         ts = self.get_tree_sequence(mutation_rate=0.0)
@@ -1243,6 +1241,25 @@ class TestSparseTreeIterator(LowLevelTestCase):
         tree = _msprime.SparseTree(ts)
         self.verify_iterator(_msprime.SparseTreeIterator(ts, tree))
 
+    def test_root_bug(self):
+        # Reproduce a simulation that provoked a root calculation bug.
+        params = {
+            "random_seed": 878638576,
+            "sample_size": 64,
+            "num_loci": 57,
+            "scaled_recombination_rate": 0.192184324155680
+        }
+        sim = _msprime.Simulator(**params)
+        sim.run()
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        st = _msprime.SparseTree(ts)
+        for st in _msprime.SparseTreeIterator(ts, st):
+            root = 1
+            while st.get_parent(root) != 0:
+                root = st.get_parent(root)
+            self.assertEqual(st.get_root(), root)
+
 
 class TestHaplotypeGenerator(LowLevelTestCase):
     """
@@ -1278,6 +1295,19 @@ class TestSparseTree(LowLevelTestCase):
     """
     Tests on the low-level sparse tree interface.
     """
+    def test_mutations(self):
+        ts = self.get_tree_sequence(sample_size=10, mutation_rate=10)
+        st = _msprime.SparseTree(ts)
+        all_mutations = ts.get_mutations()
+        all_tree_mutations = []
+        for st in _msprime.SparseTreeIterator(ts, st):
+            tree_mutations = st.get_mutations()
+            self.assertEqual(st.get_num_mutations(), len(tree_mutations))
+            all_tree_mutations.extend(tree_mutations)
+            for position, node in tree_mutations:
+                self.assertTrue(st.get_left() <= position < st.get_right())
+                self.assertNotEqual(st.get_parent(node), 0)
+        self.assertEqual(all_tree_mutations, all_mutations)
 
     def test_wrong_size(self):
         ts1 = self.get_tree_sequence(sample_size=10)

@@ -330,12 +330,13 @@ print_tree_sequence(tree_sequence_t *ts)
                 (int) tree.num_nodes);
         sparse_tree_iterator_print_state(sparse_iter);
         /* print some mrcas */
+        printf("MRCAS:\n");
         for (j = 1; j <= tree.num_nodes; j++) {
             ret = sparse_tree_get_mrca(&tree, 1, (uint32_t) j, &mrca);
             if (ret != 0) {
                 goto out;
             }
-            printf("%d %d -> %d\n", 1, (int) j, mrca);
+            printf("\t%d %d -> %d\n", 1, (int) j, mrca);
         }
     }
     sparse_tree_iterator_free(sparse_iter);
@@ -400,11 +401,11 @@ run_simulate(char *conf_file)
         if (ret != 0) {
             goto out;
         }
-        tree_sequence_print_state(tree_seq);
     }
-    print_haplotypes(tree_seq);
     print_tree_sequence(tree_seq);
     if (0) {
+        tree_sequence_print_state(tree_seq);
+        print_haplotypes(tree_seq);
         print_newick_trees(tree_seq);
         tree_sequence_print_state(tree_seq);
     }
