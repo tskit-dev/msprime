@@ -34,10 +34,11 @@ class TreeDrawer(object):
     """
     A class to draw sparse trees in SVG format.
     """
-    def __init__(self, tree, width, height):
+    def __init__(self, tree, width, height, show_times):
         self._width = width
         self._height = height
-        self._x_scale = width / (tree.get_sample_size() + 1)
+        self._show_times = show_times
+        self._x_scale = width / (tree.get_sample_size() + 2)
         t = tree.get_time(tree.get_root())
         # Leave a margin of 20px top and bottom
         y_padding = 20
@@ -81,7 +82,7 @@ class TreeDrawer(object):
             else:
                 dx = [-20]
             labels.add(dwg.text(str(u), x, dx=dx, dy=dy))
-            if self._tree.is_internal(u):
+            if self._show_times and self._tree.is_internal(u):
                 dx[0] += 25
                 labels.add(dwg.text(
                     "t = {:.2f}".format(self._tree.get_time(u)), x, dx=dx,
@@ -92,7 +93,6 @@ class TreeDrawer(object):
                 lines.add(dwg.line(x, y))
         for x in self._mutations:
             dwg.add(dwg.rect(insert=x, size=(6, 6), fill="red"))
-
         dwg.save()
 
     def _assign_x_coordinates(self, node):
@@ -285,7 +285,7 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_sample_size()
 
-    def draw(self, path, width=200, height=200):
+    def draw(self, path, width=200, height=200, show_times=False):
         """
         Draws a representation of this tree to the specified path in SVG
         format.
@@ -293,8 +293,10 @@ class SparseTree(object):
         :param str path: The path to the file to write the SVG.
         :param int width: The width of the image in pixels.
         :param int height: The height of the image in pixels.
+        :param bool show_times: If True, show time labels at each internal
+            node.
         """
-        td = TreeDrawer(self, width, height)
+        td = TreeDrawer(self, width, height, show_times)
         td.write(path)
 
     def get_num_mutations(self):
