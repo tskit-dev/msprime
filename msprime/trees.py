@@ -50,6 +50,13 @@ class TreeDrawer(object):
             self._y_coords[u] = height - scaled_t - y_padding
         self._leaf_x = 1
         self._assign_x_coordinates(self._tree.get_root())
+        self._mutations = []
+        for pos, u in tree.mutations():
+            x = self._x_coords[u], self._y_coords[u]
+            v = tree.get_parent(u)
+            y = self._x_coords[v], self._y_coords[v]
+            z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
+            self._mutations.append(z)
 
     def write(self, path):
         """
@@ -64,7 +71,7 @@ class TreeDrawer(object):
             v = self._tree.get_parent(u)
             x = self._x_coords[u], self._y_coords[u]
             dwg.add(dwg.circle(center=x, r=3))
-            dx = None
+            dx = [0]
             dy = None
             if self._tree.is_leaf(u):
                 dy = [20]
@@ -74,9 +81,18 @@ class TreeDrawer(object):
             else:
                 dx = [-20]
             labels.add(dwg.text(str(u), x, dx=dx, dy=dy))
+            if self._tree.is_internal(u):
+                dx[0] += 25
+                labels.add(dwg.text(
+                    "t = {:.2f}".format(self._tree.get_time(u)), x, dx=dx,
+                    dy=dy)
+                )
             if v != 0:
                 y = self._x_coords[v], self._y_coords[v]
                 lines.add(dwg.line(x, y))
+        for x in self._mutations:
+            dwg.add(dwg.rect(insert=x, size=(6, 6), fill="red"))
+
         dwg.save()
 
     def _assign_x_coordinates(self, node):
@@ -399,7 +415,8 @@ def simulate(
 
 
 def simulate_tree(
-        sample_size, population_models=[], random_seed=None, max_memory="10M"):
+        sample_size, scaled_mutation_rate=0, population_models=[],
+        random_seed=None, max_memory="10M"):
     """
     Simulates the coalescent at a single locus for the specified sample size
     under the specified list of population models. Returns a SparseTree
@@ -408,6 +425,7 @@ def simulate_tree(
     tree_sequence = simulate(
         sample_size, population_models=population_models,
         random_seed=random_seed, max_memory=max_memory)
+    tree_sequence.generate_mutations(scaled_mutation_rate, random_seed)
     return next(tree_sequence.sparse_trees())
 
 

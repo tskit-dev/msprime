@@ -26,13 +26,14 @@ Here, we simulate the coalescent process for a sample of size
 5 and print out a summary of the resulting tree. Trees are
 represented within ``msprime`` in a slightly unusual way. In
 the majority of libraries dealing with trees, each node is
-explicitly represented as an object in memory and the relationship
+represented as an object in memory and the relationship
 between nodes as pointers between these objects. In ``msprime``,
 however, nodes are *integers*: the leaves (i.e., our sample) are the
 integers :math:`1` to :math:`n`, and every internal node is
 some positive integer greater than :math:`n`. The result of printing
-of printing  the tree is a summary of how these nodes relate to
-each other.
+the tree is a summary of how these nodes relate to each other
+in terms of their parents. For example, we can see that the parent
+of nodes 1 and 3 is node 6.
 
 This relationship can be seen more clearly in a picture:
 
