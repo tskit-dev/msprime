@@ -102,7 +102,7 @@ We simulate the trees across over a number of loci using the
 :func:`msprime.simulate()` function::
 
     >>> tree_sequence = msprime.simulate(
-    >>>     5, num_loci=10, scaled_recombination_rate=0.1)
+    >>>     5, num_loci=10, scaled_recombination_rate=0.1, random_seed=19)
     >>> for tree in tree_sequence.sparse_trees():
     >>>     print(tree.get_interval(), str(tree), sep="\t")
     (0, 6)  {1: 9, 2: 8, 3: 8, 4: 7, 5: 7, 7: 9, 8: 10, 9: 10, 10: 0}
@@ -110,7 +110,10 @@ We simulate the trees across over a number of loci using the
 
 In this example, we simulate the history of our sample of 5 individuals
 over 10 loci, with a scaled recombination rate of 0.1 between adjacent
-pairs of loci. Unlike the :func:`msprime.simulate_tree` function which
+pairs of loci. (We also provide the ``random_seed`` parameter here
+as we wish to use this exact example again later; if we don't provide
+a random seed, one is generated automatically.)
+Unlike the :func:`msprime.simulate_tree` function which
 returns a tree, the :func:`msprime.simulate` function returns a
 *tree sequence*, which encapsulates all of the information in the
 sequence of correlated trees over the simulated region. The
@@ -154,4 +157,83 @@ also important differences between the trees.
 Mutations
 *********
 
-Mutations are generated in msprime
+Mutations are generated in ``msprime`` by throwing mutations down
+on the branches of trees at a particular rate. The mutations are
+generated under the infinite sites model, and so each mutation
+occurs at a unique (floating point) point position along the
+genomic interval occupied by a tree. The mutation rate for simulations
+is specified using the ``scaled_mutation_rate`` parameter to the
+:func:`msprime.simulate` method. For example, to add some mutations
+to our example above, we can use::
+
+    >>> tree_sequence = msprime.simulate(
+    >>>     5, num_loci=10, scaled_recombination_rate=0.1,
+    >>>     scaled_mutation_rate=0.2, random_seed=19)
+    >>> print("Total mutations = ", tree_sequence.get_num_mutations())
+    >>> for tree in tree_sequence.sparse_trees():
+    >>>     print(tree.get_interval(), list(tree.mutations()), sep="\t")
+    Total mutations =  2
+    (0, 5)  [(0.20106735406443477, 8)]
+    (5, 10) [(9.032968991668895, 7)]
+
+In this example (which has the same genealogies as our example above because
+we use the same random seed), we generate a total of two mutations, which
+happen to fall as one on each tree. Mutations are represented as a
+tuple ``(position, node)``, where ``position`` is the location of the mutation
+in genomic coordinates and ``node`` is the node in the tree above which the
+mutation occurs. Positions are given as a floating point value as we are
+using the infinite sites model. Every mutation falls on exacly one tree
+and we obtain the mutations for a particular tree using the
+:meth:`~msprime.TreeSequence.mutations` method. Mutations are always returned
+in increasing order of position. The mutations for this example are shown
+on the trees here as red boxes:
+
+.. image:: _static/mutations-tree-sequence-0.svg
+   :width: 200px
+   :alt: A simple coalescent tree with mutations
+
+.. image:: _static/mutations-tree-sequence-1.svg
+   :width: 200px
+   :alt: A simple coalescent tree with mutations
+
+When reasoning about mutations, it is usually more convenient to traverse
+the tree from top-to-bottom rather than from the leaves upwards. To
+facilitate this type of traversal, the :class:`~msprime.SparseTree`
+class provides the :meth:`~msprime.SparseTree.get_children` method,
+which returns a tuple of integers giving the children of a particular
+node. This can easily be used to create traversal algorithms.
+
+**TODO** We need to discuss traversal algorithms separately somewhere
+and provide an API for pre, post and inorder iteration over the nodes
+in a subtree.
+
+Suppose, for example, that we wish to compute the haplotypes for the
+mutations in the above example. This is easily achieved using the
+:meth:`~msprime.SparseTree.leaves` method, which iterates over all
+leaves in the subtree rooted at a particular node::
+
+
+    >>> haplotypes = [None] + [
+    >>>     ['0' for _ in range(tree_sequence.get_num_mutations())]
+    >>>     for _ in range(tree_sequence.get_sample_size())]
+    >>> site = 0
+    >>> for tree in tree_sequence.sparse_trees():
+    >>>     for _, node in tree.mutations():
+    >>>         for u in tree.leaves(node):
+    >>>             haplotypes[u][site] = '1'
+    >>>         site += 1
+    >>> for j in range(1, tree_sequence.get_sample_size() + 1):
+    >>>     print(j, "".join(haplotypes[j]), sep="\t")
+    1       11
+    2       10
+    3       11
+    4       00
+    5       10
+
+Using this type of approach, working with mutation information
+across a tree sequence is very straightforward in ``msprime``. For the
+specific example of haplotype generation the
+:meth:`~msprime.TreesSequence.haplotypes` method is much more
+efficient than the above code fragment.
+
+

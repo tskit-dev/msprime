@@ -27,6 +27,31 @@ def multi_locus_example():
         tree.draw("_static/simple-tree-sequence-{}.svg".format(j))
         j += 1
 
+def mutations_example():
+    tree_sequence = msprime.simulate(
+        5, num_loci=10, scaled_recombination_rate=0.1,
+        scaled_mutation_rate=0.2, random_seed=19)
+    print("Total mutations = ", tree_sequence.get_num_mutations())
+    j = 0
+    for tree in tree_sequence.sparse_trees():
+        print(tree.get_interval(), list(tree.mutations()), sep="\t")
+        tree.draw("_static/mutations-tree-sequence-{}.svg".format(j))
+        j += 1
+
+    haplotypes = [None] + [
+        ['0' for _ in range(tree_sequence.get_num_mutations())]
+        for _ in range(tree_sequence.get_sample_size())]
+    site = 0
+    for tree in tree_sequence.sparse_trees():
+        for _, node in tree.mutations():
+            for u in tree.leaves(node):
+                haplotypes[u][site] = '1'
+            site += 1
+    for j in range(1, tree_sequence.get_sample_size() + 1):
+        print(j, "".join(haplotypes[j]), sep="\t")
+
+
 if __name__ == "__main__":
     single_locus_example()
     multi_locus_example()
+    mutations_example()
