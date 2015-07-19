@@ -46,7 +46,10 @@ a more familiar format (images like this can be drawn for any
 tree using the :meth:`~msprime.SparseTree.draw` method).
 We can see that the leaves of the tree
 are labelled with 1 to 5, and all the internal nodes of the tree
-are also integers with the root of the tree being 9.
+are also integers with the root of the tree being 9. Also shown here
+are the times for each internal node, in coalescent time units. (The
+time for all leaves is 0, and so we don't show this information
+to avoid clutter.)
 
 Knowing that our leaves are 1 to 5, we can easily trace our path
 back to the root for a particular sample using the
@@ -77,6 +80,78 @@ method::
 The branch length for node 7 is 0.19 as the time for node 7 is 0.25,
 and the time of its parent is 0.44.
 
-Traversing from the leaves upwards using parent pointers is useful
-in many instances, but it is also convenient to traverse the tree
-downwards in some applications.
+*************
+Multiple loci
+*************
+
+Simulating the history of a single locus is a very useful, but we are
+most often interesting in simulating the history of our sample across
+large genomic regions under the influence of recombination. The ``msprime``
+API is specifically designed to make this common requirement both easy
+and efficient. Throughout ``msprime`` we use the term locus to
+refer to a non-recombining strech of sequence. Recombination occurs
+between loci but never within loci. It is often most straightforward
+to regard a single base pair as a 'locus'. In ``msprime`` we support
+up to :math:`2^{32}` loci, which is sufficient to represent all but
+the very largest of known chromosome sizes.
+
+**TODO** explain recombination rate. This is the same as used in
+``ms`` but we do not multiply by the number of loci.
+
+We simulate the trees across over a number of loci using the
+:func:`msprime.simulate()` function::
+
+    >>> tree_sequence = msprime.simulate(
+    >>>     5, num_loci=10, scaled_recombination_rate=0.1)
+    >>> for tree in tree_sequence.sparse_trees():
+    >>>     print(tree.get_interval(), str(tree), sep="\t")
+    (0, 6)  {1: 9, 2: 8, 3: 8, 4: 7, 5: 7, 7: 9, 8: 10, 9: 10, 10: 0}
+    (6, 10) {1: 9, 2: 6, 3: 10, 4: 6, 5: 7, 6: 7, 7: 9, 9: 10, 10: 0}
+
+In this example, we simulate the history of our sample of 5 individuals
+over 10 loci, with a scaled recombination rate of 0.1 between adjacent
+pairs of loci. Unlike the :func:`msprime.simulate_tree` function which
+returns a tree, the :func:`msprime.simulate` function returns a
+*tree sequence*, which encapsulates all of the information in the
+sequence of correlated trees over the simulated region. The
+:class:`msprime.TreeSequence` class provides an array of methods to
+simplify working with these trees and some efficient methods for
+common tasks that take advantage of the strong correlation structure
+of the trees in the sequence.
+
+In this example, we use the :meth:`~msprime.TreeSequence.sparse_trees`
+method to iterate over the trees in the sequence. For each tree
+we print out the interval the tree covers (i.e., the genomic
+coordinates which all share precisely this tree) using the
+:meth:`~method.TreeSequence.get_interval` method. We also print
+out the summary of each tree in terms of the parent values for
+each tree. Again, these differences are best illustrated by
+some images:
+
+.. image:: _static/simple-tree-sequence-0.svg
+   :width: 200px
+   :alt: A simple coalescent tree
+
+.. image:: _static/simple-tree-sequence-1.svg
+   :width: 200px
+   :alt: A simple coalescent tree
+
+(We have supressed the node time labels here for clarity.) We can see
+that these trees share a great deal of their structure, but that there are
+also important differences between the trees.
+
+
+.. warning:: Do not store the values returned from the
+    :meth:`~msprime.TreeSequence.sparse_trees` iterator in a list and operate
+    on them afterwards! For efficiency reasons ``msprime`` uses the same
+    instance of :class:`msprime.SparseTree` for each tree in the sequence
+    and updates the internal state for each new tree. Therefore, if you store
+    the trees returned from the iterator in a list, they will all refer
+    to the same tree.
+
+
+*********
+Mutations
+*********
+
+Mutations are generated in msprime
