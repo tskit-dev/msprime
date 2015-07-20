@@ -147,7 +147,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
                 self.assertEqual(st.get_children(u)[0], 0)
                 self.assertEqual(st.get_children(u)[1], 0)
             else:
-                for c in st.get_children(u):
+                for c in reversed(st.get_children(u)):
                     stack.append(c)
         self.assertEqual(
             sorted(leaves), list(range(1, st.get_sample_size() + 1)))
@@ -165,8 +165,8 @@ class HighLevelTestCase(tests.MsprimeTestCase):
 
     def verify_sparse_trees(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
-        iter1 = ts.sparse_trees()
-        iter2 = pts.sparse_trees()
+        iter1 = ts.trees()
+        iter2 = pts.trees()
         length = 0
         for st1, st2 in zip(iter1, iter2):
             self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
@@ -196,7 +196,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             all_mutations, sorted(all_mutations, key=lambda x: x[0]))
         self.assertEqual(len(all_mutations), ts.get_num_mutations())
         all_tree_mutations = []
-        for st in ts.sparse_trees():
+        for st in ts.trees():
             tree_mutations = list(st.mutations())
             self.assertEqual(st.get_num_mutations(), len(tree_mutations))
             all_tree_mutations.extend(tree_mutations)
@@ -206,8 +206,8 @@ class HighLevelTestCase(tests.MsprimeTestCase):
                 self.assertNotEqual(st.get_parent(node), 0)
         self.assertEqual(all_tree_mutations, all_mutations)
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
-        iter1 = ts.sparse_trees()
-        iter2 = pts.sparse_trees()
+        iter1 = ts.trees()
+        iter2 = pts.trees()
         for st1, st2 in zip(iter1, iter2):
             self.assertEqual(st1, st2)
 
@@ -394,7 +394,7 @@ class TestNewickConversion(HighLevelTestCase):
         precision = 0
         old_trees = [
             (st.get_length(), sparse_tree_to_newick(st, precision))
-            for st in tree_sequence.sparse_trees()]
+            for st in tree_sequence.trees()]
         new_trees = list(tree_sequence.newick_trees(precision))
         self.assertEqual(len(new_trees), len(old_trees))
         for (l1, t1), (l2, t2) in zip(new_trees, old_trees):
@@ -482,7 +482,7 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in self.get_example_tree_sequences():
             ts.generate_mutations(0)
             self.assertEqual(ts.get_num_mutations(), 0)
-            for st in ts.sparse_trees():
+            for st in ts.trees():
                 self.assertEqual(st.get_num_mutations(), 0)
             ts.generate_mutations(100)
             self.assertGreater(ts.get_num_mutations(), 0)
@@ -530,7 +530,7 @@ class TestSparseTree(HighLevelTestCase):
             while len(stack) > 0:
                 v = stack.pop()
                 if t.is_internal(v):
-                    for c in t.get_children(v):
+                    for c in reversed(t.get_children(v)):
                         stack.append(c)
                 else:
                     yield v
@@ -554,3 +554,15 @@ class TestSparseTree(HighLevelTestCase):
             self.assertEqual(w, width)
             height = int(root.attrib["height"])
             self.assertEqual(h, height)
+
+    def test_traversals(self):
+        t1 = self.get_tree()
+        t2 = tests.PythonSparseTree.from_sparse_tree(t1)
+        self.assertEqual(list(t1.nodes()), list(t2.nodes()))
+        self.assertEqual(list(t1.nodes()), list(t1.nodes(t1.get_root())))
+        self.assertEqual(
+            list(t1.nodes()),
+            list(t1.nodes(t1.get_root(), "preorder")))
+        for u in t1.nodes():
+            self.assertEqual(list(t1.nodes(u)), list(t2.nodes(u)))
+        self.assertRaises(ValueError, t1.nodes, None, "bad order")

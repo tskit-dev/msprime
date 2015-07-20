@@ -121,6 +121,7 @@ def large_example():
 def draw_tree():
     tree = msprime.simulate_tree(5, random_seed=1, scaled_mutation_rate=0.1)
     print(list(tree.mutations()))
+    print(list(tree.nodes()))
     tree.draw("example.svg")
 
 if __name__ == "__main__":

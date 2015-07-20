@@ -41,19 +41,57 @@ class PythonSparseTree(object):
     is tightly coupled with the PythonTreeSequence object below which updates
     the internal structures during iteration.
     """
-    def __init__(self, num_nodes):
-        self.num_nodes = num_nodes
+    def __init__(self):
         self.parent = {}
         self.children = {}
         self.time = {}
         self.left = 0
         self.right = 0
         self.root = 0
+        self.sample_size = 0
         # We need a mutations function, so this name is taken.
         self.mutation_list = []
 
-    def get_num_nodes(self):
-        return self.num_nodes
+    @classmethod
+    def from_sparse_tree(self, sparse_tree):
+        ret = PythonSparseTree()
+        ret.root = sparse_tree.get_root()
+        ret.sample_size = sparse_tree.get_sample_size()
+        ret.left, ret.right = sparse_tree.get_interval()
+        ret.mutation_list = list(sparse_tree.mutations())
+        # Traverse the tree and update the details as we go
+        # We don't use the traversal method here because this
+        # is used to test them.
+        stack = [sparse_tree.get_root()]
+        while len(stack) > 0:
+            u = stack.pop()
+            ret.time[u] = sparse_tree.get_time(u)
+            if sparse_tree.is_internal(u):
+                c = sparse_tree.get_children(u)
+                stack.extend(c)
+                for child in c:
+                    ret.parent[child] = u
+                ret.children[u] = c
+        ret.parent[sparse_tree.get_root()] = 0
+        assert ret == sparse_tree
+        return ret
+
+    def _preorder_nodes(self, u, l):
+        l.append(u)
+        if u in self.children:
+            for c in self.children[u]:
+                self._preorder_nodes(c, l)
+
+    def nodes(self, root=None, order="preorder"):
+        u = root
+        if root is None:
+            u = self.root
+        if order == "preorder":
+            l = []
+            self._preorder_nodes(u, l)
+            return iter(l)
+        else:
+            raise ValueError("order not supported")
 
     def get_sample_size(self):
         return self.sample_size
@@ -129,8 +167,8 @@ class PythonTreeSequence(object):
         else:
             return self._diffs()
 
-    def sparse_trees(self):
-        st = PythonSparseTree(self._tree_sequence.get_num_nodes())
+    def trees(self):
+        st = PythonSparseTree()
         st.sample_size = self._tree_sequence.get_sample_size()
         st.left = 0
         st.time = {j: 0 for j in range(1, st.sample_size + 1)}
