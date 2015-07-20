@@ -135,7 +135,7 @@ class SparseTree(object):
 
     Sparse trees are not intended to be instantiated directly, and are
     obtained as part of a :class:`.TreeSequence` using the
-    :meth:`.sparse_trees` method.
+    :meth:`.trees` method.
     """
     def __init__(self, ll_sparse_tree):
         self._ll_sparse_tree = ll_sparse_tree
@@ -315,7 +315,7 @@ class SparseTree(object):
         returned in increasing order of position.
 
         :return: The mutations in this tree.
-        :rtype: iter
+        :rtype: iterator
         """
         return iter(self._ll_sparse_tree.get_mutations())
 
@@ -326,18 +326,38 @@ class SparseTree(object):
 
         :param int u: The node of interest.
         :return: An iterator over all leaves in the subtree rooted at u.
-        :rtype: iter
+        :rtype: iterator
         """
+        for v in self._preorder_traversal(u):
+            if self.is_leaf(v):
+                yield v
+
+    def _preorder_traversal(self, u):
         stack = [u]
         while len(stack) > 0:
             v = stack.pop()
-            if self.is_leaf(v):
-                yield v
-            else:
-                stack.extend(self.get_children(v))
+            if self.is_internal(v):
+                stack.extend(reversed(self.get_children(v)))
+            yield v
 
-    def nodes(self):
-        return self.get_parent_dict().keys()
+    def nodes(self, root=None, order="preorder"):
+        """
+        Returns an iterator over the nodes in this tree. If the root parameter
+        is provided, iterate over the nodes in the subtree rooted at this
+        node. If this is None, iterate over all nodes. If the order parameter
+        is provided, iterate over the nodes in required tree traversal order.
+
+        :param int root: The root of the subtree we are traversing.
+        :param str order: The traversal ordering. Currently only 'preorder'
+            is supported.
+        :rtype: iterator
+        """
+        u = self.get_root() if root is None else root
+        if order == "preorder":
+            return self._preorder_traversal(u)
+        else:
+            raise ValueError(
+                "Traversal ordering '{}' not supported".format(order))
 
     def get_parent_dict(self):
         pi = {}
@@ -428,7 +448,7 @@ def simulate_tree(
         sample_size, population_models=population_models,
         random_seed=random_seed, max_memory=max_memory)
     tree_sequence.generate_mutations(scaled_mutation_rate, random_seed)
-    return next(tree_sequence.sparse_trees())
+    return next(tree_sequence.trees())
 
 
 def load(path):
@@ -693,7 +713,7 @@ class TreeSequence(object):
         """
         return iter(self._ll_tree_sequence.get_mutations())
 
-    def sparse_trees(self):
+    def trees(self):
         """
         Returns an iterator over the sparse trees in this tree
         sequence.
