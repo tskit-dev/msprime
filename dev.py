@@ -117,6 +117,12 @@ def large_example():
     msprime.simulate(10**6, 100 * 10**6, scaled_recombination_rate=0.001,
             random_seed=1, max_memory="10G")
 
+def small_example():
+    ts = msprime.simulate(5, 10, scaled_recombination_rate=0.1, random_seed=1)
+    for sp in ts.sparse_trees():
+        print(sp)
+    ts.dump("example.hdf5")
+
 
 def draw_tree():
     tree = msprime.simulate_tree(5, random_seed=1, scaled_mutation_rate=0.1)
@@ -132,4 +138,5 @@ if __name__ == "__main__":
     # dump_file("example.hdf5")
     # tree_algorithm()
     # large_example()
-    draw_tree()
+    # draw_tree()
+    small_example()
