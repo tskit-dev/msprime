@@ -130,6 +130,14 @@ def draw_tree():
     print(list(tree.nodes()))
     tree.draw("example.svg")
 
+def draw_trees():
+    # tree = msprime.simulate_trees(5, random_seed=1, scaled_mutation_rate=0.1)
+    tree_sequence = msprime.simulate(
+        10, 100, scaled_recombination_rate=1, random_seed=1)
+    for j, tree in enumerate(tree_sequence.trees()):
+        tree.draw("tmp__NOBACKUP__/example-{}.svg".format(j))
+
+
 if __name__ == "__main__":
     # haplotype_example()
     # dump_example()
@@ -139,4 +147,5 @@ if __name__ == "__main__":
     # tree_algorithm()
     # large_example()
     # draw_tree()
-    small_example()
+    # small_example()
+    draw_trees()
