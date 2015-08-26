@@ -332,6 +332,17 @@ class SparseTree(object):
             if self.is_leaf(v):
                 yield v
 
+    def get_num_leaves(self, u):
+        """
+        Returns the number of leaves in this tree underneath the specified
+        node.
+
+        :param int u: The node of interest.
+        :return: The number of leaves in the subtree rooted at u.
+        :rtype: int
+        """
+        return self._ll_sparse_tree.get_num_leaves(u)
+
     def _preorder_traversal(self, u):
         stack = [u]
         while len(stack) > 0:
@@ -708,17 +719,18 @@ class TreeSequence(object):
         is represented as a tuple (position, node), and mutations
         returned in increasing order of position.
 
-        :return: The mutations in this tree.
+        :return: The mutations in this tree sequence.
         :rtype: iter
         """
         return iter(self._ll_tree_sequence.get_mutations())
 
-    def trees(self):
+    def trees(self, count_leaves=False):
         """
         Returns an iterator over the sparse trees in this tree
         sequence.
         """
-        ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence)
+        ll_sparse_tree = _msprime.SparseTree(
+            self._ll_tree_sequence, count_leaves)
         iterator = _msprime.SparseTreeIterator(
             self._ll_tree_sequence, ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree)

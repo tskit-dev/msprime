@@ -1481,12 +1481,14 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
+    static char *kwlist[] = {"tree_sequence", "count_leaves", NULL};
     TreeSequence *tree_sequence = NULL;
+    int flags = 0;
+    int count_leaves = 0;
 
     self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &tree_sequence)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
+            &TreeSequenceType, &tree_sequence, &count_leaves)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
@@ -1497,8 +1499,11 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
+    if (count_leaves) {
+        flags |= MSP_COUNT_LEAVES;
+    }
     err = tree_sequence_alloc_sparse_tree(tree_sequence->tree_sequence,
-            self->sparse_tree);
+            self->sparse_tree, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1514,7 +1519,7 @@ out:
 }
 
 static PyObject *
-SparseTree_get_sample_size(SparseTree  *self)
+SparseTree_get_sample_size(SparseTree *self)
 {
     PyObject *ret = NULL;
 
@@ -1527,7 +1532,7 @@ out:
 }
 
 static PyObject *
-SparseTree_get_num_nodes(SparseTree  *self)
+SparseTree_get_num_nodes(SparseTree *self)
 {
     PyObject *ret = NULL;
 
@@ -1540,7 +1545,7 @@ out:
 }
 
 static PyObject *
-SparseTree_get_root(SparseTree  *self)
+SparseTree_get_root(SparseTree *self)
 {
     PyObject *ret = NULL;
 
@@ -1553,7 +1558,7 @@ out:
 }
 
 static PyObject *
-SparseTree_get_left(SparseTree  *self)
+SparseTree_get_left(SparseTree *self)
 {
     PyObject *ret = NULL;
 
@@ -1565,9 +1570,8 @@ out:
     return ret;
 }
 
-
 static PyObject *
-SparseTree_get_right(SparseTree  *self)
+SparseTree_get_right(SparseTree *self)
 {
     PyObject *ret = NULL;
 
@@ -1575,6 +1579,19 @@ SparseTree_get_right(SparseTree  *self)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->right);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_count_leaves(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = PyBool_FromLong(self->sparse_tree->flags & MSP_COUNT_LEAVES);
 out:
     return ret;
 }
@@ -1678,6 +1695,35 @@ out:
 }
 
 static PyObject *
+SparseTree_get_num_leaves(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int node;
+    uint32_t num_leaves;
+    int err;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    err = sparse_tree_get_num_leaves(self->sparse_tree, (uint32_t) node,
+            &num_leaves);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("I", (unsigned int) num_leaves);
+out:
+    return ret;
+}
+
+
+static PyObject *
 SparseTree_get_mutations(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
@@ -1722,6 +1768,8 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the right-most coordinate (exclusive)." },
     {"get_mutations", (PyCFunction) SparseTree_get_mutations, METH_NOARGS,
             "Returns the list of mutations on this tree." },
+    {"get_count_leaves", (PyCFunction) SparseTree_get_count_leaves, METH_NOARGS,
+            "Returns True if fast leaf counting is enabled." },
     {"get_num_mutations", (PyCFunction) SparseTree_get_num_mutations, METH_NOARGS,
             "Returns the number of mutations on this tree." },
     {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
@@ -1732,6 +1780,8 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the children of node u" },
     {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
             "Returns the MRCA of nodes u and v" },
+    {"get_num_leaves", (PyCFunction) SparseTree_get_num_leaves, METH_VARARGS,
+            "Returns the number of leaves below node u." },
     {NULL}  /* Sentinel */
 };
 

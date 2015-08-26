@@ -46,6 +46,8 @@
 #define MSP_ORDER_LEFT 1
 #define MSP_ORDER_RIGHT 2
 
+#define MSP_COUNT_LEAVES 1
+
 #define MAX_BRANCH_LENGTH_STRING 24
 
 /* Using a size_t for index allows us to have an effectively unlimited
@@ -193,6 +195,7 @@ typedef struct {
 } tree_diff_iterator_t;
 
 typedef struct {
+    int flags;
     uint32_t sample_size;
     size_t num_nodes;
     uint32_t root;
@@ -201,6 +204,7 @@ typedef struct {
     uint32_t *parent;
     uint32_t *children;
     double *time;
+    uint32_t *num_leaves;
     /* traversal stacks */
     uint32_t *stack1;
     uint32_t *stack2;
@@ -312,7 +316,7 @@ int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations);
 char * tree_sequence_get_simulation_parameters(tree_sequence_t *self);
 char * tree_sequence_get_mutation_parameters(tree_sequence_t *self);
 int tree_sequence_alloc_sparse_tree(tree_sequence_t *self, 
-        sparse_tree_t *tree);
+        sparse_tree_t *tree, int flags);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
         tree_sequence_t *tree_sequence);
@@ -322,11 +326,13 @@ int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 
 int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, 
-        uint32_t num_nodes, size_t max_mutations);
+        uint32_t num_nodes, size_t max_mutations, int flags);
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_clear(sparse_tree_t *self);
 int sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
         uint32_t *mrca);
+int sparse_tree_get_num_leaves(sparse_tree_t *self, uint32_t u,
+        uint32_t *num_leaves);
 
 int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
         tree_sequence_t *tree_sequence, sparse_tree_t *tree);

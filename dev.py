@@ -39,7 +39,7 @@ def tree_example():
     tree_sequence = msprime.simulate(
         sample_size=10, num_loci=1000, scaled_recombination_rate=0.1,
         random_seed=1)
-    for tree in tree_sequence.sparse_trees():
+    for tree in tree_sequence.trees():
         print(tree)
 
 
@@ -124,6 +124,7 @@ def small_example():
     ts.dump("example.hdf5")
 
 
+
 def draw_tree():
     tree = msprime.simulate_tree(5, random_seed=1, scaled_mutation_rate=0.1)
     print(list(tree.mutations()))
@@ -147,66 +148,53 @@ def count_leaves(pi, n):
             v = pi[v]
     return nu
 
-def diffs_example():
-    # This is a partial implementation of a algorithm to count the number
+def leaf_count_example():
+    # This is an implementation of the algorithm to count the number
     # of leaves under each node.
-    n = 5
-    ts = msprime.simulate(n, 100, scaled_recombination_rate=0.1, random_seed=1)
+    n = 20
+    ts = msprime.simulate(n, 10000, scaled_recombination_rate=0.1, random_seed=1)
+    pi = [0 for j in range(ts.get_num_nodes() + 1)]
+    nu = [0 for j in range(ts.get_num_nodes() + 1)]
+    for j in range(1, n + 1):
+        nu[j] = 1
     for l, records_out, records_in in ts.diffs():
-        # print(records_in)
-        # time_sorted = sorted(records_in, key=lambda x: x[2])
-        # print(time_sorted == records_in)
-        # print("Records out:")
-        print(records_out)
-        time_sorted = sorted(records_out, key=lambda x: -x[2])
-        print(time_sorted == records_out)
+        for node, children, time in records_out:
+            # print("out:", node, children)
+            for c in children:
+                pi[c] = 0
+            leaves_lost = nu[node]
+            u = node
+            while u != 0:
+                nu[u] -= leaves_lost
+                # print("Setting nu[", u, "] = ", nu[u])
+                u = pi[u]
+        for node, children, time in records_in:
+            # print("in:", node, children)
+            num_leaves = 0
+            for c in children:
+                pi[c] = node
+                num_leaves += nu[c]
+            u = node
+            while u != 0:
+                nu[u] += num_leaves
+                # print("setting nu[", u, "] = ", nu[u])
+                u = pi[u]
+        nup = count_leaves(pi, n)
+        assert nup == nu
+        # print("pi = ", pi)
+        # print("nu = ", nu)
+        # print("nup= ", nup)
 
-
-    # for sp in ts.trees():
-    #     print(sp)
-    # pi = [0 for j in range(ts.get_num_nodes() + 1)]
-    # nu = [0 for j in range(ts.get_num_nodes() + 1)]
-    # for j in range(1, n + 1):
-    #     nu[j] = 1
-    # for length, nodes_out, nodes_in in ts.diffs():
-    #     for parent, children, time in nodes_out:
-    #         print("out:", parent, children, time)
-    #         for child in children:
-    #             pi[child] = 0
-    #     for parent, children, time in reversed(nodes_out):
-    #         lost = nu[parent]
-    #         u = parent
-    #         while u != 0:
-    #             nu[u] -= lost
-    #             u = pi[u]
-    #     print("middle:", nu)
-    #     for parent, children, time in nodes_in:
-    #         for child in children:
-    #             pi[child] = parent
-    #     for parent, children, time in nodes_in:
-    #         added = 0
-    #         for child in children:
-    #             added += nu[child]
-    #         u = parent
-    #         while u != 0:
-    #             nu[u] += added
-    #             u = pi[u]
-    #         print("Added ", nu[child], "to ", parent)
-    #     print(pi)
-    #     print(nu)
-    #     other = count_leaves(pi, n)
-    #     print(other)
-    #     print(nu == other)
 
 if __name__ == "__main__":
     # haplotype_example()
     # dump_example()
     # newick_example()
-    # tree_example()
+    tree_example()
     # dump_file("example.hdf5")
     # tree_algorithm()
     # large_example()
     # draw_tree()
     # small_example()
     # draw_trees()
-    diffs_example()
+    # leaf_count_example()
