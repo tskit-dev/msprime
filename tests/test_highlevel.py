@@ -149,6 +149,9 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             else:
                 for c in reversed(st.get_children(u)):
                     stack.append(c)
+            # Check that we get the correct number of leaves at each
+            # node.
+            self.assertEqual(st.get_num_leaves(u), len(list(st.leaves(u))))
         self.assertEqual(
             sorted(leaves), list(range(1, st.get_sample_size() + 1)))
         # Check the parent dict
@@ -538,6 +541,7 @@ class TestSparseTree(HighLevelTestCase):
             l1 = list(t.leaves(u))
             l2 = list(test_func(t, u))
             self.assertEqual(l1, l2)
+            self.assertEqual(t.get_num_leaves(u), len(l1))
 
     def test_draw(self):
         t = self.get_tree()

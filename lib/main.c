@@ -320,7 +320,7 @@ print_tree_sequence(tree_sequence_t *ts)
         goto out;
     }
     /* sparse trees */
-    ret = tree_sequence_alloc_sparse_tree(ts, &tree);
+    ret = tree_sequence_alloc_sparse_tree(ts, &tree, MSP_COUNT_LEAVES);
     if (ret != 0) {
         goto out;
     }

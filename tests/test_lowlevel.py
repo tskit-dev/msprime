@@ -38,6 +38,19 @@ import _msprime
 from msprime import __version__ as _library_version
 
 
+def get_leaf_counts(st):
+    """
+    Returns a list of the node counts for the specfied sparse tree.
+    """
+    nu = [0 for j in range(st.get_num_nodes() + 1)]
+    for j in range(1, st.get_sample_size() + 1):
+        u = j
+        while u != 0:
+            nu[u] += 1
+            u = st.get_parent(u)
+    return nu
+
+
 def oriented_forests(n):
     """
     Implementation of Algorithm O from TAOCP section 7.2.1.6.
@@ -578,6 +591,17 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreaterEqual(len(python_diffs), 0)
         self.assertEqual(diffs, python_diffs)
 
+    def verify_leaf_counts(self, tree_sequence):
+        for t in [True, False]:
+            st = _msprime.SparseTree(tree_sequence, t)
+            for _ in _msprime.SparseTreeIterator(tree_sequence, st):
+                self.assertEqual(st.get_count_leaves(), t)
+                nu = get_leaf_counts(st)
+                nu_prime = [
+                    st.get_num_leaves(j) for j in
+                    range(st.get_num_nodes() + 1)]
+                self.assertEqual(nu, nu_prime)
+
     def verify_simulation(self, n, m, r, models):
         """
         Runs the specified simulation and verifies its state.
@@ -609,6 +633,7 @@ class TestSimulationState(LowLevelTestCase):
         tree_sequence = _msprime.TreeSequence()
         tree_sequence.create(sim)
         self.verify_tree_diffs(tree_sequence)
+        self.verify_leaf_counts(tree_sequence)
 
     def test_random_sims(self):
         num_random_sims = 10
@@ -1349,10 +1374,13 @@ class TestSparseTree(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.SparseTree)
         for bad_type in ["", {}, [], None, 0]:
             self.assertRaises(
-                TypeError, _msprime.SparseTree, bad_type, bad_type, bad_type)
+                TypeError, _msprime.SparseTree, bad_type)
         for n in range(1, 10):
             ts = self.get_tree_sequence(num_loci=n)
             st = _msprime.SparseTree(ts)
+            for bad_type in ["", {}, [], None]:
+                self.assertRaises(
+                    TypeError, _msprime.SparseTree, ts, bad_type)
             self.assertEqual(st.get_num_nodes(), ts.get_num_nodes())
             self.assertEqual(st.get_sample_size(), ts.get_sample_size())
             # An uninitialised sparse tree should always be zero.
@@ -1363,6 +1391,26 @@ class TestSparseTree(LowLevelTestCase):
                 self.assertEqual(st.get_parent(j), 0)
                 self.assertEqual(st.get_children(j), (0, 0))
                 self.assertEqual(st.get_time(j), 0)
+
+    def test_count_leaves(self):
+        ts = self.get_tree_sequence(num_loci=10)
+        st = _msprime.SparseTree(ts)
+        self.assertFalse(st.get_count_leaves())
+        for t in [True, False]:
+            st = _msprime.SparseTree(ts, t)
+            self.assertEqual(st.get_count_leaves(), t)
+            # Without initialisation we should be 0 leaves for every node
+            # that is not a leaf.
+            for j in range(st.get_num_nodes() + 1):
+                l = 1 if 1 <= j <= st.get_sample_size() else 0
+                self.assertEqual(st.get_num_leaves(j), l)
+            # Now, try this for a tree sequence.
+            for st in _msprime.SparseTreeIterator(ts, st):
+                nu = get_leaf_counts(st)
+                nu_prime = [
+                    st.get_num_leaves(j) for j in
+                    range(st.get_num_nodes() + 1)]
+                self.assertEqual(nu, nu_prime)
 
     def test_bounds_checking(self):
         for m in range(1, 10):
