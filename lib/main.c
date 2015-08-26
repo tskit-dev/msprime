@@ -270,7 +270,7 @@ print_tree_sequence(tree_sequence_t *ts)
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
     uint32_t length, mrca;
     sparse_tree_t tree;
-    tree_node_t *nodes_out, *nodes_in, *node;
+    node_record_t *records_in, *records_out, *record;
     coalescence_record_t cr;
     tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
     sparse_tree_iterator_t *sparse_iter = calloc(1, sizeof(sparse_tree_iterator_t));
@@ -291,22 +291,25 @@ print_tree_sequence(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
+    printf("Tree diffs:\n");
+    tree_diff_iterator_print_state(iter);
     while ((ret = tree_diff_iterator_next(
-                    iter, &length, &nodes_out, &nodes_in)) == 1) {
+                    iter, &length, &records_out, &records_in)) == 1) {
+        tree_diff_iterator_print_state(iter);
         printf("New tree: %d\n", length);
         printf("Nodes In:\n");
-        node = nodes_in;
-        while (node != NULL) {
-            printf("\t(%d\t%d)\t%d\n", node->children[0],
-                    node->children[1], node->id);
-            node = node->next;
+        record = records_in;
+        while (record != NULL) {
+            printf("\t(%d\t%d)\t%d\n", record->children[0],
+                    record->children[1], record->node);
+            record = record->next;
         }
         printf("Nodes Out:\n");
-        node = nodes_out;
-        while (node != NULL) {
-            printf("\t(%d\t%d)\t%d\n", node->children[0],
-                    node->children[1], node->id);
-            node = node->next;
+        record = records_out;
+        while (record != NULL) {
+            printf("\t(%d\t%d)\t%d\n", record->children[0],
+                    record->children[1], record->node);
+            record = record->next;
         }
     }
     if (ret != 0) {
@@ -325,6 +328,7 @@ print_tree_sequence(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
+    printf("Sparse trees:\n");
     while ((ret = sparse_tree_iterator_next(sparse_iter)) == 1) {
         printf("New tree: %d (%d)\n", tree.right - tree.left,
                 (int) tree.num_nodes);
