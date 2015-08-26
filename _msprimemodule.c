@@ -1850,64 +1850,64 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
     int err;
     uint32_t length;
     size_t list_size, j;
-    tree_node_t *nodes_out, *nodes_in, *node;
+    node_record_t *records_out, *records_in, *record;
 
     if (TreeDiffIterator_check_state(self) != 0) {
         goto out;
     }
     err = tree_diff_iterator_next(self->tree_diff_iterator, &length,
-            &nodes_out, &nodes_in);
+            &records_out, &records_in);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     if (err == 1) {
-        /* out nodes */
-        node = nodes_out;
+        /* out records */
+        record = records_out;
         list_size = 0;
-        while (node != NULL) {
+        while (record != NULL) {
             list_size++;
-            node = node->next;
+            record = record->next;
         }
         out_list = PyList_New(list_size);
         if (out_list == NULL) {
             goto out;
         }
-        node = nodes_out;
+        record = records_out;
         j = 0;
-        while (node != NULL) {
-            value = Py_BuildValue("I(II)d", (unsigned int) node->id,
-                    (unsigned int) node->children[0],
-                    (unsigned int) node->children[1], node->time);
+        while (record != NULL) {
+            value = Py_BuildValue("I(II)d", (unsigned int) record->node,
+                    (unsigned int) record->children[0],
+                    (unsigned int) record->children[1], record->time);
             if (value == NULL) {
                 goto out;
             }
             PyList_SET_ITEM(out_list, j, value);
-            node = node->next;
+            record = record->next;
             j++;
         }
-        /* in nodes */
-        node = nodes_in;
+        /* in records */
+        record = records_in;
         list_size = 0;
-        while (node != NULL) {
+        while (record != NULL) {
             list_size++;
-            node = node->next;
+            record = record->next;
         }
         in_list = PyList_New(list_size);
         if (in_list == NULL) {
             goto out;
         }
-        node = nodes_in;
+        record = records_in;
         j = 0;
-        while (node != NULL) {
-            value = Py_BuildValue("I(II)d", (unsigned int) node->id,
-                    (unsigned int) node->children[0],
-                    (unsigned int) node->children[1], node->time);
+        while (record != NULL) {
+            value = Py_BuildValue("I(II)d", (unsigned int) record->node,
+                    (unsigned int) record->children[0],
+                    (unsigned int) record->children[1], record->time);
             if (value == NULL) {
                 goto out;
             }
             PyList_SET_ITEM(in_list, j, value);
-            node = node->next;
+            record = record->next;
             j++;
         }
         ret = Py_BuildValue("IOO", (unsigned int) length, out_list, in_list);

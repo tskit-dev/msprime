@@ -29,7 +29,6 @@
 
 #include "err.h"
 #include "msprime.h"
-#include "object_heap.h"
 
 
 typedef struct {
@@ -63,14 +62,6 @@ cmp_index_sort(const void *a, const void *b) {
     }
     return ret;
 }
-
-static int
-cmp_tree_node_list(const void *a, const void *b) {
-    const tree_node_list_t *ia = (const tree_node_list_t *) a;
-    const tree_node_list_t *ib = (const tree_node_list_t *) b;
-    return (ia->key > ib->key) - (ia->key < ib->key);
-}
-
 
 static int
 encode_mutation_parameters(double mutation_rate, unsigned long random_seed,
@@ -1481,49 +1472,29 @@ out:
  * ======================================================== */
 
 
-/* TODO this implementation is unnecessarily complicated. We should
- * use the same approach as the sparse tree iterator and use the
- * sorted lists of records.
- */
 int
 tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence)
 {
     int ret = 0;
-    uint32_t n = tree_sequence->sample_size;
 
-    self->tree_sequence = tree_sequence;
-    self->current_left = 0;
-    self->next_record_index = 0;
+    assert(tree_sequence != NULL);
+    memset(self, 0, sizeof(tree_diff_iterator_t));
+    self->sample_size = tree_sequence_get_sample_size(tree_sequence);
+    self->num_nodes = tree_sequence_get_num_nodes(tree_sequence);
     self->num_records = tree_sequence_get_num_coalescence_records(
-            self->tree_sequence);
-    /* Allocate the memory heaps */
-    /* We can't have more than 2n tree_nodes used at once. */
-    /* TODO This should really be 2n plus some small contstant. However,
-     * we seem to hit conditions in tests where this isn't enough. As
-     * a workaround for now, this is increased to 3n which is surely
-     * too much. We should figure out what the real maximum is here and
-     * update this.
-     */
-    ret = object_heap_init(&self->tree_node_heap, sizeof(tree_node_t),
-            3 * n, NULL);
-    if (ret != 0) {
+            tree_sequence);
+    self->tree_sequence = tree_sequence;
+    self->insertion_index = 0;
+    self->removal_index = 0;
+    self->tree_left = 0;
+    /* The maximum number of records is to remove and insert all n - 1
+     * records */
+    self->node_records = malloc(2 * self->sample_size * sizeof(node_record_t));
+    if (self->node_records == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    /* We can have at most n active node lists */
-    ret = object_heap_init(&self->tree_node_list_heap, sizeof(tree_node_list_t),
-            n, NULL);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t),
-            n, NULL);
-    if (ret != 0) {
-        goto out;
-    }
-    avl_init_tree(&self->active_nodes, cmp_tree_node_list, NULL);
-
-    self->nodes_in.head = NULL;
 out:
     return ret;
 }
@@ -1532,244 +1503,90 @@ int
 tree_diff_iterator_free(tree_diff_iterator_t *self)
 {
     int ret = 0;
-
-    object_heap_free(&self->tree_node_heap);
-    object_heap_free(&self->tree_node_list_heap);
-    object_heap_free(&self->avl_node_heap);
+    if (self->node_records != NULL) {
+        free(self->node_records);
+    }
     return ret;
 }
 
 void
 tree_diff_iterator_print_state(tree_diff_iterator_t *self)
 {
-    tree_node_t *tree_node;
-    avl_node_t *avl_node;
-    tree_node_list_t *tree_node_list;
-
     printf("tree_diff_iterator state\n");
-    printf("current_left = %d\n", self->current_left);
-    printf("next_record_index = %d\n", (int) self->next_record_index);
     printf("num_records = %d\n", (int) self->num_records);
-    printf("nodes_in:\n");
-    tree_node = self->nodes_in.head;
-    while (tree_node != NULL) {
-        printf("\t(%d\t%d)\t%d\n", tree_node->children[0],
-                tree_node->children[1], tree_node->id);
-        tree_node = tree_node->next;
-    }
-    printf("active_nodes:\n");
-    for (avl_node = self->active_nodes.head; avl_node != NULL; avl_node = avl_node->next) {
-        tree_node_list = (tree_node_list_t *) avl_node->item;
-        printf("\t%d -> \n", tree_node_list->key);
-        tree_node = tree_node_list->head;
-        while (tree_node != NULL) {
-            printf("\t\t(%d\t%d)\t%d\n", tree_node->children[0],
-                    tree_node->children[1], tree_node->id);
-            tree_node = tree_node->next;
-        }
-    }
-    printf("Memory heaps:\n");
-    printf("tree_node_heap:\n");
-    object_heap_print_state(&self->tree_node_heap);
-    printf("tree_node_list_heap:\n");
-    object_heap_print_state(&self->tree_node_list_heap);
-    printf("avl_node_heap:\n");
-    object_heap_print_state(&self->avl_node_heap);
-}
-
-static inline avl_node_t * WARN_UNUSED
-tree_diff_iterator_alloc_avl_node(tree_diff_iterator_t *self, uint32_t key)
-{
-    avl_node_t *ret = NULL;
-    tree_node_list_t *l = NULL;
-
-    if (object_heap_empty(&self->avl_node_heap)) {
-        goto out;
-    }
-    ret = (avl_node_t *) object_heap_alloc_object(&self->avl_node_heap);
-    if (ret == NULL) {
-        goto out;
-    }
-    /* we also alloc a tree_node_list, and set it up as the value in the
-     * avl node */
-    if (object_heap_empty(&self->tree_node_list_heap)) {
-        goto out;
-    }
-    l = (tree_node_list_t *) object_heap_alloc_object(
-            &self->tree_node_list_heap);
-    if (l == NULL) {
-        goto out;
-    }
-    l->head = NULL;
-    l->tail = NULL;
-    l->key = key;
-    avl_init_node(ret, l);
-out:
-    return ret;
-}
-
-static inline void
-tree_diff_iterator_free_avl_node(tree_diff_iterator_t *self,
-        avl_node_t *avl_node)
-{
-    tree_node_list_t *l = NULL;
-
-    l = (tree_node_list_t *) avl_node->item;
-    object_heap_free_object(&self->tree_node_list_heap, l);
-    object_heap_free_object(&self->avl_node_heap, avl_node);
-}
-
-static inline tree_node_t * WARN_UNUSED
-tree_diff_iterator_alloc_tree_node(tree_diff_iterator_t *self,
-        coalescence_record_t *record)
-{
-    tree_node_t *ret = NULL;
-
-    if (object_heap_empty(&self->tree_node_heap)) {
-        goto out;
-    }
-    ret = (tree_node_t *) object_heap_alloc_object(
-            &self->tree_node_heap);
-    if (ret == NULL) {
-        goto out;
-    }
-    ret->id = record->node;
-    ret->children[0] = record->children[0];
-    ret->children[1] = record->children[1];
-    ret->time = record->time;
-    ret->next = NULL;
-out:
-    return ret;
-}
-
-static inline void
-tree_diff_iterator_free_tree_node(tree_diff_iterator_t *self,
-        tree_node_t *node)
-{
-    object_heap_free_object(&self->tree_node_heap, node);
-}
-
-
-static int
-tree_diff_iterator_process_record(tree_diff_iterator_t *self,
-        coalescence_record_t *record)
-{
-    int ret = 0;
-    tree_node_t *tree_node;
-    tree_node_list_t search, *list;
-    avl_node_t *avl_node;
-
-    tree_node = tree_diff_iterator_alloc_tree_node(self, record);
-    if (tree_node == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (self->nodes_in.head == NULL) {
-        self->nodes_in.head = tree_node;
-    } else {
-        self->nodes_in.tail->next = tree_node;
-    }
-    self->nodes_in.tail = tree_node;
-
-    /* update for the active nodes */
-    search.key = record->right;
-    avl_node = avl_search(&self->active_nodes, &search);
-    if (avl_node == NULL) {
-        avl_node = tree_diff_iterator_alloc_avl_node(self, record->right);
-        if (avl_node == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        avl_node = avl_insert_node(&self->active_nodes, avl_node);
-        assert(avl_node != NULL);
-    }
-    list = (tree_node_list_t *) avl_node->item;
-    assert(list != NULL);
-    tree_node = tree_diff_iterator_alloc_tree_node(self, record);
-    if (tree_node == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (list->head == NULL) {
-        list->head = tree_node;
-    } else {
-        list->tail->next = tree_node;
-    }
-    list->tail = tree_node;
-out:
-    return ret;
+    printf("insertion_index = %d\n", (int) self->insertion_index);
+    printf("removal_index = %d\n", (int) self->removal_index);
+    printf("tree_left = %d\n", (int) self->tree_left);
 }
 
 int
 tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
-        tree_node_t **nodes_out, tree_node_t **nodes_in)
+        node_record_t **nodes_out, node_record_t **nodes_in)
 {
     int ret = 0;
-    coalescence_record_t cr;
-    int not_done = 1;
-    avl_node_t *avl_node;
-    tree_node_t *tree_node, *tmp;
-    tree_node_list_t search, *tree_node_list;
+    uint32_t k;
+    uint32_t last_left = self->tree_left;
+    size_t next_node_record = 0;
+    tree_sequence_t *s = self->tree_sequence;
+    node_record_t *out_head = NULL;
+    node_record_t *out_tail = NULL;
+    node_record_t *in_head = NULL;
+    node_record_t *in_tail = NULL;
+    node_record_t *w = NULL;
 
-    *nodes_out = NULL;
-    if (self->current_left != 0) {
-        /* first free up the old used nodes */
-        tree_node = self->nodes_in.head;
-        while (tree_node != NULL) {
-            tmp = tree_node->next;
-            tree_diff_iterator_free_tree_node(self, tree_node);
-            tree_node = tmp;
-        }
-        self->nodes_in.head = NULL;
-        /* Set nodes_out from the active_nodes */
-        search.key = self->current_left;
-        avl_node = avl_search(&self->active_nodes, &search);
-        assert(avl_node != NULL);
-        *nodes_out = ((tree_node_list_t *) avl_node->item)->head;
-        /* free up the active nodes that have just been used also */
-        avl_node = avl_node->prev;
-        if (avl_node != NULL) {
-            assert(avl_node != NULL);
-            tree_node_list = (tree_node_list_t *) avl_node->item;
-            tree_node = tree_node_list->head;
-            while (tree_node != NULL) {
-                tmp = tree_node->next;
-                tree_diff_iterator_free_tree_node(self, tree_node);
-                tree_node = tmp;
-            }
-            avl_unlink_node(&self->active_nodes, avl_node);
-            tree_diff_iterator_free_avl_node(self, avl_node);
-        }
-    }
-
-    if (self->next_record_index < self->num_records) {
-        while (not_done) {
-            ret = tree_sequence_get_record(self->tree_sequence,
-                    self->next_record_index, &cr, MSP_ORDER_LEFT);
-            if (ret != 0) {
-                goto out;
-            }
-            if (cr.left == self->current_left) {
-                ret = tree_diff_iterator_process_record(self, &cr);
-                if (ret != 0) {
-                    goto out;
-                }
-                self->next_record_index++;
-                not_done = self->next_record_index < self->num_records;
+    assert(s != NULL);
+    if (self->insertion_index < self->num_records) {
+        /* First we remove the stale records */
+        while (s->trees.right[s->trees.removal_order[self->removal_index]]
+                == self->tree_left) {
+            k = s->trees.removal_order[self->removal_index];
+            assert(next_node_record < 2 * self->sample_size);
+            w = &self->node_records[next_node_record];
+            next_node_record++;
+            w->time = s->trees.time[k];
+            w->node = s->trees.node[k];
+            w->children[0] = s->trees.children[2 * k];
+            w->children[1] = s->trees.children[2 * k + 1];
+            w->next = NULL;
+            if (out_head == NULL) {
+                out_head = w;
+                out_tail = w;
             } else {
-                not_done = 0;
+                out_tail->next = w;
+                out_tail = w;
             }
+            self->removal_index++;
         }
-        if (self->next_record_index  == self->num_records) {
-            *length = cr.right - self->current_left;
-        } else {
-            *length = cr.left - self->current_left;
+        /* Now insert the new records */
+        while (self->insertion_index < self->num_records &&
+                s->trees.left[s->trees.insertion_order[self->insertion_index]]
+                == self->tree_left) {
+            k = s->trees.insertion_order[self->insertion_index];
+            assert(next_node_record < 2 * self->sample_size);
+            w = &self->node_records[next_node_record];
+            next_node_record++;
+            w->time = s->trees.time[k];
+            w->node = s->trees.node[k];
+            w->children[0] = s->trees.children[2 * k];
+            w->children[1] = s->trees.children[2 * k + 1];
+            w->next = NULL;
+            if (in_head == NULL) {
+                in_head = w;
+                in_tail = w;
+            } else {
+                in_tail->next = w;
+                in_tail = w;
+            }
+            self->insertion_index++;
         }
-        *nodes_in = self->nodes_in.head;
-        self->current_left = cr.left;
+        /* Update the left coordinate */
+        self->tree_left = s->trees.right[s->trees.removal_order[
+            self->removal_index]];
         ret = 1;
     }
-out:
+    *nodes_out = out_head;
+    *nodes_in = in_head;
+    *length = self->tree_left - last_left;
     return ret;
 }
 

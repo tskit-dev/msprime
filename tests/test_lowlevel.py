@@ -1,4 +1,3 @@
-#
 # Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
@@ -554,6 +553,9 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreaterEqual(length, 0)
         self.assertEqual(len(records_out), 0)
         self.assertEqual(len(records_in), n - 1)
+        # Make sure in records are in increasing time order.
+        time_sorted = sorted(records_in, key=lambda x: x[2])
+        self.assertEqual(time_sorted, records_in)
         self.assertEqual(sum([l for l, _, _ in diffs]), m)
         for l, records_out, records_in in diffs[1:]:
             self.assertGreaterEqual(l, 0)
@@ -564,6 +566,12 @@ class TestSimulationState(LowLevelTestCase):
                     self.assertGreater(c, 0)
                     self.assertGreater(node, c)
                     self.assertGreater(time, 0.0)
+            # Make sure in records are in increasing time order.
+            time_sorted = sorted(records_in, key=lambda x: x[2])
+            self.assertEqual(time_sorted, records_in)
+            # Make sure out records are in decreasing time order.
+            time_sorted = sorted(records_out, key=lambda x: -x[2])
+            self.assertEqual(time_sorted, records_out)
         # Compare with the Python implementation.
         pts = tests.PythonTreeSequence(tree_sequence)
         python_diffs = list(pts.diffs())

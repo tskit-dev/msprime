@@ -141,13 +141,16 @@ class PythonTreeSequence(object):
         records_in = []
         for l, r, node, children, t in self.records():
             if l != left:
-                yield l - left, used_records[left], records_in
+                # Out records must be sorted in reverse time order.
+                records_out = sorted(used_records[left], key=lambda x: -x[2])
+                yield l - left, records_out, records_in
                 del used_records[left]
                 records_in = []
                 left = l
             used_records[r].append((node, children, t))
             records_in.append((node, children, t))
-        yield r - left, used_records[left], records_in
+        records_out = sorted(used_records[left], key=lambda x: -x[2])
+        yield r - left, records_out, records_in
 
     def _diffs_with_breaks(self):
         k = 1

@@ -168,18 +168,12 @@ typedef struct {
     size_t num_mutations;
 } tree_sequence_t;
 
-typedef struct tree_node {
-    uint32_t id;
+typedef struct node_record {
+    uint32_t node;
     uint32_t children[2];
     double time;
-    struct tree_node *next;
-} tree_node_t;
-
-typedef struct {
-    uint32_t key;
-    tree_node_t *head;
-    tree_node_t *tail;
-} tree_node_list_t;
+    struct node_record *next;
+} node_record_t;
 
 typedef struct {
     double position;
@@ -187,17 +181,15 @@ typedef struct {
 } mutation_t;
 
 typedef struct {
-    tree_sequence_t *tree_sequence;
-    uint32_t current_left;
-    uint32_t next_breakpoint;
-    size_t current_breakpoint_index;
-    size_t next_record_index;
+    uint32_t sample_size;
+    uint32_t num_loci;
+    size_t num_nodes;
     size_t num_records;
-    tree_node_list_t nodes_in;
-    avl_tree_t active_nodes;
-    object_heap_t tree_node_heap;
-    object_heap_t tree_node_list_heap;
-    object_heap_t avl_node_heap;
+    uint32_t tree_left;
+    tree_sequence_t *tree_sequence;
+    size_t insertion_index;
+    size_t removal_index;
+    node_record_t *node_records;
 } tree_diff_iterator_t;
 
 typedef struct {
@@ -326,7 +318,7 @@ int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence);
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
 int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
-        tree_node_t **nodes_out, tree_node_t **nodes_in);
+        node_record_t **nodes_out, node_record_t **nodes_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 
 int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, 

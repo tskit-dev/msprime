@@ -366,16 +366,16 @@ out:
 }
 
 static int
-newick_converter_process_tree(newick_converter_t *self, tree_node_t *nodes_out,
-        tree_node_t *nodes_in)
+newick_converter_process_tree(newick_converter_t *self, node_record_t *nodes_out,
+        node_record_t *nodes_in)
 {
     int ret = 0;
-    tree_node_t *tree_node;
+    node_record_t *tree_node;
 
     /* mark these nodes as removed. */
     tree_node = nodes_out;
     while (tree_node != NULL) {
-        ret = newick_converter_update_out_node(self, tree_node->id);
+        ret = newick_converter_update_out_node(self, tree_node->node);
         if (ret != 0) {
             goto out;
         }
@@ -384,7 +384,7 @@ newick_converter_process_tree(newick_converter_t *self, tree_node_t *nodes_out,
     /* insert the new records */
     tree_node = nodes_in;
     while (tree_node != NULL) {
-        ret = newick_converter_insert_node(self, tree_node->id,
+        ret = newick_converter_insert_node(self, tree_node->node,
                 tree_node->children, tree_node->time);
         if (ret != 0) {
             goto out;
@@ -394,7 +394,7 @@ newick_converter_process_tree(newick_converter_t *self, tree_node_t *nodes_out,
     /* now, delete any nodes that we need to clear out of the tree */
     tree_node = nodes_out;
     while (tree_node != NULL) {
-        ret = newick_converter_delete_node(self, tree_node->id);
+        ret = newick_converter_delete_node(self, tree_node->node);
         if (ret != 0) {
             goto out;
         }
@@ -418,7 +418,7 @@ newick_converter_next(newick_converter_t *self, uint32_t *length, char **tree)
 {
     int ret = -1;
     int err;
-    tree_node_t *nodes_out, *nodes_in;
+    node_record_t *nodes_out, *nodes_in;
 
     ret = tree_diff_iterator_next(&self->diff_iterator, length, &nodes_out,
             &nodes_in);
