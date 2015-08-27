@@ -335,7 +335,12 @@ class SparseTree(object):
     def get_num_leaves(self, u):
         """
         Returns the number of leaves in this tree underneath the specified
-        node.
+        node. The time required to execute this method depends on  the
+        `fast_leaf_count` argument to :meth:`msprime.TreeSequence.trees`
+        method. If `fast_leaf_count` is enabled, this method requires
+        constant time. If `fast_leaf_count` is disabled, the method requires
+        a top down traversal starting at `u`, and so requires :math:`O(n)`
+        time in worst case.
 
         :param int u: The node of interest.
         :return: The number of leaves in the subtree rooted at u.
@@ -464,7 +469,14 @@ def simulate_tree(
 
 def load(path):
     """
-    Loads a tree sequence file from the specified path.
+    Loads a tree sequence from the specified file path. This
+    file must be in the HDF5 file format produced by the
+    :meth:`msprime.TreeSequence.dump` method.
+
+    :param str path: The file path to write the TreeSequence to.
+    :return: The tree sequence object containing the information
+        stored in the specified file path.
+    :rtype: :class:`msprime.TreeSequence`
     """
     return TreeSequence.load(path)
 
@@ -670,74 +682,18 @@ class TreeSequence(object):
     def get_ll_tree_sequence(self):
         return self._ll_tree_sequence
 
-    def dump(self, path, zlib_compression=False):
-        """
-        Writes the tree sequence to the specified file path.
-
-        :param str path: The file path to write the TreeSequence to.
-        :param bool zlib_compression: If True, use HDF5's native
-            compression when storing the data leading to smaller
-            file size. When loading, data will be decompressed
-            transparently, but load times will be significantly slower.
-        """
-        self._ll_tree_sequence.dump(path, zlib_compression)
-
     @classmethod
     def load(cls, path):
         ts = _msprime.TreeSequence()
         ts.load(path)
         return TreeSequence(ts)
 
-    def get_sample_size(self):
-        return self._ll_tree_sequence.get_sample_size()
-
-    def get_num_loci(self):
-        return self._ll_tree_sequence.get_num_loci()
-
-    def get_num_records(self):
-        return self._ll_tree_sequence.get_num_records()
-
-    def get_num_mutations(self):
-        return self._ll_tree_sequence.get_num_mutations()
-
-    def get_num_nodes(self):
-        return self._ll_tree_sequence.get_num_nodes()
-
     def get_mutations(self):
+        # TODO should we provide this???
         return self._ll_tree_sequence.get_mutations()
 
-    def records(self):
-        for j in range(self.get_num_records()):
-            yield self._ll_tree_sequence.get_record(j)
-
-    def diffs(self):
-        return _msprime.TreeDiffIterator(self._ll_tree_sequence)
-
-    def mutations(self):
-        """
-        Returns an iterator over the mutations on this tree. Each mutation
-        is represented as a tuple (position, node), and mutations
-        returned in increasing order of position.
-
-        :return: The mutations in this tree sequence.
-        :rtype: iter
-        """
-        return iter(self._ll_tree_sequence.get_mutations())
-
-    def trees(self, count_leaves=False):
-        """
-        Returns an iterator over the sparse trees in this tree
-        sequence.
-        """
-        ll_sparse_tree = _msprime.SparseTree(
-            self._ll_tree_sequence, count_leaves)
-        iterator = _msprime.SparseTreeIterator(
-            self._ll_tree_sequence, ll_sparse_tree)
-        sparse_tree = SparseTree(ll_sparse_tree)
-        for _ in iterator:
-            yield sparse_tree
-
     def newick_trees(self, precision=3, breakpoints=None):
+        # TODO document this method.
         iterator = _msprime.NewickConverter(self._ll_tree_sequence, precision)
         if breakpoints is None:
             for length, tree in iterator:
@@ -751,10 +707,177 @@ class TreeSequence(object):
                     j += 1
                     yield breakpoints[j] - breakpoints[j - 1], tree
 
+    def dump(self, path, zlib_compression=False):
+        """
+        Writes the tree sequence to the specified file path.
+
+        :param str path: The file path to write the TreeSequence to.
+        :param bool zlib_compression: If True, use HDF5's native
+            compression when storing the data leading to smaller
+            file size. When loading, data will be decompressed
+            transparently, but load times will be significantly slower.
+        """
+        self._ll_tree_sequence.dump(path, zlib_compression)
+
+    def get_sample_size(self):
+        """
+        Returns the sample size for this tree sequence. This is the number
+        of leaf nodes in each tree.
+
+        :return: The number of leaf nodes in the tree sequence.
+        :rtype: int
+        """
+        return self._ll_tree_sequence.get_sample_size()
+
+    def get_num_loci(self):
+        """
+        Returns the number of loci in this tree sequence. This defined the
+        genomic scaler over which tree coordinates are defined. Given a
+        tree sequence with :math:`m` loci, the constituent trees will be
+        defined over the half-closed interval :math:`(0, m])`. Each tree
+        then covers some subset of this interval --- see
+        :meth:`msprime.SparseTree.get_interval` for details.
+
+        :return: The number of discrete non-recombining loci in this tree
+            sequence.
+        :rtype: int
+        """
+        return self._ll_tree_sequence.get_num_loci()
+
+    def get_num_records(self):
+        """
+        Returns the number of coalescence records in this tree sequence.
+        See the :meth:`.records` method for details on these objects.
+
+        :return: The number of coalescence records defining this tree
+            sequence.
+        :rtype: int
+        """
+        return self._ll_tree_sequence.get_num_records()
+
+    def get_num_mutations(self):
+        """
+        Returns the number of mutatations in this tree sequence. See
+        the :meth:`msprime.TreeSequence.mutations` method for details on how
+        mutations are defined.
+
+        :return: The number of mutations in this tree sequence.
+        :rtype: int
+        """
+        return self._ll_tree_sequence.get_num_mutations()
+
+    def get_num_nodes(self):
+        """
+        Returns the number of nodes in this tree sequence. This is the
+        largest value :math:`u` such that `u` is a node in any of the
+        constituent trees.
+
+        :return: The total number of nodes in this tree sequence.
+        :rtype: int
+        """
+        return self._ll_tree_sequence.get_num_nodes()
+
+    def records(self):
+        """
+        Returns an iterator over the coalescence records in this tree
+        sequence in time-sorted order. Each record is a tuple
+        :math:`(l, r, u, c, t)` defining the assignment of a tree node
+        across an interval. The range of this record is as the half-open
+        genomic interval :math:`(l, r]`, such that it applies to all
+        positions :math:`l \leq x < r`. Each record represents the
+        assignment of a pair of children :math:`c` to a parent
+        :math:`u`. This assignment happens at time :math:`t` in
+        coalescent units.
+
+        :return: An iterator of all :math:`(l, r, u, c, t)` tuples defining
+            the coalescence records in this tree sequence.
+        :rtype: iter
+        """
+        for j in range(self.get_num_records()):
+            yield self._ll_tree_sequence.get_record(j)
+
+    def diffs(self):
+        """
+        Returns an iterator over the differences between adjacent trees in this
+        tree sequence. Each diff returned by this method is a tuple of the form
+        `(length, records_out, records_in)`. The `length` is the length of the
+        genomic interval covered by the current tree, and is equivalent to the
+        value returned by :meth:`msprime.SparseTree.get_length`. The
+        `records_out` value is list of :math:`(u, c, t)` tuples, and
+        corresponds to the coalesence records that have been invalidated by
+        moving to the current tree.  As in the :meth:`.records` method,
+        :math:`u` is a tree node, :math:`c` is a tuple containing its children,
+        and :math:`t` is the time the event occured.  These records are
+        returned in time-decreasing order, such that the record affecting the
+        highest parts of the tree (i.e., closest to the root) are returned
+        first.  The `records_in` value is also a list of :math:`(u, c, t)`
+        tuples, and these describe the records that must be applied to create
+        the tree covering the current interval. These records are returned in
+        time-increasing order, such that the records affecting the lowest parts
+        of the tree (i.e., closest to the leaves) are returned first.
+
+        :return: An iterator over the diffs between adjacent trees in this
+            tree sequence.
+        :rtype: iter
+        """
+        return _msprime.TreeDiffIterator(self._ll_tree_sequence)
+
+    def mutations(self):
+        """
+        Returns an iterator over the mutations on this tree. Each mutation
+        is represented as a tuple (position, node), and mutations
+        returned in increasing order of position.
+
+        :return: The mutations in this tree sequence.
+        :rtype: iter
+        """
+        return iter(self._ll_tree_sequence.get_mutations())
+
+    def trees(self, fast_leaf_count=True):
+        """
+        Returns an iterator over the trees in this tree sequence. Each value
+        returned in this iterator is an instance of `:msprime.SparseTree`.
+        If the `fast_leaf_count` feature is enabled, the number of leaves under
+        any node can be found in constant time using the
+        :meth:`msprime.SparseTree.get_num_leaves` method. If counting the
+        the number of leaves is not required, this functionality should be
+        turned off as there is a slight space and time penalty for using
+        it.
+
+        :warning: Do not store the results of this iterator in a list!
+           For performance reasons, the same underlying object is used
+           for every tree returned which will most likely lead to unexpected
+           behaviour.
+
+        :param bool fast_leaf_count: If `True`, enable constant time
+            counting of the leaves in a given subtree using the
+            :meth:`msprime.SparseTree.get_num_leaves` method. If `False`,
+            disable this feature, saving some memory.
+        :return: An iterator over the sparse trees in this tree sequence.
+        :rtype: iter
+        """
+        ll_sparse_tree = _msprime.SparseTree(
+            self._ll_tree_sequence, fast_leaf_count)
+        iterator = _msprime.SparseTreeIterator(
+            self._ll_tree_sequence, ll_sparse_tree)
+        sparse_tree = SparseTree(ll_sparse_tree)
+        for _ in iterator:
+            yield sparse_tree
+
     def haplotypes(self):
         """
         Returns an iterator over the haplotypes resulting from the trees
         and mutations in this tree sequence as a string of '1's and '0's.
+        The iterator returns a total of :math:`n` strings, each of which
+        contains :math:`s` characters (:math:`n` is the sample size
+        returned by :meth:`msprime.TreeSequence.get_sample_size` and
+        :math:`s` is the number of mutations returned by
+        :meth:`msprime.TreeSequence.get_num_mutations`). The first
+        string returned is the haplotype for sample `1`, and so on.
+
+        :return: An iterator over the haplotype strings for the samples in
+            this tree sequence.
+        :rtype: iter
         """
         return HaplotypeGenerator(self).haplotypes()
 
@@ -763,6 +886,13 @@ class TreeSequence(object):
         Generates mutation according to the infinite sites model. This
         method over-writes any existing mutations stored in the tree
         sequence.
+
+        **TODO** Be precise about the meaning of the mutation rate here.
+
+        :param float scaled_mutation_rate: The mutation rate in scaled
+            coalescence time units.
+        :param int random_seed: The random seed to use when generating
+            mutations.
         """
         seed = random_seed
         if random_seed is None:
@@ -772,13 +902,16 @@ class TreeSequence(object):
     def set_mutations(self, mutations):
         """
         Sets the mutations in this tree sequence to the specified list of
-        (position, node) tuples.
+        `(position, node)` tuples.  Each entry in the list must be a tuple of
+        the form :math:`(x, u)`, where :math:`x` is a floating point value
+        defining a genomic position and :math:`u` is an integer defining a tree
+        node. A genomic position :math:`x` must satisfy :math:`0 \leq x < m`
+        where :math:`m` is the number of loci (see :meth:`.get_num_loci`). A
+        node :math:`u` must satisfy :math:`0 < u \leq N` where `N` is the
+        largest valued node in the tree sequence (see :meth:`.get_num_nodes`).
 
         :param list mutations: The list of mutations to be assigned to this
-            tree sequence. Each entry in the list must be a tuple of the
-            form (position, node), where position is a floating point value
-            such that 0 <= position <= self.get_num_loci() and
-            0 < node <= self.get_max_node().
+            tree sequence.
         """
         self._ll_tree_sequence.set_mutations(mutations)
 
