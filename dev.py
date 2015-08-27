@@ -5,6 +5,7 @@ Simple client code for development purposes.
 from __future__ import print_function
 from __future__ import division
 
+import math
 import itertools
 
 import msprime
@@ -206,6 +207,42 @@ def leaf_count_example():
         # print("nu = ", nu)
         # print("nup= ", nup)
 
+def leaf_set_example():
+    """
+    Development for the leaf set algorithm.
+    """
+    n = 50000
+    ts = msprime.simulate(n, 100, scaled_recombination_rate=0.1, random_seed=1)
+    pi = [0 for j in range(ts.get_num_nodes() + 1)]
+    nu = [set() for j in range(ts.get_num_nodes() + 1)]
+    for j in range(1, n + 1):
+        # if j % 2 == 0:
+        nu[j].add(j)
+    total_size = 0
+    for l, records_out, records_in in ts.diffs():
+        for node, children, time in records_out:
+            for c in children:
+                pi[c] = 0
+            leaves_lost = nu[node]
+            u = node
+            while u != 0:
+                nu[u] -= leaves_lost
+                u = pi[u]
+        for node, children, time in records_in:
+            leaves = set()
+            for c in children:
+                pi[c] = node
+                leaves |= nu[c]
+            u = node
+            while u != 0:
+                nu[u] |= leaves
+                u = pi[u]
+        # print("pi = ", pi)
+        # print("nu = ", nu)
+        total_size = max(total_size, sum(len(s) for s in nu))
+        # print("nup= ", nup)
+    print(total_size, 2 * n * math.log(n, 2))
+
 
 if __name__ == "__main__":
     # haplotype_example()
@@ -220,4 +257,5 @@ if __name__ == "__main__":
     # draw_trees()
     # leaf_count_example()
     # large_leaf_count_example()
-    diffs_example()
+    # diffs_example()
+    leaf_set_example()
