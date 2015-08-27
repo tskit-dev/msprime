@@ -204,7 +204,10 @@ typedef struct {
     uint32_t *parent;
     uint32_t *children;
     double *time;
+    /* These are involved in the optional leaf tracking */
     uint32_t *num_leaves;
+    uint32_t num_tracked_leaves;
+    uint32_t *tracked_leaves;
     /* traversal stacks */
     uint32_t *stack1;
     uint32_t *stack2;
@@ -331,6 +334,8 @@ int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size,
         uint32_t num_nodes, size_t max_mutations, int flags);
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_clear(sparse_tree_t *self);
+int sparse_tree_set_tracked_leaves(sparse_tree_t *self, 
+        uint32_t *tracked_leaves, uint32_t num_tracked_leaves);
 int sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
         uint32_t *mrca);
 int sparse_tree_get_num_leaves(sparse_tree_t *self, uint32_t u,

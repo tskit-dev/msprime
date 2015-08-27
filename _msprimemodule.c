@@ -1544,14 +1544,20 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "count_leaves", NULL};
+    static char *kwlist[] = {"tree_sequence", "count_leaves",
+        "tracked_leaves", NULL};
+    PyObject *py_tracked_leaves = NULL;
     TreeSequence *tree_sequence = NULL;
+    PyObject *item;
     int flags = 0;
     int count_leaves = 0;
+    uint32_t j, num_tracked_leaves;
+    uint32_t *tracked_leaves = NULL;
 
     self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
-            &TreeSequenceType, &tree_sequence, &count_leaves)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|iO!", kwlist,
+            &TreeSequenceType, &tree_sequence, &count_leaves,
+            &PyList_Type, &py_tracked_leaves)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
@@ -1564,6 +1570,22 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     }
     if (count_leaves) {
         flags |= MSP_COUNT_LEAVES;
+    }
+    if (py_tracked_leaves != NULL) {
+        num_tracked_leaves = PyList_Size(py_tracked_leaves);
+        tracked_leaves = PyMem_Malloc(num_tracked_leaves * sizeof(uint32_t));
+        if (tracked_leaves == NULL) {
+            PyErr_NoMemory();
+            goto out;
+        }
+        for (j = 0; j < num_tracked_leaves; j++) {
+            item = PyList_GetItem(py_tracked_leaves, j);
+            if (!PyNumber_Check(item)) {
+                PyErr_SetString(PyExc_TypeError, "leaf must be a number");
+                goto out;
+            }
+            tracked_leaves[j] = (uint32_t) PyLong_AsLong(item);
+        }
     }
     err = tree_sequence_alloc_sparse_tree(tree_sequence->tree_sequence,
             self->sparse_tree, flags);
@@ -1578,6 +1600,9 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     }
     ret = 0;
 out:
+    if (tracked_leaves != NULL) {
+        PyMem_Free(tracked_leaves);
+    }
     return ret;
 }
 

@@ -1689,6 +1689,9 @@ sparse_tree_free(sparse_tree_t *self)
     if (self->num_leaves != NULL) {
         free(self->num_leaves);
     }
+    if (self->tracked_leaves != NULL) {
+        free(self->tracked_leaves);
+    }
     return 0;
 }
 
@@ -1707,10 +1710,50 @@ sparse_tree_clear(sparse_tree_t *self)
     memset(self->children, 0, 2 * N * sizeof(uint32_t));
     if (self->flags & MSP_COUNT_LEAVES) {
         memset(self->num_leaves, 0, N * sizeof(uint32_t));
-        for (j = 1; j <= self->sample_size; j++) {
-            self->num_leaves[j] = 1;
+        /* If set_tracked_leaves has not been called, then we track all
+         * leaves.
+         */
+        if (self->tracked_leaves == NULL) {
+            for (j = 1; j <= self->sample_size; j++) {
+                self->num_leaves[j] = 1;
+            }
+        } else {
+            for (j = 0; j < self->num_tracked_leaves; j++) {
+                self->num_leaves[self->tracked_leaves[j]] = 1;
+            }
         }
     }
+    return ret;
+}
+
+int
+sparse_tree_set_tracked_leaves(sparse_tree_t *self,
+        uint32_t *tracked_leaves, uint32_t num_tracked_leaves)
+{
+    int ret = 0;
+    uint32_t j, u;
+
+    assert(tracked_leaves != NULL);
+    if (self->tracked_leaves != NULL) {
+        free(self->tracked_leaves);
+    }
+    self->num_tracked_leaves = num_tracked_leaves;
+    if (self->num_tracked_leaves != 0) {
+        self->tracked_leaves = malloc(num_tracked_leaves * sizeof(uint32_t));
+        if (self->tracked_leaves == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        for (j = 0; j < self->num_tracked_leaves; j++) {
+            u = tracked_leaves[j];
+            if (u == 0 || u > self->sample_size) {
+                ret = MSP_ERR_BAD_PARAM_VALUE;
+                goto out;
+            }
+            self->tracked_leaves[j] = u;
+        }
+    }
+out:
     return ret;
 }
 
@@ -1871,7 +1914,9 @@ sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
             err = sparse_tree_get_num_leaves_by_traversal(self->tree, j,
                     &num_leaves);
             assert(err == 0);
-            assert(num_leaves == self->tree->num_leaves[j]);
+            if (self->tree->tracked_leaves == NULL) {
+                assert(num_leaves == self->tree->num_leaves[j]);
+            }
         }
     }
 }

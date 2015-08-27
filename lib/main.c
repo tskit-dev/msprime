@@ -301,6 +301,7 @@ print_tree_sequence(tree_sequence_t *ts)
     coalescence_record_t cr;
     tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
     sparse_tree_iterator_t *sparse_iter = calloc(1, sizeof(sparse_tree_iterator_t));
+    uint32_t tracked_leaves[] = {1, 4};
 
     if (iter == NULL || sparse_iter == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -346,8 +347,14 @@ print_tree_sequence(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
+
     /* sparse trees */
     ret = tree_sequence_alloc_sparse_tree(ts, &tree, MSP_COUNT_LEAVES);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = sparse_tree_set_tracked_leaves(&tree, tracked_leaves,
+            sizeof(tracked_leaves) / sizeof(uint32_t));
     if (ret != 0) {
         goto out;
     }
@@ -433,9 +440,9 @@ run_simulate(char *conf_file)
             goto out;
         }
     }
-    print_haplotypes(tree_seq);
+    print_tree_sequence(tree_seq);
     if (0) {
-        print_tree_sequence(tree_seq);
+        print_haplotypes(tree_seq);
         tree_sequence_print_state(tree_seq);
         print_newick_trees(tree_seq);
         tree_sequence_print_state(tree_seq);
