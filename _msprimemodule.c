@@ -1192,6 +1192,66 @@ out:
 }
 
 static PyObject *
+TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    size_t j;
+    PyObject *ret = NULL;
+    PyObject *item, *node, *pos;
+    PyObject *py_mutation_list = NULL;
+    static char *kwlist[] = {"mutations", NULL};
+    size_t num_mutations = 0;
+    mutation_t *mutations = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &PyList_Type, &py_mutation_list)) {
+        goto out;
+    }
+    num_mutations = PyList_Size(py_mutation_list);
+    mutations = PyMem_Malloc(num_mutations * sizeof(mutation_t));
+    for (j = 0; j < num_mutations; j++) {
+        item = PyList_GetItem(py_mutation_list, j);
+        if (!PyTuple_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "not a tuple");
+            goto out;
+        }
+        if (PyTuple_Size(item) != 2) {
+            PyErr_SetString(PyExc_ValueError,
+                    "mutations must (node, pos) tuples");
+            goto out;
+        }
+        pos = PyTuple_GetItem(item, 0);
+        node = PyTuple_GetItem(item, 1);
+        if (!PyNumber_Check(pos)) {
+            PyErr_SetString(PyExc_TypeError, "position must be a number");
+            goto out;
+        }
+        if (!PyNumber_Check(node)) {
+            PyErr_SetString(PyExc_TypeError, "node must be a number");
+            goto out;
+        }
+        mutations[j].position = PyFloat_AsDouble(pos);
+        mutations[j].node = (uint32_t) PyLong_AsLong(node);
+    }
+    err = tree_sequence_set_mutations(self->tree_sequence, num_mutations,
+            mutations);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    if (mutations != NULL) {
+        PyMem_Free(mutations);
+    }
+    return ret;
+}
+
+
+static PyObject *
 TreeSequence_get_record(TreeSequence *self, PyObject *args)
 {
     int err;
@@ -1376,10 +1436,13 @@ static PyMethodDef TreeSequence_methods[] = {
     {"generate_mutations", (PyCFunction) TreeSequence_generate_mutations,
         METH_VARARGS|METH_KEYWORDS,
         "Generates mutations under the infinite sites model"},
-    {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
-        "Returns the record at the specified index."},
+    {"set_mutations", (PyCFunction) TreeSequence_set_mutations,
+        METH_VARARGS|METH_KEYWORDS,
+        "Sets the mutations to the specified list of tuples."},
     {"get_mutations", (PyCFunction) TreeSequence_get_mutations,
         METH_NOARGS, "Returns the list of mutations"},
+    {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
+        "Returns the record at the specified index."},
     {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
             METH_NOARGS, "Returns the number of coalescence records." },
     {"get_num_loci", (PyCFunction) TreeSequence_get_num_loci, METH_NOARGS,

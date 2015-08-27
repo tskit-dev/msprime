@@ -80,6 +80,8 @@ msp_strerror(int err)
         ret = "Unsupported file format version.";
     } else if (err == MSP_ERR_BAD_ORDERING) {
         ret = "Bad record ordering requested";
+    } else if (err == MSP_ERR_BAD_MUTATION) {
+        ret = "Bad mutation provided";
     } else if (err == MSP_ERR_BAD_PARAM_VALUE) {
         ret = "Bad parameter value provided";
     } else if (err == MSP_ERR_IO) {

@@ -1082,6 +1082,31 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertNotEqual(mutations, last_mutations)
             last_mutations = mutations
 
+    def test_set_mutations(self):
+        ts = self.get_tree_sequence(mutation_rate=0.0)
+        for x in [None, "", {}, tuple(), 1]:
+            self.assertRaises(TypeError, ts.set_mutations, x)
+        invalid_mutations = ["", [1, 1], {1, 1}, None]
+        for mutation in invalid_mutations:
+            self.assertRaises(TypeError, ts.set_mutations, [mutation])
+        invalid_mutations = [tuple(), (1,), (1, 2, 3)]
+        for mutation in invalid_mutations:
+            self.assertRaises(ValueError, ts.set_mutations, [mutation])
+        invalid_mutations = [("1", 0), (0, "1"), (None, 0), ([], 0)]
+        for mutation in invalid_mutations:
+            self.assertRaises(TypeError, ts.set_mutations, [mutation])
+        invalid_mutations = [
+            (-1, 1), (ts.get_num_loci() + 1, 1), (2**32, 1),
+            (0, -1), (0, ts.get_num_nodes() + 1), (0, 0)]
+        for mutation in invalid_mutations:
+            self.assertRaises(
+                _msprime.LibraryError, ts.set_mutations, [mutation])
+        valid_mutations = [[], [(0.1, 1)], [(0.1, 1), (0.2, 2)]]
+        for mutations in valid_mutations:
+            ts.set_mutations(mutations)
+            self.assertEqual(ts.get_mutations(), mutations)
+            self.assertIsNone(ts.get_mutation_parameters())
+
     def test_constructor_interface(self):
         tree_sequence = _msprime.TreeSequence()
         for x in [None, "", {}, [], 1]:

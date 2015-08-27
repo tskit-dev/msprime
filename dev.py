@@ -5,6 +5,8 @@ Simple client code for development purposes.
 from __future__ import print_function
 from __future__ import division
 
+import itertools
+
 import msprime
 
 
@@ -138,6 +140,22 @@ def draw_trees():
     for j, tree in enumerate(tree_sequence.trees()):
         tree.draw("tmp__NOBACKUP__/example-{}.svg".format(j))
 
+def large_leaf_count_example():
+    n = 1000
+    ts = msprime.simulate(n, 100000, scaled_recombination_rate=0.1, random_seed=1)
+    num_trees = 0
+    potential_nodes = []
+    for tree, diff in itertools.izip(ts.trees(True), ts.diffs()):
+        num_trees += 1
+        _, _, records_in = diff
+        # Go through all the nodes that are introduced in this tree and
+        # see how many leaves they subtend.
+        for node, _, _ in records_in:
+            if tree.get_num_leaves(node) == 500:
+                potential_nodes.append((node, tree.get_interval()))
+    print(potential_nodes)
+    print(num_trees)
+
 
 def count_leaves(pi, n):
     nu = [0 for j in pi]
@@ -190,7 +208,7 @@ if __name__ == "__main__":
     # haplotype_example()
     # dump_example()
     # newick_example()
-    tree_example()
+    # tree_example()
     # dump_file("example.hdf5")
     # tree_algorithm()
     # large_example()
@@ -198,3 +216,4 @@ if __name__ == "__main__":
     # small_example()
     # draw_trees()
     # leaf_count_example()
+    large_leaf_count_example()

@@ -751,6 +751,13 @@ class TreeSequence(object):
                     j += 1
                     yield breakpoints[j] - breakpoints[j - 1], tree
 
+    def haplotypes(self):
+        """
+        Returns an iterator over the haplotypes resulting from the trees
+        and mutations in this tree sequence as a string of '1's and '0's.
+        """
+        return HaplotypeGenerator(self).haplotypes()
+
     def generate_mutations(self, scaled_mutation_rate, random_seed=None):
         """
         Generates mutation according to the infinite sites model. This
@@ -762,12 +769,18 @@ class TreeSequence(object):
             seed = random.randint(0, 2**31)
         self._ll_tree_sequence.generate_mutations(scaled_mutation_rate, seed)
 
-    def haplotypes(self):
+    def set_mutations(self, mutations):
         """
-        Returns an iterator over the haplotypes resulting from the trees
-        and mutations in this tree sequence as a string of '1's and '0's.
+        Sets the mutations in this tree sequence to the specified list of
+        (position, node) tuples.
+
+        :param list mutations: The list of mutations to be assigned to this
+            tree sequence. Each entry in the list must be a tuple of the
+            form (position, node), where position is a floating point value
+            such that 0 <= position <= self.get_num_loci() and
+            0 < node <= self.get_max_node().
         """
-        return HaplotypeGenerator(self).haplotypes()
+        self._ll_tree_sequence.set_mutations(mutations)
 
 
 class HaplotypeGenerator(object):

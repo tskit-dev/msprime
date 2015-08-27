@@ -1334,27 +1334,13 @@ tree_sequence_alloc_sparse_tree(tree_sequence_t *self, sparse_tree_t *tree,
             self->num_mutations, flags);
 }
 
-/* TODO mutations generation should be spun out into a separate class.
- * We should really just do this in Python and send the resulting
- * mutation objects here for storage. It's not an expensive operation.
- */
 int
-tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
-        unsigned long random_seed)
+tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
+        mutation_t *mutations)
 {
     int ret = -1;
-    coalescence_record_t cr;
-    uint32_t j, k, l, child;
-    gsl_rng *rng = NULL;
-    double *times = NULL;
-    mutation_t *mutations = NULL;
+    size_t j;
     mutation_t **mutation_ptrs = NULL;
-    unsigned int branch_mutations;
-    size_t num_mutations;
-    double branch_length, distance, mu, position;
-    size_t buffer_size;
-    size_t block_size = 2 << 10; /* alloc in blocks of 1M */
-    void *p;
 
     if (self->num_mutations > 0) {
         /* any mutations that were there previously are overwritten. */
@@ -1376,6 +1362,63 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
     self->mutations.node = NULL;
     self->mutations.parameters = NULL;
     self->mutations.environment = NULL;
+    if (num_mutations > 0) {
+        /* Allocate the storage we need to keep the mutations. */
+        mutation_ptrs = malloc(num_mutations * sizeof(mutation_t *));
+        self->mutations.node = malloc(num_mutations * sizeof(uint32_t));
+        self->mutations.position = malloc(num_mutations * sizeof(double));
+        if (mutation_ptrs == NULL || self->mutations.node == NULL
+                || self->mutations.position == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        for (j = 0; j < num_mutations; j++) {
+            mutation_ptrs[j] = mutations + j;
+            if (mutations[j].position < 0
+                    || mutations[j].position > self->num_loci
+                    || mutations[j].node == 0
+                    || mutations[j].node > self->num_nodes) {
+                ret = MSP_ERR_BAD_MUTATION;
+                goto out;
+            }
+        }
+        /* Mutations are required to be sorted in position order. */
+        qsort(mutation_ptrs, num_mutations, sizeof(mutation_t *),
+                cmp_mutation_pointer);
+        self->num_mutations = num_mutations;
+        for (j = 0; j < num_mutations; j++) {
+            self->mutations.node[j] = mutation_ptrs[j]->node;
+            self->mutations.position[j] = mutation_ptrs[j]->position;
+        }
+    }
+    ret = 0;
+out:
+    if (mutation_ptrs != NULL) {
+        free(mutation_ptrs);
+    }
+    return ret;
+}
+
+/* TODO mutations generation should be spun out into a separate class.
+ * We should really just do this in Python and send the resulting
+ * mutation objects here for storage. It's not an expensive operation.
+ */
+int
+tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
+        unsigned long random_seed)
+{
+    int ret = -1;
+    coalescence_record_t cr;
+    uint32_t j, k, l, child;
+    gsl_rng *rng = NULL;
+    double *times = NULL;
+    mutation_t *mutations = NULL;
+    unsigned int branch_mutations;
+    size_t num_mutations;
+    double branch_length, distance, mu, position;
+    size_t buffer_size;
+    size_t block_size = 2 << 10; /* alloc in blocks of 1M */
+    void *p;
 
     buffer_size = block_size;
     num_mutations = 0;
@@ -1419,27 +1462,17 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
             }
         }
     }
+    ret = tree_sequence_set_mutations(self, num_mutations, mutations);
+    if (ret != 0) {
+        goto out;
+    }
     if (num_mutations > 0) {
-        /* Allocate the storage we need to keep the mutations. */
-        mutation_ptrs = malloc(num_mutations * sizeof(mutation_t *));
-        self->mutations.node = malloc(num_mutations * sizeof(uint32_t));
-        self->mutations.position = malloc(num_mutations * sizeof(double));
-        if (mutation_ptrs == NULL || self->mutations.node == NULL
-                || self->mutations.position == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        for (j = 0; j < num_mutations; j++) {
-            mutation_ptrs[j] = mutations + j;
-        }
-        /* Mutations are required to be sorted in position order. */
-        qsort(mutation_ptrs, num_mutations, sizeof(mutation_t *),
-                cmp_mutation_pointer);
-        self->num_mutations = num_mutations;
-        for (j = 0; j < num_mutations; j++) {
-            self->mutations.node[j] = mutation_ptrs[j]->node;
-            self->mutations.position[j] = mutation_ptrs[j]->position;
-        }
+        /* TODO Make a generic method to do this attached to the
+         * mutation_generator class, and add generic string setter
+         * methods for the parameters and environment in the
+         * tree_sequence class. This will allow us to set the provenance
+         * information from anywhere.
+         */
         ret = encode_mutation_parameters(mutation_rate, random_seed,
                 &self->mutations.parameters);
         if (ret != 0) {
@@ -1450,16 +1483,12 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
             goto out;
         }
     }
-    ret = 0;
 out:
     if (times != NULL) {
         free(times);
     }
     if (mutations != NULL) {
         free(mutations);
-    }
-    if (mutation_ptrs != NULL) {
-        free(mutation_ptrs);
     }
     if (rng != NULL) {
         gsl_rng_free(rng);
