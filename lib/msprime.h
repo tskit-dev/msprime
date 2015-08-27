@@ -317,6 +317,8 @@ char * tree_sequence_get_simulation_parameters(tree_sequence_t *self);
 char * tree_sequence_get_mutation_parameters(tree_sequence_t *self);
 int tree_sequence_alloc_sparse_tree(tree_sequence_t *self, 
         sparse_tree_t *tree, int flags);
+int tree_sequence_set_mutations(tree_sequence_t *self, 
+        size_t num_mutations, mutation_t *mutations);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
         tree_sequence_t *tree_sequence);

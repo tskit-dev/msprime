@@ -199,6 +199,8 @@ print_haplotypes(tree_sequence_t *ts)
 {
     int ret = 0;
     hapgen_t *hg = calloc(1, sizeof(hapgen_t));
+    size_t num_mutations = tree_sequence_get_num_mutations(ts);
+    mutation_t *mutations = malloc(num_mutations * sizeof(mutation_t));
     uint32_t j;
     char *haplotype;
 
@@ -218,10 +220,35 @@ print_haplotypes(tree_sequence_t *ts)
         }
         printf("%d\t%s\n", j, haplotype);
     }
+    /* Get the mutations, reset them, redo the same thing to check */
+    ret = tree_sequence_get_mutations(ts, mutations);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_set_mutations(ts, num_mutations - 1, mutations);
+    if (ret != 0) {
+        goto out;
+    }
+    hapgen_free(hg);
+    ret = hapgen_alloc(hg, ts);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 1; j <= ts->sample_size; j++) {
+        ret = hapgen_get_haplotype(hg, j, &haplotype);
+        if (ret < 0) {
+            goto out;
+        }
+        printf("%d\t%s\n", j, haplotype);
+    }
+
 out:
     if (hg != NULL) {
         hapgen_free(hg);
         free(hg);
+    }
+    if (mutations != NULL) {
+        free(mutations);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));
@@ -406,10 +433,10 @@ run_simulate(char *conf_file)
             goto out;
         }
     }
-    print_tree_sequence(tree_seq);
+    print_haplotypes(tree_seq);
     if (0) {
+        print_tree_sequence(tree_seq);
         tree_sequence_print_state(tree_seq);
-        print_haplotypes(tree_seq);
         print_newick_trees(tree_seq);
         tree_sequence_print_state(tree_seq);
     }

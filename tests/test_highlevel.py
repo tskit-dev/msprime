@@ -490,6 +490,12 @@ class TestTreeSequence(HighLevelTestCase):
             ts.generate_mutations(100)
             self.assertGreater(ts.get_num_mutations(), 0)
             self.verify_mutations(ts)
+            muts = [[], [(0, 1)], [(0, 1), (0, 2)]]
+            for mutations in muts:
+                ts.set_mutations(mutations)
+                self.assertEqual(ts.get_num_mutations(), len(mutations))
+                self.assertEqual(list(ts.mutations()), mutations)
+                self.verify_mutations(ts)
 
     def verify_tree_diffs(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())

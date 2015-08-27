@@ -235,6 +235,10 @@ class StressTester(object):
             tree_mutations = st.get_mutations()
             all_tree_mutations.extend(tree_mutations)
         assert all_tree_mutations == all_mutations
+        for mutations in [[], [(0, 1), (0, 1)]]:
+            ts.set_mutations(mutations)
+            assert ts.get_mutations() == mutations
+
 
     def run(self):
         self.run_module_functions()
