@@ -121,11 +121,14 @@ def large_example():
 
 def small_example():
     ts = msprime.simulate(5, 10, scaled_recombination_rate=0.1, random_seed=1)
-    for sp in ts.sparse_trees():
+    for sp in ts.trees():
         print(sp)
     ts.dump("example.hdf5")
 
-
+def diffs_example():
+    ts = msprime.simulate(5, 10, scaled_recombination_rate=0.1, random_seed=1)
+    for length, records_out, records_in in ts.diffs():
+        print(length, records_out, records_in)
 
 def draw_tree():
     tree = msprime.simulate_tree(5, random_seed=1, scaled_mutation_rate=0.1)
@@ -216,4 +219,5 @@ if __name__ == "__main__":
     # small_example()
     # draw_trees()
     # leaf_count_example()
-    large_leaf_count_example()
+    # large_leaf_count_example()
+    diffs_example()
