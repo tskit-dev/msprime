@@ -204,10 +204,11 @@ typedef struct {
     uint32_t *parent;
     uint32_t *children;
     double *time;
-    /* These are involved in the optional leaf tracking */
+    /* These are involved in the optional leaf tracking; num_leaves counts
+     * all leaves below a give node, and num_tracked_leaves counts those 
+     * from a specific subset */
     uint32_t *num_leaves;
-    uint32_t num_tracked_leaves;
-    uint32_t *tracked_leaves;
+    uint32_t *num_tracked_leaves;
     /* traversal stacks */
     uint32_t *stack1;
     uint32_t *stack2;
@@ -319,7 +320,8 @@ int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations);
 char * tree_sequence_get_simulation_parameters(tree_sequence_t *self);
 char * tree_sequence_get_mutation_parameters(tree_sequence_t *self);
 int tree_sequence_alloc_sparse_tree(tree_sequence_t *self, 
-        sparse_tree_t *tree, int flags);
+        sparse_tree_t *tree, uint32_t *tracked_leaves, 
+        uint32_t num_tracked_leaves, int flags);
 int tree_sequence_set_mutations(tree_sequence_t *self, 
         size_t num_mutations, mutation_t *mutations);
 
@@ -331,15 +333,28 @@ int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 
 int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, 
-        uint32_t num_nodes, size_t max_mutations, int flags);
+        uint32_t num_nodes, size_t max_mutations, uint32_t *tracked_leaves, 
+        uint32_t num_tracked_leaves, int flags);
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_clear(sparse_tree_t *self);
-int sparse_tree_set_tracked_leaves(sparse_tree_t *self, 
-        uint32_t *tracked_leaves, uint32_t num_tracked_leaves);
 int sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
         uint32_t *mrca);
 int sparse_tree_get_num_leaves(sparse_tree_t *self, uint32_t u,
         uint32_t *num_leaves);
+int sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, uint32_t u,
+        uint32_t *num_tracked_leaves);
+
+int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
+        tree_sequence_t *tree_sequence, sparse_tree_t *tree);
+int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
+int sparse_tree_iterator_next(sparse_tree_iterator_t *self);
+void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
+
+int newick_converter_alloc(newick_converter_t *self, 
+        tree_sequence_t *tree_sequence, size_t precision);
+int newick_converter_next(newick_converter_t *self, uint32_t *length, 
+        char **tree);
+int newick_converter_free(newick_converter_t *self);
 
 int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
         tree_sequence_t *tree_sequence, sparse_tree_t *tree);

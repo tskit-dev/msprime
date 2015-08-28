@@ -207,10 +207,10 @@ class StressTester(object):
         except ValueError:
             pass
         ts.create(sim)
-        st = _msprime.SparseTree(ts)
+        _msprime.SparseTree(ts)
 
     def check_multiple_tree_sequences(self):
-        params = {"sample_size":10, "random_seed":1}
+        params = {"sample_size": 10, "random_seed": 1}
         sim1 = _msprime.Simulator(**params)
         sim2 = _msprime.Simulator(**params)
         sim1.run()
@@ -239,6 +239,31 @@ class StressTester(object):
             ts.set_mutations(mutations)
             assert ts.get_mutations() == mutations
 
+    def check_count_leaves(self, sim):
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        st = _msprime.SparseTree(ts)
+        for st in _msprime.SparseTreeIterator(ts, st):
+            for j in range(0, ts.get_num_nodes() + 1):
+                assert st.get_num_tracked_leaves(j) == 0
+        # provoke some error conditions to make sure we're not leaking
+        # memory.
+        leaves = range(1, 10**6)
+        try:
+            st = _msprime.SparseTree(ts, leaves)
+        except _msprime.LibraryError:
+            pass
+        leaves[-1] = {}
+        try:
+            st = _msprime.SparseTree(ts, leaves)
+        except TypeError:
+            pass
+        leaves = list(range(1, ts.get_sample_size() + 1))
+        st = _msprime.SparseTree(ts, leaves)
+        for st in _msprime.SparseTreeIterator(ts, st):
+            for j in range(0, ts.get_num_nodes() + 1):
+                assert (
+                    st.get_num_tracked_leaves(j) == st.get_num_leaves(j))
 
     def run(self):
         self.run_module_functions()
@@ -261,6 +286,7 @@ class StressTester(object):
         self.check_provenance_strings(sim)
         self.check_multiple_tree_sequences()
         self.check_mutations(sim)
+        self.check_count_leaves(sim)
 
 
 def main():

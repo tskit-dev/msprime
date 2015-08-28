@@ -84,6 +84,8 @@ msp_strerror(int err)
         ret = "Bad mutation provided";
     } else if (err == MSP_ERR_BAD_PARAM_VALUE) {
         ret = "Bad parameter value provided";
+    } else if (err == MSP_ERR_UNSUPPORTED_OPERATION) {
+        ret = "Operation cannot be performed in current configuration";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
