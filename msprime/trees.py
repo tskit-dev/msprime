@@ -346,7 +346,7 @@ class SparseTree(object):
     def get_num_tracked_leaves(self, u):
         """
         Returns the number of leaves in the set specified in the
-        `tracked_leaves` parameter of the :meth:`msprime.TreeSequence.trees`
+        ``tracked_leaves`` parameter of the :meth:`msprime.TreeSequence.trees`
         method underneath the specified node. This is a constant time
         operation.
 
@@ -845,11 +845,11 @@ class TreeSequence(object):
     def trees(self, tracked_leaves=[]):
         """
         Returns an iterator over the trees in this tree sequence. Each value
-        returned in this iterator is an instance of `:msprime.SparseTree`.
-        The `tracked_leaves` parameter can be used to efficiently count
-        the number of leaves in a given set that exist in a particular
-        subtree using the :meth:`msprime.SparseTree.get_num_tracked_leaves`
-        method.
+        returned in this iterator is an instance of
+        :class:`msprime.SparseTree`.  The ``tracked_leaves`` parameter can be
+        used to efficiently count the number of leaves in a given set that
+        exist in a particular subtree using the
+        :meth:`msprime.SparseTree.get_num_tracked_leaves` method.
 
         :warning: Do not store the results of this iterator in a list!
            For performance reasons, the same underlying object is used
