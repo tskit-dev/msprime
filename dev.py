@@ -223,6 +223,7 @@ def leaf_set_example():
         for node, children, time in records_out:
             for c in children:
                 pi[c] = 0
+
             leaves_lost = nu[node]
             u = node
             while u != 0:
@@ -243,6 +244,27 @@ def leaf_set_example():
         # print("nup= ", nup)
     print(total_size, 2 * n * math.log(n, 2))
 
+def allele_frequency_example():
+    # n = 10000
+    # ts = msprime.simulate(
+    #     n, 100000, scaled_recombination_rate=0.1, scaled_mutation_rate=0.1,
+    #     random_seed=1)
+    ts = msprime.load("tmp__NOBACKUP__/gqt.hdf5")
+    n = ts.get_sample_size()
+    num_mutations = 0
+    min_frequency = 0.0001
+    num_trees = 0
+    for tree in ts.trees(True):
+        num_trees += 1
+        for pos, node in tree.mutations():
+            if tree.get_num_leaves(node) / n < min_frequency:
+                num_mutations += 1
+    print("num_mutatinos = ", num_mutations, "\t", num_mutations / ts.get_num_mutations())
+    print("total_mutations = ", ts.get_num_mutations())
+    print("num_trees = ", num_trees)
+
+
+
 
 if __name__ == "__main__":
     # haplotype_example()
@@ -258,4 +280,5 @@ if __name__ == "__main__":
     # leaf_count_example()
     # large_leaf_count_example()
     # diffs_example()
-    leaf_set_example()
+    # leaf_set_example()
+    allele_frequency_example()

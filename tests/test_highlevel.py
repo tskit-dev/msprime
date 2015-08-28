@@ -152,6 +152,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             # Check that we get the correct number of leaves at each
             # node.
             self.assertEqual(st.get_num_leaves(u), len(list(st.leaves(u))))
+            self.assertEqual(st.get_num_tracked_leaves(u), 0)
         self.assertEqual(
             sorted(leaves), list(range(1, st.get_sample_size() + 1)))
         # Check the parent dict
@@ -509,6 +510,26 @@ class TestTreeSequence(HighLevelTestCase):
     def test_tree_diffs(self):
         for ts in self.get_example_tree_sequences():
             self.verify_tree_diffs(ts)
+
+    def verify_tracked_leaves(self, ts):
+        # Should be empty list by default.
+        for tree in ts.trees():
+            for u in tree.nodes():
+                self.assertEqual(tree.get_num_tracked_leaves(u), 0)
+        tracked_leaves = [1, 2]
+        for tree in ts.trees(tracked_leaves):
+            nu = [0 for j in range(ts.get_num_nodes() + 1)]
+            for j in tracked_leaves:
+                u = j
+                while u != 0:
+                    nu[u] += 1
+                    u = tree.get_parent(u)
+            for u, count in enumerate(nu):
+                self.assertEqual(tree.get_num_tracked_leaves(u), count)
+
+    def test_tracked_leaves(self):
+        for ts in self.get_example_tree_sequences():
+            self.verify_tracked_leaves(ts)
 
 
 class TestSparseTree(HighLevelTestCase):

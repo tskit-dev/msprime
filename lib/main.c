@@ -230,6 +230,7 @@ print_haplotypes(tree_sequence_t *ts)
         goto out;
     }
     hapgen_free(hg);
+    printf("checking set_mutations\n");
     ret = hapgen_alloc(hg, ts);
     if (ret != 0) {
         goto out;
@@ -349,12 +350,8 @@ print_tree_sequence(tree_sequence_t *ts)
     }
 
     /* sparse trees */
-    ret = tree_sequence_alloc_sparse_tree(ts, &tree, MSP_COUNT_LEAVES);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = sparse_tree_set_tracked_leaves(&tree, tracked_leaves,
-            sizeof(tracked_leaves) / sizeof(uint32_t));
+    ret = tree_sequence_alloc_sparse_tree(ts, &tree, tracked_leaves,
+            sizeof(tracked_leaves) / sizeof(uint32_t), MSP_COUNT_LEAVES);
     if (ret != 0) {
         goto out;
     }
@@ -441,8 +438,8 @@ run_simulate(char *conf_file)
         }
     }
     print_tree_sequence(tree_seq);
+    print_haplotypes(tree_seq);
     if (0) {
-        print_haplotypes(tree_seq);
         tree_sequence_print_state(tree_seq);
         print_newick_trees(tree_seq);
         tree_sequence_print_state(tree_seq);
