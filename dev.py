@@ -214,6 +214,7 @@ class LeafSetNode(object):
     def __init__(self, value):
         self.value = value
         self.next = None
+        self.prev = None
 
     def __str__(self):
         return str(self.value)
@@ -225,10 +226,12 @@ def leaf_set_example():
     """
     Development for the leaf set algorithm.
     """
-    n = 5
+    n = 10
     ts = msprime.simulate(n, 100, scaled_recombination_rate=0.1, random_seed=1)
     head = [None for j in range(ts.get_num_nodes() + 1)]
     tail = [None for j in range(ts.get_num_nodes() + 1)]
+    pi = [0 for j in range(ts.get_num_nodes() + 1)]
+    chi = [None for j in range(ts.get_num_nodes() + 1)]
     for j in range(1, n + 1):
         set_node = LeafSetNode(j)
         head[j] = set_node
@@ -238,25 +241,68 @@ def leaf_set_example():
         print(st)
 
     for st, (l, records_out, records_in) in itertools.izip(ts.trees(), ts.diffs()):
-        for node, children, time in records_out:
-            print("out:", node, children)
-            head[node].next = None
+        for node, (c1, c2), time in records_out:
+            pi[c1] = 0
+            pi[c2] = 0
+            chi[node] = None
+            print("out:", node, c1, c2)
+            # Break links in the leaf chain.
+            print("Breaking link from", tail[c1], "to", tail[c1].next)
+            tail[c1].next = None
+            tail[c2].next = None
+            print("Breaking link from", tail[c2], "to", tail[c2].next)
+            # Clear out head and tail pointers.
             head[node] = None
             tail[node] = None
 
-        for node, children, time in records_in:
-            print("in:", node, children)
-            head[children[0]].next = tail[children[1]]
-            tail[node] = tail[children[0]]
-            head[node] = head[children[1]]
-        for j in range(ts.get_num_nodes() + 1):
-            print(j, pi[j], chi[j], tail[j], head[j], sep="\t")
-        print(root, head[st.get_root()], tail[st.get_root()])
-        v = tail[st.get_root]
-        while v is not None:
-            print("\t", v)
-            v = v.next
+        for node, (c1, c2), time in records_in:
+            print("in:", node, c1, c2)
+            pi[c1] = node
+            pi[c2] = node
+            chi[node] = c1, c2
 
+            tail[c1].next = head[c2]
+            print("Creating link between ", tail[c1], "and", head[c2])
+            # head[c2].prev = tail[c1]
+            head[node] = head[c1]
+            tail[node] = tail[c2]
+            if pi[node] != 0:
+                print("P parent = ", pi[node])
+                d1, d2 = chi[pi[node]]
+                print("P siblings =", d1, d2)
+                if node == d1:
+                    head[node].next = tail[d2]
+                    print("P1 Creating link between ", head[node], "and", tail[d2])
+                else:
+                    print("d1 = ", d1)
+                    tail[d1].next = head[node]
+                    # print("P2 Creating link between ", tail[d1] , "and", head[node])
+                # Now we need to fix the head and tail values up the tree.
+                u = pi[node]
+                while u != 0:
+                    print("Fixing head/tail for ", u)
+                    d1, d2 = chi[u]
+                    head[u] = head[d1]
+                    tail[u] = tail[d2]
+                    u = pi[u]
+        print("node", "pi", "chi", "head", "tail", sep="\t")
+        for j in range(ts.get_num_nodes() + 1):
+            print(
+                j, st.get_parent(j), st.get_children(j),
+                head[j], tail[j], sep="\t")
+        for u in st.nodes():
+            leaves = list(st.leaves(u))
+            leaf_list = []
+            v = head[u]
+            while v is not tail[u]:
+                print("\t", v.value, v.next)
+                leaf_list.append(v.value)
+                v = v.next
+            leaf_list.append(v.value)
+            print(u, leaf_list, leaves)
+            assert leaf_list == leaves
+            if leaf_list != leaves:
+                print("ERROR!")
 
 def allele_frequency_example():
     # n = 10000
