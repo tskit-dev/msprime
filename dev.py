@@ -207,42 +207,56 @@ def leaf_count_example():
         # print("nu = ", nu)
         # print("nup= ", nup)
 
+class LeafSetNode(object):
+    """
+    Class representing a single leaf in the leaf set.
+    """
+    def __init__(self, value):
+        self.value = value
+        self.next = None
+
+    def __str__(self):
+        return str(self.value)
+
+    def __repr__(self):
+        return self.__str__()
+
 def leaf_set_example():
     """
     Development for the leaf set algorithm.
     """
-    n = 50000
+    n = 5
     ts = msprime.simulate(n, 100, scaled_recombination_rate=0.1, random_seed=1)
-    pi = [0 for j in range(ts.get_num_nodes() + 1)]
-    nu = [set() for j in range(ts.get_num_nodes() + 1)]
+    head = [None for j in range(ts.get_num_nodes() + 1)]
+    tail = [None for j in range(ts.get_num_nodes() + 1)]
     for j in range(1, n + 1):
-        # if j % 2 == 0:
-        nu[j].add(j)
-    total_size = 0
-    for l, records_out, records_in in ts.diffs():
-        for node, children, time in records_out:
-            for c in children:
-                pi[c] = 0
+        set_node = LeafSetNode(j)
+        head[j] = set_node
+        tail[j] = set_node
+    print(ts)
+    for st in ts.trees():
+        print(st)
 
-            leaves_lost = nu[node]
-            u = node
-            while u != 0:
-                nu[u] -= leaves_lost
-                u = pi[u]
+    for st, (l, records_out, records_in) in itertools.izip(ts.trees(), ts.diffs()):
+        for node, children, time in records_out:
+            print("out:", node, children)
+            head[node].next = None
+            head[node] = None
+            tail[node] = None
+
         for node, children, time in records_in:
-            leaves = set()
-            for c in children:
-                pi[c] = node
-                leaves |= nu[c]
-            u = node
-            while u != 0:
-                nu[u] |= leaves
-                u = pi[u]
-        # print("pi = ", pi)
-        # print("nu = ", nu)
-        total_size = max(total_size, sum(len(s) for s in nu))
-        # print("nup= ", nup)
-    print(total_size, 2 * n * math.log(n, 2))
+            print("in:", node, children)
+            head[children[0]].next = tail[children[1]]
+            tail[node] = tail[children[0]]
+            head[node] = head[children[1]]
+        for j in range(ts.get_num_nodes() + 1):
+            print(j, pi[j], chi[j], tail[j], head[j], sep="\t")
+        print(root, head[st.get_root()], tail[st.get_root()])
+        v = tail[st.get_root]
+        while v is not None:
+            print("\t", v)
+            v = v.next
+
 
 def allele_frequency_example():
     # n = 10000
@@ -280,5 +294,5 @@ if __name__ == "__main__":
     # leaf_count_example()
     # large_leaf_count_example()
     # diffs_example()
-    # leaf_set_example()
-    allele_frequency_example()
+    leaf_set_example()
+    # allele_frequency_example()
