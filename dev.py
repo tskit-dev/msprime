@@ -226,8 +226,9 @@ def leaf_set_example():
     """
     Development for the leaf set algorithm.
     """
-    n = 10
-    ts = msprime.simulate(n, 100, scaled_recombination_rate=0.1, random_seed=1)
+    n = 1000
+
+    ts = msprime.simulate(n, 10000, scaled_recombination_rate=0.1, random_seed=1)
     head = [None for j in range(ts.get_num_nodes() + 1)]
     tail = [None for j in range(ts.get_num_nodes() + 1)]
     pi = [0 for j in range(ts.get_num_nodes() + 1)]
@@ -236,21 +237,19 @@ def leaf_set_example():
         set_node = LeafSetNode(j)
         head[j] = set_node
         tail[j] = set_node
-    print(ts)
-    for st in ts.trees():
-        print(st)
+    # print(ts)
+    # for st in ts.trees():
+    #     print(st)
 
     for st, (l, records_out, records_in) in itertools.izip(ts.trees(), ts.diffs()):
         for node, (c1, c2), time in records_out:
+            print("out:", node, c1, c2)
             pi[c1] = 0
             pi[c2] = 0
             chi[node] = None
-            print("out:", node, c1, c2)
             # Break links in the leaf chain.
-            print("Breaking link from", tail[c1], "to", tail[c1].next)
             tail[c1].next = None
             tail[c2].next = None
-            print("Breaking link from", tail[c2], "to", tail[c2].next)
             # Clear out head and tail pointers.
             head[node] = None
             tail[node] = None
@@ -260,49 +259,51 @@ def leaf_set_example():
             pi[c1] = node
             pi[c2] = node
             chi[node] = c1, c2
+            u = node
+            while u != 0:
+                d1, d2 = chi[u]
+                print("\tsettting head/tail", u, d1, d2)
+                head[u] = head[d1]
+                tail[u] = tail[d2]
+                u = pi[u]
 
-            tail[c1].next = head[c2]
-            print("Creating link between ", tail[c1], "and", head[c2])
-            # head[c2].prev = tail[c1]
-            head[node] = head[c1]
-            tail[node] = tail[c2]
-            if pi[node] != 0:
-                print("P parent = ", pi[node])
-                d1, d2 = chi[pi[node]]
-                print("P siblings =", d1, d2)
-                if node == d1:
-                    head[node].next = tail[d2]
-                    print("P1 Creating link between ", head[node], "and", tail[d2])
-                else:
-                    print("d1 = ", d1)
-                    tail[d1].next = head[node]
-                    # print("P2 Creating link between ", tail[d1] , "and", head[node])
-                # Now we need to fix the head and tail values up the tree.
-                u = pi[node]
-                while u != 0:
-                    print("Fixing head/tail for ", u)
-                    d1, d2 = chi[u]
-                    head[u] = head[d1]
-                    tail[u] = tail[d2]
-                    u = pi[u]
+        for node, _, _ in records_in:
+            u = node
+            print("propagating", u)
+            while u != 0:
+                d1, d2 = chi[u]
+                print("\tpropogating", u, d1, d2)
+                print("\tbefore tail[d1] = ", tail[d1], "next = ", tail[d1].next)
+                if tail[d1] is None:
+                    break
+                tail[d1].next = head[d2]
+                print("\tafter  tail[d1] = ", tail[d1], "next = ", tail[d1].next)
+                u = pi[u]
+
+
         print("node", "pi", "chi", "head", "tail", sep="\t")
         for j in range(ts.get_num_nodes() + 1):
-            print(
-                j, st.get_parent(j), st.get_children(j),
-                head[j], tail[j], sep="\t")
-        for u in st.nodes():
+            if st.get_parent(j) != 0 or j == st.get_root():
+                print(
+                    j, st.get_parent(j), st.get_children(j),
+                    head[j], tail[j], sep="\t")
+        # for u in st.nodes():
+        for u in [st.get_root()]:
             leaves = list(st.leaves(u))
             leaf_list = []
             v = head[u]
             while v is not tail[u]:
-                print("\t", v.value, v.next)
+                # print("\t", v.value, v.next)
                 leaf_list.append(v.value)
+                assert len(leaf_list) < n
                 v = v.next
             leaf_list.append(v.value)
-            print(u, leaf_list, leaves)
-            assert leaf_list == leaves
+            # print(u, leaf_list, leaves, sep="\t")
             if leaf_list != leaves:
-                print("ERROR!")
+                print(leaf_list)
+                print(leaves)
+            assert leaf_list == leaves
+        # print()
 
 def allele_frequency_example():
     # n = 10000
