@@ -315,7 +315,7 @@ def allele_frequency_example():
     num_mutations = 0
     min_frequency = 0.0001
     num_trees = 0
-    for tree in ts.trees(True):
+    for tree in ts.trees():
         num_trees += 1
         for pos, node in tree.mutations():
             if tree.get_num_leaves(node) / n < min_frequency:
@@ -323,6 +323,79 @@ def allele_frequency_example():
     print("num_mutatinos = ", num_mutations, "\t", num_mutations / ts.get_num_mutations())
     print("total_mutations = ", ts.get_num_mutations())
     print("num_trees = ", num_trees)
+
+def write_ped(ts, num_cases, prefix):
+    # Write the ped file.
+    with open(prefix + ".ped", "w") as f:
+        for j, h in enumerate(ts.haplotypes(), 1):
+            family_id = j
+            ind_id = j
+            paternal_id = 0
+            maternal_id = 0
+            sex = 1
+            # 2 == case, 1 == control
+            phenotype = 2 if j <= num_cases else 1
+            print(
+                family_id, ind_id, paternal_id, maternal_id, sex, phenotype,
+                end=" ", file=f)
+            for allele in h:
+                a = int(allele) + 1
+                print(a, a, end=" ", file=f)
+            print(file=f)
+    # Make a map file. We're using haploid data, so we put it on the
+    # male Y chromosome.
+    with open(prefix + ".map", "w") as f:
+        for j in range(ts.get_num_mutations()):
+            print("X", "rs{}".format(j), 0, j + 1, file=f)
+
+
+
+def gwas_example():
+    # n = 100
+    # ts = msprime.simulate(
+    #     n, 1000, scaled_recombination_rate=0.1, scaled_mutation_rate=0.1,
+    #     random_seed=1)
+
+    ts = msprime.load("tmp__NOBACKUP__/gqt.hdf5")
+    n = ts.get_sample_size()
+    num_cases = n // 2
+    # write_ped(ts, num_cases, "tmp__NOBACKUP__/plink/gqt")
+    write_plink_assoc(ts, num_cases)
+
+def write_plink_assoc(ts, num_cases):
+    site = 0
+    n = ts.get_sample_size()
+    cases = list(range(1, num_cases + 1))
+    for tree in ts.trees(cases):
+        for pos, node in tree.mutations():
+            num_leaves = tree.get_num_leaves(node)
+            cases_with_mut = tree.get_num_tracked_leaves(node)
+            controls_with_mut = tree.get_num_leaves(node) - cases_with_mut
+            f_cases = cases_with_mut / num_cases
+            f_controls = controls_with_mut / (n - num_cases)
+            if num_leaves >= n / 2:
+                # The mutation is the major allele
+                a1 = 1
+                a2 = 2
+                fa = 1 - f_cases
+                fu = 1 - f_controls
+            else:
+                # The mutation is the minor allele
+                a1 = 2
+                a2 = 1
+                fa = f_cases
+                fu = f_controls
+            case_odds = fa / (1 - fa)
+            control_odds = fu / (1 - fu)
+            odds_ratio = "NA" if control_odds == 0 else case_odds / control_odds
+            print(site + 1, a1, fa, fu, a2, odds_ratio, sep="\t")
+            site += 1
+
+
+
+
+
+
 
 
 
@@ -341,5 +414,6 @@ if __name__ == "__main__":
     # leaf_count_example()
     # large_leaf_count_example()
     # diffs_example()
-    leaf_set_example()
+    # leaf_set_example()
     # allele_frequency_example()
+    gwas_example()
