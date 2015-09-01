@@ -207,42 +207,103 @@ def leaf_count_example():
         # print("nu = ", nu)
         # print("nup= ", nup)
 
+class LeafSetNode(object):
+    """
+    Class representing a single leaf in the leaf set.
+    """
+    def __init__(self, value):
+        self.value = value
+        self.next = None
+        self.prev = None
+
+    def __str__(self):
+        return str(self.value)
+
+    def __repr__(self):
+        return self.__str__()
+
 def leaf_set_example():
     """
     Development for the leaf set algorithm.
     """
-    n = 50000
-    ts = msprime.simulate(n, 100, scaled_recombination_rate=0.1, random_seed=1)
-    pi = [0 for j in range(ts.get_num_nodes() + 1)]
-    nu = [set() for j in range(ts.get_num_nodes() + 1)]
-    for j in range(1, n + 1):
-        # if j % 2 == 0:
-        nu[j].add(j)
-    total_size = 0
-    for l, records_out, records_in in ts.diffs():
-        for node, children, time in records_out:
-            for c in children:
-                pi[c] = 0
+    n = 1000
 
-            leaves_lost = nu[node]
+    ts = msprime.simulate(n, 10000, scaled_recombination_rate=0.1, random_seed=1)
+    head = [None for j in range(ts.get_num_nodes() + 1)]
+    tail = [None for j in range(ts.get_num_nodes() + 1)]
+    pi = [0 for j in range(ts.get_num_nodes() + 1)]
+    chi = [None for j in range(ts.get_num_nodes() + 1)]
+    for j in range(1, n + 1):
+        set_node = LeafSetNode(j)
+        head[j] = set_node
+        tail[j] = set_node
+    # print(ts)
+    # for st in ts.trees():
+    #     print(st)
+
+    for st, (l, records_out, records_in) in itertools.izip(ts.trees(), ts.diffs()):
+        for node, (c1, c2), time in records_out:
+            print("out:", node, c1, c2)
+            pi[c1] = 0
+            pi[c2] = 0
+            chi[node] = None
+            # Break links in the leaf chain.
+            tail[c1].next = None
+            tail[c2].next = None
+            # Clear out head and tail pointers.
+            head[node] = None
+            tail[node] = None
+
+        for node, (c1, c2), time in records_in:
+            print("in:", node, c1, c2)
+            pi[c1] = node
+            pi[c2] = node
+            chi[node] = c1, c2
             u = node
             while u != 0:
-                nu[u] -= leaves_lost
+                d1, d2 = chi[u]
+                print("\tsettting head/tail", u, d1, d2)
+                head[u] = head[d1]
+                tail[u] = tail[d2]
                 u = pi[u]
-        for node, children, time in records_in:
-            leaves = set()
-            for c in children:
-                pi[c] = node
-                leaves |= nu[c]
+
+        for node, _, _ in records_in:
             u = node
+            print("propagating", u)
             while u != 0:
-                nu[u] |= leaves
+                d1, d2 = chi[u]
+                print("\tpropogating", u, d1, d2)
+                print("\tbefore tail[d1] = ", tail[d1], "next = ", tail[d1].next)
+                if tail[d1] is None:
+                    break
+                tail[d1].next = head[d2]
+                print("\tafter  tail[d1] = ", tail[d1], "next = ", tail[d1].next)
                 u = pi[u]
-        # print("pi = ", pi)
-        # print("nu = ", nu)
-        total_size = max(total_size, sum(len(s) for s in nu))
-        # print("nup= ", nup)
-    print(total_size, 2 * n * math.log(n, 2))
+
+
+        print("node", "pi", "chi", "head", "tail", sep="\t")
+        for j in range(ts.get_num_nodes() + 1):
+            if st.get_parent(j) != 0 or j == st.get_root():
+                print(
+                    j, st.get_parent(j), st.get_children(j),
+                    head[j], tail[j], sep="\t")
+        # for u in st.nodes():
+        for u in [st.get_root()]:
+            leaves = list(st.leaves(u))
+            leaf_list = []
+            v = head[u]
+            while v is not tail[u]:
+                # print("\t", v.value, v.next)
+                leaf_list.append(v.value)
+                assert len(leaf_list) < n
+                v = v.next
+            leaf_list.append(v.value)
+            # print(u, leaf_list, leaves, sep="\t")
+            if leaf_list != leaves:
+                print(leaf_list)
+                print(leaves)
+            assert leaf_list == leaves
+        # print()
 
 def allele_frequency_example():
     # n = 10000
@@ -254,7 +315,7 @@ def allele_frequency_example():
     num_mutations = 0
     min_frequency = 0.0001
     num_trees = 0
-    for tree in ts.trees(True):
+    for tree in ts.trees():
         num_trees += 1
         for pos, node in tree.mutations():
             if tree.get_num_leaves(node) / n < min_frequency:
@@ -262,6 +323,79 @@ def allele_frequency_example():
     print("num_mutatinos = ", num_mutations, "\t", num_mutations / ts.get_num_mutations())
     print("total_mutations = ", ts.get_num_mutations())
     print("num_trees = ", num_trees)
+
+def write_ped(ts, num_cases, prefix):
+    # Write the ped file.
+    with open(prefix + ".ped", "w") as f:
+        for j, h in enumerate(ts.haplotypes(), 1):
+            family_id = j
+            ind_id = j
+            paternal_id = 0
+            maternal_id = 0
+            sex = 1
+            # 2 == case, 1 == control
+            phenotype = 2 if j <= num_cases else 1
+            print(
+                family_id, ind_id, paternal_id, maternal_id, sex, phenotype,
+                end=" ", file=f)
+            for allele in h:
+                a = int(allele) + 1
+                print(a, a, end=" ", file=f)
+            print(file=f)
+    # Make a map file. We're using haploid data, so we put it on the
+    # male Y chromosome.
+    with open(prefix + ".map", "w") as f:
+        for j in range(ts.get_num_mutations()):
+            print("X", "rs{}".format(j), 0, j + 1, file=f)
+
+
+
+def gwas_example():
+    # n = 100
+    # ts = msprime.simulate(
+    #     n, 1000, scaled_recombination_rate=0.1, scaled_mutation_rate=0.1,
+    #     random_seed=1)
+
+    ts = msprime.load("tmp__NOBACKUP__/gqt.hdf5")
+    n = ts.get_sample_size()
+    num_cases = n // 2
+    # write_ped(ts, num_cases, "tmp__NOBACKUP__/plink/gqt")
+    write_plink_assoc(ts, num_cases)
+
+def write_plink_assoc(ts, num_cases):
+    site = 0
+    n = ts.get_sample_size()
+    cases = list(range(1, num_cases + 1))
+    for tree in ts.trees(cases):
+        for pos, node in tree.mutations():
+            num_leaves = tree.get_num_leaves(node)
+            cases_with_mut = tree.get_num_tracked_leaves(node)
+            controls_with_mut = tree.get_num_leaves(node) - cases_with_mut
+            f_cases = cases_with_mut / num_cases
+            f_controls = controls_with_mut / (n - num_cases)
+            if num_leaves >= n / 2:
+                # The mutation is the major allele
+                a1 = 1
+                a2 = 2
+                fa = 1 - f_cases
+                fu = 1 - f_controls
+            else:
+                # The mutation is the minor allele
+                a1 = 2
+                a2 = 1
+                fa = f_cases
+                fu = f_controls
+            case_odds = fa / (1 - fa)
+            control_odds = fu / (1 - fu)
+            odds_ratio = "NA" if control_odds == 0 else case_odds / control_odds
+            print(site + 1, a1, fa, fu, a2, odds_ratio, sep="\t")
+            site += 1
+
+
+
+
+
+
 
 
 
@@ -281,4 +415,5 @@ if __name__ == "__main__":
     # large_leaf_count_example()
     # diffs_example()
     # leaf_set_example()
-    allele_frequency_example()
+    # allele_frequency_example()
+    gwas_example()
