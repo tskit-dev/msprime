@@ -325,7 +325,10 @@ def allele_frequency_example():
     print("num_trees = ", num_trees)
 
 def write_ped(ts, num_cases, prefix):
+    import numpy as np
     # Write the ped file.
+    s = ts.get_num_mutations()
+    indices = np.arange(0, s)
     with open(prefix + ".ped", "w") as f:
         for j, h in enumerate(ts.haplotypes(), 1):
             family_id = j
@@ -338,9 +341,18 @@ def write_ped(ts, num_cases, prefix):
             print(
                 family_id, ind_id, paternal_id, maternal_id, sex, phenotype,
                 end=" ", file=f)
-            for allele in h:
-                a = int(allele) + 1
-                print(a, a, end=" ", file=f)
+            # Neat trick for converting numerical strings to numpy array
+            nph = np.fromstring(h, np.int8) - 48
+            genotypes = np.zeros(4 * s, dtype="S1")
+            genotypes[indices * 4] = nph
+            genotypes[indices * 4 + 1] = " "
+            genotypes[indices * 4 + 2] = h
+            genotypes[indices * 4 + 3] = " "
+            genotypes.tofile(f)
+            # for allele in h:
+            #     a = str(int(allele) + 1)
+            #     # Use file.write for more efficiency
+            #     # f.write(a + " " + a + " ")
             print(file=f)
     # Make a map file. We're using haploid data, so we put it on the
     # male Y chromosome.
@@ -353,14 +365,13 @@ def write_ped(ts, num_cases, prefix):
 def gwas_example():
     # n = 100
     # ts = msprime.simulate(
-    #     n, 1000, scaled_recombination_rate=0.1, scaled_mutation_rate=0.1,
+    #     n, 1000, scaled_recombination_rate=0.1, scaled_mutation_rate=100,
     #     random_seed=1)
-
     ts = msprime.load("tmp__NOBACKUP__/gqt.hdf5")
     n = ts.get_sample_size()
     num_cases = n // 2
-    # write_ped(ts, num_cases, "tmp__NOBACKUP__/plink/gqt")
-    write_plink_assoc(ts, num_cases)
+    write_ped(ts, num_cases, "tmp__NOBACKUP__/plink/gqt")
+    # write_plink_assoc(ts, num_cases)
 
 def write_plink_assoc(ts, num_cases):
     site = 0
