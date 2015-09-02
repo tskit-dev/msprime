@@ -5,6 +5,7 @@ Simple client code for development purposes.
 from __future__ import print_function
 from __future__ import division
 
+import os
 import math
 import itertools
 
@@ -341,21 +342,22 @@ def write_ped(ts, num_cases, prefix):
             print(
                 family_id, ind_id, paternal_id, maternal_id, sex, phenotype,
                 end=" ", file=f)
-            # Neat trick for converting numerical strings to numpy array
-            nph = np.fromstring(h, np.int8) - 48
+            # Neat trick for converting numerical strings to numpy array:
+            # interpret data as raw chars, and subtrace ascii code.
+            nph = np.fromstring(h, np.int8) - ord('0')
+            # Plink genotypes are 1/2, not 0/1
+            nph += 1
             genotypes = np.zeros(4 * s, dtype="S1")
             genotypes[indices * 4] = nph
             genotypes[indices * 4 + 1] = " "
-            genotypes[indices * 4 + 2] = h
+            genotypes[indices * 4 + 2] = nph
             genotypes[indices * 4 + 3] = " "
             genotypes.tofile(f)
-            # for allele in h:
-            #     a = str(int(allele) + 1)
-            #     # Use file.write for more efficiency
-            #     # f.write(a + " " + a + " ")
+            # Remove trailing space
+            f.seek(-1, os.SEEK_CUR)
             print(file=f)
     # Make a map file. We're using haploid data, so we put it on the
-    # male Y chromosome.
+    # male X chromosome.
     with open(prefix + ".map", "w") as f:
         for j in range(ts.get_num_mutations()):
             print("X", "rs{}".format(j), 0, j + 1, file=f)
@@ -365,11 +367,12 @@ def write_ped(ts, num_cases, prefix):
 def gwas_example():
     # n = 100
     # ts = msprime.simulate(
-    #     n, 1000, scaled_recombination_rate=0.1, scaled_mutation_rate=100,
+    #     n, 1000, scaled_recombination_rate=0.1, scaled_mutation_rate=10,
     #     random_seed=1)
     ts = msprime.load("tmp__NOBACKUP__/gqt.hdf5")
     n = ts.get_sample_size()
     num_cases = n // 2
+    # write_ped(ts, num_cases, "tmp__NOBACKUP__/test")
     write_ped(ts, num_cases, "tmp__NOBACKUP__/plink/gqt")
     # write_plink_assoc(ts, num_cases)
 
@@ -400,16 +403,6 @@ def write_plink_assoc(ts, num_cases):
             control_odds = fu / (1 - fu)
             odds_ratio = "NA" if control_odds == 0 else case_odds / control_odds
             print(site + 1, a1, fa, fu, a2, odds_ratio, sep="\t")
-            site += 1
-
-
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
     # haplotype_example()
