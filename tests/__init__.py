@@ -48,6 +48,7 @@ class PythonSparseTree(object):
         self.left = 0
         self.right = 0
         self.root = 0
+        self.index = -1
         self.sample_size = 0
         # We need a mutations function, so this name is taken.
         self.mutation_list = []
@@ -59,6 +60,7 @@ class PythonSparseTree(object):
         ret.sample_size = sparse_tree.get_sample_size()
         ret.left, ret.right = sparse_tree.get_interval()
         ret.mutation_list = list(sparse_tree.mutations())
+        ret.index = sparse_tree.get_index()
         # Traverse the tree and update the details as we go
         # We don't use the traversal method here because this
         # is used to test them.
@@ -110,6 +112,9 @@ class PythonSparseTree(object):
 
     def get_root(self):
         return self.root
+
+    def get_index(self):
+        return self.index
 
     def get_parent_dict(self):
         return self.parent
@@ -192,6 +197,7 @@ class PythonTreeSequence(object):
                 root = st.parent[root]
             st.parent[root] = 0
             st.root = root
+            st.index += 1
             st.right += length
             assert len(st.parent) == 2 * st.sample_size - 1
             # Add in all the mutations

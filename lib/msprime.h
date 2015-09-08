@@ -204,6 +204,7 @@ typedef struct {
     uint32_t *parent;
     uint32_t *children;
     double *time;
+    uint32_t index;
     /* These are involved in the optional leaf tracking; num_leaves counts
      * all leaves below a give node, and num_tracked_leaves counts those 
      * from a specific subset */

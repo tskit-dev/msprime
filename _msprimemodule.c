@@ -1634,6 +1634,19 @@ out:
 }
 
 static PyObject *
+SparseTree_get_index(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->index);
+out:
+    return ret;
+}
+
+static PyObject *
 SparseTree_get_root(SparseTree *self)
 {
     PyObject *ret = NULL;
@@ -1878,6 +1891,8 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the number of nodes in the sparse tree." },
     {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
+    {"get_index", (PyCFunction) SparseTree_get_index, METH_NOARGS,
+            "Returns the index this tree occupies within the tree sequence." },
     {"get_root", (PyCFunction) SparseTree_get_root, METH_NOARGS,
             "Returns the root of the tree." },
     {"get_left", (PyCFunction) SparseTree_get_left, METH_NOARGS,

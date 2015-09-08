@@ -1743,6 +1743,7 @@ sparse_tree_clear(sparse_tree_t *self)
     self->left = 0;
     self->right = 0;
     self->root = 0;
+    self->index = UINT32_MAX;
     memset(self->parent, 0, N * sizeof(uint32_t));
     memset(self->time, 0, N * sizeof(double));
     memset(self->children, 0, 2 * N * sizeof(uint32_t));
@@ -1946,6 +1947,7 @@ sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
     printf("tree.left = %d\n", self->tree->left);
     printf("tree.right = %d\n", self->tree->right);
     printf("tree.root = %d\n", self->tree->root);
+    printf("tree.index = %d\n", self->tree->index);
     for (j = 0; j < self->tree->num_nodes + 1; j++) {
         printf("\t%d\t%d\t%d\t%d\t%f", (int) j, self->tree->parent[j],
                 self->tree->children[2 * j], self->tree->children[2 * j + 1],
@@ -2041,7 +2043,6 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
         while (t->parent[t->root] != 0) {
             t->root = t->parent[t->root];
         }
-        ret = 1;
         /* now update the mutations */
         t->num_mutations = 0;
         while (self->mutation_index < s->num_mutations
@@ -2054,6 +2055,9 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
             self->mutation_index++;
             t->num_mutations++;
         }
+        /* Finally, update the tree index and indicate we have a valid tree */
+        t->index++;
+        ret = 1;
     }
     return ret;
 }
