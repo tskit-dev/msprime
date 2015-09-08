@@ -225,7 +225,8 @@ print_haplotypes(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_set_mutations(ts, num_mutations - 1, mutations);
+    ret = tree_sequence_set_mutations(ts, num_mutations - 1, mutations,
+            "", "");
     if (ret != 0) {
         goto out;
     }

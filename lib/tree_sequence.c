@@ -1336,10 +1336,10 @@ tree_sequence_alloc_sparse_tree(tree_sequence_t *self, sparse_tree_t *tree,
 
 int
 tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
-        mutation_t *mutations)
+        mutation_t *mutations, const char *parameters, const char* environment)
 {
     int ret = -1;
-    size_t j;
+    size_t j, len;
     mutation_t **mutation_ptrs = NULL;
 
     if (self->num_mutations > 0) {
@@ -1390,6 +1390,23 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
             self->mutations.node[j] = mutation_ptrs[j]->node;
             self->mutations.position[j] = mutation_ptrs[j]->position;
         }
+        /* Make copies of the environment and parameters strings. */
+        assert(parameters != NULL);
+        len = strlen(parameters) + 1;
+        self->mutations.parameters = malloc(len);
+        if (self->mutations.parameters == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        strncpy(self->mutations.parameters, parameters, len);
+        assert(environment != NULL);
+        len = strlen(environment) + 1;
+        self->mutations.environment = malloc(len);
+        if (self->mutations.environment == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        strncpy(self->mutations.environment, environment, len);
     }
     ret = 0;
 out:
@@ -1419,6 +1436,8 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
     size_t buffer_size;
     size_t block_size = 2 << 10; /* alloc in blocks of 1M */
     void *p;
+    char *parameters = NULL;
+    char *environment = NULL;
 
     buffer_size = block_size;
     num_mutations = 0;
@@ -1462,26 +1481,18 @@ tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate,
             }
         }
     }
-    ret = tree_sequence_set_mutations(self, num_mutations, mutations);
+    ret = encode_mutation_parameters(mutation_rate, random_seed, &parameters);
     if (ret != 0) {
         goto out;
     }
-    if (num_mutations > 0) {
-        /* TODO Make a generic method to do this attached to the
-         * mutation_generator class, and add generic string setter
-         * methods for the parameters and environment in the
-         * tree_sequence class. This will allow us to set the provenance
-         * information from anywhere.
-         */
-        ret = encode_mutation_parameters(mutation_rate, random_seed,
-                &self->mutations.parameters);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = encode_environment(&self->mutations.environment);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = encode_environment(&environment);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_set_mutations(self, num_mutations, mutations,
+            parameters, environment);
+    if (ret != 0) {
+        goto out;
     }
 out:
     if (times != NULL) {
@@ -1492,6 +1503,12 @@ out:
     }
     if (rng != NULL) {
         gsl_rng_free(rng);
+    }
+    if (parameters != NULL) {
+        free(parameters);
+    }
+    if (environment != NULL) {
+        free(environment);
     }
     return ret;
 }

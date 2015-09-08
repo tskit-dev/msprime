@@ -1120,7 +1120,13 @@ class TestTreeSequence(LowLevelTestCase):
         for mutations in valid_mutations:
             ts.set_mutations(mutations)
             self.assertEqual(ts.get_mutations(), mutations)
-            self.assertIsNone(ts.get_mutation_parameters())
+            if len(mutations) == 0:
+                self.assertIsNone(ts.get_mutation_parameters())
+            else:
+                self.assertEqual("{}", ts.get_mutation_parameters())
+            # Test dumping the mutations
+            with tempfile.NamedTemporaryFile() as f:
+                self.verify_dump_equality(ts, f)
 
     def test_constructor_interface(self):
         tree_sequence = _msprime.TreeSequence()

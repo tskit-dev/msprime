@@ -238,6 +238,10 @@ class StressTester(object):
         for mutations in [[], [(0, 1), (0, 1)]]:
             ts.set_mutations(mutations)
             assert ts.get_mutations() == mutations
+            params = None if len(mutations) == 0 else "{}"
+            assert ts.get_mutation_parameters() == params
+            with tempfile.NamedTemporaryFile() as f:
+                ts.dump(f.name)
 
     def check_count_leaves(self, sim):
         ts = _msprime.TreeSequence()
