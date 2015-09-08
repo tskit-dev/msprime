@@ -1306,13 +1306,14 @@ class TestSparseTreeIterator(LowLevelTestCase):
         del ts
         n_after = 0
         parents_after = []
-        for t in iterator:
+        for index, t in enumerate(iterator):
             n_after += 1
             self.assertIsInstance(t, _msprime.SparseTree)
             pi = {}
             for j in range(t.get_num_nodes()):
                 pi[j] = t.get_parent(j)
             parents_after.append(pi)
+            self.assertEqual(index, t.get_index())
         self.assertEqual(parents_before, parents_after)
 
     def test_iterator(self):
@@ -1533,3 +1534,10 @@ class TestSparseTree(LowLevelTestCase):
                 # All the mrcas for an uninitialised tree should be 0
                 for u, v in itertools.combinations(range(1, num_nodes + 1), 2):
                     self.assertEqual(st.get_mrca(u, v), 0)
+
+    def test_index(self):
+        for num_loci in [1, 100]:
+            ts = self.get_tree_sequence(num_loci=num_loci, sample_size=10)
+            st = _msprime.SparseTree(ts)
+            for index, st in enumerate(_msprime.SparseTreeIterator(ts, st)):
+                self.assertEqual(index, st.get_index())

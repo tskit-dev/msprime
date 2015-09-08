@@ -245,6 +245,17 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_root()
 
+    def get_index(self):
+        """
+        Returns the index this tree occupies in the parent tree sequence.
+        This index is zero based, so the first tree in the sequence has index
+        0.
+
+        :return: The index of this tree.
+        :rtype: int
+        """
+        return self._ll_sparse_tree.get_index()
+
     def get_interval(self):
         """
         Returns the coordinates of the genomic interval that this tree
@@ -412,6 +423,7 @@ class SparseTree(object):
             self.get_time_dict() == other.get_time_dict() and
             self.get_interval() == other.get_interval() and
             self.get_root() == other.get_root() and
+            self.get_index() == other.get_index() and
             list(self.mutations()) == list(other.mutations()))
 
     def __ne__(self, other):
