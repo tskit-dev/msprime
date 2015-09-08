@@ -1202,6 +1202,9 @@ TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"mutations", NULL};
     size_t num_mutations = 0;
     mutation_t *mutations = NULL;
+    /* TODO fix the provenance information for arbitrary mutations. */
+    char *parameters = "{}";
+    char *environment = "{}";
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
@@ -1236,8 +1239,10 @@ TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
         mutations[j].position = PyFloat_AsDouble(pos);
         mutations[j].node = (uint32_t) PyLong_AsLong(node);
     }
+    /* TODO this interface for setting the provenance information is very
+     * brittle and needs to be fixed. */
     err = tree_sequence_set_mutations(self->tree_sequence, num_mutations,
-            mutations);
+            mutations, parameters, environment);
     if (err != 0) {
         handle_library_error(err);
         goto out;

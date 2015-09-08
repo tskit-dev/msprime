@@ -373,8 +373,8 @@ def gwas_example():
     n = ts.get_sample_size()
     num_cases = n // 2
     # write_ped(ts, num_cases, "tmp__NOBACKUP__/test")
-    write_ped(ts, num_cases, "tmp__NOBACKUP__/plink/gqt")
-    # write_plink_assoc(ts, num_cases)
+    # write_ped(ts, num_cases, "tmp__NOBACKUP__/plink/gqt")
+    write_plink_assoc(ts, num_cases)
 
 def write_plink_assoc(ts, num_cases):
     site = 0

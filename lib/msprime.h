@@ -323,7 +323,8 @@ int tree_sequence_alloc_sparse_tree(tree_sequence_t *self,
         sparse_tree_t *tree, uint32_t *tracked_leaves, 
         uint32_t num_tracked_leaves, int flags);
 int tree_sequence_set_mutations(tree_sequence_t *self, 
-        size_t num_mutations, mutation_t *mutations);
+        size_t num_mutations, mutation_t *mutations, 
+        const char *parameters, const char *environment);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
         tree_sequence_t *tree_sequence);
