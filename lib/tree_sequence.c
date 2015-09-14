@@ -2072,12 +2072,21 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
                 while (v != 0) {
                     t->num_leaves[v] += all_leaves_diff;
                     t->num_tracked_leaves[v] += tracked_leaves_diff;
-                    t->leaf_list_head[v] = t->leaf_list_head[
-                        t->children[2 * v]];
-                    t->leaf_list_tail[v] = t->leaf_list_tail[
-                        t->children[2 * v + 1]];
-                    t->leaf_list_tail[t->children[2 * v]]->next =
-                        t->leaf_list_head[t->children[2 * v + 1]];
+                    c[0] = t->children[2 * v];
+                    c[1] = t->children[2 * v + 1];
+                    if (t->leaf_list_head[c[0]] == NULL) {
+                        t->leaf_list_head[v] = t->leaf_list_head[c[1]];
+                        t->leaf_list_tail[v] = t->leaf_list_tail[c[1]];
+                    } else if (t->leaf_list_head[c[1]] == NULL) {
+                        t->leaf_list_head[v] = t->leaf_list_head[c[0]];
+                        t->leaf_list_tail[v] = t->leaf_list_tail[c[0]];
+                    } else {
+                        t->leaf_list_head[v] = t->leaf_list_head[c[0]];
+                        t->leaf_list_tail[v] = t->leaf_list_tail[c[1]];
+                        assert(t->leaf_list_tail[c[0]] != NULL);
+                        t->leaf_list_tail[c[0]]->next =
+                            t->leaf_list_head[c[1]];
+                    }
                     v = t->parent[v];
                 }
             }
