@@ -72,6 +72,7 @@ hapgen_apply_tree_mutation(hapgen_t *self, size_t site, mutation_t *mut)
 {
     int ret = 0;
     sparse_tree_t *tree = &self->tree;
+#if 0
     uint32_t *stack = self->traversal_stack;
     uint32_t u, c;
     int stack_top = 0;
@@ -89,6 +90,18 @@ hapgen_apply_tree_mutation(hapgen_t *self, size_t site, mutation_t *mut)
             }
         }
     }
+#else
+    uint32_t u = mut->node;
+    leaf_list_node_t *w = tree->leaf_list_head[u];
+    int not_done = 1;
+
+    while (not_done) {
+        assert(w != NULL);
+        hapgen_set_bit(self, w->node - 1, site);
+        not_done = w != tree->leaf_list_tail[u];
+        w = w->next;
+    }
+#endif
     return ret;
 }
 
@@ -129,7 +142,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     self->tree_sequence = tree_sequence;
 
     ret = tree_sequence_alloc_sparse_tree(tree_sequence, &self->tree,
-            NULL, 0, 0);
+            NULL, 0, MSP_COUNT_LEAVES);
     if (ret != 0) {
         goto out;
     }
