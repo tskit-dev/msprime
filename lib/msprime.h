@@ -182,6 +182,11 @@ typedef struct {
     uint32_t node;
 } mutation_t;
 
+typedef struct leaf_list_node {
+    uint32_t node;
+    struct leaf_list_node *next;
+} leaf_list_node_t;
+
 typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
@@ -207,9 +212,12 @@ typedef struct {
     uint32_t index;
     /* These are involved in the optional leaf tracking; num_leaves counts
      * all leaves below a give node, and num_tracked_leaves counts those 
-     * from a specific subset */
+     * from a specific subset. */
     uint32_t *num_leaves;
     uint32_t *num_tracked_leaves;
+    leaf_list_node_t **leaf_list_head;
+    leaf_list_node_t **leaf_list_tail;
+    leaf_list_node_t *leaf_list_node_mem;
     /* traversal stacks */
     uint32_t *stack1;
     uint32_t *stack2;
