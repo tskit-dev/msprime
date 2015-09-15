@@ -1882,6 +1882,22 @@ out:
     return ret;
 }
 
+int
+sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
+        leaf_list_node_t **head, leaf_list_node_t **tail)
+{
+    int ret = 0;
+
+    if (! (self->flags & MSP_COUNT_LEAVES)) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
+    *head = self->leaf_list_head[u];
+    *tail = self->leaf_list_tail[u];
+out:
+    return ret;
+}
+
 
 /* ======================================================== *
  * sparse tree iterator
