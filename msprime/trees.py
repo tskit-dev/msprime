@@ -339,9 +339,7 @@ class SparseTree(object):
         :return: An iterator over all leaves in the subtree rooted at u.
         :rtype: iterator
         """
-        for v in self._preorder_traversal(u):
-            if self.is_leaf(v):
-                yield v
+        return _msprime.LeafListIterator(self._ll_sparse_tree, u)
 
     def get_num_leaves(self, u):
         """

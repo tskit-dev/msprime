@@ -68,6 +68,14 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    SparseTree *sparse_tree;
+    leaf_list_node_t *head;
+    leaf_list_node_t *tail;
+    leaf_list_node_t *next;
+} LeafListIterator;
+
+typedef struct {
+    PyObject_HEAD
     TreeSequence *tree_sequence;
     newick_converter_t *newick_converter;
 } NewickConverter;
@@ -2152,6 +2160,135 @@ static PyTypeObject TreeDiffIteratorType = {
 };
 
 /*===================================================================
+ * LeafListIterator
+ *===================================================================
+ */
+
+static int
+LeafListIterator_check_state(LeafListIterator *self)
+{
+    int ret = 0;
+    if (self->sparse_tree == NULL) {
+        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+LeafListIterator_dealloc(LeafListIterator* self)
+{
+    Py_XDECREF(self->sparse_tree);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+LeafListIterator_init(LeafListIterator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"sparse_tree", "node", NULL};
+    unsigned int node = 0;
+    SparseTree *sparse_tree = NULL;
+
+    self->sparse_tree = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!I", kwlist,
+            &SparseTreeType, &sparse_tree, &node)) {
+        goto out;
+    }
+    self->sparse_tree = sparse_tree;
+    Py_INCREF(self->sparse_tree);
+    if (SparseTree_check_sparse_tree(sparse_tree) != 0) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self->sparse_tree, node)) {
+        goto out;
+    }
+    err = sparse_tree_get_leaf_list(self->sparse_tree->sparse_tree,
+            (uint32_t) node, &self->head, &self->tail);
+    self->next = self->head;
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+LeafListIterator_next(LeafListIterator  *self)
+{
+    PyObject *ret = NULL;
+
+    if (LeafListIterator_check_state(self) != 0) {
+        goto out;
+    }
+    if (self->next != NULL) {
+        ret = Py_BuildValue("I", (unsigned int) self->next->node);
+        if (ret == NULL) {
+            goto out;
+        }
+        /* Get the next value */
+        if (self->next == self->tail) {
+            self->next = NULL;
+        } else {
+            self->next = self->next->next;
+        }
+    }
+out:
+    return ret;
+}
+
+static PyMemberDef LeafListIterator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef LeafListIterator_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject LeafListIteratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.LeafListIterator",             /* tp_name */
+    sizeof(LeafListIterator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)LeafListIterator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "LeafListIterator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) LeafListIterator_next, /* tp_iternext */
+    LeafListIterator_methods,             /* tp_methods */
+    LeafListIterator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)LeafListIterator_init,      /* tp_init */
+};
+
+
+/*===================================================================
  * SparseTreeIterator
  *===================================================================
  */
@@ -2682,6 +2819,14 @@ init_msprime(void)
     Py_INCREF(&TreeDiffIteratorType);
     PyModule_AddObject(module, "TreeDiffIterator",
             (PyObject *) &TreeDiffIteratorType);
+    /* LeafListIterator type */
+    LeafListIteratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&LeafListIteratorType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&LeafListIteratorType);
+    PyModule_AddObject(module, "LeafListIterator",
+            (PyObject *) &LeafListIteratorType);
     /* NewickConverter type */
     NewickConverterType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&NewickConverterType) < 0) {

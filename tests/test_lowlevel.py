@@ -1512,6 +1512,8 @@ class TestSparseTree(LowLevelTestCase):
                 self.assertRaises(ValueError, st.get_parent, v)
                 self.assertRaises(ValueError, st.get_children, v)
                 self.assertRaises(ValueError, st.get_time, v)
+                self.assertRaises(
+                    ValueError, _msprime.LeafListIterator, st, v)
 
     def test_mrca_interface(self):
         for num_loci in range(1, 10):
@@ -1541,3 +1543,25 @@ class TestSparseTree(LowLevelTestCase):
             st = _msprime.SparseTree(ts)
             for index, st in enumerate(_msprime.SparseTreeIterator(ts, st)):
                 self.assertEqual(index, st.get_index())
+
+
+class TestLeafListIterator(LowLevelTestCase):
+    """
+    Tests for the low-level leaf list iterator.
+    """
+
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.LeafListIterator)
+        self.assertRaises(TypeError, _msprime.LeafListIterator, None)
+        ts = self.get_tree_sequence()
+        tree = _msprime.SparseTree(ts)
+        self.assertRaises(ValueError, _msprime.LeafListIterator, tree, 1)
+        # TODO fix these tests and add more.
+
+    def test_iterator(self):
+        ts = self.get_tree_sequence()
+        tree = _msprime.SparseTree(ts)
+        for tree in _msprime.SparseTreeIterator(ts, tree):
+            self.verify_iterator(_msprime.LeafListIterator(tree, 1))
+            self.verify_iterator(
+                _msprime.LeafListIterator(tree, tree.get_root()))

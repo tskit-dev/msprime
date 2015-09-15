@@ -69,18 +69,20 @@ static int
 hapgen_apply_tree_mutation(hapgen_t *self, size_t site, mutation_t *mut)
 {
     int ret = 0;
-    sparse_tree_t *tree = &self->tree;
-    uint32_t u = mut->node;
-    leaf_list_node_t *w = tree->leaf_list_head[u];
-    leaf_list_node_t *tail = tree->leaf_list_tail[u];
+    leaf_list_node_t *w, *tail;
     int not_done = 1;
 
+    ret = sparse_tree_get_leaf_list(&self->tree, mut->node, &w, &tail);
+    if (ret != 0) {
+        goto out;
+    }
     while (not_done) {
         assert(w != NULL);
         hapgen_set_bit(self, w->node - 1, site);
         not_done = w != tail;
         w = w->next;
     }
+out:
     return ret;
 }
 
