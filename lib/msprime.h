@@ -269,7 +269,6 @@ typedef struct {
     char *haplotype;
     sparse_tree_t tree;
     sparse_tree_iterator_t tree_iterator;
-    uint32_t *traversal_stack;
 } hapgen_t;
 
 int msp_alloc(msp_t *self, uint32_t sample_size);
