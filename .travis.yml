@@ -2,7 +2,6 @@ language: python
 python:
   - "2.7"
   - "2.7_with_system_site_packages"
-  - "3.2"
   - "3.3"
   - "3.4"
 
@@ -22,9 +21,7 @@ script:
   - flake8 setup.py msprime tests
   - nosetests -v --with-coverage --cover-package msprime
               --cover-inclusive --cover-min-percentage 80 tests
-  # Check that our docs build, but don't run for Python 3.2 as 
-  # sphinx doesn't support it.
-  - if [[ $TRAVIS_PYTHON_VERSION != 3.2* ]]; then make -C docs; fi
+  - make -C docs 
 
 env:
   global:
