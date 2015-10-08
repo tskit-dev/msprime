@@ -804,7 +804,7 @@ class TreeSequence(object):
         sequence in time-sorted order. Each record is a tuple
         :math:`(l, r, u, c, t)` defining the assignment of a tree node
         across an interval. The range of this record is as the half-open
-        genomic interval :math:`(l, r]`, such that it applies to all
+        genomic interval :math:`[l, r)`, such that it applies to all
         positions :math:`l \leq x < r`. Each record represents the
         assignment of a pair of children :math:`c` to a parent
         :math:`u`. This assignment happens at time :math:`t` in
