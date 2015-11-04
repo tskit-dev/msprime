@@ -1,5 +1,5 @@
 """
-Simple shim for msp-ms development.
+Simple shim for mspms development.
 """
 import msprime.cli
 
