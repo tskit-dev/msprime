@@ -638,7 +638,7 @@ class TreeSimulator(object):
         if n < 2:
             raise ValueError("Sample size must be >= 2")
         if m < 1:
-            raise ValueError("Postive number of loci required")
+            raise ValueError("Positive number of loci required")
         rho = 4 * self._scaled_recombination_rate * (m - 1)
         num_trees = min(m // 2, rho * harmonic_number(n - 1))
         b = 10  # Baseline maximum
@@ -664,7 +664,7 @@ class TreeSimulator(object):
 
     def run(self):
         """
-        Runs the simulation until complete coalescence has occured.
+        Runs the simulation until complete coalescence has occurred.
         """
         # Sort the models by start time
         models = sorted(self._population_models, key=lambda m: m.start_time)
@@ -787,7 +787,7 @@ class TreeSequence(object):
 
     def get_num_mutations(self):
         """
-        Returns the number of mutatations in this tree sequence. See
+        Returns the number of mutations in this tree sequence. See
         the :meth:`msprime.TreeSequence.mutations` method for details on how
         mutations are defined.
 
@@ -834,10 +834,10 @@ class TreeSequence(object):
         genomic interval covered by the current tree, and is equivalent to the
         value returned by :meth:`msprime.SparseTree.get_length`. The
         `records_out` value is list of :math:`(u, c, t)` tuples, and
-        corresponds to the coalesence records that have been invalidated by
+        corresponds to the coalescence records that have been invalidated by
         moving to the current tree.  As in the :meth:`.records` method,
         :math:`u` is a tree node, :math:`c` is a tuple containing its children,
-        and :math:`t` is the time the event occured.  These records are
+        and :math:`t` is the time the event occurred.  These records are
         returned in time-decreasing order, such that the record affecting the
         highest parts of the tree (i.e., closest to the root) are returned
         first.  The `records_in` value is also a list of :math:`(u, c, t)`
