@@ -29,10 +29,11 @@ space from :math:`0` to :math:`m`. The mutations rate is specified by the
 fall per unit length per :math:`4N_0` generations.
 
 .. warning:: This parameterisation of recombination and mutation rate is
-    different to ``ms``, which states these rates over the entire region. The
+    different to :program:`ms`, which states these rates over the entire region. The
     motivation for this is to allow the user change the size of the simulated
     region without having to rescale the recombination and mutation rates.
-    However, the ``mspms`` command line application is fully ``ms`` compatible.
+    However, the ``mspms`` command line application is fully :program:`ms`
+    compatible.
 
 ++++++++++++++++++
 Demographic events
@@ -43,7 +44,7 @@ Demographic events in the history of the population are specified via
 (which may be zero), and some associated parameters. Arbitrarily complex
 demographic histories can specified by providing a list of these population
 model to :func:`simulate`. This method of specifying demographic events
-closely follows the ``-eG`` and ``-eN`` options to ``ms``, and the models
+closely follows the ``-eG`` and ``-eN`` options to :program:`ms`, and the models
 are equivalent to these options.
 
 .. autoclass:: msprime.ConstantPopulationModel
@@ -57,7 +58,7 @@ Running simulations
 
 The :func:`.simulate` function provides the basic interface to running the
 coalescent with recombination simulation. The :func:`.simulate_tree` function
-provides a simplified interface for the speicial case in which we have no
+provides a simplified interface for the special case in which we have no
 recombination.
 
 .. autofunction:: msprime.simulate

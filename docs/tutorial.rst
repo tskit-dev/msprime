@@ -5,10 +5,10 @@ Tutorial
 ========
 
 This is the tutorial for the Python interface to the ``msprime``
-library. Detailed :ref:`sec-api` is also availale for this
-library. An ``ms``-compatible :ref:`command line interface <sec-cli>`
+library. Detailed :ref:`sec-api` is also available for this
+library. An :program:`ms`-compatible :ref:`command line interface <sec-cli>`
 is also available if you wish to use ``msprime`` directly within
-an existing workflow.
+an existing work flow.
 
 
 ****************
@@ -18,7 +18,7 @@ Simulating trees
 Running simulations is very straightforward in ``msprime``::
 
     >>> import msprime
-    >>> tree = msprime.simulate(5)
+    >>> tree = msprime.simulate_tree(5)
     >>> print(tree)
     {1: 6, 2: 8, 3: 6, 4: 8, 5: 7, 6: 7, 7: 9, 8: 9, 9: 0}
 
@@ -84,29 +84,27 @@ and the time of its parent is 0.44.
 Multiple loci
 *************
 
-Simulating the history of a single locus is a very useful, but we are
-most often interesting in simulating the history of our sample across
-large genomic regions under the influence of recombination. The ``msprime``
-API is specifically designed to make this common requirement both easy
-and efficient. Throughout ``msprime`` we use the term locus to
-refer to a non-recombining strech of sequence. Recombination occurs
-between loci but never within loci. It is often most straightforward
-to regard a single base pair as a 'locus'. In ``msprime`` we support
-up to :math:`2^{32}` loci, which is sufficient to represent all but
-the very largest of known chromosome sizes.
+Simulating the history of a single locus is a very useful, but we are most
+often interesting in simulating the history of our sample across large genomic
+regions under the influence of recombination. The ``msprime`` API is
+specifically designed to make this common requirement both easy and efficient.
+Throughout ``msprime`` we use the term locus to refer to a non-recombining
+stretch of sequence. Recombination occurs between loci but never within loci.
+It is often most straightforward to regard a single base pair as a 'locus'. In
+``msprime`` we support up to :math:`2^{32}` loci, which is sufficient to
+represent all but the very largest of known chromosome sizes. See the
+:ref:`sec-api` for a discussion of the precise recombination model used.
 
-**TODO** explain recombination rate. This is the same as used in
-``ms`` but we do not multiply by the number of loci.
 
 We simulate the trees across over a number of loci using the
 :func:`msprime.simulate()` function::
 
     >>> tree_sequence = msprime.simulate(
-    >>>     5, num_loci=10, scaled_recombination_rate=0.1, random_seed=19)
-    >>> for tree in tree_sequence.sparse_trees():
-    >>>     print(tree.get_interval(), str(tree), sep="\t")
-    (0, 6)  {1: 9, 2: 8, 3: 8, 4: 7, 5: 7, 7: 9, 8: 10, 9: 10, 10: 0}
-    (6, 10) {1: 9, 2: 6, 3: 10, 4: 6, 5: 7, 6: 7, 7: 9, 9: 10, 10: 0}
+    ...     5, num_loci=10, scaled_recombination_rate=0.1, random_seed=19)
+    >>> for tree in tree_sequence.trees():
+    ...     print(tree.get_interval(), str(tree), sep="\t")
+    (0, 5)  {1: 7, 2: 6, 3: 7, 4: 10, 5: 6, 6: 8, 7: 8, 8: 10, 10: 0}
+    (5, 10) {1: 7, 2: 6, 3: 7, 4: 9, 5: 6, 6: 9, 7: 10, 9: 10, 10: 0}
 
 In this example, we simulate the history of our sample of 5 individuals
 over 10 loci, with a scaled recombination rate of 0.1 between adjacent
@@ -122,11 +120,11 @@ simplify working with these trees and some efficient methods for
 common tasks that take advantage of the strong correlation structure
 of the trees in the sequence.
 
-In this example, we use the :meth:`~msprime.TreeSequence.sparse_trees`
+In this example, we use the :meth:`~msprime.TreeSequence.trees`
 method to iterate over the trees in the sequence. For each tree
 we print out the interval the tree covers (i.e., the genomic
 coordinates which all share precisely this tree) using the
-:meth:`~method.TreeSequence.get_interval` method. We also print
+:meth:`~msprime.SparseTree.get_interval` method. We also print
 out the summary of each tree in terms of the parent values for
 each tree. Again, these differences are best illustrated by
 some images:
@@ -139,13 +137,13 @@ some images:
    :width: 200px
    :alt: A simple coalescent tree
 
-(We have supressed the node time labels here for clarity.) We can see
+(We have suppressed the node time labels here for clarity.) We can see
 that these trees share a great deal of their structure, but that there are
 also important differences between the trees.
 
 
 .. warning:: Do not store the values returned from the
-    :meth:`~msprime.TreeSequence.sparse_trees` iterator in a list and operate
+    :meth:`~msprime.TreeSequence.trees` iterator in a list and operate
     on them afterwards! For efficiency reasons ``msprime`` uses the same
     instance of :class:`msprime.SparseTree` for each tree in the sequence
     and updates the internal state for each new tree. Therefore, if you store
@@ -170,7 +168,7 @@ to our example above, we can use::
     >>>     5, num_loci=10, scaled_recombination_rate=0.1,
     >>>     scaled_mutation_rate=0.2, random_seed=19)
     >>> print("Total mutations = ", tree_sequence.get_num_mutations())
-    >>> for tree in tree_sequence.sparse_trees():
+    >>> for tree in tree_sequence.trees():
     >>>     print(tree.get_interval(), list(tree.mutations()), sep="\t")
     Total mutations =  2
     (0, 5)  [(0.20106735406443477, 8)]
@@ -182,7 +180,7 @@ happen to fall as one on each tree. Mutations are represented as a
 tuple ``(position, node)``, where ``position`` is the location of the mutation
 in genomic coordinates and ``node`` is the node in the tree above which the
 mutation occurs. Positions are given as a floating point value as we are
-using the infinite sites model. Every mutation falls on exacly one tree
+using the infinite sites model. Every mutation falls on exactly one tree
 and we obtain the mutations for a particular tree using the
 :meth:`~msprime.TreeSequence.mutations` method. Mutations are always returned
 in increasing order of position. The mutations for this example are shown
@@ -196,44 +194,14 @@ on the trees here as red boxes:
    :width: 200px
    :alt: A simple coalescent tree with mutations
 
-When reasoning about mutations, it is usually more convenient to traverse
-the tree from top-to-bottom rather than from the leaves upwards. To
-facilitate this type of traversal, the :class:`~msprime.SparseTree`
-class provides the :meth:`~msprime.SparseTree.get_children` method,
-which returns a tuple of integers giving the children of a particular
-node. This can easily be used to create traversal algorithms.
+We can calculate the allele frequency of mutations easily and
+efficiently using the :meth:`~msprime.SparseTree.get_num_leaves`
+which returns the number of leaves underneath a particular node.
+For example,::
 
-**TODO** We need to discuss traversal algorithms separately somewhere
-and provide an API for pre, post and inorder iteration over the nodes
-in a subtree.
-
-Suppose, for example, that we wish to compute the haplotypes for the
-mutations in the above example. This is easily achieved using the
-:meth:`~msprime.SparseTree.leaves` method, which iterates over all
-leaves in the subtree rooted at a particular node::
-
-
-    >>> haplotypes = [None] + [
-    >>>     ['0' for _ in range(tree_sequence.get_num_mutations())]
-    >>>     for _ in range(tree_sequence.get_sample_size())]
-    >>> site = 0
-    >>> for tree in tree_sequence.sparse_trees():
-    >>>     for _, node in tree.mutations():
-    >>>         for u in tree.leaves(node):
-    >>>             haplotypes[u][site] = '1'
-    >>>         site += 1
-    >>> for j in range(1, tree_sequence.get_sample_size() + 1):
-    >>>     print(j, "".join(haplotypes[j]), sep="\t")
-    1       11
-    2       10
-    3       11
-    4       00
-    5       10
-
-Using this type of approach, working with mutation information
-across a tree sequence is very straightforward in ``msprime``. For the
-specific example of haplotype generation the
-:meth:`~msprime.TreesSequence.haplotypes` method is much more
-efficient than the above code fragment.
-
-
+    >>> for tree in tree_sequence.trees():
+    ...    for position, node in tree.mutations():
+    ...        print("Mutation @ position {} has frequency {}".format(
+    ...            position, tree.get_num_leaves(node) / tree.get_sample_size()))
+    Mutation @ position 0.201067354064 has frequency 0.8
+    Mutation @ position 9.03296899167 has frequency 0.4
