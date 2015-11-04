@@ -53,7 +53,6 @@ hapgen_print_state(hapgen_t *self)
     hapgen_check_state(self);
 }
 
-
 static inline int
 hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
 {
@@ -66,29 +65,24 @@ hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
     return 0;
 }
 
-
 static int
 hapgen_apply_tree_mutation(hapgen_t *self, size_t site, mutation_t *mut)
 {
     int ret = 0;
-    sparse_tree_t *tree = &self->tree;
-    uint32_t *stack = self->traversal_stack;
-    uint32_t u, c;
-    int stack_top = 0;
+    leaf_list_node_t *w, *tail;
+    int not_done = 1;
 
-    stack[0] = mut->node;
-    while (stack_top >= 0) {
-        u = stack[stack_top];
-        stack_top--;
-        if (tree->children[2 * u] == 0) {
-            hapgen_set_bit(self, u - 1, site);
-        } else {
-            for (c = 0; c < 2; c++) {
-                stack_top++;
-                stack[stack_top] = tree->children[2 * u + c];
-            }
-        }
+    ret = sparse_tree_get_leaf_list(&self->tree, mut->node, &w, &tail);
+    if (ret != 0) {
+        goto out;
     }
+    while (not_done) {
+        assert(w != NULL);
+        hapgen_set_bit(self, w->node - 1, site);
+        not_done = w != tail;
+        w = w->next;
+    }
+out:
     return ret;
 }
 
@@ -129,17 +123,13 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     self->tree_sequence = tree_sequence;
 
     ret = tree_sequence_alloc_sparse_tree(tree_sequence, &self->tree,
-            NULL, 0, 0);
+            NULL, 0, MSP_COUNT_LEAVES);
     if (ret != 0) {
         goto out;
     }
     ret = sparse_tree_iterator_alloc(&self->tree_iterator,
             self->tree_sequence, &self->tree);
     if (ret != 0) {
-        goto out;
-    }
-    self->traversal_stack = malloc(self->sample_size * sizeof(uint32_t));
-    if (self->traversal_stack == NULL) {
         goto out;
     }
     /* set up the haplotype binary matrix */
@@ -169,14 +159,10 @@ hapgen_free(hapgen_t *self)
     if (self->haplotype != NULL) {
         free(self->haplotype);
     }
-    if (self->traversal_stack != NULL) {
-        free(self->traversal_stack);
-    }
     sparse_tree_free(&self->tree);
     sparse_tree_iterator_free(&self->tree_iterator);
     return 0;
 }
-
 
 int
 hapgen_get_haplotype(hapgen_t *self, uint32_t sample_id, char **haplotype)

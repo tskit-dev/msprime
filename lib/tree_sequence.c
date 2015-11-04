@@ -1648,6 +1648,7 @@ sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, uint32_t num_nodes,
 {
     int ret = MSP_ERR_NO_MEMORY;
     uint32_t j, u;
+    leaf_list_node_t *w;
 
     memset(self, 0, sizeof(sparse_tree_t));
     if (num_nodes == 0 || sample_size == 0) {
@@ -1677,17 +1678,29 @@ sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, uint32_t num_nodes,
         goto out;
     }
     if (self->flags & MSP_COUNT_LEAVES) {
-        self->num_leaves = malloc((self->num_nodes + 1) * sizeof(uint32_t));
-        self->num_tracked_leaves = malloc((self->num_nodes + 1)
-                * sizeof(uint32_t));
+        self->num_leaves = calloc(self->num_nodes + 1, sizeof(uint32_t));
+        self->num_tracked_leaves = calloc(self->num_nodes + 1,
+                sizeof(uint32_t));
         if (self->num_leaves == NULL || self->num_tracked_leaves == NULL) {
             goto out;
         }
-        self->num_leaves[0] = 0;
-        self->num_tracked_leaves[0] = 0;
+        self->leaf_list_head = calloc(self->num_nodes + 1,
+                sizeof(leaf_list_node_t *));
+        self->leaf_list_tail = calloc(self->num_nodes + 1,
+                sizeof(leaf_list_node_t *));
+        self->leaf_list_node_mem = calloc(self->sample_size,
+                sizeof(leaf_list_node_t));
+        if (self->leaf_list_head == NULL || self->leaf_list_tail == NULL
+                || self->leaf_list_node_mem == NULL) {
+            goto out;
+        }
         for (j = 1; j <= self->sample_size; j++) {
             self->num_leaves[j] = 1;
-            self->num_tracked_leaves[j] = 0;
+            w = &self->leaf_list_node_mem[j - 1];
+            w->next = NULL;
+            w->node = j;
+            self->leaf_list_head[j] = w;
+            self->leaf_list_tail[j] = w;
         }
         for (j = 0; j < num_tracked_leaves; j++) {
             u = tracked_leaves[j];
@@ -1730,6 +1743,15 @@ sparse_tree_free(sparse_tree_t *self)
     if (self->num_tracked_leaves != NULL) {
         free(self->num_tracked_leaves);
     }
+    if (self->leaf_list_head != NULL) {
+        free(self->leaf_list_head);
+    }
+    if (self->leaf_list_tail != NULL) {
+        free(self->leaf_list_tail);
+    }
+    if (self->leaf_list_node_mem != NULL) {
+        free(self->leaf_list_node_mem);
+    }
     return 0;
 }
 
@@ -1751,6 +1773,10 @@ sparse_tree_clear(sparse_tree_t *self)
         memset(self->num_leaves + n + 1, 0, (N - n - 1) * sizeof(uint32_t));
         memset(self->num_tracked_leaves + n + 1, 0,
                 (N - n - 1) * sizeof(uint32_t));
+        memset(self->leaf_list_head + n + 1, 0,
+                (N - n - 1) * sizeof(leaf_list_node_t *));
+        memset(self->leaf_list_tail + n + 1, 0,
+                (N - n - 1) * sizeof(leaf_list_node_t *));
     }
     return ret;
 }
@@ -1856,6 +1882,22 @@ out:
     return ret;
 }
 
+int
+sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
+        leaf_list_node_t **head, leaf_list_node_t **tail)
+{
+    int ret = 0;
+
+    if (! (self->flags & MSP_COUNT_LEAVES)) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
+    *head = self->leaf_list_head[u];
+    *tail = self->leaf_list_tail[u];
+out:
+    return ret;
+}
+
 
 /* ======================================================== *
  * sparse tree iterator
@@ -1937,6 +1979,7 @@ void
 sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
 {
     size_t j;
+    uint32_t u;
 
     printf("sparse_tree_iterator state\n");
     printf("insertion_index = %d\n", (int) self->insertion_index);
@@ -1955,6 +1998,16 @@ sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
         if (self->tree->flags & MSP_COUNT_LEAVES) {
             printf("\t%d\t%d", self->tree->num_leaves[j],
                     self->tree->num_tracked_leaves[j]);
+            u = 0;
+            if (self->tree->leaf_list_head[j] != NULL) {
+                u = self->tree->leaf_list_head[j]->node;
+            }
+            printf("\t%d", u);
+            u = 0;
+            if (self->tree->leaf_list_tail[j] != NULL) {
+                u = self->tree->leaf_list_tail[j]->node;
+            }
+            printf("\t%d", u);
         }
         printf("\n");
     }
@@ -2000,6 +2053,8 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
                 while (v != 0) {
                     t->num_leaves[v] -= all_leaves_diff;
                     t->num_tracked_leaves[v] -= tracked_leaves_diff;
+                    t->leaf_list_head[v] = NULL;
+                    t->leaf_list_tail[v] = NULL;
                     v = t->parent[v];
                 }
             }
@@ -2033,6 +2088,21 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
                 while (v != 0) {
                     t->num_leaves[v] += all_leaves_diff;
                     t->num_tracked_leaves[v] += tracked_leaves_diff;
+                    c[0] = t->children[2 * v];
+                    c[1] = t->children[2 * v + 1];
+                    if (t->leaf_list_head[c[0]] == NULL) {
+                        t->leaf_list_head[v] = t->leaf_list_head[c[1]];
+                        t->leaf_list_tail[v] = t->leaf_list_tail[c[1]];
+                    } else if (t->leaf_list_head[c[1]] == NULL) {
+                        t->leaf_list_head[v] = t->leaf_list_head[c[0]];
+                        t->leaf_list_tail[v] = t->leaf_list_tail[c[0]];
+                    } else {
+                        t->leaf_list_head[v] = t->leaf_list_head[c[0]];
+                        t->leaf_list_tail[v] = t->leaf_list_tail[c[1]];
+                        assert(t->leaf_list_tail[c[0]] != NULL);
+                        t->leaf_list_tail[c[0]]->next =
+                            t->leaf_list_head[c[1]];
+                    }
                     v = t->parent[v];
                 }
             }

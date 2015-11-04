@@ -182,6 +182,11 @@ typedef struct {
     uint32_t node;
 } mutation_t;
 
+typedef struct leaf_list_node {
+    uint32_t node;
+    struct leaf_list_node *next;
+} leaf_list_node_t;
+
 typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
@@ -207,9 +212,12 @@ typedef struct {
     uint32_t index;
     /* These are involved in the optional leaf tracking; num_leaves counts
      * all leaves below a give node, and num_tracked_leaves counts those 
-     * from a specific subset */
+     * from a specific subset. */
     uint32_t *num_leaves;
     uint32_t *num_tracked_leaves;
+    leaf_list_node_t **leaf_list_head;
+    leaf_list_node_t **leaf_list_tail;
+    leaf_list_node_t *leaf_list_node_mem;
     /* traversal stacks */
     uint32_t *stack1;
     uint32_t *stack2;
@@ -261,7 +269,6 @@ typedef struct {
     char *haplotype;
     sparse_tree_t tree;
     sparse_tree_iterator_t tree_iterator;
-    uint32_t *traversal_stack;
 } hapgen_t;
 
 int msp_alloc(msp_t *self, uint32_t sample_size);
@@ -345,6 +352,8 @@ int sparse_tree_get_num_leaves(sparse_tree_t *self, uint32_t u,
         uint32_t *num_leaves);
 int sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, uint32_t u,
         uint32_t *num_tracked_leaves);
+int sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
+        leaf_list_node_t **head, leaf_list_node_t **tail);
 
 int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
         tree_sequence_t *tree_sequence, sparse_tree_t *tree);

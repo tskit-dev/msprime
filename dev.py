@@ -404,6 +404,17 @@ def write_plink_assoc(ts, num_cases):
             odds_ratio = "NA" if control_odds == 0 else case_odds / control_odds
             print(site + 1, a1, fa, fu, a2, odds_ratio, sep="\t")
 
+def convert_haplotypes():
+    import sys
+    ts = msprime.load(sys.argv[1])
+    ts.generate_mutations(0.0001, 1)
+    print("Generated mutations", ts.get_num_mutations())
+    c = 0
+    for h in ts.haplotypes():
+        c += 1
+        # print(h)
+    print("generated ", c, "haplotypes")
+
 if __name__ == "__main__":
     # haplotype_example()
     # dump_example()
@@ -420,4 +431,5 @@ if __name__ == "__main__":
     # diffs_example()
     # leaf_set_example()
     # allele_frequency_example()
-    gwas_example()
+    # gwas_example()
+    convert_haplotypes()

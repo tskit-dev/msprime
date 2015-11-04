@@ -303,7 +303,7 @@ print_tree_sequence(tree_sequence_t *ts)
     coalescence_record_t cr;
     tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
     sparse_tree_iterator_t *sparse_iter = calloc(1, sizeof(sparse_tree_iterator_t));
-    uint32_t tracked_leaves[] = {1, 4};
+    uint32_t tracked_leaves[] = {1, 2};
 
     if (iter == NULL || sparse_iter == NULL) {
         ret = MSP_ERR_NO_MEMORY;
