@@ -436,16 +436,13 @@ def simulate(
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`.
 
-    **TODO** concise description of the model parameters and how we
-    can run the simulations we are interested in.
-
     :param int sample_size: The number of individuals in our sample.
     :param int num_loci: The length of the simulated region in
-        bases.
+        discrete non-recombining loci.
     :param float scaled_recombination_rate: The rate of recombination
-        between adjacent bases per :math:`4N` generations.
+        between adjacent loci per :math:`4N` generations.
     :param float scaled_mutation_rate: The rate of mutation
-        per site per :math:`4N` generations.
+        per locus per :math:`4N` generations.
     :param list population_models: The list of :class:`.PopulationModel`
         instances describing the demographic history of the population.
     :param int random_seed: The random seed. If this is `None`, a
@@ -472,17 +469,31 @@ def simulate(
 
 
 def simulate_tree(
-        sample_size, scaled_mutation_rate=0, population_models=[],
-        random_seed=None, max_memory="10M"):
+        sample_size, scaled_mutation_rate=None, population_models=[],
+        random_seed=None, max_memory="1G"):
     """
     Simulates the coalescent at a single locus for the specified sample size
-    under the specified list of population models. Returns a SparseTree
-    representing the results.
+    under the specified list of population models. Returns a
+    :class:`.SparseTree` representing the results.
+
+    :param int sample_size: The number of individuals in our sample.
+    :param float scaled_mutation_rate: The rate of mutation
+        per :math:`4N` generations.
+    :param list population_models: The list of :class:`.PopulationModel`
+        instances describing the demographic history of the population.
+    :param int random_seed: The random seed. If this is `None`, a
+        random seed will be automatically generated.
+    :param int,str max_memory: The maximum amount of memory used
+        during the simulation. If this is exceeded, the simulation will
+        terminate with a :class:`LibraryError` exception.
+    :return: The :class:`.SparseTree` object representing the results
+        of the simulation.
+    :rtype: :class:`.SparseTree`
     """
     tree_sequence = simulate(
-        sample_size, population_models=population_models,
-        random_seed=random_seed, max_memory=max_memory)
-    tree_sequence.generate_mutations(scaled_mutation_rate, random_seed)
+        sample_size, scaled_mutation_rate=scaled_mutation_rate,
+        population_models=population_models, random_seed=random_seed,
+        max_memory=max_memory)
     return next(tree_sequence.trees())
 
 
@@ -903,10 +914,8 @@ class TreeSequence(object):
         method over-writes any existing mutations stored in the tree
         sequence.
 
-        **TODO** Be precise about the meaning of the mutation rate here.
-
-        :param float scaled_mutation_rate: The mutation rate in scaled
-            coalescence time units.
+        :param float scaled_mutation_rate: The rate of mutation
+            per locus per :math:`4N` generations.
         :param int random_seed: The random seed to use when generating
             mutations.
         """
@@ -965,13 +974,13 @@ class PopulationModel(object):
 class ConstantPopulationModel(PopulationModel):
     """
     A population model in which the size of the population
-    is a fixed multiple ``size`` of the size at time 0, which
-    starts at the specified time.
+    is a fixed multiple ``size`` of :math:`N_0` (the Wright-Fisher population
+    size at time 0), which starts at the specified time.
 
     :param float start_time: The time (in coalescent units) at which
         this population model begins.
     :param float size: The size of the population under this model
-        relative to its size at time 0.
+        relative to :math:`N_0`.
     """
     def __init__(self, start_time, size):
         super(ConstantPopulationModel, self).__init__(start_time)
@@ -981,8 +990,17 @@ class ConstantPopulationModel(PopulationModel):
 
 class ExponentialPopulationModel(PopulationModel):
     """
-    Class representing an exponentially growing or shrinking population.
-    TODO document model.
+
+    A population model in which the size is exponentially growing (or
+    shrinking). If we have a :attr:`start_time` of :math:`s`, the population
+    size at a time :math:`t` (measured in units of :math:`4N_0` generations) is
+    :math:`N_s e^{\\alpha (t - s)}`, where :math:`N_s` is the population size
+    at time :math:`s`.
+
+    :param float start_time: The time (in coalescent units) at which
+        this population model begins.
+    :param float alpha: The exponential growth (or contraction) rate
+        :math:`\\alpha`.
     """
     def __init__(self, start_time, alpha):
         super(ExponentialPopulationModel, self).__init__(start_time)
