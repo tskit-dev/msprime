@@ -517,8 +517,14 @@ class TreeSimulator(object):
     recombination.
     """
     def __init__(self, sample_size):
+        if not isinstance(sample_size, int):
+            raise TypeError("Sample size must be an integer")
+        if sample_size < 2:
+            raise ValueError("Sample size must be >= 2")
+        if sample_size >= 2**32:
+            raise ValueError("sample_size must be < 2**32")
         self._sample_size = sample_size
-        self._scaled_recombination_rate = 1.0
+        self._scaled_recombination_rate = 0.0
         self._num_loci = 1
         self._population_models = []
         self._random_seed = None
@@ -556,6 +562,18 @@ class TreeSimulator(object):
     def get_time(self):
         return self._ll_sim.get_time()
 
+    def get_avl_node_block_size(self):
+        return self._avl_node_block_size
+
+    def get_coalescence_record_block_size(self):
+        return self._coalescence_record_block_size
+
+    def get_node_mapping_block_size(self):
+        return self._node_mapping_block_size
+
+    def get_segment_block_size(self):
+        return self._segment_block_size
+
     def get_num_avl_node_blocks(self):
         return self._ll_sim.get_num_avl_node_blocks()
 
@@ -584,13 +602,18 @@ class TreeSimulator(object):
         self._population_models.append(pop_model)
 
     def set_num_loci(self, num_loci):
+        if not isinstance(num_loci, int):
+            raise TypeError("num_loci must be an integer")
+        if num_loci < 1:
+            raise ValueError("Positive number of loci required")
+        if num_loci >= 2**32:
+            raise ValueError("num_loci must be < 2**32")
         self._num_loci = num_loci
 
     def set_scaled_recombination_rate(self, scaled_recombination_rate):
+        if scaled_recombination_rate < 0:
+            raise ValueError("Recombination rate cannot be negative")
         self._scaled_recombination_rate = scaled_recombination_rate
-
-    def set_effective_population_size(self, effective_population_size):
-        self._effective_population_size = effective_population_size
 
     def set_random_seed(self, random_seed):
         self._random_seed = random_seed
@@ -630,15 +653,6 @@ class TreeSimulator(object):
         # Set the block sizes using our estimates.
         n = self._sample_size
         m = self._num_loci
-        # First check to make sure they are sane.
-        if not isinstance(n, int):
-            raise TypeError("Sample size must be an integer")
-        if not isinstance(m, int):
-            raise TypeError("Number of loci must be an integer")
-        if n < 2:
-            raise ValueError("Sample size must be >= 2")
-        if m < 1:
-            raise ValueError("Positive number of loci required")
         rho = 4 * self._scaled_recombination_rate * (m - 1)
         num_trees = min(m // 2, rho * harmonic_number(n - 1))
         b = 10  # Baseline maximum
