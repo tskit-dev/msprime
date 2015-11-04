@@ -1591,4 +1591,4 @@ class TestLeafListIterator(LowLevelTestCase):
             # The root should have all leaves.
             leaves = list(_msprime.LeafListIterator(t, t.get_root()))
             self.assertEqual(
-                sorted(leaves), range(1, t.get_sample_size() + 1))
+                sorted(leaves), list(range(1, t.get_sample_size() + 1)))
