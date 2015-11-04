@@ -250,6 +250,112 @@ def mspms_main():
 # msp: the command line interface for msprime
 #######################################################
 
+def run_dump_newick(args):
+    tree_sequence = msprime.load(args.tree_file)
+    for l, ns in tree_sequence.newick_trees():
+        print("[{0}]".format(l), end="")
+        print(ns)
+
+
+def run_dump_haplotypes(args):
+    tree_sequence = msprime.load(args.tree_file)
+    for h in tree_sequence.haplotypes():
+        print(h)
+
+
+def run_dump_records(args):
+    tree_sequence = msprime.load(args.tree_file)
+    for l, r, u, c, t in tree_sequence.records():
+        print(l, r, u, c[0], c[1], t, sep="\t")
+
+
+def run_dump_macs(args):
+    """
+    Write a macs formatted file so we can import into pbwt.
+    """
+    tree_sequence = msprime.load(args.tree_file)
+    n = tree_sequence.get_sample_size()
+    m = tree_sequence.get_num_loci()
+    print("COMMAND:\tnot_macs {} {}".format(n, m))
+    print("SEED:\tASEED")
+    site = 0
+    for tree in tree_sequence.trees():
+        for position, node in tree.mutations():
+            h = ['0' for _ in range(n)]
+            for u in tree.leaves(node):
+                h[u - 1] = '1'
+            print(
+                "SITE:", site, position / m, 0.0, "".join(h), sep="\t"
+            )
+            site += 1
+
+
+def run_simulate(args):
+    tree_sequence = msprime.simulate(
+        sample_size=int(args.sample_size),
+        num_loci=int(args.num_loci),
+        scaled_recombination_rate=args.recombination_rate,
+        scaled_mutation_rate=args.mutation_rate,
+        max_memory=args.max_memory,
+        random_seed=args.random_seed)
+    tree_sequence.dump(args.tree_file, zlib_compression=args.compress)
+
+
+def get_msp_parser():
+    parser = argparse.ArgumentParser(
+        description="Command line interface for msprime.")
+    parser.add_argument(
+        "-V", "--version", action='version',
+        version='%(prog)s {}'.format(msprime.__version__))
+    subparsers = parser.add_subparsers()
+
+    simulate_parser = subparsers.add_parser(
+            "simulate",
+            help="Run the simulation")
+    simulate_parser.add_argument("sample_size", type=float)
+    simulate_parser.add_argument("tree_file")
+    simulate_parser.add_argument(
+        "--num-loci", "-m", type=float, default=1)
+    simulate_parser.add_argument(
+        "--recombination-rate", "-r", type=float, default=0)
+    simulate_parser.add_argument(
+        "--mutation-rate", "-u", type=float, default=0)
+    simulate_parser.add_argument(
+        "--random-seed", "-s", type=int, default=None)
+    simulate_parser.add_argument(
+        "--max-memory", "-M", default="1G")
+    simulate_parser.add_argument(
+        "--compress", "-z", action="store_true",
+        help="Compress the output file")
+    simulate_parser.set_defaults(runner=run_simulate)
+
+    records_parser = subparsers.add_parser(
+            "records",
+            help="Dump records in tabular format.")
+    records_parser.add_argument("tree_file")
+    records_parser.set_defaults(runner=run_dump_records)
+
+    haplotypes_parser = subparsers.add_parser(
+            "haplotypes",
+            help="Dump results in tabular format.")
+    haplotypes_parser.add_argument("tree_file")
+    haplotypes_parser.set_defaults(runner=run_dump_haplotypes)
+
+    macs_parser = subparsers.add_parser(
+            "macs",
+            help="Dump results in MaCS format.")
+    macs_parser.add_argument("tree_file")
+    macs_parser.set_defaults(runner=run_dump_macs)
+
+    newick_parser = subparsers.add_parser(
+            "newick",
+            help="Dump results in newick format.")
+    newick_parser.add_argument("tree_file")
+    newick_parser.set_defaults(runner=run_dump_newick)
+    return parser
+
 
 def msp_main():
-    print("main")
+    parser = get_msp_parser()
+    args = parser.parse_args()
+    args.runner(args)
