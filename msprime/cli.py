@@ -29,6 +29,9 @@ import sys
 
 import msprime
 
+#######################################################
+# mspms: the ms compatible interface
+#######################################################
 
 mscompat_description = (
     "mspms is an ms-compatible interface to the msprime library. "
@@ -185,7 +188,7 @@ def create_simulation_runner(args):
     return runner
 
 
-def get_parser():
+def get_mspms_parser():
     parser = argparse.ArgumentParser(description=mscompat_description)
     parser.add_argument("sample_size", type=positive_int, help="Sample size")
     parser.add_argument(
@@ -235,9 +238,18 @@ def get_parser():
 
 
 def mspms_main():
-    parser = get_parser()
+    parser = get_mspms_parser()
     args = parser.parse_args()
     if args.mutation_rate == 0 and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
     sr = create_simulation_runner(args)
     sr.run(sys.stdout)
+
+
+#######################################################
+# msp: the command line interface for msprime
+#######################################################
+
+
+def msp_main():
+    print("main")

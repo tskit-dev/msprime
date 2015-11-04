@@ -65,7 +65,7 @@ class TestArgumentParser(unittest.TestCase):
     """
 
     def test_msdoc_examples(self):
-        parser = cli.get_parser()
+        parser = cli.get_mspms_parser()
 
         args = parser.parse_args(["4", "2", "-t", "5.0"])
         self.assertEqual(args.sample_size, 4)
@@ -103,14 +103,14 @@ class TestArgumentParser(unittest.TestCase):
         self.assertEqual(args.size_event, [[0.3, 0.5]])
 
     def test_positional_arguments(self):
-        parser = cli.get_parser()
+        parser = cli.get_mspms_parser()
         args = parser.parse_args(["40", "20"])
         self.assertEqual(args.sample_size, 40)
         self.assertEqual(args.num_replicates, 20)
         # TODO test errors here.
 
     def test_mutations(self):
-        parser = cli.get_parser()
+        parser = cli.get_mspms_parser()
         args = parser.parse_args(["40", "20"])
         self.assertEqual(args.mutation_rate, 0.0)
         args = parser.parse_args(["40", "20", "-t", "10"])
@@ -120,7 +120,7 @@ class TestArgumentParser(unittest.TestCase):
         # TODO test errors
 
     def test_trees(self):
-        parser = cli.get_parser()
+        parser = cli.get_mspms_parser()
         args = parser.parse_args(["40", "20"])
         self.assertEqual(args.trees, False)
         args = parser.parse_args(["40", "20", "-T"])
@@ -130,7 +130,7 @@ class TestArgumentParser(unittest.TestCase):
         # TODO test errors
 
     def test_size_events(self):
-        parser = cli.get_parser()
+        parser = cli.get_mspms_parser()
         args = parser.parse_args(["40", "20"])
         self.assertEqual(args.size_event, [])
         args = parser.parse_args("10 1 -eN 2.0 0.5".split())
@@ -140,7 +140,7 @@ class TestArgumentParser(unittest.TestCase):
         # TODO test errors
 
     def test_growth_rates(self):
-        parser = cli.get_parser()
+        parser = cli.get_mspms_parser()
         args = parser.parse_args(["40", "20"])
         self.assertEqual(args.growth_rate, None)
         self.assertEqual(args.growth_event, [])
