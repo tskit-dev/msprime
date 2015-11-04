@@ -109,6 +109,7 @@ class StressTester(object):
         iterator = _msprime.NewickConverter(ts, 4)
         del ts
         assert list(iterator) == trees
+
         # Check the SparseTreeIterator
         ts = _msprime.TreeSequence()
         ts.create(sim)
@@ -129,6 +130,21 @@ class StressTester(object):
                 pi[j] = t.get_parent(j)
             parents_after.append(pi)
         assert parents_before == parents_after
+
+        # Check the LeafListIterator
+        ts = _msprime.TreeSequence()
+        ts.create(sim)
+        tree = _msprime.SparseTree(ts)
+        tree_iterator = _msprime.SparseTreeIterator(ts, tree)
+        del tree
+        del ts
+        count = 0
+        for t in tree_iterator:
+            count += 1
+            leaf_iterator = _msprime.LeafListIterator(t, 1)
+            del t
+            assert list(leaf_iterator) == [1]
+        assert count > 0
 
     def check_tree_sequence_file_errors(self, sim):
         ts = _msprime.TreeSequence()

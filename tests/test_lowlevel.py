@@ -128,7 +128,7 @@ class TestMRCACalculator(unittest.TestCase):
     These tests are included here as we use the MRCA calculator below in
     our tests.
     """
-    def test_all_oriented_forsts(self):
+    def test_all_oriented_forests(self):
         # Runs through all possible oriented forests and checks all possible
         # node pairs using an inferior algorithm.
         for n in range(2, 9):
@@ -1555,8 +1555,17 @@ class TestLeafListIterator(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.LeafListIterator, None)
         ts = self.get_tree_sequence()
         tree = _msprime.SparseTree(ts)
-        self.assertRaises(ValueError, _msprime.LeafListIterator, tree, 1)
-        # TODO fix these tests and add more.
+        for bad_type in [None, "1", []]:
+            self.assertRaises(
+                TypeError, _msprime.LeafListIterator, tree, bad_type)
+        for bad_node in [-1, tree.get_num_nodes() + 1]:
+            self.assertRaises(
+                ValueError, _msprime.LeafListIterator, tree, bad_node)
+        # Do nasty things...
+        iterator = _msprime.LeafListIterator(tree, 1)
+        del tree
+        del ts
+        self.assertEqual(list(iterator), [1])
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
@@ -1565,3 +1574,21 @@ class TestLeafListIterator(LowLevelTestCase):
             self.verify_iterator(_msprime.LeafListIterator(tree, 1))
             self.verify_iterator(
                 _msprime.LeafListIterator(tree, tree.get_root()))
+
+    def test_leaf_list(self):
+        ts = self.get_tree_sequence()
+        st = _msprime.SparseTree(ts)
+        for t in _msprime.SparseTreeIterator(ts, st):
+            # All leaf nodes should have themselves.
+            for j in range(1, t.get_sample_size() + 1):
+                leaves = list(_msprime.LeafListIterator(t, j))
+                self.assertEqual(leaves, [j])
+            # All non-tree nodes should have 0
+            for j in range(t.get_num_nodes() + 1):
+                if t.get_parent(j) == 0 and j != t.get_root():
+                    leaves = list(_msprime.LeafListIterator(t, j))
+                    self.assertEqual(len(leaves), 0)
+            # The root should have all leaves.
+            leaves = list(_msprime.LeafListIterator(t, t.get_root()))
+            self.assertEqual(
+                sorted(leaves), range(1, t.get_sample_size() + 1))
