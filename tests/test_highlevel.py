@@ -179,6 +179,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
                 root = st1.get_parent(root)
             self.assertEqual(root, st1.get_root())
             self.assertEqual(st1, st2)
+            self.assertFalse(st1 != st2)
             l, r = st1.get_interval()
             self.assertEqual(l, length)
             self.assertGreaterEqual(l, 0)
@@ -296,6 +297,18 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertIsInstance(environment, dict)
         self.assertGreater(len(environment), 0)
 
+    def verify_dump_load(self, tree_sequence):
+        """
+        Dump the tree sequence and verify we can load again from the same
+        file.
+        """
+        with tempfile.NamedTemporaryFile() as f:
+            tree_sequence.dump(f.name)
+            other = msprime.load(f.name)
+        records = list(tree_sequence.records())
+        other_records = list(other.records())
+        self.assertEqual(records, other_records)
+
     def verify_simulation(self, n, m, r):
         """
         Verifies a simulation for the specified parameters.
@@ -307,15 +320,37 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertEqual(sim.get_scaled_recombination_rate(), r)
         sim.set_num_loci(m)
         self.assertEqual(sim.get_num_loci(), m)
+        seed = 1
+        sim.set_random_seed(seed)
+        self.assertEqual(sim.get_random_seed(), seed)
         sim.run()
+        self.assertEqual(sim.get_population_models(), [])
+        self.assertEqual(sim.get_num_breakpoints(), len(sim.get_breakpoints()))
+        self.assertGreater(sim.get_used_memory(), 0)
+        self.assertGreater(sim.get_time(), 0)
+        self.assertGreater(sim.get_num_avl_node_blocks(), 0)
+        self.assertGreater(sim.get_num_segment_blocks(), 0)
+        self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
+        self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
+        self.assertGreater(sim.get_max_memory(), 0)
         tree_sequence = sim.get_tree_sequence()
-        # TODO verify the records are the same
+        t = 0.0
+        for _, _, _, _, time in tree_sequence.records():
+            if time > t:
+                t = time
+        self.assertEqual(sim.get_time(), t)
+        self.assertGreater(sim.get_num_coancestry_events(), 0)
+        self.assertGreaterEqual(sim.get_num_recombination_events(), 0)
+        self.assertGreaterEqual(sim.get_num_multiple_recombination_events(), 0)
         self.verify_sparse_trees(tree_sequence)
+
         # TODO reenable test parameters and environment
         # self.verify_parameters(sim, tree_sequence)
         # self.verify_environment(tree_sequence)
         # TODO save the tree_sequence to a file and verify equality
         # between the two.
+
+        self.verify_dump_load(tree_sequence)
 
     def test_random_parameters(self):
         num_random_sims = 10
@@ -324,6 +359,39 @@ class TestTreeSimulator(HighLevelTestCase):
             m = random.randint(10, 100)
             r = random.random()
             self.verify_simulation(n, m, r)
+
+    def test_perf_parameters(self):
+        sim = msprime.TreeSimulator(10)
+        # Before we call run, all perf parameters should be None
+        self.assertIsNone(sim.get_avl_node_block_size())
+        self.assertIsNone(sim.get_segment_block_size())
+        self.assertIsNone(sim.get_node_mapping_block_size())
+        self.assertIsNone(sim.get_coalescence_record_block_size())
+        sim.run()
+        self.assertGreater(sim.get_avl_node_block_size(), 0)
+        self.assertGreater(sim.get_segment_block_size(), 0)
+        self.assertGreater(sim.get_node_mapping_block_size(), 0)
+        self.assertGreater(sim.get_coalescence_record_block_size(), 0)
+        sim.reset()
+        sim.set_avl_node_block_size(1)
+        sim.set_segment_block_size(1)
+        sim.set_node_mapping_block_size(1)
+        sim.set_coalescence_record_block_size(1)
+        self.assertEqual(sim.get_avl_node_block_size(), 1)
+        self.assertEqual(sim.get_segment_block_size(), 1)
+        self.assertEqual(sim.get_node_mapping_block_size(), 1)
+        self.assertEqual(sim.get_coalescence_record_block_size(), 1)
+
+    def test_bad_inputs(self):
+        sim = msprime.TreeSimulator(10)
+        for bad_type in ["xd", None, [], 4.4]:
+            self.assertRaises(TypeError, msprime.TreeSimulator, bad_type)
+            self.assertRaises(TypeError, sim.set_num_loci, bad_type)
+        for bad_value in [-1, 0, 2**32]:
+            self.assertRaises(ValueError, msprime.TreeSimulator, bad_value)
+            self.assertRaises(ValueError, sim.set_num_loci, bad_value)
+        self.assertRaises(ValueError, msprime.TreeSimulator, 1)
+        self.assertRaises(ValueError, sim.set_scaled_recombination_rate, -1)
 
 
 class TestHaplotypeGenerator(HighLevelTestCase):
@@ -360,8 +428,7 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         ts.run()
         tree_sequence = ts.get_tree_sequence()
         tree_sequence.generate_mutations(theta)
-        hg = msprime.HaplotypeGenerator(tree_sequence)
-        haplotypes = list(hg.haplotypes())
+        haplotypes = list(tree_sequence.haplotypes())
         for h in haplotypes:
             self.assertEqual(len(h), tree_sequence.get_num_mutations())
         self.verify_haplotypes(n, haplotypes)
@@ -537,7 +604,8 @@ class TestSparseTree(HighLevelTestCase):
     Some simple tests on the API for the sparse tree.
     """
     def get_tree(self):
-        return msprime.simulate_tree(10, random_seed=1)
+        return msprime.simulate_tree(
+            10, random_seed=1, scaled_mutation_rate=1)
 
     def test_str(self):
         t = self.get_tree()
@@ -575,7 +643,7 @@ class TestSparseTree(HighLevelTestCase):
         with tempfile.NamedTemporaryFile() as f:
             w = 123
             h = 456
-            t.draw(f.name, w, h)
+            t.draw(f.name, w, h, show_times=True)
             self.assertGreater(os.path.getsize(f.name), 0)
             # Check some basic stuff about the SVG output.
             f.seek(0)
