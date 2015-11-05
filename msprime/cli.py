@@ -237,9 +237,9 @@ def get_mspms_parser():
     return parser
 
 
-def mspms_main():
+def mspms_main(arg_list=None):
     parser = get_mspms_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(arg_list)
     if args.mutation_rate == 0 and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
     sr = create_simulation_runner(args)
@@ -251,29 +251,38 @@ def mspms_main():
 #######################################################
 
 def run_dump_newick(args):
-    tree_sequence = msprime.load(args.tree_file)
+    tree_sequence = msprime.load(args.history_file)
     for l, ns in tree_sequence.newick_trees():
-        print("[{0}]".format(l), end="")
         print(ns)
 
 
 def run_dump_haplotypes(args):
-    tree_sequence = msprime.load(args.tree_file)
+    tree_sequence = msprime.load(args.history_file)
     for h in tree_sequence.haplotypes():
         print(h)
 
 
 def run_dump_records(args):
-    tree_sequence = msprime.load(args.tree_file)
+    tree_sequence = msprime.load(args.history_file)
+    if args.header:
+        print("l", "r", "u", "c1", "c2", "t", sep="\t")
     for l, r, u, c, t in tree_sequence.records():
         print(l, r, u, c[0], c[1], t, sep="\t")
+
+
+def run_dump_mutations(args):
+    tree_sequence = msprime.load(args.history_file)
+    if args.header:
+        print("x", "u", sep="\t")
+    for position, node in tree_sequence.mutations():
+        print(position, node, sep="\t")
 
 
 def run_dump_macs(args):
     """
     Write a macs formatted file so we can import into pbwt.
     """
-    tree_sequence = msprime.load(args.tree_file)
+    tree_sequence = msprime.load(args.history_file)
     n = tree_sequence.get_sample_size()
     m = tree_sequence.get_num_loci()
     print("COMMAND:\tnot_macs {} {}".format(n, m))
@@ -298,7 +307,13 @@ def run_simulate(args):
         scaled_mutation_rate=args.mutation_rate,
         max_memory=args.max_memory,
         random_seed=args.random_seed)
-    tree_sequence.dump(args.tree_file, zlib_compression=args.compress)
+    tree_sequence.dump(args.history_file, zlib_compression=args.compress)
+
+
+def add_header_argument(parser):
+    parser.add_argument(
+        "--header", "-H", action="store_true", default=False,
+        help="Print a header line in the output.")
 
 
 def get_msp_parser():
@@ -313,7 +328,7 @@ def get_msp_parser():
             "simulate",
             help="Run the simulation")
     simulate_parser.add_argument("sample_size", type=float)
-    simulate_parser.add_argument("tree_file")
+    simulate_parser.add_argument("history_file")
     simulate_parser.add_argument(
         "--num-loci", "-m", type=float, default=1)
     simulate_parser.add_argument(
@@ -332,30 +347,38 @@ def get_msp_parser():
     records_parser = subparsers.add_parser(
             "records",
             help="Dump records in tabular format.")
-    records_parser.add_argument("tree_file")
+    records_parser.add_argument("history_file")
+    add_header_argument(records_parser)
     records_parser.set_defaults(runner=run_dump_records)
+
+    mutations_parser = subparsers.add_parser(
+            "mutations",
+            help="Dump mutations in tabular format.")
+    mutations_parser.add_argument("history_file")
+    add_header_argument(mutations_parser)
+    mutations_parser.set_defaults(runner=run_dump_mutations)
 
     haplotypes_parser = subparsers.add_parser(
             "haplotypes",
             help="Dump results in tabular format.")
-    haplotypes_parser.add_argument("tree_file")
+    haplotypes_parser.add_argument("history_file")
     haplotypes_parser.set_defaults(runner=run_dump_haplotypes)
 
     macs_parser = subparsers.add_parser(
             "macs",
             help="Dump results in MaCS format.")
-    macs_parser.add_argument("tree_file")
+    macs_parser.add_argument("history_file")
     macs_parser.set_defaults(runner=run_dump_macs)
 
     newick_parser = subparsers.add_parser(
             "newick",
             help="Dump results in newick format.")
-    newick_parser.add_argument("tree_file")
+    newick_parser.add_argument("history_file")
     newick_parser.set_defaults(runner=run_dump_newick)
     return parser
 
 
-def msp_main():
+def msp_main(arg_list=None):
     parser = get_msp_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(arg_list)
     args.runner(args)
