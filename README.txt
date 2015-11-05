@@ -46,6 +46,7 @@ follows::
     (msprime-env) $ pip install msprime
     (msprime-env) $ mspms
 
+See below for installation instructions for Macs.
 
 *************
 Requirements
@@ -67,11 +68,10 @@ On FreeBSD we can use ``pkg`` to install the requirements::
 
     # pkg install gsl hdf5-18
 
-----
-TODO
-----
+To install the dependencies on OS X, we can use `Homebrew <http://brew.sh/>`_::
 
-- Add instructions for HomeBrew/MacPorts.
+    $ brew update
+    $ brew install gsl homebrew/science/hdf5
 
 ************
 Installation
@@ -120,10 +120,33 @@ This assumes that root is logged in using a bash shell. For other shells,
 different methods are need to set the ``CFLAGS`` and ``LDFLAGS`` environment
 variables.
 
----
-OSX
----
-*TODO*
+++++
+OS X
+++++
+
+First, ensure that Homebrew is installed and up-to-date::
+
+    $ brew update
+
+We need to ensure that the version of Python we used is installed via Homebrew
+(there can be issues with linking to HDF5 if we use the built-in version of
+Python or a version from Anaconda). Therefore, we install Python 3 using
+homebrew::
+
+    $ brew install python3
+    $ python3 -m ensurepip --upgrade
+
+The previous step can be skipped if you wish to use your own Python installation,
+and already have a working pip.
+
+Now install the dependencies and msprime::
+
+    $ brew install gsl homebrew/science/hdf5
+    $ pip3 install msprime
+
+Check if it works::
+
+    $ mspms 10 1 -T
 
 ****************
 Tested platforms
