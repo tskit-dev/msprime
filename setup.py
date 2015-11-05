@@ -76,6 +76,7 @@ class PathConfigurator(object):
             print("pkg-config error (not installed?):", e)
         except subprocess.CalledProcessError as e:
             print("pkg-config failed:", e)
+        print("Returning pkg-config list", ret)
         return ret
 
     def _attempt_pkgconfig(self):
@@ -139,7 +140,7 @@ setup(
             'mspms=msprime.cli:mspms_main',
         ]
     },
-    install_requires=[],
+    install_requires=["svgwrite"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU LGPLv3+",
