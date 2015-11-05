@@ -24,7 +24,7 @@ Quick Start
 To install and run ``msprime`` on a fresh Ubuntu 15.10 installation, do the
 following::
 
-    $ sudo apt-get install pkgconf python-dev python-pip libgsl0-dev hdf5-tools libhdf5-serial-dev
+    $ sudo apt-get install pkg-config python-dev python-pip libgsl0-dev hdf5-tools libhdf5-serial-dev
     $ sudo pip install msprime
     $ mspms 2 1 -t 1
     /usr/local/bin/mspms 2 1 -t 1
@@ -164,4 +164,5 @@ Debian wheezy           i686            2.7.3           gcc 4.7.2
 Fedora 20               x86-64          2.7.5           gcc 4.8.3
 FreeBSD 10              x86-64          2.7.6           clang 3.4.1
 SunOS 5.10              SPARC           3.4.1           gcc 3.4.3
+OS X 10.10.5            x86-64          3.4.2           clang 7.0.0
 ====================    ========        ======          ===========
