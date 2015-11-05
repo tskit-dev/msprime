@@ -21,7 +21,7 @@ script:
   - flake8 setup.py msprime tests
   - nosetests -v --with-coverage --cover-package msprime
               --cover-branches --cover-erase
-              --cover-inclusive --cover-min-percentage 80 tests
+              --cover-inclusive --cover-min-percentage 90 tests
   - make -C docs 
 
 env:
