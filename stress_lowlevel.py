@@ -268,7 +268,7 @@ class StressTester(object):
                 assert st.get_num_tracked_leaves(j) == 0
         # provoke some error conditions to make sure we're not leaking
         # memory.
-        leaves = range(1, 10**6)
+        leaves = list(range(1, 10**6))
         try:
             st = _msprime.SparseTree(ts, leaves)
         except _msprime.LibraryError:
