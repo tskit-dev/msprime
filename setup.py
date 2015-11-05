@@ -138,6 +138,7 @@ setup(
     entry_points={
         'console_scripts': [
             'mspms=msprime.cli:mspms_main',
+            'msp=msprime.cli:msp_main',
         ]
     },
     install_requires=["svgwrite"],
