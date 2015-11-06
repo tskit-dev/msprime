@@ -340,8 +340,8 @@ def get_msp_parser():
     subparsers = parser.add_subparsers()
 
     simulate_parser = subparsers.add_parser(
-            "simulate",
-            help="Run the simulation")
+        "simulate",
+        help="Run the simulation")
     add_sample_size_argument(simulate_parser)
     add_history_file_argument(simulate_parser)
     simulate_parser.add_argument(
@@ -367,34 +367,34 @@ def get_msp_parser():
     simulate_parser.set_defaults(runner=run_simulate)
 
     records_parser = subparsers.add_parser(
-            "records",
-            help="Dump records in tabular format.")
+        "records",
+        help="Dump records in tabular format.")
     add_history_file_argument(records_parser)
     add_header_argument(records_parser)
     records_parser.set_defaults(runner=run_dump_records)
 
     mutations_parser = subparsers.add_parser(
-            "mutations",
-            help="Dump mutations in tabular format.")
+        "mutations",
+        help="Dump mutations in tabular format.")
     add_history_file_argument(mutations_parser)
     add_header_argument(mutations_parser)
     mutations_parser.set_defaults(runner=run_dump_mutations)
 
     haplotypes_parser = subparsers.add_parser(
-            "haplotypes",
-            help="Dump results in tabular format.")
+        "haplotypes",
+        help="Dump results in tabular format.")
     add_history_file_argument(haplotypes_parser)
     haplotypes_parser.set_defaults(runner=run_dump_haplotypes)
 
     macs_parser = subparsers.add_parser(
-            "macs",
-            help="Dump results in MaCS format.")
+        "macs",
+        help="Dump results in MaCS format.")
     add_history_file_argument(macs_parser)
     macs_parser.set_defaults(runner=run_dump_macs)
 
     newick_parser = subparsers.add_parser(
-            "newick",
-            help="Dump results in newick format.")
+        "newick",
+        help="Dump results in newick format.")
     add_history_file_argument(newick_parser)
     newick_parser.set_defaults(runner=run_dump_newick)
     return parser
