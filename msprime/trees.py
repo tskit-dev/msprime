@@ -440,9 +440,9 @@ def simulate(
     :param int num_loci: The length of the simulated region in
         discrete non-recombining loci.
     :param float scaled_recombination_rate: The rate of recombination
-        between adjacent loci per :math:`4N` generations.
+        between adjacent loci per :math:`4N_0` generations.
     :param float scaled_mutation_rate: The rate of mutation
-        per locus per :math:`4N` generations.
+        per locus per :math:`4N_0` generations.
     :param list population_models: The list of :class:`.PopulationModel`
         instances describing the demographic history of the population.
     :param int random_seed: The random seed. If this is `None`, a
@@ -478,7 +478,7 @@ def simulate_tree(
 
     :param int sample_size: The number of individuals in our sample.
     :param float scaled_mutation_rate: The rate of mutation
-        per :math:`4N` generations.
+        per :math:`4N_0` generations.
     :param list population_models: The list of :class:`.PopulationModel`
         instances describing the demographic history of the population.
     :param int random_seed: The random seed. If this is `None`, a
@@ -868,8 +868,8 @@ class TreeSequence(object):
 
     def mutations(self):
         """
-        Returns an iterator over the mutations on this tree. Each mutation
-        is represented as a tuple (position, node), and mutations
+        Returns an iterator over the mutations in this tree sequence. Each
+        mutation is represented as a tuple (position, node), and mutations
         returned in increasing order of position.
 
         :return: The mutations in this tree sequence.
@@ -929,7 +929,7 @@ class TreeSequence(object):
         sequence.
 
         :param float scaled_mutation_rate: The rate of mutation
-            per locus per :math:`4N` generations.
+            per locus per :math:`4N_0` generations.
         :param int random_seed: The random seed to use when generating
             mutations.
         """
@@ -946,7 +946,7 @@ class TreeSequence(object):
         defining a genomic position and :math:`u` is an integer defining a tree
         node. A genomic position :math:`x` must satisfy :math:`0 \leq x < m`
         where :math:`m` is the number of loci (see :meth:`.get_num_loci`). A
-        node :math:`u` must satisfy :math:`0 < u \leq N` where `N` is the
+        node :math:`u` must satisfy :math:`0 < u \leq N` where :math:`N` is the
         largest valued node in the tree sequence (see :meth:`.get_num_nodes`).
 
         :param list mutations: The list of mutations to be assigned to this
@@ -1004,12 +1004,11 @@ class ConstantPopulationModel(PopulationModel):
 
 class ExponentialPopulationModel(PopulationModel):
     """
-
     A population model in which the size is exponentially growing (or
     shrinking). If we have a :attr:`start_time` of :math:`s`, the population
-    size at a time :math:`t` (measured in units of :math:`4N_0` generations) is
-    :math:`N_s e^{\\alpha (t - s)}`, where :math:`N_s` is the population size
-    at time :math:`s`.
+    size at a time :math:`t` (measured in units of :math:`4N_0_0` generations)
+    is :math:`N_s e^{\\alpha (t - s)}`, where :math:`N_s` is the population
+    size at time :math:`s`.
 
     :param float start_time: The time (in coalescent units) at which
         this population model begins.

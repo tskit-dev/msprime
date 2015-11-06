@@ -45,6 +45,39 @@ mscompat_recombination_help = (
     "of sites between which recombination can occur")
 
 
+def positive_int(value):
+    int_value = int(float(value))
+    if int_value <= 0:
+        msg = "{0} in an invalid postive integer value".format(value)
+        raise argparse.ArgumentTypeError(msg)
+    return int_value
+
+
+def add_sample_size_argument(parser):
+    parser.add_argument(
+        "sample_size", type=positive_int,
+        help="The number of individuals in the sample")
+
+
+def add_history_file_argument(parser):
+    parser.add_argument(
+        "history_file", help="The msprime history file in HDF5 format")
+
+
+def add_header_argument(parser):
+    parser.add_argument(
+        "--header", "-H", action="store_true", default=False,
+        help="Print a header line in the output.")
+
+
+def add_max_memory_argument(parser):
+    parser.add_argument(
+        "--max-memory", "-M", default="100M",
+        help=(
+            "Maximum memory to use. If the simulation exceeds this limit "
+            "exit with error status. Supports K,M and G suffixes"))
+
+
 def get_seeds(random_seeds):
     """
     Takes the specified command line seeds and truncates them to 16
@@ -143,14 +176,6 @@ class SimulationRunner(object):
             self._simulator.reset()
 
 
-def positive_int(value):
-    int_value = int(value)
-    if int_value <= 0:
-        msg = "{0} in an invalid postive integer value".format(value)
-        raise argparse.ArgumentTypeError(msg)
-    return int_value
-
-
 def create_simulation_runner(args):
     """
     Parses the arguments and returns a SimulationRunner instance.
@@ -190,7 +215,7 @@ def create_simulation_runner(args):
 
 def get_mspms_parser():
     parser = argparse.ArgumentParser(description=mscompat_description)
-    parser.add_argument("sample_size", type=positive_int, help="Sample size")
+    add_sample_size_argument(parser)
     parser.add_argument(
         "num_replicates", type=positive_int,
         help="Number of independent replicates")
@@ -229,11 +254,7 @@ def get_mspms_parser():
     group.add_argument(
         "--precision", "-p", type=positive_int, default=3,
         help="Number of values after decimal place to print")
-    group.add_argument(
-        "--max-memory", "-M", default="100M",
-        help=(
-            "Maximum memory to use. If the simulation exceeds this limit "
-            "exit with error status. Supports K,M and G suffixes"))
+    add_max_memory_argument(group)
     return parser
 
 
@@ -310,12 +331,6 @@ def run_simulate(args):
     tree_sequence.dump(args.history_file, zlib_compression=args.compress)
 
 
-def add_header_argument(parser):
-    parser.add_argument(
-        "--header", "-H", action="store_true", default=False,
-        help="Print a header line in the output.")
-
-
 def get_msp_parser():
     parser = argparse.ArgumentParser(
         description="Command line interface for msprime.")
@@ -327,53 +342,60 @@ def get_msp_parser():
     simulate_parser = subparsers.add_parser(
             "simulate",
             help="Run the simulation")
-    simulate_parser.add_argument("sample_size", type=float)
-    simulate_parser.add_argument("history_file")
+    add_sample_size_argument(simulate_parser)
+    add_history_file_argument(simulate_parser)
     simulate_parser.add_argument(
-        "--num-loci", "-m", type=float, default=1)
+        "--num-loci", "-m", type=float, default=1,
+        help="The number of non-recombining loci")
     simulate_parser.add_argument(
-        "--recombination-rate", "-r", type=float, default=0)
+        "--recombination-rate", "-r", type=float, default=0,
+        help=(
+            "The rate at which recombination occurs between adjacent loci "
+            "in units of 4N generations"))
     simulate_parser.add_argument(
-        "--mutation-rate", "-u", type=float, default=0)
+        "--mutation-rate", "-u", type=float, default=0,
+        help=(
+            "The rate at which mutations occur within a single locus "
+            "in units of 4N generations"))
     simulate_parser.add_argument(
-        "--random-seed", "-s", type=int, default=None)
-    simulate_parser.add_argument(
-        "--max-memory", "-M", default="1G")
+        "--random-seed", "-s", type=int, default=None,
+        help="The random seed. If not specified one is chosen randomly")
+    add_max_memory_argument(simulate_parser)
     simulate_parser.add_argument(
         "--compress", "-z", action="store_true",
-        help="Compress the output file")
+        help="Enable HDF5's transparent zlib compression")
     simulate_parser.set_defaults(runner=run_simulate)
 
     records_parser = subparsers.add_parser(
             "records",
             help="Dump records in tabular format.")
-    records_parser.add_argument("history_file")
+    add_history_file_argument(records_parser)
     add_header_argument(records_parser)
     records_parser.set_defaults(runner=run_dump_records)
 
     mutations_parser = subparsers.add_parser(
             "mutations",
             help="Dump mutations in tabular format.")
-    mutations_parser.add_argument("history_file")
+    add_history_file_argument(mutations_parser)
     add_header_argument(mutations_parser)
     mutations_parser.set_defaults(runner=run_dump_mutations)
 
     haplotypes_parser = subparsers.add_parser(
             "haplotypes",
             help="Dump results in tabular format.")
-    haplotypes_parser.add_argument("history_file")
+    add_history_file_argument(haplotypes_parser)
     haplotypes_parser.set_defaults(runner=run_dump_haplotypes)
 
     macs_parser = subparsers.add_parser(
             "macs",
             help="Dump results in MaCS format.")
-    macs_parser.add_argument("history_file")
+    add_history_file_argument(macs_parser)
     macs_parser.set_defaults(runner=run_dump_macs)
 
     newick_parser = subparsers.add_parser(
             "newick",
             help="Dump results in newick format.")
-    newick_parser.add_argument("history_file")
+    add_history_file_argument(newick_parser)
     newick_parser.set_defaults(runner=run_dump_newick)
     return parser
 
