@@ -134,7 +134,7 @@ Python or a version from Anaconda). Therefore, we install Python 3 using
 homebrew::
 
     $ brew install python3
-    $ python3 -m ensurepip --upgrade
+    $ pip3 install --upgrade pip setuptools
 
 The previous step can be skipped if you wish to use your own Python installation,
 and already have a working pip.
