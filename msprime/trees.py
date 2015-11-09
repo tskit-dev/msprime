@@ -25,7 +25,11 @@ from __future__ import print_function
 import math
 import random
 
-import svgwrite
+try:
+    import svgwrite
+    _svgwrite_imported = True
+except ImportError:
+    _svgwrite_imported = False
 
 import _msprime
 
@@ -307,6 +311,9 @@ class SparseTree(object):
         :param bool show_times: If True, show time labels at each internal
             node.
         """
+        if not _svgwrite_imported:
+            raise ImportError(
+                "svgwrite is not installed. try `pip install svgwrite`")
         td = TreeDrawer(self, width, height, show_times)
         td.write(path)
 
