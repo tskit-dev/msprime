@@ -23,11 +23,19 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import os
 import random
+import signal
 import struct
 import sys
 
 import msprime
+
+
+def set_sigpipe_handler():
+    if os.name == "posix":
+        # Set signal handler for SIGPIPE to quietly kill the program.
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 #######################################################
 # mspms: the ms compatible interface
@@ -259,6 +267,7 @@ def get_mspms_parser():
 
 
 def mspms_main(arg_list=None):
+    set_sigpipe_handler()
     parser = get_mspms_parser()
     args = parser.parse_args(arg_list)
     if args.mutation_rate == 0 and not args.trees:
@@ -403,6 +412,7 @@ def get_msp_parser():
 
 
 def msp_main(arg_list=None):
+    set_sigpipe_handler()
     parser = get_msp_parser()
     args = parser.parse_args(arg_list)
     args.runner(args)
