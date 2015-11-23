@@ -706,17 +706,19 @@ msp_print_segment_chain(msp_t *self, segment_t *head)
 void
 msp_verify(msp_t *self)
 {
-    int64_t s, ss, total_links;
+    int64_t s, ss, total_links, left, right, alt_total_links;
     size_t total_segments = 0;
     size_t total_avl_nodes = 0;
     avl_node_t *node;
     segment_t *u;
 
     total_links = 0;
+    alt_total_links = 0;
     node = (&self->ancestral_population)->head;
     while (node != NULL) {
         u = (segment_t *) node->item;
         assert(u->prev == NULL);
+        left = u->left;
         while (u != NULL) {
             total_segments++;
             assert(u->left < u->right);
@@ -729,7 +731,7 @@ msp_verify(msp_t *self)
             }
             */
             if (u->prev != NULL) {
-                s = u->right - u->prev->right - 1;
+                s = u->right - u->prev->right;
             } else {
                 s = u->right - u->left - 1;
             }
@@ -737,11 +739,14 @@ msp_verify(msp_t *self)
             total_links += ss;
             assert(s == ss);
             ss = s; /* just to keep compiler happy - see below also */
+            right = u->right;
             u = u->next;
         }
+        alt_total_links += right - left - 1;
         node = node->next;
     }
     assert(total_links == fenwick_get_total(&self->links));
+    assert(total_links == alt_total_links);
     assert(total_segments == object_heap_get_num_allocated(
                 &self->segment_heap));
     total_avl_nodes = avl_count(&self->ancestral_population)
@@ -801,7 +806,8 @@ msp_print_state(msp_t *self)
         u = msp_get_segment(self, j);
         v = fenwick_get_value(&self->links, j);
         if (v != 0) {
-            printf("\t%ld\tl=%d r=%d v=%d prev=%p next=%p\n", (long) v, u->left,
+            printf("\t%ld\ti=%d l=%d r=%d v=%d prev=%p next=%p\n", (long) v,
+                    (int) u->index, u->left,
                     u->right, (int) u->value, (void *) u->prev, (void *) u->next);
         }
     }
@@ -1105,14 +1111,15 @@ msp_coancestry_event(msp_t *self)
                 if (ret != 0) {
                     goto out;
                 }
+                fenwick_set_value(&self->links, alpha->index,
+                        alpha->right - alpha->left - 1);
             } else {
                 defrag_required |= z->right == alpha->left && z->value == alpha->value;
                 z->next = alpha;
-                l = z->right;
+                fenwick_set_value(&self->links, alpha->index, alpha->right - z->right);
             }
             alpha->prev = z;
             z = alpha;
-            fenwick_set_value(&self->links, alpha->index, alpha->right - l - 1);
         }
     }
     if (defrag_required) {
