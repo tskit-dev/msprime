@@ -703,7 +703,7 @@ msp_print_segment_chain(msp_t *self, segment_t *head)
 }
 
 
-static void
+void
 msp_verify(msp_t *self)
 {
     int64_t s, ss, total_links;

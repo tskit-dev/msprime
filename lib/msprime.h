@@ -287,6 +287,7 @@ int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);
+void msp_verify(msp_t *self);
 
 int msp_get_population_models(msp_t *self, population_model_t *models);
 int msp_get_ancestors(msp_t *self, segment_t **ancestors);
