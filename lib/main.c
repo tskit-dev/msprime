@@ -406,10 +406,14 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    result = msp_run(msp, DBL_MAX, ULONG_MAX);
-    if (result < 0) {
-        ret = result;
-        goto out;
+    result = 1;
+    while (result == 1) {
+        result = msp_run(msp, DBL_MAX, 1);
+        if (result < 0) {
+            ret = result;
+            goto out;
+        }
+        msp_verify(msp);
     }
     ret = msp_print_state(msp);
     if (ret != 0) {
