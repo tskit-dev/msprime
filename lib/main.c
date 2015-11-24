@@ -414,7 +414,7 @@ run_simulate(char *conf_file)
             goto out;
         }
         msp_verify(msp);
-        /* ret = msp_print_state(msp); */
+        ret = msp_print_state(msp);
     }
     ret = msp_print_state(msp);
     if (ret != 0) {
