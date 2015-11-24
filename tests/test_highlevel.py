@@ -479,17 +479,18 @@ class TestNewickConversion(HighLevelTestCase):
         the all_breakpoints option for newick generation.
         """
         trees = list(tree_sequence.newick_trees(2, breakpoints))
-        self.assertEqual(len(trees), len(breakpoints) - 1)
+        bp = [0] + breakpoints + [tree_sequence.get_num_loci()]
+        self.assertEqual(len(trees), len(bp) - 1)
         j = 0
         s = 0
         for length, _ in trees:
             self.assertGreater(length, 0)
-            self.assertEqual(s, breakpoints[j])
+            self.assertEqual(s, bp[j])
             s += length
             j += 1
         self.assertEqual(s, tree_sequence.get_num_loci())
         pts = tests.PythonTreeSequence(
-            tree_sequence.get_ll_tree_sequence(), breakpoints)
+            tree_sequence.get_ll_tree_sequence(), bp)
         diffs = list(pts.diffs(all_breaks=True))
         self.assertEqual(len(diffs), len(trees))
         for j in range(1, len(diffs)):
