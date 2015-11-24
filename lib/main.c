@@ -414,38 +414,38 @@ run_simulate(char *conf_file)
             goto out;
         }
         msp_verify(msp);
-        ret = msp_print_state(msp);
+        /* ret = msp_print_state(msp); */
     }
     ret = msp_print_state(msp);
     if (ret != 0) {
         goto out;
     }
-    /* Create the tree_sequence from the state of the simulator. */
-    ret = tree_sequence_create(tree_seq, msp);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_generate_mutations(tree_seq,
-            mutation_params.mutation_rate, mutation_params.random_seed);
-    if (ret != 0) {
-        goto out;
-    }
-    int j;
-    for (j = 0; j < 1; j++) {
-        ret = tree_sequence_dump(tree_seq, output_file, 0);
-        if (ret != 0) {
-            goto out;
-        }
-        tree_sequence_free(tree_seq);
-        memset(tree_seq, 0, sizeof(tree_sequence_t));
-        ret = tree_sequence_load(tree_seq, output_file, 0);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    print_tree_sequence(tree_seq);
-    print_haplotypes(tree_seq);
     if (0) {
+        /* Create the tree_sequence from the state of the simulator. */
+        ret = tree_sequence_create(tree_seq, msp);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = tree_sequence_generate_mutations(tree_seq,
+                mutation_params.mutation_rate, mutation_params.random_seed);
+        if (ret != 0) {
+            goto out;
+        }
+        int j;
+        for (j = 0; j < 1; j++) {
+            ret = tree_sequence_dump(tree_seq, output_file, 0);
+            if (ret != 0) {
+                goto out;
+            }
+            tree_sequence_free(tree_seq);
+            memset(tree_seq, 0, sizeof(tree_sequence_t));
+            ret = tree_sequence_load(tree_seq, output_file, 0);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        print_tree_sequence(tree_seq);
+        print_haplotypes(tree_seq);
         tree_sequence_print_state(tree_seq);
         print_newick_trees(tree_seq);
         tree_sequence_print_state(tree_seq);

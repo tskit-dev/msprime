@@ -965,6 +965,64 @@ out:
     return ret;
 }
 
+static int
+msp_compress_overlap_counts(msp_t *self)
+{
+    int ret = 0;
+    avl_node_t *node1, *node2;
+    node_mapping_t *nm1, *nm2;
+
+    /* printf("Coalescence occured\n"); */
+
+    /* printf("Before: Overlap count = %d\n", avl_count(&self->overlap_counts)); */
+    /* for (node1 = self->overlap_counts.head; node1 != NULL; node1 = node1->next) { */
+    /*     nm1 = (node_mapping_t *) node1->item; */
+    /*     printf("\t%d -> %d\n", nm1->left, nm1->value); */
+    /* } */
+
+    node1 = self->overlap_counts.head;
+    node2 = node1->next;
+    while (node2 != NULL) {
+        nm1 = (node_mapping_t *) node1->item;
+        nm2 = (node_mapping_t *) node2->item;
+        if (nm1->value == nm2->value) {
+            /* printf("Squash %d\n", nm2->left); */
+            // TODO free the node mapping.
+            avl_unlink_node(&self->overlap_counts, node2);
+            msp_free_avl_node(self, node2);
+            node2 = node1->next;
+        } else {
+            node1 = node2;
+            node2 = node2->next;
+        }
+    }
+
+    /* printf("After: Overlap count = %d\n", avl_count(&self->overlap_counts)); */
+    /* for (node1 = self->overlap_counts.head; node1 != NULL; node1 = node1->next) { */
+    /*     nm1 = (node_mapping_t *) node1->item; */
+    /*     printf("\t%d -> %d\n", nm1->left, nm1->value); */
+    /* } */
+
+/*     for (node = self->overlap_counts.head; node->next != NULL; node = node->next) { */
+/*         nm = (node_mapping_t *) node->item; */
+/*         v = nm->value; */
+/*         nm = (node_mapping_t *) node->next->item; */
+/*         if (v == nm->value) { */
+/*             printf("squash %d\n", nm->left); */
+/*         } */
+
+/*     } */
+
+/*     printf("After: Overlap count = %d\n", avl_count(&self->overlap_counts)); */
+/*     for (node = self->overlap_counts.head; node != NULL; */
+/*             node = node->next) { */
+/*         nm = (node_mapping_t *) node->item; */
+/*         printf("\t%d -> %d\n", nm->left, nm->value); */
+/*     } */
+
+    return ret;
+}
+
 static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
 {
@@ -1132,34 +1190,6 @@ msp_coancestry_event(msp_t *self)
                         goto out;
                     }
                 }
-
-                /* l = x->left; */
-                /* search.left = l; */
-                /* node = avl_search(&self->breakpoints, &search); */
-                /* assert(node != NULL); */
-                /* nm = (node_mapping_t *) node->item; */
-                /* nm->value -= 1; */
-                /* segment_coalesced = nm->value == 1; */
-                /* node = node->next; */
-                /* assert(node != NULL); */
-                /* nm = (node_mapping_t *) node->item; */
-                /* r = nm->left; */
-                /* if (!segment_coalesced) { */
-                /*     r_max = GSL_MIN(x->right, y->right); */
-                /*     while (nm->value > 2 && r < r_max) { */
-                /*         nm->value--; */
-                /*         node = node->next; */
-                /*         assert(node != NULL); */
-                /*         nm = (node_mapping_t *) node->item; */
-                /*         r = nm->left; */
-                /*     } */
-                /*     alpha = msp_alloc_segment(self, l, r, v, NULL, NULL); */
-                /*     if (alpha == NULL) { */
-                /*         ret = MSP_ERR_NO_MEMORY; */
-                /*         goto out; */
-                /*     } */
-                /* } */
-
                 ret = msp_record_coalescence(self, l, r, x->value, y->value, v);
                 if (ret != 0) {
                     goto out;
@@ -1213,6 +1243,12 @@ msp_coancestry_event(msp_t *self)
                 msp_free_segment(self, y);
             }
             y = x;
+        }
+    }
+    if (coalescence) {
+        ret = msp_compress_overlap_counts(self);
+        if (ret != 0) {
+            goto out;
         }
     }
 out:
