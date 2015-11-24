@@ -272,7 +272,7 @@ class TestSimulationState(LowLevelTestCase):
         Verifies the state of the specified simulation that has run
         for at least one event.
         """
-        self.assertGreater(sim.get_num_breakpoints(), 0)
+        self.assertGreaterEqual(sim.get_num_breakpoints(), 0)
         self.assertGreater(sim.get_time(), 0.0)
         self.assertGreater(sim.get_num_ancestors(), 1)
         self.assertGreater(sim.get_used_memory(), 0)
@@ -292,11 +292,9 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertTrue(0 <= l < m)
                 self.assertTrue(1 <= r <= m)
                 self.assertGreaterEqual(node, 1)
-        breakpoints = sim.get_breakpoints()
-        self.assertEqual(len(breakpoints), sim.get_num_breakpoints())
+        breakpoints = [0] + sim.get_breakpoints() + [m]
+        self.assertEqual(len(breakpoints), sim.get_num_breakpoints() + 2)
         self.assertEqual(breakpoints, sorted(breakpoints))
-        self.assertEqual(breakpoints[0], 0)
-        self.assertEqual(breakpoints[-1], m)
         records = sim.get_coalescence_records()
         self.assertEqual(len(records), sim.get_num_coalescence_records())
         for l, r, p, children, t in records:
@@ -421,7 +419,7 @@ class TestSimulationState(LowLevelTestCase):
         st = next(st_iter)
         self.verify_trees_equal(n, pi, tau, st)
         num_trees += 1
-        self.assertLessEqual(num_trees, sim.get_num_breakpoints())
+        self.assertLessEqual(num_trees, sim.get_num_breakpoints() + 2)
         self.assertRaises(StopIteration, next, st_iter)
 
     def verify_squashed_records(self, sorted_records):
@@ -442,7 +440,7 @@ class TestSimulationState(LowLevelTestCase):
         """
         self.assertEqual(sim.get_ancestors(), [])
         self.assertEqual(sim.get_num_ancestors(), 0)
-        self.assertGreater(sim.get_num_breakpoints(), 0)
+        self.assertGreaterEqual(sim.get_num_breakpoints(), 0)
         self.assertGreater(sim.get_num_coalescence_records(), 0)
         self.assertGreater(sim.get_time(), 0.0)
         events = sim.get_num_coancestry_events()
