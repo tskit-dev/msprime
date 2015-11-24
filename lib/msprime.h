@@ -129,6 +129,7 @@ typedef struct {
     gsl_rng *rng;
     avl_tree_t ancestral_population;
     avl_tree_t breakpoints;
+    avl_tree_t overlap_counts;
     fenwick_t links;
     /* memory management */
     object_heap_t avl_node_heap;

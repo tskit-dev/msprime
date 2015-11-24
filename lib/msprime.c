@@ -449,6 +449,7 @@ msp_alloc(msp_t *self, uint32_t sample_size)
     /* set up the AVL trees */
     avl_init_tree(&self->ancestral_population, cmp_individual, NULL);
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
+    avl_init_tree(&self->overlap_counts, cmp_node_mapping, NULL);
     /* Add the base population model */
     ret = msp_add_constant_population_model(self, -1.0, 1.0);
 out:
@@ -750,7 +751,8 @@ msp_verify(msp_t *self)
     assert(total_segments == object_heap_get_num_allocated(
                 &self->segment_heap));
     total_avl_nodes = avl_count(&self->ancestral_population)
-            + avl_count(&self->breakpoints);
+            + avl_count(&self->breakpoints)
+            + avl_count(&self->overlap_counts);
     assert(total_avl_nodes == object_heap_get_num_allocated(
                 &self->avl_node_heap));
     if (total_avl_nodes == total_segments) {
@@ -816,6 +818,11 @@ msp_print_state(msp_t *self)
         nm = (node_mapping_t *) node->item;
         printf("\t%d -> %d\n", nm->left, nm->value);
     }
+    printf("Overlap count = %d\n", avl_count(&self->overlap_counts));
+    for (node = self->overlap_counts.head; node != NULL; node = node->next) {
+        nm = (node_mapping_t *) node->item;
+        printf("\t%d -> %d\n", nm->left, nm->value);
+    }
     printf("Coalescence records = %ld\n", (long) self->num_coalescence_records);
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
@@ -840,11 +847,35 @@ out:
 }
 
 /*
- * Inserts a new breakpoint at the specified locus left, mapping to the
- * specified tree node v.
+ * Inserts a new breakpoint at the specified locus left.
  */
 static int WARN_UNUSED
-msp_insert_breakpoint(msp_t *self, uint32_t left, uint32_t v)
+msp_insert_breakpoint(msp_t *self, uint32_t left)
+{
+    int ret = 0;
+    avl_node_t *node = msp_alloc_avl_node(self);
+    node_mapping_t *m = msp_alloc_node_mapping(self);
+
+    if (node == NULL || m == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    m->left = left;
+    m->value = 0;
+    avl_init_node(node, m);
+    node = avl_insert_node(&self->breakpoints, node);
+    assert(node != NULL);
+out:
+    return ret;
+}
+
+
+/*
+ * Inserts a new overlap_count at the specified locus left, mapping to the
+ * specified number of overlapping segments b.
+ */
+static int WARN_UNUSED
+msp_insert_overlap_count(msp_t *self, uint32_t left, uint32_t v)
 {
     int ret = 0;
     avl_node_t *node = msp_alloc_avl_node(self);
@@ -857,25 +888,25 @@ msp_insert_breakpoint(msp_t *self, uint32_t left, uint32_t v)
     m->left = left;
     m->value = v;
     avl_init_node(node, m);
-    node = avl_insert_node(&self->breakpoints, node);
+    node = avl_insert_node(&self->overlap_counts, node);
     assert(node != NULL);
 out:
     return ret;
 }
 
 /*
- * Inserts a new breakpoint at the specified locus, and copies its
- * node mapping from the containing breakpoint.
+ * Inserts a new overlap_count at the specified locus, and copies its
+ * node mapping from the containing overlap_count.
  */
 static int WARN_UNUSED
-msp_copy_breakpoint(msp_t *self, uint32_t k)
+msp_copy_overlap_count(msp_t *self, uint32_t k)
 {
     int ret;
     node_mapping_t search, *nm;
     avl_node_t *node;
 
     search.left = k;
-    avl_search_closest(&self->breakpoints, &search, &node);
+    avl_search_closest(&self->overlap_counts, &search, &node);
     assert(node != NULL);
     nm = (node_mapping_t *) node->item;
     if (nm->left > k) {
@@ -883,7 +914,7 @@ msp_copy_breakpoint(msp_t *self, uint32_t k)
         assert(node != NULL);
         nm = (node_mapping_t *) node->item;
     }
-    ret = msp_insert_breakpoint(self, k, nm->value);
+    ret = msp_insert_overlap_count(self, k, nm->value);
     return ret;
 }
 
@@ -970,7 +1001,7 @@ msp_recombination_event(msp_t *self)
         fenwick_increment(&self->links, y->index, k - z->right);
         search.left = (uint32_t) k;
         if (avl_search(&self->breakpoints, &search) == NULL) {
-            ret = msp_copy_breakpoint(self, (uint32_t) k);
+            ret = msp_insert_breakpoint(self, (uint32_t) k);
             if (ret != 0) {
                 goto out;
             }
@@ -996,7 +1027,6 @@ msp_coancestry_event(msp_t *self)
     int ret = 0;
     int coalescence = 0;
     int defrag_required = 0;
-    int segment_coalesced;
     uint32_t j, n, l, r, r_max, v;
     avl_node_t *node;
     node_mapping_t *nm, search;
@@ -1057,21 +1087,39 @@ msp_coancestry_event(msp_t *self)
                     assert(self->next_node != 0);
                 }
                 v = self->next_node - 1;
-
                 l = x->left;
+                r_max = GSL_MIN(x->right, y->right);
+                /* Insert overlap counts for bounds, if necessary */
                 search.left = l;
-                node = avl_search(&self->breakpoints, &search);
+                node = avl_search(&self->overlap_counts, &search);
+                if (node == NULL) {
+                    ret = msp_copy_overlap_count(self, l);
+                    if (ret < 0) {
+                        goto out;
+                    }
+                }
+                search.left = r_max;
+                node = avl_search(&self->overlap_counts, &search);
+                if (node == NULL) {
+                    ret = msp_copy_overlap_count(self, r_max);
+                    if (ret < 0) {
+                        goto out;
+                    }
+                }
+                /* Now get overlap count at the left */
+                search.left = l;
+                node = avl_search(&self->overlap_counts, &search);
                 assert(node != NULL);
                 nm = (node_mapping_t *) node->item;
-                nm->value -= 1;
-                segment_coalesced = nm->value == 1;
-                node = node->next;
-                assert(node != NULL);
-                nm = (node_mapping_t *) node->item;
-                r = nm->left;
-                if (!segment_coalesced) {
-                    r_max = GSL_MIN(x->right, y->right);
-                    while (nm->value > 2 && r < r_max) {
+                if (nm->value == 2) {
+                    nm->value = 0;
+                    node = node->next;
+                    assert(node != NULL);
+                    nm = (node_mapping_t *) node->item;
+                    r = nm->left;
+                } else {
+                    r = l;
+                    while (nm->value != 2 && r < r_max) {
                         nm->value--;
                         node = node->next;
                         assert(node != NULL);
@@ -1084,10 +1132,39 @@ msp_coancestry_event(msp_t *self)
                         goto out;
                     }
                 }
+
+                /* l = x->left; */
+                /* search.left = l; */
+                /* node = avl_search(&self->breakpoints, &search); */
+                /* assert(node != NULL); */
+                /* nm = (node_mapping_t *) node->item; */
+                /* nm->value -= 1; */
+                /* segment_coalesced = nm->value == 1; */
+                /* node = node->next; */
+                /* assert(node != NULL); */
+                /* nm = (node_mapping_t *) node->item; */
+                /* r = nm->left; */
+                /* if (!segment_coalesced) { */
+                /*     r_max = GSL_MIN(x->right, y->right); */
+                /*     while (nm->value > 2 && r < r_max) { */
+                /*         nm->value--; */
+                /*         node = node->next; */
+                /*         assert(node != NULL); */
+                /*         nm = (node_mapping_t *) node->item; */
+                /*         r = nm->left; */
+                /*     } */
+                /*     alpha = msp_alloc_segment(self, l, r, v, NULL, NULL); */
+                /*     if (alpha == NULL) { */
+                /*         ret = MSP_ERR_NO_MEMORY; */
+                /*         goto out; */
+                /*     } */
+                /* } */
+
                 ret = msp_record_coalescence(self, l, r, x->value, y->value, v);
                 if (ret != 0) {
                     goto out;
                 }
+                /* Trim the ends of x and y, and prepare for next iteration. */
                 if (x->right == r) {
                     beta = x;
                     x = x->next;
@@ -1190,11 +1267,12 @@ msp_initialise(msp_t *self)
         fenwick_set_value(&self->links, u->index, self->num_loci - 1);
     }
     self->next_node = self->sample_size + 1;
-    ret = msp_insert_breakpoint(self, 0, self->sample_size);
+    ret = msp_insert_overlap_count(self, 0, self->sample_size);
     if (ret != 0) {
         goto out;
     }
-    ret = msp_insert_breakpoint(self, self->num_loci, 0);
+    ret = msp_insert_overlap_count(self, self->num_loci,
+            self->sample_size + 1);
     if (ret != 0) {
         goto out;
     }
