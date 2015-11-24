@@ -966,13 +966,13 @@ out:
 }
 
 static int
-msp_compress_overlap_counts(msp_t *self)
+msp_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
 {
     int ret = 0;
     avl_node_t *node1, *node2;
-    node_mapping_t *nm1, *nm2;
+    node_mapping_t search, *nm1, *nm2;
 
-    /* printf("Coalescence occured\n"); */
+    /* printf("Coalescence occured %d %d\n", l, r); */
 
     /* printf("Before: Overlap count = %d\n", avl_count(&self->overlap_counts)); */
     /* for (node1 = self->overlap_counts.head; node1 != NULL; node1 = node1->next) { */
@@ -980,9 +980,13 @@ msp_compress_overlap_counts(msp_t *self)
     /*     printf("\t%d -> %d\n", nm1->left, nm1->value); */
     /* } */
 
-    node1 = self->overlap_counts.head;
+    search.left = l;
+    node1 = avl_search(&self->overlap_counts, &search);
+    if (node1->prev != NULL) {
+        node1 = node1->prev;
+    }
     node2 = node1->next;
-    while (node2 != NULL) {
+    do {
         nm1 = (node_mapping_t *) node1->item;
         nm2 = (node_mapping_t *) node2->item;
         if (nm1->value == nm2->value) {
@@ -995,31 +999,13 @@ msp_compress_overlap_counts(msp_t *self)
             node1 = node2;
             node2 = node2->next;
         }
-    }
+    } while (node2 != NULL && nm2->left < r);
 
     /* printf("After: Overlap count = %d\n", avl_count(&self->overlap_counts)); */
     /* for (node1 = self->overlap_counts.head; node1 != NULL; node1 = node1->next) { */
     /*     nm1 = (node_mapping_t *) node1->item; */
     /*     printf("\t%d -> %d\n", nm1->left, nm1->value); */
     /* } */
-
-/*     for (node = self->overlap_counts.head; node->next != NULL; node = node->next) { */
-/*         nm = (node_mapping_t *) node->item; */
-/*         v = nm->value; */
-/*         nm = (node_mapping_t *) node->next->item; */
-/*         if (v == nm->value) { */
-/*             printf("squash %d\n", nm->left); */
-/*         } */
-
-/*     } */
-
-/*     printf("After: Overlap count = %d\n", avl_count(&self->overlap_counts)); */
-/*     for (node = self->overlap_counts.head; node != NULL; */
-/*             node = node->next) { */
-/*         nm = (node_mapping_t *) node->item; */
-/*         printf("\t%d -> %d\n", nm->left, nm->value); */
-/*     } */
-
     return ret;
 }
 
@@ -1085,7 +1071,7 @@ msp_coancestry_event(msp_t *self)
     int ret = 0;
     int coalescence = 0;
     int defrag_required = 0;
-    uint32_t j, n, l, r, r_max, v;
+    uint32_t j, n, l, r, l_min, r_max, v;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
@@ -1138,15 +1124,16 @@ msp_coancestry_event(msp_t *self)
                 }
                 x->left = y->left;
             } else {
+                l = x->left;
+                r_max = GSL_MIN(x->right, y->right);
                 if (!coalescence) {
                     coalescence = 1;
+                    l_min = l;
                     self->next_node++;
                     /* Check for overflow */
                     assert(self->next_node != 0);
                 }
                 v = self->next_node - 1;
-                l = x->left;
-                r_max = GSL_MIN(x->right, y->right);
                 /* Insert overlap counts for bounds, if necessary */
                 search.left = l;
                 node = avl_search(&self->overlap_counts, &search);
@@ -1246,7 +1233,7 @@ msp_coancestry_event(msp_t *self)
         }
     }
     if (coalescence) {
-        ret = msp_compress_overlap_counts(self);
+        ret = msp_compress_overlap_counts(self, l_min, r_max);
         if (ret != 0) {
             goto out;
         }
