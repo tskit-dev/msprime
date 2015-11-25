@@ -134,10 +134,7 @@ typedef struct {
     /* memory management */
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
-    /* node mappings are never freed, so simpler requirements */
-    void **node_mapping_blocks;
-    size_t num_node_mapping_blocks;
-    size_t next_node_mapping;
+    object_heap_t node_mapping_heap;
     /* coalescence records are stored in an array */
     coalescence_record_t *coalescence_records;
     size_t num_coalescence_records;

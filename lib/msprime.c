@@ -269,31 +269,6 @@ msp_get_node_mapping_mem_increment(msp_t *self)
             * sizeof(node_mapping_t);
 }
 
-static int WARN_UNUSED
-msp_add_node_mapping_block(msp_t *self)
-{
-    int ret = -1;
-    void *p = realloc(self->node_mapping_blocks,
-            (self->num_node_mapping_blocks + 1) * sizeof(void *));
-
-    if (p == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->node_mapping_blocks = p;
-    p = malloc(self->node_mapping_block_size * sizeof(node_mapping_t));
-    if (p == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->node_mapping_blocks[self->num_node_mapping_blocks] = p;
-    self->num_node_mapping_blocks++;
-    self->next_node_mapping = 0;
-    ret = 0;
-out:
-    return ret;
-}
-
 size_t
 msp_get_num_avl_node_blocks(msp_t *self)
 {
@@ -303,7 +278,7 @@ msp_get_num_avl_node_blocks(msp_t *self)
 size_t
 msp_get_num_node_mapping_blocks(msp_t *self)
 {
-    return self->num_node_mapping_blocks;
+    return self->node_mapping_heap.num_blocks;
 }
 
 size_t
@@ -336,6 +311,7 @@ int
 msp_set_num_loci(msp_t *self, uint32_t num_loci)
 {
     int ret = 0;
+
     if (num_loci < 1) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -350,6 +326,7 @@ msp_set_scaled_recombination_rate(msp_t *self,
         double scaled_recombination_rate)
 {
     int ret = 0;
+
     if (scaled_recombination_rate < 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -363,6 +340,7 @@ int
 msp_set_max_memory(msp_t *self, size_t max_memory)
 {
     int ret = 0;
+
     if (max_memory < 1) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -375,6 +353,7 @@ out:
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size)
 {
     int ret = 0;
+
     if (block_size < 1) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -387,6 +366,7 @@ out:
 int msp_set_segment_block_size(msp_t *self, size_t block_size)
 {
     int ret = 0;
+
     if (block_size < 1) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -399,6 +379,7 @@ out:
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size)
 {
     int ret = 0;
+
     if (block_size < 1) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -411,6 +392,7 @@ out:
 int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size)
 {
     int ret = 0;
+
     if (block_size < 1) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -474,20 +456,11 @@ msp_alloc_memory_blocks(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    /* set up the node mapping allocator */
-    self->node_mapping_blocks = malloc(sizeof(void *));
-    if (self->node_mapping_blocks == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
+    ret = object_heap_init(&self->node_mapping_heap, sizeof(node_mapping_t),
+           self->node_mapping_block_size, NULL);
+    if (ret != 0) {
         goto out;
     }
-    self->num_node_mapping_blocks = 1;
-    self->node_mapping_blocks[0] = malloc(self->node_mapping_block_size
-            * sizeof(node_mapping_t));
-    if (self->node_mapping_blocks[0] == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->next_node_mapping = 0;
     /* allocate the segments and Fenwick tree */
     ret = object_heap_init(&self->segment_heap, sizeof(segment_t),
            self->segment_block_size, segment_init);
@@ -532,7 +505,6 @@ int
 msp_free(msp_t *self)
 {
     int ret = -1;
-    size_t j;
 
     if (self->population_models != NULL) {
         free(self->population_models);
@@ -543,15 +515,8 @@ msp_free(msp_t *self)
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->segment_heap);
+    object_heap_free(&self->node_mapping_heap);
     fenwick_free(&self->links);
-    if (self->node_mapping_blocks != NULL) {
-        for (j = 0; j < self->num_node_mapping_blocks; j++) {
-            if (self->node_mapping_blocks[j] != NULL) {
-                free(self->node_mapping_blocks[j]);
-            }
-        }
-        free(self->node_mapping_blocks);
-    }
     if (self->coalescence_records != NULL) {
         free(self->coalescence_records);
     }
@@ -588,30 +553,33 @@ static inline node_mapping_t *
 msp_alloc_node_mapping(msp_t *self)
 {
     node_mapping_t *ret = NULL;
-    char *p;
 
-    if (self->next_node_mapping == self->node_mapping_block_size) {
+    if (object_heap_empty(&self->node_mapping_heap)) {
         self->used_memory += msp_get_node_mapping_mem_increment(self);
         if (self->used_memory > self->max_memory) {
             goto out;
         }
-        if (msp_add_node_mapping_block(self) != 0) {
+        if (object_heap_expand(&self->node_mapping_heap) != 0) {
             goto out;
         }
     }
-    p = self->node_mapping_blocks[self->num_node_mapping_blocks - 1];
-    /* cast to void * here to avoid alignment warnings from clang. */
-    ret = (void *)(p +
-            self->next_node_mapping * sizeof(node_mapping_t));
-    self->next_node_mapping++;
+    ret = (node_mapping_t *) object_heap_alloc_object(&self->node_mapping_heap);
+    if (ret == NULL) {
+        goto out;
+    }
 out:
     return ret;
 }
 
+static void
+msp_free_node_mapping(msp_t *self, node_mapping_t *nm)
+{
+    object_heap_free_object(&self->node_mapping_heap, nm);
+}
 
 static segment_t * WARN_UNUSED
-msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, uint32_t value, segment_t *prev,
-        segment_t *next)
+msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, uint32_t value,
+        segment_t *prev, segment_t *next)
 {
     segment_t *seg = NULL;
 
@@ -755,6 +723,8 @@ msp_verify(msp_t *self)
             + avl_count(&self->overlap_counts);
     assert(total_avl_nodes == object_heap_get_num_allocated(
                 &self->avl_node_heap));
+    assert(total_avl_nodes - avl_count(&self->ancestral_population)
+            == object_heap_get_num_allocated(&self->node_mapping_heap));
     if (total_avl_nodes == total_segments) {
         /* do nothing - this is just to keep the compiler happy when
          * asserts are turned off.
@@ -834,10 +804,8 @@ msp_print_state(msp_t *self)
     object_heap_print_state(&self->avl_node_heap);
     printf("segment_heap:");
     object_heap_print_state(&self->segment_heap);
-    printf("node_mapping stack:\n");
-    printf("\tblock size = %d\n", (int) self->node_mapping_block_size);
-    printf("\tnext = %d\n", (int) self->next_node_mapping);
-    printf("\tnum_blocks = %d\n",  (int) self->num_node_mapping_blocks);
+    printf("node_mapping_heap:");
+    object_heap_print_state(&self->node_mapping_heap);
     msp_verify(self);
 out:
     if (ancestors != NULL) {
@@ -972,14 +940,6 @@ msp_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
     avl_node_t *node1, *node2;
     node_mapping_t search, *nm1, *nm2;
 
-    /* printf("Coalescence occured %d %d\n", l, r); */
-
-    /* printf("Before: Overlap count = %d\n", avl_count(&self->overlap_counts)); */
-    /* for (node1 = self->overlap_counts.head; node1 != NULL; node1 = node1->next) { */
-    /*     nm1 = (node_mapping_t *) node1->item; */
-    /*     printf("\t%d -> %d\n", nm1->left, nm1->value); */
-    /* } */
-
     search.left = l;
     node1 = avl_search(&self->overlap_counts, &search);
     if (node1->prev != NULL) {
@@ -990,22 +950,15 @@ msp_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
         nm1 = (node_mapping_t *) node1->item;
         nm2 = (node_mapping_t *) node2->item;
         if (nm1->value == nm2->value) {
-            /* printf("Squash %d\n", nm2->left); */
-            // TODO free the node mapping.
             avl_unlink_node(&self->overlap_counts, node2);
             msp_free_avl_node(self, node2);
+            msp_free_node_mapping(self, nm2);
             node2 = node1->next;
         } else {
             node1 = node2;
             node2 = node2->next;
         }
-    } while (node2 != NULL && nm2->left < r);
-
-    /* printf("After: Overlap count = %d\n", avl_count(&self->overlap_counts)); */
-    /* for (node1 = self->overlap_counts.head; node1 != NULL; node1 = node1->next) { */
-    /*     nm1 = (node_mapping_t *) node1->item; */
-    /*     printf("\t%d -> %d\n", nm1->left, nm1->value); */
-    /* } */
+    } while (node2 != NULL && nm2->left <= r);
     return ret;
 }
 
@@ -1241,8 +1194,6 @@ msp_coancestry_event(msp_t *self)
 out:
     return ret;
 }
-
-
 
 /* Given the value of the current_population_model, return the next one,
  * or NULL if none exists.
