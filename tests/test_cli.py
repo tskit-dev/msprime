@@ -471,6 +471,25 @@ class TestMspArgumentParser(unittest.TestCase):
         history_file = "test3.hdf5"
         args = parser.parse_args([cmd, history_file])
         self.assertEqual(args.history_file, history_file)
+        self.assertEqual(args.precision, 3)
+
+    def test_newick_short_args(self):
+        parser = cli.get_msp_parser()
+        cmd = "newick"
+        history_file = "test.hdf5"
+        args = parser.parse_args([
+            cmd, history_file, "-p", "10"])
+        self.assertEqual(args.history_file, history_file)
+        self.assertEqual(args.precision, 10)
+
+    def test_newick_long_args(self):
+        parser = cli.get_msp_parser()
+        cmd = "newick"
+        history_file = "test.hdf5"
+        args = parser.parse_args([
+            cmd, history_file, "--precision=5"])
+        self.assertEqual(args.history_file, history_file)
+        self.assertEqual(args.precision, 5)
 
 
 class TestMspSimulateOutput(unittest.TestCase):

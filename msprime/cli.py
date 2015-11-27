@@ -282,7 +282,7 @@ def mspms_main(arg_list=None):
 
 def run_dump_newick(args):
     tree_sequence = msprime.load(args.history_file)
-    for l, ns in tree_sequence.newick_trees():
+    for l, ns in tree_sequence.newick_trees(args.precision):
         print(ns)
 
 
@@ -407,6 +407,9 @@ def get_msp_parser():
         "newick",
         help="Dump results in newick format.")
     add_history_file_argument(newick_parser)
+    newick_parser.add_argument(
+        "--precision", "-p", type=int, default=3,
+        help="The number of decimal places in branch lengths")
     newick_parser.set_defaults(runner=run_dump_newick)
     return parser
 
