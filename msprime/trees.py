@@ -752,11 +752,14 @@ class TreeSequence(object):
         else:
             trees_covered = 0
             j = 0
+            # TODO this is ugly. Update the alg so we don't need this
+            # bracketing.
+            bp = [0] + breakpoints + [self.get_num_loci()]
             for length, tree in iterator:
                 trees_covered += length
-                while breakpoints[j] < trees_covered:
+                while bp[j] < trees_covered:
                     j += 1
-                    yield breakpoints[j] - breakpoints[j - 1], tree
+                    yield bp[j] - bp[j - 1], tree
 
     def dump(self, path, zlib_compression=False):
         """

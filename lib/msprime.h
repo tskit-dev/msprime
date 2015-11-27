@@ -129,14 +129,12 @@ typedef struct {
     gsl_rng *rng;
     avl_tree_t ancestral_population;
     avl_tree_t breakpoints;
+    avl_tree_t overlap_counts;
     fenwick_t links;
     /* memory management */
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
-    /* node mappings are never freed, so simpler requirements */
-    void **node_mapping_blocks;
-    size_t num_node_mapping_blocks;
-    size_t next_node_mapping;
+    object_heap_t node_mapping_heap;
     /* coalescence records are stored in an array */
     coalescence_record_t *coalescence_records;
     size_t num_coalescence_records;
@@ -287,6 +285,7 @@ int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);
+void msp_verify(msp_t *self);
 
 int msp_get_population_models(msp_t *self, population_model_t *models);
 int msp_get_ancestors(msp_t *self, segment_t **ancestors);
