@@ -286,6 +286,9 @@ class TestMspmsOutput(unittest.TestCase):
                                 self.assertEqual(precision, len(p) - j - 1)
                         values = list(map(float, positions))
                         self.assertEqual(values, sorted(values))
+                        for position in values:
+                            self.assertGreaterEqual(position, 0.0)
+                            self.assertLessEqual(position, 1.0)
                         line = next(f, None)
                         sequences_found = 0
                         while line is not None and line[0] in "01":
