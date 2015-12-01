@@ -29,6 +29,7 @@ class StressTester(object):
         """
         major, minor = _msprime.get_gsl_version()
         major, minor, revision = _msprime.get_hdf5_version()
+        version_str = _msprime.get_library_version_str()
 
     def check_simulator_errors(self):
         """

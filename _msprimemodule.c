@@ -2737,11 +2737,20 @@ out:
     return ret;
 }
 
+static PyObject *
+msprime_get_library_version_str(PyObject *self)
+{
+    return Py_BuildValue("s", MSP_LIBRARY_VERSION_STR);
+}
+
+
 static PyMethodDef msprime_methods[] = {
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
     {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,
             "Returns the version of HDF5 we are linking against." },
+    {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,
+            METH_NOARGS, "Returns the version of the msp C library." },
     {NULL}        /* Sentinel */
 };
 

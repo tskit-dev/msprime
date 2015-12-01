@@ -154,6 +154,8 @@ class TestModule(tests.MsprimeTestCase):
         self.assertGreater(major, 0)
         self.assertIsInstance(minor, int)
         self.assertIsInstance(revision, int)
+        version_str = _msprime.get_library_version_str()
+        self.assertEqual(version_str, _library_version)
 
 
 def get_random_population_models(n):
