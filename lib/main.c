@@ -395,7 +395,7 @@ run_simulate(char *conf_file)
     int ret = -1;
     int result;
     mutation_params_t mutation_params;
-    msp_t *msp = malloc(sizeof(msp_t));
+    msp_t *msp = calloc(1, sizeof(msp_t));
     char *output_file = NULL;
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
 

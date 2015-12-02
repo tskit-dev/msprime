@@ -1152,7 +1152,6 @@ msp_coancestry_event(msp_t *self)
             }
         }
         if (alpha != NULL) {
-            l = alpha->left;
             if (z == NULL) {
                 ret = msp_insert_individual(self, alpha);
                 if (ret != 0) {
