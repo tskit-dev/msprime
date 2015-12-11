@@ -745,16 +745,7 @@ class TreeSimulator(object):
             mu = scaled_mutation_rate * m
             args += ["-t", str(mu)]
         for model in self._population_models:
-            if isinstance(model, ConstantPopulationModel):
-                v = ["-eN", str(model.start_time), str(model.size)]
-            elif isinstance(model, ExponentialPopulationModel):
-                if model.start_time == 0.0:
-                    v = ["-G", str(model.alpha)]
-                else:
-                    v = ["-eG", str(model.start_time), str(model.alpha)]
-            else:
-                raise ValueError("unknown population model")
-            args.extend(v)
+            args.extend(model.get_ms_arguments())
         return args
 
 
@@ -1049,6 +1040,9 @@ class ConstantPopulationModel(PopulationModel):
         self.size = size
         self.type = _msprime.POP_MODEL_CONSTANT
 
+    def get_ms_arguments(self):
+        return ["-eN", str(self.start_time), str(self.size)]
+
 
 class ExponentialPopulationModel(PopulationModel):
     """
@@ -1067,6 +1061,13 @@ class ExponentialPopulationModel(PopulationModel):
         super(ExponentialPopulationModel, self).__init__(start_time)
         self.alpha = alpha
         self.type = _msprime.POP_MODEL_EXPONENTIAL
+
+    def get_ms_arguments(self):
+        if self.start_time == 0.0:
+            ret = ["-G", str(self.alpha)]
+        else:
+            ret = ["-eG", str(self.start_time), str(self.alpha)]
+        return ret
 
 
 def harmonic_number(n):
