@@ -1024,6 +1024,7 @@ msp_coancestry_event(msp_t *self)
     int ret = 0;
     int coalescence = 0;
     int defrag_required = 0;
+    double covered_fraction;
     uint32_t j, n, l, r, l_min, r_max, v;
     avl_node_t *node;
     node_mapping_t *nm, search;
@@ -1185,9 +1186,17 @@ msp_coancestry_event(msp_t *self)
         }
     }
     if (coalescence) {
-        ret = msp_compress_overlap_counts(self, l_min, r_max);
-        if (ret != 0) {
-            goto out;
+        covered_fraction = (r_max - l_min) / (double) self->num_loci;
+        /* This is a heuristic to prevent us spending a lot of time pointlessly
+         * trying to defragment during the early stages of the simulation.
+         * 5% of the overall length seems like a good value and leads to
+         * a ~15% time reduction when doing large simulations.
+         */
+        if (covered_fraction < 0.05) {
+            ret = msp_compress_overlap_counts(self, l_min, r_max);
+            if (ret != 0) {
+                goto out;
+            }
         }
     }
 out:
