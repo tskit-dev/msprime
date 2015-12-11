@@ -87,6 +87,45 @@ class TestRandomSeeds(unittest.TestCase):
             len(generated_seeds), len(set(generated_seeds.keys())))
 
 
+class TestMspmsRoundTrip(unittest.TestCase):
+    """
+    Tests the mspms argument parsing to ensure that we correctly round-trip
+    to the ms arguments.
+    """
+    def test_msdoc_examples(self):
+
+        parser = cli.get_mspms_parser()
+        arg_list = ["4", "1", "-T"]
+        simulator = cli.get_mspms_runner(arg_list).get_simulator()
+        line = simulator.get_ms_command_line()
+        args = parser.parse_args(line[1:])
+        self.assertEqual(args.sample_size, 4)
+        self.assertEqual(args.num_replicates, 1)
+        self.assertEqual(args.trees, True)
+
+        arg_list = "15 1000 -t 2.0 -eN 1.0 .1 -eN 2.0 4.0".split()
+        simulator = cli.get_mspms_runner(arg_list).get_simulator()
+        line = simulator.get_ms_command_line(
+            num_replicates=1000, scaled_mutation_rate=2.0)
+        args = parser.parse_args(line[1:])
+        self.assertEqual(args.sample_size, 15)
+        self.assertEqual(args.num_replicates, 1000)
+        self.assertEqual(args.mutation_rate, 2.0)
+        self.assertEqual(args.size_event, [[1.0, 0.1], [2.0, 4.0]])
+
+        arg_list = "15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split()
+        simulator = cli.get_mspms_runner(arg_list).get_simulator()
+        line = simulator.get_ms_command_line(
+            num_replicates=1000, scaled_mutation_rate=6.4)
+        args = parser.parse_args(line[1:])
+        self.assertEqual(args.sample_size, 15)
+        self.assertEqual(args.num_replicates, 1000)
+        self.assertEqual(args.mutation_rate, 6.4)
+        self.assertEqual(args.growth_rate, 6.93)
+        self.assertEqual(args.growth_event, [[0.2, 0.0]])
+        self.assertEqual(args.size_event, [[0.3, 0.5]])
+
+
 class TestMspmsArgumentParser(unittest.TestCase):
     """
     Tests the parser to ensure it works correctly and is ms compatible.

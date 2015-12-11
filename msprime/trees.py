@@ -719,6 +719,44 @@ class TreeSimulator(object):
         """
         self._ll_sim = None
 
+    def get_ms_command_line(
+            self, executable="ms", num_replicates=1, output_trees=True,
+            scaled_mutation_rate=None):
+        """
+        Returns an command line for ms that is equivalent to the parameters
+        for this simulator.
+
+        :param str executable: The path to the ms-compatible binary.
+        :param int num_relicates: The number of replicates to simulate.
+        :param float scaled_mutation_rate: The rate of mutation
+            per :math:`4N_0` generations.
+        :return: A list of command line arguments that can be used to invoke
+            ms with equivalent parameters to this simulator.
+        :rtype: list
+        """
+        m = self._num_loci
+        rho = self.get_scaled_recombination_rate() * (m - 1)
+        args = [executable, str(self._sample_size), str(num_replicates)]
+        if output_trees:
+            args += ["-T"]
+        if m > 1:
+            args += ["-r", str(rho), str(m)]
+        if scaled_mutation_rate is not None:
+            mu = scaled_mutation_rate * m
+            args += ["-t", str(mu)]
+        for model in self._population_models:
+            if isinstance(model, ConstantPopulationModel):
+                v = ["-eN", str(model.start_time), str(model.size)]
+            elif isinstance(model, ExponentialPopulationModel):
+                if model.start_time == 0.0:
+                    v = ["-G", str(model.alpha)]
+                else:
+                    v = ["-eG", str(model.start_time), str(model.alpha)]
+            else:
+                raise ValueError("unknown population model")
+            args.extend(v)
+        return args
+
 
 class TreeSequence(object):
     """

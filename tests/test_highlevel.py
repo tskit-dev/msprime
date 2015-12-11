@@ -86,6 +86,65 @@ class TestHarmonicNumber(unittest.TestCase):
             self.assertAlmostEqual(msprime.harmonic_number(n), H(n), 1)
 
 
+class TestMsCommandLine(tests.MsprimeTestCase):
+    """
+    Tests the output of the get_ms_command_line method.
+    """
+    def test_executable(self):
+        sim = msprime.TreeSimulator(10)
+        line = sim.get_ms_command_line()
+        self.assertEqual(line[0], "ms")
+        line = sim.get_ms_command_line("otherms")
+        self.assertEqual(line[0], "otherms")
+
+    def test_sample_size(self):
+        for n in [2, 10, 100]:
+            sim = msprime.TreeSimulator(n)
+            self.assertEqual(sim.get_ms_command_line()[1], str(n))
+
+    def test_recombination(self):
+        for m in [10, 100, 1000]:
+            for r in [0.125, 1.0, 10]:
+                rho = r * (m - 1)
+                sim = msprime.TreeSimulator(10)
+                sim.set_num_loci(m)
+                sim.set_scaled_recombination_rate(r)
+                args = sim.get_ms_command_line()
+                self.assertEqual(args[-3], "-r")
+                self.assertEqual(args[-2], str(rho))
+                self.assertEqual(args[-1], str(m))
+
+    def test_mutation(self):
+        for m in [1, 10, 100, 1000]:
+            for u in [0.125, 1.0, 10]:
+                mu = u * m
+                sim = msprime.TreeSimulator(10)
+                sim.set_scaled_recombination_rate(1.0)
+                sim.set_num_loci(m)
+                args = sim.get_ms_command_line(scaled_mutation_rate=u)
+                self.assertEqual(args[-2], "-t")
+                self.assertEqual(args[-1], str(mu))
+
+    def test_trees(self):
+        sim = msprime.TreeSimulator(10)
+        self.assertIn("-T", sim.get_ms_command_line())
+        self.assertIn("-T", sim.get_ms_command_line(output_trees=True))
+        self.assertNotIn("-T", sim.get_ms_command_line(output_trees=False))
+        self.assertIn("-T", sim.get_ms_command_line(scaled_mutation_rate=1.0))
+        self.assertIn("-T", sim.get_ms_command_line(
+            scaled_mutation_rate=1.0, output_trees=True))
+        self.assertNotIn("-T", sim.get_ms_command_line(
+            scaled_mutation_rate=1.0, output_trees=False))
+
+    def test_num_replicates(self):
+        for j in [1, 100, 1000]:
+            sim = msprime.TreeSimulator(10)
+            args = sim.get_ms_command_line(num_replicates=j)
+            self.assertEqual(str(j), args[2])
+
+    # TODO Test population models.
+
+
 class HighLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests on the high level interface.

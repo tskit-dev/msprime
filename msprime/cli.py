@@ -131,6 +131,12 @@ class SimulationRunner(object):
         self._ms_random_seeds = ms_seeds
         random.seed(python_seed)
 
+    def get_simulator(self):
+        """
+        Returns the simulator instance for this simulation runner.
+        """
+        return self._simulator
+
     def run(self, output):
         """
         Runs the simulations and writes the output to the specified
@@ -266,13 +272,17 @@ def get_mspms_parser():
     return parser
 
 
-def mspms_main(arg_list=None):
-    set_sigpipe_handler()
+def get_mspms_runner(arg_list):
     parser = get_mspms_parser()
     args = parser.parse_args(arg_list)
     if args.mutation_rate == 0 and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
-    sr = create_simulation_runner(args)
+    return create_simulation_runner(args)
+
+
+def mspms_main(arg_list=None):
+    set_sigpipe_handler()
+    sr = get_mspms_runner(arg_list)
     sr.run(sys.stdout)
 
 
