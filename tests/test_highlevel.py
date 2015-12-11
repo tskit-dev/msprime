@@ -610,20 +610,26 @@ class TestTreeSequence(HighLevelTestCase):
             self.verify_sparse_trees(ts)
 
     def test_mutations(self):
+        all_zero = True
         for ts in self.get_example_tree_sequences():
             ts.generate_mutations(0)
             self.assertEqual(ts.get_num_mutations(), 0)
             for st in ts.trees():
                 self.assertEqual(st.get_num_mutations(), 0)
-            ts.generate_mutations(100)
-            self.assertGreater(ts.get_num_mutations(), 0)
-            self.verify_mutations(ts)
-            muts = [[], [(0, 1)], [(0, 1), (0, 2)]]
+            # choose a mutation rate that hopefully guarantees mutations,
+            # but not too many.
+            mu = 100 / ts.get_num_loci()
+            ts.generate_mutations(mu)
+            if ts.get_num_mutations() > 0:
+                all_zero = False
+                self.verify_mutations(ts)
+                muts = [[], [(0, 1)], [(0, 1), (0, 2)]]
             for mutations in muts:
                 ts.set_mutations(mutations)
                 self.assertEqual(ts.get_num_mutations(), len(mutations))
                 self.assertEqual(list(ts.mutations()), mutations)
                 self.verify_mutations(ts)
+        self.assertFalse(all_zero)
 
     def verify_tree_diffs(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
