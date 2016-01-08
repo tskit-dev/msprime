@@ -28,4 +28,9 @@ from _msprime import get_hdf5_version  # NOQA
 
 from msprime.trees import *  # NOQA
 
-__version__ = '0.1.7.dev1'
+__version__ = "undefined"
+try:
+    from . import _version
+    __version__ = _version.version
+except ImportError:
+    pass
