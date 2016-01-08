@@ -1,22 +1,28 @@
+sudo: false
+
 language: python
+
 python:
   - "2.7"
   - "2.7_with_system_site_packages"
   - "3.3"
   - "3.4"
 
-before_install:
-  - sudo apt-get update -qq
-  - sudo apt-get install -qq libgsl0-dev libhdf5-serial-dev python-h5py
+cache:
+  directories:
+    - $HOME/.cache/pip
 
 install:
+  # Install newer version of pip to take advantage of bdist_wheel cache.
+  - pip install pip --upgrade
   # We install these requirements here rather than through the requirements.txt
-  # file because of issues on readthedocs.
-  - pip install numpy
+  # file because of issues on readthedocs. First we install Cython so that it 
+  # creates a bdist_wheel and then h5py. This allows Travis to cache the builds.
+  - pip install Cython
   - pip install h5py 
   - pip install -r requirements.txt
   - python setup.py sdist 
-  - pip install dist/msprime*.tar.gz
+  - pip install dist/msprime*.tar.gz --no-cache-dir
 
 script: 
   - flake8 setup.py msprime tests
@@ -32,6 +38,12 @@ env:
   - secure: "XRqUqbcFEmdl5dN7bvBeMRRdMtN1Sfcfqc0iLx8mH1xRRy8lQgaSmWG3zdaY5WSFbCGwoPuv2IXy7bPbwX5DKYsH0OkXLfkgo3yjw5X4341hQjMn0B7scr0lM8QU30YcSgqniFxEwMOytmQsQGSKwlz6tMKs2R758GCR7xJIyi4="
 
 addons:
+  apt:
+    packages:
+      - libgsl0-dev
+      - libhdf5-serial-dev
+      - python-h5py
+
   coverity_scan:
     project:
       name: "jeromekelleher/msprime"
