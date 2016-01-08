@@ -15,7 +15,8 @@ install:
   - pip install numpy
   - pip install h5py 
   - pip install -r requirements.txt
-  - pip install .
+  - python setup.py sdist 
+  - pip install dist/msprime*.tar.gz
 
 script: 
   - flake8 setup.py msprime tests
