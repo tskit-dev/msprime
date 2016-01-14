@@ -42,6 +42,20 @@ def physical_to_genetic(x, recomb_rates):
     return s
 
 
+def genetic_to_physical(x, recomb_rates):
+    s = 0
+    last_phys_x = 0
+    j = 0
+    while j < len(recomb_rates) and s < x:
+        phys_x, recomb_rate = recomb_rates[j]
+        s += (phys_x - last_phys_x) * recomb_rate
+        j += 1
+        last_phys_x = phys_x
+    y = last_phys_x
+    if x != s:
+        y -= (s - x) / recomb_rate
+    return y
+
 
 def plot_distance_maps(recomb_rates):
     # Plot the piecewise map of physical distance to recombination rate
@@ -75,8 +89,10 @@ def plot_distance_maps(recomb_rates):
         j += 1
         last_phys_x = phys_x
     pyplot.plot(x, y)
-    physical_dist = 25.6
-    genetic_dist = physical_to_genetic(physical_dist, recomb_rates)
+    # physical_dist = 21.6
+    # genetic_dist = physical_to_genetic(physical_dist, recomb_rates)
+    genetic_dist = 4
+    physical_dist = genetic_to_physical(genetic_dist, recomb_rates)
     pyplot.axvline(x=physical_dist, color="green")
     pyplot.axhline(y=genetic_dist, color="green")
     pyplot.savefig("phys_genetic_distance.png")
