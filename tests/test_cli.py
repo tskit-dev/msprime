@@ -405,7 +405,7 @@ class TestMspArgumentParser(unittest.TestCase):
         self.assertEqual(args.mutation_rate, 0.0)
         self.assertEqual(args.num_loci, 1)
         self.assertEqual(args.random_seed, None)
-        self.assertEqual(args.max_memory, "1G")
+        self.assertEqual(args.max_memory, None)
         self.assertEqual(args.compress, False)
 
     def test_simulate_short_args(self):

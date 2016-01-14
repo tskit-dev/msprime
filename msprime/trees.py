@@ -24,6 +24,7 @@ from __future__ import print_function
 
 import math
 import random
+import sys
 
 try:
     import svgwrite
@@ -438,7 +439,7 @@ class SparseTree(object):
 def simulate(
         sample_size, num_loci=1, scaled_recombination_rate=0.0,
         scaled_mutation_rate=None,
-        population_models=[], random_seed=None, max_memory="1G"):
+        population_models=[], random_seed=None, max_memory=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`.
@@ -456,7 +457,8 @@ def simulate(
         random seed will be automatically generated.
     :param int,str max_memory: The maximum amount of memory used
         during the simulation. If this is exceeded, the simulation will
-        terminate with a :class:`LibraryError` exception.
+        terminate with a :class:`LibraryError` exception. By default
+        this is not set, and no memory limits are imposed.
     :return: The :class:`.TreeSequence` object representing the results
         of the simulation.
     :rtype: :class:`.TreeSequence`
@@ -477,7 +479,7 @@ def simulate(
 
 def simulate_tree(
         sample_size, scaled_mutation_rate=None, population_models=[],
-        random_seed=None, max_memory="1G"):
+        random_seed=None, max_memory=None):
     """
     Simulates the coalescent at a single locus for the specified sample size
     under the specified list of population models. Returns a
@@ -492,7 +494,8 @@ def simulate_tree(
         random seed will be automatically generated.
     :param int,str max_memory: The maximum amount of memory used
         during the simulation. If this is exceeded, the simulation will
-        terminate with a :class:`LibraryError` exception.
+        terminate with a :class:`LibraryError` exception. By default
+        this is not set, and no memory limits are imposed.
     :return: The :class:`.SparseTree` object representing the results
         of the simulation.
     :rtype: :class:`.SparseTree`
@@ -643,15 +646,18 @@ class TreeSimulator(object):
         to the specified value.  This can be suffixed with
         K, M or G to specify units of Kibibytes, Mibibytes or Gibibytes.
         """
-        s = max_memory
-        d = {"K": 2**10, "M": 2**20, "G": 2**30}
-        multiplier = 1
-        value = s
-        if s.endswith(tuple(d.keys())):
-            value = s[:-1]
-            multiplier = d[s[-1]]
-        n = int(value)
-        self._max_memory = n * multiplier
+        if max_memory is None:
+            self._max_memory = max_memory
+        else:
+            s = max_memory
+            d = {"K": 2**10, "M": 2**20, "G": 2**30}
+            multiplier = 1
+            value = s
+            if s.endswith(tuple(d.keys())):
+                value = s[:-1]
+                multiplier = d[s[-1]]
+            n = int(value)
+            self._max_memory = n * multiplier
 
     def _set_environment_defaults(self):
         """
@@ -681,7 +687,7 @@ class TreeSimulator(object):
         if self._random_seed is None:
             self._random_seed = random.randint(0, 2**31 - 1)
         if self._max_memory is None:
-            self._max_memory = 10 * 1024 * 1024  # 10MiB by default
+            self._max_memory = sys.maxsize  # Unlimited
 
     def run(self):
         """

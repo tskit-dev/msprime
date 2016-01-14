@@ -80,7 +80,7 @@ def add_header_argument(parser):
 
 def add_max_memory_argument(parser):
     parser.add_argument(
-        "--max-memory", "-M", default="1G",
+        "--max-memory", "-M", default=None,
         help=(
             "Maximum memory to use. If the simulation exceeds this limit "
             "exit with error status. Supports K,M and G suffixes"))
