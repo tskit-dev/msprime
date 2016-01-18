@@ -29,6 +29,7 @@ except ImportError:
     # This fails for Python 3.x, but that's fine.
     pass
 
+import math
 import os
 import random
 import tempfile
@@ -37,6 +38,20 @@ import xml.etree
 
 import msprime
 import tests
+
+
+def get_pairwise_diversity(haplotypes):
+    """
+    Returns the value of pi for the specified haplotypes.
+    """
+    # Very simplistic algorithm...
+    n = len(haplotypes)
+    pi = 0
+    for k in range(n):
+        for j in range(k):
+            for u, v in zip(haplotypes[j], haplotypes[k]):
+                pi += u != v
+    return 2 * pi / (n * (n - 1))
 
 
 def sparse_tree_to_newick(st, precision):
@@ -250,10 +265,22 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
 
+    def verify_haplotype_statistics(self, ts):
+        """
+        Verifies the statistics calculated for the haplotypes
+        in the specified tree sequence.
+        """
+        pi1 = ts.get_pairwise_diversity()
+        pi2 = get_pairwise_diversity(list(ts.haplotypes()))
+        self.assertAlmostEqual(pi1, pi2)
+        self.assertGreaterEqual(pi1, 0.0)
+        self.assertFalse(math.isnan(pi1))
+
     def verify_mutations(self, ts):
         """
         Verify the mutations on this tree sequence make sense.
         """
+        self.verify_haplotype_statistics(ts)
         all_mutations = list(ts.mutations())
         # Mutations must be sorted by position
         self.assertEqual(
@@ -623,7 +650,7 @@ class TestTreeSequence(HighLevelTestCase):
             if ts.get_num_mutations() > 0:
                 all_zero = False
                 self.verify_mutations(ts)
-                muts = [[], [(0, 1)], [(0, 1), (0, 2)]]
+            muts = [[], [(0, 1)], [(0, 1), (0, 2)]]
             for mutations in muts:
                 ts.set_mutations(mutations)
                 self.assertEqual(ts.get_num_mutations(), len(mutations))

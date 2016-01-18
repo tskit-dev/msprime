@@ -999,6 +999,22 @@ class TreeSequence(object):
         """
         self._ll_tree_sequence.set_mutations(mutations)
 
+    def get_pairwise_diversity(self):
+        """
+        Returns the value of pi, the pairwise nucleotide site diversity.
+
+        :return: The pairwise nucleotide site diversity.
+        :rtype: iter
+        """
+        pi = 0
+        n = self.get_sample_size()
+        denom = n * (n - 1) / 2
+        for t in self.trees():
+            for _, node in t.mutations():
+                k = t.get_num_leaves(node)
+                pi += k * (n - k) / denom
+        return pi
+
 
 class HaplotypeGenerator(object):
 
