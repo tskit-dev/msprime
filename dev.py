@@ -98,10 +98,40 @@ def plot_distance_maps(recomb_rates):
     pyplot.savefig("phys_genetic_distance.png")
 
 
+def plot_1kg_map():
+    infile = "tmp__NOBACKUP__/genetic_map_b36/genetic_map_chr1_b36.txt.gz"
+
+    import pandas as pd
+    df = pd.read_csv(infile, delim_whitespace=True, compression="gzip",
+            names=["pos", "rate", "distance"], header=0)
+    # print(df.pos)
+    physical_length = df.pos.iloc[-1]
+    num_crossovers = df.distance.iloc[-1] / 100
+    Ne = 10**4
+    rate = 4 * Ne * num_crossovers / physical_length
+    print("Overall rate = {:.2E}".format(rate))
+
+    scaled_rate = np.array(4 * Ne * (df.rate / 100) / 10**6)[:-1]
+    print(scaled_rate)
+
+    lengths = np.diff(df.pos)
+    print(lengths)
+
+    print(lengths * scaled_rate)
+
+
+    # print("overall rate = ",
+    # print(df["pos"])
+    # pyplot.plot(df.pos, df.rate)
+    # pyplot.savefig("1kg.png")
+
+
+
 if __name__ == "__main__":
     # mutations()
 
-    plot_distance_maps(
-        [(10, 0.1), (11, 1), (20, 0.1), (21, 1), (30, 0.1)]
-    )
+    # plot_distance_maps(
+    #     [(10, 0.1), (11, 1), (20, 0.1), (21, 1), (30, 0.1)]
+    # )
+    plot_1kg_map()
 
