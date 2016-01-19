@@ -6,6 +6,7 @@ from __future__ import print_function
 from __future__ import division
 
 import math
+import subprocess
 
 import numpy as np
 import matplotlib
@@ -16,15 +17,59 @@ import matplotlib.pyplot as pyplot
 import msprime
 
 def mutations():
-    recomb_rates = [(10, 0.05), (20, 0.1), (30, 0), (40, 0.05)]
-    for x, rate in recomb_rates:
-        print(x, rate)
-    max_rate = max(rate for _, rate in recomb_rates)
-    print("max_ rate = ", max_rate)
+    n = 10
+    num_reps = 1000
+    num_loci = 10001
+    recomb_rates = [(1000, 0.005), (2000, 0.01), (3000, 0), (10001, 0.05)]
+    last_pos = 0
+    mean_rate = 0
+    for pos, rate in recomb_rates:
+        d = (pos - last_pos) / num_loci
+        mean_rate += d * rate
+        # print("mean_rate + ", d, rate)
+        # print("rate = ", rate, rate / (4 * 10**4))
+        last_pos = pos
+    assert last_pos == num_loci
+    print("mean_rate = ", mean_rate)
+    num_trees = 0
+    for j in range(num_reps):
+        simulator = msprime.TreeSimulator(n)
+        simulator.set_num_loci(num_loci)
+        simulator.set_scaled_recombination_rate(mean_rate)
+        # simulator.set_random_seed(j)
+        simulator.run()
+        num_trees += simulator.get_num_breakpoints()
 
-    tree_sequence = msprime.simulate(10, 100, max_rate, random_seed=1)
-    for tree in tree_sequence.trees():
-        print(tree.get_interval())
+    # Construct the scrm command line. Use the last value as the background
+    # rate
+    simulator.set_scaled_recombination_rate(recomb_rates[0][-1])
+
+    cmd = simulator.get_ms_command_line(
+        "/home/jk/work/wt/papers/msprime/simulators/scrm",
+        num_replicates=num_reps)
+    for j in range(len(recomb_rates) - 1):
+        pos = recomb_rates[j][0]
+        # We still scale the recombination rate by the full locus length,
+        # not the subset that we are working over.
+        length = num_loci - 1
+        rate = recomb_rates[j + 1][1]
+        cmd += ["-sr", str(pos), str(rate * length)]
+    # print(cmd)
+    print(" ".join(cmd))
+    result = subprocess.check_output(cmd)
+    scrm_num_trees = 0
+    for line in result.splitlines():
+        # print(line)
+        if line.startswith(b"["):
+            scrm_num_trees += 1
+    print(num_trees / num_reps, scrm_num_trees / num_reps)
+
+    # tree_sequence = msprime.simulate(10, 100, mean_rate, random_seed=1)
+
+    # for record in tree_sequence.records():
+    #     print(record)
+    # for tree in tree_sequence.trees():
+    #     print(tree.get_interval())
 
 
 def physical_to_genetic(x, recomb_rates):
@@ -122,16 +167,16 @@ def plot_1kg_map():
 
     # print("overall rate = ",
     # print(df["pos"])
-    # pyplot.plot(df.pos, df.rate)
-    # pyplot.savefig("1kg.png")
+    pyplot.plot(df.pos, df.rate)
+    pyplot.savefig("1kg.png")
 
 
 
 if __name__ == "__main__":
-    # mutations()
+    mutations()
 
     # plot_distance_maps(
     #     [(10, 0.1), (11, 1), (20, 0.1), (21, 1), (30, 0.1)]
     # )
-    plot_1kg_map()
+    # plot_1kg_map()
 
