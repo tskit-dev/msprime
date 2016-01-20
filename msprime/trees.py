@@ -536,6 +536,7 @@ class TreeSimulator(object):
         self._sample_size = sample_size
         self._scaled_recombination_rate = 0.0
         self._num_loci = 1
+        self._migration_matrix = [[0.0]]
         self._population_models = []
         self._random_seed = None
         self._segment_block_size = None
@@ -550,6 +551,12 @@ class TreeSimulator(object):
 
     def get_scaled_recombination_rate(self):
         return self._scaled_recombination_rate
+
+    def get_migration_matrix(self):
+        return self._migration_matrix
+
+    def get_sample_configuration(self):
+        return self._sample_configuration
 
     def get_num_loci(self):
         return self._num_loci
@@ -624,6 +631,12 @@ class TreeSimulator(object):
         if scaled_recombination_rate < 0:
             raise ValueError("Recombination rate cannot be negative")
         self._scaled_recombination_rate = scaled_recombination_rate
+
+    def set_migration_matrix(self, migration_matrix):
+        self._migration_matrix = migration_matrix
+
+    def set_sample_configuration(self, sample_configuration):
+        self._sample_configuration = sample_configuration
 
     def set_random_seed(self, random_seed):
         self._random_seed = random_seed

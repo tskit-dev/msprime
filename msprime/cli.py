@@ -110,7 +110,8 @@ class SimulationRunner(object):
     """
     def __init__(
             self, sample_size=1, num_loci=1, recombination_rate=0,
-            num_replicates=1, mutation_rate=0, print_trees=False,
+            num_replicates=1, migration_matrix=[[0.0]],
+            sample_configuration=None, mutation_rate=0, print_trees=False,
             max_memory="16M", precision=3, population_models=[],
             random_seeds=None):
         self._sample_size = sample_size
@@ -121,6 +122,8 @@ class SimulationRunner(object):
         self._simulator = msprime.TreeSimulator(sample_size)
         self._simulator.set_max_memory(max_memory)
         self._simulator.set_num_loci(num_loci)
+        self._simulator.set_migration_matrix(migration_matrix)
+        self._simulator.set_sample_configuration(sample_configuration)
         self._simulator.set_scaled_recombination_rate(recombination_rate)
         self._precision = precision
         self._print_trees = print_trees
@@ -190,10 +193,35 @@ class SimulationRunner(object):
             self._simulator.reset()
 
 
-def create_simulation_runner(args):
+def convert_int(value, parser):
+    """
+    Converts the specified value to an integer if possible. If
+    conversion fails, exit by calling parser.error.
+    """
+    try:
+        return int(value)
+    except ValueError:
+        parser.error("invalid int value '{}'".format(value))
+
+
+def convert_float(value, parser):
+    """
+    Converts the specified value to a float if possible. If
+    conversion fails, exit by calling parser.error.
+    """
+    try:
+        return float(value)
+    except ValueError:
+        parser.error("invalid float value '{}'".format(value))
+
+
+def create_simulation_runner(parser, arg_list):
     """
     Parses the arguments and returns a SimulationRunner instance.
     """
+    args = parser.parse_args(arg_list)
+    if args.mutation_rate == 0 and not args.trees:
+        parser.error("Need to specify at least one of --theta or --trees")
     num_loci = int(args.recombination[1])
     r = 0.0
     # We don't scale recombination or mutation rates by the size
@@ -201,11 +229,37 @@ def create_simulation_runner(args):
     if num_loci > 1:
         r = args.recombination[0] / (num_loci - 1)
     mu = args.mutation_rate / num_loci
-    models = []
+
+    # Check the structure format.
+    symmetric_migration_rate = 0.0
+    num_populations = 1
+    sample_configuration = [args.sample_size]
+    if args.structure is not None:
+        num_populations = convert_int(args.structure[0], parser)
+        # We must have at least num_population sample_configurations
+        if len(args.structure) < num_populations + 1:
+            parser.error("Must have num_populations sample sizes")
+        sample_configuration = [0 for j in range(num_populations)]
+        for j in range(num_populations):
+            sample_configuration[j] = convert_int(
+                args.structure[j + 1], parser)
+        if sum(sample_configuration) != args.sample_size:
+            parser.error("Population sample sizes must sum to sample_size")
+        # We optionally have the overall migration_rate here
+        if len(args.structure) == num_populations + 2:
+            symmetric_migration_rate = convert_float(
+                args.structure[num_populations + 1], parser)
+        elif len(args.structure) > num_populations + 2:
+            parser.error("Too many arguments to --structure/-I")
+    migration_matrix = [
+        [symmetric_migration_rate * int(j != k)
+            for j in range(num_populations)] for k in range(num_populations)]
+
     # Get the demography parameters
     # TODO for strict ms compatability, we need to resolve the command line
     # ordering of arguments when there are two or more events with the
     # same start time. We should resolve this.
+    models = []
     if args.growth_rate is not None:
         models.append(
             msprime.ExponentialPopulationModel(0.0, args.growth_rate))
@@ -213,9 +267,12 @@ def create_simulation_runner(args):
         models.append(msprime.ExponentialPopulationModel(t, alpha))
     for t, x in args.size_event:
         models.append(msprime.ConstantPopulationModel(t, x))
+
     runner = SimulationRunner(
         sample_size=args.sample_size,
         num_loci=num_loci,
+        migration_matrix=migration_matrix,
+        sample_configuration=sample_configuration,
         num_replicates=args.num_replicates,
         recombination_rate=r,
         mutation_rate=mu,
@@ -248,6 +305,16 @@ def get_mspms_parser():
         "--recombination", "-r", type=float, nargs=2, default=(0, 1),
         metavar=("rho", "num_loci"), help=mscompat_recombination_help)
 
+    group = parser.add_argument_group("Structure and migration")
+    group.add_argument(
+        "--structure", "-I", nargs='+',
+        help=(
+            "Sample from populations with the specified deme structure. "
+            "The STRUCTURE argument is of the form 'num_populations "
+            "n1 n2 ... [4N0m]', specifying the number of populations, "
+            "the sample configuration, and optionally, the migration "
+            "rate for a symmetric island model"))
+
     group = parser.add_argument_group("Demography")
     group.add_argument(
         "--growth-rate", "-G", metavar="alpha", type=float,
@@ -274,10 +341,7 @@ def get_mspms_parser():
 
 def get_mspms_runner(arg_list):
     parser = get_mspms_parser()
-    args = parser.parse_args(arg_list)
-    if args.mutation_rate == 0 and not args.trees:
-        parser.error("Need to specify at least one of --theta or --trees")
-    return create_simulation_runner(args)
+    return create_simulation_runner(parser, arg_list)
 
 
 def mspms_main(arg_list=None):

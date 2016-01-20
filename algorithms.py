@@ -144,8 +144,9 @@ class Simulator(object):
             max_segments=100):
         # Must be a square matrix.
         assert len(sample_sizes) == len(migration_matrix)
-        for row in migration_matrix:
-            assert len(sample_sizes) == len(row)
+        for j in range(len(sample_sizes)):
+            assert len(sample_sizes) == len(migration_matrix[j])
+            assert migration_matrix[j][j] == 0
 
         self.n = sum(sample_sizes)
         self.m = num_loci
@@ -221,10 +222,11 @@ class Simulator(object):
             for j in range(len(self.P)):
                 for k in range(len(self.P)):
                     t = 1001
-                    if self.migration_matrix[j][k] > 0:
-                        t = random.expovariate(self.migration_matrix[j][k])
-                        waiting_times.append(
-                            (t, self.migration_event, j, k))
+                    if self.migration_matrix[j][k] > 0 and len(self.P[j]) > 0:
+                        t = random.expovariate(
+                            len(self.P[j]) * self.migration_matrix[j][k])
+                    waiting_times.append(
+                        (t, self.migration_event, j, k))
             min_index = 0
             min_time = 1000
             for j, tup in enumerate(waiting_times):
@@ -236,13 +238,13 @@ class Simulator(object):
             self.t += min_time
             tup = waiting_times[min_index]
             if len(tup) == 2:
-                print("RE EVENT")
+                # print("RE EVENT")
                 tup[1]()
             elif len(tup) == 3:
-                print("CA EVENT")
+                # print("CA EVENT")
                 tup[1](tup[2])
             else:
-                print("MIG EVENT")
+                # print("MIG EVENT")
                 tup[1](tup[2], tup[3])
 
             # lambda_all = lambda_r + len(self.P) * (len(self.P) - 1)
@@ -256,6 +258,19 @@ class Simulator(object):
         """
         Migrates an individual from population j to population k.
         """
+        # print("Migrating ind from ", j, " to ", k)
+        # print("Population sizes:", [len(pop) for pop in self.P])
+        deme = self.P[j]
+        index = random.randint(0, len(deme) - 1)
+        x = deme.pop(index)
+        # print("Moving ", x, " to pop", k)
+        u = x
+        while u is not None:
+            u.population = k
+            u = u.next
+        self.P[k].append(x)
+        # print("AFTER Population sizes:", [len(pop) for pop in self.P])
+
 
     def recombination_event(self):
         """
@@ -604,7 +619,7 @@ def run_verify(args):
     rho = args.recombination_rate
     num_populations = args.num_populations
     migration_matrix = [
-        [args.migration_rate for j in range(num_populations)]
+        [args.migration_rate * int(j != k) for j in range(num_populations)]
         for k in range(num_populations)]
     sample_sizes = [args.sample_size for _ in range(num_populations)]
     msp_events = np.zeros(args.num_replicates)
