@@ -184,6 +184,29 @@ def run_verify_mutations(n, m, Ne, r, models, num_replicates, mutation_rate,
         pyplot.savefig(f, dpi=72)
         pyplot.clf()
 
+def run_verify_ms_command(n, num_replicates, output_prefix):
+    """
+    Runs ms and msprime for the specified parameters, and filters the results
+    through Hudson's sample_stats program to get distributions of the
+    haplotype statistics.
+    """
+    ms = MsMutationStatisticsSimulator(n, m, r, Ne, models, mutation_rate)
+    df_ms = ms.run(num_replicates)
+    msp = MsprimeMutationStatisticsSimulator(n, m, r, Ne, models, mutation_rate)
+    df_msp = msp.run(num_replicates)
+    for stat in ["pi", "ss", "D", "thetaH", "H"]:
+        v1 = df_ms[stat]
+        v2 = df_msp[stat]
+        # pyplot.hist(v1, 20, alpha=0.5, label="ms")
+        # pyplot.hist(v2, 20, alpha=0.5, label="msp")
+        # pyplot.legend(loc="upper left")
+        sm.graphics.qqplot(v1)
+        sm.qqplot_2samples(v1, v2, line="45")
+        f = "{0}_{1}.png".format(output_prefix, stat)
+        pyplot.savefig(f, dpi=72)
+        pyplot.clf()
+
+
 def run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix):
     """
     Runs ms and msprime on the specified parameters and outputs qqplots
@@ -328,15 +351,51 @@ def verify_mutations():
     run_verify_mutations(n, m, Ne, r, models, num_replicates, theta, output_prefix)
     run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
 
+def sample_stats(executable, sample_size, num_replicates, options):
+    args = executable + [str(sample_size), str(num_replicates)] + options.split()
+    print(" ".join(args))
+    p1 = subprocess.Popen(args, stdout=subprocess.PIPE)
+    p2 = subprocess.Popen(["./data/ms/sample_stats"], stdin=p1.stdout,
+            stdout=subprocess.PIPE)
+    p1.stdout.close()
+    output = p2.communicate()[0]
+    with tempfile.TemporaryFile() as f:
+        f.write(output)
+        f.seek(0)
+        df = pd.read_table(f)
+    return df
+
+
+
+def verify_migration_example():
+    output_prefix = "tmp__NOBACKUP__/migration_"
+    n = 15
+    num_replicates = 10000
+    options = "-t 2.0 -I 4 10 4 1 0 5.0"
+    df_ms = sample_stats(["./data/ms/ms"], n, num_replicates, options)
+    df_msp = sample_stats(["python", "mspms_dev.py"], n, num_replicates, options)
+    for stat in ["pi", "ss", "D", "thetaH", "H"]:
+        v1 = df_ms[stat]
+        v2 = df_msp[stat]
+        # pyplot.hist(v1, 20, alpha=0.5, label="ms")
+        # pyplot.hist(v2, 20, alpha=0.5, label="msp")
+        # pyplot.legend(loc="upper left")
+        sm.graphics.qqplot(v1)
+        sm.qqplot_2samples(v1, v2, line="45")
+        f = "{0}_{1}.png".format(output_prefix, stat)
+        pyplot.savefig(f, dpi=72)
+        pyplot.clf()
+
 
 def main():
     # verify_recombination_events()
-    verify_random(10)
+    # verify_random(10)
     # verify_exponential_models()
     # verify_simple()
     # verify_zero_growth_example()
     # verify_scrm_example()
-    verify_mutations()
+    # verify_mutations()
+    verify_migration_example()
 
 
 def verify_human_demographics():
