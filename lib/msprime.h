@@ -103,7 +103,7 @@ typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
-    uint8_t num_populations;
+    uint32_t num_populations;
     double *migration_matrix;
     uint32_t *sample_configuration;
     unsigned long random_seed;

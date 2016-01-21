@@ -335,7 +335,7 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->num_populations = (uint8_t) num_populations;
+    self->num_populations = (uint32_t) num_populations;
     /* Free any memory, if it has been allocated */
     if (self->migration_matrix != NULL) {
         free(self->migration_matrix);
@@ -397,7 +397,7 @@ msp_set_sample_configuration(msp_t *self, size_t num_populations,
         goto out;
     }
     for (j = 0; j < num_populations; j++) {
-        self->sample_configuration[j] = (uint8_t) sample_configuration[j];
+        self->sample_configuration[j] = (uint32_t) sample_configuration[j];
     }
     ret = 0;
 out:
@@ -695,7 +695,7 @@ msp_free_node_mapping(msp_t *self, node_mapping_t *nm)
 
 static segment_t * WARN_UNUSED
 msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, uint32_t value,
-        segment_t *prev, segment_t *next)
+        uint32_t population_id, segment_t *prev, segment_t *next)
 {
     segment_t *seg = NULL;
 
@@ -720,7 +720,8 @@ msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, uint32_t value,
     seg->left = left;
     seg->right = right;
     seg->value = value;
-    seg->population_id = 0;
+    assert(population_id < UINT8_MAX);
+    seg->population_id = (uint8_t) population_id;
 out:
     return seg;
 }
@@ -1091,7 +1092,8 @@ msp_recombination_event(msp_t *self)
     k = y->right - gap - 1;
     assert(k >= 0 && k < self->num_loci);
     if (y->left < k) {
-        z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value, NULL, y->next);
+        z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value,
+                y->population_id, NULL, y->next);
         if (z == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -1125,7 +1127,7 @@ out:
 }
 
 static int WARN_UNUSED
-msp_coancestry_event(msp_t *self)
+msp_common_ancestor_event(msp_t *self, uint32_t population_id)
 {
     int ret = 0;
     int coalescence = 0;
@@ -1136,8 +1138,6 @@ msp_coancestry_event(msp_t *self)
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
-
-    uint8_t population_id = 0;
 
     ancestors = &self->populations[population_id].ancestors;
     self->num_ca_events++;
@@ -1181,7 +1181,7 @@ msp_coancestry_event(msp_t *self)
                 alpha->next = NULL;
             } else if (x->left != y->left) {
                 alpha = msp_alloc_segment(self, x->left, y->left, x->value,
-                        NULL, NULL);
+                        x->population_id, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -1235,7 +1235,8 @@ msp_coancestry_event(msp_t *self)
                         nm = (node_mapping_t *) node->item;
                         r = nm->left;
                     }
-                    alpha = msp_alloc_segment(self, l, r, v, NULL, NULL);
+                    alpha = msp_alloc_segment(self, l, r, v, population_id,
+                            NULL, NULL);
                     if (alpha == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
                         goto out;
@@ -1313,6 +1314,15 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
+{
+    int ret = 0;
+
+    return ret;
+}
+
+
 /* Given the value of the current_population_model, return the next one,
  * or NULL if none exists.
  */
@@ -1336,7 +1346,7 @@ msp_initialise(msp_t *self)
 {
     int ret = -1;
     segment_t *u;
-    uint32_t j, population_id, sample_id, total;
+    uint32_t j, sample_id, total, population_id;
 
     /* These should really be proper checks with a return value */
     assert(self->sample_size > 1);
@@ -1363,7 +1373,7 @@ msp_initialise(msp_t *self)
             population_id++) {
         for (j = 0; j < self->sample_configuration[population_id]; j++) {
             u = msp_alloc_segment(self, 0, self->num_loci, sample_id,
-                    NULL, NULL);
+                    population_id, NULL, NULL);
             if (u == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -1399,10 +1409,10 @@ int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda_c, lambda_r, t_c, t_r, t_wait;
+    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait;
     int64_t num_links;
-    uint32_t n;
-    int (*event_method)(msp_t *);
+    uint32_t j, k, n;
+    uint32_t ca_pop_id, mig_source_pop, mig_dest_pop;
     population_model_t *model, *next_model;
     unsigned long events = 0;
 
@@ -1434,22 +1444,47 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             ret = MSP_ERR_LINKS_OVERFLOW;
             goto out;
         }
-        lambda_r = (double) num_links * self->scaled_recombination_rate;
-        t_r = DBL_MAX;
-        if (lambda_r != 0.0) {
-            t_r = gsl_ran_exponential(self->rng, 1.0 / lambda_r);
+        /* Recombination */
+        lambda = (double) num_links * self->scaled_recombination_rate;
+        re_t_wait = DBL_MAX;
+        if (lambda != 0.0) {
+            re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
         }
-        /* Need to perform n * (n - 1) as a double due to overflow */
-        lambda_c = n * ((double) n - 1.0);
-        t_c = model->get_waiting_time(model, lambda_c, self->time, self->rng);
-        if (t_r < t_c) {
-            t_wait = t_r;
-            event_method = msp_recombination_event;
-        } else {
-            t_wait = t_c;
-            event_method = msp_coancestry_event;
+        /* Common ancestors */
+        ca_t_wait = DBL_MAX;
+        ca_pop_id = 0;
+        for (j = 0; j < self->num_populations; j++) {
+            n = avl_count(&self->populations[j].ancestors);
+            /* Need to perform n * (n - 1) as a double due to overflow */
+            lambda = n * ((double) n - 1.0);
+            t_temp = model->get_waiting_time(model, lambda, self->time, self->rng);
+            if (t_temp < ca_t_wait) {
+                ca_t_wait = t_temp;
+                ca_pop_id = j;
+            }
         }
-        /* TODO check for infinite waiting time and return error. */
+        /* Migration */
+        mig_t_wait = DBL_MAX;
+        mig_source_pop = 0;
+        mig_dest_pop = 0;
+        for (j = 0; j < self->num_populations; j++) {
+            n = avl_count(&self->populations[j].ancestors);
+            for (k = 0; k < self->num_populations; k++) {
+                lambda = n * self->migration_matrix[
+                    j * self->num_populations + k];
+                if (lambda != 0.0) {
+                    t_temp = gsl_ran_exponential(self->rng, 1.0 / lambda);
+                    if (t_temp < mig_t_wait) {
+                        mig_t_wait = t_temp;
+                        mig_source_pop = j;
+                        mig_dest_pop = k;
+                    }
+                }
+            }
+        }
+        t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
+
+                /* TODO check for infinite waiting time and return error. */
         assert(t_wait != DBL_MAX);
         if (next_model != NULL
                 && self->time + t_wait >= next_model->start_time) {
@@ -1465,12 +1500,27 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             next_model = msp_get_next_population_model(self);
         } else {
             self->time += t_wait;
-            ret = event_method(self);
+
+            /* printf("min = %f re = %f ca = %f mig = %f\n", t_wait, re_t_wait, ca_t_wait, mig_t_wait); */
+            if (re_t_wait == t_wait) {
+                /* Recombination event */
+                /* printf("RE\n"); */
+                ret = msp_recombination_event(self);
+            } else if (ca_t_wait == t_wait) {
+                /* Common ancestor event */
+                /* printf("CA\n"); */
+                ret = msp_common_ancestor_event(self, ca_pop_id);
+            } else {
+                /* Migration event */
+                /* printf("MIG\n"); */
+                ret = msp_migration_event(self, mig_source_pop, mig_dest_pop);
+            }
             if (ret != 0) {
                 goto out;
             }
             n = (uint32_t) msp_get_num_ancestors(self);
         }
+
     }
     if (n != 0) {
         ret = 1;
