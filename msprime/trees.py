@@ -726,6 +726,7 @@ class TreeSimulator(object):
             sample_size=self._sample_size,
             num_loci=self._num_loci,
             population_models=models,
+            num_populations=len(self._sample_configuration),
             sample_configuration=self._sample_configuration,
             migration_matrix=flattened_matrix,
             scaled_recombination_rate=self._scaled_recombination_rate,

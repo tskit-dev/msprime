@@ -1318,7 +1318,24 @@ static int WARN_UNUSED
 msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
 {
     int ret = 0;
+    uint32_t j;
+    avl_node_t *node;
+    segment_t *ind, *x;
+    avl_tree_t *source = &self->populations[source_pop].ancestors;
 
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
+    node = avl_at(source, j);
+    assert(node != NULL);
+    ind = (segment_t *) node->item;
+    avl_unlink_node(source, node);
+    msp_free_avl_node(self, node);
+    /* Need to set the population_id for each segment. */
+    x = ind;
+    while (x != NULL) {
+        x->population_id = (uint8_t) dest_pop;
+        x = x->next;
+    }
+    ret = msp_insert_individual(self, ind);
     return ret;
 }
 
@@ -1456,11 +1473,13 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         for (j = 0; j < self->num_populations; j++) {
             n = avl_count(&self->populations[j].ancestors);
             /* Need to perform n * (n - 1) as a double due to overflow */
-            lambda = n * ((double) n - 1.0);
-            t_temp = model->get_waiting_time(model, lambda, self->time, self->rng);
-            if (t_temp < ca_t_wait) {
-                ca_t_wait = t_temp;
-                ca_pop_id = j;
+            if (n > 1) {
+                lambda = n * ((double) n - 1.0);
+                t_temp = model->get_waiting_time(model, lambda, self->time, self->rng);
+                if (t_temp < ca_t_wait) {
+                    ca_t_wait = t_temp;
+                    ca_pop_id = j;
+                }
             }
         }
         /* Migration */
@@ -1483,8 +1502,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             }
         }
         t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
-
-                /* TODO check for infinite waiting time and return error. */
+        /* TODO check for infinite waiting time and return error. */
         assert(t_wait != DBL_MAX);
         if (next_model != NULL
                 && self->time + t_wait >= next_model->start_time) {
