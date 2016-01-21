@@ -1269,9 +1269,8 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
 {
     int err;
     PyObject *ret = NULL;
-    size_t num_records;
     int order = MSP_ORDER_TIME;
-    Py_ssize_t record_index;
+    Py_ssize_t record_index, num_records;
     coalescence_record_t cr;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
@@ -1280,7 +1279,8 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n|i", &record_index, &order)) {
         goto out;
     }
-    num_records = tree_sequence_get_num_coalescence_records(self->tree_sequence);
+    num_records = (Py_ssize_t) tree_sequence_get_num_coalescence_records(
+        self->tree_sequence);
     if (record_index < 0 || record_index >= num_records) {
         PyErr_SetString(PyExc_IndexError, "record index out of bounds");
         goto out;
