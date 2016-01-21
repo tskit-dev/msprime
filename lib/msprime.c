@@ -113,7 +113,7 @@ static int
 cmp_individual(const void *a, const void *b) {
     const segment_t *ia = (const segment_t *) a;
     const segment_t *ib = (const segment_t *) b;
-    return (ia->index > ib->index) - (ia->index < ib->index);
+    return (ia->id > ib->id) - (ia->id < ib->id);
 }
 
 static int
@@ -125,10 +125,10 @@ cmp_node_mapping(const void *a, const void *b) {
 
 
 static void
-segment_init(void **obj, size_t index)
+segment_init(void **obj, size_t id)
 {
     segment_t *seg = (segment_t *) obj;
-    seg->index = index + 1;
+    seg->id = id + 1;
 }
 
 /* population models */
@@ -713,15 +713,15 @@ out:
 }
 
 /*
- * Returns the segment with the specified index.
+ * Returns the segment with the specified id.
  */
 static segment_t *
-msp_get_segment(msp_t *self, size_t index)
+msp_get_segment(msp_t *self, size_t id)
 {
-    segment_t *u = object_heap_get_object(&self->segment_heap, index - 1);
+    segment_t *u = object_heap_get_object(&self->segment_heap, id - 1);
 
     assert(u != NULL);
-    assert(u->index == index);
+    assert(u->id == id);
     return u;
 }
 
@@ -729,7 +729,7 @@ static void
 msp_free_segment(msp_t *self, segment_t *seg)
 {
     object_heap_free_object(&self->segment_heap, seg);
-    fenwick_set_value(&self->links, seg->index, 0);
+    fenwick_set_value(&self->links, seg->id, 0);
 }
 
 static inline int WARN_UNUSED
@@ -808,7 +808,7 @@ msp_verify(msp_t *self)
             } else {
                 s = u->right - u->left - 1;
             }
-            ss = fenwick_get_value(&self->links, u->index);
+            ss = fenwick_get_value(&self->links, u->id);
             total_links += ss;
             assert(s == ss);
             ss = s; /* just to keep compiler happy - see below also */
@@ -883,7 +883,7 @@ msp_print_state(msp_t *self)
         v = fenwick_get_value(&self->links, j);
         if (v != 0) {
             printf("\t%ld\ti=%d l=%d r=%d v=%d prev=%p next=%p\n", (long) v,
-                    (int) u->index, u->left,
+                    (int) u->id, u->left,
                     u->right, (int) u->value, (void *) u->prev, (void *) u->next);
         }
     }
@@ -1071,7 +1071,7 @@ msp_recombination_event(msp_t *self)
 {
     int ret = 0;
     int64_t l, t, gap, k;
-    size_t segment_index;
+    size_t segment_id;
     node_mapping_t search;
     segment_t *x, *y, *z;
     int64_t num_links = fenwick_get_total(&self->links);
@@ -1080,11 +1080,11 @@ msp_recombination_event(msp_t *self)
     /* We can't use the GSL integer generator here as the range is too large */
     l = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
     assert(l > 0 && l <= num_links);
-    segment_index = fenwick_find(&self->links, l);
-    t = fenwick_get_cumulative_sum(&self->links, segment_index);
+    segment_id = fenwick_find(&self->links, l);
+    t = fenwick_get_cumulative_sum(&self->links, segment_id);
     gap = t - l;
     assert(gap >= 0 && gap < self->num_loci);
-    y = msp_get_segment(self, segment_index);
+    y = msp_get_segment(self, segment_id);
     x = y->prev;
     k = y->right - gap - 1;
     assert(k >= 0 && k < self->num_loci);
@@ -1099,7 +1099,7 @@ msp_recombination_event(msp_t *self)
         }
         y->next = NULL;
         y->right = (uint32_t) k;
-        fenwick_increment(&self->links, y->index, k - z->right);
+        fenwick_increment(&self->links, y->id, k - z->right);
         search.left = (uint32_t) k;
         if (avl_search(&self->breakpoints, &search) == NULL) {
             ret = msp_insert_breakpoint(self, (uint32_t) k);
@@ -1116,7 +1116,7 @@ msp_recombination_event(msp_t *self)
         z = y;
         self->num_trapped_re_events++;
     }
-    fenwick_set_value(&self->links, z->index, z->right - z->left - 1);
+    fenwick_set_value(&self->links, z->id, z->right - z->left - 1);
     ret = msp_insert_individual(self, z);
 out:
     return ret;
@@ -1262,12 +1262,12 @@ msp_coancestry_event(msp_t *self)
                 if (ret != 0) {
                     goto out;
                 }
-                fenwick_set_value(&self->links, alpha->index,
+                fenwick_set_value(&self->links, alpha->id,
                         alpha->right - alpha->left - 1);
             } else {
                 defrag_required |= z->right == alpha->left && z->value == alpha->value;
                 z->next = alpha;
-                fenwick_set_value(&self->links, alpha->index, alpha->right - z->right);
+                fenwick_set_value(&self->links, alpha->id, alpha->right - z->right);
             }
             alpha->prev = z;
             z = alpha;
@@ -1283,7 +1283,7 @@ msp_coancestry_event(msp_t *self)
                 if (y->next != NULL) {
                     y->next->prev = x;
                 }
-                fenwick_increment(&self->links, x->index, y->right - y->left);
+                fenwick_increment(&self->links, x->id, y->right - y->left);
                 msp_free_segment(self, y);
             }
             y = x;
@@ -1350,7 +1350,7 @@ msp_initialise(msp_t *self)
         if (ret != 0) {
             goto out;
         }
-        fenwick_set_value(&self->links, u->index, self->num_loci - 1);
+        fenwick_set_value(&self->links, u->id, self->num_loci - 1);
     }
     self->next_node = self->sample_size + 1;
     ret = msp_insert_overlap_count(self, 0, self->sample_size);

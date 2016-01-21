@@ -63,7 +63,7 @@ typedef struct segment_t_t {
     uint32_t left;
     uint32_t right;
     uint32_t value;
-    size_t index;
+    size_t id;
     struct segment_t_t *prev;
     struct segment_t_t *next;
 } segment_t;
