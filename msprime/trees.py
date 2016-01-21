@@ -537,6 +537,7 @@ class TreeSimulator(object):
         self._scaled_recombination_rate = 0.0
         self._num_loci = 1
         self._migration_matrix = [[0.0]]
+        self._sample_configuration = None
         self._population_models = []
         self._random_seed = None
         self._segment_block_size = None
@@ -679,6 +680,10 @@ class TreeSimulator(object):
         # Set the block sizes using our estimates.
         n = self._sample_size
         m = self._num_loci
+        if self._sample_configuration is None:
+            self._sample_configuration = [n]
+        if self._migration_matrix is None:
+            self._migration_matrix = [[0.0]]
         rho = 4 * self._scaled_recombination_rate * (m - 1)
         num_trees = min(m // 2, rho * harmonic_number(n - 1))
         b = 10  # Baseline maximum
@@ -711,10 +716,18 @@ class TreeSimulator(object):
         models = [m.get_ll_model() for m in models]
         assert self._ll_sim is None
         self._set_environment_defaults()
+        # We flatten the migration matrix for the low-level interface.
+        N = len(self._sample_configuration)
+        flattened_matrix = [0 for j in range(N**2)]
+        for j in range(N):
+            for k in range(N):
+                flattened_matrix[j * N + k] = self._migration_matrix[j][k]
         self._ll_sim = _msprime.Simulator(
             sample_size=self._sample_size,
             num_loci=self._num_loci,
             population_models=models,
+            sample_configuration=self._sample_configuration,
+            migration_matrix=flattened_matrix,
             scaled_recombination_rate=self._scaled_recombination_rate,
             random_seed=self._random_seed,
             max_memory=self._max_memory,

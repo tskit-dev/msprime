@@ -86,6 +86,10 @@ msp_strerror(int err)
         ret = "Bad parameter value provided";
     } else if (err == MSP_ERR_UNSUPPORTED_OPERATION) {
         ret = "Operation cannot be performed in current configuration";
+    } else if (err == MSP_ERR_BAD_SAMPLE_CONFIGURATION) {
+        ret = "Bad sample configuration provided.";
+    } else if (err == MSP_ERR_BAD_MIGRATION_MATRIX) {
+        ret = "Bad migration matrix provided.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -308,7 +312,7 @@ msp_set_random_seed(msp_t *self, unsigned long random_seed)
 }
 
 int
-msp_set_num_loci(msp_t *self, uint32_t num_loci)
+msp_set_num_loci(msp_t *self, size_t num_loci)
 {
     int ret = 0;
 
@@ -316,7 +320,21 @@ msp_set_num_loci(msp_t *self, uint32_t num_loci)
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->num_loci = num_loci;
+    self->num_loci = (uint32_t) num_loci;
+out:
+    return ret;
+}
+
+int
+msp_set_num_populations(msp_t *self, size_t num_populations)
+{
+    int ret = 0;
+
+    if (num_populations < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->num_populations = (uint32_t) num_populations;
 out:
     return ret;
 }
@@ -335,6 +353,61 @@ msp_set_scaled_recombination_rate(msp_t *self,
 out:
     return ret;
 }
+
+int
+msp_set_sample_configuration(msp_t *self, size_t num_populations,
+    size_t *sample_configuration)
+{
+    int ret = 0;
+    size_t j;
+    uint32_t total = 0;
+
+    for (j = 0; j < num_populations; j++) {
+        total += sample_configuration[j];
+    }
+    if (total != self->sample_size) {
+        ret = MSP_ERR_BAD_SAMPLE_CONFIGURATION;
+        goto out;
+    }
+    /* TODO assign locally */
+out:
+    return ret;
+}
+
+int
+msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
+{
+    int ret = 0;
+    size_t j, k;
+    size_t N = self->num_populations;
+
+    if (gsl_pow_2(N) != size) {
+        ret = MSP_ERR_BAD_MIGRATION_MATRIX;
+        goto out;
+    }
+    /* Check values */
+    for (j = 0; j < N; j++) {
+        for (k = 0; k < N; k++) {
+            if (j == k) {
+                if (migration_matrix[j * N + k] != 0.0) {
+                    ret = MSP_ERR_BAD_MIGRATION_MATRIX;
+                    goto out;
+                }
+            } else {
+                if (migration_matrix[j * N + k] < 0.0) {
+                    ret = MSP_ERR_BAD_MIGRATION_MATRIX;
+                    goto out;
+                }
+            }
+        }
+    }
+
+
+    /* TODO assign locally */
+out:
+    return ret;
+}
+
 
 int
 msp_set_max_memory(msp_t *self, size_t max_memory)
@@ -403,7 +476,7 @@ out:
 }
 
 int
-msp_alloc(msp_t *self, uint32_t sample_size)
+msp_alloc(msp_t *self, size_t sample_size)
 {
     int ret = -1;
 
@@ -412,7 +485,7 @@ msp_alloc(msp_t *self, uint32_t sample_size)
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->sample_size = sample_size;
+    self->sample_size = (uint32_t) sample_size;
     self->rng = gsl_rng_alloc(gsl_rng_default);
     if (self->rng == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -1351,6 +1424,24 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
 out:
     return ret;
+}
+
+size_t
+msp_get_sample_size(msp_t *self)
+{
+    return (size_t) self->sample_size;
+}
+
+size_t
+msp_get_num_loci(msp_t *self)
+{
+    return (size_t) self->num_loci;
+}
+
+size_t
+msp_get_num_populations(msp_t *self)
+{
+    return (size_t) self->num_populations;
 }
 
 /* Returns the number of population models added by the user. */

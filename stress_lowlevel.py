@@ -57,6 +57,33 @@ class StressTester(object):
             assert False
         except _msprime.InputError:
             pass
+        bad_sample_configurations = [
+            (2, []), (3, [1, 1, 0]), (3, [3, -1, 1])
+        ]
+        for sample_size, sample_configuration in bad_sample_configurations:
+            try:
+                _msprime.Simulator(
+                    sample_size=sample_size, random_seed=1,
+                    num_populations=len(sample_configuration),
+                    sample_configuration=bad_sample_configurations)
+                assert False
+            except Exception:
+                pass
+        bad_migration_matrices = [
+            (1, [-1]),
+            (2, []),
+            (2, [1, 1, 1, 1]),
+            (2, [0, -1, 0, 1]),
+        ]
+        for num_populations, matrix in bad_migration_matrices:
+            try:
+                _msprime.Simulator(
+                    sample_size=2, random_seed=1,
+                    num_populations=num_populations,
+                    migration_matrix=migration_matrix)
+                assert False
+            except Exception:
+                pass
 
     def get_simulator(self):
         models = [

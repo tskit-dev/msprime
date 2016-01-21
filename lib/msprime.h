@@ -107,6 +107,7 @@ typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
+    uint32_t num_populations;
     unsigned long random_seed;
     /* allocation block sizes */
     size_t avl_node_block_size;
@@ -269,11 +270,12 @@ typedef struct {
     sparse_tree_iterator_t tree_iterator;
 } hapgen_t;
 
-int msp_alloc(msp_t *self, uint32_t sample_size);
+int msp_alloc(msp_t *self, size_t sample_size);
 int msp_add_constant_population_model(msp_t *self, double time, double size);
 int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
 int msp_set_random_seed(msp_t *self, unsigned long random_seed);
-int msp_set_num_loci(msp_t *self, uint32_t num_loci);
+int msp_set_num_loci(msp_t *self, size_t num_loci);
+int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_scaled_recombination_rate(msp_t *self, 
         double scaled_recombination_rate);
 int msp_set_max_memory(msp_t *self, size_t max_memory);
@@ -281,6 +283,10 @@ int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
 int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size);
+int msp_set_sample_configuration(msp_t *self, size_t num_populations,
+        size_t *sample_configuration);
+int msp_set_migration_matrix(msp_t *self, size_t size,
+        double *migration_matrix);
 
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
@@ -293,6 +299,9 @@ int msp_get_breakpoints(msp_t *self, uint32_t *breakpoints);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
 int msp_is_completed(msp_t *self);
 
+size_t msp_get_sample_size(msp_t *self);
+size_t msp_get_num_loci(msp_t *self);
+size_t msp_get_num_populations(msp_t *self);
 size_t msp_get_num_population_models(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
@@ -305,11 +314,9 @@ size_t msp_get_used_memory(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self);
 int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
-int tree_sequence_load(tree_sequence_t *self, const char *filename,
-        int flags);
+int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
-int tree_sequence_dump(tree_sequence_t *self, const char *filename, 
-        int flags);
+int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_generate_mutations(tree_sequence_t *self, 
         double mutation_rate, unsigned long random_seed);
 size_t tree_sequence_get_num_breakpoints(tree_sequence_t *self);

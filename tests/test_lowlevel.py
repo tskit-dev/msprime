@@ -763,6 +763,60 @@ class TestSimulator(LowLevelTestCase):
         m.reverse()
         self.assertRaises(_msprime.InputError, f, m)
 
+    def test_bad_sample_configurations(self):
+        def f(sample_size, num_populations, sample_configuration):
+            return _msprime.Simulator(
+                sample_size, 1, num_populations=num_populations,
+                sample_configuration=sample_configuration)
+        for bad_type in ["", {}, None, 2, [""], [[]], [None]]:
+            self.assertRaises(TypeError, f, 2, 1, bad_type)
+        # Negative numbers are ValueErrors.
+        self.assertRaises(ValueError, f, 2, 2, [-1, 3])
+        # Providing the wrong number of populations provokes a ValueError
+        self.assertRaises(ValueError, f, 2, 1, [1, 1])
+        self.assertRaises(ValueError, f, 2, 2, [1])
+        self.assertRaises(ValueError, f, 2, 1, [])
+        self.assertRaises(ValueError, f, 2, -1, [])
+        # Other miscellaneous errors are InputErrors
+        self.assertRaises(_msprime.InputError, f, 2, 0, [])
+        self.assertRaises(_msprime.InputError, f, 2, 1, [3])
+        self.assertRaises(_msprime.InputError, f, 2, 2, [2, 1])
+        self.assertRaises(_msprime.InputError, f, 5, 2, [2, 2])
+
+    def test_bad_migration_matrix(self):
+        def f(num_populations, migration_matrix):
+            return _msprime.Simulator(
+                2, 1, num_populations=num_populations,
+                migration_matrix=migration_matrix)
+        for bad_type in ["", {}, None, 2, [""], [[]], [None]]:
+            self.assertRaises(TypeError, f, 1, bad_type)
+        for bad_value in [[1, 2], [-1], [1, 2, 3]]:
+            self.assertRaises(ValueError, f, 1, bad_value)
+
+        # Providing the wrong number of populations provokes a ValueError
+        self.assertRaises(ValueError, f, 1, [1, 1])
+        self.assertRaises(ValueError, f, 2, [1, 1])
+        self.assertRaises(ValueError, f, 2, [1, 1, 1])
+        self.assertRaises(ValueError, f, 2, [1, 1, 1, 1, 1])
+        # Negative values also provoke ValueError
+        self.assertRaises(ValueError, f, 2, [0, 1, -1, 0])
+
+        bad_matrices = [
+            # Non-zero diagonal gives a InputError
+            [[1, 1],
+             [1, 1]],
+            [[0, 1],
+             [1, 1]],
+            [[0, 1, 1],
+             [1, 0, 1],
+             [1, 0, 1]],
+        ]
+        for matrix in bad_matrices:
+            num_populations = len(matrix[0])
+            flattened = [v for row in matrix for v in row]
+            self.assertRaises(
+                _msprime.InputError, f, num_populations, flattened)
+
     def test_seed_equality(self):
         simulations = [
             {"sample_size": 10, "random_seed": 1},

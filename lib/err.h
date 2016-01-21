@@ -29,7 +29,6 @@
     #define WARN_UNUSED
 #endif
 
-
 #define MSP_ERR_GENERIC -1
 #define MSP_ERR_NO_MEMORY -2
 #define MSP_ERR_IO -3
@@ -48,5 +47,7 @@
 #define MSP_ERR_BAD_ORDERING -16
 #define MSP_ERR_BAD_MUTATION -17
 #define MSP_ERR_UNSUPPORTED_OPERATION -18
+#define MSP_ERR_BAD_SAMPLE_CONFIGURATION -19
+#define MSP_ERR_BAD_MIGRATION_MATRIX -20
 
 #endif /*__ERR_H__*/

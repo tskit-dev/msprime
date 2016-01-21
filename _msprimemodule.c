@@ -257,6 +257,112 @@ out:
     return ret;
 }
 
+static int
+Simulator_parse_sample_configuration(Simulator *self,
+        PyObject *py_sample_configuration)
+{
+    int ret = -1;
+    int err;
+    Py_ssize_t j;
+    Py_ssize_t num_populations;
+    PyObject *value;
+    long v;
+    size_t *sample_configuration = NULL;
+
+    num_populations = PyList_Size(py_sample_configuration);
+    sample_configuration = PyMem_Malloc(num_populations * sizeof(size_t));
+    if (sample_configuration == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (msp_get_num_populations(self->sim) != num_populations) {
+        PyErr_Format(PyExc_ValueError,
+            "sample configuration must have num_populations entries");
+        goto out;
+    }
+    for (j = 0; j < num_populations; j++) {
+        value = PyList_GetItem(py_sample_configuration, j);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError,
+                "Sample configuration value not a number");
+            goto out;
+        }
+        v = PyLong_AsLong(value);
+        if (v < 0) {
+            PyErr_Format(PyExc_ValueError, "Negative values not permitted");
+            goto out;
+        }
+        sample_configuration[j] = (size_t) v;
+    }
+    err = msp_set_sample_configuration(self->sim, num_populations,
+            sample_configuration);
+    if (err != 0) {
+        handle_input_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    if (sample_configuration != NULL) {
+        PyMem_Free(sample_configuration);
+    }
+    return ret;
+}
+
+static int
+Simulator_parse_migration_matrix(Simulator *self,
+        PyObject *py_migration_matrix)
+{
+    int ret = -1;
+    int err;
+    Py_ssize_t j, size;
+    size_t num_populations;
+    PyObject *value;
+    double *migration_matrix = NULL;
+
+    size = PyList_Size(py_migration_matrix);
+    migration_matrix = PyMem_Malloc(size * sizeof(double));
+    if (migration_matrix == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    num_populations = msp_get_num_populations(self->sim);
+    if (num_populations * num_populations != size) {
+        PyErr_Format(PyExc_ValueError,
+            "Migration matrix must be a flattend num_populations*num_populations "
+            "square array");
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        value = PyList_GetItem(py_migration_matrix, j);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "Migration rate not a number");
+            goto out;
+        }
+        migration_matrix[j] = PyFloat_AsDouble(value);
+        if (migration_matrix[j] < 0.0) {
+            PyErr_Format(PyExc_ValueError, "Negative values not permitted");
+            goto out;
+        }
+    }
+    err = msp_set_migration_matrix(self->sim, size, migration_matrix);
+    if (err != 0) {
+        handle_input_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    if (migration_matrix != NULL) {
+        PyMem_Free(migration_matrix);
+    }
+    return ret;
+}
+
 static void
 Simulator_dealloc(Simulator* self)
 {
@@ -274,13 +380,17 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int sim_ret;
     static char *kwlist[] = {"sample_size", "random_seed",
-        "num_loci", "scaled_recombination_rate", "population_models",
+        "num_loci", "scaled_recombination_rate", "num_populations",
+        "sample_configuration", "migration_matrix", "population_models",
         "max_memory", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "coalescence_record_block_size", NULL};
     PyObject *population_models = NULL;
+    PyObject *migration_matrix = NULL;
+    PyObject *sample_configuration = NULL;
     /* parameter defaults */
     unsigned int sample_size = 2;
     unsigned int num_loci = 1;
+    unsigned int num_populations = 1;
     unsigned long random_seed = 1;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
@@ -290,9 +400,11 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t coalescence_record_block_size = 10;
 
     self->sim = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Il|IdO!nnnnn", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Il|IdIO!O!O!nnnnn", kwlist,
             &sample_size, &random_seed, &num_loci,
-            &scaled_recombination_rate,
+            &scaled_recombination_rate, &num_populations,
+            &PyList_Type, &sample_configuration,
+            &PyList_Type, &migration_matrix,
             &PyList_Type, &population_models,
             &max_memory, &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &coalescence_record_block_size)) {
@@ -319,6 +431,11 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     sim_ret = msp_set_scaled_recombination_rate(self->sim, scaled_recombination_rate);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_num_populations(self->sim, (uint32_t) num_populations);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -357,6 +474,18 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+    if (sample_configuration != NULL) {
+        if (Simulator_parse_sample_configuration(self,
+                sample_configuration) != 0) {
+            goto out;
+        }
+    }
+    if (migration_matrix != NULL) {
+        if (Simulator_parse_migration_matrix(self,
+                migration_matrix) != 0) {
+            goto out;
+        }
+    }
     ret = 0;
 out:
     return ret;
@@ -375,7 +504,7 @@ Simulator_get_num_loci(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_loci);
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_loci(self->sim));
 out:
     return ret;
 }
@@ -387,7 +516,7 @@ Simulator_get_sample_size(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->sample_size);
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_sample_size(self->sim));
 out:
     return ret;
 }
