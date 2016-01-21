@@ -782,11 +782,18 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(_msprime.InputError, f, 2, 1, [3])
         self.assertRaises(_msprime.InputError, f, 2, 2, [2, 1])
         self.assertRaises(_msprime.InputError, f, 5, 2, [2, 2])
+        # Must provide sample_configuration for > 1pops
+        self.assertRaises(
+            ValueError, _msprime.Simulator, 2, 1,
+            num_populations=2, migration_matrix=[0, 0, 0, 0])
 
     def test_bad_migration_matrix(self):
         def f(num_populations, migration_matrix):
+            sample_configuration = [0 for j in range(num_populations)]
+            sample_configuration[0] = 2
             return _msprime.Simulator(
                 2, 1, num_populations=num_populations,
+                sample_configuration=sample_configuration,
                 migration_matrix=migration_matrix)
         for bad_type in ["", {}, None, 2, [""], [[]], [None]]:
             self.assertRaises(TypeError, f, 1, bad_type)
@@ -816,6 +823,10 @@ class TestSimulator(LowLevelTestCase):
             flattened = [v for row in matrix for v in row]
             self.assertRaises(
                 _msprime.InputError, f, num_populations, flattened)
+        # Must provide migration_matrix for > 1pops
+        self.assertRaises(
+            ValueError, _msprime.Simulator, 2, 1,
+            num_populations=2, sample_configuration=[2, 0])
 
     def test_seed_equality(self):
         simulations = [

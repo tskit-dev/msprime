@@ -329,12 +329,13 @@ int
 msp_set_num_populations(msp_t *self, size_t num_populations)
 {
     int ret = 0;
+    size_t j;
 
-    if (num_populations < 1 || num_populations > UINT32_MAX) {
+    if (num_populations < 1 || num_populations > UINT8_MAX) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->num_populations = (uint32_t) num_populations;
+    self->num_populations = (uint8_t) num_populations;
     /* Free any memory, if it has been allocated */
     if (self->migration_matrix != NULL) {
         free(self->migration_matrix);
@@ -342,14 +343,22 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
     if (self->sample_configuration != NULL) {
         free(self->sample_configuration);
     }
+    if (self->populations != NULL) {
+        free(self->populations);
+    }
     /* Allocate storage for new num_populations */
-    self->sample_configuration = malloc(num_populations * sizeof(uint32_t));
-    self->migration_matrix = malloc(
-        num_populations * num_populations * sizeof(double));
+    self->sample_configuration = calloc(num_populations, sizeof(uint32_t));
+    self->migration_matrix = calloc(num_populations * num_populations,
+            sizeof(double));
+    self->populations = malloc(num_populations * sizeof(population_t));
     if (self->sample_configuration == NULL
-            || self->migration_matrix == NULL) {
+            || self->migration_matrix == NULL
+            || self->populations == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
+    }
+    for (j = 0; j < num_populations; j++) {
+        avl_init_tree(&self->populations[j].ancestors, cmp_individual, NULL);
     }
 out:
     return ret;
@@ -381,7 +390,6 @@ msp_set_sample_configuration(msp_t *self, size_t num_populations,
     if (num_populations != self->num_populations) {
         goto out;
     }
-
     for (j = 0; j < num_populations; j++) {
         total += sample_configuration[j];
     }
@@ -389,7 +397,7 @@ msp_set_sample_configuration(msp_t *self, size_t num_populations,
         goto out;
     }
     for (j = 0; j < num_populations; j++) {
-        self->sample_configuration[j] = (uint32_t) sample_configuration[j];
+        self->sample_configuration[j] = (uint8_t) sample_configuration[j];
     }
     ret = 0;
 out:
@@ -399,12 +407,11 @@ out:
 int
 msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
 {
-    int ret = 0;
+    int ret = MSP_ERR_BAD_MIGRATION_MATRIX;
     size_t j, k;
     size_t N = self->num_populations;
 
     if (N * N != size) {
-        ret = MSP_ERR_BAD_MIGRATION_MATRIX;
         goto out;
     }
     /* Check values */
@@ -412,12 +419,10 @@ msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
         for (k = 0; k < N; k++) {
             if (j == k) {
                 if (migration_matrix[j * N + k] != 0.0) {
-                    ret = MSP_ERR_BAD_MIGRATION_MATRIX;
                     goto out;
                 }
             } else {
                 if (migration_matrix[j * N + k] < 0.0) {
-                    ret = MSP_ERR_BAD_MIGRATION_MATRIX;
                     goto out;
                 }
             }
@@ -426,6 +431,7 @@ msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
     for (j = 0; j < N * N; j++) {
         self->migration_matrix[j] = migration_matrix[j];
     }
+    ret = 0;
 out:
     return ret;
 }
@@ -520,6 +526,9 @@ msp_alloc(msp_t *self, size_t sample_size)
     if (ret != 0) {
         goto out;
     }
+    /* Set sensible defaults for the sample_config and migration matrix */
+    self->sample_configuration[0] = self->sample_size;
+    self->migration_matrix[0] = 0.0;
     /* Set the memory defaults */
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
@@ -527,7 +536,6 @@ msp_alloc(msp_t *self, size_t sample_size)
     self->max_memory = 1024 * 1024 * 1024; /* 1MiB */
     self->coalescence_record_block_size = 1024;
     /* set up the AVL trees */
-    avl_init_tree(&self->ancestral_population, cmp_individual, NULL);
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
     avl_init_tree(&self->overlap_counts, cmp_node_mapping, NULL);
     /* Add the base population model */
@@ -595,7 +603,8 @@ msp_is_initialised(msp_t *self)
 int
 msp_is_completed(msp_t *self)
 {
-    size_t n = avl_count(&self->ancestral_population);
+    size_t n = msp_get_num_ancestors(self);
+
     return msp_is_initialised(self) && n == 0;
 }
 
@@ -615,6 +624,9 @@ msp_free(msp_t *self)
     }
     if (self->sample_configuration != NULL) {
         free(self->sample_configuration);
+    }
+    if (self->populations != NULL) {
+        free(self->populations);
     }
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
@@ -708,6 +720,7 @@ msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, uint32_t value,
     seg->left = left;
     seg->right = right;
     seg->value = value;
+    seg->population_id = 0;
 out:
     return seg;
 }
@@ -745,7 +758,8 @@ msp_insert_individual(msp_t *self, segment_t *u)
         goto out;
     }
     avl_init_node(node, u);
-    node = avl_insert_node(&self->ancestral_population, node);
+    node = avl_insert_node(
+        &self->populations[u->population_id].ancestors, node);
     assert(node != NULL);
 out:
     return ret;
@@ -754,32 +768,21 @@ out:
 static void
 msp_print_segment_chain(msp_t *self, segment_t *head)
 {
-    unsigned int j;
     segment_t *s = head;
-    j = 1;
+
+    printf("[%d]", s->population_id);
     while (s != NULL) {
-        while (j < s->left) {
-            printf("%4c", '-');
-            j++;
-        }
-        while (j <= s->right) {
-            printf("%4d", s->value);
-            j++;
-        }
+        printf("[(%d-%d) %d] ", s->left, s->right, s->value);
         s = s->next;
-    }
-    while (j <= self->num_loci) {
-        printf("%4c", '-');
-        j++;
     }
     printf("\n");
 }
-
 
 void
 msp_verify(msp_t *self)
 {
     int64_t s, ss, total_links, left, right, alt_total_links;
+    size_t j;
     size_t total_segments = 0;
     size_t total_avl_nodes = 0;
     avl_node_t *node;
@@ -787,47 +790,43 @@ msp_verify(msp_t *self)
 
     total_links = 0;
     alt_total_links = 0;
-    node = (&self->ancestral_population)->head;
-    while (node != NULL) {
-        u = (segment_t *) node->item;
-        assert(u->prev == NULL);
-        left = u->left;
-        while (u != NULL) {
-            total_segments++;
-            assert(u->left < u->right);
-            assert(u->right <= self->num_loci);
-            /*
-             TODO add back in checking for tree integrity
-            for (j = u->left; j <= u->right; j++) {
-                msp_get_tree(self, j, pi, tau);
-                assert(pi[u->value] == 0);
+    for (j = 0; j < self->num_populations; j++) {
+        node = (&self->populations[j].ancestors)->head;
+        while (node != NULL) {
+            u = (segment_t *) node->item;
+            assert(u->prev == NULL);
+            left = u->left;
+            while (u != NULL) {
+                total_segments++;
+                assert(u->population_id == j);
+                assert(u->left < u->right);
+                assert(u->right <= self->num_loci);
+                if (u->prev != NULL) {
+                    s = u->right - u->prev->right;
+                } else {
+                    s = u->right - u->left - 1;
+                }
+                ss = fenwick_get_value(&self->links, u->id);
+                total_links += ss;
+                assert(s == ss);
+                ss = s; /* just to keep compiler happy - see below also */
+                right = u->right;
+                u = u->next;
             }
-            */
-            if (u->prev != NULL) {
-                s = u->right - u->prev->right;
-            } else {
-                s = u->right - u->left - 1;
-            }
-            ss = fenwick_get_value(&self->links, u->id);
-            total_links += ss;
-            assert(s == ss);
-            ss = s; /* just to keep compiler happy - see below also */
-            right = u->right;
-            u = u->next;
+            alt_total_links += right - left - 1;
+            node = node->next;
         }
-        alt_total_links += right - left - 1;
-        node = node->next;
     }
     assert(total_links == fenwick_get_total(&self->links));
     assert(total_links == alt_total_links);
     assert(total_segments == object_heap_get_num_allocated(
                 &self->segment_heap));
-    total_avl_nodes = avl_count(&self->ancestral_population)
+    total_avl_nodes = msp_get_num_ancestors(self)
             + avl_count(&self->breakpoints)
             + avl_count(&self->overlap_counts);
     assert(total_avl_nodes == object_heap_get_num_allocated(
                 &self->avl_node_heap));
-    assert(total_avl_nodes - avl_count(&self->ancestral_population)
+    assert(total_avl_nodes - msp_get_num_ancestors(self)
             == object_heap_get_num_allocated(&self->node_mapping_heap));
     if (total_avl_nodes == total_segments) {
         /* do nothing - this is just to keep the compiler happy when
@@ -865,7 +864,10 @@ msp_print_state(msp_t *self)
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
     printf("num_links = %ld\n", (long) fenwick_get_total(&self->links));
-    printf("population = %d\n", avl_count(&self->ancestral_population));
+    for (j = 0; j < self->num_populations; j++) {
+        printf("population[%d] = %d\n", j,
+            avl_count(&self->populations[j].ancestors));
+    }
     printf("population models = %d\n", (int) self->num_population_models - 1);
     for (j = 1; j < self->num_population_models; j++) {
         m = &self->population_models[j];
@@ -1130,24 +1132,28 @@ msp_coancestry_event(msp_t *self)
     int defrag_required = 0;
     double covered_fraction;
     uint32_t j, n, l, r, l_min, r_max, v;
+    avl_tree_t *ancestors;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
 
+    uint8_t population_id = 0;
+
+    ancestors = &self->populations[population_id].ancestors;
     self->num_ca_events++;
     /* Choose x and y */
-    n = avl_count(&self->ancestral_population);
+    n = avl_count(ancestors);
     j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
-    node = avl_at(&self->ancestral_population, j);
+    node = avl_at(ancestors, j);
     assert(node != NULL);
     x = (segment_t *) node->item;
-    avl_unlink_node(&self->ancestral_population, node);
+    avl_unlink_node(ancestors, node);
     msp_free_avl_node(self, node);
     j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
-    node = avl_at(&self->ancestral_population, j);
+    node = avl_at(ancestors, j);
     assert(node != NULL);
     y = (segment_t *) node->item;
-    avl_unlink_node(&self->ancestral_population, node);
+    avl_unlink_node(ancestors, node);
     msp_free_avl_node(self, node);
 
     /* update num_links and get ready for loop */
@@ -1330,28 +1336,47 @@ msp_initialise(msp_t *self)
 {
     int ret = -1;
     segment_t *u;
-    unsigned int j;
+    uint32_t j, population_id, sample_id, total;
+
     /* These should really be proper checks with a return value */
     assert(self->sample_size > 1);
     assert(self->num_loci >= 1);
+    assert(self->num_populations >= 1);
 
     ret = msp_alloc_memory_blocks(self);
     if (ret != 0) {
         goto out;
     }
-    /* Set up the initial segments and algorithm state */
-    for (j = 1; j <= self->sample_size; j++) {
-        u = msp_alloc_segment(self, 0, self->num_loci, j, NULL, NULL);
-        if (u == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        ret = msp_insert_individual(self, u);
-        if (ret != 0) {
-            goto out;
-        }
-        fenwick_set_value(&self->links, u->id, self->num_loci - 1);
+    /* First check that the sample configuration makes sense */
+    total = 0;
+    for (population_id = 0; population_id < self->num_populations;
+            population_id++) {
+        total += self->sample_configuration[population_id];
     }
+    if (total != self->sample_size) {
+        ret = MSP_ERR_BAD_SAMPLE_CONFIGURATION;
+        goto out;
+    }
+    /* Set up the initial segments and algorithm state */
+    sample_id = 1;
+    for (population_id = 0; population_id < self->num_populations;
+            population_id++) {
+        for (j = 0; j < self->sample_configuration[population_id]; j++) {
+            u = msp_alloc_segment(self, 0, self->num_loci, sample_id,
+                    NULL, NULL);
+            if (u == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            ret = msp_insert_individual(self, u);
+            if (ret != 0) {
+                goto out;
+            }
+            fenwick_set_value(&self->links, u->id, self->num_loci - 1);
+            sample_id++;
+        }
+    }
+    assert(sample_id == self->sample_size + 1);
     self->next_node = self->sample_size + 1;
     ret = msp_insert_overlap_count(self, 0, self->sample_size);
     if (ret != 0) {
@@ -1390,7 +1415,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     model = &self->population_models[self->current_population_model];
     assert(model != NULL);
     next_model = msp_get_next_population_model(self);
-    n = avl_count(&self->ancestral_population);
+    n = (uint32_t) msp_get_num_ancestors(self);
     while (n > 1 && self->time <= max_time && events < max_events) {
         events++;
         num_links = fenwick_get_total(&self->links);
@@ -1444,7 +1469,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             if (ret != 0) {
                 goto out;
             }
-            n = avl_count(&self->ancestral_population);
+            n = (uint32_t) msp_get_num_ancestors(self);
         }
     }
     if (n != 0) {
@@ -1485,7 +1510,13 @@ msp_get_num_population_models(msp_t *self)
 size_t
 msp_get_num_ancestors(msp_t *self)
 {
-    return avl_count(&self->ancestral_population);
+    size_t n = 0;
+    size_t j;
+
+    for (j = 0; j < self->num_populations; j++) {
+        n += avl_count(&self->populations[j].ancestors);
+    }
+    return n;
 }
 
 size_t
@@ -1505,11 +1536,16 @@ msp_get_ancestors(msp_t *self, segment_t **ancestors)
 {
     int ret = -1;
     avl_node_t *node;
-    size_t j = 0;
+    avl_tree_t *population_ancestors;
+    size_t j;
+    size_t k = 0;
 
-    for (node = (&self->ancestral_population)->head; node != NULL; node = node->next) {
-        ancestors[j] = (segment_t *) node->item;
-        j++;
+    for (j = 0; j < self->num_populations; j++) {
+        population_ancestors = &self->populations[j].ancestors;
+        for (node = population_ancestors->head; node != NULL; node = node->next) {
+            ancestors[k] = (segment_t *) node->item;
+            k++;
+        }
     }
     ret = 0;
     return ret;

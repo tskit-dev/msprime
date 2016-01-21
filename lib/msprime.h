@@ -50,16 +50,8 @@
 
 #define MAX_BRANCH_LENGTH_STRING 24
 
-/* Using a size_t for index allows us to have an effectively unlimited
- * number of segments. However, we end up wasting 4 bytes of space 
- * per segment because of alignments requirements. This means that 
- * we use 40 bytes instead of 32 (if we use a 32 bit index for a limit
- * of 4G segments), which is a 25% increase in space. It may be possible
- * to do something clever using the offsets of the pointers from the 
- * base address of the memory chunk, which might allow us to get this
- * memory back.
- */
 typedef struct segment_t_t {
+    uint8_t population_id;
     uint32_t left;
     uint32_t right;
     uint32_t value;
@@ -103,11 +95,15 @@ typedef struct {
 } object_heap_t;
 
 typedef struct {
+    avl_tree_t ancestors;
+} population_t;
+
+typedef struct {
     /* input parameters */
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
-    uint32_t num_populations;
+    uint8_t num_populations;
     double *migration_matrix;
     uint32_t *sample_configuration;
     unsigned long random_seed;
@@ -130,7 +126,7 @@ typedef struct {
     double time;
     uint32_t next_node;
     gsl_rng *rng;
-    avl_tree_t ancestral_population;
+    population_t *populations;
     avl_tree_t breakpoints;
     avl_tree_t overlap_counts;
     fenwick_t links;

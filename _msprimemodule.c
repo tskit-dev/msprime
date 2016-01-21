@@ -436,10 +436,18 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
-    sim_ret = msp_set_num_populations(self->sim, (size_t) num_populations);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
+    if (num_populations != 1) {
+        /* We avoid calling this for num_populations = 1 because this is
+         * the default, and we already have the sane defaults for
+         * sample_configuration and migration_matrix in this case. If we
+         * called msp_set_num_populations, we would need to deal with the
+         * problem of setting these with default values too.
+         */
+        sim_ret = msp_set_num_populations(self->sim, (size_t) num_populations);
+        if (sim_ret != 0) {
+            handle_input_error(sim_ret);
+            goto out;
+        }
     }
     sim_ret = msp_set_max_memory(self->sim, (size_t) max_memory);
     if (sim_ret != 0) {
@@ -480,10 +488,22 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
                 sample_configuration) != 0) {
             goto out;
         }
+    } else {
+        if (num_populations != 1) {
+            PyErr_SetString(PyExc_ValueError,
+                "Must specify sample_configuration for num_populations > 1");
+            goto out;
+        }
     }
     if (migration_matrix != NULL) {
         if (Simulator_parse_migration_matrix(self,
                 migration_matrix) != 0) {
+            goto out;
+        }
+    } else {
+        if (num_populations != 1) {
+            PyErr_SetString(PyExc_ValueError,
+                "Must specify migration_matrix for num_populations > 1");
             goto out;
         }
     }
