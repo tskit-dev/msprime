@@ -28,6 +28,10 @@
 #include "msprime.h"
 #include "err.h"
 
+/* This file defines a crude CLI for msprime. It is intended for development
+ * use only.
+ */
+
 typedef struct {
     double mutation_rate;
     unsigned long random_seed;
@@ -105,6 +109,79 @@ out:
 }
 
 static int
+read_sample_configuration(msp_t *msp, config_t *config)
+{
+    int ret = 0;
+    size_t j, num_populations;
+    size_t *sample_configuration = NULL;
+    config_setting_t *s;
+    config_setting_t *setting = config_lookup(config, "sample_configuration");
+
+    if (setting == NULL) {
+        fatal_error("sample_configuration is a required parameter");
+    }
+    if (config_setting_is_array(setting) == CONFIG_FALSE) {
+        fatal_error("sample_configuration must be an array");
+    }
+    num_populations = (size_t) config_setting_length(setting);
+    sample_configuration = malloc(num_populations * sizeof(size_t));
+    if (sample_configuration == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < num_populations; j++) {
+        s = config_setting_get_elem(setting, (unsigned int) j);
+        if (s == NULL) {
+            fatal_error("error reading sample_configuration[%d]", j);
+        }
+        sample_configuration[j] = (size_t) config_setting_get_int(s);
+    }
+    ret = msp_set_sample_configuration(msp,
+        num_populations, sample_configuration);
+out:
+    if (sample_configuration != NULL) {
+        free(sample_configuration);
+    }
+    return ret;
+}
+
+static int
+read_migration_matrix(msp_t *msp, config_t *config)
+{
+    int ret = 0;
+    size_t j, size;
+    double *migration_matrix = NULL;
+    config_setting_t *s;
+    config_setting_t *setting = config_lookup(config, "migration_matrix");
+
+    if (setting == NULL) {
+        fatal_error("migration_matrix is a required parameter");
+    }
+    if (config_setting_is_array(setting) == CONFIG_FALSE) {
+        fatal_error("migration_matrix must be an array");
+    }
+    size = (size_t) config_setting_length(setting);
+    migration_matrix = malloc(size * sizeof(double));
+    if (migration_matrix == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        s = config_setting_get_elem(setting, (unsigned int) j);
+        if (s == NULL) {
+            fatal_error("error reading migration_matrix[%d]", j);
+        }
+        migration_matrix[j] = (double) config_setting_get_float(s);
+    }
+    ret = msp_set_migration_matrix(msp, size, migration_matrix);
+out:
+    if (migration_matrix != NULL) {
+        free(migration_matrix);
+    }
+    return ret;
+}
+
+static int
 get_configuration(msp_t *msp, mutation_params_t *mutation_params,
         char **output_file, const char *filename)
 {
@@ -129,11 +206,21 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     if (config_lookup_int(config, "sample_size", &int_tmp) == CONFIG_FALSE) {
         fatal_error("sample_size is a required parameter");
     }
-    ret = msp_alloc(msp, (uint32_t) int_tmp);
+    ret = msp_alloc(msp, (size_t) int_tmp);
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
-    msp_set_num_loci(msp, (uint32_t) int_tmp);
+    ret = msp_set_num_loci(msp, (size_t) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+    if (config_lookup_int(config, "num_populations", &int_tmp) == CONFIG_FALSE) {
+        fatal_error("num_populations is a required parameter");
+    }
+    ret = msp_set_num_populations(msp, (size_t) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     if (config_lookup_int(config, "random_seed", &int_tmp) == CONFIG_FALSE) {
         fatal_error("random_seed is a required parameter");
     }
@@ -178,6 +265,17 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     }
     msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
     ret = read_population_models(msp, config);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+    ret = read_sample_configuration(msp, config);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+    ret = read_migration_matrix(msp, config);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     if (config_lookup_string(config, "output_file", &str_tmp)
             == CONFIG_FALSE) {
         fatal_error("output_file is a required parameter");
@@ -395,7 +493,7 @@ run_simulate(char *conf_file)
     int ret = -1;
     int result;
     mutation_params_t mutation_params;
-    msp_t *msp = calloc(1, sizeof(msp_t));
+    msp_t *msp = malloc(sizeof(msp_t));
     char *output_file = NULL;
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
 

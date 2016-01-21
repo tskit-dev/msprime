@@ -108,6 +108,8 @@ typedef struct {
     uint32_t num_loci;
     double scaled_recombination_rate;
     uint32_t num_populations;
+    double *migration_matrix;
+    uint32_t *sample_configuration;
     unsigned long random_seed;
     /* allocation block sizes */
     size_t avl_node_block_size;

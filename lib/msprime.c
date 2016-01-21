@@ -330,11 +330,27 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
 {
     int ret = 0;
 
-    if (num_populations < 1) {
+    if (num_populations < 1 || num_populations > UINT32_MAX) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->num_populations = (uint32_t) num_populations;
+    /* Free any memory, if it has been allocated */
+    if (self->migration_matrix != NULL) {
+        free(self->migration_matrix);
+    }
+    if (self->sample_configuration != NULL) {
+        free(self->sample_configuration);
+    }
+    /* Allocate storage for new num_populations */
+    self->sample_configuration = malloc(num_populations * sizeof(uint32_t));
+    self->migration_matrix = malloc(
+        num_populations * num_populations * sizeof(double));
+    if (self->sample_configuration == NULL
+            || self->migration_matrix == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
 out:
     return ret;
 }
@@ -358,18 +374,24 @@ int
 msp_set_sample_configuration(msp_t *self, size_t num_populations,
     size_t *sample_configuration)
 {
-    int ret = 0;
+    int ret = MSP_ERR_BAD_SAMPLE_CONFIGURATION;
     size_t j;
-    uint32_t total = 0;
+    size_t total = 0;
+
+    if (num_populations != self->num_populations) {
+        goto out;
+    }
 
     for (j = 0; j < num_populations; j++) {
         total += sample_configuration[j];
     }
-    if (total != self->sample_size) {
-        ret = MSP_ERR_BAD_SAMPLE_CONFIGURATION;
+    if (total != (size_t) self->sample_size) {
         goto out;
     }
-    /* TODO assign locally */
+    for (j = 0; j < num_populations; j++) {
+        self->sample_configuration[j] = (uint32_t) sample_configuration[j];
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -381,7 +403,7 @@ msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
     size_t j, k;
     size_t N = self->num_populations;
 
-    if (gsl_pow_2(N) != size) {
+    if (N * N != size) {
         ret = MSP_ERR_BAD_MIGRATION_MATRIX;
         goto out;
     }
@@ -401,13 +423,12 @@ msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
             }
         }
     }
-
-
-    /* TODO assign locally */
+    for (j = 0; j < N * N; j++) {
+        self->migration_matrix[j] = migration_matrix[j];
+    }
 out:
     return ret;
 }
-
 
 int
 msp_set_max_memory(msp_t *self, size_t max_memory)
@@ -495,6 +516,10 @@ msp_alloc(msp_t *self, size_t sample_size)
     msp_set_random_seed(self, 1);
     self->num_loci = 1;
     self->scaled_recombination_rate = 0.0;
+    ret = msp_set_num_populations(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
     /* Set the memory defaults */
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
@@ -584,6 +609,12 @@ msp_free(msp_t *self)
     }
     if (self->rng != NULL) {
         gsl_rng_free(self->rng);
+    }
+    if (self->migration_matrix != NULL) {
+        free(self->migration_matrix);
+    }
+    if (self->sample_configuration != NULL) {
+        free(self->sample_configuration);
     }
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);

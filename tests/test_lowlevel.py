@@ -776,7 +776,7 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(ValueError, f, 2, 1, [1, 1])
         self.assertRaises(ValueError, f, 2, 2, [1])
         self.assertRaises(ValueError, f, 2, 1, [])
-        self.assertRaises(ValueError, f, 2, -1, [])
+        self.assertRaises(_msprime.InputError, f, 2, -1, [])
         # Other miscellaneous errors are InputErrors
         self.assertRaises(_msprime.InputError, f, 2, 0, [])
         self.assertRaises(_msprime.InputError, f, 2, 1, [3])

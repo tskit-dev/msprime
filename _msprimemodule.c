@@ -388,9 +388,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     PyObject *migration_matrix = NULL;
     PyObject *sample_configuration = NULL;
     /* parameter defaults */
-    unsigned int sample_size = 2;
-    unsigned int num_loci = 1;
-    unsigned int num_populations = 1;
+    Py_ssize_t sample_size = 2;
+    Py_ssize_t num_loci = 1;
+    Py_ssize_t num_populations = 1;
     unsigned long random_seed = 1;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
@@ -400,7 +400,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t coalescence_record_block_size = 10;
 
     self->sim = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Il|IdIO!O!O!nnnnn", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "nl|ndnO!O!O!nnnnn", kwlist,
             &sample_size, &random_seed, &num_loci,
             &scaled_recombination_rate, &num_populations,
             &PyList_Type, &sample_configuration,
@@ -415,12 +415,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    sim_ret = msp_alloc(self->sim, sample_size);
+    sim_ret = msp_alloc(self->sim, (size_t) sample_size);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
     }
-    sim_ret = msp_set_num_loci(self->sim, (uint32_t) num_loci);
+    sim_ret = msp_set_num_loci(self->sim, (size_t) num_loci);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -430,12 +430,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
-    sim_ret = msp_set_scaled_recombination_rate(self->sim, scaled_recombination_rate);
+    sim_ret = msp_set_scaled_recombination_rate(self->sim,
+            scaled_recombination_rate);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
     }
-    sim_ret = msp_set_num_populations(self->sim, (uint32_t) num_populations);
+    sim_ret = msp_set_num_populations(self->sim, (size_t) num_populations);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
