@@ -234,6 +234,7 @@ def create_simulation_runner(parser, arg_list):
     symmetric_migration_rate = 0.0
     num_populations = 1
     sample_configuration = [args.sample_size]
+    migration_matrix = [[0.0]]
     if args.structure is not None:
         num_populations = convert_int(args.structure[0], parser)
         # We must have at least num_population sample_configurations
@@ -251,9 +252,32 @@ def create_simulation_runner(parser, arg_list):
                 args.structure[num_populations + 1], parser)
         elif len(args.structure) > num_populations + 2:
             parser.error("Too many arguments to --structure/-I")
-    migration_matrix = [
-        [symmetric_migration_rate * int(j != k)
+        migration_matrix = [[
+            symmetric_migration_rate / (num_populations - 1) * int(j != k)
             for j in range(num_populations)] for k in range(num_populations)]
+    else:
+        if len(args.migration_matrix_entry) > 0:
+            parser.error(
+                "Cannot specify migration matrix entries without "
+                "first providing a -I option")
+    for matrix_entry in args.migration_matrix_entry:
+        dest = int(matrix_entry[0])
+        source = int(matrix_entry[1])
+        rate = matrix_entry[2]
+        msg = "Bad population ID '{}': must be an integer"
+        if dest != matrix_entry[0]:
+            parser.error(msg.format(matrix_entry[0]))
+        if source != matrix_entry[1]:
+            parser.error(msg.format(matrix_entry[1]))
+        msg = "Bad population ID '{}': must be 1 to num_populations"
+        if source < 1 or source > num_populations:
+            parser.error(msg.format(source))
+        if dest < 1 or dest > num_populations:
+            parser.error(msg.format(dest))
+        if dest == source:
+            parser.error("Cannot set diagonal elements in migration matrix")
+        # Ms uses dest-source, but we use source-dest matrix
+        migration_matrix[source - 1][dest - 1] = rate
 
     # Get the demography parameters
     # TODO for strict ms compatability, we need to resolve the command line
@@ -296,14 +320,14 @@ def get_mspms_parser():
 
     group = parser.add_argument_group("Behaviour")
     group.add_argument(
-        "--mutation-rate", "-t", type=float, metavar="theta",
+        "--mutation-rate", "-t", type=float, metavar="THETA",
         help="Mutation rate theta=4*N0*mu", default=0)
     group.add_argument(
         "--trees", "-T", action="store_true",
         help="Print out trees in Newick format")
     group.add_argument(
         "--recombination", "-r", type=float, nargs=2, default=(0, 1),
-        metavar=("rho", "num_loci"), help=mscompat_recombination_help)
+        metavar=("RHO", "NUM_LOCI"), help=mscompat_recombination_help)
 
     group = parser.add_argument_group("Structure and migration")
     group.add_argument(
@@ -314,6 +338,14 @@ def get_mspms_parser():
             "n1 n2 ... [4N0m]', specifying the number of populations, "
             "the sample configuration, and optionally, the migration "
             "rate for a symmetric island model"))
+    group.add_argument(
+        "--migration-matrix-entry", "-m", action="append",
+        metavar=("DEST", "SOURCE", "RATE"),
+        nargs=3, type=float, default=[],
+        help=(
+            "Sets an entry M[i, j] in the migration matrix to the specified "
+            "rate. SOURCE and DEST are (1-indexed) population IDs. Multiple "
+            "-m options can be specified."))
 
     group = parser.add_argument_group("Demography")
     group.add_argument(

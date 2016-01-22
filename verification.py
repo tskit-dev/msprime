@@ -371,8 +371,10 @@ def verify_migration_example():
     output_prefix = "tmp__NOBACKUP__/migration_"
     n = 15
     num_replicates = 10000
-    options = "-t 2.0 -I 4 10 4 1 0 5.0"
+    # options = "-t 2.0 -I 4 10 4 1 0 5.0"
+    options = "-t 2.0 -I 3 10 4 1 5.0 -m 1 2 100.0 -m 2 1 90.0"
     df_ms = sample_stats(["./data/ms/ms"], n, num_replicates, options)
+    # df_msp = sample_stats(["./data/ms/ms"], n, num_replicates, options)
     df_msp = sample_stats(["python", "mspms_dev.py"], n, num_replicates, options)
     for stat in ["pi", "ss", "D", "thetaH", "H"]:
         v1 = df_ms[stat]

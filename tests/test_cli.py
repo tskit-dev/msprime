@@ -271,6 +271,20 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 4 1 1")
         self.assert_parser_error("10 1 -T -I 5 1 1 1 1 6 1 1")
 
+    def test_migration_matrix_entry_errors(self):
+        # -m without -I raises an error
+        self.assert_parser_error("10 1 -T -m 1 1 1")
+        # Non int values not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1.1 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 1.1 1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 0 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 0 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 3 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 3 1")
+        # Diagonal elements cannot be set.
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 1 1")
+
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
     """
@@ -290,15 +304,30 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         # self.assertEqual(sim.get_num_populations(), 2)
         self.assertEqual(sim.get_migration_matrix(), [[0, 0], [0, 0]])
 
+        # Default migration matrix is zeros
+        sim = self.create_simulator("2 1 -T -I 2 2 0")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 0], [0, 0]])
+        self.assertEqual(sim.get_sample_configuration(), [2, 0])
+
         sim = self.create_simulator("2 1 -T -I 2 1 1 0.1")
         self.assertEqual(sim.get_migration_matrix(), [[0, 0.1], [0.1, 0]])
         self.assertEqual(sim.get_sample_configuration(), [1, 1])
-        sim = self.create_simulator("3 1 -T -I 3 1 1 1 1")
+
+        # Initial migration matrix is M / (num_pops - 1)
+        sim = self.create_simulator("3 1 -T -I 3 1 1 1 2")
         self.assertEqual(sim.get_sample_configuration(), [1, 1, 1])
         self.assertEqual(
             sim.get_migration_matrix(), [[0, 1, 1], [1, 0, 1], [1, 1, 0]])
         sim = self.create_simulator("15 1 -T -I 6 5 4 3 2 1 0")
         self.assertEqual(sim.get_sample_configuration(), [5, 4, 3, 2, 1, 0])
+
+    def test_migration_matrix_entry(self):
+        sim = self.create_simulator("3 1 -T -I 2 3 0 -m 1 2 1.1 -m 2 1 9.0")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 9.0], [1.1, 0]])
+        sim = self.create_simulator("3 1 -T -I 3 3 0 0 -m 1 2 1.1 -m 2 1 9.0")
+        self.assertEqual(
+            sim.get_migration_matrix(),
+            [[0, 9.0, 0], [1.1, 0, 0], [0, 0, 0]])
 
 
 class TestMspmsOutput(unittest.TestCase):
