@@ -849,6 +849,13 @@ class TestSimulator(LowLevelTestCase):
                 sim2.get_coalescence_records())
             self.assertEqual(sim1.get_breakpoints(), sim2.get_breakpoints())
 
+    def test_infinite_waiting_time(self):
+        # With no migration we should have an infinite waiting time.
+        sim = _msprime.Simulator(
+            10, 1, num_populations=2, sample_configuration=[5, 5],
+            migration_matrix=[0, 0, 0, 0])
+        self.assertRaises(_msprime.LibraryError, sim.run)
+
 
 class TestTreeSequence(LowLevelTestCase):
     """

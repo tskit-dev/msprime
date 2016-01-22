@@ -90,6 +90,8 @@ msp_strerror(int err)
         ret = "Bad sample configuration provided.";
     } else if (err == MSP_ERR_BAD_MIGRATION_MATRIX) {
         ret = "Bad migration matrix provided.";
+    } else if (err == MSP_ERR_INFINITE_WAITING_TIME) {
+        ret = "Infinite waiting time until next simulation event.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -1502,8 +1504,12 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             }
         }
         t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
-        /* TODO check for infinite waiting time and return error. */
-        assert(t_wait != DBL_MAX);
+        /* printf("min = %f re = %f ca = %f mig = %f\n", */
+        /*         t_wait, re_t_wait, ca_t_wait, mig_t_wait); */
+        if (t_wait == DBL_MAX) {
+            ret = MSP_ERR_INFINITE_WAITING_TIME;
+            goto out;
+        }
         if (next_model != NULL
                 && self->time + t_wait >= next_model->start_time) {
             /* We skip ahead to the start time for the next demographic
@@ -1519,7 +1525,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         } else {
             self->time += t_wait;
 
-            /* printf("min = %f re = %f ca = %f mig = %f\n", t_wait, re_t_wait, ca_t_wait, mig_t_wait); */
             if (re_t_wait == t_wait) {
                 /* Recombination event */
                 /* printf("RE\n"); */
