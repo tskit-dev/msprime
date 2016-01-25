@@ -143,7 +143,7 @@ main(argc,argv)
 #endif
 #ifdef SUMMARY_STATS
     /* print out the header*/
-    printf("t\tnum_trees\tre_events\tca_events\n");
+    printf("t\tnum_trees\tre_events\tca_events\tmig_events\n");
 #endif
 
 	for( i =0; i<argc; i++) tbsparamstrs[i] = (char *)malloc(30*sizeof(char) ) ;

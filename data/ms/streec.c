@@ -93,6 +93,7 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 #ifdef SUMMARY_STATS
     unsigned int recombination_events = 0;
     unsigned int coancestry_events = 0;
+    unsigned int migration_events = 0;
 #endif
 
 	nsam = cp->nsam;
@@ -392,8 +393,10 @@ segtre_mig(struct c_params *cp, int *pnsegs )
             recombination_events++;
         } else if (event == 'c') {
             coancestry_events++;
+        } else if (event == 'm') {
+            migration_events++;
         } else {
-            printf("ERROR!\n");
+            printf("ERROR!: %c\n", event);
             exit(1);
         }
 #endif
@@ -401,7 +404,8 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 }
 #ifdef SUMMARY_STATS
     /* print out the events */
-    printf("%f\t%d\t%d\t%d\n", t, nsegs, recombination_events, coancestry_events);
+    printf("%f\t%d\t%d\t%d\t%d\n", t, nsegs, recombination_events, coancestry_events,
+            migration_events);
 #endif
 	*pnsegs = nsegs ;
 	free(config);
