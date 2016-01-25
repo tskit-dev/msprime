@@ -119,6 +119,7 @@ typedef struct {
     /* Counters for statistics */
     uint64_t num_re_events;
     uint64_t num_ca_events;
+    uint64_t num_migration_events;
     uint64_t num_trapped_re_events;
     uint64_t num_multiple_re_events;
     /* algorithm state */

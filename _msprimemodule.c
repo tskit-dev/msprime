@@ -677,6 +677,18 @@ out:
 }
 
 static PyObject *
+Simulator_get_num_migration_events(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_migration_events);
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_get_num_multiple_recombination_events(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -1083,6 +1095,9 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_recombination_events",
             (PyCFunction) Simulator_get_num_recombination_events, METH_NOARGS,
             "Returns the number of recombination_events" },
+    {"get_num_migration_events",
+            (PyCFunction) Simulator_get_num_migration_events, METH_NOARGS,
+            "Returns the number of migration events" },
     {"get_num_multiple_recombination_events",
             (PyCFunction) Simulator_get_num_multiple_recombination_events,
             METH_NOARGS,

@@ -1325,6 +1325,7 @@ msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
     segment_t *ind, *x;
     avl_tree_t *source = &self->populations[source_pop].ancestors;
 
+    self->num_migration_events++;
     j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
     node = avl_at(source, j);
     assert(node != NULL);

@@ -610,6 +610,9 @@ class TreeSimulator(object):
     def get_num_recombination_events(self):
         return self._ll_sim.get_num_recombination_events()
 
+    def get_num_migration_events(self):
+        return self._ll_sim.get_num_migration_events()
+
     def get_num_multiple_recombination_events(self):
         return self._ll_sim.get_num_multiple_recombination_events()
 

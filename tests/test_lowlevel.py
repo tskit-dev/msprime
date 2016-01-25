@@ -280,6 +280,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_used_memory(), 0)
         events = sim.get_num_coancestry_events()
         events += sim.get_num_recombination_events()
+        events += sim.get_num_migration_events()
         self.assertGreater(events, 0)
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
@@ -447,6 +448,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_time(), 0.0)
         events = sim.get_num_coancestry_events()
         events += sim.get_num_recombination_events()
+        events += sim.get_num_migration_events()
         self.assertGreater(events, 0)
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
@@ -524,6 +526,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(0, sim.get_num_ancestors())
         self.assertEqual(0, sim.get_num_coancestry_events())
         self.assertEqual(0, sim.get_num_recombination_events())
+        self.assertEqual(0, sim.get_num_migration_events())
         self.assertEqual(sim.get_num_avl_node_blocks(), 0)
         self.assertEqual(sim.get_num_segment_blocks(), 0)
         self.assertEqual(sim.get_num_node_mapping_blocks(), 0)
@@ -697,7 +700,8 @@ class TestSimulationState(LowLevelTestCase):
             events += 1
             total_events = (
                 sim.get_num_coancestry_events() +
-                sim.get_num_recombination_events())
+                sim.get_num_recombination_events() +
+                sim.get_num_migration_events())
             self.assertEqual(events, total_events)
 
 
