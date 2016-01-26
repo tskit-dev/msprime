@@ -610,8 +610,20 @@ class TreeSimulator(object):
     def get_num_recombination_events(self):
         return self._ll_sim.get_num_recombination_events()
 
+    def get_num_populations(self):
+        return self._ll_sim.get_num_populations()
+
     def get_num_migration_events(self):
-        return self._ll_sim.get_num_migration_events()
+        N = self.get_num_populations()
+        matrix = [[0 for j in range(N)] for k in range(N)]
+        flat = self._ll_sim.get_num_migration_events()
+        for j in range(N):
+            for k in range(N):
+                matrix[j][k] = flat[j * N + k]
+        return matrix
+
+    def get_total_num_migration_events(self):
+        return sum(self._ll_sim.get_num_migration_events())
 
     def get_num_multiple_recombination_events(self):
         return self._ll_sim.get_num_multiple_recombination_events()

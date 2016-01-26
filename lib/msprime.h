@@ -117,11 +117,11 @@ typedef struct {
     size_t current_population_model;
     size_t num_population_models;
     /* Counters for statistics */
-    uint64_t num_re_events;
-    uint64_t num_ca_events;
-    uint64_t num_migration_events;
-    uint64_t num_trapped_re_events;
-    uint64_t num_multiple_re_events;
+    size_t num_re_events;
+    size_t num_ca_events;
+    size_t *num_migration_events;
+    size_t num_trapped_re_events;
+    size_t num_multiple_re_events;
     /* algorithm state */
     size_t used_memory;
     double time;
@@ -294,7 +294,8 @@ void msp_verify(msp_t *self);
 
 int msp_get_population_models(msp_t *self, population_model_t *models);
 int msp_get_ancestors(msp_t *self, segment_t **ancestors);
-int msp_get_breakpoints(msp_t *self, uint32_t *breakpoints);
+int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
+int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
 int msp_is_completed(msp_t *self);
 
@@ -310,6 +311,8 @@ size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_coalescence_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
+size_t msp_get_num_common_ancestor_events(msp_t *self);
+size_t msp_get_num_recombination_events(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self);
 int tree_sequence_create(tree_sequence_t *self, msp_t *sim);

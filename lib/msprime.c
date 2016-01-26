@@ -305,6 +305,18 @@ msp_get_used_memory(msp_t *self)
     return self->used_memory;
 }
 
+size_t
+msp_get_num_common_ancestor_events(msp_t *self)
+{
+    return self->num_ca_events;
+}
+
+size_t
+msp_get_num_recombination_events(msp_t *self)
+{
+    return self->num_re_events;
+}
+
 int
 msp_set_random_seed(msp_t *self, unsigned long random_seed)
 {
@@ -345,6 +357,9 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
     if (self->sample_configuration != NULL) {
         free(self->sample_configuration);
     }
+    if (self->num_migration_events != NULL) {
+        free(self->num_migration_events);
+    }
     if (self->populations != NULL) {
         free(self->populations);
     }
@@ -352,9 +367,12 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
     self->sample_configuration = calloc(num_populations, sizeof(uint32_t));
     self->migration_matrix = calloc(num_populations * num_populations,
             sizeof(double));
+    self->num_migration_events = calloc(num_populations * num_populations,
+            sizeof(size_t));
     self->populations = malloc(num_populations * sizeof(population_t));
     if (self->sample_configuration == NULL
             || self->migration_matrix == NULL
+            || self->num_migration_events == NULL
             || self->populations == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -623,6 +641,9 @@ msp_free(msp_t *self)
     }
     if (self->migration_matrix != NULL) {
         free(self->migration_matrix);
+    }
+    if (self->num_migration_events != NULL) {
+        free(self->num_migration_events);
     }
     if (self->sample_configuration != NULL) {
         free(self->sample_configuration);
@@ -1325,7 +1346,8 @@ msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
     segment_t *ind, *x;
     avl_tree_t *source = &self->populations[source_pop].ancestors;
 
-    self->num_migration_events++;
+    self->num_migration_events[
+        source_pop * self->num_populations + dest_pop]++;
     j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
     node = avl_at(source, j);
     assert(node != NULL);
@@ -1626,7 +1648,7 @@ msp_get_ancestors(msp_t *self, segment_t **ancestors)
 }
 
 int
-msp_get_breakpoints(msp_t *self, uint32_t *breakpoints)
+msp_get_breakpoints(msp_t *self, size_t *breakpoints)
 {
     int ret = -1;
     avl_node_t *node;
@@ -1635,12 +1657,23 @@ msp_get_breakpoints(msp_t *self, uint32_t *breakpoints)
 
     for (node = (&self->breakpoints)->head; node != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
-        breakpoints[j] = nm->left;
+        breakpoints[j] = (size_t) nm->left;
         j++;
     }
     ret = 0;
     return ret;
 }
+
+int
+msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
+{
+    size_t N = self->num_populations;
+
+    memcpy(num_migration_events, self->num_migration_events,
+        N * N * sizeof(size_t));
+    return 0;
+}
+
 
 int
 msp_get_coalescence_records(msp_t *self, coalescence_record_t *coalescence_records)

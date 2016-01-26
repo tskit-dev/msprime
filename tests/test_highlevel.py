@@ -427,7 +427,7 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertEqual(sim.get_time(), t)
         self.assertGreater(sim.get_num_coancestry_events(), 0)
         self.assertGreaterEqual(sim.get_num_recombination_events(), 0)
-        self.assertGreaterEqual(sim.get_num_migration_events(), 0)
+        self.assertGreaterEqual(sim.get_total_num_migration_events(), 0)
         self.assertGreaterEqual(sim.get_num_multiple_recombination_events(), 0)
         self.verify_sparse_trees(tree_sequence)
 

@@ -14,6 +14,7 @@ import subprocess
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+import allel
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
@@ -38,13 +39,19 @@ class Simulator(object):
     """
     Superclass of coalescent simulator objects.
     """
-    def __init__(self, n, m, Ne, r, models=[], mutation_rate=None):
+    def __init__(
+            self, n, m, Ne, r, models=[], mutation_rate=None,
+            sample_configuration=None, migration_rate=None,
+            migration_matrix=None):
         self.sample_size = n
         self.recombination_rate = r
         self.num_loci = m
         self.effective_population_size = Ne
         self.population_models = models
         self.mutation_rate = mutation_rate
+        self.migration_rate = migration_rate
+        self.migration_matrix = migration_matrix
+        self.sample_configuration = sample_configuration
 
 class MsSimulator(Simulator):
     """
@@ -76,6 +83,17 @@ class MsSimulator(Simulator):
             else:
                 raise ValueError("unknown population model")
             args.extend(v)
+        if self.sample_configuration is not None:
+            v = ["-I", str(len(self.sample_configuration))] + [
+                    str(c) for c in self.sample_configuration]
+            if self.migration_matrix is None and self.migration_rate is None:
+                raise ValueError("Migration rate must be specified")
+            if self.migration_rate is not None:
+                v.append(str(self.migration_rate))
+            args.extend(v)
+            if self.migration_matrix is not None:
+                flattened = [str(v) for row in self.migration_matrix for v in row]
+                args.extend(["-ma"] + flattened)
         return args
 
 
@@ -119,7 +137,6 @@ class MutationStatisticsSimulator(object):
         return df
 
 
-
 class MsMutationStatisticsSimulator(MutationStatisticsSimulator, MsSimulator):
     """
     Runs ms with a given set of parameters, and returns the mutation
@@ -144,6 +161,7 @@ class MsprimeCoalescentStatisticsSimulator(Simulator):
         time = [0 for j in range(replicates)]
         ca_events = [0 for j in range(replicates)]
         re_events = [0 for j in range(replicates)]
+        mig_events = [0 for j in range(replicates)]
         for j in range(replicates):
             sim = msprime.TreeSimulator(self.sample_size)
             sim.set_scaled_recombination_rate(4
@@ -152,13 +170,23 @@ class MsprimeCoalescentStatisticsSimulator(Simulator):
             sim.set_max_memory("10G")
             for m in self.population_models:
                 sim.add_population_model(m)
+            N = len(self.sample_configuration)
+            sim.set_sample_configuration(self.sample_configuration)
+            if self.migration_rate is not None:
+                matrix = [[(self.migration_rate / (N - 1)) * int(j != k)
+                        for j in range(N)] for k in range(N)]
+            else:
+                matrix = self.migration_matrix
+            sim.set_migration_matrix(matrix)
             tree_sequence = sim.run()
-            num_trees[j] = sim.get_num_breakpoints()
+            num_trees[j] = sim.get_num_breakpoints() + 1
             time[j] = sim.get_time()
             ca_events[j] = sim.get_num_coancestry_events()
             re_events[j] = sim.get_num_recombination_events()
+            mig_events[j] = sim.get_num_migration_events()
         df = pd.DataFrame({"t":time, "num_trees":num_trees,
-                "ca_events":ca_events, "re_events":re_events})
+                "ca_events":ca_events, "re_events":re_events,
+                "mig_events":mig_events})
         return df
 
 def run_verify_mutations(n, m, Ne, r, models, num_replicates, mutation_rate,
@@ -207,17 +235,25 @@ def run_verify_ms_command(n, num_replicates, output_prefix):
         pyplot.clf()
 
 
-def run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix):
+def run_verify_coalescent(
+        n, m, Ne, r, models, num_replicates, output_prefix,
+        sample_configuration=None, migration_rate=None,
+        migration_matrix=None):
     """
     Runs ms and msprime on the specified parameters and outputs qqplots
     of the coalescent simulation summary statistics with the specified
     prefix.
     """
-    ms = MsCoalescentStatisticsSimulator(n, m, r, Ne, models)
+    ms = MsCoalescentStatisticsSimulator(n, m, r, Ne, models,
+            sample_configuration=sample_configuration,
+            migration_rate=migration_rate,
+            migration_matrix=migration_matrix)
     df_ms = ms.run(num_replicates)
-    msp = MsprimeCoalescentStatisticsSimulator(n, m, r, Ne, models)
+    msp = MsprimeCoalescentStatisticsSimulator(n, m, r, Ne, models,
+            sample_configuration=sample_configuration,
+            migration_rate=migration_rate, migration_matrix=migration_matrix)
     df_msp = msp.run(num_replicates)
-    for stat in ["t", "num_trees", "re_events", "ca_events"]:
+    for stat in ["t", "num_trees", "re_events", "ca_events", "mig_events"]:
         v1 = df_ms[stat]
         v2 = df_msp[stat]
         # pyplot.hist(v1, 20, alpha=0.5, label="ms")
@@ -366,6 +402,54 @@ def sample_stats(executable, sample_size, num_replicates, options):
     return df
 
 
+def get_ms_haplotypes(
+        prefix, sample_size, mutation_rate, sample_configuration,
+        migration_rate, migration_options=""):
+    cmd = prefix + [
+        str(sample_size), "1", "-t", str(mutation_rate),
+        "-I", str(len(sample_configuration))]
+    cmd += [str(s) for s in sample_configuration]
+    cmd += [str(migration_rate)] + migration_options.split()
+
+    output = subprocess.check_output(cmd)
+    haplotypes_started = 0
+    haplotypes = [[] for _ in sample_configuration]
+    pop_id = 0
+    for line in output.splitlines():
+        if line.startswith(b'//'):
+            haplotypes_started = True
+        if haplotypes_started and (
+                line.startswith(b'0') or line.startswith(b'1')):
+            if len(haplotypes[pop_id]) == sample_configuration[pop_id]:
+                pop_id += 1
+            haplotypes[pop_id].append(line)
+            s = len(line)
+
+    ret = []
+    for pop in haplotypes:
+        shape = (len(pop), s)
+        h_array = np.zeros(shape, dtype='u1')
+        for j, h in enumerate(pop):
+            h_array[j] = np.fromstring(h, np.uint8) - ord('0')
+        a_array = allel.HaplotypeArray(h_array.T)
+        ret.append(a_array)
+    return ret
+
+
+def verify_migration():
+    # -I 3 10 4 1 5.0
+    samples = get_ms_haplotypes(["./data/ms/ms"], 15, 2.0, [10, 4, 1], 5.0)
+    # get_ms_haplotypes(["python", "mspms_dev.py"], 15, 2.0, [1, 13, 1], 5.0)
+    # TODO Finish this: we need to get data into this somehow and figure out
+    # how to calculate various statistics. These can be used to compare the
+    # output of ms and msprime.
+    for pop in samples:
+        print(pop)
+        pi = allel.stats.diversity.mean_pairwise_difference(pop.count_alleles())
+        print(pi)
+
+
+
 
 def verify_migration_example():
     output_prefix = "tmp__NOBACKUP__/migration_"
@@ -388,16 +472,39 @@ def verify_migration_example():
         pyplot.savefig(f, dpi=72)
         pyplot.clf()
 
+def verify_migration_new():
+    n = 15
+    # -I 3 10 4 1 5.0
+    num_replicates = 1000
+    models = []
+    output_prefix = "tmp__NOBACKUP__/migration_coalescent"
+    run_verify_coalescent(
+        n, 1, 1, 0, [], num_replicates, output_prefix,
+        sample_configuration=[10, 4, 1], migration_rate=5.0)
+
+    #ms 15 1000 -t 10.0 -I 3 10 4 1 -ma x 1.0 2.0 3.0 x 4.0 5.0 6.0 x
+    output_prefix = "tmp__NOBACKUP__/migration_matrix_coalescent"
+    migration_matrix = [
+        [0, 1, 2],
+        [2, 0, 4],
+        [5, 6, 0]]
+    run_verify_coalescent(
+        n, 1, 1, 0, [], num_replicates, output_prefix,
+        sample_configuration=[10, 4, 1],
+        migration_matrix=migration_matrix)
+
 
 def main():
     # verify_recombination_events()
     # verify_random(10)
     # verify_exponential_models()
     # verify_simple()
+    verify_migration_new()
     # verify_zero_growth_example()
     # verify_scrm_example()
     # verify_mutations()
-    verify_migration_example()
+    # verify_migration_example()
+    # verify_migration()
 
 
 def verify_human_demographics():

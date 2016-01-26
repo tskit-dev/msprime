@@ -133,19 +133,19 @@ out:
 }
 
 static PyObject *
-convert_breakpoints(uint32_t *breakpoints, size_t num_breakpoints)
+convert_integer_list(size_t *list, size_t size)
 {
     PyObject *ret = NULL;
     PyObject *l = NULL;
     PyObject *py_int = NULL;
     size_t j;
 
-    l = PyList_New(num_breakpoints);
+    l = PyList_New(size);
     if (l == NULL) {
         goto out;
     }
-    for (j = 0; j < num_breakpoints; j++) {
-        py_int = Py_BuildValue("I", (unsigned int) breakpoints[j]);
+    for (j = 0; j < size; j++) {
+        py_int = Py_BuildValue("n", (Py_ssize_t) list[j]);
         if (py_int == NULL) {
             Py_DECREF(l);
             goto out;
@@ -531,7 +531,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_sample_size(Simulator  *self)
+Simulator_get_sample_size(Simulator *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -541,6 +541,19 @@ Simulator_get_sample_size(Simulator  *self)
 out:
     return ret;
 }
+
+static PyObject *
+Simulator_get_num_populations(Simulator *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_populations(self->sim));
+out:
+    return ret;
+}
+
 
 static PyObject *
 Simulator_get_scaled_recombination_rate(Simulator  *self)
@@ -574,7 +587,7 @@ Simulator_get_max_memory(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->max_memory);
+    ret = Py_BuildValue("n", self->sim->max_memory);
 out:
     return ret;
 }
@@ -659,7 +672,8 @@ Simulator_get_num_coancestry_events(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_ca_events);
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) msp_get_num_common_ancestor_events(self->sim));
 out:
     return ret;
 }
@@ -671,7 +685,8 @@ Simulator_get_num_recombination_events(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_re_events);
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) msp_get_num_recombination_events(self->sim));
 out:
     return ret;
 }
@@ -680,11 +695,31 @@ static PyObject *
 Simulator_get_num_migration_events(Simulator  *self)
 {
     PyObject *ret = NULL;
+    size_t *num_migration_events = NULL;
+    size_t num_populations;
+    int err;
+
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_migration_events);
+    num_populations = msp_get_num_populations(self->sim);
+    num_migration_events = PyMem_Malloc(
+        num_populations * num_populations * sizeof(size_t));
+    if (num_migration_events == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = msp_get_num_migration_events(self->sim, num_migration_events);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_integer_list(num_migration_events,
+            num_populations * num_populations);
 out:
+    if (num_migration_events != NULL) {
+        PyMem_Free(num_migration_events);
+    }
     return ret;
 }
 
@@ -871,7 +906,7 @@ static PyObject *
 Simulator_get_breakpoints(Simulator *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    uint32_t *breakpoints = NULL;
+    size_t *breakpoints = NULL;
     size_t num_breakpoints;
     int err;
 
@@ -879,7 +914,7 @@ Simulator_get_breakpoints(Simulator *self, PyObject *args)
         goto out;
     }
     num_breakpoints = msp_get_num_breakpoints(self->sim);
-    breakpoints = PyMem_Malloc(num_breakpoints * sizeof(uint32_t));
+    breakpoints = PyMem_Malloc(num_breakpoints * sizeof(size_t));
     if (breakpoints == NULL) {
         PyErr_NoMemory();
         goto out;
@@ -889,7 +924,7 @@ Simulator_get_breakpoints(Simulator *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    ret = convert_breakpoints(breakpoints, num_breakpoints);
+    ret = convert_integer_list(breakpoints, num_breakpoints);
 out:
     if (breakpoints != NULL) {
         PyMem_Free(breakpoints);
@@ -1066,6 +1101,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the number of loci" },
     {"get_sample_size", (PyCFunction) Simulator_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
+    {"get_num_populations", (PyCFunction) Simulator_get_num_populations, METH_NOARGS,
+            "Returns the number of populations." },
     {"get_scaled_recombination_rate",
             (PyCFunction) Simulator_get_scaled_recombination_rate, METH_NOARGS,
             "Returns the scaled recombination rate." },
