@@ -52,6 +52,7 @@ class Simulator(object):
         self.migration_rate = migration_rate
         self.migration_matrix = migration_matrix
         self.sample_configuration = sample_configuration
+        self.num_populations = len(sample_configuration)
 
 class MsSimulator(Simulator):
     """
@@ -161,7 +162,7 @@ class MsprimeCoalescentStatisticsSimulator(Simulator):
         time = [0 for j in range(replicates)]
         ca_events = [0 for j in range(replicates)]
         re_events = [0 for j in range(replicates)]
-        mig_events = [0 for j in range(replicates)]
+        mig_events = [None for j in range(replicates)]
         for j in range(replicates):
             sim = msprime.TreeSimulator(self.sample_size)
             sim.set_scaled_recombination_rate(4
@@ -181,12 +182,19 @@ class MsprimeCoalescentStatisticsSimulator(Simulator):
             tree_sequence = sim.run()
             num_trees[j] = sim.get_num_breakpoints() + 1
             time[j] = sim.get_time()
-            ca_events[j] = sim.get_num_coancestry_events()
+            ca_events[j] = sim.get_num_common_ancestor_events()
             re_events[j] = sim.get_num_recombination_events()
-            mig_events[j] = sim.get_num_migration_events()
-        df = pd.DataFrame({"t":time, "num_trees":num_trees,
-                "ca_events":ca_events, "re_events":re_events,
-                "mig_events":mig_events})
+            mig_events[j] = [r for row in sim.get_num_migration_events() for r in row]
+        d = {
+            "t":time, "num_trees":num_trees,
+            "ca_events":ca_events, "re_events":re_events}
+
+        for j in range(self.num_populations**2):
+            events = [0 for j in range(replicates)]
+            for k in range(replicates):
+                events[k] = mig_events[k][j]
+            d["mig_events_{}".format(j)] = events
+        df = pd.DataFrame(d)
         return df
 
 def run_verify_mutations(n, m, Ne, r, models, num_replicates, mutation_rate,
@@ -253,7 +261,10 @@ def run_verify_coalescent(
             sample_configuration=sample_configuration,
             migration_rate=migration_rate, migration_matrix=migration_matrix)
     df_msp = msp.run(num_replicates)
-    for stat in ["t", "num_trees", "re_events", "ca_events", "mig_events"]:
+    stats = ["t", "num_trees", "re_events", "ca_events"]
+    for j in range(len(sample_configuration)**2):
+        stats.append("mig_events_{}".format(j))
+    for stat in stats:
         v1 = df_ms[stat]
         v2 = df_msp[stat]
         # pyplot.hist(v1, 20, alpha=0.5, label="ms")
@@ -475,7 +486,7 @@ def verify_migration_example():
 def verify_migration_new():
     n = 15
     # -I 3 10 4 1 5.0
-    num_replicates = 1000
+    num_replicates = 10000
     models = []
     output_prefix = "tmp__NOBACKUP__/migration_coalescent"
     run_verify_coalescent(
@@ -492,6 +503,15 @@ def verify_migration_new():
         n, 1, 1, 0, [], num_replicates, output_prefix,
         sample_configuration=[10, 4, 1],
         migration_matrix=migration_matrix)
+
+    n = 100
+    num_replicates = 1000
+    output_prefix = "tmp__NOBACKUP__/high_migration_coalescent"
+    run_verify_coalescent(
+        n, 1, 1, 0, [], num_replicates, output_prefix,
+        sample_configuration=[10, 90, 0],
+        migration_matrix=[[0.0, 100, 0], [0, 0, 150], [200, 0, 0]])
+
 
 
 def main():
