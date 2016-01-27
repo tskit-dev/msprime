@@ -604,8 +604,8 @@ class TreeSimulator(object):
     def get_num_segment_blocks(self):
         return self._ll_sim.get_num_segment_blocks()
 
-    def get_num_coancestry_events(self):
-        return self._ll_sim.get_num_coancestry_events()
+    def get_num_common_ancestor_events(self):
+        return self._ll_sim.get_num_common_ancestor_events()
 
     def get_num_recombination_events(self):
         return self._ll_sim.get_num_recombination_events()

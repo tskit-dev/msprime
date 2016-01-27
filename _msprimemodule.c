@@ -666,7 +666,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_coancestry_events(Simulator  *self)
+Simulator_get_num_common_ancestor_events(Simulator  *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -1126,9 +1126,9 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the current simulation time" },
     {"get_num_ancestors", (PyCFunction) Simulator_get_num_ancestors, METH_NOARGS,
             "Returns the number of ancestors" },
-    {"get_num_coancestry_events",
-            (PyCFunction) Simulator_get_num_coancestry_events, METH_NOARGS,
-            "Returns the number of coancestry_events" },
+    {"get_num_common_ancestor_events",
+            (PyCFunction) Simulator_get_num_common_ancestor_events, METH_NOARGS,
+            "Returns the number of common_ancestor_events" },
     {"get_num_recombination_events",
             (PyCFunction) Simulator_get_num_recombination_events, METH_NOARGS,
             "Returns the number of recombination_events" },

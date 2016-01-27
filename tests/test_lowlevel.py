@@ -278,7 +278,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_time(), 0.0)
         self.assertGreater(sim.get_num_ancestors(), 1)
         self.assertGreater(sim.get_used_memory(), 0)
-        events = sim.get_num_coancestry_events()
+        events = sim.get_num_common_ancestor_events()
         events += sim.get_num_recombination_events()
         events += sum(sim.get_num_migration_events())
         self.assertGreater(events, 0)
@@ -446,7 +446,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreaterEqual(sim.get_num_breakpoints(), 0)
         self.assertGreater(sim.get_num_coalescence_records(), 0)
         self.assertGreater(sim.get_time(), 0.0)
-        events = sim.get_num_coancestry_events()
+        events = sim.get_num_common_ancestor_events()
         events += sim.get_num_recombination_events()
         events += sum(sim.get_num_migration_events())
         self.assertGreater(events, 0)
@@ -524,7 +524,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(0, sim.get_num_breakpoints())
         self.assertEqual(0.0, sim.get_time())
         self.assertEqual(0, sim.get_num_ancestors())
-        self.assertEqual(0, sim.get_num_coancestry_events())
+        self.assertEqual(0, sim.get_num_common_ancestor_events())
         self.assertEqual(0, sim.get_num_recombination_events())
         self.assertEqual(0, sum(sim.get_num_migration_events()))
         self.assertEqual(sim.get_num_avl_node_blocks(), 0)
@@ -699,7 +699,7 @@ class TestSimulationState(LowLevelTestCase):
         while not sim.run_event():
             events += 1
             total_events = (
-                sim.get_num_coancestry_events() +
+                sim.get_num_common_ancestor_events() +
                 sim.get_num_recombination_events() +
                 sum(sim.get_num_migration_events()))
             self.assertEqual(events, total_events)
@@ -859,6 +859,109 @@ class TestSimulator(LowLevelTestCase):
             10, 1, num_populations=2, sample_configuration=[5, 5],
             migration_matrix=[0, 0, 0, 0])
         self.assertRaises(_msprime.LibraryError, sim.run)
+
+    def test_simple_event_counters(self):
+        for n in [2, 10, 20]:
+            sim = _msprime.Simulator(n, 1, scaled_recombination_rate=0)
+            sim.run()
+            self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
+            self.assertEqual(0, sim.get_num_recombination_events())
+            self.assertEqual([0], sim.get_num_migration_events())
+
+    def test_simple_migration_event_counters(self):
+        n = 10
+        # No migration at all
+        sim = _msprime.Simulator(
+            n, 1, num_populations=2, sample_configuration=[n, 0],
+            migration_matrix=[0.0, 0.0, 0.0, 0.0])
+        sim.run()
+        self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
+        self.assertEqual(0, sim.get_num_recombination_events())
+        self.assertEqual([0, 0, 0, 0], sim.get_num_migration_events())
+        # Migration between only pops 0 and 1
+        matrix = [
+            [0, 5, 0],
+            [5, 0, 0],
+            [0, 0, 0]]
+        flattened = [x for row in matrix for x in row]
+        sim = _msprime.Simulator(
+            n, 1, num_populations=3, sample_configuration=[5, 5, 0],
+            migration_matrix=flattened)
+        sim.run()
+        self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
+        self.assertEqual(0, sim.get_num_recombination_events())
+        migration_events = sim.get_num_migration_events()
+        for rate, num_events in zip(flattened, migration_events):
+            if rate == 0:
+                self.assertEqual(num_events, 0)
+            else:
+                self.assertGreater(num_events, 0)
+
+    def test_large_migration_matrix_counters(self):
+        # Put in linear migration into a larger matrix of populations.
+        n = 10
+        num_populations = 10
+        migration_matrix = [
+            [0 for j in range(num_populations)]
+            for k in range(num_populations)]
+        active_pops = [3, 5, 7]
+        for index in range(len(active_pops) - 1):
+            j = active_pops[index]
+            k = active_pops[index + 1]
+            migration_matrix[j][k] = 2
+            migration_matrix[k][j] = 2
+        sample_configuration = [0 for _ in range(num_populations)]
+        sample_configuration[active_pops[0]] = 2
+        sample_configuration[active_pops[1]] = 2
+        sample_configuration[active_pops[2]] = 6
+        flattened = [x for row in migration_matrix for x in row]
+        sim = _msprime.Simulator(
+            n, 1, num_populations=num_populations,
+            sample_configuration=sample_configuration,
+            migration_matrix=flattened)
+        sim.run()
+        self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
+        self.assertEqual(0, sim.get_num_recombination_events())
+        migration_events = sim.get_num_migration_events()
+        self.assertEqual(len(migration_events), len(flattened))
+        for rate, num_events in zip(flattened, migration_events):
+            if rate == 0:
+                self.assertEqual(num_events, 0)
+            else:
+                self.assertGreater(num_events, 0)
+
+    def test_recombination_event_counters(self):
+        n = 10
+        # No migration
+        sim = _msprime.Simulator(
+            n, 1, num_populations=2, sample_configuration=[n, 0],
+            migration_matrix=[0.0, 0.0, 0.0, 0.0], num_loci=10,
+            scaled_recombination_rate=10)
+        sim.run()
+        self.assertLessEqual(n - 1, sim.get_num_common_ancestor_events())
+        self.assertLess(0, sim.get_num_recombination_events())
+        self.assertEqual([0, 0, 0, 0], sim.get_num_migration_events())
+
+    def test_single_sink_population_counters(self):
+        n = 10
+        # Migration only into population 2.
+        matrix = [
+            [0, 0, 1],
+            [0, 0, 1],
+            [0, 0, 0]]
+        flattened = [x for row in matrix for x in row]
+        sim = _msprime.Simulator(
+            n, 1, num_populations=3, sample_configuration=[5, 5, 0],
+            migration_matrix=flattened)
+        sim.run()
+        self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
+        self.assertEqual(0, sim.get_num_recombination_events())
+        migration_events = sim.get_num_migration_events()
+        for rate, num_events in zip(flattened, migration_events):
+            if rate == 0:
+                self.assertEqual(num_events, 0)
+            else:
+                self.assertGreater(num_events, 0)
 
 
 class TestTreeSequence(LowLevelTestCase):
