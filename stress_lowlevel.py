@@ -17,11 +17,14 @@ class StressTester(object):
     """
     def __init__(
             self, sample_size=2, num_loci=1, scaled_recombination_rate=1.0,
-            random_seed=1):
+            random_seed=1, sample_configuration=[2], migration_matrix=[[0.0]]):
         self._sample_size = sample_size
         self._num_loci = num_loci
         self._scaled_recombination_rate = scaled_recombination_rate
         self._random_seed = random_seed
+        self._num_populations = len(sample_configuration)
+        self._sample_configuration = sample_configuration
+        self._migration_matrix = migration_matrix
 
     def run_module_functions(self):
         """
@@ -95,12 +98,20 @@ class StressTester(object):
                 "alpha": 5}]
         sim = _msprime.Simulator(
             sample_size=self._sample_size, random_seed=self._random_seed,
-            num_loci=self._num_loci,
+            num_loci=self._num_loci, num_populations=self._num_populations,
+            sample_configuration=self._sample_configuration,
+            migration_matrix=self._migration_matrix,
             scaled_recombination_rate=self._scaled_recombination_rate,
             max_memory=1024**3, segment_block_size=10**6,
             coalescence_record_block_size=1000,
             population_models=models)
         return sim
+
+    def check_event_counters(self, sim):
+        assert sim.get_num_common_ancestor_events() > 0
+        assert sim.get_num_recombination_events() > 0
+        migration_events = sim.get_num_migration_events()
+        assert len(migration_events) == len(self._migration_matrix)
 
     def check_uninitialised_tree_sequence(self):
         ts = _msprime.TreeSequence()
@@ -326,6 +337,7 @@ class StressTester(object):
             bps = list(sim.get_breakpoints())
             assert len(bps) == sim.get_num_breakpoints()
         self.check_uninitialised_tree_sequence()
+        self.check_event_counters(sim)
         self.check_sparse_tree(sim)
         self.check_tree_sequence_iterators(sim)
         self.check_tree_sequence_file_errors(sim)
@@ -338,8 +350,13 @@ class StressTester(object):
 
 
 def main():
+    migration_matrix = [
+        0, 1, 1,
+        1, 0, 1,
+        1, 1, 0]
     tester = StressTester(
-        sample_size=10, num_loci=1000, scaled_recombination_rate=0.1)
+        sample_size=10, num_loci=1000, scaled_recombination_rate=0.1,
+        sample_configuration=[3, 3, 4], migration_matrix=migration_matrix)
     while True:
         tester.run()
 
