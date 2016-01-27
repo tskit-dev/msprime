@@ -285,6 +285,18 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         # Diagonal elements cannot be set.
         self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 1 1")
 
+    def test_migration_matrix_errors(self):
+        # -ma without -I raises an error
+        self.assert_parser_error("10 1 -T -ma 1 1 1")
+        # Incorrect lengths
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma ")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 0 0 0")
+        # Non float values in non-diagonals not allowed
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 x 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 x 0")
+
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
     """
@@ -328,6 +340,16 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         self.assertEqual(
             sim.get_migration_matrix(),
             [[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]])
+
+    def test_migration_matrix(self):
+        # Diagonal values are ignored
+        sim = self.create_simulator("2 1 -T -I 2 2 0 -ma 0 1 2 3")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1], [2, 0]])
+        sim = self.create_simulator("2 1 -T -I 2 2 0 -ma x 1 2 x")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1], [2, 0]])
+        sim = self.create_simulator("3 1 -T -I 3 1 1 1 -ma 1 2 3 4 5 6 7 8 9")
+        self.assertEqual(
+            sim.get_migration_matrix(), [[0, 2, 3], [4, 0, 6], [7, 8, 0]])
 
 
 class TestMspmsOutput(unittest.TestCase):

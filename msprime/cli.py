@@ -260,6 +260,20 @@ def create_simulation_runner(parser, arg_list):
             parser.error(
                 "Cannot specify migration matrix entries without "
                 "first providing a -I option")
+        if args.migration_matrix is not None:
+            parser.error(
+                "Cannot specify a migration matrix without "
+                "first providing a -I option")
+    if args.migration_matrix is not None:
+        if len(args.migration_matrix) != num_populations**2:
+            parser.error(
+                "Must be num_populations^2 migration matrix entries")
+        for j in range(num_populations):
+            for k in range(num_populations):
+                if j != k:
+                    migration_matrix[j][k] = convert_float(
+                        args.migration_matrix[j * num_populations + k],
+                        parser)
     for matrix_entry in args.migration_matrix_entry:
         dest = int(matrix_entry[0])
         source = int(matrix_entry[1])
@@ -342,9 +356,15 @@ def get_mspms_parser():
         metavar=("DEST", "SOURCE", "RATE"),
         nargs=3, type=float, default=[],
         help=(
-            "Sets an entry M[i, j] in the migration matrix to the specified "
-            "rate. SOURCE and DEST are (1-indexed) population IDs. Multiple "
-            "-m options can be specified."))
+            "Sets an entry M[DEST, SOURCE] in the migration matrix to the "
+            "specified ate. SOURCE and DEST are (1-indexed) population "
+            "IDs. Multiple options can be specified."))
+    group.add_argument(
+        "--migration-matrix", "-ma", nargs='+', default=None,
+        help=(
+            "Sets the migration matrix to the specified value. The "
+            "entries are in the order M[1,1], M[1, 2], ..., M[2, 1],"
+            "M[2, 2], ..., M[N, N], where N is the number of populations."))
 
     group = parser.add_argument_group("Demography")
     group.add_argument(
