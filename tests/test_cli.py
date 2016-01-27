@@ -323,11 +323,11 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
 
     def test_migration_matrix_entry(self):
         sim = self.create_simulator("3 1 -T -I 2 3 0 -m 1 2 1.1 -m 2 1 9.0")
-        self.assertEqual(sim.get_migration_matrix(), [[0, 9.0], [1.1, 0]])
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1.1], [9.0, 0]])
         sim = self.create_simulator("3 1 -T -I 3 3 0 0 -m 1 2 1.1 -m 2 1 9.0")
         self.assertEqual(
             sim.get_migration_matrix(),
-            [[0, 9.0, 0], [1.1, 0, 0], [0, 0, 0]])
+            [[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]])
 
 
 class TestMspmsOutput(unittest.TestCase):

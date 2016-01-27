@@ -1520,6 +1520,11 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
                     t_temp = gsl_ran_exponential(self->rng, 1.0 / lambda);
                     if (t_temp < mig_t_wait) {
                         mig_t_wait = t_temp;
+                        /* m[j, k] is the rate at which migrants move from
+                         * population k to j forwards in time. Backwards
+                         * in time, we move the individual from from
+                         * population j into population k.
+                         */
                         mig_source_pop = j;
                         mig_dest_pop = k;
                     }

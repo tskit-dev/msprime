@@ -276,8 +276,7 @@ def create_simulation_runner(parser, arg_list):
             parser.error(msg.format(dest))
         if dest == source:
             parser.error("Cannot set diagonal elements in migration matrix")
-        # Ms uses dest-source, but we use source-dest matrix
-        migration_matrix[source - 1][dest - 1] = rate
+        migration_matrix[dest - 1][source - 1] = rate
 
     # Get the demography parameters
     # TODO for strict ms compatability, we need to resolve the command line
