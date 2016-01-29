@@ -164,11 +164,13 @@ class Population(object):
                 u = u.next
             print("\t\t" + s)
 
-    def set_growth_rate(self, growth_rate):
+    def set_growth_rate(self, growth_rate, time):
         # TODO This doesn't work because we need to know what the time
         # is so we can set the start size accordingly. Need to look at
         # ms's model carefully to see what it actually does here.
-        self._start_size = self.get_size()
+        new_size = self.get_size(time)
+        self._start_size = new_size
+        self._start_time = time
         self._growth_rate = growth_rate
 
     def set_start_size(self, start_size):
@@ -227,7 +229,7 @@ class Simulator(object):
             self, sample_size, num_loci, recombination_rate, migration_matrix,
             sample_configuration, population_growth_rates, population_sizes,
             population_growth_rate_changes, population_size_changes,
-            max_segments=100):
+            migration_matrix_element_changes, max_segments=100):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -257,7 +259,8 @@ class Simulator(object):
         for pop_index in range(N):
             sample_size = sample_configuration[pop_index]
             self.P[pop_index].set_start_size(population_sizes[pop_index])
-            self.P[pop_index].set_growth_rate(population_growth_rates[pop_index])
+            self.P[pop_index].set_growth_rate(
+                population_growth_rates[pop_index], 0)
             for k in range(sample_size):
                 x = self.alloc_segment(0, self.m, j, pop_index)
                 self.L.set_value(x.index, self.m - 1)
@@ -276,16 +279,24 @@ class Simulator(object):
         for time, pop_id, new_rate in population_growth_rate_changes:
             self.modifier_events.append(
                 (time, self.change_population_growth_rate,
-                    (int(pop_id), new_rate)))
+                    (int(pop_id), new_rate, time)))
+        for time, pop_i, pop_j, new_rate in migration_matrix_element_changes:
+            self.modifier_events.append(
+                (time, self.change_migration_matrix_element,
+                    (int(pop_i), int(pop_j), new_rate)))
         self.modifier_events.sort()
 
     def change_population_size(self, pop_id, size):
         print("Changing pop size to ", size)
         self.P[pop_id].set_start_size(size)
 
-    def change_population_growth_rate(self, pop_id, rate):
+    def change_population_growth_rate(self, pop_id, rate, time):
         print("Changing growth rate to ", rate)
-        self.P[pop_id].set_growth_rate(rate)
+        self.P[pop_id].set_growth_rate(rate, time)
+
+    def change_migration_matrix_element(self, pop_i, pop_j, rate):
+        print("Changing migration rate", pop_i, pop_j, rate)
+        self.migration_matrix[pop_i][pop_j] = rate
 
     def alloc_segment(
             self, left, right, node, pop_index, prev=None, next=None):
@@ -734,6 +745,7 @@ def run_verify(args):
             sample_configuration, population_growth_rates,
             population_sizes, args.population_growth_rate_change,
             args.population_size_change,
+            args.migration_matrix_element_change,
             10000)
         s.simulate()
         s.print_state()
@@ -782,6 +794,9 @@ def main():
         default=[])
     verify_parser.add_argument(
         "--population-growth-rate-change", type=float, nargs=3,
+        action="append", default=[])
+    verify_parser.add_argument(
+        "--migration-matrix-element-change", type=float, nargs=4,
         action="append", default=[])
     verify_parser.set_defaults(runner=run_verify)
 
