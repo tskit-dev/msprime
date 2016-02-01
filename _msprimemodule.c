@@ -111,26 +111,26 @@ convert_coalescence_record(coalescence_record_t *cr)
  * Retrieves a number value with the specified key from the specified
  * dictionary.
  */
-static PyObject *
-get_dict_number(PyObject *dict, const char *key_str)
-{
-    PyObject *ret = NULL;
-    PyObject *value;
-    PyObject *key = Py_BuildValue("s", key_str);
-    if (!PyDict_Contains(dict, key)) {
-        PyErr_Format(MsprimeInputError, "'%s' not specified", key_str);
-        goto out;
-    }
-    value = PyDict_GetItem(dict, key);
-    if (!PyNumber_Check(value)) {
-        PyErr_Format(MsprimeInputError, "'%s' is not number", key_str);
-        goto out;
-    }
-    ret = value;
-out:
-    Py_DECREF(key);
-    return ret;
-}
+/* static PyObject * */
+/* get_dict_number(PyObject *dict, const char *key_str) */
+/* { */
+/*     PyObject *ret = NULL; */
+/*     PyObject *value; */
+/*     PyObject *key = Py_BuildValue("s", key_str); */
+/*     if (!PyDict_Contains(dict, key)) { */
+/*         PyErr_Format(MsprimeInputError, "'%s' not specified", key_str); */
+/*         goto out; */
+/*     } */
+/*     value = PyDict_GetItem(dict, key); */
+/*     if (!PyNumber_Check(value)) { */
+/*         PyErr_Format(MsprimeInputError, "'%s' is not number", key_str); */
+/*         goto out; */
+/*     } */
+/*     ret = value; */
+/* out: */
+/*     Py_DECREF(key); */
+/*     return ret; */
+/* } */
 
 static PyObject *
 convert_integer_list(size_t *list, size_t size)
@@ -199,117 +199,117 @@ Simulator_check_sim(Simulator *self)
     return ret;
 }
 
-static int
-Simulator_parse_population_models(Simulator *self, PyObject *py_pop_models)
-{
-    int ret = -1;
-    Py_ssize_t j;
-    double start_time, size, alpha;
-    long type;
-    int err;
-    PyObject *item, *value;
+/* static int */
+/* Simulator_parse_population_models(Simulator *self, PyObject *py_pop_models) */
+/* { */
+/*     int ret = -1; */
+/*     Py_ssize_t j; */
+/*     double start_time, size, alpha; */
+/*     long type; */
+/*     int err; */
+/*     PyObject *item, *value; */
 
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    for (j = 0; j < PyList_Size(py_pop_models); j++) {
-        item = PyList_GetItem(py_pop_models, j);
-        if (!PyDict_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "not a dictionary");
-            goto out;
-        }
-        value = get_dict_number(item, "start_time");
-        if (value == NULL) {
-            goto out;
-        }
-        start_time = PyFloat_AsDouble(value);
-        value = get_dict_number(item, "type");
-        if (value == NULL) {
-            goto out;
-        }
-        type = PyLong_AsLong(value);
-        if (type == POP_MODEL_CONSTANT) {
-            value = get_dict_number(item, "size");
-            if (value == NULL) {
-                goto out;
-            }
-            size = PyFloat_AsDouble(value);
-            err = msp_add_constant_population_model(self->sim, start_time, size);
-        } else if (type == POP_MODEL_EXPONENTIAL) {
-            value = get_dict_number(item, "alpha");
-            if (value == NULL) {
-                goto out;
-            }
-            alpha = PyFloat_AsDouble(value);
-            err = msp_add_exponential_population_model(self->sim, start_time, alpha);
-        } else {
-            PyErr_SetString(MsprimeInputError,
-                    "Invalid population model type");
-            goto out;
-        }
-        if (err != 0) {
-            handle_input_error(err);
-            goto out;
-        }
-    }
-    ret = 0;
-out:
-    return ret;
-}
+/*     if (Simulator_check_sim(self) != 0) { */
+/*         goto out; */
+/*     } */
+/*     for (j = 0; j < PyList_Size(py_pop_models); j++) { */
+/*         item = PyList_GetItem(py_pop_models, j); */
+/*         if (!PyDict_Check(item)) { */
+/*             PyErr_SetString(PyExc_TypeError, "not a dictionary"); */
+/*             goto out; */
+/*         } */
+/*         value = get_dict_number(item, "start_time"); */
+/*         if (value == NULL) { */
+/*             goto out; */
+/*         } */
+/*         start_time = PyFloat_AsDouble(value); */
+/*         value = get_dict_number(item, "type"); */
+/*         if (value == NULL) { */
+/*             goto out; */
+/*         } */
+/*         type = PyLong_AsLong(value); */
+/*         if (type == POP_MODEL_CONSTANT) { */
+/*             value = get_dict_number(item, "size"); */
+/*             if (value == NULL) { */
+/*                 goto out; */
+/*             } */
+/*             size = PyFloat_AsDouble(value); */
+/*             err = msp_add_constant_population_model(self->sim, start_time, size); */
+/*         } else if (type == POP_MODEL_EXPONENTIAL) { */
+/*             value = get_dict_number(item, "alpha"); */
+/*             if (value == NULL) { */
+/*                 goto out; */
+/*             } */
+/*             alpha = PyFloat_AsDouble(value); */
+/*             err = msp_add_exponential_population_model(self->sim, start_time, alpha); */
+/*         } else { */
+/*             PyErr_SetString(MsprimeInputError, */
+/*                     "Invalid population model type"); */
+/*             goto out; */
+/*         } */
+/*         if (err != 0) { */
+/*             handle_input_error(err); */
+/*             goto out; */
+/*         } */
+/*     } */
+/*     ret = 0; */
+/* out: */
+/*     return ret; */
+/* } */
 
-static int
-Simulator_parse_sample_configuration(Simulator *self,
-        PyObject *py_sample_configuration)
-{
-    int ret = -1;
-    int err;
-    Py_ssize_t j;
-    Py_ssize_t num_populations;
-    PyObject *value;
-    long v;
-    size_t *sample_configuration = NULL;
+/* static int */
+/* Simulator_parse_sample_configuration(Simulator *self, */
+/*         PyObject *py_sample_configuration) */
+/* { */
+/*     int ret = -1; */
+/*     int err; */
+/*     Py_ssize_t j; */
+/*     Py_ssize_t num_populations; */
+/*     PyObject *value; */
+/*     long v; */
+/*     size_t *sample_configuration = NULL; */
 
-    num_populations = PyList_Size(py_sample_configuration);
-    sample_configuration = PyMem_Malloc(num_populations * sizeof(size_t));
-    if (sample_configuration == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    if (msp_get_num_populations(self->sim) != num_populations) {
-        PyErr_Format(PyExc_ValueError,
-            "sample configuration must have num_populations entries");
-        goto out;
-    }
-    for (j = 0; j < num_populations; j++) {
-        value = PyList_GetItem(py_sample_configuration, j);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError,
-                "Sample configuration value not a number");
-            goto out;
-        }
-        v = PyLong_AsLong(value);
-        if (v < 0) {
-            PyErr_Format(PyExc_ValueError, "Negative values not permitted");
-            goto out;
-        }
-        sample_configuration[j] = (size_t) v;
-    }
-    err = msp_set_sample_configuration(self->sim, num_populations,
-            sample_configuration);
-    if (err != 0) {
-        handle_input_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    if (sample_configuration != NULL) {
-        PyMem_Free(sample_configuration);
-    }
-    return ret;
-}
+/*     num_populations = PyList_Size(py_sample_configuration); */
+/*     sample_configuration = PyMem_Malloc(num_populations * sizeof(size_t)); */
+/*     if (sample_configuration == NULL) { */
+/*         PyErr_NoMemory(); */
+/*         goto out; */
+/*     } */
+/*     if (Simulator_check_sim(self) != 0) { */
+/*         goto out; */
+/*     } */
+/*     if (msp_get_num_populations(self->sim) != num_populations) { */
+/*         PyErr_Format(PyExc_ValueError, */
+/*             "sample configuration must have num_populations entries"); */
+/*         goto out; */
+/*     } */
+/*     for (j = 0; j < num_populations; j++) { */
+/*         value = PyList_GetItem(py_sample_configuration, j); */
+/*         if (!PyNumber_Check(value)) { */
+/*             PyErr_Format(PyExc_TypeError, */
+/*                 "Sample configuration value not a number"); */
+/*             goto out; */
+/*         } */
+/*         v = PyLong_AsLong(value); */
+/*         if (v < 0) { */
+/*             PyErr_Format(PyExc_ValueError, "Negative values not permitted"); */
+/*             goto out; */
+/*         } */
+/*         sample_configuration[j] = (size_t) v; */
+/*     } */
+/*     err = msp_set_sample_configuration(self->sim, num_populations, */
+/*             sample_configuration); */
+/*     if (err != 0) { */
+/*         handle_input_error(err); */
+/*         goto out; */
+/*     } */
+/*     ret = 0; */
+/* out: */
+/*     if (sample_configuration != NULL) { */
+/*         PyMem_Free(sample_configuration); */
+/*     } */
+/*     return ret; */
+/* } */
 
 static int
 Simulator_parse_migration_matrix(Simulator *self,
@@ -380,13 +380,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int sim_ret;
     static char *kwlist[] = {"sample_size", "random_seed",
-        "num_loci", "scaled_recombination_rate", "num_populations",
-        "sample_configuration", "migration_matrix", "population_models",
+        "num_loci", "scaled_recombination_rate",
+        "population_configuration", "migration_matrix", "demographic_events",
         "max_memory", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "coalescence_record_block_size", NULL};
-    PyObject *population_models = NULL;
     PyObject *migration_matrix = NULL;
-    PyObject *sample_configuration = NULL;
+    PyObject *population_configuration = NULL;
+    PyObject *demographic_events = NULL;
     /* parameter defaults */
     Py_ssize_t sample_size = 2;
     Py_ssize_t num_loci = 1;
@@ -400,12 +400,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t coalescence_record_block_size = 10;
 
     self->sim = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "nl|ndnO!O!O!nnnnn", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "nl|ndO!O!O!nnnnn", kwlist,
             &sample_size, &random_seed, &num_loci,
-            &scaled_recombination_rate, &num_populations,
-            &PyList_Type, &sample_configuration,
+            &scaled_recombination_rate,
+            &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
-            &PyList_Type, &population_models,
+            &PyList_Type, &demographic_events,
             &max_memory, &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &coalescence_record_block_size)) {
         goto out;
@@ -436,19 +436,19 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
-    if (num_populations != 1) {
-        /* We avoid calling this for num_populations = 1 because this is
-         * the default, and we already have the sane defaults for
-         * sample_configuration and migration_matrix in this case. If we
-         * called msp_set_num_populations, we would need to deal with the
-         * problem of setting these with default values too.
-         */
-        sim_ret = msp_set_num_populations(self->sim, (size_t) num_populations);
-        if (sim_ret != 0) {
-            handle_input_error(sim_ret);
-            goto out;
-        }
-    }
+    /* if (num_populations != 1) { */
+    /*     /1* We avoid calling this for num_populations = 1 because this is */
+    /*      * the default, and we already have the sane defaults for */
+    /*      * sample_configuration and migration_matrix in this case. If we */
+    /*      * called msp_set_num_populations, we would need to deal with the */
+    /*      * problem of setting these with default values too. */
+    /*      *1/ */
+    /*     sim_ret = msp_set_num_populations(self->sim, (size_t) num_populations); */
+    /*     if (sim_ret != 0) { */
+    /*         handle_input_error(sim_ret); */
+    /*         goto out; */
+    /*     } */
+    /* } */
     sim_ret = msp_set_max_memory(self->sim, (size_t) max_memory);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
@@ -478,23 +478,23 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
-    if (population_models != NULL) {
-        if (Simulator_parse_population_models(self, population_models) != 0) {
-            goto out;
-        }
-    }
-    if (sample_configuration != NULL) {
-        if (Simulator_parse_sample_configuration(self,
-                sample_configuration) != 0) {
-            goto out;
-        }
-    } else {
-        if (num_populations != 1) {
-            PyErr_SetString(PyExc_ValueError,
-                "Must specify sample_configuration for num_populations > 1");
-            goto out;
-        }
-    }
+    /* if (population_models != NULL) { */
+    /*     if (Simulator_parse_population_models(self, population_models) != 0) { */
+    /*         goto out; */
+    /*     } */
+    /* } */
+    /* if (sample_configuration != NULL) { */
+    /*     if (Simulator_parse_sample_configuration(self, */
+    /*             sample_configuration) != 0) { */
+    /*         goto out; */
+    /*     } */
+    /* } else { */
+    /*     if (num_populations != 1) { */
+    /*         PyErr_SetString(PyExc_ValueError, */
+    /*             "Must specify sample_configuration for num_populations > 1"); */
+    /*         goto out; */
+    /*     } */
+    /* } */
     if (migration_matrix != NULL) {
         if (Simulator_parse_migration_matrix(self,
                 migration_matrix) != 0) {
@@ -979,63 +979,63 @@ out:
     return ret;
 }
 
-static PyObject *
-Simulator_get_population_models(Simulator *self)
-{
-    PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *d = NULL;
-    population_model_t *models = NULL;
-    population_model_t *m;
-    const char *param_name;
-    size_t j = 0;
-    size_t num_models;
-    int sim_ret = 0;
+/* static PyObject * */
+/* Simulator_get_population_models(Simulator *self) */
+/* { */
+/*     PyObject *ret = NULL; */
+/*     PyObject *l = NULL; */
+/*     PyObject *d = NULL; */
+/*     population_model_t *models = NULL; */
+/*     population_model_t *m; */
+/*     const char *param_name; */
+/*     size_t j = 0; */
+/*     size_t num_models; */
+/*     int sim_ret = 0; */
 
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    num_models = msp_get_num_population_models(self->sim);
-    models = PyMem_Malloc(num_models * sizeof(population_model_t));
-    if (models == NULL) {
-        ret = PyErr_NoMemory();
-        goto out;
-    }
-    sim_ret = msp_get_population_models(self->sim, models);
-    if (sim_ret != 0) {
-        handle_library_error(sim_ret);
-        goto out;
-    }
-    l = PyList_New(num_models);
-    if (l == NULL) {
-        goto out;
-    }
-    for (j = 0; j < num_models; j++) {
-        m = &models[j];
-        if (m->type == POP_MODEL_CONSTANT) {
-            param_name = "size";
-        } else if (m->type == POP_MODEL_EXPONENTIAL) {
-            param_name = "alpha";
-        } else {
-            PyErr_SetString(PyExc_SystemError, "Unexpected pop model");
-            goto out;
-        }
-        d = Py_BuildValue("{s:I,s:d,s:d}", "type", m->type, "start_time",
-                m->start_time, param_name, m->param);
-        if (d == NULL) {
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, d);
-    }
-    ret = l;
-    l = NULL;
-out:
-    Py_XDECREF(l);
-    if (models != NULL) {
-        PyMem_Free(models);
-    }
-    return ret;
-}
+/*     if (Simulator_check_sim(self) != 0) { */
+/*         goto out; */
+/*     } */
+/*     num_models = msp_get_num_population_models(self->sim); */
+/*     models = PyMem_Malloc(num_models * sizeof(population_model_t)); */
+/*     if (models == NULL) { */
+/*         ret = PyErr_NoMemory(); */
+/*         goto out; */
+/*     } */
+/*     sim_ret = msp_get_population_models(self->sim, models); */
+/*     if (sim_ret != 0) { */
+/*         handle_library_error(sim_ret); */
+/*         goto out; */
+/*     } */
+/*     l = PyList_New(num_models); */
+/*     if (l == NULL) { */
+/*         goto out; */
+/*     } */
+/*     for (j = 0; j < num_models; j++) { */
+/*         m = &models[j]; */
+/*         if (m->type == POP_MODEL_CONSTANT) { */
+/*             param_name = "size"; */
+/*         } else if (m->type == POP_MODEL_EXPONENTIAL) { */
+/*             param_name = "alpha"; */
+/*         } else { */
+/*             PyErr_SetString(PyExc_SystemError, "Unexpected pop model"); */
+/*             goto out; */
+/*         } */
+/*         d = Py_BuildValue("{s:I,s:d,s:d}", "type", m->type, "start_time", */
+/*                 m->start_time, param_name, m->param); */
+/*         if (d == NULL) { */
+/*             goto out; */
+/*         } */
+/*         PyList_SET_ITEM(l, j, d); */
+/*     } */
+/*     ret = l; */
+/*     l = NULL; */
+/* out: */
+/*     Py_XDECREF(l); */
+/*     if (models != NULL) { */
+/*         PyMem_Free(models); */
+/*     } */
+/*     return ret; */
+/* } */
 
 static PyObject *
 Simulator_run(Simulator *self, PyObject *args)
@@ -1165,8 +1165,8 @@ static PyMethodDef Simulator_methods[] = {
             METH_NOARGS, "Returns the list of breakpoints." },
     {"get_coalescence_records", (PyCFunction) Simulator_get_coalescence_records,
             METH_NOARGS, "Returns the coalescence records." },
-    {"get_population_models", (PyCFunction) Simulator_get_population_models,
-            METH_VARARGS, "Returns the population models"},
+    /* {"get_population_models", (PyCFunction) Simulator_get_population_models, */
+    /*         METH_VARARGS, "Returns the population models"}, */
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\
             if sample has coalesced and False otherwise." },
@@ -3063,9 +3063,6 @@ init_msprime(void)
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
 
-    PyModule_AddIntConstant(module, "POP_MODEL_CONSTANT", POP_MODEL_CONSTANT);
-    PyModule_AddIntConstant(module, "POP_MODEL_EXPONENTIAL",
-            POP_MODEL_EXPONENTIAL);
     PyModule_AddIntConstant(module, "MSP_ORDER_TIME", MSP_ORDER_TIME);
     PyModule_AddIntConstant(module, "MSP_ORDER_LEFT", MSP_ORDER_LEFT);
     PyModule_AddIntConstant(module, "MSP_ORDER_RIGHT", MSP_ORDER_RIGHT);

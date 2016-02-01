@@ -32,9 +32,6 @@
 #include "avl.h"
 #include "fenwick.h"
 
-#define POP_MODEL_CONSTANT 0
-#define POP_MODEL_EXPONENTIAL 1
-
 /* Flags for tree sequence dump/load */
 #define MSP_ZLIB_COMPRESSION 1
 #define MSP_SKIP_H5CLOSE 2

@@ -38,6 +38,19 @@ import _msprime
 from msprime import __version__ as _library_version
 
 
+def get_population_configuration(
+        sample_size=0, growth_rate=0.0, initial_size=1.0):
+    """
+    Returns a population configuration dictionary suitable for passing
+    to the low-level API.
+    """
+    return {
+        "sample_size": sample_size,
+        "growth_rate": growth_rate,
+        "initial_size": initial_size
+    }
+
+
 def get_leaf_counts(st):
     """
     Returns a list of the leaf node counts for the specfied sparse tree.
@@ -793,11 +806,12 @@ class TestSimulator(LowLevelTestCase):
 
     def test_bad_migration_matrix(self):
         def f(num_populations, migration_matrix):
-            sample_configuration = [0 for j in range(num_populations)]
-            sample_configuration[0] = 2
+            population_configuration = [
+                get_population_configuration()
+                for j in range(num_populations)]
+            population_configuration[0]["sample_size"] = 2
             return _msprime.Simulator(
-                2, 1, num_populations=num_populations,
-                sample_configuration=sample_configuration,
+                2, 1, population_configuration=population_configuration,
                 migration_matrix=migration_matrix)
         for bad_type in ["", {}, None, 2, [""], [[]], [None]]:
             self.assertRaises(TypeError, f, 1, bad_type)
@@ -828,9 +842,11 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(
                 _msprime.InputError, f, num_populations, flattened)
         # Must provide migration_matrix for > 1pops
+        # sample_configuration = [
+            # get_sample_configuration(2), get_sample_configuration(0)]
         self.assertRaises(
-            ValueError, _msprime.Simulator, 2, 1,
-            num_populations=2, sample_configuration=[2, 0])
+            ValueError, _msprime.Simulator, 2, 1)
+        # sample_configuration=sample_configuration)
 
     def test_seed_equality(self):
         simulations = [
@@ -855,8 +871,11 @@ class TestSimulator(LowLevelTestCase):
 
     def test_infinite_waiting_time(self):
         # With no migration we should have an infinite waiting time.
+        population_configuration = [
+            get_population_configuration(5),
+            get_population_configuration(5)]
         sim = _msprime.Simulator(
-            10, 1, num_populations=2, sample_configuration=[5, 5],
+            10, 1, population_configuration=population_configuration,
             migration_matrix=[0, 0, 0, 0])
         self.assertRaises(_msprime.LibraryError, sim.run)
 
@@ -871,8 +890,11 @@ class TestSimulator(LowLevelTestCase):
     def test_simple_migration_event_counters(self):
         n = 10
         # No migration at all
+        population_configuration = [
+            get_population_configuration(n),
+            get_population_configuration(0)]
         sim = _msprime.Simulator(
-            n, 1, num_populations=2, sample_configuration=[n, 0],
+            n, 1, population_configuration=population_configuration,
             migration_matrix=[0.0, 0.0, 0.0, 0.0])
         sim.run()
         self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
@@ -884,8 +906,12 @@ class TestSimulator(LowLevelTestCase):
             [5, 0, 0],
             [0, 0, 0]]
         flattened = [x for row in matrix for x in row]
+        population_configuration = [
+            get_population_configuration(5),
+            get_population_configuration(5),
+            get_population_configuration(0)]
         sim = _msprime.Simulator(
-            n, 1, num_populations=3, sample_configuration=[5, 5, 0],
+            n, 1, population_configuration=population_configuration,
             migration_matrix=flattened)
         sim.run()
         self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
@@ -910,14 +936,18 @@ class TestSimulator(LowLevelTestCase):
             k = active_pops[index + 1]
             migration_matrix[j][k] = 2
             migration_matrix[k][j] = 2
-        sample_configuration = [0 for _ in range(num_populations)]
-        sample_configuration[active_pops[0]] = 2
-        sample_configuration[active_pops[1]] = 2
-        sample_configuration[active_pops[2]] = 6
+        population_configuration = [
+            get_population_configuration() for _ in range(num_populations)]
+        population_configuration[
+            active_pops[0]] = get_population_configuration(2)
+        population_configuration[
+            active_pops[1]] = get_population_configuration(2)
+        population_configuration[
+            active_pops[2]] = get_population_configuration(6)
         flattened = [x for row in migration_matrix for x in row]
         sim = _msprime.Simulator(
-            n, 1, num_populations=num_populations,
-            sample_configuration=sample_configuration,
+            n, 1,
+            population_configuration=population_configuration,
             migration_matrix=flattened)
         sim.run()
         self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
@@ -933,8 +963,11 @@ class TestSimulator(LowLevelTestCase):
     def test_recombination_event_counters(self):
         n = 10
         # No migration
+        population_configuration = [
+            get_population_configuration(n),
+            get_population_configuration(0)]
         sim = _msprime.Simulator(
-            n, 1, num_populations=2, sample_configuration=[n, 0],
+            n, 1, population_configuration=population_configuration,
             migration_matrix=[0.0, 0.0, 0.0, 0.0], num_loci=10,
             scaled_recombination_rate=10)
         sim.run()
@@ -950,8 +983,12 @@ class TestSimulator(LowLevelTestCase):
             [0, 0, 1],
             [0, 0, 0]]
         flattened = [x for row in matrix for x in row]
+        population_configuration = [
+            get_population_configuration(5),
+            get_population_configuration(5),
+            get_population_configuration(0)]
         sim = _msprime.Simulator(
-            n, 1, num_populations=3, sample_configuration=[5, 5, 0],
+            n, 1, population_configuration=population_configuration,
             migration_matrix=flattened)
         sim.run()
         self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
