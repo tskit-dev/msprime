@@ -50,56 +50,52 @@ fatal_error(const char *msg, ...)
 }
 
 static int
-read_population_models(msp_t *msp, config_t *config)
+read_population_configuration(msp_t *msp, config_t *config)
 {
     int ret = 0;
     int j;
-    const char *type;
-    double time, param;
-    int num_population_models;
+    double growth_rate, initial_size;
+    int sample_size;
+    int num_populations;
     config_setting_t *s, *t;
-    config_setting_t *setting = config_lookup(config, "population_models");
+    config_setting_t *setting = config_lookup(config, "population_configuration");
 
     if (setting == NULL) {
-        fatal_error("population_models is a required parameter");
+        fatal_error("population_configuration is a required parameter");
     }
     if (config_setting_is_list(setting) == CONFIG_FALSE) {
-        fatal_error("population_models must be a list");
+        fatal_error("population_configuration must be a list");
     }
-    num_population_models = config_setting_length(setting);
-    for (j = 0; j < num_population_models; j++) {
+    num_populations = config_setting_length(setting);
+    ret = msp_set_num_populations(msp, (size_t) num_populations);
+    if (ret != 0) {
+        fatal_error("Error reading number of populations");
+    }
+    for (j = 0; j < num_populations; j++) {
         s = config_setting_get_elem(setting, (unsigned int) j);
         if (s == NULL) {
-            fatal_error("error reading population_models[%d]", j);
+            fatal_error("error reading population_configurations[%d]", j);
         }
         if (config_setting_is_group(s) == CONFIG_FALSE) {
-            fatal_error("population_models[%d] not a group", j);
+            fatal_error("population_configurations[%d] not a group", j);
         }
-        t = config_setting_get_member(s, "time");
+        t = config_setting_get_member(s, "sample_size");
         if (t == NULL) {
-            fatal_error("time not specified");
+            fatal_error("sample_size not specified");
         }
-        time = config_setting_get_float(t);
-        if (time < 0.0) {
-            fatal_error("population_model time must be > 0");
-        }
-        t = config_setting_get_member(s, "param");
+        sample_size = config_setting_get_int(t);
+        t = config_setting_get_member(s, "growth_rate");
         if (t == NULL) {
-            fatal_error("param not specified");
+            fatal_error("growth_rate not specified");
         }
-        param = config_setting_get_float(t);
-        t = config_setting_get_member(s, "type");
+        growth_rate = config_setting_get_float(t);
+        t = config_setting_get_member(s, "initial_size");
         if (t == NULL) {
-            fatal_error("type not specified");
+            fatal_error("initial_size not specified");
         }
-        type = config_setting_get_string(t);
-        if (strcmp(type, "constant") == 0) {
-            ret = msp_add_constant_population_model(msp, time, param);
-        } else if (strcmp(type, "exponential") == 0) {
-            ret = msp_add_exponential_population_model(msp, time, param);
-        } else {
-            fatal_error("unknown population_model type '%s'", type);
-        }
+        initial_size = config_setting_get_float(t);
+        ret = msp_set_population_configuration(msp, j, (size_t) sample_size,
+                initial_size, growth_rate);
         if (ret != 0) {
             goto out;
         }
@@ -109,39 +105,90 @@ out:
 }
 
 static int
-read_sample_configuration(msp_t *msp, config_t *config)
+read_demographic_events(msp_t *msp, config_t *config)
 {
     int ret = 0;
-    size_t j, num_populations;
-    size_t *sample_configuration = NULL;
-    config_setting_t *s;
-    config_setting_t *setting = config_lookup(config, "sample_configuration");
+    int j;
+    const char *type;
+    double time, growth_rate, size, migration_rate;
+    int num_demographic_events, population_id, matrix_index;
+    config_setting_t *s, *t;
+    config_setting_t *setting = config_lookup(config, "demographic_events");
 
     if (setting == NULL) {
-        fatal_error("sample_configuration is a required parameter");
+        fatal_error("demographic_events is a required parameter");
     }
-    if (config_setting_is_array(setting) == CONFIG_FALSE) {
-        fatal_error("sample_configuration must be an array");
+    if (config_setting_is_list(setting) == CONFIG_FALSE) {
+        fatal_error("demographic_events must be a list");
     }
-    num_populations = (size_t) config_setting_length(setting);
-    sample_configuration = malloc(num_populations * sizeof(size_t));
-    if (sample_configuration == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    for (j = 0; j < num_populations; j++) {
+    num_demographic_events = config_setting_length(setting);
+    for (j = 0; j < num_demographic_events; j++) {
         s = config_setting_get_elem(setting, (unsigned int) j);
         if (s == NULL) {
-            fatal_error("error reading sample_configuration[%d]", j);
+            fatal_error("error reading demographic_events[%d]", j);
         }
-        sample_configuration[j] = (size_t) config_setting_get_int(s);
+        if (config_setting_is_group(s) == CONFIG_FALSE) {
+            fatal_error("demographic_events[%d] not a group", j);
+        }
+        t = config_setting_get_member(s, "time");
+        if (t == NULL) {
+            fatal_error("time not specified");
+        }
+        time = config_setting_get_float(t);
+        if (time < 0.0) {
+            fatal_error("demographic event time must be > 0");
+        }
+        t = config_setting_get_member(s, "type");
+        if (t == NULL) {
+            fatal_error("type not specified");
+        }
+        type = config_setting_get_string(t);
+        if (strcmp(type, "growth_rate_change") == 0) {
+            t = config_setting_get_member(s, "growth_rate");
+            if (t == NULL) {
+                fatal_error("growth_rate not specified");
+            }
+            growth_rate = config_setting_get_float(t);
+            t = config_setting_get_member(s, "population_id");
+            if (t == NULL) {
+                fatal_error("population_id not specified");
+            }
+            population_id = config_setting_get_int(t);
+            ret = msp_add_growth_rate_change(msp, time, population_id,
+                    growth_rate);
+        } else if (strcmp(type, "size_change") == 0) {
+            t = config_setting_get_member(s, "size");
+            if (t == NULL) {
+                fatal_error("size not specified");
+            }
+            size = config_setting_get_float(t);
+            t = config_setting_get_member(s, "population_id");
+            if (t == NULL) {
+                fatal_error("population_id not specified");
+            }
+            population_id = config_setting_get_int(t);
+            ret = msp_add_size_change(msp, time, population_id, size);
+        } else if (strcmp(type, "migration_rate_change") == 0) {
+            t = config_setting_get_member(s, "migration_rate");
+            if (t == NULL) {
+                fatal_error("migration_rate not specified");
+            }
+            migration_rate = config_setting_get_float(t);
+            t = config_setting_get_member(s, "matrix_index");
+            if (t == NULL) {
+                fatal_error("matrix_index not specified");
+            }
+            matrix_index = config_setting_get_int(t);
+            ret = msp_add_migration_rate_change(msp, time,
+                    matrix_index, migration_rate);
+        } else {
+            fatal_error("unknown demographic event type '%s'", type);
+        }
+        if (ret != 0) {
+            goto out;
+        }
     }
-    ret = msp_set_sample_configuration(msp,
-        num_populations, sample_configuration);
 out:
-    if (sample_configuration != NULL) {
-        free(sample_configuration);
-    }
     return ret;
 }
 
@@ -214,10 +261,6 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    if (config_lookup_int(config, "num_populations", &int_tmp) == CONFIG_FALSE) {
-        fatal_error("num_populations is a required parameter");
-    }
-    ret = msp_set_num_populations(msp, (size_t) int_tmp);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
@@ -264,15 +307,16 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("max_memory is a required parameter");
     }
     msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
-    ret = read_population_models(msp, config);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
-    ret = read_sample_configuration(msp, config);
+
+    ret = read_population_configuration(msp, config);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
     ret = read_migration_matrix(msp, config);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+    ret = read_demographic_events(msp, config);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
@@ -512,7 +556,7 @@ run_simulate(char *conf_file)
             goto out;
         }
         msp_verify(msp);
-        ret = msp_print_state(msp);
+        /* ret = msp_print_state(msp); */
     }
     ret = msp_print_state(msp);
     if (ret != 0) {

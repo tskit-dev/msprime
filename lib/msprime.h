@@ -73,16 +73,6 @@ typedef struct {
     uint32_t value;
 } node_mapping_t;
 
-typedef struct population_model_t_t {
-    int type;
-    double start_time;
-    double initial_size;
-    double param;
-    double (*get_size)(struct population_model_t_t *, double);
-    double (*get_waiting_time)(struct population_model_t_t *, double, double,
-            gsl_rng*);
-} population_model_t;
-
 typedef struct {
     size_t object_size;
     size_t block_size; /* number of objects in a block */
@@ -95,6 +85,10 @@ typedef struct {
 } object_heap_t;
 
 typedef struct {
+    uint32_t sample_size;
+    double initial_size;
+    double growth_rate;
+    double start_time;
     avl_tree_t ancestors;
 } population_t;
 
@@ -105,23 +99,22 @@ typedef struct {
     double scaled_recombination_rate;
     uint32_t num_populations;
     double *migration_matrix;
-    uint32_t *sample_configuration;
     unsigned long random_seed;
     /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
     size_t segment_block_size;
     size_t max_memory;
-    /* population models */
-    population_model_t *population_models;
-    size_t current_population_model;
-    size_t num_population_models;
     /* Counters for statistics */
     size_t num_re_events;
     size_t num_ca_events;
     size_t *num_migration_events;
     size_t num_trapped_re_events;
     size_t num_multiple_re_events;
+    /* demographic events */
+    struct demographic_event_t_t *demographic_events_head;
+    struct demographic_event_t_t *demographic_events_tail;
+    struct demographic_event_t_t *next_demographic_event;
     /* algorithm state */
     size_t used_memory;
     double time;
@@ -143,6 +136,35 @@ typedef struct {
     size_t num_coalescence_record_blocks;
 } msp_t;
 
+/* Demographic events */
+typedef struct {
+    int population_id;
+    double size;
+} size_change_t;
+
+typedef struct {
+    int population_id;
+    double growth_rate;
+} growth_rate_change_t;
+
+typedef struct {
+    int matrix_index;
+    double migration_rate;
+} migration_rate_change_t;
+
+typedef struct demographic_event_t_t {
+    double time;
+    int (*change_state)(msp_t *, struct demographic_event_t_t *);
+    void (*print_state)(msp_t *, struct demographic_event_t_t *);
+    union {
+        size_change_t size_change;
+        growth_rate_change_t growth_rate_change;
+        migration_rate_change_t migration_rate_change;
+    } params;
+    struct demographic_event_t_t *next;
+} demographic_event_t;
+
+/* Tree sequences */
 typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
@@ -269,9 +291,8 @@ typedef struct {
     sparse_tree_iterator_t tree_iterator;
 } hapgen_t;
 
+
 int msp_alloc(msp_t *self, size_t sample_size);
-int msp_add_constant_population_model(msp_t *self, double time, double size);
-int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
 int msp_set_random_seed(msp_t *self, unsigned long random_seed);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
@@ -286,13 +307,21 @@ int msp_set_sample_configuration(msp_t *self, size_t num_populations,
         size_t *sample_configuration);
 int msp_set_migration_matrix(msp_t *self, size_t size,
         double *migration_matrix);
+int msp_set_population_configuration(msp_t *self, int population_id, 
+        size_t sample_size, double initial_size, double growth_rate);
+
+int msp_add_growth_rate_change(msp_t *self, double time, int population_id,
+        double growth_rate);
+int msp_add_size_change(msp_t *self, double time, int population_id,
+        double size);
+int msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
+        double migration_rate);
 
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);
 void msp_verify(msp_t *self);
 
-int msp_get_population_models(msp_t *self, population_model_t *models);
 int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
@@ -302,7 +331,6 @@ int msp_is_completed(msp_t *self);
 size_t msp_get_sample_size(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);
-size_t msp_get_num_population_models(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
 size_t msp_get_num_coalescence_records(msp_t *self);
