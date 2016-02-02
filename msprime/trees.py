@@ -737,13 +737,14 @@ class TreeSimulator(object):
         for j in range(N):
             for k in range(N):
                 flattened_matrix[j * N + k] = self._migration_matrix[j][k]
+        # FIXME
         self._ll_sim = _msprime.Simulator(
             sample_size=self._sample_size,
             num_loci=self._num_loci,
-            population_models=models,
-            num_populations=len(self._sample_configuration),
-            sample_configuration=self._sample_configuration,
-            migration_matrix=flattened_matrix,
+            # population_models=models,
+            # num_populations=len(self._sample_configuration),
+            # sample_configuration=self._sample_configuration,
+            # migration_matrix=flattened_matrix,
             scaled_recombination_rate=self._scaled_recombination_rate,
             random_seed=self._random_seed,
             max_memory=self._max_memory,
