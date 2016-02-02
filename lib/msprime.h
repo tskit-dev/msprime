@@ -323,6 +323,8 @@ int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
+int msp_get_population_configuration(msp_t *self, size_t population_id,
+        size_t *sample_size, double *initial_size, double *growth_rate);
 int msp_is_completed(msp_t *self);
 
 size_t msp_get_sample_size(msp_t *self);

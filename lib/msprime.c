@@ -711,6 +711,7 @@ msp_alloc(msp_t *self, size_t sample_size)
     }
     /* Set sensible defaults for the sample_config and migration matrix */
     self->migration_matrix[0] = 0.0;
+    self->populations[0].sample_size = sample_size;
     /* Set the memory defaults */
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
@@ -1863,7 +1864,7 @@ msp_get_breakpoints(msp_t *self, size_t *breakpoints)
     return ret;
 }
 
-int
+int WARN_UNUSED
 msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
 {
     size_t N = self->num_populations;
@@ -1874,10 +1875,29 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
 }
 
 
-int
+int WARN_UNUSED
 msp_get_coalescence_records(msp_t *self, coalescence_record_t *coalescence_records)
 {
     memcpy(coalescence_records, self->coalescence_records,
             self->num_coalescence_records * sizeof(coalescence_record_t));
     return 0;
+}
+
+int WARN_UNUSED
+msp_get_population_configuration(msp_t *self, size_t population_id,
+        size_t *sample_size, double *initial_size, double *growth_rate)
+{
+    int ret = 0;
+    population_t *pop;
+
+    if (population_id > self->num_populations) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    pop = &self->populations[population_id];
+    *sample_size = pop->sample_size;
+    *initial_size = pop->initial_size;
+    *growth_rate = pop->growth_rate;
+out:
+    return ret;
 }
