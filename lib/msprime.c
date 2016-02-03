@@ -1579,6 +1579,10 @@ msp_initialise(msp_t *self)
     /* Are the demographic events time sorted? */
     t = 0;
     for (de=self->demographic_events_head; de != NULL; de=de->next) {
+        if (de->time < 0) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
         if (de->time < t) {
             ret = MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS;
             goto out;
@@ -1827,7 +1831,7 @@ msp_get_num_coalescence_records(msp_t *self)
     return self->num_coalescence_records;
 }
 
-int
+int WARN_UNUSED
 msp_get_ancestors(msp_t *self, segment_t **ancestors)
 {
     int ret = -1;
@@ -1847,7 +1851,7 @@ msp_get_ancestors(msp_t *self, segment_t **ancestors)
     return ret;
 }
 
-int
+int WARN_UNUSED
 msp_get_breakpoints(msp_t *self, size_t *breakpoints)
 {
     int ret = -1;
@@ -1863,6 +1867,16 @@ msp_get_breakpoints(msp_t *self, size_t *breakpoints)
     ret = 0;
     return ret;
 }
+
+int WARN_UNUSED
+msp_get_migration_matrix(msp_t *self, double *migration_matrix)
+{
+    size_t N = self->num_populations;
+
+    memcpy(migration_matrix, self->migration_matrix, N * N * sizeof(double));
+    return 0;
+}
+
 
 int WARN_UNUSED
 msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)

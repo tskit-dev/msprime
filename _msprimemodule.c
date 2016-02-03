@@ -117,11 +117,16 @@ get_dict_number(PyObject *dict, const char *key_str)
     PyObject *ret = NULL;
     PyObject *value;
     PyObject *key = Py_BuildValue("s", key_str);
+
+    if (key == NULL) {
+        goto out;
+    }
     if (!PyDict_Contains(dict, key)) {
-        PyErr_Format(MsprimeInputError, "'%s' not specified", key_str);
+        PyErr_Format(PyExc_ValueError, "'%s' not specified", key_str);
         goto out;
     }
     value = PyDict_GetItem(dict, key);
+    assert(value != NULL);
     if (!PyNumber_Check(value)) {
         PyErr_Format(PyExc_TypeError, "'%s' is not number", key_str);
         goto out;
@@ -131,6 +136,34 @@ out:
     Py_DECREF(key);
     return ret;
 }
+
+/*
+ * Retrieves a string value with the specified key from the specified
+ * dictionary. The returned string is internal to Python and must
+ * not be modified or freed.
+ */
+static char *
+get_dict_string(PyObject *dict, const char *key_str)
+{
+    char *ret = NULL;
+    PyObject *value;
+    PyObject *key = Py_BuildValue("s", key_str);
+    if (!PyDict_Contains(dict, key)) {
+        PyErr_Format(PyExc_ValueError, "'%s' not specified", key_str);
+        goto out;
+    }
+    value = PyDict_GetItem(dict, key);
+    assert(value != NULL);
+    if (!PyBytes_Check(value)) {
+        PyErr_Format(PyExc_TypeError, "'%s' is not a bytes value", key_str);
+        goto out;
+    }
+    ret = PyBytes_AsString(value);
+out:
+    Py_DECREF(key);
+    return ret;
+}
+
 
 static PyObject *
 convert_integer_list(size_t *list, size_t size)
@@ -151,6 +184,31 @@ convert_integer_list(size_t *list, size_t size)
             goto out;
         }
         PyList_SET_ITEM(l, j, py_int);
+    }
+    ret = l;
+out:
+    return ret;
+}
+
+static PyObject *
+convert_float_list(double *list, size_t size)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_float = NULL;
+    size_t j;
+
+    l = PyList_New(size);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        py_float = Py_BuildValue("d", list[j]);
+        if (py_float == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_float);
     }
     ret = l;
 out:
@@ -313,6 +371,88 @@ out:
     return ret;
 }
 
+static int
+Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
+{
+    int ret = -1;
+    Py_ssize_t j;
+    double time, size, growth_rate, migration_rate;
+    int err, population_id, matrix_index;
+    char *type;
+    PyObject *item, *value;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    for (j = 0; j < PyList_Size(py_events); j++) {
+        item = PyList_GetItem(py_events, j);
+        if (!PyDict_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "not a dictionary");
+            goto out;
+        }
+        value = get_dict_number(item, "time");
+        if (value == NULL) {
+            goto out;
+        }
+        time = PyFloat_AsDouble(value);
+        type = get_dict_string(item, "type");
+        if (type == NULL) {
+            goto out;
+        }
+        if (strcmp(type, "size_change") == 0) {
+            value = get_dict_number(item, "size");
+            if (value == NULL) {
+                goto out;
+            }
+            size = PyFloat_AsDouble(value);
+            value = get_dict_number(item, "population_id");
+            if (value == NULL) {
+                goto out;
+            }
+            population_id = (int) PyLong_AsLong(value);
+            err = msp_add_size_change(self->sim, time, population_id, size);
+        } else if (strcmp(type, "growth_rate_change") == 0) {
+            value = get_dict_number(item, "growth_rate");
+            if (value == NULL) {
+                goto out;
+            }
+            growth_rate = PyFloat_AsDouble(value);
+            value = get_dict_number(item, "population_id");
+            if (value == NULL) {
+                goto out;
+            }
+            population_id = (int) PyLong_AsLong(value);
+            err = msp_add_growth_rate_change(self->sim, time, population_id,
+                    growth_rate);
+        } else if (strcmp(type, "migration_rate_change") == 0) {
+            value = get_dict_number(item, "migration_rate");
+            if (value == NULL) {
+                goto out;
+            }
+            migration_rate = PyFloat_AsDouble(value);
+            value = get_dict_number(item, "matrix_index");
+            if (value == NULL) {
+                goto out;
+            }
+            matrix_index = (int) PyLong_AsLong(value);
+            err = msp_add_migration_rate_change(self->sim, time, matrix_index,
+                    migration_rate);
+        } else {
+            PyErr_Format(PyExc_ValueError,
+                    "Unknown demographic event type '%s'", type);
+            goto out;
+        }
+        if (err != 0) {
+            handle_input_error(err);
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+
 static void
 Simulator_dealloc(Simulator* self)
 {
@@ -434,6 +574,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             "Cannot supply migration_matrix without "
             "population_configuration.");
         goto out;
+    }
+    if (demographic_events != NULL) {
+        if (Simulator_parse_demographic_events(self,
+                    demographic_events) != 0) {
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -861,6 +1007,37 @@ out:
 }
 
 static PyObject *
+Simulator_get_migration_matrix(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double *migration_matrix = NULL;
+    size_t N;
+    int err;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    N = msp_get_num_populations(self->sim);
+    migration_matrix = PyMem_Malloc(N * N * sizeof(double));
+    if (migration_matrix == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = msp_get_migration_matrix(self->sim, migration_matrix);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_float_list(migration_matrix, N * N);
+out:
+    if (migration_matrix != NULL) {
+        PyMem_Free(migration_matrix);
+    }
+    return ret;
+}
+
+
+static PyObject *
 Simulator_get_coalescence_records(Simulator *self, PyObject *args)
 {
     PyObject *ret = NULL;
@@ -908,7 +1085,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_population_configurations(Simulator *self)
+Simulator_get_population_configuration(Simulator *self)
 {
     PyObject *ret = NULL;
     PyObject *l = NULL;
@@ -947,12 +1124,51 @@ Simulator_get_population_configurations(Simulator *self)
     l = NULL;
 out:
     Py_XDECREF(l);
-    /* if (models != NULL) { */
-    /*     PyMem_Free(models); */
-    /* } */
     return ret;
 }
 
+static PyObject *
+Simulator_get_demographic_events(Simulator *self)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *d = NULL;
+    size_t j = 0;
+    size_t num_populations;
+    int sim_ret = 0;
+    double initial_size, growth_rate;
+    size_t sample_size;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    num_populations = msp_get_num_populations(self->sim);
+    l = PyList_New(num_populations);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_populations; j++) {
+        sim_ret = msp_get_population_configuration(self->sim, j,
+            &sample_size, &initial_size, &growth_rate);
+        if (sim_ret != 0) {
+            handle_library_error(sim_ret);
+            goto out;
+        }
+        d = Py_BuildValue("{s:n,s:d,s:d}",
+               "sample_size", (Py_ssize_t) sample_size,
+               "initial_size", initial_size,
+               "growth_rate", growth_rate);
+        if (d == NULL) {
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, d);
+    }
+    ret = l;
+    l = NULL;
+out:
+    Py_XDECREF(l);
+    return ret;
+}
 static PyObject *
 Simulator_run(Simulator *self, PyObject *args)
 {
@@ -1079,11 +1295,16 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the ancestors" },
     {"get_breakpoints", (PyCFunction) Simulator_get_breakpoints,
             METH_NOARGS, "Returns the list of breakpoints." },
+    {"get_migration_matrix", (PyCFunction) Simulator_get_migration_matrix,
+            METH_NOARGS, "Returns the migration matrix." },
     {"get_coalescence_records", (PyCFunction) Simulator_get_coalescence_records,
             METH_NOARGS, "Returns the coalescence records." },
-    {"get_population_configurations",
-            (PyCFunction) Simulator_get_population_configurations,
-            METH_VARARGS, "Returns the population configurations"},
+    {"get_population_configuration",
+            (PyCFunction) Simulator_get_population_configuration, METH_NOARGS,
+            "Returns the population configurations"},
+    {"get_demographic_events",
+            (PyCFunction) Simulator_get_demographic_events, METH_NOARGS,
+            "Returns the demographic events"},
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\
             if sample has coalesced and False otherwise." },
