@@ -28,8 +28,8 @@ import itertools
 import json
 import os.path
 import random
-import unittest
 import tempfile
+import unittest
 
 import tests
 import _msprime
@@ -935,21 +935,25 @@ class TestSimulator(LowLevelTestCase):
 
     def test_get_migration_matrix(self):
         for N in range(1, 10):
-            migration_matrix = get_migration_matrix(N)
             population_configuration = [get_population_configuration(2)] + [
                 get_population_configuration(0) for _ in range(N - 1)]
-            sim = _msprime.Simulator(
-                2, 1, migration_matrix=migration_matrix,
-                population_configuration=population_configuration)
-            self.assertEqual(migration_matrix, sim.get_migration_matrix())
-            # Random values.
-            migration_matrix = [
+            random_matrix = [
                 random.random() * (j != k) for j in range(N)
                 for k in range(N)]
-            sim = _msprime.Simulator(
-                2, 1, migration_matrix=migration_matrix,
-                population_configuration=population_configuration)
-            self.assertEqual(migration_matrix, sim.get_migration_matrix())
+            # Deliberately stress the JSON encoding code.
+            nasty_matrix = [
+                random.random() * 1e9 * (j != k) for j in range(N)
+                for k in range(N)]
+            matrices = [random_matrix, nasty_matrix]
+            for migration_matrix in matrices:
+                sim = _msprime.Simulator(
+                    2, 1, migration_matrix=migration_matrix,
+                    population_configuration=population_configuration)
+                self.assertEqual(migration_matrix, sim.get_migration_matrix())
+                json_matrix = json.loads(sim.get_migration_matrix_json())
+                self.assertEqual(len(json_matrix), len(migration_matrix))
+                for v1, v2 in zip(json_matrix, migration_matrix):
+                    self.assertAlmostEqual(v1, v2)
 
     def test_bad_demographic_event_types(self):
         def f(events):

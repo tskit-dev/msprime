@@ -131,6 +131,10 @@ typedef struct {
     size_t max_coalescence_records;
     size_t coalescence_record_block_size;
     size_t num_coalescence_record_blocks;
+    /* JSON strings for provenance */
+    char *migration_matrix_json;
+    char *population_configuration_json;
+    char *demographic_events_json;
 } msp_t;
 
 /* Demographic events */
@@ -153,6 +157,7 @@ typedef struct demographic_event_t_t {
     double time;
     int (*change_state)(msp_t *, struct demographic_event_t_t *);
     void (*print_state)(msp_t *, struct demographic_event_t_t *);
+    int (*json_snprintf)(struct demographic_event_t_t *, char *, size_t);
     union {
         size_change_t size_change;
         growth_rate_change_t growth_rate_change;
@@ -341,6 +346,8 @@ size_t msp_get_num_coalescence_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
+
+char *msp_get_migration_matrix_json(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self);
 int tree_sequence_create(tree_sequence_t *self, msp_t *sim);

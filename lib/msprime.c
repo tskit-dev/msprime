@@ -488,6 +488,21 @@ msp_print_growth_rate_change(msp_t *self, demographic_event_t *event)
             event->params.growth_rate_change.growth_rate);
 }
 
+static int
+json_snprintf_growth_rate_change(demographic_event_t *event, char *buffer,
+        size_t size)
+{
+    const char *pattern = "{"
+        "\"type\": \"growth_rate_change\", "
+        "\"time\": %.14f, "
+        "\"population_id\": %d, "
+        "\"growth_rate\": %.14f"
+        "}, ";
+    return snprintf(buffer, size, pattern, event->time,
+            event->params.growth_rate_change.population_id,
+            event->params.growth_rate_change.growth_rate);
+}
+
 int
 msp_add_growth_rate_change(msp_t *self, double time, int population_id,
         double growth_rate)
@@ -508,6 +523,7 @@ msp_add_growth_rate_change(msp_t *self, double time, int population_id,
     de->params.growth_rate_change.population_id = population_id;
     de->change_state = msp_change_growth_rate;
     de->print_state = msp_print_growth_rate_change;
+    de->json_snprintf = json_snprintf_growth_rate_change;
     ret = 0;
 out:
     return ret;
@@ -568,6 +584,20 @@ msp_print_size_change(msp_t *self, demographic_event_t *event)
             event->params.size_change.size);
 }
 
+static int
+json_snprintf_size_change(demographic_event_t *event, char *buffer, size_t size)
+{
+    const char *pattern = "{"
+        "\"type\": \"size_change\", "
+        "\"time\": %.14f, "
+        "\"population_id\": %d, "
+        "\"size\": %.14f"
+        "}, ";
+    return snprintf(buffer, size, pattern, event->time,
+            event->params.size_change.population_id,
+            event->params.size_change.size);
+}
+
 int
 msp_add_size_change(msp_t *self, double time, int population_id, double size)
 {
@@ -591,6 +621,7 @@ msp_add_size_change(msp_t *self, double time, int population_id, double size)
     de->params.size_change.population_id = population_id;
     de->change_state = msp_change_size;
     de->print_state = msp_print_size_change;
+    de->json_snprintf = json_snprintf_size_change;
     ret = 0;
 out:
     return ret;
@@ -654,6 +685,22 @@ msp_print_migration_rate_change(msp_t *self, demographic_event_t *event)
             event->params.migration_rate_change.migration_rate);
 }
 
+static int
+json_snprintf_migration_rate_change(demographic_event_t *event, char *buffer,
+        size_t size)
+{
+    const char *pattern = "{"
+        "\"type\": \"migration_rate_change\", "
+        "\"time\": %.14f, "
+        "\"matrix_index\": %d, "
+        "\"migration_rate\": %.14f"
+        "}, ";
+    return snprintf(buffer, size, pattern, event->time,
+            event->params.migration_rate_change.matrix_index,
+            event->params.migration_rate_change.migration_rate);
+}
+
+
 int
 msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate)
@@ -678,7 +725,194 @@ msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
     de->params.migration_rate_change.matrix_index = matrix_index;
     de->change_state = msp_change_migration_rate;
     de->print_state = msp_print_migration_rate_change;
+    de->json_snprintf = json_snprintf_migration_rate_change;
     ret = 0;
+out:
+    return ret;
+}
+
+/* JSON provenance strings */
+
+static int WARN_UNUSED
+msp_generate_migration_matrix_json(msp_t *self)
+{
+    int ret = -1;
+    size_t N = self->num_populations;
+    size_t buffer_size = 0;
+    size_t offset = 0;
+    char *buffer;
+    size_t j;
+    int written;
+    const char *pattern = "%.14f, ";
+
+    assert(self->num_populations > 0);
+    for (j = 0; j < N * N; j++) {
+        written = snprintf(NULL, 0, pattern, self->migration_matrix[j]);
+        if (written < 0) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+        buffer_size += (size_t) written;
+    }
+    /* Allow some wiggle room */
+    buffer_size += 8;
+    buffer = malloc(buffer_size);
+    if (buffer == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    buffer[0] = '[';
+    offset = 1;
+    for (j = 0; j < N * N; j++) {
+        written = snprintf(buffer + offset, buffer_size - offset, pattern,
+            self->migration_matrix[j]);
+        if (written < 0) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+        offset += (size_t) written;
+        assert(offset < buffer_size - 1);
+    }
+    /* wipe out the last ', ' */
+    offset -= 2;
+    assert(offset < buffer_size - 2);
+    buffer[offset] = ']';
+    buffer[offset + 1] = '\0';
+
+    self->migration_matrix_json = buffer;
+    ret = 0;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+msp_generate_population_configuration_json(msp_t *self)
+{
+    int ret = -1;
+    size_t buffer_size = 0;
+    size_t offset = 0;
+    char *buffer;
+    size_t j;
+    int written;
+    const char *pattern = "{"
+        "\"initial_size\":%.14f, "
+        "\"growth_rate\":%.14f, "
+        "\"sample_size\":%d}, ";
+    population_t *pop;
+
+    assert(self->num_populations > 0);
+    for (j = 0; j < self->num_populations; j++) {
+        pop = &self->populations[j];
+        written = snprintf(NULL, 0, pattern, pop->initial_size,
+                pop->growth_rate, pop->sample_size);
+        if (written < 0) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+        buffer_size += (size_t) written;
+    }
+    /* Allow some wiggle room */
+    buffer_size += 8;
+    buffer = malloc(buffer_size);
+    if (buffer == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    buffer[0] = '[';
+    offset = 1;
+    for (j = 0; j < self->num_populations; j++) {
+        pop = &self->populations[j];
+        written = snprintf(buffer + offset, buffer_size - offset, pattern,
+                pop->initial_size, pop->growth_rate, pop->sample_size);
+        if (written < 0) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+        offset += (size_t) written;
+        assert(offset < buffer_size - 1);
+    }
+    /* wipe out the last ', ' */
+    offset -= 2;
+    assert(offset < buffer_size - 2);
+    buffer[offset] = ']';
+    buffer[offset + 1] = '\0';
+
+    self->population_configuration_json = buffer;
+    ret = 0;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+msp_generate_demographic_events_json(msp_t *self)
+{
+    int ret = -1;
+    size_t buffer_size = 0;
+    size_t offset = 0;
+    char *buffer;
+    int written;
+    int empty_list;
+    demographic_event_t *de;
+
+    for (de = self->demographic_events_head; de != NULL; de = de->next) {
+        written = de->json_snprintf(de, NULL, 0);
+        if (written < 0) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+        buffer_size += (size_t) written;
+    }
+    empty_list = buffer_size == 0;
+    /* Allow some wiggle room */
+    buffer_size += 8;
+    buffer = malloc(buffer_size);
+    if (buffer == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    buffer[0] = '[';
+    offset = 1;
+    for (de = self->demographic_events_head; de != NULL; de = de->next) {
+        written = de->json_snprintf(de, buffer + offset, buffer_size - offset);
+        if (written < 0) {
+            ret = MSP_ERR_IO;
+            goto out;
+        }
+        offset += (size_t) written;
+        assert(offset < buffer_size - 1);
+    }
+    if (!empty_list) {
+        /* wipe out the last ', ' */
+        offset -= 2;
+    }
+    assert(offset < buffer_size - 2);
+    buffer[offset] = ']';
+    buffer[offset + 1] = '\0';
+
+    self->demographic_events_json = buffer;
+    ret = 0;
+out:
+    return ret;
+}
+
+
+static int WARN_UNUSED
+msp_generate_provenance_strings(msp_t *self)
+{
+    int ret = 0;
+
+    ret = msp_generate_migration_matrix_json(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_generate_population_configuration_json(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_generate_demographic_events_json(self);
+    if (ret != 0) {
+        goto out;
+    }
 out:
     return ret;
 }
@@ -711,7 +945,7 @@ msp_alloc(msp_t *self, size_t sample_size)
     }
     /* Set sensible defaults for the sample_config and migration matrix */
     self->migration_matrix[0] = 0.0;
-    self->populations[0].sample_size = sample_size;
+    self->populations[0].sample_size = (uint32_t) sample_size;
     /* Set the memory defaults */
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
@@ -824,6 +1058,15 @@ msp_free(msp_t *self)
     fenwick_free(&self->links);
     if (self->coalescence_records != NULL) {
         free(self->coalescence_records);
+    }
+    if (self->migration_matrix_json != NULL) {
+        free(self->migration_matrix_json);
+    }
+    if (self->population_configuration_json != NULL) {
+        free(self->population_configuration_json);
+    }
+    if (self->demographic_events_json != NULL) {
+        free(self->demographic_events_json);
     }
     return ret;
 }
@@ -1053,8 +1296,12 @@ msp_print_state(msp_t *self)
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
     printf("random seed = %ld\n", self->random_seed);
+    printf("migration_matrix_json = \t\t%s\n", self->migration_matrix_json);
+    printf("population_configuration_json = \t%s\n", self->population_configuration_json);
+    printf("demographic_events_json = \t\t%s\n", self->demographic_events_json);
+
     printf("Demographic events:\n");
-    for (de=self->demographic_events_head; de != NULL; de=de->next) {
+    for (de = self->demographic_events_head; de != NULL; de = de->next) {
         if (de == self->next_demographic_event) {
             printf("  ***");
         }
@@ -1578,7 +1825,7 @@ msp_initialise(msp_t *self)
     }
     /* Are the demographic events time sorted? */
     t = 0;
-    for (de=self->demographic_events_head; de != NULL; de=de->next) {
+    for (de = self->demographic_events_head; de != NULL; de = de->next) {
         if (de->time < 0) {
             ret = MSP_ERR_BAD_PARAM_VALUE;
             goto out;
@@ -1611,6 +1858,13 @@ msp_initialise(msp_t *self)
     }
     assert(sample_id == self->sample_size + 1);
     self->next_node = self->sample_size + 1;
+    /* Store the JSON strings now because we need to store the initial
+     * state of the migration matrix and population configuration.
+     */
+    ret = msp_generate_provenance_strings(self);
+    if (ret != 0) {
+        goto out;
+    }
     ret = msp_insert_overlap_count(self, 0, self->sample_size);
     if (ret != 0) {
         goto out;
@@ -1914,4 +2168,10 @@ msp_get_population_configuration(msp_t *self, size_t population_id,
     *growth_rate = pop->growth_rate;
 out:
     return ret;
+}
+
+char * WARN_UNUSED
+msp_get_migration_matrix_json(msp_t *self)
+{
+    return self->migration_matrix_json;
 }
