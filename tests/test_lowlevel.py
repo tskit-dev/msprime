@@ -38,6 +38,12 @@ import _msprime
 # here. All we need is the version.
 from msprime import __version__ as _library_version
 
+# We use this to disable hdf5 tests when we're looping through the
+# tests to stress test the low-level memory management, etc. For
+# obscure reasons we cannot import h5py in the normal way (see
+# below for more discussion on this)
+enable_h5py_tests = True
+
 
 def get_population_configuration(
         sample_size=0, growth_rate=0.0, initial_size=1.0):
@@ -1481,22 +1487,24 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertEqual(g[name].dtype, dtype)
 
     def test_dump_format(self):
-        for ts in self.get_example_tree_sequences():
-            with tempfile.NamedTemporaryFile() as f:
-                self.verify_tree_dump_format(ts, f)
+        if enable_h5py_tests:
+            for ts in self.get_example_tree_sequences():
+                with tempfile.NamedTemporaryFile() as f:
+                    self.verify_tree_dump_format(ts, f)
 
     def test_load_malformed_hdf5(self):
-        # See above for why we import h5py here.
-        import h5py
-        ts = _msprime.TreeSequence()
-        with tempfile.NamedTemporaryFile() as f:
-            hfile = h5py.File(f.name, "w")
-            # First try the empty hdf5 file.
-            hfile.flush()
-            self.assertRaises(
-                _msprime.LibraryError, ts.load, f.name, skip_h5close=True)
-            # TODO create a legitimate hdf5 file and copy parts of
-            # it to a local hdf5 file. Try opening this then.
+        if enable_h5py_tests:
+            # See above for why we import h5py here.
+            import h5py
+            ts = _msprime.TreeSequence()
+            with tempfile.NamedTemporaryFile() as f:
+                hfile = h5py.File(f.name, "w")
+                # First try the empty hdf5 file.
+                hfile.flush()
+                self.assertRaises(
+                    _msprime.LibraryError, ts.load, f.name, skip_h5close=True)
+                # TODO create a legitimate hdf5 file and copy parts of
+                # it to a local hdf5 file. Try opening this then.
 
     def test_load_bad_formats(self):
         # try loading a bunch of files in various formats.
