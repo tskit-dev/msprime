@@ -1039,7 +1039,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_migration_matrix_json(Simulator *self)
+Simulator_get_configuration(Simulator *self)
 {
     PyObject *ret = NULL;
     char *json;
@@ -1047,7 +1047,7 @@ Simulator_get_migration_matrix_json(Simulator *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    json = msp_get_migration_matrix_json(self->sim);
+    json = msp_get_configuration(self->sim);
     assert(json != NULL);
     ret = Py_BuildValue("s", json);
 out:
@@ -1314,8 +1314,8 @@ static PyMethodDef Simulator_methods[] = {
             METH_NOARGS, "Returns the list of breakpoints." },
     {"get_migration_matrix", (PyCFunction) Simulator_get_migration_matrix,
             METH_NOARGS, "Returns the migration matrix." },
-    {"get_migration_matrix_json", (PyCFunction) Simulator_get_migration_matrix_json,
-            METH_NOARGS, "Returns the initial migration matrix as JSON." },
+    {"get_configuration", (PyCFunction) Simulator_get_configuration,
+            METH_NOARGS, "Returns the initial configuration as JSON." },
     {"get_coalescence_records", (PyCFunction) Simulator_get_coalescence_records,
             METH_NOARGS, "Returns the coalescence records." },
     {"get_population_configuration",
