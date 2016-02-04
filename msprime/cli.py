@@ -110,10 +110,10 @@ class SimulationRunner(object):
     """
     def __init__(
             self, sample_size=1, num_loci=1, recombination_rate=0,
-            num_replicates=1, migration_matrix=[[0.0]],
-            sample_configuration=None, mutation_rate=0, print_trees=False,
-            max_memory="16M", precision=3, population_models=[],
-            random_seeds=None):
+            num_replicates=1, migration_matrix=None,
+            population_configurations=None, demographic_events=None,
+            mutation_rate=0, print_trees=False, max_memory="16M",
+            precision=3, random_seeds=None):
         self._sample_size = sample_size
         self._num_loci = num_loci
         self._num_replicates = num_replicates
@@ -123,12 +123,12 @@ class SimulationRunner(object):
         self._simulator.set_max_memory(max_memory)
         self._simulator.set_num_loci(num_loci)
         self._simulator.set_migration_matrix(migration_matrix)
-        self._simulator.set_sample_configuration(sample_configuration)
+        self._simulator.set_population_configurations(
+            population_configurations)
+        self._simulator.set_demographic_events(demographic_events)
         self._simulator.set_scaled_recombination_rate(recombination_rate)
         self._precision = precision
         self._print_trees = print_trees
-        for m in population_models:
-            self._simulator.add_population_model(m)
         # sort out the random seeds
         python_seed, ms_seeds = get_seeds(random_seeds)
         self._ms_random_seeds = ms_seeds
@@ -233,18 +233,20 @@ def create_simulation_runner(parser, arg_list):
     # Check the structure format.
     symmetric_migration_rate = 0.0
     num_populations = 1
-    sample_configuration = [args.sample_size]
+    population_configurations = [
+        msprime.PopulationConfiguration(args.sample_size)]
     migration_matrix = [[0.0]]
     if args.structure is not None:
         num_populations = convert_int(args.structure[0], parser)
         # We must have at least num_population sample_configurations
         if len(args.structure) < num_populations + 1:
             parser.error("Must have num_populations sample sizes")
-        sample_configuration = [0 for j in range(num_populations)]
+        population_configurations = [None for j in range(num_populations)]
         for j in range(num_populations):
-            sample_configuration[j] = convert_int(
-                args.structure[j + 1], parser)
-        if sum(sample_configuration) != args.sample_size:
+            population_configurations[j] = msprime.PopulationConfiguration(
+                convert_int(args.structure[j + 1], parser))
+        total = sum(conf.sample_size for conf in population_configurations)
+        if total != args.sample_size:
             parser.error("Population sample sizes must sum to sample_size")
         # We optionally have the overall migration_rate here
         if len(args.structure) == num_populations + 2:
@@ -296,27 +298,30 @@ def create_simulation_runner(parser, arg_list):
     # TODO for strict ms compatability, we need to resolve the command line
     # ordering of arguments when there are two or more events with the
     # same start time. We should resolve this.
-    models = []
+    demographic_events = []
     if args.growth_rate is not None:
-        models.append(
-            msprime.ExponentialPopulationModel(0.0, args.growth_rate))
+        for config in population_configurations:
+            config.growth_rate = args.growth_rate
     for t, alpha in args.growth_event:
-        models.append(msprime.ExponentialPopulationModel(t, alpha))
+        demographic_events.append(
+            msprime.GrowthRateChangeEvent(t, alpha))
     for t, x in args.size_event:
-        models.append(msprime.ConstantPopulationModel(t, x))
+        demographic_events.append(
+            msprime.SizeChangeEvent(t, x))
+    demographic_events.sort(key=lambda config: config.time)
 
     runner = SimulationRunner(
         sample_size=args.sample_size,
         num_loci=num_loci,
         migration_matrix=migration_matrix,
-        sample_configuration=sample_configuration,
+        population_configurations=population_configurations,
+        demographic_events=demographic_events,
         num_replicates=args.num_replicates,
         recombination_rate=r,
         mutation_rate=mu,
         precision=args.precision,
         max_memory=args.max_memory,
         print_trees=args.trees,
-        population_models=models,
         random_seeds=args.random_seeds)
     return runner
 

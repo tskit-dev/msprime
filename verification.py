@@ -516,12 +516,12 @@ def verify_migration_new():
 
 def main():
     # verify_recombination_events()
-    # verify_random(10)
-    # verify_exponential_models()
+    verify_random(10)
+    verify_exponential_models()
     # verify_simple()
-    verify_migration_new()
-    # verify_zero_growth_example()
-    # verify_scrm_example()
+    # verify_migration_new()
+    verify_zero_growth_example()
+    verify_scrm_example()
     # verify_mutations()
     # verify_migration_example()
     # verify_migration()

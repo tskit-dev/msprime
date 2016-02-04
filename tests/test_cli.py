@@ -374,8 +374,7 @@ class TestMspmsOutput(unittest.TestCase):
     def verify_output(
             self, sample_size=2, num_loci=1, recombination_rate=0,
             num_replicates=1, mutation_rate=0.0, print_trees=True,
-            max_memory="16M", precision=3, population_models=[],
-            random_seeds=[1, 2, 3]):
+            max_memory="16M", precision=3, random_seeds=[1, 2, 3]):
         """
         Runs the UI for the specified parameters, and parses the output
         to ensure it's consistent.
@@ -385,7 +384,6 @@ class TestMspmsOutput(unittest.TestCase):
             recombination_rate=recombination_rate,
             num_replicates=num_replicates, mutation_rate=mutation_rate,
             print_trees=print_trees, precision=precision,
-            population_models=population_models,
             random_seeds=random_seeds)
         with tempfile.TemporaryFile("w+") as f:
             sr.run(f)
