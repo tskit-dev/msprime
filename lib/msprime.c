@@ -909,7 +909,7 @@ msp_generate_provenance_strings(msp_t *self)
         "\"sample_size\": %d, "
         "\"num_loci\": %d, "
         "\"random_seed\": %ld, "
-        "\"scaled_recombination_rate\": %f, "
+        "\"scaled_recombination_rate\": %.14f, "
         "\"migration_matrix\": %s, "
         "\"population_configuration\": %s, "
         "\"demographic_events\": %s}";
