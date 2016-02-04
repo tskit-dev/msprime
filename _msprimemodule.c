@@ -395,6 +395,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             goto out;
         }
         time = PyFloat_AsDouble(value);
+        if (time < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative times not valid");
+            goto out;
+        }
         type = get_dict_string(item, "type");
         if (type == NULL) {
             goto out;
@@ -581,9 +585,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    /* We don't allow any further modification of the simulator state
-     * so we call run  for 0 events to invoke initialise */
-    ret = msp_run(self->sim, 0, 0);
+    sim_ret = msp_initialise(self->sim);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -1039,7 +1046,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_configuration(Simulator *self)
+Simulator_get_configuration_json(Simulator *self)
 {
     PyObject *ret = NULL;
     char *json;
@@ -1047,7 +1054,7 @@ Simulator_get_configuration(Simulator *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    json = msp_get_configuration(self->sim);
+    json = msp_get_configuration_json(self->sim);
     assert(json != NULL);
     ret = Py_BuildValue("s", json);
 out:
@@ -1144,48 +1151,6 @@ out:
     return ret;
 }
 
-static PyObject *
-Simulator_get_demographic_events(Simulator *self)
-{
-    PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *d = NULL;
-    size_t j = 0;
-    size_t num_populations;
-    int sim_ret = 0;
-    double initial_size, growth_rate;
-    size_t sample_size;
-
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    num_populations = msp_get_num_populations(self->sim);
-    l = PyList_New(num_populations);
-    if (l == NULL) {
-        goto out;
-    }
-    for (j = 0; j < num_populations; j++) {
-        sim_ret = msp_get_population_configuration(self->sim, j,
-            &sample_size, &initial_size, &growth_rate);
-        if (sim_ret != 0) {
-            handle_library_error(sim_ret);
-            goto out;
-        }
-        d = Py_BuildValue("{s:n,s:d,s:d}",
-               "sample_size", (Py_ssize_t) sample_size,
-               "initial_size", initial_size,
-               "growth_rate", growth_rate);
-        if (d == NULL) {
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, d);
-    }
-    ret = l;
-    l = NULL;
-out:
-    Py_XDECREF(l);
-    return ret;
-}
 static PyObject *
 Simulator_run(Simulator *self, PyObject *args)
 {
@@ -1314,16 +1279,13 @@ static PyMethodDef Simulator_methods[] = {
             METH_NOARGS, "Returns the list of breakpoints." },
     {"get_migration_matrix", (PyCFunction) Simulator_get_migration_matrix,
             METH_NOARGS, "Returns the migration matrix." },
-    {"get_configuration", (PyCFunction) Simulator_get_configuration,
+    {"get_configuration_json", (PyCFunction) Simulator_get_configuration_json,
             METH_NOARGS, "Returns the initial configuration as JSON." },
     {"get_coalescence_records", (PyCFunction) Simulator_get_coalescence_records,
             METH_NOARGS, "Returns the coalescence records." },
     {"get_population_configuration",
             (PyCFunction) Simulator_get_population_configuration, METH_NOARGS,
             "Returns the population configurations"},
-    {"get_demographic_events",
-            (PyCFunction) Simulator_get_demographic_events, METH_NOARGS,
-            "Returns the demographic events"},
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\
             if sample has coalesced and False otherwise." },

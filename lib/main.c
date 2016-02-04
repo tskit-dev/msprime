@@ -548,6 +548,10 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+    ret = msp_initialise(msp);
+    if (ret != 0) {
+        goto out;
+    }
     result = 1;
     while (result == 1) {
         result = msp_run(msp, DBL_MAX, 1);
@@ -562,6 +566,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+    if (0) {
         /* Create the tree_sequence from the state of the simulator. */
         ret = tree_sequence_create(tree_seq, msp);
         if (ret != 0) {
@@ -586,7 +591,6 @@ run_simulate(char *conf_file)
             }
         }
         tree_sequence_print_state(tree_seq);
-    if (0) {
         print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);
         tree_sequence_print_state(tree_seq);

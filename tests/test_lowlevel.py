@@ -26,6 +26,7 @@ import collections
 import heapq
 import itertools
 import json
+import math
 import os.path
 import random
 import tempfile
@@ -95,6 +96,34 @@ def get_migration_matrix(num_populations, value=1.0):
     return [
         value * (j != k) for j in range(num_populations)
         for k in range(num_populations)]
+
+
+def get_random_demographic_events(num_populations, num_events):
+    """
+    Return some random demographic events for the specified number
+    of populations. Note: we return num_events of *each type*.
+    """
+    events = []
+    for j in range(num_events):
+        events.append(get_size_change_event(
+            time=random.random(), size=random.random(),
+            population_id=random.randint(-1, num_populations - 1)))
+        events.append(get_growth_rate_change_event(
+            time=random.random(), growth_rate=random.random(),
+            population_id=random.randint(-1, num_populations - 1)))
+        if num_populations > 1:
+            matrix_index = 0
+            if random.random() < 0.5:
+                matrix_index = -1
+            else:
+                # Don't pick diagonal elements
+                while matrix_index % (num_populations + 1) == 0:
+                    matrix_index = random.randint(0, num_populations**2 - 1)
+            events.append(get_migration_rate_change_event(
+                time=random.random(), migration_rate=random.random(),
+                matrix_index=matrix_index))
+    sorted_events = sorted(events, key=lambda x: x["time"])
+    return sorted_events
 
 
 def get_leaf_counts(st):
@@ -546,27 +575,24 @@ class TestSimulationState(LowLevelTestCase):
             for j in range(len(records))]
         self.assertEqual(ts_records, right_sorted_records)
         # Check the simulation parameters
-        # FIXME
-        # json_str = ts.get_simulation_parameters()
-        # parameters = json.loads(json_str)
-        # self.assertEqual(parameters["random_seed"], sim.get_random_seed())
-        # self.assertEqual(parameters["sample_size"], sim.get_sample_size())
-        # self.assertEqual(parameters["num_loci"], sim.get_num_loci())
-        # self.assertEqual(
-        #     parameters["scaled_recombination_rate"],
-        #     sim.get_scaled_recombination_rate())
-        # models = parameters["population_models"]
-        # sim_models = sim.get_population_models()
-        # self.assertEqual(models, sim_models)
+        self.assertEqual(
+            json.loads(ts.get_simulation_parameters()),
+            json.loads(sim.get_configuration_json())),
 
     def verify_random_parameters(self):
         mb = 1024 * 1024
         n = random.randint(2, 100)
         m = random.randint(1, 10**6)
         rho = random.uniform(0, 1000)
-        # num_pop_models = random.randint(0, 10)
-        # FIXME
-        # models = get_random_population_models(num_pop_models)
+        N = random.randint(1, 4)
+        migration_matrix = [
+            random.random() * (j != k) for j in range(N) for k in range(N)]
+        population_configuration = [
+            get_population_configuration(
+                n * (j == 0), random.random(), random.random())
+            for j in range(N)]
+        demographic_events = get_random_demographic_events(
+            N, random.randint(1, 5))
         random_seed = random.randint(0, 2**31)
         max_memory = random.randint(10 * mb, 100 * mb)
         segment_block_size = random.randint(1, 100)
@@ -576,6 +602,9 @@ class TestSimulationState(LowLevelTestCase):
         sim = _msprime.Simulator(
             sample_size=n, num_loci=m,
             scaled_recombination_rate=rho,
+            population_configuration=population_configuration,
+            demographic_events=demographic_events,
+            migration_matrix=migration_matrix,
             random_seed=random_seed, max_memory=max_memory,
             segment_block_size=segment_block_size,
             avl_node_block_size=avl_node_block_size,
@@ -584,19 +613,29 @@ class TestSimulationState(LowLevelTestCase):
         # Check initial state
         self.assertEqual(0, sim.get_num_breakpoints())
         self.assertEqual(0.0, sim.get_time())
-        self.assertEqual(0, sim.get_num_ancestors())
+        self.assertEqual(n, sim.get_num_ancestors())
         self.assertEqual(0, sim.get_num_common_ancestor_events())
         self.assertEqual(0, sim.get_num_recombination_events())
         self.assertEqual(0, sum(sim.get_num_migration_events()))
-        self.assertEqual(sim.get_num_avl_node_blocks(), 0)
-        self.assertEqual(sim.get_num_segment_blocks(), 0)
-        self.assertEqual(sim.get_num_node_mapping_blocks(), 0)
-        self.assertEqual(sim.get_num_coalescence_record_blocks(), 0)
+        self.assertGreater(sim.get_num_avl_node_blocks(), 0)
+        self.assertGreater(sim.get_num_segment_blocks(), 0)
+        self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
+        self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
         self.assertEqual(sim.get_sample_size(), n)
         self.assertEqual(sim.get_num_loci(), m)
-        self.assertEqual(0, len(sim.get_ancestors()))
-        # Force initialisaton of the simulation by running for 0 events.
-        sim.run(-1.0)
+        self.assertEqual(n, len(sim.get_ancestors()))
+        self.assertEqual(sim.get_migration_matrix(), migration_matrix)
+        self.assertEqual(
+            sim.get_population_configuration(), population_configuration)
+        # Check the configuration json
+        config = {
+            "sample_size": n, "num_loci": m,
+            "scaled_recombination_rate": rho,
+            "random_seed": random_seed,  "migration_matrix": migration_matrix,
+            "demographic_events": demographic_events,
+            "population_configuration": population_configuration
+        }
+        self.assertEqual(json.loads(sim.get_configuration_json()), config)
         a = 0
         nodes = set()
         for ind in sim.get_ancestors():
@@ -623,20 +662,10 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(
                 coalescence_record_block_size,
                 sim.get_coalescence_record_block_size())
-            # self.verify_population_models(sim, models)
+            self.assertEqual(json.loads(sim.get_configuration_json()), config)
             # Run this for a tiny amount of time and check the state
             self.assertFalse(sim.run(1e-8))
             self.verify_running_simulation(sim)
-            # self.verify_population_models(sim, models)
-
-    def verify_population_models(self, sim, models):
-        """
-        Verifies that the population models returned by the simulator
-        match the specified list.
-        """
-        # FIXME --- find equivalent and fix this.
-        pop_models = sim.get_population_models()
-        self.assertEqual(pop_models, models)
 
     def verify_tree_diffs(self, tree_sequence):
         n = tree_sequence.get_sample_size()
@@ -696,9 +725,7 @@ class TestSimulationState(LowLevelTestCase):
             max_memory=10 * mb, segment_block_size=1000,
             avl_node_block_size=1000, node_mapping_block_size=1000,
             coalescence_record_block_size=1000)
-        # self.verify_population_models(sim, models)
         # Run the sim for a tiny amount of time and check.
-        # self.assertFalse(sim.run(1e-8))
         self.assertFalse(sim.run(1e-8))
         self.verify_running_simulation(sim)
         increment = 0.01
@@ -708,7 +735,6 @@ class TestSimulationState(LowLevelTestCase):
             self.verify_running_simulation(sim)
             t += increment
         self.verify_completed_simulation(sim)
-        # self.verify_population_models(sim, models)
         # Check the tree sequence.
         tree_sequence = _msprime.TreeSequence()
         tree_sequence.create(sim)
@@ -725,19 +751,6 @@ class TestSimulationState(LowLevelTestCase):
         self.verify_simulation(3, 100, 0.0)
         self.verify_simulation(3, 10, 1000.0)
         self.verify_simulation(5, 10, 10.0)
-
-    def test_population_models(self):
-        pass
-        # FIXME
-        # print("FIXME")
-        # exp_model = _msprime.POP_MODEL_EXPONENTIAL
-        # m1 = {"alpha": 0.0, "start_time": 0.0, "type": exp_model}
-        # m2 = {"alpha": 1.0, "start_time": 0.5, "type": exp_model}
-        # # TODO add constant pop models here too.
-        # for n in [5, 10, 100]:
-        #     self.verify_simulation(n, 1, 0.0, [m1])
-        #     self.verify_simulation(n, 1, 0.0, [m2])
-        #     self.verify_simulation(n, 1, 0.0, [m1, m2])
 
     def test_event_by_event(self):
         n = 10
@@ -766,6 +779,69 @@ class TestSimulationState(LowLevelTestCase):
                 sim.get_num_recombination_events() +
                 sum(sim.get_num_migration_events()))
             self.assertEqual(events, total_events)
+
+    def test_demographic_events(self):
+        n = 10
+        N = 3
+        migration_matrix = [
+            random.random() * (j != k) for j in range(N) for k in range(N)]
+        population_configuration = [
+            get_population_configuration(
+                n * (j == 0), random.random(), random.random())
+            for j in range(N)]
+        demographic_events = get_random_demographic_events(N, 10)
+        start_times = [0 for j in range(N)]
+        # Rescale time back to very small values so we know that they
+        # will definitely happen
+        for event in demographic_events:
+            event["time"] *= 1e-6
+        sim = _msprime.Simulator(
+            n, 1, migration_matrix=migration_matrix,
+            population_configuration=population_configuration,
+            demographic_events=demographic_events)
+        self.assertEqual(sim.get_migration_matrix(), migration_matrix)
+        self.assertEqual(
+            sim.get_population_configuration(), population_configuration)
+        # For each event we now run the simulator forward until this time
+        # and make sure that the internal state is what it should be.
+        for event in demographic_events:
+            t = event["time"]
+            event_type = event["type"]
+            sim.run(t)
+            self.assertEqual(sim.get_time(), t)
+            if event_type == "migration_rate_change":
+                matrix_index = event["matrix_index"]
+                rate = event["migration_rate"]
+                if matrix_index == -1:
+                    for j in range(N):
+                        for k in range(N):
+                            if j != k:
+                                migration_matrix[j * N + k] = rate
+                else:
+                    migration_matrix[matrix_index] = rate
+            else:
+                population_id = event["population_id"]
+                indexes = [population_id]
+                if population_id == -1:
+                    indexes = range(N)
+                if event_type == "size_change":
+                    size = event["size"]
+                    for j in indexes:
+                        population_configuration[j]["initial_size"] = size
+                        population_configuration[j]["growth_rate"] = 0
+                else:
+                    alpha = event["growth_rate"]
+                    for j in indexes:
+                        s = population_configuration[j]["initial_size"]
+                        a = population_configuration[j]["growth_rate"]
+                        # Calculate the new size
+                        size = s * math.exp(-a * (t - start_times[j]))
+                        population_configuration[j]["initial_size"] = size
+                        population_configuration[j]["growth_rate"] = alpha
+                        start_times[j] = t
+            self.assertEqual(sim.get_migration_matrix(), migration_matrix)
+            self.assertEqual(
+                sim.get_population_configuration(), population_configuration)
 
 
 class TestSimulator(LowLevelTestCase):
@@ -804,6 +880,17 @@ class TestSimulator(LowLevelTestCase):
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, max_memory=2**65)
 
+    def test_defaults(self):
+        n = 10
+        sim = _msprime.Simulator(n, 1)
+        self.assertEqual(sim.get_migration_matrix(), [0.0])
+        self.assertEqual(
+            sim.get_population_configuration(),
+            [get_population_configuration(n)])
+        self.assertEqual(
+            json.loads(sim.get_configuration_json())["demographic_events"],
+            [])
+
     def test_bad_population_configurations(self):
         def f(population_configuration):
             return _msprime.Simulator(
@@ -841,11 +928,10 @@ class TestSimulator(LowLevelTestCase):
                 get_population_configuration(n) for n in pop_sample_sizes]
             N = len(pop_sample_sizes)
             migration_matrix = [0 for j in range(N) for k in range(N)]
-            s = _msprime.Simulator(
+            _msprime.Simulator(
                 sample_size, 1,
                 population_configuration=population_configuration,
                 migration_matrix=migration_matrix)
-            s.run(0.0)
         for bad_type in [{}, None, 2, [""], [[]], [None]]:
             self.assertRaises(
                 TypeError, _msprime.Simulator, 2, 1,
@@ -855,9 +941,9 @@ class TestSimulator(LowLevelTestCase):
         # Cannot have empty list
         self.assertRaises(ValueError, f, 2, [])
         # Sample sizes that don't add up are input errors.
-        self.assertRaises(_msprime.LibraryError, f, 2, [3])
-        self.assertRaises(_msprime.LibraryError, f, 2, [2, 1])
-        self.assertRaises(_msprime.LibraryError, f, 5, [2, 2])
+        self.assertRaises(_msprime.InputError, f, 2, [3])
+        self.assertRaises(_msprime.InputError, f, 2, [2, 1])
+        self.assertRaises(_msprime.InputError, f, 5, [2, 2])
         # Must provide population_configuration if a migration_matrix
         # is supplied.
         self.assertRaises(
@@ -950,10 +1036,9 @@ class TestSimulator(LowLevelTestCase):
                     2, 1, migration_matrix=migration_matrix,
                     population_configuration=population_configuration)
                 self.assertEqual(migration_matrix, sim.get_migration_matrix())
-                json_matrix = json.loads(sim.get_migration_matrix_json())
-                self.assertEqual(len(json_matrix), len(migration_matrix))
-                for v1, v2 in zip(json_matrix, migration_matrix):
-                    self.assertAlmostEqual(v1, v2)
+                json_config = json.loads(sim.get_configuration_json())
+                json_matrix = json_config["migration_matrix"]
+                self.assertEqual(migration_matrix, json_matrix)
 
     def test_bad_demographic_event_types(self):
         def f(events):
@@ -983,18 +1068,17 @@ class TestSimulator(LowLevelTestCase):
             population_configuration = [get_population_configuration(2)] + [
                 get_population_configuration(0)
                 for _ in range(num_populations - 1)]
-            sim = _msprime.Simulator(
+            _msprime.Simulator(
                 2, 1, demographic_events=events,
                 population_configuration=population_configuration,
                 migration_matrix=get_migration_matrix(num_populations))
-            sim.run()
         event_generators = [
             get_size_change_event, get_growth_rate_change_event,
             get_migration_rate_change_event]
         for event_generator in event_generators:
             # Negative times not allowed.
             event = event_generator(time=-1)
-            self.assertRaises(_msprime.LibraryError, f, [event])
+            self.assertRaises(ValueError, f, [event])
         event_generators = [
             get_size_change_event, get_growth_rate_change_event]
         # Check for bad population ids.
@@ -1021,6 +1105,10 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(_msprime.InputError, f, [event], k)
             events = [event_generator(), event]
             self.assertRaises(_msprime.InputError, f, events, k)
+            # Diagonal matrix values are not accepted.
+            for j in range(k):
+                event = event_generator(matrix_index=j * k + j)
+                self.assertRaises(_msprime.InputError, f, [event], k)
 
     def test_unsorted_demographic_events(self):
         event_generators = [
@@ -1032,13 +1120,30 @@ class TestSimulator(LowLevelTestCase):
                 events.append(event_generator(time=random.random()))
         sorted_events = sorted(events, key=lambda x: x["time"])
         self.assertNotEqual(events, sorted_events)
-        sim = _msprime.Simulator(10, 1, demographic_events=events)
-        self.assertRaises(_msprime.LibraryError, sim.run)
+        self.assertRaises(
+            _msprime.InputError, _msprime.Simulator, 10, 1,
+            demographic_events=events)
 
     def test_get_demographic_events(self):
         # If no events are set, we should get the empty list.
         sim = _msprime.Simulator(2, 1)
-        self.assertEqual([], sim.get_demographic_events())
+
+        def get_events(s):
+            d = json.loads(sim.get_configuration_json())
+            return d["demographic_events"]
+
+        self.assertEqual([], get_events(sim))
+        num_populations = 3
+        events = get_random_demographic_events(3, 3)
+        population_configuration = [
+            get_population_configuration(2),
+            get_population_configuration(0),
+            get_population_configuration(0)]
+        sim = _msprime.Simulator(
+            2, 1, population_configuration=population_configuration,
+            migration_matrix=[0 for j in range(num_populations**2)],
+            demographic_events=events)
+        self.assertEqual(events, get_events(sim))
 
     def test_seed_equality(self):
         simulations = [
@@ -1291,35 +1396,22 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertIsInstance(parameters["random_seed"], int)
 
     def verify_tree_parameters_json(self, json_str):
-        pass
-        # FIXME
-        # print("FIXME")
-        # parameters = json.loads(json_str.decode())
-        # self.assertIn("scaled_recombination_rate", parameters)
-        # self.assertIn("random_seed", parameters)
-        # self.assertIn("sample_size", parameters)
-        # self.assertIn("num_loci", parameters)
-        # self.assertIn("population_models", parameters)
-        # self.assertIsInstance(parameters["scaled_recombination_rate"], float)
-        # self.assertIsInstance(parameters["random_seed"], int)
-        # self.assertIsInstance(parameters["sample_size"], int)
-        # self.assertIsInstance(parameters["num_loci"], int)
-        # self.assertIsInstance(parameters["population_models"], list)
-        # for m in parameters["population_models"]:
-        #     self.assertIsInstance(m, dict)
-        #     self.assertIn("start_time", m)
-        #     self.assertIn("type", m)
-        #     self.assertIsInstance(m["start_time"], float)
-        #     t = m["type"]
-        #     self.assertIsInstance(t, int)
-        #     self.assertIn(t, [
-        #         _msprime.POP_MODEL_EXPONENTIAL, _msprime.POP_MODEL_CONSTANT])
-        #     if t == _msprime.POP_MODEL_EXPONENTIAL:
-        #         self.assertIn("alpha", m)
-        #         self.assertIsInstance(m["alpha"], float)
-        #     else:
-        #         self.assertIn("size", m)
-        #         self.assertIsInstance(m["size"], float)
+        parameters = json.loads(json_str.decode())
+        self.assertIn("scaled_recombination_rate", parameters)
+        self.assertIn("random_seed", parameters)
+        self.assertIn("sample_size", parameters)
+        self.assertIn("num_loci", parameters)
+        self.assertIn("population_configuration", parameters)
+        self.assertIn("migration_matrix", parameters)
+        self.assertIn("demographic_events", parameters)
+        self.assertIsInstance(
+            parameters["scaled_recombination_rate"], int, float)
+        self.assertIsInstance(parameters["random_seed"], int)
+        self.assertIsInstance(parameters["sample_size"], int)
+        self.assertIsInstance(parameters["num_loci"], int)
+        self.assertIsInstance(parameters["population_configuration"], list)
+        self.assertIsInstance(parameters["migration_matrix"], list)
+        self.assertIsInstance(parameters["demographic_events"], list)
 
     def verify_environment_json(self, json_str):
         environment = json.loads(json_str.decode())

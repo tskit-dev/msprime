@@ -317,6 +317,7 @@ int msp_add_size_change(msp_t *self, double time, int population_id,
 int msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate);
 
+int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);

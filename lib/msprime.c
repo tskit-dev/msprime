@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <float.h>
 
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_math.h>
@@ -34,6 +35,8 @@
 #include "msprime.h"
 
 #define MSP_HDF5_ERR_MSG_SIZE 1024
+/* printf pattern to print out double values losslessly */
+#define MSP_LOSSLESS_DBL "%.17g"
 
 static char _hdf5_error[MSP_HDF5_ERR_MSG_SIZE];
 
@@ -62,8 +65,8 @@ msp_strerror(int err)
         ret = "File format error";
     } else if (err == MSP_ERR_FILE_VERSION) {
         ret = "Unsupported file format version";
-    } else if (err == MSP_ERR_BAD_MODE) {
-        ret = "Bad tree file mode";
+    } else if (err == MSP_ERR_NOT_INITIALISED) {
+        ret = "Simulator not initialised";
     } else if (err == MSP_ERR_NEWICK_OVERFLOW) {
         ret = "Newick string generation overflow.";
     } else if (err == MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS) {
@@ -494,9 +497,9 @@ json_snprintf_growth_rate_change(demographic_event_t *event, char *buffer,
 {
     const char *pattern = "{"
         "\"type\": \"growth_rate_change\", "
-        "\"time\": %.14f, "
+        "\"time\": " MSP_LOSSLESS_DBL ", "
         "\"population_id\": %d, "
-        "\"growth_rate\": %.14f"
+        "\"growth_rate\": " MSP_LOSSLESS_DBL
         "}, ";
     return snprintf(buffer, size, pattern, event->time,
             event->params.growth_rate_change.population_id,
@@ -589,9 +592,9 @@ json_snprintf_size_change(demographic_event_t *event, char *buffer, size_t size)
 {
     const char *pattern = "{"
         "\"type\": \"size_change\", "
-        "\"time\": %.14f, "
-        "\"population_id\": %d, "
-        "\"size\": %.14f"
+        "\"time\": " MSP_LOSSLESS_DBL ", "
+        "\"size\": " MSP_LOSSLESS_DBL ", "
+        "\"population_id\": %d"
         "}, ";
     return snprintf(buffer, size, pattern, event->time,
             event->params.size_change.population_id,
@@ -691,9 +694,9 @@ json_snprintf_migration_rate_change(demographic_event_t *event, char *buffer,
 {
     const char *pattern = "{"
         "\"type\": \"migration_rate_change\", "
-        "\"time\": %.14f, "
-        "\"matrix_index\": %d, "
-        "\"migration_rate\": %.14f"
+        "\"time\": " MSP_LOSSLESS_DBL ", "
+        "\"migration_rate\": " MSP_LOSSLESS_DBL ", "
+        "\"matrix_index\": %d"
         "}, ";
     return snprintf(buffer, size, pattern, event->time,
             event->params.migration_rate_change.matrix_index,
@@ -721,6 +724,10 @@ msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    if (matrix_index % (N + 1) == 0) {
+        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
     de->params.migration_rate_change.migration_rate = migration_rate;
     de->params.migration_rate_change.matrix_index = matrix_index;
     de->change_state = msp_change_migration_rate;
@@ -743,7 +750,7 @@ msp_generate_migration_matrix_json(msp_t *self, char **output)
     char *buffer;
     size_t j;
     int written;
-    const char *pattern = "%.14f, ";
+    const char *pattern = MSP_LOSSLESS_DBL ", ";
 
     assert(self->num_populations > 0);
     for (j = 0; j < N * N; j++) {
@@ -785,6 +792,7 @@ out:
     return ret;
 }
 
+
 static int WARN_UNUSED
 msp_generate_population_configuration_json(msp_t *self, char **output)
 {
@@ -795,8 +803,8 @@ msp_generate_population_configuration_json(msp_t *self, char **output)
     size_t j;
     int written;
     const char *pattern = "{"
-        "\"initial_size\":%.14f, "
-        "\"growth_rate\":%.14f, "
+        "\"initial_size\":" MSP_LOSSLESS_DBL ", "
+        "\"growth_rate\":" MSP_LOSSLESS_DBL ", "
         "\"sample_size\":%d}, ";
     population_t *pop;
 
@@ -909,7 +917,7 @@ msp_generate_provenance_strings(msp_t *self)
         "\"sample_size\": %d, "
         "\"num_loci\": %d, "
         "\"random_seed\": %ld, "
-        "\"scaled_recombination_rate\": %.14f, "
+        "\"scaled_recombination_rate\": " MSP_LOSSLESS_DBL ", "
         "\"migration_matrix\": %s, "
         "\"population_configuration\": %s, "
         "\"demographic_events\": %s}";
@@ -1841,7 +1849,7 @@ msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
 /*
  * Sets up the memory heaps, initial population and trees.
  */
-static int WARN_UNUSED
+int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
     int ret = -1;
@@ -1966,10 +1974,8 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     unsigned long events = 0;
 
     if (!msp_is_initialised(self)) {
-        ret = msp_initialise(self);
-        if (ret != 0) {
-            goto out;
-        }
+        ret = MSP_ERR_NOT_INITIALISED;
+        goto out;
     }
     n = (uint32_t) msp_get_num_ancestors(self);
     while (n > 1 && self->time <= max_time && events < max_events) {
