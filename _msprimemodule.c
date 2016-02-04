@@ -108,14 +108,13 @@ convert_coalescence_record(coalescence_record_t *cr)
 }
 
 /*
- * Retrieves a number value with the specified key from the specified
- * dictionary.
+ * Retrieves the PyObject* corresponding the specified key in the
+ * specified dictionary.
  */
 static PyObject *
-get_dict_number(PyObject *dict, const char *key_str)
+get_dict_value(PyObject *dict, const char *key_str)
 {
     PyObject *ret = NULL;
-    PyObject *value;
     PyObject *key = Py_BuildValue("s", key_str);
 
     if (key == NULL) {
@@ -125,42 +124,34 @@ get_dict_number(PyObject *dict, const char *key_str)
         PyErr_Format(PyExc_ValueError, "'%s' not specified", key_str);
         goto out;
     }
-    value = PyDict_GetItem(dict, key);
-    assert(value != NULL);
+    ret = PyDict_GetItem(dict, key);
+    assert(ret != NULL);
+out:
+    Py_DECREF(key);
+    return ret;
+}
+
+
+/*
+ * Retrieves a number value with the specified key from the specified
+ * dictionary.
+ */
+static PyObject *
+get_dict_number(PyObject *dict, const char *key_str)
+{
+    PyObject *ret = NULL;
+    PyObject *value;
+
+    value = get_dict_value(dict, key_str);
+    if (value == NULL) {
+        goto out;
+    }
     if (!PyNumber_Check(value)) {
         PyErr_Format(PyExc_TypeError, "'%s' is not number", key_str);
         goto out;
     }
     ret = value;
 out:
-    Py_DECREF(key);
-    return ret;
-}
-
-/*
- * Retrieves a string value with the specified key from the specified
- * dictionary. The returned string is internal to Python and must
- * not be modified or freed.
- */
-static char *
-get_dict_string(PyObject *dict, const char *key_str)
-{
-    char *ret = NULL;
-    PyObject *value;
-    PyObject *key = Py_BuildValue("s", key_str);
-    if (!PyDict_Contains(dict, key)) {
-        PyErr_Format(PyExc_ValueError, "'%s' not specified", key_str);
-        goto out;
-    }
-    value = PyDict_GetItem(dict, key);
-    assert(value != NULL);
-    if (!PyBytes_Check(value)) {
-        PyErr_Format(PyExc_TypeError, "'%s' is not a bytes value", key_str);
-        goto out;
-    }
-    ret = PyBytes_AsString(value);
-out:
-    Py_DECREF(key);
     return ret;
 }
 
@@ -378,10 +369,26 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     Py_ssize_t j;
     double time, size, growth_rate, migration_rate;
     int err, population_id, matrix_index;
-    char *type;
-    PyObject *item, *value;
+    int is_size_change, is_growth_rate_change, is_migration_rate_change;
+    PyObject *item, *value, *type;
+    PyObject *size_change = NULL;
+    PyObject *growth_rate_change = NULL;
+    PyObject *migration_rate_change = NULL;
 
     if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    /* Create the Python strings for comparison with the types */
+    size_change = Py_BuildValue("s", "size_change");
+    if (size_change == NULL) {
+        goto out;
+    }
+    growth_rate_change = Py_BuildValue("s", "growth_rate_change");
+    if (growth_rate_change == NULL) {
+        goto out;
+    }
+    migration_rate_change = Py_BuildValue("s", "migration_rate_change");
+    if (migration_rate_change == NULL) {
         goto out;
     }
     for (j = 0; j < PyList_Size(py_events); j++) {
@@ -399,11 +406,29 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             PyErr_SetString(PyExc_ValueError, "negative times not valid");
             goto out;
         }
-        type = get_dict_string(item, "type");
+        type = get_dict_value(item, "type");
         if (type == NULL) {
             goto out;
         }
-        if (strcmp(type, "size_change") == 0) {
+        /* We need to go through this tedious rigmarole because of string
+         * handling in Python 3. By pushing the comparison up into Python
+         * we don't need to worry about encodings, etc, etc.
+         */
+        is_size_change = PyObject_RichCompareBool(type, size_change, Py_EQ);
+        if (is_size_change == -1) {
+            goto out;
+        }
+        is_growth_rate_change = PyObject_RichCompareBool(type,
+                growth_rate_change, Py_EQ);
+        if (is_growth_rate_change == -1) {
+            goto out;
+        }
+        is_migration_rate_change = PyObject_RichCompareBool(type,
+                migration_rate_change, Py_EQ);
+        if (is_migration_rate_change == -1) {
+            goto out;
+        }
+        if (is_size_change) {
             value = get_dict_number(item, "size");
             if (value == NULL) {
                 goto out;
@@ -415,7 +440,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             }
             population_id = (int) PyLong_AsLong(value);
             err = msp_add_size_change(self->sim, time, population_id, size);
-        } else if (strcmp(type, "growth_rate_change") == 0) {
+        } else if (is_growth_rate_change) {
             value = get_dict_number(item, "growth_rate");
             if (value == NULL) {
                 goto out;
@@ -428,7 +453,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             population_id = (int) PyLong_AsLong(value);
             err = msp_add_growth_rate_change(self->sim, time, population_id,
                     growth_rate);
-        } else if (strcmp(type, "migration_rate_change") == 0) {
+        } else if (is_migration_rate_change) {
             value = get_dict_number(item, "migration_rate");
             if (value == NULL) {
                 goto out;
@@ -442,8 +467,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             err = msp_add_migration_rate_change(self->sim, time, matrix_index,
                     migration_rate);
         } else {
-            PyErr_Format(PyExc_ValueError,
-                    "Unknown demographic event type '%s'", type);
+            PyErr_Format(PyExc_ValueError, "Unknown demographic event type");
             goto out;
         }
         if (err != 0) {
@@ -453,6 +477,9 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     }
     ret = 0;
 out:
+    Py_DECREF(size_change);
+    Py_DECREF(growth_rate_change);
+    Py_DECREF(migration_rate_change);
     return ret;
 }
 

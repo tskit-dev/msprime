@@ -8,15 +8,15 @@ from __future__ import division
 import unittest
 
 import tests.test_lowlevel as test_lowlevel
-# import tests.test_highlevel as test_highlevel
+import tests.test_highlevel as test_highlevel
 
 
 def main():
     testloader = unittest.TestLoader()
     test_lowlevel.enable_h5py_tests = False
     suite = testloader.loadTestsFromModule(test_lowlevel)
-    # l = testloader.loadTestsFromModule(tests.test_highlevel)
-    # suite.addTests(l)
+    l = testloader.loadTestsFromModule(test_highlevel)
+    suite.addTests(l)
     while True:
         unittest.TextTestRunner(verbosity=0).run(suite)
 

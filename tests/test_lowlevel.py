@@ -63,7 +63,7 @@ def get_size_change_event(time=0.0, size=1.0, population_id=-1):
     Returns a size change demographic event.
     """
     return {
-        "type": b"size_change",
+        "type": "size_change",
         "size": size,
         "time": time,
         "population_id": population_id
@@ -75,7 +75,7 @@ def get_growth_rate_change_event(time=0.0, growth_rate=1.0, population_id=-1):
     Returns a growth_rate change demographic event.
     """
     return {
-        "type": b"growth_rate_change",
+        "type": "growth_rate_change",
         "growth_rate": growth_rate,
         "time": time,
         "population_id": population_id
@@ -88,7 +88,7 @@ def get_migration_rate_change_event(
     Returns a migration_rate change demographic event.
     """
     return {
-        "type": b"migration_rate_change",
+        "type": "migration_rate_change",
         "migration_rate": migration_rate,
         "time": time,
         "matrix_index": matrix_index
@@ -1056,8 +1056,8 @@ class TestSimulator(LowLevelTestCase):
         for bad_type in [None, [], 0]:
             size_change_event = get_size_change_event()
             size_change_event["type"] = bad_type
-            self.assertRaises(TypeError, f, [size_change_event])
-        for bad_event in [b'', b'1', b'x' * 1000, b'Size_change']:
+            self.assertRaises(ValueError, f, [size_change_event])
+        for bad_event in [b'', b'1', b'x' * 1000, b'Size_change', 2, 'none']:
             size_change_event = get_size_change_event()
             size_change_event["type"] = bad_event
             self.assertRaises(ValueError, f, [size_change_event])
