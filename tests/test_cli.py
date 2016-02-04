@@ -227,6 +227,131 @@ class TestMspmsArgumentParser(unittest.TestCase):
         # TODO test errors
 
 
+class CustomExceptionForTesting(Exception):
+    """
+    This exception class is used to check that errors are correctly
+    thrown.
+    """
+
+
+class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
+    """
+    Tests for errors that can be thrown when creating the simulation runner.
+    """
+
+    def setUp(self):
+        self.parser = cli.get_mspms_parser()
+
+        def f(message):
+            # print("error:", message)
+            raise CustomExceptionForTesting()
+        self.parser.error = f
+
+    def assert_parser_error(self, command_line):
+        self.assertRaises(
+            CustomExceptionForTesting, cli.create_simulation_runner,
+            self.parser, command_line.split())
+
+    def test_trees_or_mutations(self):
+        self.assert_parser_error("10 1")
+        self.assert_parser_error("10 1 -G 1")
+
+    def test_structure_errors(self):
+        self.assert_parser_error("2 1 -T -I")
+        self.assert_parser_error("2 1 -T -I x")
+        self.assert_parser_error("2 1 -T -I 2")
+        self.assert_parser_error("2 1 -T -I 2 1")
+        self.assert_parser_error("2 1 -T -I 2 1x")
+        self.assert_parser_error("2 1 -T -I 2 1x 1")
+        self.assert_parser_error("2 1 -T -I 2 1 100")
+        # We can also optionally have a migration rate
+        self.assert_parser_error("2 1 -T -I 2 1 100 sd")
+        self.assert_parser_error("2 1 -T -I 2 1 1 0.1 1")
+        # Check for some higher values
+        self.assert_parser_error("10 1 -T -I 4 1 1")
+        self.assert_parser_error("10 1 -T -I 5 1 1 1 1 6 1 1")
+
+    def test_migration_matrix_entry_errors(self):
+        # -m without -I raises an error
+        self.assert_parser_error("10 1 -T -m 1 1 1")
+        # Non int values not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1.1 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 1.1 1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 0 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 0 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 3 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 3 1")
+        # Diagonal elements cannot be set.
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 1 1")
+
+    def test_migration_matrix_errors(self):
+        # -ma without -I raises an error
+        self.assert_parser_error("10 1 -T -ma 1 1 1")
+        # Incorrect lengths
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma ")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 0 0 0")
+        # Non float values in non-diagonals not allowed
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 x 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 x 0")
+
+
+class TestMspmsCreateSimulationRunner(unittest.TestCase):
+    """
+    Test that we correctly create a simulator instance based on the
+    command line arguments.
+    """
+
+    def create_simulator(self, command_line):
+        parser = cli.get_mspms_parser()
+        runner = cli.create_simulation_runner(parser, command_line.split())
+        return runner.get_simulator()
+
+    def test_structure_args(self):
+        sim = self.create_simulator("2 1 -T -I 2 1 1")
+        # TODO Add tests to test the arguments for the sample configuration
+        # when we've figured out the right interface.
+        # self.assertEqual(sim.get_num_populations(), 2)
+        self.assertEqual(sim.get_migration_matrix(), [[0, 0], [0, 0]])
+
+        # Default migration matrix is zeros
+        sim = self.create_simulator("2 1 -T -I 2 2 0")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 0], [0, 0]])
+        self.assertEqual(sim.get_sample_configuration(), [2, 0])
+
+        sim = self.create_simulator("2 1 -T -I 2 1 1 0.1")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 0.1], [0.1, 0]])
+        self.assertEqual(sim.get_sample_configuration(), [1, 1])
+
+        # Initial migration matrix is M / (num_pops - 1)
+        sim = self.create_simulator("3 1 -T -I 3 1 1 1 2")
+        self.assertEqual(sim.get_sample_configuration(), [1, 1, 1])
+        self.assertEqual(
+            sim.get_migration_matrix(), [[0, 1, 1], [1, 0, 1], [1, 1, 0]])
+        sim = self.create_simulator("15 1 -T -I 6 5 4 3 2 1 0")
+        self.assertEqual(sim.get_sample_configuration(), [5, 4, 3, 2, 1, 0])
+
+    def test_migration_matrix_entry(self):
+        sim = self.create_simulator("3 1 -T -I 2 3 0 -m 1 2 1.1 -m 2 1 9.0")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1.1], [9.0, 0]])
+        sim = self.create_simulator("3 1 -T -I 3 3 0 0 -m 1 2 1.1 -m 2 1 9.0")
+        self.assertEqual(
+            sim.get_migration_matrix(),
+            [[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]])
+
+    def test_migration_matrix(self):
+        # Diagonal values are ignored
+        sim = self.create_simulator("2 1 -T -I 2 2 0 -ma 0 1 2 3")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1], [2, 0]])
+        sim = self.create_simulator("2 1 -T -I 2 2 0 -ma x 1 2 x")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1], [2, 0]])
+        sim = self.create_simulator("3 1 -T -I 3 1 1 1 -ma 1 2 3 4 5 6 7 8 9")
+        self.assertEqual(
+            sim.get_migration_matrix(), [[0, 2, 3], [4, 0, 6], [7, 8, 0]])
+
+
 class TestMspmsOutput(unittest.TestCase):
     """
     Tests the output of the ms compatible CLI.
@@ -249,8 +374,7 @@ class TestMspmsOutput(unittest.TestCase):
     def verify_output(
             self, sample_size=2, num_loci=1, recombination_rate=0,
             num_replicates=1, mutation_rate=0.0, print_trees=True,
-            max_memory="16M", precision=3, population_models=[],
-            random_seeds=[1, 2, 3]):
+            max_memory="16M", precision=3, random_seeds=[1, 2, 3]):
         """
         Runs the UI for the specified parameters, and parses the output
         to ensure it's consistent.
@@ -260,7 +384,6 @@ class TestMspmsOutput(unittest.TestCase):
             recombination_rate=recombination_rate,
             num_replicates=num_replicates, mutation_rate=mutation_rate,
             print_trees=print_trees, precision=precision,
-            population_models=population_models,
             random_seeds=random_seeds)
         with tempfile.TemporaryFile("w+") as f:
             sr.run(f)

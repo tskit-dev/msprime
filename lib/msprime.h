@@ -32,9 +32,6 @@
 #include "avl.h"
 #include "fenwick.h"
 
-#define POP_MODEL_CONSTANT 0
-#define POP_MODEL_EXPONENTIAL 1
-
 /* Flags for tree sequence dump/load */
 #define MSP_ZLIB_COMPRESSION 1
 #define MSP_SKIP_H5CLOSE 2
@@ -50,20 +47,12 @@
 
 #define MAX_BRANCH_LENGTH_STRING 24
 
-/* Using a size_t for index allows us to have an effectively unlimited
- * number of segments. However, we end up wasting 4 bytes of space 
- * per segment because of alignments requirements. This means that 
- * we use 40 bytes instead of 32 (if we use a 32 bit index for a limit
- * of 4G segments), which is a 25% increase in space. It may be possible
- * to do something clever using the offsets of the pointers from the 
- * base address of the memory chunk, which might allow us to get this
- * memory back.
- */
 typedef struct segment_t_t {
+    uint8_t population_id;
     uint32_t left;
     uint32_t right;
     uint32_t value;
-    size_t index;
+    size_t id;
     struct segment_t_t *prev;
     struct segment_t_t *next;
 } segment_t;
@@ -81,16 +70,6 @@ typedef struct {
     uint32_t value;
 } node_mapping_t;
 
-typedef struct population_model_t_t {
-    int type;
-    double start_time;
-    double initial_size;
-    double param;
-    double (*get_size)(struct population_model_t_t *, double);
-    double (*get_waiting_time)(struct population_model_t_t *, double, double,
-            gsl_rng*);
-} population_model_t;
-
 typedef struct {
     size_t object_size;
     size_t block_size; /* number of objects in a block */
@@ -103,31 +82,42 @@ typedef struct {
 } object_heap_t;
 
 typedef struct {
+    uint32_t sample_size;
+    double initial_size;
+    double growth_rate;
+    double start_time;
+    avl_tree_t ancestors;
+} population_t;
+
+typedef struct {
     /* input parameters */
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
+    uint32_t num_populations;
+    double *migration_matrix;
     unsigned long random_seed;
     /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
     size_t segment_block_size;
     size_t max_memory;
-    /* population models */
-    population_model_t *population_models;
-    size_t current_population_model;
-    size_t num_population_models;
     /* Counters for statistics */
-    uint64_t num_re_events;
-    uint64_t num_ca_events;
-    uint64_t num_trapped_re_events;
-    uint64_t num_multiple_re_events;
+    size_t num_re_events;
+    size_t num_ca_events;
+    size_t *num_migration_events;
+    size_t num_trapped_re_events;
+    size_t num_multiple_re_events;
+    /* demographic events */
+    struct demographic_event_t_t *demographic_events_head;
+    struct demographic_event_t_t *demographic_events_tail;
+    struct demographic_event_t_t *next_demographic_event;
     /* algorithm state */
     size_t used_memory;
     double time;
     uint32_t next_node;
     gsl_rng *rng;
-    avl_tree_t ancestral_population;
+    population_t *populations;
     avl_tree_t breakpoints;
     avl_tree_t overlap_counts;
     fenwick_t links;
@@ -141,8 +131,40 @@ typedef struct {
     size_t max_coalescence_records;
     size_t coalescence_record_block_size;
     size_t num_coalescence_record_blocks;
+    /* JSON provenance string*/
+    char *configuration_json;
 } msp_t;
 
+/* Demographic events */
+typedef struct {
+    int population_id;
+    double size;
+} size_change_t;
+
+typedef struct {
+    int population_id;
+    double growth_rate;
+} growth_rate_change_t;
+
+typedef struct {
+    int matrix_index;
+    double migration_rate;
+} migration_rate_change_t;
+
+typedef struct demographic_event_t_t {
+    double time;
+    int (*change_state)(msp_t *, struct demographic_event_t_t *);
+    void (*print_state)(msp_t *, struct demographic_event_t_t *);
+    int (*json_snprintf)(struct demographic_event_t_t *, char *, size_t);
+    union {
+        size_change_t size_change;
+        growth_rate_change_t growth_rate_change;
+        migration_rate_change_t migration_rate_change;
+    } params;
+    struct demographic_event_t_t *next;
+} demographic_event_t;
+
+/* Tree sequences */
 typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
@@ -269,11 +291,11 @@ typedef struct {
     sparse_tree_iterator_t tree_iterator;
 } hapgen_t;
 
-int msp_alloc(msp_t *self, uint32_t sample_size);
-int msp_add_constant_population_model(msp_t *self, double time, double size);
-int msp_add_exponential_population_model(msp_t *self, double time, double alpha);
+
+int msp_alloc(msp_t *self, size_t sample_size);
 int msp_set_random_seed(msp_t *self, unsigned long random_seed);
-int msp_set_num_loci(msp_t *self, uint32_t num_loci);
+int msp_set_num_loci(msp_t *self, size_t num_loci);
+int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_scaled_recombination_rate(msp_t *self, 
         double scaled_recombination_rate);
 int msp_set_max_memory(msp_t *self, size_t max_memory);
@@ -281,19 +303,38 @@ int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
 int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size);
+int msp_set_sample_configuration(msp_t *self, size_t num_populations,
+        size_t *sample_configuration);
+int msp_set_migration_matrix(msp_t *self, size_t size,
+        double *migration_matrix);
+int msp_set_population_configuration(msp_t *self, int population_id, 
+        size_t sample_size, double initial_size, double growth_rate);
 
+int msp_add_growth_rate_change(msp_t *self, double time, int population_id,
+        double growth_rate);
+int msp_add_size_change(msp_t *self, double time, int population_id,
+        double size);
+int msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
+        double migration_rate);
+
+int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);
 void msp_verify(msp_t *self);
 
-int msp_get_population_models(msp_t *self, population_model_t *models);
 int msp_get_ancestors(msp_t *self, segment_t **ancestors);
-int msp_get_breakpoints(msp_t *self, uint32_t *breakpoints);
+int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
+int msp_get_migration_matrix(msp_t *self, double *migration_matrix);
+int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
+int msp_get_population_configuration(msp_t *self, size_t population_id,
+        size_t *sample_size, double *initial_size, double *growth_rate);
 int msp_is_completed(msp_t *self);
 
-size_t msp_get_num_population_models(msp_t *self);
+size_t msp_get_sample_size(msp_t *self);
+size_t msp_get_num_loci(msp_t *self);
+size_t msp_get_num_populations(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
 size_t msp_get_num_coalescence_records(msp_t *self);
@@ -302,14 +343,16 @@ size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_coalescence_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
+size_t msp_get_num_common_ancestor_events(msp_t *self);
+size_t msp_get_num_recombination_events(msp_t *self);
+
+char *msp_get_configuration_json(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self);
 int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
-int tree_sequence_load(tree_sequence_t *self, const char *filename,
-        int flags);
+int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
-int tree_sequence_dump(tree_sequence_t *self, const char *filename, 
-        int flags);
+int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_generate_mutations(tree_sequence_t *self, 
         double mutation_rate, unsigned long random_seed);
 size_t tree_sequence_get_num_breakpoints(tree_sequence_t *self);

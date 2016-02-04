@@ -22,6 +22,7 @@ Module responsible to generating and reading tree files.
 from __future__ import division
 from __future__ import print_function
 
+import json
 import math
 import random
 import sys
@@ -439,7 +440,7 @@ class SparseTree(object):
 def simulate(
         sample_size, num_loci=1, scaled_recombination_rate=0.0,
         scaled_mutation_rate=None,
-        population_models=[], random_seed=None, max_memory=None):
+        random_seed=None, max_memory=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`.
@@ -451,8 +452,6 @@ def simulate(
         between adjacent loci per :math:`4N_0` generations.
     :param float scaled_mutation_rate: The rate of mutation
         per locus per :math:`4N_0` generations.
-    :param list population_models: The list of :class:`.PopulationModel`
-        instances describing the demographic history of the population.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated.
     :param int,str max_memory: The maximum amount of memory used
@@ -468,8 +467,6 @@ def simulate(
     sim.set_scaled_recombination_rate(scaled_recombination_rate)
     sim.set_random_seed(random_seed)
     sim.set_max_memory(max_memory)
-    for m in population_models:
-        sim.add_population_model(m)
     sim.run()
     tree_sequence = sim.get_tree_sequence()
     if scaled_mutation_rate is not None:
@@ -478,7 +475,7 @@ def simulate(
 
 
 def simulate_tree(
-        sample_size, scaled_mutation_rate=None, population_models=[],
+        sample_size, scaled_mutation_rate=None,
         random_seed=None, max_memory=None):
     """
     Simulates the coalescent at a single locus for the specified sample size
@@ -488,8 +485,6 @@ def simulate_tree(
     :param int sample_size: The number of individuals in our sample.
     :param float scaled_mutation_rate: The rate of mutation
         per :math:`4N_0` generations.
-    :param list population_models: The list of :class:`.PopulationModel`
-        instances describing the demographic history of the population.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated.
     :param int,str max_memory: The maximum amount of memory used
@@ -502,8 +497,7 @@ def simulate_tree(
     """
     tree_sequence = simulate(
         sample_size, scaled_mutation_rate=scaled_mutation_rate,
-        population_models=population_models, random_seed=random_seed,
-        max_memory=max_memory)
+        random_seed=random_seed, max_memory=max_memory)
     return next(tree_sequence.trees())
 
 
@@ -536,7 +530,9 @@ class TreeSimulator(object):
         self._sample_size = sample_size
         self._scaled_recombination_rate = 0.0
         self._num_loci = 1
-        self._population_models = []
+        self._migration_matrix = None
+        self._population_configurations = None
+        self._demographic_events = []
         self._random_seed = None
         self._segment_block_size = None
         self._avl_node_block_size = None
@@ -551,14 +547,20 @@ class TreeSimulator(object):
     def get_scaled_recombination_rate(self):
         return self._scaled_recombination_rate
 
+    def get_migration_matrix(self):
+        return self._migration_matrix
+
     def get_num_loci(self):
         return self._num_loci
 
     def get_random_seed(self):
         return self._random_seed
 
-    def get_population_models(self):
-        return self._population_models
+    def get_population_configurations(self):
+        return self._population_configurations
+
+    def get_sample_configuration(self):
+        return [conf.sample_size for conf in self._population_configurations]
 
     def get_num_breakpoints(self):
         return self._ll_sim.get_num_breakpoints()
@@ -596,11 +598,26 @@ class TreeSimulator(object):
     def get_num_segment_blocks(self):
         return self._ll_sim.get_num_segment_blocks()
 
-    def get_num_coancestry_events(self):
-        return self._ll_sim.get_num_coancestry_events()
+    def get_num_common_ancestor_events(self):
+        return self._ll_sim.get_num_common_ancestor_events()
 
     def get_num_recombination_events(self):
         return self._ll_sim.get_num_recombination_events()
+
+    def get_num_populations(self):
+        return self._ll_sim.get_num_populations()
+
+    def get_num_migration_events(self):
+        N = self.get_num_populations()
+        matrix = [[0 for j in range(N)] for k in range(N)]
+        flat = self._ll_sim.get_num_migration_events()
+        for j in range(N):
+            for k in range(N):
+                matrix[j][k] = flat[j * N + k]
+        return matrix
+
+    def get_total_num_migration_events(self):
+        return sum(self._ll_sim.get_num_migration_events())
 
     def get_num_multiple_recombination_events(self):
         return self._ll_sim.get_num_multiple_recombination_events()
@@ -608,8 +625,8 @@ class TreeSimulator(object):
     def get_max_memory(self):
         return self._ll_sim.get_max_memory()
 
-    def add_population_model(self, pop_model):
-        self._population_models.append(pop_model)
+    def get_configuration(self):
+        return json.loads(self._ll_sim.get_configuration_json())
 
     def set_num_loci(self, num_loci):
         if not isinstance(num_loci, int):
@@ -624,6 +641,15 @@ class TreeSimulator(object):
         if scaled_recombination_rate < 0:
             raise ValueError("Recombination rate cannot be negative")
         self._scaled_recombination_rate = scaled_recombination_rate
+
+    def set_migration_matrix(self, migration_matrix):
+        self._migration_matrix = migration_matrix
+
+    def set_population_configurations(self, population_configurations):
+        self._population_configurations = population_configurations
+
+    def set_demographic_events(self, demographic_events):
+        self._demographic_events = demographic_events
 
     def set_random_seed(self, random_seed):
         self._random_seed = random_seed
@@ -666,6 +692,14 @@ class TreeSimulator(object):
         # Set the block sizes using our estimates.
         n = self._sample_size
         m = self._num_loci
+        if self._population_configurations is None:
+            self._population_configurations = [PopulationConfiguration(n)]
+        N = len(self._population_configurations)
+        if self._migration_matrix is None:
+            self._migration_matrix = [
+                [0.0 for j in range(N)] for k in range(N)]
+        if self._demographic_events is None:
+            self._demographic_events = []
         rho = 4 * self._scaled_recombination_rate * (m - 1)
         num_trees = min(m // 2, rho * harmonic_number(n - 1))
         b = 10  # Baseline maximum
@@ -693,15 +727,26 @@ class TreeSimulator(object):
         """
         Runs the simulation until complete coalescence has occurred.
         """
-        # Sort the models by start time
-        models = sorted(self._population_models, key=lambda m: m.start_time)
-        models = [m.get_ll_model() for m in models]
         assert self._ll_sim is None
         self._set_environment_defaults()
+        # We flatten the migration matrix for the low-level interface.
+        N = len(self._population_configurations)
+        ll_migration_matrix = [0 for j in range(N**2)]
+        for j in range(N):
+            for k in range(N):
+                ll_migration_matrix[j * N + k] = self._migration_matrix[j][k]
+        ll_population_configuration = [
+            conf.get_ll_representation()
+            for conf in self._population_configurations]
+        ll_demographic_events = [
+            event.get_ll_representation()
+            for event in self._demographic_events]
         self._ll_sim = _msprime.Simulator(
             sample_size=self._sample_size,
             num_loci=self._num_loci,
-            population_models=models,
+            migration_matrix=ll_migration_matrix,
+            population_configuration=ll_population_configuration,
+            demographic_events=ll_demographic_events,
             scaled_recombination_rate=self._scaled_recombination_rate,
             random_seed=self._random_seed,
             max_memory=self._max_memory,
@@ -740,6 +785,7 @@ class TreeSimulator(object):
             ms with equivalent parameters to this simulator.
         :rtype: list
         """
+        self._set_environment_defaults()
         m = self._num_loci
         rho = self.get_scaled_recombination_rate() * (m - 1)
         args = [executable, str(self._sample_size), str(num_replicates)]
@@ -750,8 +796,14 @@ class TreeSimulator(object):
         if scaled_mutation_rate is not None:
             mu = scaled_mutation_rate * m
             args += ["-t", str(mu)]
-        for model in self._population_models:
-            args.extend(model.get_ms_arguments())
+        for conf in self._population_configurations:
+            if conf.growth_rate > 0:
+                args.extend(["-G", str(conf.growth_rate)])
+        if len(self._population_configurations) > 1:
+            # TODO add -I arguments
+            assert False
+        for event in self._demographic_events:
+            args.extend(event.get_ms_arguments())
         return args
 
 
@@ -1031,65 +1083,54 @@ class HaplotypeGenerator(object):
             yield self.get_haplotype(j)
 
 
-class PopulationModel(object):
+class PopulationConfiguration(object):
     """
-    Superclass of simulation population models.
+    TODO document.
     """
-    def __init__(self, start_time):
-        self.start_time = start_time
+    def __init__(self, sample_size=0, initial_size=1.0, growth_rate=0.0):
+        self.sample_size = sample_size
+        self.initial_size = initial_size
+        self.growth_rate = growth_rate
 
-    def get_ll_model(self):
+    def get_ll_representation(self):
         """
-        Returns the low-level model corresponding to this population
-        model.
+        Returns the low-level representation of this PopulationConfiguration.
         """
         return self.__dict__
 
 
-class ConstantPopulationModel(PopulationModel):
-    """
-    A population model in which the size of the population
-    is a fixed multiple ``size`` of :math:`N_0` (the Wright-Fisher population
-    size at time 0), which starts at the specified time.
+class GrowthRateChangeEvent(object):
+    def __init__(self, time, growth_rate):
+        self.time = time
+        self.growth_rate = growth_rate
 
-    :param float start_time: The time (in coalescent units) at which
-        this population model begins.
-    :param float size: The size of the population under this model
-        relative to :math:`N_0`.
-    """
-    def __init__(self, start_time, size):
-        super(ConstantPopulationModel, self).__init__(start_time)
+    def get_ll_representation(self):
+        return {
+            "type": "growth_rate_change",
+            "time": self.time,
+            "growth_rate": self.growth_rate,
+            "population_id": -1
+        }
+
+    def get_ms_arguments(self):
+        return ["-eG", str(self.time), str(self.growth_rate)]
+
+
+class SizeChangeEvent(object):
+    def __init__(self, time, size):
+        self.time = time
         self.size = size
-        self.type = _msprime.POP_MODEL_CONSTANT
+
+    def get_ll_representation(self):
+        return {
+            "type": "size_change",
+            "time": self.time,
+            "size": self.size,
+            "population_id": -1
+        }
 
     def get_ms_arguments(self):
-        return ["-eN", str(self.start_time), str(self.size)]
-
-
-class ExponentialPopulationModel(PopulationModel):
-    """
-    A population model in which the size is exponentially growing (or
-    shrinking). If we have a :attr:`start_time` of :math:`s`, the population
-    size at a time :math:`t` (measured in units of :math:`4N_0_0` generations)
-    is :math:`N_s e^{\\alpha (t - s)}`, where :math:`N_s` is the population
-    size at time :math:`s`.
-
-    :param float start_time: The time (in coalescent units) at which
-        this population model begins.
-    :param float alpha: The exponential growth (or contraction) rate
-        :math:`\\alpha`.
-    """
-    def __init__(self, start_time, alpha):
-        super(ExponentialPopulationModel, self).__init__(start_time)
-        self.alpha = alpha
-        self.type = _msprime.POP_MODEL_EXPONENTIAL
-
-    def get_ms_arguments(self):
-        if self.start_time == 0.0:
-            ret = ["-G", str(self.alpha)]
-        else:
-            ret = ["-eG", str(self.start_time), str(self.alpha)]
-        return ret
+        return ["-eN", str(self.time), str(self.size)]
 
 
 def harmonic_number(n):

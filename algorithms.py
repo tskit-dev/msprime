@@ -4,8 +4,10 @@ Python versions of the algorithms from the paper.
 from __future__ import print_function
 from __future__ import division
 
+import sys
 import random
 import argparse
+import math
 
 import bintrees
 import msprime
@@ -125,6 +127,7 @@ class Segment(object):
         self.node = None
         self.prev = None
         self.next = None
+        self.population = None
         self.index = index
 
     def __str__(self):
@@ -134,14 +137,113 @@ class Segment(object):
         return s
 
 
+class Population(object):
+    """
+    Class representing a population in the simulation.
+    """
+    def __init__(self, id_):
+        self._id = id_
+        self._start_time = 0
+        self._start_size = 1.0
+        self._growth_rate = 0
+        # We'd like to use an AVLTree here for P but the API doesn't quite
+        # do what we need. Lists are inefficient here and should not be
+        # used in a real implementation.
+        self._ancestors = []
+
+    def print_state(self):
+        print("Population ", self._id)
+        print("\tstart_size = ", self._start_size)
+        print("\tgrowth_rate = ", self._growth_rate)
+        print("\tAncestors: ", len(self._ancestors))
+        for u in self._ancestors:
+            s = ""
+            while u is not None:
+                s += "({0}-{1}->{2}({3}))".format(
+                    u.left, u.right, u.node, u.index)
+                u = u.next
+            print("\t\t" + s)
+
+    def set_growth_rate(self, growth_rate, time):
+        # TODO This doesn't work because we need to know what the time
+        # is so we can set the start size accordingly. Need to look at
+        # ms's model carefully to see what it actually does here.
+        new_size = self.get_size(time)
+        self._start_size = new_size
+        self._start_time = time
+        self._growth_rate = growth_rate
+
+    def set_start_size(self, start_size):
+        self._start_size = start_size
+        self._growth_rate = 0
+
+    def get_num_ancestors(self):
+        return len(self._ancestors)
+
+    def get_size(self, t):
+        """
+        Returns the size of this population at time t.
+        """
+        dt = t - self._start_time
+        return self._start_size * math.exp(-self._growth_rate * dt)
+
+    def get_common_ancestor_waiting_time(self, t):
+        """
+        Returns the random waiting time until a common ancestor event
+        occurs within this population.
+        """
+        ret = sys.float_info.max
+        k = len(self._ancestors)
+        if k > 1:
+            u = random.expovariate(k * (k - 1))
+            if self._growth_rate == 0:
+                ret = self._start_size * u
+            else:
+                dt = t - self._start_time
+                z = (1 + self._growth_rate * self._start_size *
+                    math.exp(-self._growth_rate * dt) * u)
+                if z > 0:
+                    ret = math.log(z) / self._growth_rate
+        return ret
+
+    def remove(self, index):
+        """
+        Removes and returns the individual at the specified index.
+        """
+        return self._ancestors.pop(index)
+
+    def add(self, individual):
+        """
+        Inserts the specified individual into this population.
+        """
+        self._ancestors.append(individual)
+
+    def __iter__(self):
+        return iter(self._ancestors)
+
 class Simulator(object):
     """
     A reference implementation of the multi locus simulation algorithm.
     """
-    def __init__(self, n, m, r, max_segments=100):
-        self.n = n
-        self.m = m
-        self.r = r
+    def __init__(
+            self, sample_size, num_loci, recombination_rate, migration_matrix,
+            sample_configuration, population_growth_rates, population_sizes,
+            population_growth_rate_changes, population_size_changes,
+            migration_matrix_element_changes, max_segments=100):
+        # Must be a square matrix.
+        N = len(migration_matrix)
+        assert len(sample_configuration) == N
+        assert len(population_growth_rates) == N
+        assert len(population_sizes) == N
+        for j in range(N):
+            assert N == len(migration_matrix[j])
+            assert migration_matrix[j][j] == 0
+        assert sum(sample_configuration) == sample_size
+
+        self.n = sample_size
+        self.m = num_loci
+        self.r = recombination_rate
+        self.migration_matrix = migration_matrix
         self.max_segments = max_segments
         self.segment_stack = []
         self.segments = [None for j in range(self.max_segments + 1)]
@@ -149,25 +251,55 @@ class Simulator(object):
             s = Segment(j + 1)
             self.segments[j + 1] = s
             self.segment_stack.append(s)
-        # We'd like to use an AVLTree here for P but the API doesn't quite
-        # do what we need. Lists are inefficient here and should not be
-        # used in a real implementation.
-        self.P = [None for j in range(n)]
+        self.P = [Population(id_) for id_ in range(N)]
         self.C = []
         self.L = FenwickTree(self.max_segments)
         self.S = bintrees.AVLTree()
-        for j in range(n):
-            x = self.alloc_segment(0, m, j + 1)
-            self.L.set_value(x.index, m - 1)
-            self.P[j] = x
-        self.S[0] = n
-        self.S[m] = -1
+        j = 1
+        for pop_index in range(N):
+            sample_size = sample_configuration[pop_index]
+            self.P[pop_index].set_start_size(population_sizes[pop_index])
+            self.P[pop_index].set_growth_rate(
+                population_growth_rates[pop_index], 0)
+            for k in range(sample_size):
+                x = self.alloc_segment(0, self.m, j, pop_index)
+                self.L.set_value(x.index, self.m - 1)
+                self.P[pop_index].add(x)
+                j += 1
+        self.S[0] = self.n
+        self.S[self.m] = -1
         self.t = 0
-        self.w = n + 1
+        self.w = self.n + 1
         self.num_ca_events = 0
         self.num_re_events = 0
+        self.modifier_events = [(sys.float_info.max, None, None)]
+        for time, pop_id, new_size in population_size_changes:
+            self.modifier_events.append(
+                (time, self.change_population_size, (int(pop_id), new_size)))
+        for time, pop_id, new_rate in population_growth_rate_changes:
+            self.modifier_events.append(
+                (time, self.change_population_growth_rate,
+                    (int(pop_id), new_rate, time)))
+        for time, pop_i, pop_j, new_rate in migration_matrix_element_changes:
+            self.modifier_events.append(
+                (time, self.change_migration_matrix_element,
+                    (int(pop_i), int(pop_j), new_rate)))
+        self.modifier_events.sort()
 
-    def alloc_segment(self, left, right, node, prev=None, next=None):
+    def change_population_size(self, pop_id, size):
+        print("Changing pop size to ", size)
+        self.P[pop_id].set_start_size(size)
+
+    def change_population_growth_rate(self, pop_id, rate, time):
+        print("Changing growth rate to ", rate)
+        self.P[pop_id].set_growth_rate(rate, time)
+
+    def change_migration_matrix_element(self, pop_i, pop_j, rate):
+        print("Changing migration rate", pop_i, pop_j, rate)
+        self.migration_matrix[pop_i][pop_j] = rate
+
+    def alloc_segment(
+            self, left, right, node, pop_index, prev=None, next=None):
         """
         Pops a new segment off the stack and sets its properties.
         """
@@ -175,6 +307,7 @@ class Simulator(object):
         s.left = left
         s.right = right
         s.node = node
+        s.population = pop_index
         s.next = next
         s.prev = prev
         return s
@@ -191,16 +324,67 @@ class Simulator(object):
         """
         Simulates the algorithm until all loci have coalesced.
         """
-        while len(self.P) != 0:
-            # self.print_state()
+        infinity = sys.float_info.max
+        while sum(pop.get_num_ancestors() for pop in self.P) != 0:
+            self.print_state()
             # self.verify()
-            lambda_r = self.r * self.L.get_total()
-            lambda_all = lambda_r + len(self.P) * (len(self.P) - 1)
-            self.t += random.expovariate(lambda_all)
-            if random.random() < lambda_r / lambda_all:
-                self.recombination_event()
+            rate = self.r * self.L.get_total()
+            t_re = infinity
+            if rate != 0:
+                t_re = random.expovariate(rate)
+            # Common ancestor events occur within demes.
+            t_ca = infinity
+            for index, pop in enumerate(self.P):
+                t = pop.get_common_ancestor_waiting_time(self.t)
+                if t < t_ca:
+                    t_ca = t
+                    ca_population = index
+            t_mig = infinity
+            # Migration events happen at the rates in the matrix.
+            for j in range(len(self.P)):
+                source_size = self.P[j].get_num_ancestors()
+                for k in range(len(self.P)):
+                    rate = source_size * self.migration_matrix[j][k]
+                    if rate > 0:
+                        t = random.expovariate(rate)
+                        if t < t_mig:
+                            t_mig = t
+                            mig_source = j
+                            mig_dest = k
+            min_time = min(t_re, t_ca, t_mig)
+            assert min_time != infinity
+            if self.t + min_time > self.modifier_events[0][0]:
+                t, func, args = self.modifier_events.pop(0)
+                func(*args)
+                self.t = t
             else:
-                self.common_ancestor_event()
+                self.t += min_time
+                if min_time == t_re:
+                    # print("RE EVENT")
+                    self.recombination_event()
+                elif min_time == t_ca:
+                    # print("CA EVENT")
+                    self.common_ancestor_event(ca_population)
+                else:
+                    # print("MIG EVENT")
+                    self.migration_event(mig_source, mig_dest)
+
+    def migration_event(self, j, k):
+        """
+        Migrates an individual from population j to population k.
+        """
+        # print("Migrating ind from ", j, " to ", k)
+        # print("Population sizes:", [len(pop) for pop in self.P])
+        index = random.randint(0, self.P[j].get_num_ancestors() - 1)
+        x = self.P[j].remove(index)
+        self.P[k].add(x)
+        # Set the population id for each segment also.
+        u = x
+        while u is not None:
+            u.population = k
+            u = u.next
+        # print("AFTER Population sizes:", [len(pop) for pop in self.P])
+
 
     def recombination_event(self):
         """
@@ -214,7 +398,8 @@ class Simulator(object):
         x = y.prev
         if y.left < k:
             # Make new segment
-            z = self.alloc_segment(k, y.right, y.node, None, y.next)
+            z = self.alloc_segment(
+                k, y.right, y.node, y.population, None, y.next)
             if y.next is not None:
                 y.next.prev = z
             y.next = None
@@ -226,20 +411,19 @@ class Simulator(object):
             y.prev = None
             z = y
         self.L.set_value(z.index, z.right - z.left - 1)
-        self.P.append(z)
+        self.P[z.population].add(z)
 
-    def common_ancestor_event(self):
+    def common_ancestor_event(self, population_index):
         """
         Implements a coancestry event.
         """
+        pop = self.P[population_index]
         self.num_ca_events += 1
         # Choose two ancestors uniformly.
-        j = random.randint(0, len(self.P) - 1)
-        x = self.P[j]
-        del self.P[j]
-        j = random.randint(0, len(self.P) - 1)
-        y = self.P[j]
-        del self.P[j]
+        j = random.randint(0, pop.get_num_ancestors() - 1)
+        x = pop.remove(j)
+        j = random.randint(0, pop.get_num_ancestors() - 1)
+        y = pop.remove(j)
         z = None
         coalescence = False
         defrag_required = False
@@ -263,7 +447,8 @@ class Simulator(object):
                     x = x.next
                     alpha.next = None
                 elif x.left != y.left:
-                    alpha = self.alloc_segment(x.left, y.left, x.node)
+                    alpha = self.alloc_segment(
+                        x.left, y.left, x.node, x.population)
                     x.left = y.left
                 else:
                     if not coalescence:
@@ -289,7 +474,7 @@ class Simulator(object):
                         while r < r_max and self.S[r] != 2:
                             self.S[r] -= 1
                             r = self.S.succ_key(r)
-                        alpha = self.alloc_segment(l, r, u)
+                        alpha = self.alloc_segment(l, r, u, population_index)
                     self.C.append((l, r, x.node, y.node, u, self.t))
                     # Now trim the ends of x and y to the right sizes.
                     if x.right == r:
@@ -306,7 +491,7 @@ class Simulator(object):
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
                 if z is None:
-                    self.P.append(alpha)
+                    pop.add(alpha)
                     self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
                 else:
                     defrag_required |= (
@@ -342,14 +527,15 @@ class Simulator(object):
     def print_state(self):
         print("State @ time ", self.t)
         print("Links = ", self.L.get_total())
-        print("Population:", len(self.P))
-        for u in self.P:
-            s = ""
-            while u is not None:
-                s += "({0}-{1}->{2}({3}))".format(
-                    u.left, u.right, u.node, u.index)
-                u = u.next
-            print("\t" + s)
+        print("Modifier events = ")
+        for t, f, args in self.modifier_events:
+            print("\t", t, f, args)
+        print("Population sizes:", [pop.get_num_ancestors() for pop in self.P])
+        print("Migration Matrix:")
+        for row in self.migration_matrix:
+            print("\t", row)
+        for population in self.P:
+            population.print_state()
         print("Overlap counts", len(self.S))
         for k, x in self.S.items():
             print("\t", k, "\t:\t", x)
@@ -369,23 +555,25 @@ class Simulator(object):
         Checks that the state of the simulator is consistent.
         """
         q = 0
-        for u in self.P:
-            assert u.prev is None
-            left = u.left
-            right = u.left
-            while u is not None:
-                assert u.left <= u.right
-                if u.prev is not None:
-                    s = u.right - u.prev.right
-                else:
-                    s = u.right - u.left - 1
-                assert s == self.L.get_frequency(u.index)
-                right = u.right
-                v = u.next
-                if v is not None:
-                    assert v.prev == u
-                u = v
-            q += right - left - 1
+        for pop_index, pop in enumerate(self.P):
+            for u in pop:
+                assert u.prev is None
+                left = u.left
+                right = u.left
+                while u is not None:
+                    assert u.population == pop_index
+                    assert u.left <= u.right
+                    if u.prev is not None:
+                        s = u.right - u.prev.right
+                    else:
+                        s = u.right - u.left - 1
+                    assert s == self.L.get_frequency(u.index)
+                    right = u.right
+                    v = u.next
+                    if v is not None:
+                        assert v.prev == u
+                    u = v
+                q += right - left - 1
         assert q == self.L.get_total()
 
         assert self.S[self.m] == -1
@@ -393,19 +581,20 @@ class Simulator(object):
         A = bintrees.AVLTree()
         A[0] = 0
         A[self.m] = -1
-        for u in self.P:
-            while u is not None:
-                if u.left not in A:
-                    k = A.floor_key(u.left)
-                    A[u.left] = A[k]
-                if u.right not in A:
-                    k = A.floor_key(u.right)
-                    A[u.right] = A[k]
-                k = u.left
-                while k < u.right:
-                    A[k] += 1
-                    k = A.succ_key(k)
-                u = u.next
+        for pop in self.P:
+            for u in pop:
+                while u is not None:
+                    if u.left not in A:
+                        k = A.floor_key(u.left)
+                        A[u.left] = A[k]
+                    if u.right not in A:
+                        k = A.floor_key(u.right)
+                        A[u.right] = A[k]
+                    k = u.left
+                    while k < u.right:
+                        A[k] += 1
+                        k = A.succ_key(k)
+                    u = u.next
         # Now, defrag A
         j = 0
         k = 0
@@ -533,22 +722,43 @@ def run_verify(args):
     n = args.sample_size
     m = args.num_loci
     rho = args.recombination_rate
+    num_populations = args.num_populations
+    migration_matrix = [
+        [args.migration_rate * int(j != k) for j in range(num_populations)]
+        for k in range(num_populations)]
+    sample_configuration = [0 for j in range(num_populations)]
+    population_growth_rates = [0 for j in range(num_populations)]
+    population_sizes = [1 for j in range(num_populations)]
+    sample_configuration[0] = n
+    if args.sample_configuration is not None:
+        sample_configuration = args.sample_configuration
+    if args.population_growth_rates is not None:
+        population_growth_rates = args.population_growth_rates
+    if args.population_sizes is not None:
+        population_sizes = args.population_sizes
     msp_events = np.zeros(args.num_replicates)
     local_events = np.zeros(args.num_replicates)
     for j in range(args.num_replicates):
         random.seed(j)
-        s = Simulator(n, m, rho, 10000)
+        s = Simulator(
+            n, m, rho, migration_matrix,
+            sample_configuration, population_growth_rates,
+            population_sizes, args.population_growth_rate_change,
+            args.population_size_change,
+            args.migration_matrix_element_change,
+            10000)
         s.simulate()
-        local_events[j] = s.num_re_events
-        s = msprime.TreeSimulator(n)
-        s.set_num_loci(m)
-        s.set_scaled_recombination_rate(rho)
-        s.set_random_seed(j)
-        s.run()
-        msp_events[j] = s.get_num_recombination_events()
-    sm.graphics.qqplot(local_events)
-    sm.qqplot_2samples(local_events, msp_events, line="45")
-    pyplot.savefig(args.outfile, dpi=72)
+        s.print_state()
+        # local_events[j] = s.num_re_events
+        # s = msprime.TreeSimulator(n)
+        # s.set_num_loci(m)
+        # s.set_scaled_recombination_rate(rho)
+        # s.set_random_seed(j)
+        # s.run()
+        # msp_events[j] = s.get_num_recombination_events()
+    # sm.graphics.qqplot(local_events)
+    # sm.qqplot_2samples(local_events, msp_events, line="45")
+    # pyplot.savefig(args.outfile, dpi=72)
 
 
 def main():
@@ -569,6 +779,25 @@ def main():
         "--num-replicates", "-R", type=int, default=1000)
     verify_parser.add_argument(
         "--recombination-rate", "-r", type=float, default=0.1)
+    verify_parser.add_argument(
+        "--num-populations", "-p", type=int, default=1)
+    verify_parser.add_argument(
+        "--migration-rate", "-g", type=float, default=1)
+    verify_parser.add_argument(
+        "--sample-configuration", type=int, nargs="+", default=None)
+    verify_parser.add_argument(
+        "--population-growth-rates", type=float, nargs="+", default=None)
+    verify_parser.add_argument(
+        "--population-sizes", type=float, nargs="+", default=None)
+    verify_parser.add_argument(
+        "--population-size-change", type=float, nargs=3, action="append",
+        default=[])
+    verify_parser.add_argument(
+        "--population-growth-rate-change", type=float, nargs=3,
+        action="append", default=[])
+    verify_parser.add_argument(
+        "--migration-matrix-element-change", type=float, nargs=4,
+        action="append", default=[])
     verify_parser.set_defaults(runner=run_verify)
 
     trees_parser = subparsers.add_parser(

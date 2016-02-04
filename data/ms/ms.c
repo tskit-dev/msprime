@@ -141,10 +141,6 @@ main(argc,argv)
 #ifndef SUPPRESS_OUTPUT
 	for( i=0; i<argc; i++) printf("%s ",argv[i]);
 #endif
-#ifdef SUMMARY_STATS
-    /* print out the header*/
-    printf("t\tnum_trees\tre_events\tca_events\n");
-#endif
 
 	for( i =0; i<argc; i++) tbsparamstrs[i] = (char *)malloc(30*sizeof(char) ) ;
 	for( i = 1; i<argc ; i++)
@@ -170,6 +166,15 @@ main(argc,argv)
 		    for(  i= pars.mp.segsitesin; i > 1; i--) segfac *= i ;
 		 }
 	}
+
+#ifdef SUMMARY_STATS
+    /* print out the header*/
+    printf("t\tnum_trees\tre_events\tca_events");
+    for (i = 0; i < pars.cp.npop * pars.cp.npop; i++) {
+        printf("\tmig_events_%d", i);
+    }
+    printf("\n");
+#endif
 
     while( howmany-count++ ) {
 	   if( (ntbs > 0) && (count >1 ) ){

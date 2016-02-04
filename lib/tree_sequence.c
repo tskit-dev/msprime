@@ -95,127 +95,6 @@ out:
     return ret;
 }
 
-/* Returns a JSON representation of the population models in the specified
- * result buffer. It is the calling code's responsibility to free this memory.
- */
-static int
-encode_population_models(msp_t *sim, char **result)
-{
-    int ret = -1;
-    size_t num_models = msp_get_num_population_models(sim);
-    size_t buffer_size = (num_models + 1) * 1024; /* 1K per model - should be plenty */
-    size_t j, offset;
-    int written;
-    population_model_t *models = NULL;
-    population_model_t *m;
-    char *buffer = NULL;
-    const char *param_name;
-    const char *pattern = "{"
-        "\"start_time\": %.15f,"
-        "\"type\": %d,"
-        "\"%s\": %.15f}";
-
-    models = malloc(num_models * sizeof(population_model_t));
-    if (models == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = msp_get_population_models(sim, models);
-    if (ret != 0) {
-        goto out;
-    }
-    buffer = malloc(buffer_size);
-    if (buffer == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    buffer[0] = '[';
-    offset = 1;
-    for (j = 0; j < num_models; j++) {
-        m = &models[j];
-        if (m->type == POP_MODEL_CONSTANT) {
-            param_name = "size";
-        } else if (m->type == POP_MODEL_EXPONENTIAL) {
-            param_name = "alpha";
-        } else {
-            ret = MSP_ERR_BAD_POP_MODEL;
-            goto out;
-        }
-        written = snprintf(buffer + offset, buffer_size - offset, pattern,
-                m->start_time, m->type, param_name, m->param);
-        if (written < 0) {
-            ret = MSP_ERR_IO;
-            goto out;
-        }
-        offset += (size_t) written;
-        assert(offset < buffer_size - 1);
-        if (j < num_models - 1) {
-            buffer[offset] = ',';
-            offset++;
-        }
-    }
-    assert(offset < buffer_size - 2);
-    buffer[offset] = ']';
-    buffer[offset + 1] = '\0';
-    *result = buffer;
-out:
-    if (models != NULL) {
-        free(models);
-    }
-    return ret;
-}
-
-static int
-encode_simulation_parameters(msp_t *sim, char **result)
-{
-    int ret = -1;
-    const char *pattern = "{"
-        "\"random_seed\":%lu,"
-        "\"sample_size\":%d,"
-        "\"num_loci\":%d,"
-        "\"scaled_recombination_rate\":%.15f,"
-        "\"population_models\":%s"
-        "}";
-    size_t size;
-    int written;
-    char *str = NULL;
-    char *models = NULL;
-
-    ret = encode_population_models(sim, &models);
-    if (ret != 0) {
-        goto out;
-    }
-    size = 1 + (size_t) snprintf(NULL, 0, pattern,
-            sim->random_seed,
-            sim->sample_size,
-            sim->num_loci,
-            sim->scaled_recombination_rate,
-            models);
-    str = malloc(size);
-    if (str == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    written = snprintf(str, size, pattern,
-            sim->random_seed,
-            sim->sample_size,
-            sim->num_loci,
-            sim->scaled_recombination_rate,
-            models);
-    if (written < 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    assert(written == (int) size - 1);
-    *result = str;
-    ret = 0;
-out:
-    if (models != NULL) {
-        free(models);
-    }
-    return ret;
-}
-
 static int
 encode_environment(char **result)
 {
@@ -434,6 +313,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     int ret = -1;
     uint32_t j;
     coalescence_record_t *records = NULL;
+    char *parameters;
 
     memset(self, 0, sizeof(tree_sequence_t));
     self->num_records = msp_get_num_coalescence_records(sim);
@@ -470,10 +350,14 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     if (ret != 0) {
         goto out;
     }
-    ret = encode_simulation_parameters(sim, &self->trees.parameters);
-    if (ret != 0) {
+    parameters = msp_get_configuration_json(sim);
+    assert(parameters != NULL);
+    self->trees.parameters = malloc(strlen(parameters) + 1);
+    if (self->trees.parameters == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    strcpy(self->trees.parameters, parameters);
     ret = 0;
 out:
     if (records != NULL) {

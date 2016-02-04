@@ -91,8 +91,10 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 	double *size, *alphag, *tlast ;
 	struct devent *nextevent ;
 #ifdef SUMMARY_STATS
+    unsigned int jk_pop_j, jk_pop_k;
     unsigned int recombination_events = 0;
     unsigned int coancestry_events = 0;
+    unsigned int *migration_events = calloc(cp->npop * cp->npop, sizeof(unsigned int));
 #endif
 
 	nsam = cp->nsam;
@@ -374,6 +376,10 @@ segtre_mig(struct c_params *cp, int *pnsegs )
                         if( x < sum ) break;
                     }
                 }
+#ifdef SUMMARY_STATS
+                jk_pop_j = chrom[migrant].pop;
+                jk_pop_k = i;
+#endif
                 source_pop = i;
                 config[chrom[migrant].pop] -= 1;
                 config[source_pop] += 1;
@@ -392,8 +398,10 @@ segtre_mig(struct c_params *cp, int *pnsegs )
             recombination_events++;
         } else if (event == 'c') {
             coancestry_events++;
+        } else if (event == 'm') {
+            migration_events[jk_pop_j * npop + jk_pop_k]++;
         } else {
-            printf("ERROR!\n");
+            printf("ERROR!: %c\n", event);
             exit(1);
         }
 #endif
@@ -401,7 +409,11 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 }
 #ifdef SUMMARY_STATS
     /* print out the events */
-    printf("%f\t%d\t%d\t%d\n", t, nsegs, recombination_events, coancestry_events);
+    printf("%f\t%d\t%d\t%d", t, nsegs, recombination_events, coancestry_events);
+    for (i = 0; i < npop * npop; i++) {
+        printf("\t%d", migration_events[i]);
+    }
+    printf("\n");
 #endif
 	*pnsegs = nsegs ;
 	free(config);
