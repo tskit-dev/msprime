@@ -2062,20 +2062,16 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
                 self->time = event->time;
                 self->next_demographic_event = event->next;
             }
+            /* printf("After event\n"); */
+            /* msp_print_state(self); */
         } else {
             self->time += t_wait;
 
             if (re_t_wait == t_wait) {
-                /* Recombination event */
-                /* printf("RE\n"); */
                 ret = msp_recombination_event(self);
             } else if (ca_t_wait == t_wait) {
-                /* Common ancestor event */
-                /* printf("CA\n"); */
                 ret = msp_common_ancestor_event(self, ca_pop_id);
             } else {
-                /* Migration event */
-                /* printf("MIG\n"); */
                 ret = msp_migration_event(self, mig_source_pop, mig_dest_pop);
             }
             if (ret != 0) {

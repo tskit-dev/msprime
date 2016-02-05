@@ -391,20 +391,20 @@ segtre_mig(struct c_params *cp, int *pnsegs )
                 dec = ca(nsam,nsites,c1,c2 );
                 config[cpop] -= dec ;
             }
-        }
 #ifdef SUMMARY_STATS
-        /* verify that the events are what we think and count*/
-        if (event == 'r') {
-            recombination_events++;
-        } else if (event == 'c') {
-            coancestry_events++;
-        } else if (event == 'm') {
-            migration_events[jk_pop_j * npop + jk_pop_k]++;
-        } else {
-            printf("ERROR!: %c\n", event);
-            exit(1);
-        }
+            /* verify that the events are what we think and count*/
+            if (event == 'r') {
+                recombination_events++;
+            } else if (event == 'c') {
+                coancestry_events++;
+            } else if (event == 'm') {
+                migration_events[jk_pop_j * npop + jk_pop_k]++;
+            } else {
+                printf("ERROR!: %c\n", event);
+                exit(1);
+            }
 #endif
+        }
 
 }
 #ifdef SUMMARY_STATS
