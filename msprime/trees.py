@@ -562,6 +562,9 @@ class TreeSimulator(object):
     def get_sample_configuration(self):
         return [conf.sample_size for conf in self._population_configurations]
 
+    def get_demographic_events(self):
+        return self._demographic_events
+
     def get_num_breakpoints(self):
         return self._ll_sim.get_num_breakpoints()
 
@@ -1101,12 +1104,13 @@ class PopulationConfiguration(object):
 
 class GrowthRateChangeEvent(object):
     def __init__(self, time, growth_rate):
+        self.type = "growth_rate_change"
         self.time = time
         self.growth_rate = growth_rate
 
     def get_ll_representation(self):
         return {
-            "type": "growth_rate_change",
+            "type": self.type,
             "time": self.time,
             "growth_rate": self.growth_rate,
             "population_id": -1
@@ -1118,12 +1122,13 @@ class GrowthRateChangeEvent(object):
 
 class SizeChangeEvent(object):
     def __init__(self, time, size):
+        self.type = "size_change"
         self.time = time
         self.size = size
 
     def get_ll_representation(self):
         return {
-            "type": "size_change",
+            "type": self.type,
             "time": self.time,
             "size": self.size,
             "population_id": -1

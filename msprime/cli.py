@@ -301,27 +301,29 @@ def create_simulation_runner(parser, arg_list):
         migration_matrix[dest - 1][source - 1] = rate
 
     # Get the demography parameters
-    # TODO for strict ms compatability, we need to resolve the command line
-    # ordering of arguments when there are two or more events with the
-    # same start time. We should resolve this.
     demographic_events = []
     if args.growth_rate is not None:
         for config in population_configurations:
             config.growth_rate = args.growth_rate
-    for t, alpha in args.growth_event:
+    for index, (t, alpha) in args.growth_event:
         demographic_events.append(
-            msprime.GrowthRateChangeEvent(t, alpha))
-    for t, x in args.size_event:
+            (index, msprime.GrowthRateChangeEvent(t, alpha)))
+    for index, (t, x) in args.size_event:
         demographic_events.append(
-            msprime.SizeChangeEvent(t, x))
-    demographic_events.sort(key=lambda config: config.time)
+            (index, msprime.SizeChangeEvent(t, x)))
+    demographic_events.sort()
+    time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
+    if demographic_events != time_sorted:
+        parser.error(
+            "Demographic events must be supplied in non-decreasing "
+            "time order")
 
     runner = SimulationRunner(
         sample_size=args.sample_size,
         num_loci=num_loci,
         migration_matrix=migration_matrix,
         population_configurations=population_configurations,
-        demographic_events=demographic_events,
+        demographic_events=[event for _, event in demographic_events],
         num_replicates=args.num_replicates,
         recombination_rate=r,
         mutation_rate=mu,
@@ -332,7 +334,25 @@ def create_simulation_runner(parser, arg_list):
     return runner
 
 
+class IndexedAction(argparse._AppendAction):
+    """
+    Argparse action class that allows us to find the overall ordering
+    across several different options. We use this for the demographic
+    events, as the order in which the events are applied matters for
+    ms compatability.
+    """
+    index = 0
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        super(IndexedAction, self).__call__(
+            parser, namespace, (IndexedAction.index, values), option_string)
+        IndexedAction.index += 1
+
+
 def get_mspms_parser():
+    # Ensure that the IndexedAction counter is set to zero. This is useful
+    # for testing where we'll be creating lots of these parsers.
+    IndexedAction.index = 0
     parser = argparse.ArgumentParser(description=mscompat_description)
     add_sample_size_argument(parser)
     parser.add_argument(
@@ -382,13 +402,14 @@ def get_mspms_parser():
         "--growth-rate", "-G", metavar="alpha", type=float,
         help="Population growth rate alpha.")
     group.add_argument(
-        "--growth-event", "-eG", nargs=2, action="append",
+        "--growth-event", "-eG", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "alpha"),
         help="Set the growth rate to alpha at time t")
     group.add_argument(
-        "--size-event", "-eN", nargs=2, action="append",
+        "--size-event", "-eN", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "x"),
         help="Set the population size to x * N0 at time t")
+
     group = parser.add_argument_group("Miscellaneous")
     group.add_argument(
         "--random-seeds", "-seeds", nargs=3, type=positive_int,
