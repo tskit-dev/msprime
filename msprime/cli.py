@@ -134,6 +134,12 @@ class SimulationRunner(object):
         self._ms_random_seeds = ms_seeds
         random.seed(python_seed)
 
+    def get_num_replicates(self):
+        """
+        Returns the number of replicates we are to run.
+        """
+        return self._num_replicates
+
     def get_simulator(self):
         """
         Returns the simulator instance for this simulation runner.

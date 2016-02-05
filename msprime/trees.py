@@ -605,7 +605,7 @@ class TreeSimulator(object):
         return self._ll_sim.get_num_recombination_events()
 
     def get_num_populations(self):
-        return self._ll_sim.get_num_populations()
+        return len(self._population_configurations)
 
     def get_num_migration_events(self):
         N = self.get_num_populations()

@@ -483,7 +483,6 @@ out:
     return ret;
 }
 
-
 static void
 Simulator_dealloc(Simulator* self)
 {

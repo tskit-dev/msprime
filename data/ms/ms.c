@@ -195,6 +195,7 @@ main(argc,argv)
 		printf("\n");
 #endif
         segsites = gensam( list, &probss, &tmrca, &ttot ) ;
+#ifndef SUPPRESS_OUTPUT
   		if( pars.mp.timeflag ) fprintf(pf,"time:\t%lf\t%lf\n",tmrca, ttot ) ;
         if( (segsites > 0 ) || ( pars.mp.theta > 0.0 ) ) {
    	       if( (pars.mp.segsitesin > 0 ) && ( pars.mp.theta > 0.0 ))
@@ -207,6 +208,7 @@ main(argc,argv)
 	       if( segsites > 0 )
 	          for(i=0;i<pars.cp.nsam; i++) { fprintf(pf,"%s\n", list[i] ); }
 	    }
+#endif
     }
 	if( !pars.commandlineseedflag ) seedit( "end" );
 
