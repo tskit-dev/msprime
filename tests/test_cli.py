@@ -113,7 +113,7 @@ class TestMspmsRoundTrip(unittest.TestCase):
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 2.0)
         self.assertEqual(
-            args.size_event, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
+            args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
 
         arg_list = "15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split()
         simulator = cli.get_mspms_runner(arg_list).get_simulator()
@@ -125,8 +125,8 @@ class TestMspmsRoundTrip(unittest.TestCase):
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 6.4)
         self.assertEqual(args.growth_rate, 6.93)
-        self.assertEqual(args.growth_event, [(0, [0.2, 0.0])])
-        self.assertEqual(args.size_event, [(1, [0.3, 0.5])])
+        self.assertEqual(args.growth_rate_change, [(0, [0.2, 0.0])])
+        self.assertEqual(args.size_change, [(1, [0.3, 0.5])])
 
 
 class TestMspmsArgumentParser(unittest.TestCase):
@@ -163,7 +163,7 @@ class TestMspmsArgumentParser(unittest.TestCase):
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 2.0)
         self.assertEqual(
-            args.size_event, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
+            args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
 
         args = self.parse_args(
             "15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split())
@@ -171,8 +171,8 @@ class TestMspmsArgumentParser(unittest.TestCase):
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 6.4)
         self.assertEqual(args.growth_rate, 6.93)
-        self.assertEqual(args.growth_event, [(0, [0.2, 0.0])])
-        self.assertEqual(args.size_event, [(1, [0.3, 0.5])])
+        self.assertEqual(args.growth_rate_change, [(0, [0.2, 0.0])])
+        self.assertEqual(args.size_change, [(1, [0.3, 0.5])])
 
     def test_positional_arguments(self):
         args = self.parse_args(["40", "20"])
@@ -195,35 +195,35 @@ class TestMspmsArgumentParser(unittest.TestCase):
         args = self.parse_args(["40", "20", "--trees"])
         self.assertEqual(args.trees, True)
 
-    def test_size_events(self):
+    def test_size_changes(self):
         args = self.parse_args(["40", "20"])
-        self.assertEqual(args.size_event, [])
+        self.assertEqual(args.size_change, [])
         args = self.parse_args("10 1 -eN 2.0 0.5".split())
-        self.assertEqual(args.size_event, [(0, [2.0, 0.5])])
+        self.assertEqual(args.size_change, [(0, [2.0, 0.5])])
         args = self.parse_args("10 1 -eN 1.0 0.5 -eN 2.0 5.0".split())
-        self.assertEqual(args.size_event, [(0, [1.0, 0.5]), (1, [2.0, 5.0])])
+        self.assertEqual(args.size_change, [(0, [1.0, 0.5]), (1, [2.0, 5.0])])
 
     def test_growth_rates(self):
         args = self.parse_args(["40", "20"])
         self.assertEqual(args.growth_rate, None)
-        self.assertEqual(args.growth_event, [])
+        self.assertEqual(args.growth_rate_change, [])
 
         args = self.parse_args("15 1000 -G 5.25".split())
         self.assertEqual(args.growth_rate, 5.25)
-        self.assertEqual(args.growth_event, [])
+        self.assertEqual(args.growth_rate_change, [])
 
         args = self.parse_args("15 1000 -eG 1.0 5.25".split())
         self.assertEqual(args.growth_rate, None)
-        self.assertEqual(args.growth_event, [(0, [1.0, 5.25])])
+        self.assertEqual(args.growth_rate_change, [(0, [1.0, 5.25])])
         args = self.parse_args("15 1000 -eG 1.0 5.25 -eG 2.0 10".split())
         self.assertEqual(args.growth_rate, None)
         self.assertEqual(
-            args.growth_event, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
+            args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
         args = self.parse_args(
             "15 1000 -eG 1.0 5.25 -eG 2.0 10 -G 4".split())
         self.assertEqual(args.growth_rate, 4.0)
         self.assertEqual(
-            args.growth_event, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
+            args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
 
 
 class CustomExceptionForTesting(Exception):

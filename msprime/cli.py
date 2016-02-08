@@ -305,10 +305,10 @@ def create_simulation_runner(parser, arg_list):
     if args.growth_rate is not None:
         for config in population_configurations:
             config.growth_rate = args.growth_rate
-    for index, (t, alpha) in args.growth_event:
+    for index, (t, alpha) in args.growth_rate_change:
         demographic_events.append(
             (index, msprime.GrowthRateChangeEvent(t, alpha)))
-    for index, (t, x) in args.size_event:
+    for index, (t, x) in args.size_change:
         demographic_events.append(
             (index, msprime.SizeChangeEvent(t, x)))
     demographic_events.sort()
@@ -402,11 +402,11 @@ def get_mspms_parser():
         "--growth-rate", "-G", metavar="alpha", type=float,
         help="Population growth rate alpha.")
     group.add_argument(
-        "--growth-event", "-eG", nargs=2, action=IndexedAction,
+        "--growth-rate-change", "-eG", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "alpha"),
         help="Set the growth rate to alpha at time t")
     group.add_argument(
-        "--size-event", "-eN", nargs=2, action=IndexedAction,
+        "--size-change", "-eN", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "x"),
         help="Set the population size to x * N0 at time t")
 
