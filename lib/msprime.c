@@ -1962,6 +1962,31 @@ msp_get_common_ancestor_waiting_time(msp_t *self, uint32_t population_id)
     return ret;
 }
 
+static int WARN_UNUSED
+msp_sanity_check(msp_t *self, int64_t num_links)
+{
+    int ret = 0;
+    size_t n = msp_get_num_ancestors(self);
+
+    /* TODO there are various worries when we're dealing with very
+     * large population sizes and numbers of links. For example,
+     * what if n is too big for the gsl integer random generator?
+     * To at least determine if these are real things to worry
+     * about, we put in some arbitrary (and hopefully safe) limits
+     * and see if they are ever hit in practise.
+     */
+    if (n >= UINT32_MAX / 8) {
+        ret = MSP_ERR_POPULATION_OVERFLOW;
+        goto out;
+    }
+    if (num_links >= INT64_MAX / 8) {
+        ret = MSP_ERR_LINKS_OVERFLOW;
+        goto out;
+    }
+out:
+    return ret;
+}
+
 int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
@@ -1977,23 +2002,12 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_NOT_INITIALISED;
         goto out;
     }
-    n = (uint32_t) msp_get_num_ancestors(self);
-    while (n > 1 && self->time <= max_time && events < max_events) {
+    while (msp_get_num_ancestors(self) > 0
+            && self->time < max_time && events < max_events) {
         events++;
         num_links = fenwick_get_total(&self->links);
-        /* TODO there are various worries when we're dealing with very
-         * large population sizes and numbers of links. For example,
-         * what if n is too big for the gsl integer random generator?
-         * To at least determine if these are real things to worry
-         * about, we put in some arbitrary (and hopefully safe) limits
-         * and see if they are ever hit in practise.
-         */
-        if (n >= UINT32_MAX / 8) {
-            ret = MSP_ERR_POPULATION_OVERFLOW;
-            goto out;
-        }
-        if (num_links >= INT64_MAX / 8) {
-            ret = MSP_ERR_LINKS_OVERFLOW;
+        ret = msp_sanity_check(self, num_links);
+        if (ret != 0) {
             goto out;
         }
         /* Recombination */
@@ -2037,8 +2051,8 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             }
         }
         t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
-        /* printf("min = %f re = %f ca = %f mig = %f\n", */
-        /*         t_wait, re_t_wait, ca_t_wait, mig_t_wait); */
+        /* printf("t = %f min = %f re = %f ca = %f mig = %f\n", */
+        /*         self->time, t_wait, re_t_wait, ca_t_wait, mig_t_wait); */
         if (t_wait == DBL_MAX) {
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
@@ -2062,7 +2076,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
                 self->time = event->time;
                 self->next_demographic_event = event->next;
             }
-            /* printf("After event\n"); */
             /* msp_print_state(self); */
         } else {
             self->time += t_wait;
@@ -2077,13 +2090,11 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             if (ret != 0) {
                 goto out;
             }
-            n = (uint32_t) msp_get_num_ancestors(self);
         }
-
     }
-    if (n != 0) {
+    if (msp_get_num_ancestors(self) != 0) {
         ret = 1;
-        if (self->time > max_time) {
+        if (self->time >= max_time) {
             ret = 2;
         }
     }
