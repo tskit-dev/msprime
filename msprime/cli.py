@@ -229,6 +229,10 @@ def create_simulation_runner(parser, arg_list):
     if args.mutation_rate == 0 and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
     num_loci = int(args.recombination[1])
+    if args.recombination[1] != num_loci:
+        parser.error("Number of loci must be integer value")
+    if args.recombination[0] != 0.0 and num_loci < 2:
+        parser.error("Number of loci must > 1")
     r = 0.0
     # We don't scale recombination or mutation rates by the size
     # of the region.

@@ -303,6 +303,17 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -eG 0.1 -eN 0.21 -eG 0.2")
         self.assert_parser_error("10 1 -T -eG 0.1 -eG 0.21 -eG 0.2")
 
+    def test_recombination_errors(self):
+        self.assert_parser_error("10 1 -T -r x 20")
+        # Cannot have non-integer numbers of loci
+        self.assert_parser_error("10 1 -T -r 1 x")
+        self.assert_parser_error("10 1 -T -r 1 x")
+        self.assert_parser_error("10 1 -T -r 1 1.1")
+        # Number of loci must be > 1
+        self.assert_parser_error("10 1 -T -r 1 0")
+        self.assert_parser_error("10 1 -T -r 1 1")
+        self.assert_parser_error("10 1 -T -r 1 -1")
+
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
     """
