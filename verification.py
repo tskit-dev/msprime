@@ -192,6 +192,7 @@ class SimulationVerifier(object):
 
 
 def main():
+    random.seed(2)
     verifier = SimulationVerifier("tmp__NOBACKUP__")
 
     # Try various options independently
@@ -199,6 +200,13 @@ def main():
         "size-change1", "10 10000 -t 2.0 -eN 0.1 2.0")
     verifier.add_ms_instance(
         "growth-rate-change1", "10 10000 -t 2.0 -eG 0.1 5.0")
+    verifier.add_ms_instance(
+        "growth-rate-2-pops1", "10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0")
+    verifier.add_ms_instance(
+        "growth-rate-2-pops2", "10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0 -g 1 0.1")
+    verifier.add_ms_instance(
+        "growth-rate-2-pops3", "10 10000 -t 2.0 -I 2 5 5 2.5 -g 1 0.1")
+
     # Examples from ms documentation
     verifier.add_ms_instance(
         "msdoc-simple-ex", "4 20000 -t 5.0")
@@ -216,12 +224,10 @@ def main():
     verifier.add_ms_instance(
         "simultaneous-ex1", "10 10000 -t 2.0 -eN 0.3 0.5 -eG .3 7.0")
     # Add a bunch more instances...
-
     verifier.add_ms_instance(
         "zero-growth-rate", "10 10000 -t 2.0 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5")
 
     # Add some random instances.
-    random.seed(2)
     verifier.add_random_instance("random1")
     verifier.add_random_instance("random2", num_demographic_events=10)
     # verifier.add_random_instance("random2", num_populations=3)

@@ -221,6 +221,22 @@ def convert_float(value, parser):
         parser.error("invalid float value '{}'".format(value))
 
 
+def convert_population_id(parser, population_id, num_populations):
+    """
+    Checks the specified population ID makes sense and returns
+    it as an integer, and converted into msprime's internal population
+    ID scheme (i.e., zero based).
+    """
+    pid = int(population_id)
+    if pid != population_id:
+        msg = "Bad population ID '{}': must be an integer"
+        parser.error(msg.format(population_id))
+    if pid < 1 or pid > num_populations:
+        msg = "Bad population ID '{}': must be 1 to num_populations"
+        parser.error(msg.format(pid))
+    return pid - 1
+
+
 def create_simulation_runner(parser, arg_list):
     """
     Parses the arguments and returns a SimulationRunner instance.
@@ -289,28 +305,24 @@ def create_simulation_runner(parser, arg_list):
                         args.migration_matrix[j * num_populations + k],
                         parser)
     for matrix_entry in args.migration_matrix_entry:
-        dest = int(matrix_entry[0])
-        source = int(matrix_entry[1])
+        dest = convert_population_id(parser, matrix_entry[0], num_populations)
+        source = convert_population_id(
+            parser, matrix_entry[1], num_populations)
         rate = matrix_entry[2]
-        msg = "Bad population ID '{}': must be an integer"
-        if dest != matrix_entry[0]:
-            parser.error(msg.format(matrix_entry[0]))
-        if source != matrix_entry[1]:
-            parser.error(msg.format(matrix_entry[1]))
-        msg = "Bad population ID '{}': must be 1 to num_populations"
-        if source < 1 or source > num_populations:
-            parser.error(msg.format(source))
-        if dest < 1 or dest > num_populations:
-            parser.error(msg.format(dest))
         if dest == source:
             parser.error("Cannot set diagonal elements in migration matrix")
-        migration_matrix[dest - 1][source - 1] = rate
+        migration_matrix[dest][source] = rate
 
-    # Get the demography parameters
+    # Set the initial demography
     demographic_events = []
     if args.growth_rate is not None:
         for config in population_configurations:
             config.growth_rate = args.growth_rate
+    for population_id, growth_rate in args.population_growth_rate:
+        pid = convert_population_id(parser, population_id, num_populations)
+        population_configurations[pid].growth_rate = growth_rate
+
+    # Add the demographic events
     for index, (t, alpha) in args.growth_rate_change:
         demographic_events.append(
             (index, msprime.GrowthRateChangeEvent(t, alpha)))
@@ -370,14 +382,14 @@ def get_mspms_parser():
 
     group = parser.add_argument_group("Behaviour")
     group.add_argument(
-        "--mutation-rate", "-t", type=float, metavar="THETA",
+        "--mutation-rate", "-t", type=float, metavar="theta",
         help="Mutation rate theta=4*N0*mu", default=0)
     group.add_argument(
         "--trees", "-T", action="store_true",
         help="Print out trees in Newick format")
     group.add_argument(
         "--recombination", "-r", type=float, nargs=2, default=(0, 1),
-        metavar=("RHO", "NUM_LOCI"), help=mscompat_recombination_help)
+        metavar=("rho", "num_loci"), help=mscompat_recombination_help)
 
     group = parser.add_argument_group("Structure and migration")
     group.add_argument(
@@ -390,11 +402,11 @@ def get_mspms_parser():
             "rate for a symmetric island model"))
     group.add_argument(
         "--migration-matrix-entry", "-m", action="append",
-        metavar=("DEST", "SOURCE", "RATE"),
+        metavar=("dest", "source", "rate"),
         nargs=3, type=float, default=[],
         help=(
-            "Sets an entry M[DEST, SOURCE] in the migration matrix to the "
-            "specified ate. SOURCE and DEST are (1-indexed) population "
+            "Sets an entry M[dest, source] in the migration matrix to the "
+            "specified ate. source and dest are (1-indexed) population "
             "IDs. Multiple options can be specified."))
     group.add_argument(
         "--migration-matrix", "-ma", nargs='+', default=None,
@@ -406,7 +418,12 @@ def get_mspms_parser():
     group = parser.add_argument_group("Demography")
     group.add_argument(
         "--growth-rate", "-G", metavar="alpha", type=float,
-        help="Population growth rate alpha.")
+        help="Growth rate alpha (all populations).")
+    group.add_argument(
+        "--population-growth-rate", "-g", action="append", default=[],
+        nargs=2, metavar=("population_id", "alpha"), type=float,
+        help="Growth rate alpha for specific population.")
+
     group.add_argument(
         "--growth-rate-change", "-eG", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "alpha"),

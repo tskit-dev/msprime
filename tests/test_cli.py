@@ -314,6 +314,17 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -r 1 1")
         self.assert_parser_error("10 1 -T -r 1 -1")
 
+    def test_population_growth_rate_errors(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g x 1")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g 1.1 1.1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g 0 1.1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g -1 1.1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g 3 1.1")
+        self.assert_parser_error("10 1 -T -I 4 10 0 0 0 -g 5 1.1")
+
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
     """
@@ -387,6 +398,27 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         self.assertEqual(events[1].growth_rate, 3)
         self.assertEqual(events[2].type, "size_change")
         self.assertEqual(events[2].size, 4)
+
+    def test_population_growth_rate(self):
+        def f(args):
+            sim = self.create_simulator(args)
+            return [
+                (c.initial_size, c.growth_rate)
+                for c in sim.get_population_configurations()]
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -g 1 -1"),
+            [(1, -1), (1, 0), (1, 0)])
+        self.assertEqual(
+            f("2 1 -T -I 4 2 0 0 0 -g 1 1 -g 2 2 -g 3 3"),
+            [(1, 1), (1, 2), (1, 3), (1, 0)])
+        # A -g should override a -G
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -g 1 2 -G -1"),
+            [(1, 2), (1, -1), (1, -1)])
+        # The last -g should be effective
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -g 1 1 -g 1 -1"),
+            [(1, -1), (1, 0), (1, 0)])
 
 
 class TestMspmsOutput(unittest.TestCase):
