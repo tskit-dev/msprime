@@ -1103,39 +1103,51 @@ class PopulationConfiguration(object):
 
 
 class GrowthRateChangeEvent(object):
-    def __init__(self, time, growth_rate):
+    def __init__(self, time, growth_rate, population_id=-1):
         self.type = "growth_rate_change"
         self.time = time
         self.growth_rate = growth_rate
+        self.population_id = population_id
 
     def get_ll_representation(self):
         return {
             "type": self.type,
             "time": self.time,
             "growth_rate": self.growth_rate,
-            "population_id": -1
+            "population_id": self.population_id
         }
 
     def get_ms_arguments(self):
-        return ["-eG", str(self.time), str(self.growth_rate)]
+        if self.population_id == -1:
+            return ["-eG", str(self.time), str(self.growth_rate)]
+        else:
+            return [
+                "-eg", str(self.time), str(self.population_id + 1),
+                str(self.growth_rate)]
 
 
 class SizeChangeEvent(object):
-    def __init__(self, time, size):
+    def __init__(self, time, size, population_id=-1):
         self.type = "size_change"
         self.time = time
         self.size = size
+        self.population_id = population_id
 
     def get_ll_representation(self):
         return {
             "type": self.type,
             "time": self.time,
             "size": self.size,
-            "population_id": -1
+            "population_id": self.population_id
         }
 
     def get_ms_arguments(self):
-        return ["-eN", str(self.time), str(self.size)]
+        if self.population_id == -1:
+            return ["-eN", str(self.time), str(self.size)]
+        else:
+            return [
+                "-en", str(self.time), str(self.population_id + 1),
+                str(self.growth_rate)]
 
 
 def harmonic_number(n):

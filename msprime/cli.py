@@ -329,6 +329,10 @@ def create_simulation_runner(parser, arg_list):
     for index, (t, alpha) in args.growth_rate_change:
         demographic_events.append(
             (index, msprime.GrowthRateChangeEvent(t, alpha)))
+    for index, (t, population_id, alpha) in args.population_growth_rate_change:
+        pid = convert_population_id(parser, population_id, num_populations)
+        demographic_events.append(
+            (index, msprime.GrowthRateChangeEvent(t, alpha, pid)))
     for index, (t, x) in args.size_change:
         demographic_events.append(
             (index, msprime.SizeChangeEvent(t, x)))
@@ -434,11 +438,18 @@ def get_mspms_parser():
     group.add_argument(
         "--growth-rate-change", "-eG", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "alpha"),
-        help="Set the growth rate to alpha at time t")
+        help="Set the growth rate for all populations to alpha at time t")
+    group.add_argument(
+        "--population-growth-rate-change", "-eg", nargs=3,
+        action=IndexedAction, type=float, default=[],
+        metavar=("t", "population_id", "alpha"),
+        help=(
+            "Set the growth rate for a specific population to "
+            "alpha at time t"))
     group.add_argument(
         "--size-change", "-eN", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "x"),
-        help="Set the population size to x * N0 at time t")
+        help="Set the population size for all populations to x * N0 at time t")
 
     group = parser.add_argument_group("Miscellaneous")
     group.add_argument(

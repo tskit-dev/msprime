@@ -336,6 +336,16 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 2 10 0 -n 3 1.1")
         self.assert_parser_error("10 1 -T -I 4 10 0 0 0 -n 5 1.1")
 
+    def test_population_growth_rate_change(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg 1 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg x 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg 1 x 1")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg 0.1 1.1 1.1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg 0.1 -1 1.1")
+
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
     """
@@ -450,6 +460,27 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 2 -n 1 0.1"),
             [(0.1, 2), (1, 0), (1, 0)])
+
+    def test_population_growth_rate_change(self):
+        def f(args):
+            sim = self.create_simulator(args)
+            return sim.get_demographic_events()
+        events = f("2 1 -T -eg 0.1 1 2")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, "growth_rate_change")
+        self.assertEqual(events[0].growth_rate, 2.0)
+        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].population_id, 0)
+        events = f("2 1 -T -I 2 1 1 -eg 0.1 1 2 -eg 0.2 2 3")
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].type, "growth_rate_change")
+        self.assertEqual(events[0].growth_rate, 2.0)
+        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].population_id, 0)
+        self.assertEqual(events[1].type, "growth_rate_change")
+        self.assertEqual(events[1].growth_rate, 3.0)
+        self.assertEqual(events[1].time, 0.2)
+        self.assertEqual(events[1].population_id, 1)
 
 
 class TestMspmsOutput(unittest.TestCase):
