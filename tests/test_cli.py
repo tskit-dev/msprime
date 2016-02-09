@@ -327,10 +327,17 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         return runner.get_simulator()
 
     def test_structure_args(self):
+        sim = self.create_simulator("2 1 -T")
+        self.assertEqual(sim.get_sample_configuration(), [2])
+        self.assertEqual(sim.get_migration_matrix(), [[0]])
+
+        # Specifying 1 population is the same as the default.
+        sim = self.create_simulator("2 1 -T -I 1 2")
+        self.assertEqual(sim.get_sample_configuration(), [2])
+        self.assertEqual(sim.get_migration_matrix(), [[0]])
+
         sim = self.create_simulator("2 1 -T -I 2 1 1")
-        # TODO Add tests to test the arguments for the sample configuration
-        # when we've figured out the right interface.
-        # self.assertEqual(sim.get_num_populations(), 2)
+        self.assertEqual(sim.get_sample_configuration(), [1, 1])
         self.assertEqual(sim.get_migration_matrix(), [[0, 0], [0, 0]])
 
         # Default migration matrix is zeros

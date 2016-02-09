@@ -264,9 +264,11 @@ def create_simulation_runner(parser, arg_list):
                 args.structure[num_populations + 1], parser)
         elif len(args.structure) > num_populations + 2:
             parser.error("Too many arguments to --structure/-I")
-        migration_matrix = [[
-            symmetric_migration_rate / (num_populations - 1) * int(j != k)
-            for j in range(num_populations)] for k in range(num_populations)]
+        if num_populations > 1:
+            migration_matrix = [[
+                symmetric_migration_rate / (num_populations - 1) * int(j != k)
+                for j in range(num_populations)]
+                for k in range(num_populations)]
     else:
         if len(args.migration_matrix_entry) > 0:
             parser.error(
