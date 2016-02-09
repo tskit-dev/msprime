@@ -5,112 +5,21 @@ Hudson's ms.
 from __future__ import print_function
 from __future__ import division
 
-import math
 import os
 import random
 import subprocess
 import sys
 import tempfile
 
-import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-import allel
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
 from matplotlib import pyplot
 
-import msprime
 import msprime.cli as cli
 
-
-
-# TODO remove these once they have been replaced.
-
-def verify_random(k):
-
-    random.seed(k)
-    for j in range(k):
-        n = random.randint(2, 100)
-        m = random.randint(1, 10000)
-        Ne = random.uniform(100, 1e4)
-        r = random.uniform(1e-9, 1e-6)
-        theta = random.uniform(1, 100)
-        num_replicates = 1000
-        output_prefix = "tmp__NOBACKUP__/random_{0}".format(j)
-        models = []
-        t = 0
-        for j in range(random.randint(0, 10)):
-            t += random.uniform(0, 0.3)
-            p = random.uniform(0.1, 2.0)
-            if random.random() < 0.5:
-                mod = msprime.ConstantPopulationModel(t, p)
-            else:
-                mod = msprime.ExponentialPopulationModel(t, p)
-            models.append(mod)
-            print(mod.get_ll_model())
-        print("running for", n, m, Ne, r, 4 * Ne * r)
-        run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
-        run_verify_mutations(n, m, Ne, r, models, num_replicates, theta, output_prefix)
-
-def verify_exponential_models():
-    random.seed(4)
-    n = 15
-    m = 4550
-    Ne = 7730.75967602
-    r = 7.05807713707e-07
-    num_replicates = 10000
-    output_prefix = "tmp__NOBACKUP__/expo_models"
-    models = []
-    t = 0.0
-    for j in range(3):
-        t += 0.1
-        p = 100 * t
-        mod = msprime.ExponentialPopulationModel(t, p)
-        models.append(mod)
-        print(mod.get_ll_model())
-    # params = [(0.05, 0.1), (0.1, 0.2), (0.11, 1000), (0.15, 0.0001)]
-    # models = [msprime.ConstantPopulationModel(t, p) for t, p in params]
-    print("running for", n, m, Ne, r, 4 * Ne * r)
-    run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
-
-def verify_scrm_example():
-    # -eN 0.3 0.5 -eG .3 7.0
-    num_replicates = 10000
-    models = [
-            msprime.ConstantPopulationModel(0.3, 0.5),
-            msprime.ExponentialPopulationModel(0.3, 7.0)]
-    output_prefix = "tmp__NOBACKUP__/scrm"
-    run_verify_coalescent(5, 1, 1, 0, models, num_replicates, output_prefix)
-
-def verify_zero_growth_example():
-    num_replicates = 10000
-    models = [
-            msprime.ExponentialPopulationModel(0.0, 6.93),
-            msprime.ExponentialPopulationModel(0.2, 0.0),
-            msprime.ConstantPopulationModel(0.3, 0.5)]
-    output_prefix = "tmp__NOBACKUP__/zero"
-    run_verify_coalescent(5, 1, 1, 0, models, num_replicates, output_prefix)
-
-def verify_simple():
-    # default to humanish recombination rates and population sizes.
-    n = 400
-    m = 100000
-    Ne = 1e4
-    r = 1e-8
-    num_replicates = 1000
-    models = [
-            msprime.ConstantPopulationModel(0.1, 2.0),
-            msprime.ConstantPopulationModel(0.4, 0.5),
-            msprime.ExponentialPopulationModel(0.5, 1.0)]
-    output_prefix = "tmp__NOBACKUP__/simple_coalescent"
-    run_verify_coalescent(n, m, Ne, r, models, num_replicates, output_prefix)
-    output_prefix = "tmp__NOBACKUP__/simple_mutations"
-    run_verify_mutations(n, m, Ne, r, models, num_replicates, 10, output_prefix)
-
-
-#######################
 
 class SimulationVerifier(object):
     """
@@ -172,14 +81,13 @@ class SimulationVerifier(object):
             time[j] = sim.get_time()
             ca_events[j] = sim.get_num_common_ancestor_events()
             re_events[j] = sim.get_num_recombination_events()
-            mig_events[j] = [r for row in sim.get_num_migration_events() for r in row]
+            mig_events[j] = [
+                r for row in sim.get_num_migration_events() for r in row]
         d = {
-            "t":time, "num_trees":num_trees,
-            "ca_events":ca_events, "re_events":re_events}
+            "t": time, "num_trees": num_trees,
+            "ca_events": ca_events, "re_events": re_events}
         for j in range(num_populations**2):
-            events = [0 for j in range(replicates)]
-            for k in range(replicates):
-                events[k] = mig_events[k][j]
+            events = [mig_events[k][j] for k in range(replicates)]
             d["mig_events_{}".format(j)] = events
         df = pd.DataFrame(d)
         return df
@@ -225,6 +133,63 @@ class SimulationVerifier(object):
         """
         self._instances[key] = command_line
 
+    def add_random_instance(
+            self, key, num_populations=1, num_replicates=1000,
+            num_demographic_events=0):
+        m = random.randint(1, 1000)
+        r = random.uniform(0.01, 0.1) * m
+        theta = random.uniform(1, 100)
+        N = num_populations
+        sample_sizes = [random.randint(2, 10) for _ in range(N)]
+        migration_matrix = [
+            random.random() * (j % (N + 1) != 0) for j in range(N**2)]
+        structure = ""
+        if num_populations > 1:
+            structure = "-I {} {} -ma {}".format(
+                num_populations, " ".join(str(s) for s in sample_sizes),
+                " ".join(str(r) for r in migration_matrix))
+        cmd = "{} {} -t {} -r {} {} {}".format(
+            sum(sample_sizes), num_replicates, theta, r, m, structure)
+
+        if N > 1:
+            # Add some migration matrix changes
+            t = 0
+            for j in range(1, 6):
+                t += 0.125
+                u = random.random()
+                if u < 0.33:
+                    cmd += " -eM {} {}".format(t, random.random())
+                elif u < 0.66:
+                    j = random.randint(1, N)
+                    k = j
+                    while k == j:
+                        k = random.randint(1, N)
+                    r = random.random()
+                    cmd += " -em {} {}".format(t, j, k, r)
+                else:
+                    migration_matrix = [
+                        random.random() * (j % (N + 1) != 0)
+                        for j in range(N**2)]
+                    cmd += " -ema {} {} {}".format(
+                        t, N, " ".join(str(r) for r in migration_matrix))
+
+        # Set some initial growth rates, etc.
+        if N == 1:
+            if random.random() < 0.5:
+                cmd += " -G {}".format(random.random())
+            else:
+                cmd += " -eN 0 {}".format(random.random())
+        # Add some demographic events
+        t = 0
+        for j in range(num_demographic_events):
+            t += 0.125
+            if random.random() < 0.5:
+                cmd += " -eG {} {}".format(t, random.random())
+            else:
+                cmd += " -eN {} {}".format(t, random.random())
+
+        self._instances[key] = cmd
+
 
 def main():
     verifier = SimulationVerifier("tmp__NOBACKUP__")
@@ -251,6 +216,15 @@ def main():
     verifier.add_ms_instance(
         "simultaneous-ex1", "10 10000 -t 2.0 -eN 0.3 0.5 -eG .3 7.0")
     # Add a bunch more instances...
+
+    verifier.add_ms_instance(
+        "zero-growth-rate", "10 10000 -t 2.0 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5")
+
+    # Add some random instances.
+    random.seed(2)
+    verifier.add_random_instance("random1")
+    verifier.add_random_instance("random2", num_demographic_events=10)
+    # verifier.add_random_instance("random2", num_populations=3)
 
     keys = None
     if len(sys.argv) > 1:
