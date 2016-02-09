@@ -255,7 +255,7 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1")
         self.assert_parser_error("10 1 -G 1")
 
-    def test_structure_errors(self):
+    def test_structure(self):
         self.assert_parser_error("2 1 -T -I")
         self.assert_parser_error("2 1 -T -I x")
         self.assert_parser_error("2 1 -T -I 2")
@@ -270,7 +270,7 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 4 1 1")
         self.assert_parser_error("10 1 -T -I 5 1 1 1 1 6 1 1")
 
-    def test_migration_matrix_entry_errors(self):
+    def test_migration_matrix_entry(self):
         # -m without -I raises an error
         self.assert_parser_error("10 1 -T -m 1 1 1")
         # Non int values not allowed
@@ -284,7 +284,7 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         # Diagonal elements cannot be set.
         self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 1 1")
 
-    def test_migration_matrix_errors(self):
+    def test_migration_matrix(self):
         # -ma without -I raises an error
         self.assert_parser_error("10 1 -T -ma 1 1 1")
         # Incorrect lengths
@@ -303,7 +303,7 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -eG 0.1 -eN 0.21 -eG 0.2")
         self.assert_parser_error("10 1 -T -eG 0.1 -eG 0.21 -eG 0.2")
 
-    def test_recombination_errors(self):
+    def test_recombination(self):
         self.assert_parser_error("10 1 -T -r x 20")
         # Cannot have non-integer numbers of loci
         self.assert_parser_error("10 1 -T -r 1 x")
@@ -314,7 +314,7 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -r 1 1")
         self.assert_parser_error("10 1 -T -r 1 -1")
 
-    def test_population_growth_rate_errors(self):
+    def test_population_growth_rate(self):
         self.assert_parser_error("10 1 -T -I 2 10 0 -g 1 x")
         self.assert_parser_error("10 1 -T -I 2 10 0 -g x 1")
         # Non int values not allowed for pop_id
@@ -324,6 +324,17 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 2 10 0 -g -1 1.1")
         self.assert_parser_error("10 1 -T -I 2 10 0 -g 3 1.1")
         self.assert_parser_error("10 1 -T -I 4 10 0 0 0 -g 5 1.1")
+
+    def test_population_size(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n x 1")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n 1.1 1.1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n 0 1.1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n -1 1.1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n 3 1.1")
+        self.assert_parser_error("10 1 -T -I 4 10 0 0 0 -n 5 1.1")
 
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
@@ -419,6 +430,26 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 1 -g 1 -1"),
             [(1, -1), (1, 0), (1, 0)])
+
+    def test_population_size(self):
+        def f(args):
+            sim = self.create_simulator(args)
+            return [
+                (c.initial_size, c.growth_rate)
+                for c in sim.get_population_configurations()]
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -n 1 2"),
+            [(2, 0), (1, 0), (1, 0)])
+        self.assertEqual(
+            f("2 1 -T -I 4 2 0 0 0 -n 1 1 -n 2 2 -n 3 3"),
+            [(1, 0), (2, 0), (3, 0), (1, 0)])
+        # The last -n should be effective
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -n 1 1 -n 1 0.1"),
+            [(0.1, 0), (1, 0), (1, 0)])
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -g 1 2 -n 1 0.1"),
+            [(0.1, 2), (1, 0), (1, 0)])
 
 
 class TestMspmsOutput(unittest.TestCase):

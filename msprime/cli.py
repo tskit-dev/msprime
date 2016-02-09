@@ -321,6 +321,9 @@ def create_simulation_runner(parser, arg_list):
     for population_id, growth_rate in args.population_growth_rate:
         pid = convert_population_id(parser, population_id, num_populations)
         population_configurations[pid].growth_rate = growth_rate
+    for population_id, size in args.population_size:
+        pid = convert_population_id(parser, population_id, num_populations)
+        population_configurations[pid].initial_size = size
 
     # Add the demographic events
     for index, (t, alpha) in args.growth_rate_change:
@@ -418,11 +421,15 @@ def get_mspms_parser():
     group = parser.add_argument_group("Demography")
     group.add_argument(
         "--growth-rate", "-G", metavar="alpha", type=float,
-        help="Growth rate alpha (all populations).")
+        help="Set the growth rate to alpha for all populations.")
     group.add_argument(
         "--population-growth-rate", "-g", action="append", default=[],
         nargs=2, metavar=("population_id", "alpha"), type=float,
-        help="Growth rate alpha for specific population.")
+        help="Set the growth rate to alpha for a specific population.")
+    group.add_argument(
+        "--population-size", "-n", action="append", default=[],
+        nargs=2, metavar=("population_id", "size"), type=float,
+        help="Set the size of a specific population to size*N0.")
 
     group.add_argument(
         "--growth-rate-change", "-eG", nargs=2, action=IndexedAction,
