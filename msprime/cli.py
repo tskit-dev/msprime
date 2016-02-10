@@ -237,6 +237,22 @@ def convert_population_id(parser, population_id, num_populations):
     return pid - 1
 
 
+def check_migration_rate(parser, rate):
+    """
+    Checks that the specified migration rate makes sense.
+    """
+    if rate < 0:
+        parser.error("Migration rates must be non-negative.")
+
+
+def check_event_time(parser, time):
+    """
+    Checks that the specified time for an event makes sense
+    """
+    if time < 0:
+        parser.error("Event times must be non-negative.")
+
+
 def create_simulation_runner(parser, arg_list):
     """
     Parses the arguments and returns a SimulationRunner instance.
@@ -278,6 +294,7 @@ def create_simulation_runner(parser, arg_list):
         if len(args.structure) == num_populations + 2:
             symmetric_migration_rate = convert_float(
                 args.structure[num_populations + 1], parser)
+            check_migration_rate(parser, symmetric_migration_rate)
         elif len(args.structure) > num_populations + 2:
             parser.error("Too many arguments to --structure/-I")
         if num_populations > 1:
@@ -301,9 +318,11 @@ def create_simulation_runner(parser, arg_list):
         for j in range(num_populations):
             for k in range(num_populations):
                 if j != k:
-                    migration_matrix[j][k] = convert_float(
+                    rate = convert_float(
                         args.migration_matrix[j * num_populations + k],
                         parser)
+                    check_migration_rate(parser, rate)
+                    migration_matrix[j][k] = rate
     for matrix_entry in args.migration_matrix_entry:
         dest = convert_population_id(parser, matrix_entry[0], num_populations)
         source = convert_population_id(
@@ -311,6 +330,7 @@ def create_simulation_runner(parser, arg_list):
         rate = matrix_entry[2]
         if dest == source:
             parser.error("Cannot set diagonal elements in migration matrix")
+        check_migration_rate(parser, rate)
         migration_matrix[dest][source] = rate
 
     # Set the initial demography
@@ -327,19 +347,38 @@ def create_simulation_runner(parser, arg_list):
 
     # Add the demographic events
     for index, (t, alpha) in args.growth_rate_change:
+        check_event_time(parser, t)
         demographic_events.append(
             (index, msprime.GrowthRateChangeEvent(t, alpha)))
     for index, (t, population_id, alpha) in args.population_growth_rate_change:
         pid = convert_population_id(parser, population_id, num_populations)
+        check_event_time(parser, t)
         demographic_events.append(
             (index, msprime.GrowthRateChangeEvent(t, alpha, pid)))
     for index, (t, x) in args.size_change:
+        check_event_time(parser, t)
         demographic_events.append(
             (index, msprime.SizeChangeEvent(t, x)))
     for index, (t, population_id, x) in args.population_size_change:
         pid = convert_population_id(parser, population_id, num_populations)
+        check_event_time(parser, t)
         demographic_events.append(
             (index, msprime.SizeChangeEvent(t, x, pid)))
+
+    # Demographic events that affect the migration matrix
+    if num_populations == 1:
+        if len(args.migration_rate_change) > 0:
+            parser.error("Cannot change migration rates for 1 population")
+    for index, (t, x) in args.migration_rate_change:
+        # TODO How does this interact with population splits and so on? i.e.,
+        # do we need to keep track of num_populations over time for this
+        # scaling?
+        check_migration_rate(parser, x)
+        check_event_time(parser, t)
+        demographic_events.append((
+            index,
+            msprime.MigrationRateChangeEvent(t, x / (num_populations - 1))))
+
     demographic_events.sort()
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
     if demographic_events != time_sorted:
@@ -425,6 +464,12 @@ def get_mspms_parser():
             "Sets the migration matrix to the specified value. The "
             "entries are in the order M[1,1], M[1, 2], ..., M[2, 1],"
             "M[2, 2], ..., M[N, N], where N is the number of populations."))
+    group.add_argument(
+        "--migration-rate-change", "-eM", nargs=2, action=IndexedAction,
+        type=float, default=[], metavar=("t", "x"),
+        help=(
+            "Set the symmetric island model migration rate to "
+            "x / (npop - 1) at time t"))
 
     group = parser.add_argument_group("Demography")
     group.add_argument(

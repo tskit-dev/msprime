@@ -742,7 +742,7 @@ class TreeSimulator(object):
             conf.get_ll_representation()
             for conf in self._population_configurations]
         ll_demographic_events = [
-            event.get_ll_representation()
+            event.get_ll_representation(N)
             for event in self._demographic_events]
         self._ll_sim = _msprime.Simulator(
             sample_size=self._sample_size,
@@ -1102,14 +1102,19 @@ class PopulationConfiguration(object):
         return self.__dict__
 
 
-class GrowthRateChangeEvent(object):
+class DemographicEvent(object):
+    def __init__(self, type_):
+        self.type = type_
+
+
+class GrowthRateChangeEvent(DemographicEvent):
     def __init__(self, time, growth_rate, population_id=-1):
-        self.type = "growth_rate_change"
+        super(GrowthRateChangeEvent, self).__init__("growth_rate_change")
         self.time = time
         self.growth_rate = growth_rate
         self.population_id = population_id
 
-    def get_ll_representation(self):
+    def get_ll_representation(self, num_populations):
         return {
             "type": self.type,
             "time": self.time,
@@ -1126,14 +1131,14 @@ class GrowthRateChangeEvent(object):
                 str(self.growth_rate)]
 
 
-class SizeChangeEvent(object):
+class SizeChangeEvent(DemographicEvent):
     def __init__(self, time, size, population_id=-1):
-        self.type = "size_change"
+        super(SizeChangeEvent, self).__init__("size_change")
         self.time = time
         self.size = size
         self.population_id = population_id
 
-    def get_ll_representation(self):
+    def get_ll_representation(self, num_populations):
         return {
             "type": self.type,
             "time": self.time,
@@ -1148,6 +1153,42 @@ class SizeChangeEvent(object):
             return [
                 "-en", str(self.time), str(self.population_id + 1),
                 str(self.growth_rate)]
+
+
+class MigrationRateChangeEvent(DemographicEvent):
+    def __init__(self, time, rate, matrix_index=None):
+        super(MigrationRateChangeEvent, self).__init__(
+            "migration_rate_change")
+        self.time = time
+        self.rate = rate
+        self.matrix_index = matrix_index
+
+    def _convert_matrix_index(self, matrix_index):
+        ret = -1
+        if matrix_index is not None:
+            ret = matrix_index[0] * self._num_populations + matrix_index[1]
+        return ret
+
+    def get_ll_representation(self, num_populations):
+        matrix_index = -1
+        if self.matrix_index is not None:
+            matrix_index = (
+                self.matrix_index[0] * num_populations + self.matrix_index[1])
+        return {
+            "type": self.type,
+            "time": self.time,
+            "migration_rate": self.rate,
+            "matrix_index": matrix_index
+        }
+
+    def get_ms_arguments(self):
+        raise NotImplemented()
+        # if self.population_id is None:
+        #     return ["-eN", str(self.time), str(self.size)]
+        # else:
+        #     return [
+        #         "-en", str(self.time), str(self.population_id + 1),
+        #         str(self.growth_rate)]
 
 
 def harmonic_number(n):

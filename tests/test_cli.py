@@ -233,6 +233,15 @@ class TestMspmsArgumentParser(unittest.TestCase):
         self.assertEqual(
             args.population_growth_rate_change, [(0, [1, 2, 3])])
 
+    def test_migration_rates(self):
+        args = self.parse_args("15 1 -I 2 15 0 -eM 2 3 ".split())
+        self.assertEqual(
+            args.migration_rate_change, [(0, [2, 3])])
+        args = self.parse_args(
+            "15 1 -I 2 15 0 -eM 2 3 -eG 3 4 -eM 4 5".split())
+        self.assertEqual(
+            args.migration_rate_change, [(0, [2, 3]), (2, [4, 5])])
+
 
 class CustomExceptionForTesting(Exception):
     """
@@ -277,6 +286,8 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         # Check for some higher values
         self.assert_parser_error("10 1 -T -I 4 1 1")
         self.assert_parser_error("10 1 -T -I 5 1 1 1 1 6 1 1")
+        # Negative migration rates not allowed
+        self.assert_parser_error("2 1 -T -I 2 1 1 -1")
 
     def test_migration_matrix_entry(self):
         # -m without -I raises an error
@@ -291,6 +302,8 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 3 1")
         # Diagonal elements cannot be set.
         self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 1 1")
+        # Negative rates not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 2 -1")
 
     def test_migration_matrix(self):
         # -ma without -I raises an error
@@ -303,13 +316,30 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         # Non float values in non-diagonals not allowed
         self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 x 0 0")
         self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 x 0")
+        # Negative values
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 -1 0 0")
+
+    def test_migration_rate_change(self):
+        # -eM without -I raises error
+        self.assert_parser_error("10 1 -T -eM 1 1")
+        # Non int values
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM x 1")
+        # Wrong number of args
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM 1 1 1")
+        # Negative migration rates not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM 1 -1")
+        # Negative times are not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM -1 1")
 
     def test_unordered_demographic_events(self):
-        self.assert_parser_error("10 1 -T -eN 0.2 -eN 0.1")
-        self.assert_parser_error("10 1 -T -eG 0.2 -eN 0.1")
-        self.assert_parser_error("10 1 -T -eG 0.2 -eG 0.1")
-        self.assert_parser_error("10 1 -T -eG 0.1 -eN 0.21 -eG 0.2")
-        self.assert_parser_error("10 1 -T -eG 0.1 -eG 0.21 -eG 0.2")
+        self.assert_parser_error("10 1 -T -eN 0.2 1 -eN 0.1 1")
+        self.assert_parser_error("10 1 -T -eG 0.2 1 -eN 0.1 1")
+        self.assert_parser_error("10 1 -T -eG 0.2 1 -eG 0.1 1")
+        self.assert_parser_error("10 1 -T -eG 0.1 1 -eN 0.21 1 -eG 0.2 1")
+        self.assert_parser_error("10 1 -T -eG 0.1 1 -eG 0.21 1 -eG 0.2 1")
+        self.assert_parser_error(
+            "10 1 -T -I 2 10 0 -eG 0.1 1 -eM 0.21 1 -eG 0.2 1")
 
     def test_recombination(self):
         self.assert_parser_error("10 1 -T -r x 20")
@@ -353,6 +383,8 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 2 10 0 -eg 0.1 1.1 1.1")
         # Out-of-bounds raises an error
         self.assert_parser_error("10 1 -T -I 2 10 0 -eg 0.1 -1 1.1")
+        # Negative times raise an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg -1 1 1")
 
     def test_population_size_change(self):
         self.assert_parser_error("10 1 -T -I 2 10 0 -en")
@@ -363,6 +395,8 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 2 10 0 -en 0.1 1.1 1.1")
         # Out-of-bounds raises an error
         self.assert_parser_error("10 1 -T -I 2 10 0 -en 0.1 -1 1.1")
+        # Negative times raise an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en -1 1 1")
 
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
