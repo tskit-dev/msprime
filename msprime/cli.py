@@ -336,6 +336,10 @@ def create_simulation_runner(parser, arg_list):
     for index, (t, x) in args.size_change:
         demographic_events.append(
             (index, msprime.SizeChangeEvent(t, x)))
+    for index, (t, population_id, x) in args.population_size_change:
+        pid = convert_population_id(parser, population_id, num_populations)
+        demographic_events.append(
+            (index, msprime.SizeChangeEvent(t, x, pid)))
     demographic_events.sort()
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
     if demographic_events != time_sorted:
@@ -450,6 +454,13 @@ def get_mspms_parser():
         "--size-change", "-eN", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "x"),
         help="Set the population size for all populations to x * N0 at time t")
+    group.add_argument(
+        "--population-size-change", "-en", nargs=3,
+        action=IndexedAction, type=float, default=[],
+        metavar=("t", "population_id", "x"),
+        help=(
+            "Set the population size for a specific population to "
+            "x * N0 at time t"))
 
     group = parser.add_argument_group("Miscellaneous")
     group.add_argument(

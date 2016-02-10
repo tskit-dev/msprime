@@ -202,6 +202,11 @@ class TestMspmsArgumentParser(unittest.TestCase):
         self.assertEqual(args.size_change, [(0, [2.0, 0.5])])
         args = self.parse_args("10 1 -eN 1.0 0.5 -eN 2.0 5.0".split())
         self.assertEqual(args.size_change, [(0, [1.0, 0.5]), (1, [2.0, 5.0])])
+        args = self.parse_args("10 1 -eN 1.0 0.5 -eN 2.0 5.0".split())
+        self.assertEqual(args.size_change, [(0, [1.0, 0.5]), (1, [2.0, 5.0])])
+        args = self.parse_args("10 1 -I 2 10 0 -en 1 2 3".split())
+        self.assertEqual(
+            args.population_size_change, [(0, [1, 2, 3])])
 
     def test_growth_rates(self):
         args = self.parse_args(["40", "20"])
@@ -224,6 +229,9 @@ class TestMspmsArgumentParser(unittest.TestCase):
         self.assertEqual(args.growth_rate, 4.0)
         self.assertEqual(
             args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
+        args = self.parse_args("10 1 -I 2 10 0 -eg 1 2 3".split())
+        self.assertEqual(
+            args.population_growth_rate_change, [(0, [1, 2, 3])])
 
 
 class CustomExceptionForTesting(Exception):
@@ -345,6 +353,16 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 2 10 0 -eg 0.1 1.1 1.1")
         # Out-of-bounds raises an error
         self.assert_parser_error("10 1 -T -I 2 10 0 -eg 0.1 -1 1.1")
+
+    def test_population_size_change(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en 1 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en x 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en 1 x 1")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en 0.1 1.1 1.1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en 0.1 -1 1.1")
 
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
@@ -479,6 +497,27 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         self.assertEqual(events[0].population_id, 0)
         self.assertEqual(events[1].type, "growth_rate_change")
         self.assertEqual(events[1].growth_rate, 3.0)
+        self.assertEqual(events[1].time, 0.2)
+        self.assertEqual(events[1].population_id, 1)
+
+    def test_population_size_change(self):
+        def f(args):
+            sim = self.create_simulator(args)
+            return sim.get_demographic_events()
+        events = f("2 1 -T -en 0.1 1 2")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, "size_change")
+        self.assertEqual(events[0].size, 2.0)
+        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].population_id, 0)
+        events = f("2 1 -T -I 2 1 1 -en 0.1 1 2 -en 0.2 2 3")
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].type, "size_change")
+        self.assertEqual(events[0].size, 2.0)
+        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].population_id, 0)
+        self.assertEqual(events[1].type, "size_change")
+        self.assertEqual(events[1].size, 3.0)
         self.assertEqual(events[1].time, 0.2)
         self.assertEqual(events[1].population_id, 1)
 

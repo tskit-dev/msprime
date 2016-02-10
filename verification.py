@@ -212,6 +212,10 @@ def main():
         "pop-size-2-pops1", "100 10000 -t 2.0 -I 2 50 50 2.5 -n 1 0.1")
     verifier.add_ms_instance(
         "pop-size-2-pops2", "100 10000 -t 2.0 -I 2 50 50 2.5 -g 1 2 -n 1 0.1")
+    verifier.add_ms_instance(
+        "pop-size-2-pops3", "100 10000 -t 2.0 -I 2 50 50 2.5 -eN 0.5 3.5")
+    verifier.add_ms_instance(
+        "pop-size-2-pops4", "100 10000 -t 2.0 -I 2 50 50 2.5 -en 0.5 1 3.5")
 
     # Examples from ms documentation
     verifier.add_ms_instance(
