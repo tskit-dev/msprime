@@ -1191,6 +1191,74 @@ class MigrationRateChangeEvent(DemographicEvent):
         #         str(self.growth_rate)]
 
 
+##############################
+#
+# Deprecated interface for specifying population demography
+#
+##############################
+
+
+class PopulationModel(object):
+    """
+    Superclass of simulation population models.
+    """
+    def __init__(self, start_time):
+        self.start_time = start_time
+
+    def get_ll_model(self):
+        """
+        Returns the low-level model corresponding to this population
+        model.
+        """
+        return self.__dict__
+
+
+class ConstantPopulationModel(PopulationModel):
+    """
+    A population model in which the size of the population
+    is a fixed multiple ``size`` of :math:`N_0` (the Wright-Fisher population
+    size at time 0), which starts at the specified time.
+
+    :param float start_time: The time (in coalescent units) at which
+        this population model begins.
+    :param float size: The size of the population under this model
+        relative to :math:`N_0`.
+    """
+    def __init__(self, start_time, size):
+        super(ConstantPopulationModel, self).__init__(start_time)
+        self.size = size
+        self.type = _msprime.POP_MODEL_CONSTANT
+
+    def get_ms_arguments(self):
+        return ["-eN", str(self.start_time), str(self.size)]
+
+
+class ExponentialPopulationModel(PopulationModel):
+    """
+    A population model in which the size is exponentially growing (or
+    shrinking). If we have a :attr:`start_time` of :math:`s`, the population
+    size at a time :math:`t` (measured in units of :math:`4N_0_0` generations)
+    is :math:`N_s e^{\\alpha (t - s)}`, where :math:`N_s` is the population
+    size at time :math:`s`.
+
+    :param float start_time: The time (in coalescent units) at which
+        this population model begins.
+    :param float alpha: The exponential growth (or contraction) rate
+        :math:`\\alpha`.
+    """
+    def __init__(self, start_time, alpha):
+        super(ExponentialPopulationModel, self).__init__(start_time)
+        self.alpha = alpha
+        self.type = _msprime.POP_MODEL_EXPONENTIAL
+
+    def get_ms_arguments(self):
+        if self.start_time == 0.0:
+            ret = ["-G", str(self.alpha)]
+        else:
+            ret = ["-eG", str(self.start_time), str(self.alpha)]
+        return ret
+
+
 def harmonic_number(n):
     """
     Returns the nth Harmonic number.
