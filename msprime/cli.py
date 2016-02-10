@@ -253,6 +253,25 @@ def check_event_time(parser, time):
         parser.error("Event times must be non-negative.")
 
 
+def convert_migration_matrix(parser, input_matrix, num_populations):
+    """
+    Converts the specified migration matrix into the internal format.
+    """
+    if len(input_matrix) != num_populations**2:
+        parser.error(
+            "Must be num_populations^2 migration matrix entries")
+    migration_matrix = [[
+        0 for j in range(num_populations)] for k in range(num_populations)]
+    for j in range(num_populations):
+        for k in range(num_populations):
+            if j != k:
+                rate = convert_float(
+                    input_matrix[j * num_populations + k], parser)
+                check_migration_rate(parser, rate)
+                migration_matrix[j][k] = rate
+    return migration_matrix
+
+
 def create_simulation_runner(parser, arg_list):
     """
     Parses the arguments and returns a SimulationRunner instance.
@@ -312,17 +331,8 @@ def create_simulation_runner(parser, arg_list):
                 "Cannot specify a migration matrix without "
                 "first providing a -I option")
     if args.migration_matrix is not None:
-        if len(args.migration_matrix) != num_populations**2:
-            parser.error(
-                "Must be num_populations^2 migration matrix entries")
-        for j in range(num_populations):
-            for k in range(num_populations):
-                if j != k:
-                    rate = convert_float(
-                        args.migration_matrix[j * num_populations + k],
-                        parser)
-                    check_migration_rate(parser, rate)
-                    migration_matrix[j][k] = rate
+        migration_matrix = convert_migration_matrix(
+            parser, args.migration_matrix, num_populations)
     for matrix_entry in args.migration_matrix_entry:
         dest = convert_population_id(parser, matrix_entry[0], num_populations)
         source = convert_population_id(
@@ -367,7 +377,11 @@ def create_simulation_runner(parser, arg_list):
 
     # Demographic events that affect the migration matrix
     if num_populations == 1:
-        if len(args.migration_rate_change) > 0:
+        condition = (
+            len(args.migration_rate_change) > 0 or
+            len(args.migration_matrix_entry_change) > 0 or
+            len(args.migration_matrix_change) > 0)
+        if condition:
             parser.error("Cannot change migration rates for 1 population")
     for index, (t, x) in args.migration_rate_change:
         # TODO How does this interact with population splits and so on? i.e.,
@@ -389,8 +403,23 @@ def create_simulation_runner(parser, arg_list):
         check_migration_rate(parser, rate)
         msp_event = msprime.MigrationRateChangeEvent(t, rate, (dest, source))
         demographic_events.append((index, msp_event))
+    for index, event in args.migration_matrix_change:
+        if len(event) < 3:
+            parser.error("Need at least three arguments to -ma")
+        t = convert_float(event[0], parser)
+        check_event_time(parser, t)
+        if convert_int(event[1], parser) != num_populations:
+            parser.error(
+                "num_populations must be equal for new migration matrix")
+        matrix = convert_migration_matrix(parser, event[2:], num_populations)
+        for j in range(num_populations):
+            for k in range(num_populations):
+                if j != k:
+                    msp_event = msprime.MigrationRateChangeEvent(
+                        t, matrix[j][k], (j, k))
+                    demographic_events.append((index, msp_event))
 
-    demographic_events.sort()
+    demographic_events.sort(key=lambda x: (x[0], x[1].time))
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
     if demographic_events != time_sorted:
         parser.error(
@@ -454,10 +483,10 @@ def get_mspms_parser():
 
     group = parser.add_argument_group("Structure and migration")
     group.add_argument(
-        "--structure", "-I", nargs='+',
+        "--structure", "-I", nargs='+', metavar="value",
         help=(
             "Sample from populations with the specified deme structure. "
-            "The STRUCTURE argument is of the form 'num_populations "
+            "The arguments are of the form 'num_populations "
             "n1 n2 ... [4N0m]', specifying the number of populations, "
             "the sample configuration, and optionally, the migration "
             "rate for a symmetric island model"))
@@ -470,7 +499,7 @@ def get_mspms_parser():
             "specified rate. source and dest are (1-indexed) population "
             "IDs. Multiple options can be specified."))
     group.add_argument(
-        "--migration-matrix", "-ma", nargs='+', default=None,
+        "--migration-matrix", "-ma", nargs='+', default=None, metavar="entry",
         help=(
             "Sets the migration matrix to the specified value. The "
             "entries are in the order M[1,1], M[1, 2], ..., M[2, 1],"
@@ -489,6 +518,12 @@ def get_mspms_parser():
             "Sets an entry M[dest, source] in the migration matrix to the "
             "specified rate at the specified time. source and dest are "
             "(1-indexed) population IDs."))
+    group.add_argument(
+        "--migration-matrix-change", "-ema", nargs='+', default=[],
+        action=IndexedAction, metavar="entry", help=(
+            "Sets the migration matrix to the specified value at time t."
+            "The entries are in the order M[1,1], M[1, 2], ..., M[2, 1],"
+            "M[2, 2], ..., M[N, N], where N is the number of populations."))
 
     group = parser.add_argument_group("Demography")
     group.add_argument(

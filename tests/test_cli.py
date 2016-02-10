@@ -307,19 +307,19 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
 
     def test_migration_matrix_entry_change(self):
         # -em without -I raises an error
-        self.assert_parser_error("10 1 -T -em 1 1 1")
+        self.assert_parser_error("10 1 -T -em 1 1 1 1")
         # Non int values not allowed
-        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1.1 1 1")
-        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1.1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1.1 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 1.1 1")
         # Out-of-bounds raises an error
-        self.assert_parser_error("10 1 -T -I 2 10 0 -em 0 1 1")
-        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 0 1")
-        self.assert_parser_error("10 1 -T -I 2 10 0 -em 3 1 1")
-        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 3 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 0 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 0 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 3 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 3 1")
         # Diagonal elements cannot be set.
-        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 1 1")
         # Negative rates not allowed
-        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 2 -1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 2 -1")
 
     def test_migration_matrix(self):
         # -ma without -I raises an error
@@ -334,6 +334,26 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 x 0")
         # Negative values
         self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 -1 0 0")
+
+    def test_migration_matrix_change(self):
+        # -ema without -I raises an error
+        self.assert_parser_error("10 1 -T -ema 1 1 1 1")
+        # Incorrect lengths
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 ")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 0 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 0 0 0 0 0")
+        # Non float values in non-diagonals not allowed
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 2 0 x 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 2 0 0 x 0")
+        # Negative values
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 2 0 -1 0 0")
+        # Non float times.
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema x 2 0 0 0 0")
+        # Change in migration matrix size.
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema x 1 0")
+        self.assert_parser_error(
+            "10 1 -T -I 2 5 5 -ema x 3 0 0 0 0 0 0 0 0 0")
 
     def test_migration_rate_change(self):
         # -eM without -I raises error
@@ -600,6 +620,32 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         check(
             "2 1 -T -I 3 2 0 0 -eM 2.2 2 -em 3.3 3 1 5.5",
             [(2.2, 1, None), (3.3, 5.5, (2, 0))])
+
+    def test_migration_matrix_change(self):
+        def check(args, results):
+            sim = self.create_simulator(args)
+            # Make sure we haven't changed the initial matrix.
+            matrix = sim.get_migration_matrix()
+            for row in matrix:
+                for entry in row:
+                    self.assertEqual(entry, 0.0)
+            events = sim.get_demographic_events()
+            self.assertEqual(len(events), len(results))
+            for event, result in zip(events, results):
+                self.assertEqual(event.type, "migration_rate_change")
+                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.rate, result[1])
+                self.assertEqual(event.matrix_index, result[2])
+        check(
+            "2 1 -T -I 2 2 0 -ema 2.2 2 x 1 2 x",
+            [(2.2, 1, (0, 1)), (2.2, 2, (1, 0))])
+        check(
+            "2 1 -T -I 3 2 0 0 -ema 2.2 3 x 1 2 3 x 4 5 6 x",
+            [
+                (2.2, 1, (0, 1)), (2.2, 2, (0, 2)),
+                (2.2, 3, (1, 0)), (2.2, 4, (1, 2)),
+                (2.2, 5, (2, 0)), (2.2, 6, (2, 1)),
+            ])
 
 
 class TestMspmsOutput(unittest.TestCase):

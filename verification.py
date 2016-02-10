@@ -220,7 +220,7 @@ def main():
         "migration-rate-2-pops1", "100 10000 -t 2.0 -I 2 50 50 0 -eM 3 5")
     verifier.add_ms_instance(
         "migration-matrix-2-pops1",
-        "100 10000 -t 2.0 -I 2 50 50 -ma x 0.01 10 x")
+        "100 10000 -t 2.0 -I 2 50 50 -ma x 10 0 x")
     verifier.add_ms_instance(
         "migration-matrix-2-pops2",
         "100 10000 -t 2.0 -I 2 50 50 -m 1 2 10 -m 2 1 50")
@@ -230,6 +230,13 @@ def main():
     verifier.add_ms_instance(
         "migration-matrix-entry-change-2-pops1",
         "100 10000 -t 2.0 -I 2 50 50 -em 0.5 2 1 10")
+    verifier.add_ms_instance(
+        "migration-matrix-change-2-pops1",
+        "100 10000 -t 2.0 -I 2 50 50 -ema 10.0 2 x 10 0 x")
+    verifier.add_ms_instance(
+        "migration-matrix-change-2-pops2",
+        "100 10000 -t 2.0 -I 2 50 50 -ema 1.0 2 x 0.1 0 x "
+        "-eN 1.1 0 -ema 10 2 x 0 10 x")
 
     # Examples from ms documentation
     verifier.add_ms_instance(
