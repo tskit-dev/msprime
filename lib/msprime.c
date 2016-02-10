@@ -2053,7 +2053,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
         /* printf("t = %f min = %f re = %f ca = %f mig = %f\n", */
         /*         self->time, t_wait, re_t_wait, ca_t_wait, mig_t_wait); */
-        if (t_wait == DBL_MAX) {
+        if (self->next_demographic_event == NULL && t_wait == DBL_MAX) {
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
         }
@@ -2079,7 +2079,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             /* msp_print_state(self); */
         } else {
             self->time += t_wait;
-
             if (re_t_wait == t_wait) {
                 ret = msp_recombination_event(self);
             } else if (ca_t_wait == t_wait) {
