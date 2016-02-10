@@ -375,9 +375,20 @@ def create_simulation_runner(parser, arg_list):
         # scaling?
         check_migration_rate(parser, x)
         check_event_time(parser, t)
-        demographic_events.append((
-            index,
-            msprime.MigrationRateChangeEvent(t, x / (num_populations - 1))))
+        event = msprime.MigrationRateChangeEvent(
+            t, x / (num_populations - 1))
+        demographic_events.append((index, event))
+    for index, event in args.migration_matrix_entry_change:
+        t = event[0]
+        check_event_time(parser, t)
+        dest = convert_population_id(parser, event[1], num_populations)
+        source = convert_population_id(parser, event[2], num_populations)
+        if dest == source:
+            parser.error("Cannot set diagonal elements in migration matrix")
+        rate = event[3]
+        check_migration_rate(parser, rate)
+        msp_event = msprime.MigrationRateChangeEvent(t, rate, (dest, source))
+        demographic_events.append((index, msp_event))
 
     demographic_events.sort()
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
@@ -456,7 +467,7 @@ def get_mspms_parser():
         nargs=3, type=float, default=[],
         help=(
             "Sets an entry M[dest, source] in the migration matrix to the "
-            "specified ate. source and dest are (1-indexed) population "
+            "specified rate. source and dest are (1-indexed) population "
             "IDs. Multiple options can be specified."))
     group.add_argument(
         "--migration-matrix", "-ma", nargs='+', default=None,
@@ -470,6 +481,14 @@ def get_mspms_parser():
         help=(
             "Set the symmetric island model migration rate to "
             "x / (npop - 1) at time t"))
+    group.add_argument(
+        "--migration-matrix-entry-change", "-em", action=IndexedAction,
+        metavar=("time", "dest", "source", "rate"),
+        nargs=4, type=float, default=[],
+        help=(
+            "Sets an entry M[dest, source] in the migration matrix to the "
+            "specified rate at the specified time. source and dest are "
+            "(1-indexed) population IDs."))
 
     group = parser.add_argument_group("Demography")
     group.add_argument(
