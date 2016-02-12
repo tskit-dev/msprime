@@ -367,13 +367,15 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 {
     int ret = -1;
     Py_ssize_t j;
-    double time, size, growth_rate, migration_rate;
-    int err, population_id, matrix_index;
-    int is_size_change, is_growth_rate_change, is_migration_rate_change;
+    double time, size, growth_rate, migration_rate, proportion;
+    int err, population_id, matrix_index, source, destination;
+    int is_size_change, is_growth_rate_change, is_migration_rate_change,
+        is_mass_migration;
     PyObject *item, *value, *type;
     PyObject *size_change = NULL;
     PyObject *growth_rate_change = NULL;
     PyObject *migration_rate_change = NULL;
+    PyObject *mass_migration = NULL;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -389,6 +391,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     }
     migration_rate_change = Py_BuildValue("s", "migration_rate_change");
     if (migration_rate_change == NULL) {
+        goto out;
+    }
+    mass_migration = Py_BuildValue("s", "mass_migration");
+    if (mass_migration == NULL) {
         goto out;
     }
     for (j = 0; j < PyList_Size(py_events); j++) {
@@ -426,6 +432,11 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
         is_migration_rate_change = PyObject_RichCompareBool(type,
                 migration_rate_change, Py_EQ);
         if (is_migration_rate_change == -1) {
+            goto out;
+        }
+        is_mass_migration = PyObject_RichCompareBool(type, mass_migration,
+                Py_EQ);
+        if (is_mass_migration == -1) {
             goto out;
         }
         if (is_size_change) {
@@ -466,6 +477,24 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             matrix_index = (int) PyLong_AsLong(value);
             err = msp_add_migration_rate_change(self->sim, time, matrix_index,
                     migration_rate);
+        } else if (is_mass_migration) {
+            value = get_dict_number(item, "proportion");
+            if (value == NULL) {
+                goto out;
+            }
+            proportion = PyFloat_AsDouble(value);
+            value = get_dict_number(item, "source");
+            if (value == NULL) {
+                goto out;
+            }
+            source = (int) PyLong_AsLong(value);
+            value = get_dict_number(item, "destination");
+            if (value == NULL) {
+                goto out;
+            }
+            destination = (int) PyLong_AsLong(value);
+            err = msp_add_mass_migration(self->sim, time, source, destination,
+                    proportion);
         } else {
             PyErr_Format(PyExc_ValueError, "Unknown demographic event type");
             goto out;
@@ -953,7 +982,7 @@ Simulator_individual_to_python(Simulator *self, segment_t *ind)
     u = ind;
     j = 0;
     while (u != NULL) {
-        t = Py_BuildValue("(I,I,i)", u->left, u->right, u->value);
+        t = Py_BuildValue("(I,I,I,I)", u->left, u->right, u->value, u->population_id);
         if (t == NULL) {
             Py_DECREF(l);
             goto out;

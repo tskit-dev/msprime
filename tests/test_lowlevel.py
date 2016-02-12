@@ -95,6 +95,20 @@ def get_migration_rate_change_event(
     }
 
 
+def get_mass_migration_event(
+        time=0.0, source=0, destination=1, proportion=1):
+    """
+    Returns a mass_migration demographic event.
+    """
+    return {
+        "type": "mass_migration",
+        "time": time,
+        "source": source,
+        "destination": destination,
+        "proportion": proportion
+    }
+
+
 def get_migration_matrix(num_populations, value=1.0):
     """
     Returns a simple migration matrix.
@@ -128,6 +142,15 @@ def get_random_demographic_events(num_populations, num_events):
             events.append(get_migration_rate_change_event(
                 time=random.random(), migration_rate=random.random(),
                 matrix_index=matrix_index))
+            # Add a mass migration event.
+            source = random.randint(0, num_populations - 1)
+            destination = source
+            while destination == source:
+                destination = random.randint(0, num_populations - 1)
+            # We use proportion of 0 or 1 so that we can test deterministically
+            events.append(get_mass_migration_event(
+                time=random.random(), proportion=random.choice([0, 1]),
+                source=source, destination=destination))
     sorted_events = sorted(events, key=lambda x: x["time"])
     return sorted_events
 
@@ -382,13 +405,17 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
         n = sim.get_sample_size()
         m = sim.get_num_loci()
+        N = sim.get_num_populations()
         ancestors = sim.get_ancestors()
         self.assertEqual(len(ancestors), sim.get_num_ancestors())
         for ind in ancestors:
-            for l, r, node in ind:
+            the_pop_id = ind[0][-1]
+            for l, r, node, pop_id in ind:
                 self.assertTrue(0 <= l < m)
                 self.assertTrue(1 <= r <= m)
                 self.assertGreaterEqual(node, 1)
+                self.assertTrue(0 <= pop_id < N)
+                self.assertEqual(the_pop_id, pop_id)
         breakpoints = [0] + sim.get_breakpoints() + [m]
         self.assertEqual(len(breakpoints), sim.get_num_breakpoints() + 2)
         self.assertEqual(breakpoints, sorted(breakpoints))
@@ -407,7 +434,7 @@ class TestSimulationState(LowLevelTestCase):
         # full coalescence has occured).
         segments_am = [0 for b in breakpoints[:-1]]
         for ind in ancestors:
-            for l, r, _ in ind:
+            for l, r, _, _ in ind:
                 j = breakpoints.index(l)
                 while breakpoints[j] < r:
                     segments_am[j] += 1
@@ -644,14 +671,18 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(json.loads(sim.get_configuration_json()), config)
         a = 0
         nodes = set()
+        pop_sizes = [0 for _ in population_configuration]
         for ind in sim.get_ancestors():
             self.assertEqual(len(ind), 1)
-            l, r, node = ind[0]
+            l, r, node, pop_id = ind[0]
+            pop_sizes[pop_id] += 1
             self.assertEqual(l, 0)
             self.assertEqual(r, m)
             self.assertFalse(node in nodes)
             nodes.add(node)
             a += 1
+        for pop_config, pop_size in zip(population_configuration, pop_sizes):
+            self.assertEqual(pop_config["sample_size"], pop_size)
         self.assertEqual(a, n)
         for j in range(3):
             # Check the getters to ensure we've got the right values.
@@ -772,9 +803,10 @@ class TestSimulationState(LowLevelTestCase):
         nodes = []
         for ancestor in ancestors:
             self.assertEqual(len(ancestor), 1)
-            for l, r, node in ancestor:
+            for l, r, node, pop_id in ancestor:
                 self.assertEqual(l, 0)
                 self.assertEqual(r, m)
+                self.assertEqual(pop_id, 0)
                 nodes.append(node)
         self.assertEqual(sorted(nodes), list(range(1, n + 1)))
         events = 0
@@ -825,6 +857,15 @@ class TestSimulationState(LowLevelTestCase):
                                 migration_matrix[j * N + k] = rate
                 else:
                     migration_matrix[matrix_index] = rate
+            elif event_type == "mass_migration":
+                dest = event["destination"]
+                proportion = event["proportion"]
+                pop_sizes = [0 for j in range(N)]
+                for ind in sim.get_ancestors():
+                    _, _, _, pop_id = ind[0]
+                    pop_sizes[pop_id] += 1
+                if proportion == 1:
+                    self.assertEqual(pop_sizes[dest], 0)
             else:
                 population_id = event["population_id"]
                 indexes = [population_id]
@@ -1080,7 +1121,8 @@ class TestSimulator(LowLevelTestCase):
                 migration_matrix=get_migration_matrix(num_populations))
         event_generators = [
             get_size_change_event, get_growth_rate_change_event,
-            get_migration_rate_change_event]
+            get_migration_rate_change_event,
+            get_mass_migration_event]
         for event_generator in event_generators:
             # Negative times not allowed.
             event = event_generator(time=-1)
@@ -1098,6 +1140,11 @@ class TestSimulator(LowLevelTestCase):
                 self.assertRaises(_msprime.InputError, f, [event], k)
                 events = [event_generator(), event]
                 self.assertRaises(_msprime.InputError, f, events, k)
+        for bad_pop_id in [-2, 1, 10**6]:
+            event = get_mass_migration_event(source=bad_pop_id)
+            self.assertRaises(_msprime.InputError, f, [event])
+            event = get_mass_migration_event(destination=bad_pop_id)
+            self.assertRaises(_msprime.InputError, f, [event])
         # Negative size values not allowed
         size_change_event = get_size_change_event(size=-5)
         self.assertRaises(_msprime.InputError, f, [size_change_event])
@@ -1115,11 +1162,17 @@ class TestSimulator(LowLevelTestCase):
             for j in range(k):
                 event = event_generator(matrix_index=j * k + j)
                 self.assertRaises(_msprime.InputError, f, [event], k)
+        # Tests specific for mass_migration
+        event = get_mass_migration_event(source=0, destination=0)
+        self.assertRaises(_msprime.InputError, f, [event])
+        for bad_proportion in [-1, 1.1, 1e7]:
+            event = get_mass_migration_event(proportion=bad_proportion)
+            self.assertRaises(_msprime.InputError, f, [event])
 
     def test_unsorted_demographic_events(self):
         event_generators = [
             get_size_change_event, get_growth_rate_change_event,
-            get_migration_rate_change_event]
+            get_migration_rate_change_event, get_mass_migration_event]
         events = []
         for event_generator in event_generators:
             for _ in range(3):
@@ -1168,7 +1221,8 @@ class TestSimulator(LowLevelTestCase):
                 "demographic_events": [
                     get_size_change_event(0.1, 0.5),
                     get_migration_rate_change_event(0.2, 2),
-                    get_growth_rate_change_event(0.3, 2)]
+                    get_growth_rate_change_event(0.3, 2),
+                    get_mass_migration_event(0.4, 0, 1, 0.5)]
             }
         ]
         for params in simulations:
@@ -1274,6 +1328,31 @@ class TestSimulator(LowLevelTestCase):
                 self.assertEqual(num_events, 0)
             else:
                 self.assertGreater(num_events, 0)
+
+    def test_mass_migration(self):
+        n = 10
+        t = 0.01
+        dt = 0.0000001
+        sim = _msprime.Simulator(
+            n, 1, population_configuration=[
+                get_population_configuration(n),
+                get_population_configuration(0)],
+            demographic_events=[
+                get_migration_rate_change_event(t),
+                get_mass_migration_event(
+                    t + dt, source=1, destination=0, proportion=1)],
+            migration_matrix=[0, 0, 0, 0])
+        sim.run(t)
+        pop_sizes_before = [0, 0]
+        for ind in sim.get_ancestors():
+            for _, _, _, pop_id in ind:
+                pop_sizes_before[pop_id] += 1
+        sim.run(t + dt)
+        pop_sizes_after = [0, 0]
+        for ind in sim.get_ancestors():
+            for _, _, _, pop_id in ind:
+                pop_sizes_after[pop_id] += 1
+        self.assertEqual(pop_sizes_before[0], pop_sizes_after[1])
 
     def test_recombination_event_counters(self):
         n = 10
