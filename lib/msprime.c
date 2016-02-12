@@ -99,6 +99,10 @@ msp_strerror(int err)
         ret = "Cannot set diagonal migration matrix elements.";
     } else if (err == MSP_ERR_INFINITE_WAITING_TIME) {
         ret = "Infinite waiting time until next simulation event.";
+    } else if (err == MSP_ERR_ASSERTION_FAILED) {
+        ret = "Internal error; please file a bug report.";
+    } else if (err == MSP_ERR_SOURCE_DEST_EQUAL) {
+        ret = "Source and destination populations equal.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -405,339 +409,6 @@ msp_set_coalescence_record_block_size(msp_t *self, size_t block_size)
 out:
     return ret;
 }
-
-/* Demographic events */
-static demographic_event_t * WARN_UNUSED
-msp_add_demographic_event(msp_t *self, double time)
-{
-    demographic_event_t *ret = NULL;
-
-    ret = calloc(1, sizeof(demographic_event_t));
-    if (ret == NULL) {
-        goto out;
-    }
-    ret->time = time;
-    /* now insert this event at the end of the chain. */
-    if (self->demographic_events_head == NULL) {
-        self->demographic_events_head = ret;
-        self->demographic_events_tail = ret;
-    } else {
-        self->demographic_events_tail->next = ret;
-        self->demographic_events_tail = ret;
-    }
-out:
-    return ret;
-}
-
-static int
-msp_change_population_growth_rate(msp_t *self, size_t population_id, double time,
-        double growth_rate)
-{
-    int ret = 0;
-    double current_size = 0;
-    double dt;
-    population_t *pop;
-
-    if (population_id >= self->num_populations) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    /* Calculate the size of the the population at this time */
-    pop = &self->populations[population_id];
-    dt = time - pop->start_time;
-    current_size = pop->initial_size * exp(-pop->growth_rate * dt);
-
-    /* Change the growth_rate of the population to the specified multiple of N0,
-     * and set the initial_size of the population to its current size */
-    pop->initial_size = current_size;
-    pop->start_time = time;
-    pop->growth_rate = growth_rate;
-out:
-    return ret;
-}
-
-static int
-msp_change_growth_rate(msp_t *self, demographic_event_t *event)
-{
-    int ret = 0;
-    int pid = event->params.growth_rate_change.population_id;
-    double growth_rate = event->params.growth_rate_change.growth_rate;
-
-    if (pid == -1) {
-        for (pid = 0; pid < (int) self->num_populations; pid++) {
-            ret = msp_change_population_growth_rate(self, (size_t) pid,
-                    event->time, growth_rate);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-    } else {
-        ret = msp_change_population_growth_rate(self, (size_t) pid,
-                event->time, growth_rate);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-out:
-    return ret;
-}
-
-static void
-msp_print_growth_rate_change(msp_t *self, demographic_event_t *event)
-{
-    printf("%f\tgrowth_rate_change: %d -> %f\n",
-            event->time,
-            event->params.growth_rate_change.population_id,
-            event->params.growth_rate_change.growth_rate);
-}
-
-static int
-json_snprintf_growth_rate_change(demographic_event_t *event, char *buffer,
-        size_t size)
-{
-    const char *pattern = "{"
-        "\"type\": \"growth_rate_change\", "
-        "\"time\": " MSP_LOSSLESS_DBL ", "
-        "\"population_id\": %d, "
-        "\"growth_rate\": " MSP_LOSSLESS_DBL
-        "}, ";
-    return snprintf(buffer, size, pattern, event->time,
-            event->params.growth_rate_change.population_id,
-            event->params.growth_rate_change.growth_rate);
-}
-
-int
-msp_add_growth_rate_change(msp_t *self, double time, int population_id,
-        double growth_rate)
-{
-    int ret = -1;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
-    int N = (int) self->num_populations;
-
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (population_id < -1 || population_id >= N) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    de->params.growth_rate_change.growth_rate = growth_rate;
-    de->params.growth_rate_change.population_id = population_id;
-    de->change_state = msp_change_growth_rate;
-    de->print_state = msp_print_growth_rate_change;
-    de->json_snprintf = json_snprintf_growth_rate_change;
-    ret = 0;
-out:
-    return ret;
-}
-
-static int
-msp_change_population_size(msp_t *self, size_t population_id, double time,
-        double size)
-{
-    int ret = 0;
-
-    if (population_id >= self->num_populations) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    /* Change the size of the population to the specified multiple of N0,
-     * and set the growth rate to 0.
-     */
-    self->populations[population_id].initial_size = size;
-    self->populations[population_id].start_time = time;
-    self->populations[population_id].growth_rate = 0.0;
-out:
-    return ret;
-}
-
-static int
-msp_change_size(msp_t *self, demographic_event_t *event)
-{
-    int ret = 0;
-    int pid = event->params.size_change.population_id;
-    double size = event->params.size_change.size;
-
-    if (pid == -1) {
-        for (pid = 0; pid < (int) self->num_populations; pid++) {
-            ret = msp_change_population_size(self, (size_t) pid,
-                    event->time, size);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-    } else {
-        ret = msp_change_population_size(self, (size_t) pid,
-                event->time, size);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-out:
-    return ret;
-}
-
-static void
-msp_print_size_change(msp_t *self, demographic_event_t *event)
-{
-    printf("%f\tsize_change: %d -> %f\n",
-            event->time,
-            event->params.size_change.population_id,
-            event->params.size_change.size);
-}
-
-static int
-json_snprintf_size_change(demographic_event_t *event, char *buffer, size_t size)
-{
-    const char *pattern = "{"
-        "\"type\": \"size_change\", "
-        "\"time\": " MSP_LOSSLESS_DBL ", "
-        "\"size\": " MSP_LOSSLESS_DBL ", "
-        "\"population_id\": %d"
-        "}, ";
-    return snprintf(buffer, size, pattern, event->time,
-            event->params.size_change.population_id,
-            event->params.size_change.size);
-}
-
-int
-msp_add_size_change(msp_t *self, double time, int population_id, double size)
-{
-    int ret = -1;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
-    int N = (int) self->num_populations;
-
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (population_id < -1 || population_id >= N) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    if (size < 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    de->params.size_change.size = size;
-    de->params.size_change.population_id = population_id;
-    de->change_state = msp_change_size;
-    de->print_state = msp_print_size_change;
-    de->json_snprintf = json_snprintf_size_change;
-    ret = 0;
-out:
-    return ret;
-}
-
-/* Migration rate change */
-
-static int WARN_UNUSED
-msp_change_migration_matrix_entry(msp_t *self, size_t index, double rate)
-{
-    int ret = 0;
-    size_t N = self->num_populations;
-
-    if (index >= N * N) {
-        ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
-        goto out;
-    }
-    if (index % (N + 1) == 0) {
-        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
-        goto out;
-    }
-    self->migration_matrix[index] = rate;
-out:
-    return ret;
-}
-
-static int
-msp_change_migration_rate(msp_t *self, demographic_event_t *event)
-{
-    int ret = 0;
-    int index = event->params.migration_rate_change.matrix_index;
-    double rate  = event->params.migration_rate_change.migration_rate;
-    int N = (int) self->num_populations;
-
-    if (index == -1) {
-        for (index = 0; index < N * N; index++) {
-            if (index % (N + 1) != 0) {
-                ret = msp_change_migration_matrix_entry(self, (size_t) index,
-                        rate);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
-        }
-    } else {
-        ret = msp_change_migration_matrix_entry(self, (size_t) index, rate);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-out:
-    return ret;
-}
-
-static void
-msp_print_migration_rate_change(msp_t *self, demographic_event_t *event)
-{
-    printf("%f\tmigration_rate_change: %d -> %f\n",
-            event->time,
-            event->params.migration_rate_change.matrix_index,
-            event->params.migration_rate_change.migration_rate);
-}
-
-static int
-json_snprintf_migration_rate_change(demographic_event_t *event, char *buffer,
-        size_t size)
-{
-    const char *pattern = "{"
-        "\"type\": \"migration_rate_change\", "
-        "\"time\": " MSP_LOSSLESS_DBL ", "
-        "\"migration_rate\": " MSP_LOSSLESS_DBL ", "
-        "\"matrix_index\": %d"
-        "}, ";
-    return snprintf(buffer, size, pattern, event->time,
-            event->params.migration_rate_change.matrix_index,
-            event->params.migration_rate_change.migration_rate);
-}
-
-
-int
-msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
-        double migration_rate)
-{
-    int ret = -1;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
-    int N = (int) self->num_populations;
-
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (matrix_index < -1 || matrix_index >= N * N) {
-        ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
-        goto out;
-    }
-    if (migration_rate < 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    if (matrix_index % (N + 1) == 0) {
-        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
-        goto out;
-    }
-    de->params.migration_rate_change.migration_rate = migration_rate;
-    de->params.migration_rate_change.matrix_index = matrix_index;
-    de->change_state = msp_change_migration_rate;
-    de->print_state = msp_print_migration_rate_change;
-    de->json_snprintf = json_snprintf_migration_rate_change;
-    ret = 0;
-out:
-    return ret;
-}
-
 /* JSON provenance strings */
 
 static int WARN_UNUSED
@@ -1426,6 +1097,460 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
+        uint32_t dest_pop)
+{
+    int ret = 0;
+    segment_t *ind, *x;
+
+    ind = (segment_t *) node->item;
+    avl_unlink_node(source, node);
+    msp_free_avl_node(self, node);
+    /* Need to set the population_id for each segment. */
+    x = ind;
+    while (x != NULL) {
+        x->population_id = (uint8_t) dest_pop;
+        x = x->next;
+    }
+    ret = msp_insert_individual(self, ind);
+    return ret;
+}
+
+/* Demographic events */
+static demographic_event_t * WARN_UNUSED
+msp_add_demographic_event(msp_t *self, double time)
+{
+    demographic_event_t *ret = NULL;
+
+    ret = calloc(1, sizeof(demographic_event_t));
+    if (ret == NULL) {
+        goto out;
+    }
+    ret->time = time;
+    /* now insert this event at the end of the chain. */
+    if (self->demographic_events_head == NULL) {
+        self->demographic_events_head = ret;
+        self->demographic_events_tail = ret;
+    } else {
+        self->demographic_events_tail->next = ret;
+        self->demographic_events_tail = ret;
+    }
+out:
+    return ret;
+}
+
+/* Growth rate change */
+
+static int
+msp_change_population_growth_rate(msp_t *self, size_t population_id, double time,
+        double growth_rate)
+{
+    int ret = 0;
+    double current_size = 0;
+    double dt;
+    population_t *pop;
+
+    if (population_id >= self->num_populations) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    /* Calculate the size of the the population at this time */
+    pop = &self->populations[population_id];
+    dt = time - pop->start_time;
+    current_size = pop->initial_size * exp(-pop->growth_rate * dt);
+
+    /* Change the growth_rate of the population to the specified multiple of N0,
+     * and set the initial_size of the population to its current size */
+    pop->initial_size = current_size;
+    pop->start_time = time;
+    pop->growth_rate = growth_rate;
+out:
+    return ret;
+}
+
+static int
+msp_change_growth_rate(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    int pid = event->params.growth_rate_change.population_id;
+    double growth_rate = event->params.growth_rate_change.growth_rate;
+
+    if (pid == -1) {
+        for (pid = 0; pid < (int) self->num_populations; pid++) {
+            ret = msp_change_population_growth_rate(self, (size_t) pid,
+                    event->time, growth_rate);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    } else {
+        ret = msp_change_population_growth_rate(self, (size_t) pid,
+                event->time, growth_rate);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static void
+msp_print_growth_rate_change(msp_t *self, demographic_event_t *event)
+{
+    printf("%f\tgrowth_rate_change: %d -> %f\n",
+            event->time,
+            event->params.growth_rate_change.population_id,
+            event->params.growth_rate_change.growth_rate);
+}
+
+static int
+json_snprintf_growth_rate_change(demographic_event_t *event, char *buffer,
+        size_t size)
+{
+    const char *pattern = "{"
+        "\"type\": \"growth_rate_change\", "
+        "\"time\": " MSP_LOSSLESS_DBL ", "
+        "\"population_id\": %d, "
+        "\"growth_rate\": " MSP_LOSSLESS_DBL
+        "}, ";
+    return snprintf(buffer, size, pattern, event->time,
+            event->params.growth_rate_change.population_id,
+            event->params.growth_rate_change.growth_rate);
+}
+
+int
+msp_add_growth_rate_change(msp_t *self, double time, int population_id,
+        double growth_rate)
+{
+    int ret = -1;
+    demographic_event_t *de = msp_add_demographic_event(self, time);
+    int N = (int) self->num_populations;
+
+    if (de == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    if (population_id < -1 || population_id >= N) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    de->params.growth_rate_change.growth_rate = growth_rate;
+    de->params.growth_rate_change.population_id = population_id;
+    de->change_state = msp_change_growth_rate;
+    de->print_state = msp_print_growth_rate_change;
+    de->json_snprintf = json_snprintf_growth_rate_change;
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Population size change */
+
+static int
+msp_change_population_size(msp_t *self, size_t population_id, double time,
+        double size)
+{
+    int ret = 0;
+
+    if (population_id >= self->num_populations) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    /* Change the size of the population to the specified multiple of N0,
+     * and set the growth rate to 0.
+     */
+    self->populations[population_id].initial_size = size;
+    self->populations[population_id].start_time = time;
+    self->populations[population_id].growth_rate = 0.0;
+out:
+    return ret;
+}
+
+static int
+msp_change_size(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    int pid = event->params.size_change.population_id;
+    double size = event->params.size_change.size;
+
+    if (pid == -1) {
+        for (pid = 0; pid < (int) self->num_populations; pid++) {
+            ret = msp_change_population_size(self, (size_t) pid,
+                    event->time, size);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    } else {
+        ret = msp_change_population_size(self, (size_t) pid,
+                event->time, size);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static void
+msp_print_size_change(msp_t *self, demographic_event_t *event)
+{
+    printf("%f\tsize_change: %d -> %f\n",
+            event->time,
+            event->params.size_change.population_id,
+            event->params.size_change.size);
+}
+
+static int
+json_snprintf_size_change(demographic_event_t *event, char *buffer, size_t size)
+{
+    const char *pattern = "{"
+        "\"type\": \"size_change\", "
+        "\"time\": " MSP_LOSSLESS_DBL ", "
+        "\"size\": " MSP_LOSSLESS_DBL ", "
+        "\"population_id\": %d"
+        "}, ";
+    return snprintf(buffer, size, pattern, event->time,
+            event->params.size_change.population_id,
+            event->params.size_change.size);
+}
+
+int
+msp_add_size_change(msp_t *self, double time, int population_id, double size)
+{
+    int ret = -1;
+    demographic_event_t *de = msp_add_demographic_event(self, time);
+    int N = (int) self->num_populations;
+
+    if (de == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    if (population_id < -1 || population_id >= N) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    if (size < 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    de->params.size_change.size = size;
+    de->params.size_change.population_id = population_id;
+    de->change_state = msp_change_size;
+    de->print_state = msp_print_size_change;
+    de->json_snprintf = json_snprintf_size_change;
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Migration rate change */
+
+static int WARN_UNUSED
+msp_change_migration_matrix_entry(msp_t *self, size_t index, double rate)
+{
+    int ret = 0;
+    size_t N = self->num_populations;
+
+    if (index >= N * N) {
+        ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
+    if (index % (N + 1) == 0) {
+        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
+    self->migration_matrix[index] = rate;
+out:
+    return ret;
+}
+
+static int
+msp_change_migration_rate(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    int index = event->params.migration_rate_change.matrix_index;
+    double rate  = event->params.migration_rate_change.migration_rate;
+    int N = (int) self->num_populations;
+
+    if (index == -1) {
+        for (index = 0; index < N * N; index++) {
+            if (index % (N + 1) != 0) {
+                ret = msp_change_migration_matrix_entry(self, (size_t) index,
+                        rate);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+    } else {
+        ret = msp_change_migration_matrix_entry(self, (size_t) index, rate);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static void
+msp_print_migration_rate_change(msp_t *self, demographic_event_t *event)
+{
+    printf("%f\tmigration_rate_change: %d -> %f\n",
+            event->time,
+            event->params.migration_rate_change.matrix_index,
+            event->params.migration_rate_change.migration_rate);
+}
+
+static int
+json_snprintf_migration_rate_change(demographic_event_t *event, char *buffer,
+        size_t size)
+{
+    const char *pattern = "{"
+        "\"type\": \"migration_rate_change\", "
+        "\"time\": " MSP_LOSSLESS_DBL ", "
+        "\"migration_rate\": " MSP_LOSSLESS_DBL ", "
+        "\"matrix_index\": %d"
+        "}, ";
+    return snprintf(buffer, size, pattern, event->time,
+            event->params.migration_rate_change.matrix_index,
+            event->params.migration_rate_change.migration_rate);
+}
+
+int WARN_UNUSED
+msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
+        double migration_rate)
+{
+    int ret = -1;
+    demographic_event_t *de = msp_add_demographic_event(self, time);
+    int N = (int) self->num_populations;
+
+    if (de == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    if (matrix_index < -1 || matrix_index >= N * N) {
+        ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
+    if (migration_rate < 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (matrix_index % (N + 1) == 0) {
+        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
+    de->params.migration_rate_change.migration_rate = migration_rate;
+    de->params.migration_rate_change.matrix_index = matrix_index;
+    de->change_state = msp_change_migration_rate;
+    de->print_state = msp_print_migration_rate_change;
+    de->json_snprintf = json_snprintf_migration_rate_change;
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Mass migration */
+
+static int
+msp_mass_migration(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    int source = event->params.mass_migration.source;
+    int dest = event->params.mass_migration.destination;
+    double p = event->params.mass_migration.proportion;
+    int N = (int) self->num_populations;
+    avl_node_t *node, *next;
+    avl_tree_t *pop;
+
+    /* This should have been caught on adding the event */
+    if (source < 0 || source > N || dest < 0 || dest > N) {
+        ret = MSP_ERR_ASSERTION_FAILED;
+        goto out;
+    }
+    /* dest and source are *forwards* in time, so from our perpective
+     * they are reversed. We move lineages from dest into source with
+     * propabality p */
+    pop = &self->populations[dest].ancestors;
+    node = pop->head;
+    while (node != NULL) {
+        next = node->next;
+        if (gsl_rng_uniform(self->rng) < p) {
+            ret = msp_move_individual(self, node, pop, (uint32_t) source);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        node = next;
+    }
+out:
+    return ret;
+}
+
+static void
+msp_print_mass_migration(msp_t *self, demographic_event_t *event)
+{
+    printf("%f\tmass_migration: %d -> %d p = %f\n",
+            event->time,
+            event->params.mass_migration.source,
+            event->params.mass_migration.destination,
+            event->params.mass_migration.proportion);
+}
+
+static int
+json_snprintf_mass_migration(demographic_event_t *event, char *buffer,
+        size_t size)
+{
+    const char *pattern = "{"
+        "\"type\": \"mass_migration\", "
+        "\"time\": " MSP_LOSSLESS_DBL ", "
+        "\"source\": %d, "
+        "\"destination\": %d, "
+        "\"proportion\": " MSP_LOSSLESS_DBL
+        "}, ";
+    return snprintf(buffer, size, pattern, event->time,
+            event->params.mass_migration.source,
+            event->params.mass_migration.destination,
+            event->params.mass_migration.proportion);
+}
+
+int WARN_UNUSED
+msp_add_mass_migration(msp_t *self, double time, int source, int destination,
+        double proportion)
+{
+    int ret = 0;
+    demographic_event_t *de = msp_add_demographic_event(self, time);
+    int N = (int) self->num_populations;
+
+    if (de == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    if (source < 0 || source >= N || destination < 0 || destination >= N) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    if (source == destination) {
+        ret = MSP_ERR_SOURCE_DEST_EQUAL;
+        goto out;
+    }
+    if (proportion < 0.0 || proportion > 1.0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    de->params.mass_migration.source = source;
+    de->params.mass_migration.destination = destination;
+    de->params.mass_migration.proportion = proportion;
+    de->change_state = msp_mass_migration;
+    de->print_state = msp_print_mass_migration;
+    de->json_snprintf = json_snprintf_mass_migration;
+    ret = 0;
+out:
+    return ret;
+}
+
 /*
  * Inserts a new breakpoint at the specified locus left.
  */
@@ -1825,7 +1950,6 @@ msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
     int ret = 0;
     uint32_t j;
     avl_node_t *node;
-    segment_t *ind, *x;
     avl_tree_t *source = &self->populations[source_pop].ancestors;
 
     self->num_migration_events[
@@ -1833,16 +1957,7 @@ msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
     j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
     node = avl_at(source, j);
     assert(node != NULL);
-    ind = (segment_t *) node->item;
-    avl_unlink_node(source, node);
-    msp_free_avl_node(self, node);
-    /* Need to set the population_id for each segment. */
-    x = ind;
-    while (x != NULL) {
-        x->population_id = (uint8_t) dest_pop;
-        x = x->next;
-    }
-    ret = msp_insert_individual(self, ind);
+    ret = msp_move_individual(self, node, source, dest_pop);
     return ret;
 }
 

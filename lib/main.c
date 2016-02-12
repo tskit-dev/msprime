@@ -110,8 +110,8 @@ read_demographic_events(msp_t *msp, config_t *config)
     int ret = 0;
     int j;
     const char *type;
-    double time, growth_rate, size, migration_rate;
-    int num_demographic_events, population_id, matrix_index;
+    double time, growth_rate, size, migration_rate, proportion;
+    int num_demographic_events, population_id, matrix_index, source, dest;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "demographic_events");
 
@@ -181,6 +181,23 @@ read_demographic_events(msp_t *msp, config_t *config)
             matrix_index = config_setting_get_int(t);
             ret = msp_add_migration_rate_change(msp, time,
                     matrix_index, migration_rate);
+        } else if (strcmp(type, "mass_migration") == 0) {
+            t = config_setting_get_member(s, "proportion");
+            if (t == NULL) {
+                fatal_error("proportion not specified");
+            }
+            proportion = config_setting_get_float(t);
+            t = config_setting_get_member(s, "source");
+            if (t == NULL) {
+                fatal_error("matrix_index not specified");
+            }
+            source = config_setting_get_int(t);
+            t = config_setting_get_member(s, "dest");
+            if (t == NULL) {
+                fatal_error("matrix_index not specified");
+            }
+            dest = config_setting_get_int(t);
+            ret = msp_add_mass_migration(msp, time, source, dest, proportion);
         } else {
             fatal_error("unknown demographic event type '%s'", type);
         }
@@ -559,7 +576,7 @@ run_simulate(char *conf_file)
             ret = result;
             goto out;
         }
-        msp_verify(msp);
+        /* msp_verify(msp); */
         /* ret = msp_print_state(msp); */
     }
     ret = msp_print_state(msp);

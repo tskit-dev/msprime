@@ -151,6 +151,12 @@ typedef struct {
     double migration_rate;
 } migration_rate_change_t;
 
+typedef struct {
+    int source;
+    int destination;
+    double proportion;
+} mass_migration_t;
+
 typedef struct demographic_event_t_t {
     double time;
     int (*change_state)(msp_t *, struct demographic_event_t_t *);
@@ -160,6 +166,7 @@ typedef struct demographic_event_t_t {
         size_change_t size_change;
         growth_rate_change_t growth_rate_change;
         migration_rate_change_t migration_rate_change;
+        mass_migration_t mass_migration;
     } params;
     struct demographic_event_t_t *next;
 } demographic_event_t;
@@ -316,6 +323,8 @@ int msp_add_size_change(msp_t *self, double time, int population_id,
         double size);
 int msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate);
+int msp_add_mass_migration(msp_t *self, double time, int source, int dest,
+        double proportion);
 
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
