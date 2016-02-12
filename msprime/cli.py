@@ -370,10 +370,21 @@ def create_simulation_runner(parser, arg_list):
         demographic_events.append(
             (index, msprime.SizeChangeEvent(t, x)))
     for index, (t, population_id, x) in args.population_size_change:
-        pid = convert_population_id(parser, population_id, num_populations)
         check_event_time(parser, t)
+        pid = convert_population_id(parser, population_id, num_populations)
         demographic_events.append(
             (index, msprime.SizeChangeEvent(t, x, pid)))
+    for index, (t, dest, source) in args.population_split:
+        check_event_time(parser, t)
+        source_id = convert_population_id(parser, source, num_populations)
+        dest_id = convert_population_id(parser, dest, num_populations)
+        demographic_events.append(
+            (index, msprime.MassMigrationEvent(t, source_id, dest_id, 1.0)))
+        # Set the migration rates for source to 0
+        for j in range(num_populations):
+            if j != dest_id:
+                event = msprime.MigrationRateChangeEvent(t, 0.0, (j, dest_id))
+                demographic_events.append((index, event))
 
     # Demographic events that affect the migration matrix
     if num_populations == 1:
@@ -560,6 +571,24 @@ def get_mspms_parser():
         help=(
             "Set the population size for a specific population to "
             "x * N0 at time t"))
+    group.add_argument(
+        "--population-split", "-ej", nargs=3,
+        action=IndexedAction, type=float, default=[],
+        metavar=("t", "dest", "source"),
+        help=(
+            "Move all lineages in population dest to source at time t. "
+            "Forwards in time, this corresponds to a population split "
+            "in which lineages in source split into dest. All migration "
+            "rates for population source are set to zero."))
+    group.add_argument(
+        "--admixture", "-es", nargs=3,
+        action=IndexedAction, type=float, default=[],
+        metavar=("t", "dest", "source"),
+        help=(
+            "Move all lineages in population dest to source at time t. "
+            "Forwards in time, this corresponds to a population split "
+            "in which lineages in source split into dest. All migration "
+            "rates for population source are set to zero."))
 
     group = parser.add_argument_group("Miscellaneous")
     group.add_argument(

@@ -434,6 +434,19 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         # Negative times raise an error
         self.assert_parser_error("10 1 -T -I 2 10 0 -en -1 1 1")
 
+    def test_population_split(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 1 ")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 1 2")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 1 2 3 4")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 0.1 1.1 2")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 0.1 1 2.2")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en 0.1 -1 2")
+        # Negative times raise an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en -1 1 2")
+
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
     """
@@ -646,6 +659,38 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 (2.2, 3, (1, 0)), (2.2, 4, (1, 2)),
                 (2.2, 5, (2, 0)), (2.2, 6, (2, 1)),
             ])
+
+    def test_population_split(self):
+        def check(N, args, results):
+            sim = self.create_simulator(args)
+            events = sim.get_demographic_events()
+            self.assertEqual(len(events), len(results) * N)
+            k = 0
+            for result in results:
+                event = events[k]
+                dest = event.destination
+                self.assertEqual(event.type, "mass_migration")
+                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.destination, result[1])
+                self.assertEqual(event.source, result[2])
+                # We also have to set the migration rates to 0 for the
+                # population that didn't exist before now.
+                k += 1
+                for j in range(N):
+                    if j != dest:
+                        event = events[k]
+                        self.assertEqual(event.type, "migration_rate_change")
+                        self.assertEqual(event.time, result[0])
+                        self.assertEqual(event.rate, 0.0)
+                        self.assertEqual(event.matrix_index, (j, dest))
+                        k += 1
+        check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 0, 1)])
+        check(
+            3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
+            [(2.2, 0, 1), (2.3, 0, 2)])
+        check(
+            4, "2 1 -T -I 4 2 0 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
+            [(2.2, 0, 1), (2.3, 0, 2)])
 
 
 class TestMspmsOutput(unittest.TestCase):

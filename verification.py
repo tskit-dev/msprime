@@ -93,7 +93,10 @@ class SimulationVerifier(object):
         return df
 
     def _build_filename(self, *args):
-        return os.path.join(self._output_dir, "_".join(args))
+        output_dir = os.path.join(self._output_dir, args[0])
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
+        return os.path.join(output_dir, "_".join(args[1:]))
 
     def _plot_stats(self, key, stats_type, df_msp, df_ms):
         assert set(df_ms.columns.values) == set(df_msp.columns.values)
@@ -237,6 +240,19 @@ def main():
         "migration-matrix-change-2-pops2",
         "100 10000 -t 2.0 -I 2 50 50 -ema 1.0 2 x 0.1 0 x "
         "-eN 1.1 0 -ema 10 2 x 0 10 x")
+    verifier.add_ms_instance(
+        "population-split-2-pops1",
+        "100 10000 -t 2.0 -I 2 50 50 5.0 -ej 2.0 1 2")
+    verifier.add_ms_instance(
+        "population-split-4-pops1",
+        "100 10000 -t 2.0 -I 4 50 50 0 0 2.0 -ej 0.5 2 1")
+    verifier.add_ms_instance(
+        "population-split-4-pops2",
+        "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -ej 2 3 1 -ej 3 4 1")
+    verifier.add_ms_instance(
+        "population-split-4-pops3", (
+        "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -em 1.5 4 1 2 "
+        "-ej 2 3 1 -ej 3 4 1"))
 
     # Examples from ms documentation
     verifier.add_ms_instance(
@@ -251,6 +267,14 @@ def main():
     verifier.add_ms_instance(
         "msdoc-structure-ex3",
         "15 1000 -t 10.0 -I 3 10 4 1 -ma x 1.0 2.0 3.0 x 4.0 5.0 6.0 x")
+    verifier.add_ms_instance(
+        "msdoc-outgroup-sequence", "11 1000 -t 2.0 -I 2 1 10 -ej 6.0 1 2")
+    verifier.add_ms_instance(
+        "msdoc-stepping-stone", (
+        "15 10000 -t 3.0 -I 6 0 7 0 0 8 0 -m 1 2 2.5 -m 2 1 2.5 -m 2 3 2.5 "
+        "-m 3 2 2.5 -m 4 5 2.5 -m 5 4 2.5 -m 5 6 2.5 -m 6 5 2.5 -em 2.0 3 4 "
+        "2.5 -em 2.0 4 3 2.5"))
+
     # The order of simultaneous events matters in ms.
     verifier.add_ms_instance(
         "simultaneous-ex1", "10 10000 -t 2.0 -eN 0.3 0.5 -eG .3 7.0")

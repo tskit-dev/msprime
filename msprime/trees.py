@@ -1103,13 +1103,15 @@ class PopulationConfiguration(object):
 
 
 class DemographicEvent(object):
-    def __init__(self, type_):
+    def __init__(self, type_, time):
         self.type = type_
+        self.time = time
 
 
 class GrowthRateChangeEvent(DemographicEvent):
     def __init__(self, time, growth_rate, population_id=-1):
-        super(GrowthRateChangeEvent, self).__init__("growth_rate_change")
+        super(GrowthRateChangeEvent, self).__init__(
+            "growth_rate_change", time)
         self.time = time
         self.growth_rate = growth_rate
         self.population_id = population_id
@@ -1133,8 +1135,7 @@ class GrowthRateChangeEvent(DemographicEvent):
 
 class SizeChangeEvent(DemographicEvent):
     def __init__(self, time, size, population_id=-1):
-        super(SizeChangeEvent, self).__init__("size_change")
-        self.time = time
+        super(SizeChangeEvent, self).__init__("size_change", time)
         self.size = size
         self.population_id = population_id
 
@@ -1158,8 +1159,7 @@ class SizeChangeEvent(DemographicEvent):
 class MigrationRateChangeEvent(DemographicEvent):
     def __init__(self, time, rate, matrix_index=None):
         super(MigrationRateChangeEvent, self).__init__(
-            "migration_rate_change")
-        self.time = time
+            "migration_rate_change", time)
         self.rate = rate
         self.matrix_index = matrix_index
 
@@ -1179,6 +1179,32 @@ class MigrationRateChangeEvent(DemographicEvent):
             "time": self.time,
             "migration_rate": self.rate,
             "matrix_index": matrix_index
+        }
+
+    def get_ms_arguments(self):
+        raise NotImplemented()
+        # if self.population_id is None:
+        #     return ["-eN", str(self.time), str(self.size)]
+        # else:
+        #     return [
+        #         "-en", str(self.time), str(self.population_id + 1),
+        #         str(self.growth_rate)]
+
+
+class MassMigrationEvent(DemographicEvent):
+    def __init__(self, time, source, destination, proportion):
+        super(MassMigrationEvent, self).__init__("mass_migration", time)
+        self.source = source
+        self.destination = destination
+        self.proportion = proportion
+
+    def get_ll_representation(self, num_populations):
+        return {
+            "type": self.type,
+            "time": self.time,
+            "source": self.source,
+            "destination": self.destination,
+            "proportion": self.proportion
         }
 
     def get_ms_arguments(self):
