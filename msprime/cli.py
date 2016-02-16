@@ -272,6 +272,18 @@ def convert_migration_matrix(parser, input_matrix, num_populations):
     return migration_matrix
 
 
+def raise_admixture_incompatability_error(parser, other_option):
+    """
+    Because of the state dependency within ms, it is messy for us to
+    support options that affect all populations in conjunction with
+    population splits. For now, raise an error.
+    """
+    parser.error(
+        "Cannot currently use the -es and {} options together. "
+        "Please open an issue on GitHub if this functionality is "
+        "important to you.".format(other_option))
+
+
 def create_simulation_runner(parser, arg_list):
     """
     Parses the arguments and returns a SimulationRunner instance.
@@ -355,8 +367,33 @@ def create_simulation_runner(parser, arg_list):
         pid = convert_population_id(parser, population_id, num_populations)
         population_configurations[pid].initial_size = size
 
+    # First we look at population split events. We do this differently
+    # to ms, as msprime requires a fixed number of population. Therefore,
+    # modify the number of populations to take into account populations
+    # splits. This is a messy hack, and will probably need to be changed.
+    for index, (t, population_id, proportion) in args.admixture:
+        check_event_time(parser, t)
+        pid = convert_population_id(parser, population_id, num_populations)
+        if proportion < 0 or proportion > 1:
+            parser.error("Proportion value must be 0 <= p <= 1.")
+        event = (index, msprime.MassMigrationEvent(
+            t, num_populations, pid, 1 - proportion))
+        demographic_events.append(event)
+
+        num_populations += 1
+        # We add another element to each row in the migration matrix
+        # along with an other row. All new entries are zero.
+        for row in migration_matrix:
+            row.append(0)
+        migration_matrix.append([0 for j in range(num_populations)])
+        # Add another PopulationConfiguration object with a sample size
+        # of zero.
+        population_configurations.append(msprime.PopulationConfiguration(0))
+
     # Add the demographic events
     for index, (t, alpha) in args.growth_rate_change:
+        if len(args.admixture) != 0:
+            raise_admixture_incompatability_error(parser, "-eG")
         check_event_time(parser, t)
         demographic_events.append(
             (index, msprime.GrowthRateChangeEvent(t, alpha)))
@@ -366,6 +403,8 @@ def create_simulation_runner(parser, arg_list):
         demographic_events.append(
             (index, msprime.GrowthRateChangeEvent(t, alpha, pid)))
     for index, (t, x) in args.size_change:
+        if len(args.admixture) != 0:
+            raise_admixture_incompatability_error(parser, "-eN")
         check_event_time(parser, t)
         demographic_events.append(
             (index, msprime.SizeChangeEvent(t, x)))
@@ -395,9 +434,8 @@ def create_simulation_runner(parser, arg_list):
         if condition:
             parser.error("Cannot change migration rates for 1 population")
     for index, (t, x) in args.migration_rate_change:
-        # TODO How does this interact with population splits and so on? i.e.,
-        # do we need to keep track of num_populations over time for this
-        # scaling?
+        if len(args.admixture) != 0:
+            raise_admixture_incompatability_error(parser, "-eM")
         check_migration_rate(parser, x)
         check_event_time(parser, t)
         event = msprime.MigrationRateChangeEvent(
@@ -417,6 +455,8 @@ def create_simulation_runner(parser, arg_list):
     for index, event in args.migration_matrix_change:
         if len(event) < 3:
             parser.error("Need at least three arguments to -ma")
+        if len(args.admixture) != 0:
+            raise_admixture_incompatability_error(parser, "-ema")
         t = convert_float(event[0], parser)
         check_event_time(parser, t)
         if convert_int(event[1], parser) != num_populations:
@@ -436,7 +476,6 @@ def create_simulation_runner(parser, arg_list):
         parser.error(
             "Demographic events must be supplied in non-decreasing "
             "time order")
-
     runner = SimulationRunner(
         sample_size=args.sample_size,
         num_loci=num_loci,
@@ -583,12 +622,15 @@ def get_mspms_parser():
     group.add_argument(
         "--admixture", "-es", nargs=3,
         action=IndexedAction, type=float, default=[],
-        metavar=("t", "dest", "source"),
+        metavar=("t", "population_id", "proportion"),
         help=(
-            "Move all lineages in population dest to source at time t. "
-            "Forwards in time, this corresponds to a population split "
-            "in which lineages in source split into dest. All migration "
-            "rates for population source are set to zero."))
+            "Split the specified population into a new population, such "
+            "that the specified proportion of lineages remains in "
+            "the population population_id. Forwards in time this "
+            "corresponds to an admixture event. The new population has ID "
+            "num_populations + 1. Migration rates to and from the new "
+            "population are set to 0, and growth rate is 0 and the "
+            "population size for the new population is N0."))
 
     group = parser.add_argument_group("Miscellaneous")
     group.add_argument(

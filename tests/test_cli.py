@@ -443,9 +443,31 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assert_parser_error("10 1 -T -I 2 10 0 -ej 0.1 1.1 2")
         self.assert_parser_error("10 1 -T -I 2 10 0 -ej 0.1 1 2.2")
         # Out-of-bounds raises an error
-        self.assert_parser_error("10 1 -T -I 2 10 0 -en 0.1 -1 2")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 0.1 -1 2")
         # Negative times raise an error
-        self.assert_parser_error("10 1 -T -I 2 10 0 -en -1 1 2")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej -1 1 2")
+
+    def test_admixture(self):
+        self.assert_parser_error("10 1 -T -es")
+        self.assert_parser_error("10 1 -T -es 1")
+        self.assert_parser_error("10 1 -T -es 1 1")
+        self.assert_parser_error("10 1 -T -es 1 1 1 2")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 1.1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 x 1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 -1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 3 1")
+        # After an -ej, num_populations is increased by one
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 2 1 -en 0.2 4 1")
+        # Negative times raise an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es -1 1 1")
+        # We don't support -es and any options that affect all pops.
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 1 1 1 -eM 1 2")
+        self.assert_parser_error(
+            "10 1 -T -I 2 10 0 -es 1 1 1 -ema 0.5 2 1 2 3 4")
+        self.assert_parser_error("10 1 -t 2.0 -eG 0.001 5.0 -es 0.01 1 0.0")
+        self.assert_parser_error("10 1 -t 2.0 -eN 0.001 5.0 -es 0.01 1 0.0")
 
 
 class TestMspmsCreateSimulationRunner(unittest.TestCase):
@@ -691,6 +713,27 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         check(
             4, "2 1 -T -I 4 2 0 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
             [(2.2, 0, 1), (2.3, 0, 2)])
+
+    def test_admixture(self):
+        def check(N, args, results):
+            sim = self.create_simulator(args)
+            events = sim.get_demographic_events()
+            self.assertEqual(sim.get_num_populations(), N)
+            self.assertEqual(len(events), len(results))
+            matrix = [[0 for _ in range(N)] for _ in range(N)]
+            self.assertEqual(sim.get_migration_matrix(), matrix)
+            for result, event in zip(results, events):
+                self.assertEqual(event.type, "mass_migration")
+                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.destination, result[1])
+                self.assertEqual(event.source, result[2])
+        check(2, "2 1 -T -es 2.2 1 1", [(2.2, 0, 1, 0)])
+        check(
+            3, "2 1 -T -es 2.2 1 1 -es 3.3 2 0",
+            [(2.2, 0, 1, 0), (3.3, 1, 2, 1.0)])
+        check(
+            4, "2 1 -T -I 2 2 0 -es 2.2 1 1 -es 3.3 2 0",
+            [(2.2, 0, 2, 0), (3.3, 1, 3, 1.0)])
 
 
 class TestMspmsOutput(unittest.TestCase):

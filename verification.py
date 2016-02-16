@@ -253,6 +253,40 @@ def main():
         "population-split-4-pops3", (
         "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -em 1.5 4 1 2 "
         "-ej 2 3 1 -ej 3 4 1"))
+    verifier.add_ms_instance(
+        "admixture-1-pop1", "1000 1000 -t 2.0 -es 0.1 1 0.5 -em 0.1 1 2 1")
+    verifier.add_ms_instance(
+        "admixture-1-pop2", "1000 1000 -t 2.0 -es 0.1 1 0.1 -em 0.1 1 2 1")
+    verifier.add_ms_instance(
+        "admixture-1-pop3", "1000 1000 -t 2.0 -es 0.01 1 0.1 -em 0.1 2 1 1")
+    verifier.add_ms_instance(
+        "admixture-1-pop4",
+        "1000 1000 -t 2.0 -es 0.01 1 0.1 -es 0.1 2 0 -em 0.1 3 1 1")
+    verifier.add_ms_instance(
+        "admixture-1-pop5",
+        "1000 1000 -t 2.0 -es 0.01 1 0.1 -ej 1 2 1")
+    verifier.add_ms_instance(
+        "admixture-1-pop6", "1000 1000 -t 2.0 -es 0.01 1 0.0 -eg 0.02 2 5.0 ")
+    verifier.add_ms_instance(
+        "admixture-1-pop7", "1000 1000 -t 2.0 -es 0.01 1 0.0 -en 0.02 2 5.0 ")
+    verifier.add_ms_instance(
+        "admixture-2-pop1",
+        "1000 1000 -t 2.0 -I 2 500 500 1 -es 0.01 1 0.1 -ej 1 3 1")
+    verifier.add_ms_instance(
+        "admixture-2-pop2",
+        "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -em 2.0 3 1 1")
+    verifier.add_ms_instance(
+        "admixture-2-pop3",
+        (
+            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 "
+            "-em 2.0 3 1 1"
+        ))
+    verifier.add_ms_instance(
+        "admixture-2-pop4",
+        (
+            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eG 0.02 5.0 "
+            "-em 0.02 3 1 1"
+        ))
 
     # Examples from ms documentation
     verifier.add_ms_instance(
