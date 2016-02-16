@@ -315,6 +315,18 @@ def main():
     # Add a bunch more instances...
     verifier.add_ms_instance(
         "zero-growth-rate", "10 10000 -t 2.0 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5")
+    # Some examples provided by Konrad Lohse
+    verifier.add_ms_instance(
+        "konrad-1", (
+        "4 1000 -t 2508 -I 2 2 2 0 -n 2 2.59 -ma x 0 1.502 x -ej 0.9485 1 2 "
+        "-r 23.76 3000"))
+    verifier.add_ms_instance(
+        "konrad-2", (
+        "3 10000 -t 0.423 -I 3 1 1 1 -es 0.0786 1 0.946635 -ej 0.0786 4 3 "
+        "-ej 0.189256 1 2 -ej 0.483492 2 3"))
+    verifier.add_ms_instance(
+        "konrad-3", (
+        "100 100 -t 2 -I 10 10 10 10 10 10 10 10 10 10 10 0.001 "))
 
     # Add some random instances.
     verifier.add_random_instance("random1")
