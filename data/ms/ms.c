@@ -170,7 +170,16 @@ main(argc,argv)
 #ifdef SUMMARY_STATS
     /* print out the header*/
     printf("t\tnum_trees\tre_events\tca_events");
-    for (i = 0; i < pars.cp.npop * pars.cp.npop; i++) {
+    int N = pars.cp.npop;
+	struct devent *event ;
+
+    for (event = pars.cp.deventlist; event != NULL; event = event->nextde) {
+        if (event->detype == 's') {
+            N++;
+        }
+    }
+
+    for (i = 0; i < N * N; i++) {
         printf("\tmig_events_%d", i);
     }
     printf("\n");

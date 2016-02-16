@@ -94,7 +94,15 @@ segtre_mig(struct c_params *cp, int *pnsegs )
     unsigned int jk_pop_j, jk_pop_k;
     unsigned int recombination_events = 0;
     unsigned int coancestry_events = 0;
-    unsigned int *migration_events = calloc(cp->npop * cp->npop, sizeof(unsigned int));
+    int N = cp->npop;
+	struct devent *e;
+
+    for (e= cp->deventlist; e != NULL; e = e->nextde) {
+        if (e->detype == 's') {
+            N++;
+        }
+    }
+    unsigned int *migration_events = calloc(N * N, sizeof(unsigned int));
 #endif
 
 	nsam = cp->nsam;
@@ -398,7 +406,7 @@ segtre_mig(struct c_params *cp, int *pnsegs )
             } else if (event == 'c') {
                 coancestry_events++;
             } else if (event == 'm') {
-                migration_events[jk_pop_j * npop + jk_pop_k]++;
+                migration_events[jk_pop_j * N + jk_pop_k]++;
             } else {
                 printf("ERROR!: %c\n", event);
                 exit(1);
@@ -410,7 +418,7 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 #ifdef SUMMARY_STATS
     /* print out the events */
     printf("%f\t%d\t%d\t%d", t, nsegs, recombination_events, coancestry_events);
-    for (i = 0; i < npop * npop; i++) {
+    for (i = 0; i < N * N; i++) {
         printf("\t%d", migration_events[i]);
     }
     printf("\n");
