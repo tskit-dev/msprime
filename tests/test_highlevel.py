@@ -323,19 +323,17 @@ class TestSingleLocusSimulation(HighLevelTestCase):
 
     def test_models(self):
         # Exponential growth of 0 and constant model should be identical.
-        # FIXME
-        pass
-        # m1 = msprime.ExponentialPopulationModel(alpha=0.0, start_time=0.0)
-        # m2 = msprime.ConstantPopulationModel(size=1.0, start_time=0.0)
-        # for n in [2, 10, 100]:
-        #     # TODO this _should_ be the same as running with no population
-        #     # models, but it's not. need to investigate.
-        #     st1 = msprime.simulate_tree(
-        #         n, random_seed=1, population_models=[m1])
-        #     st2 = msprime.simulate_tree(
-        #         n, random_seed=1, population_models=[m2])
-        #     self.assertEqual(st1, st2)
-        # # TODO add more tests!
+        m1 = msprime.ExponentialPopulationModel(alpha=0.0, start_time=0.0)
+        m2 = msprime.ConstantPopulationModel(size=1.0, start_time=0.0)
+        for n in [2, 10, 100]:
+            # TODO this _should_ be the same as running with no population
+            # models, but it's not. need to investigate.
+            st1 = msprime.simulate_tree(
+                n, random_seed=1, population_models=[m1])
+            st2 = msprime.simulate_tree(
+                n, random_seed=1, population_models=[m2])
+            self.assertEqual(st1, st2)
+        # TODO add more tests!
 
 
 class TestMultiLocusSimulation(HighLevelTestCase):
@@ -380,11 +378,6 @@ class TestTreeSimulator(HighLevelTestCase):
         config = sim.get_configuration()
         self.assertEqual(config, parameters)
 
-    def verify_environment(self, tree_sequence):
-        environment = tree_sequence.get_environment()
-        self.assertIsInstance(environment, dict)
-        self.assertGreater(len(environment), 0)
-
     def verify_dump_load(self, tree_sequence):
         """
         Dump the tree sequence and verify we can load again from the same
@@ -412,7 +405,6 @@ class TestTreeSimulator(HighLevelTestCase):
         sim.set_random_seed(seed)
         self.assertEqual(sim.get_random_seed(), seed)
         sim.run()
-        # self.assertEqual(sim.get_population_models(), [])
         self.assertEqual(sim.get_num_breakpoints(), len(sim.get_breakpoints()))
         self.assertGreater(sim.get_used_memory(), 0)
         self.assertGreater(sim.get_time(), 0)
@@ -432,13 +424,7 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertGreaterEqual(sim.get_total_num_migration_events(), 0)
         self.assertGreaterEqual(sim.get_num_multiple_recombination_events(), 0)
         self.verify_sparse_trees(tree_sequence)
-
-        # TODO reenable test parameters and environment
-        # self.verify_parameters(sim, tree_sequence)
-        # self.verify_environment(tree_sequence)
-        # TODO save the tree_sequence to a file and verify equality
-        # between the two.
-
+        self.verify_parameters(sim, tree_sequence)
         self.verify_dump_load(tree_sequence)
 
     def test_random_parameters(self):

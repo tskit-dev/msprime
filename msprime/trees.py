@@ -440,7 +440,7 @@ class SparseTree(object):
 def simulate(
         sample_size, num_loci=1, scaled_recombination_rate=0.0,
         scaled_mutation_rate=None,
-        random_seed=None, max_memory=None):
+        population_models=[], random_seed=None, max_memory=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`.
@@ -452,6 +452,8 @@ def simulate(
         between adjacent loci per :math:`4N_0` generations.
     :param float scaled_mutation_rate: The rate of mutation
         per locus per :math:`4N_0` generations.
+    :param list population_models: The list of :class:`.PopulationModel`
+        instances describing the demographic history of the population.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated.
     :param int,str max_memory: The maximum amount of memory used
@@ -467,6 +469,30 @@ def simulate(
     sim.set_scaled_recombination_rate(scaled_recombination_rate)
     sim.set_random_seed(random_seed)
     sim.set_max_memory(max_memory)
+    # Reinterpret the population models in terms of the new interface.
+    # This will be deprecated in later releases in favour of a direct
+    # approach.
+    initial_size = 1
+    initial_growth_rate = 0
+    demographic_events = []
+    for model in population_models:
+        if isinstance(model, ConstantPopulationModel):
+            if model.start_time == 0:
+                initial_size = model.size
+            else:
+                demographic_events.append(SizeChangeEvent(
+                    model.start_time, model.size))
+        elif isinstance(model, ExponentialPopulationModel):
+            if model.start_time == 0:
+                initial_growth_rate = model.alpha
+            else:
+                demographic_events.append(GrowthRateChangeEvent(
+                    model.start_time, model.alpha))
+        else:
+            raise TypeError("Arguments must be PopulationModel instances")
+    sim.set_population_configurations([PopulationConfiguration(
+        sample_size, initial_size, initial_growth_rate)])
+    sim.set_demographic_events(demographic_events)
     sim.run()
     tree_sequence = sim.get_tree_sequence()
     if scaled_mutation_rate is not None:
@@ -475,7 +501,7 @@ def simulate(
 
 
 def simulate_tree(
-        sample_size, scaled_mutation_rate=None,
+        sample_size, scaled_mutation_rate=None, population_models=[],
         random_seed=None, max_memory=None):
     """
     Simulates the coalescent at a single locus for the specified sample size
@@ -487,6 +513,8 @@ def simulate_tree(
         per :math:`4N_0` generations.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated.
+    :param list population_models: The list of :class:`.PopulationModel`
+        instances describing the demographic history of the population.
     :param int,str max_memory: The maximum amount of memory used
         during the simulation. If this is exceeded, the simulation will
         terminate with a :class:`LibraryError` exception. By default
@@ -497,7 +525,8 @@ def simulate_tree(
     """
     tree_sequence = simulate(
         sample_size, scaled_mutation_rate=scaled_mutation_rate,
-        random_seed=random_seed, max_memory=max_memory)
+        population_models=population_models, random_seed=random_seed,
+        max_memory=max_memory)
     return next(tree_sequence.trees())
 
 
@@ -828,6 +857,12 @@ class TreeSequence(object):
         ts = _msprime.TreeSequence()
         ts.load(path)
         return TreeSequence(ts)
+
+    def get_parameters(self):
+        return json.loads(self._ll_tree_sequence.get_simulation_parameters())
+
+    def get_environment(self):
+        return json.loads(self._ll_tree_sequence.get_simulation_env())
 
     def get_mutations(self):
         # TODO should we provide this???
@@ -1183,12 +1218,6 @@ class MigrationRateChangeEvent(DemographicEvent):
 
     def get_ms_arguments(self):
         raise NotImplemented()
-        # if self.population_id is None:
-        #     return ["-eN", str(self.time), str(self.size)]
-        # else:
-        #     return [
-        #         "-en", str(self.time), str(self.population_id + 1),
-        #         str(self.growth_rate)]
 
 
 class MassMigrationEvent(DemographicEvent):
@@ -1209,12 +1238,6 @@ class MassMigrationEvent(DemographicEvent):
 
     def get_ms_arguments(self):
         raise NotImplemented()
-        # if self.population_id is None:
-        #     return ["-eN", str(self.time), str(self.size)]
-        # else:
-        #     return [
-        #         "-en", str(self.time), str(self.population_id + 1),
-        #         str(self.growth_rate)]
 
 
 ##############################
@@ -1231,13 +1254,6 @@ class PopulationModel(object):
     def __init__(self, start_time):
         self.start_time = start_time
 
-    def get_ll_model(self):
-        """
-        Returns the low-level model corresponding to this population
-        model.
-        """
-        return self.__dict__
-
 
 class ConstantPopulationModel(PopulationModel):
     """
@@ -1253,17 +1269,13 @@ class ConstantPopulationModel(PopulationModel):
     def __init__(self, start_time, size):
         super(ConstantPopulationModel, self).__init__(start_time)
         self.size = size
-        self.type = _msprime.POP_MODEL_CONSTANT
-
-    def get_ms_arguments(self):
-        return ["-eN", str(self.start_time), str(self.size)]
 
 
 class ExponentialPopulationModel(PopulationModel):
     """
     A population model in which the size is exponentially growing (or
     shrinking). If we have a :attr:`start_time` of :math:`s`, the population
-    size at a time :math:`t` (measured in units of :math:`4N_0_0` generations)
+    size at a time :math:`t` (measured in units of :math:`4N_0` generations)
     is :math:`N_s e^{\\alpha (t - s)}`, where :math:`N_s` is the population
     size at time :math:`s`.
 
@@ -1275,14 +1287,6 @@ class ExponentialPopulationModel(PopulationModel):
     def __init__(self, start_time, alpha):
         super(ExponentialPopulationModel, self).__init__(start_time)
         self.alpha = alpha
-        self.type = _msprime.POP_MODEL_EXPONENTIAL
-
-    def get_ms_arguments(self):
-        if self.start_time == 0.0:
-            ret = ["-G", str(self.alpha)]
-        else:
-            ret = ["-eG", str(self.start_time), str(self.alpha)]
-        return ret
 
 
 def harmonic_number(n):
