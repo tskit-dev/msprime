@@ -4,14 +4,14 @@
 ********************
 
 Transitional release providing population structure support for the
-ms-compatible command line interface. A considerable amount of
-low-level plumbing to provide the required flexibility. This is
-currently not visible from the high-level API, but will shortly
-be made available in the forthcoming 0.2.x series.
+ms-compatible command line interface. A considerable amount of low-level
+plumbing was required to provide the required flexibility. This is currently
+not visible from the high-level API, but will shortly be made available in the
+forthcoming 0.2.x series.
 
-The current implementation of migration should work well for
-small numbers of populations (e.g. < 10), but will not scale
-well for large numbers of populations.
+The current implementation of migration should work well for small numbers of
+populations (e.g. < 10), but will not scale well for large numbers of
+populations.
 
 +++++++
 Changes
