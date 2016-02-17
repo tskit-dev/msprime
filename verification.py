@@ -276,17 +276,13 @@ def main():
         "admixture-2-pop2",
         "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -em 2.0 3 1 1")
     verifier.add_ms_instance(
-        "admixture-2-pop3",
-        (
-            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 "
-            "-em 2.0 3 1 1"
-        ))
+        "admixture-2-pop3", (
+        "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 "
+        "-em 2.0 3 1 1"))
     verifier.add_ms_instance(
-        "admixture-2-pop4",
-        (
-            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eG 0.02 5.0 "
-            "-em 0.02 3 1 1"
-        ))
+        "admixture-2-pop4", (
+        "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eg 0.02 1 5.0 "
+        "-em 0.02 3 1 1"))
 
     # Examples from ms documentation
     verifier.add_ms_instance(
