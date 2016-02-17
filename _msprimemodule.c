@@ -316,8 +316,7 @@ Simulator_parse_migration_matrix(Simulator *self,
 {
     int ret = -1;
     int err;
-    Py_ssize_t j, size;
-    size_t num_populations;
+    size_t num_populations, j, size;
     PyObject *value;
     double *migration_matrix = NULL;
 
@@ -333,8 +332,8 @@ Simulator_parse_migration_matrix(Simulator *self,
     num_populations = msp_get_num_populations(self->sim);
     if (num_populations * num_populations != size) {
         PyErr_Format(PyExc_ValueError,
-            "Migration matrix must be a flattend num_populations*num_populations "
-            "square array");
+            "Migration matrix must be a flattened "
+            "num_populations*num_populations square array");
         goto out;
     }
     for (j = 0; j < size; j++) {
