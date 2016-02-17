@@ -335,6 +335,56 @@ class TestSingleLocusSimulation(HighLevelTestCase):
             self.assertEqual(st1, st2)
         # TODO add more tests!
 
+    def test_initial_growth_rate(self):
+        alpha = 5.0
+        random_seed = 1234
+        n = 10
+        ts1 = msprime.simulate(
+            n, random_seed=random_seed, population_models=[
+                msprime.ExponentialPopulationModel(0.0, alpha)])
+        sim = msprime.TreeSimulator(n)
+        sim.set_random_seed(random_seed)
+        sim.set_population_configurations([
+            msprime.PopulationConfiguration(n, growth_rate=alpha)])
+        sim.run()
+        ts2 = sim.get_tree_sequence()
+        self.assertEqual(list(ts1.records()), list(ts2.records()))
+
+    def test_initial_pop_size(self):
+        size = 5.0
+        random_seed = 1234
+        n = 10
+        ts1 = msprime.simulate(
+            n, random_seed=random_seed, population_models=[
+                msprime.ConstantPopulationModel(0.0, size)])
+        sim = msprime.TreeSimulator(n)
+        sim.set_random_seed(random_seed)
+        sim.set_population_configurations([
+            msprime.PopulationConfiguration(n, initial_size=size)])
+        sim.run()
+        ts2 = sim.get_tree_sequence()
+        self.assertEqual(list(ts1.records()), list(ts2.records()))
+
+    def test_mixed_events(self):
+        random_seed = 1234
+        n = 10
+        models = [
+            msprime.ConstantPopulationModel(0.0, 2.0),
+            msprime.ConstantPopulationModel(0.01, 5.0),
+            msprime.ExponentialPopulationModel(0.5, 3.0)]
+        ts1 = msprime.simulate(
+            n, random_seed=random_seed, population_models=models)
+        sim = msprime.TreeSimulator(n)
+        sim.set_random_seed(random_seed)
+        sim.set_population_configurations([
+            msprime.PopulationConfiguration(n, initial_size=2)])
+        sim.set_demographic_events([
+            msprime.SizeChangeEvent(0.01, 5.0),
+            msprime.GrowthRateChangeEvent(0.5, 3.0)])
+        sim.run()
+        ts2 = sim.get_tree_sequence()
+        self.assertEqual(list(ts1.records()), list(ts2.records()))
+
 
 class TestMultiLocusSimulation(HighLevelTestCase):
     """
