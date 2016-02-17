@@ -861,9 +861,6 @@ class TreeSequence(object):
     def get_parameters(self):
         return json.loads(self._ll_tree_sequence.get_simulation_parameters())
 
-    def get_environment(self):
-        return json.loads(self._ll_tree_sequence.get_simulation_env())
-
     def get_mutations(self):
         # TODO should we provide this???
         return self._ll_tree_sequence.get_mutations()
