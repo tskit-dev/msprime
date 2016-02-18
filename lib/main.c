@@ -245,14 +245,72 @@ out:
     return ret;
 }
 
+
+static int
+read_recomb_map(recomb_map_t *recomb_map, config_t *config)
+{
+    int ret = 0;
+    size_t j, size;
+    double *rates = NULL;
+    uint32_t *coordinates = NULL;
+    config_setting_t *row, *s;
+    config_setting_t *setting = config_lookup(config, "recombination_map");
+
+    if (setting == NULL) {
+        fatal_error("recombination_map is a required parameter");
+    }
+    if (config_setting_is_list(setting) == CONFIG_FALSE) {
+        fatal_error("recombination_map must be a list");
+    }
+    size = (size_t) config_setting_length(setting);
+    rates = malloc(size * sizeof(double));
+    coordinates = malloc(size * sizeof(uint32_t));
+    if (rates == NULL || coordinates == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        row = config_setting_get_elem(setting, (unsigned int) j);
+        if (row == NULL) {
+            fatal_error("error reading recombination_map[%d]", j);
+        }
+        if (config_setting_is_array(row) == CONFIG_FALSE) {
+            fatal_error("recombination_map[%d] not an array", j);
+        }
+        if (config_setting_length(row) != 2) {
+            fatal_error(
+                "recombination_map entries must be [coord, rate] pairs");
+        }
+        s = config_setting_get_elem(row, 0);
+        if (!config_setting_is_number(s)) {
+            fatal_error("recombination_map entries must be numbers");
+        }
+        coordinates[j] = (uint32_t) config_setting_get_float(s);
+        s = config_setting_get_elem(row, 1);
+        if (!config_setting_is_number(s)) {
+            fatal_error("recombination_map entries must be numbers");
+        }
+        rates[j] = config_setting_get_float(s);
+    }
+    ret = recomb_map_alloc(recomb_map, coordinates, rates, size);
+out:
+    if (rates != NULL) {
+        free(rates);
+    }
+    if (coordinates != NULL) {
+        free(coordinates);
+    }
+    return ret;
+}
+
 static int
 get_configuration(msp_t *msp, mutation_params_t *mutation_params,
+        recomb_map_t *recomb_map,
         char **output_file, const char *filename)
 {
     int ret = 0;
     int err;
     int int_tmp;
-    double double_tmp;
     char *str;
     const char *str_tmp;
     config_t *config = malloc(sizeof(config_t));
@@ -287,11 +345,6 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     msp_set_random_seed(msp, (unsigned long) int_tmp);
     /* Set the random seed for mutations to the same value */
     mutation_params->random_seed = (unsigned long) int_tmp;
-    if (config_lookup_float(config, "recombination_rate", &double_tmp)
-            == CONFIG_FALSE) {
-        fatal_error("recombination_rate is a required parameter");
-    }
-    msp_set_scaled_recombination_rate(msp, double_tmp);
 
     /* Set the mutation rate */
     if (config_lookup_float(config,
@@ -340,6 +393,15 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     if (config_lookup_string(config, "output_file", &str_tmp)
             == CONFIG_FALSE) {
         fatal_error("output_file is a required parameter");
+    }
+    ret = read_recomb_map(recomb_map, config);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+    ret = msp_set_scaled_recombination_rate(msp,
+            recomb_map_get_effective_rate(recomb_map));
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
     }
     /* Create a copy of output_file to return */
     str = malloc(strlen(str_tmp) + 1);
@@ -557,14 +619,17 @@ run_simulate(char *conf_file)
     msp_t *msp = malloc(sizeof(msp_t));
     char *output_file = NULL;
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
+    recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
 
-    if (msp == NULL || tree_seq == NULL) {
+    if (msp == NULL || tree_seq == NULL || recomb_map == NULL) {
         goto out;
     }
-    ret = get_configuration(msp, &mutation_params, &output_file, conf_file);
+    ret = get_configuration(msp, &mutation_params, recomb_map,
+            &output_file, conf_file);
     if (ret != 0) {
         goto out;
     }
+    recomb_map_print_state(recomb_map);
     ret = msp_initialise(msp);
     if (ret != 0) {
         goto out;
@@ -625,6 +690,10 @@ out:
     }
     if (output_file != NULL) {
         free(output_file);
+    }
+    if (recomb_map != NULL) {
+        recomb_map_free(recomb_map);
+        free(recomb_map);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));

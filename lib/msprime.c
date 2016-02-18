@@ -103,6 +103,8 @@ msp_strerror(int err)
         ret = "Internal error; please file a bug report.";
     } else if (err == MSP_ERR_SOURCE_DEST_EQUAL) {
         ret = "Source and destination populations equal.";
+    } else if (err == MSP_ERR_BAD_RECOMBINATION_MAP) {
+        ret = "Bad recombination map provided.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);

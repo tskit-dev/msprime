@@ -15,9 +15,9 @@ LDFLAGS=-lgsl -lgslcblas -lhdf5 -lconfig
 
 
 SRC=msprime.c fenwick.c fenwick.h msprime.h err.h main.c tree_sequence.c \
-    object_heap.c object_heap.h newick.c hapgen.c
+    object_heap.c object_heap.h newick.c hapgen.c recomb_map.c
 COMPILED=msprime.c fenwick.c main.c tree_sequence.c object_heap.c newick.c \
-    hapgen.c
+    hapgen.c recomb_map.c
 
 all: main test_fenwick
 

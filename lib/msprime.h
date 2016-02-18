@@ -171,6 +171,15 @@ typedef struct demographic_event_t_t {
     struct demographic_event_t_t *next;
 } demographic_event_t;
 
+/* Recombination map */
+
+typedef struct {
+    size_t size;
+    uint32_t *coordinates;
+    double *rates;
+} recomb_map_t;
+
+
 /* Tree sequences */
 typedef struct {
     uint32_t sample_size;
@@ -437,6 +446,12 @@ size_t hapgen_get_num_segregating_sites(hapgen_t *self);
 int hapget_get_locations(hapgen_t *self, double *);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
+
+int recomb_map_alloc(recomb_map_t *self, uint32_t *coordinates, double *rates,
+        size_t size);
+int recomb_map_free(recomb_map_t *self);
+double recomb_map_get_effective_rate(recomb_map_t *self);
+void recomb_map_print_state(recomb_map_t *self);
 
 const char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/
