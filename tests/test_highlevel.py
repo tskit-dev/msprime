@@ -797,3 +797,26 @@ class TestSparseTree(HighLevelTestCase):
         for u in t1.nodes():
             self.assertEqual(list(t1.nodes(u)), list(t2.nodes(u)))
         self.assertRaises(ValueError, t1.nodes, None, "bad order")
+
+
+class TestGeneticMap(unittest.TestCase):
+    """
+    Tests the code for calculating the effective recombination rate.
+    """
+
+    def test_one_rate(self):
+        for m in [1, 10, 2**32]:
+            for rate in [0.0, 1.0, 10]:
+                gm = msprime.GeneticMap([0, m], [rate, None])
+                self.assertEqual(rate, gm.get_effective_rate())
+
+    def test_zero_rate(self):
+        for m in [1, 10, 2**32]:
+            gm = msprime.GeneticMap([m], [None])
+            self.assertEqual(0.0, gm.get_effective_rate())
+
+    def test_simple_examples(self):
+        gm = msprime.GeneticMap([0, 9, 10], [2, 1, None])
+        self.assertAlmostEqual(gm.get_effective_rate(), 1.9)
+        gm = msprime.GeneticMap([0, 5, 6, 10], [2, 1, 2, None])
+        self.assertAlmostEqual(gm.get_effective_rate(), 1.9)

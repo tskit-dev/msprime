@@ -18,13 +18,15 @@ import msprime
 
 def mutations():
     n = 10
-    num_reps = 1000
+    # num_reps = 1000
+    num_reps = 1
     num_loci = 10001
-    recomb_rates = [(1000, 0.005), (2000, 0.01), (3000, 0), (10001, 0.05)]
+    # recomb_rates = [(1000, 0.005), (2000, 0.01), (3000, 0), (10001, 0.05)]
+    recomb_rates = [(10001, 0.05)]
     last_pos = 0
     mean_rate = 0
     for pos, rate in recomb_rates:
-        d = (pos - last_pos) / num_loci
+        d = (pos - last_pos - 1) / (num_loci - 1)
         mean_rate += d * rate
         # print("mean_rate + ", d, rate)
         # print("rate = ", rate, rate / (4 * 10**4))
@@ -39,8 +41,11 @@ def mutations():
         # simulator.set_random_seed(j)
         simulator.run()
         num_trees += simulator.get_num_breakpoints()
+        ts = simulator.get_tree_sequence()
+        for t in ts.trees():
+            print(t.get_interval()[0])
 
-    # Construct the scrm command line. Use the last value as the background
+    # Construct the scrm command line. Use the first value as the background
     # rate
     simulator.set_scaled_recombination_rate(recomb_rates[0][-1])
 
@@ -173,10 +178,10 @@ def plot_1kg_map():
 
 
 if __name__ == "__main__":
-    mutations()
+    # mutations()
 
-    # plot_distance_maps(
-    #     [(10, 0.1), (11, 1), (20, 0.1), (21, 1), (30, 0.1)]
-    # )
+    plot_distance_maps(
+        [(10, 0.1), (11, 1), (20, 0.1), (21, 1), (30, 0.1)]
+    )
     # plot_1kg_map()
 

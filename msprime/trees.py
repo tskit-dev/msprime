@@ -1102,6 +1102,10 @@ class TreeSequence(object):
                 pi += k * (n - k) / denom
         return pi
 
+    def rescale_coordinates(self, genetic_map):
+        pass
+        # print("rescaling coordinates according to", genetic_map)
+
 
 class HaplotypeGenerator(object):
 
@@ -1116,6 +1120,34 @@ class HaplotypeGenerator(object):
     def haplotypes(self):
         for j in range(1, self._tree_sequence.get_sample_size() + 1):
             yield self.get_haplotype(j)
+
+
+class GeneticMap(object):
+    """
+    A class representing the changing recombination rate along a
+    chromosome. It is represented by a list of tuples, (x, rate)
+    where x is the start coordinate and rate is the recombination
+    rate until the next interval. The last element of this list
+    must always be (num_loci, None).
+    """
+    def __init__(self, coordinates, rates):
+        assert len(coordinates) == len(rates)
+        assert len(coordinates) >= 1
+        self._coordinates = coordinates
+        self._rates = rates
+
+    def get_effective_rate(self):
+        """
+        Returns the effective recombination rate for this genetic map.
+        This is the weighted mean of the rates across all intervals.
+        """
+        effective_rate = 0
+        x = self._coordinates
+        num_loci = x[-1]
+        for j in range(len(self._coordinates) - 1):
+            length = (x[j + 1] - x[j]) / num_loci
+            effective_rate += self._rates[j] * length
+        return effective_rate
 
 
 class PopulationConfiguration(object):

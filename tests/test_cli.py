@@ -763,9 +763,10 @@ class TestMspmsOutput(unittest.TestCase):
         Runs the UI for the specified parameters, and parses the output
         to ensure it's consistent.
         """
+        gm = msprime.GeneticMap([0, num_loci], [recombination_rate, None])
         sr = cli.SimulationRunner(
             sample_size=sample_size, num_loci=num_loci,
-            recombination_rate=recombination_rate,
+            recombination_map=gm,
             num_replicates=num_replicates, mutation_rate=mutation_rate,
             print_trees=print_trees, precision=precision,
             random_seeds=random_seeds)

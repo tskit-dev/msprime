@@ -37,6 +37,7 @@ def set_sigpipe_handler():
         # Set signal handler for SIGPIPE to quietly kill the program.
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
+
 #######################################################
 # mspms: the ms compatible interface
 #######################################################
@@ -109,15 +110,15 @@ class SimulationRunner(object):
     Class to run msprime simulation and output the results.
     """
     def __init__(
-            self, sample_size=1, num_loci=1, recombination_rate=0,
+            self, sample_size=1, num_loci=1, recombination_map=None,
             num_replicates=1, migration_matrix=None,
             population_configurations=None, demographic_events=None,
-            mutation_rate=0, print_trees=False, max_memory="16M",
-            precision=3, random_seeds=None):
+            mutation_rate=0, print_trees=False,
+            max_memory="16M", precision=3, random_seeds=None):
         self._sample_size = sample_size
         self._num_loci = num_loci
         self._num_replicates = num_replicates
-        self._recombination = recombination_rate
+        self._recombination_map = recombination_map
         self._mutation_rate = mutation_rate
         self._simulator = msprime.TreeSimulator(sample_size)
         self._simulator.set_max_memory(max_memory)
@@ -126,7 +127,8 @@ class SimulationRunner(object):
         self._simulator.set_population_configurations(
             population_configurations)
         self._simulator.set_demographic_events(demographic_events)
-        self._simulator.set_scaled_recombination_rate(recombination_rate)
+        self._simulator.set_scaled_recombination_rate(
+            recombination_map.get_effective_rate())
         self._precision = precision
         self._print_trees = print_trees
         # sort out the random seeds
@@ -158,6 +160,7 @@ class SimulationRunner(object):
             self._simulator.set_random_seed(random.randint(0, 2**30))
             self._simulator.run()
             tree_sequence = self._simulator.get_tree_sequence()
+            tree_sequence.rescale_coordinates(self._recombination_map)
             breakpoints = self._simulator.get_breakpoints()
             print(file=output)
             print("//", file=output)
@@ -284,6 +287,30 @@ def raise_admixture_incompatability_error(parser, other_option):
         "important to you.".format(other_option))
 
 
+def get_recombinatation_map(parser, args):
+    num_loci = int(args.recombination[1])
+    if args.recombination[1] != num_loci:
+        parser.error("Number of loci must be integer value")
+    if args.recombination[0] != 0.0 and num_loci < 2:
+        parser.error("Number of loci must > 1")
+    rates = []
+    coordinates = []
+    if num_loci > 1:
+        r = args.recombination[0] / (num_loci - 1)
+        for position, rate in sorted(args.recombination_rate_change):
+            rate /= (num_loci - 1)
+            if position != 0 and len(rates) == 0:
+                rates.append(r)
+                coordinates.append(0)
+            if position < 0 or position >= num_loci:
+                parser.error("Genomic position out of bounds")
+            rates.append(rate)
+            coordinates.append(position)
+    rates.append(None)
+    coordinates.append(num_loci)
+    return msprime.GeneticMap(coordinates, rates)
+
+
 def create_simulation_runner(parser, arg_list):
     """
     Parses the arguments and returns a SimulationRunner instance.
@@ -292,15 +319,9 @@ def create_simulation_runner(parser, arg_list):
     if args.mutation_rate == 0 and not args.trees:
         parser.error("Need to specify at least one of --theta or --trees")
     num_loci = int(args.recombination[1])
-    if args.recombination[1] != num_loci:
-        parser.error("Number of loci must be integer value")
-    if args.recombination[0] != 0.0 and num_loci < 2:
-        parser.error("Number of loci must > 1")
-    r = 0.0
     # We don't scale recombination or mutation rates by the size
     # of the region.
-    if num_loci > 1:
-        r = args.recombination[0] / (num_loci - 1)
+    recombination_map = get_recombinatation_map(parser, args)
     mu = args.mutation_rate / num_loci
 
     # Check the structure format.
@@ -483,7 +504,7 @@ def create_simulation_runner(parser, arg_list):
         population_configurations=population_configurations,
         demographic_events=[event for _, event in demographic_events],
         num_replicates=args.num_replicates,
-        recombination_rate=r,
+        recombination_map=recombination_map,
         mutation_rate=mu,
         precision=args.precision,
         max_memory=args.max_memory,
@@ -530,6 +551,11 @@ def get_mspms_parser():
     group.add_argument(
         "--recombination", "-r", type=float, nargs=2, default=(0, 1),
         metavar=("rho", "num_loci"), help=mscompat_recombination_help)
+    group.add_argument(
+        "--recombination-rate-change", "-sr", type=float, nargs=2,
+        action="append", default=[],
+        metavar=("s", "rho"), help=(
+            "Sets the recombination rate beginning from position s to rho"))
 
     group = parser.add_argument_group("Structure and migration")
     group.add_argument(
