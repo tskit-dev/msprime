@@ -29,6 +29,7 @@ except ImportError:
     # This fails for Python 3.x, but that's fine.
     pass
 
+import math
 import os
 import random
 import tempfile
@@ -37,6 +38,20 @@ import xml.etree
 
 import msprime
 import tests
+
+
+def get_pairwise_diversity(haplotypes):
+    """
+    Returns the value of pi for the specified haplotypes.
+    """
+    # Very simplistic algorithm...
+    n = len(haplotypes)
+    pi = 0
+    for k in range(n):
+        for j in range(k):
+            for u, v in zip(haplotypes[j], haplotypes[k]):
+                pi += u != v
+    return 2 * pi / (n * (n - 1))
 
 
 def sparse_tree_to_newick(st, precision):
@@ -250,10 +265,22 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
 
+    def verify_haplotype_statistics(self, ts):
+        """
+        Verifies the statistics calculated for the haplotypes
+        in the specified tree sequence.
+        """
+        pi1 = ts.get_pairwise_diversity()
+        pi2 = get_pairwise_diversity(list(ts.haplotypes()))
+        self.assertAlmostEqual(pi1, pi2)
+        self.assertGreaterEqual(pi1, 0.0)
+        self.assertFalse(math.isnan(pi1))
+
     def verify_mutations(self, ts):
         """
         Verify the mutations on this tree sequence make sense.
         """
+        self.verify_haplotype_statistics(ts)
         all_mutations = list(ts.mutations())
         # Mutations must be sorted by position
         self.assertEqual(
@@ -308,6 +335,56 @@ class TestSingleLocusSimulation(HighLevelTestCase):
             self.assertEqual(st1, st2)
         # TODO add more tests!
 
+    def test_initial_growth_rate(self):
+        alpha = 5.0
+        random_seed = 1234
+        n = 10
+        ts1 = msprime.simulate(
+            n, random_seed=random_seed, population_models=[
+                msprime.ExponentialPopulationModel(0.0, alpha)])
+        sim = msprime.TreeSimulator(n)
+        sim.set_random_seed(random_seed)
+        sim.set_population_configurations([
+            msprime.PopulationConfiguration(n, growth_rate=alpha)])
+        sim.run()
+        ts2 = sim.get_tree_sequence()
+        self.assertEqual(list(ts1.records()), list(ts2.records()))
+
+    def test_initial_pop_size(self):
+        size = 5.0
+        random_seed = 1234
+        n = 10
+        ts1 = msprime.simulate(
+            n, random_seed=random_seed, population_models=[
+                msprime.ConstantPopulationModel(0.0, size)])
+        sim = msprime.TreeSimulator(n)
+        sim.set_random_seed(random_seed)
+        sim.set_population_configurations([
+            msprime.PopulationConfiguration(n, initial_size=size)])
+        sim.run()
+        ts2 = sim.get_tree_sequence()
+        self.assertEqual(list(ts1.records()), list(ts2.records()))
+
+    def test_mixed_events(self):
+        random_seed = 1234
+        n = 10
+        models = [
+            msprime.ConstantPopulationModel(0.0, 2.0),
+            msprime.ConstantPopulationModel(0.01, 5.0),
+            msprime.ExponentialPopulationModel(0.5, 3.0)]
+        ts1 = msprime.simulate(
+            n, random_seed=random_seed, population_models=models)
+        sim = msprime.TreeSimulator(n)
+        sim.set_random_seed(random_seed)
+        sim.set_population_configurations([
+            msprime.PopulationConfiguration(n, initial_size=2)])
+        sim.set_demographic_events([
+            msprime.SizeChangeEvent(0.01, 5.0),
+            msprime.GrowthRateChangeEvent(0.5, 3.0)])
+        sim.run()
+        ts2 = sim.get_tree_sequence()
+        self.assertEqual(list(ts1.records()), list(ts2.records()))
+
 
 class TestMultiLocusSimulation(HighLevelTestCase):
     """
@@ -348,13 +425,8 @@ class TestTreeSimulator(HighLevelTestCase):
             parameters["scaled_recombination_rate"],
             sim.get_scaled_recombination_rate())
         self.assertEqual(parameters["random_seed"], sim.get_random_seed())
-        models = [m.get_ll_model() for m in sim.get_population_models()]
-        self.assertEqual(parameters["population_models"], models)
-
-    def verify_environment(self, tree_sequence):
-        environment = tree_sequence.get_environment()
-        self.assertIsInstance(environment, dict)
-        self.assertGreater(len(environment), 0)
+        config = sim.get_configuration()
+        self.assertEqual(config, parameters)
 
     def verify_dump_load(self, tree_sequence):
         """
@@ -383,7 +455,6 @@ class TestTreeSimulator(HighLevelTestCase):
         sim.set_random_seed(seed)
         self.assertEqual(sim.get_random_seed(), seed)
         sim.run()
-        self.assertEqual(sim.get_population_models(), [])
         self.assertEqual(sim.get_num_breakpoints(), len(sim.get_breakpoints()))
         self.assertGreater(sim.get_used_memory(), 0)
         self.assertGreater(sim.get_time(), 0)
@@ -398,17 +469,12 @@ class TestTreeSimulator(HighLevelTestCase):
             if time > t:
                 t = time
         self.assertEqual(sim.get_time(), t)
-        self.assertGreater(sim.get_num_coancestry_events(), 0)
+        self.assertGreater(sim.get_num_common_ancestor_events(), 0)
         self.assertGreaterEqual(sim.get_num_recombination_events(), 0)
+        self.assertGreaterEqual(sim.get_total_num_migration_events(), 0)
         self.assertGreaterEqual(sim.get_num_multiple_recombination_events(), 0)
         self.verify_sparse_trees(tree_sequence)
-
-        # TODO reenable test parameters and environment
-        # self.verify_parameters(sim, tree_sequence)
-        # self.verify_environment(tree_sequence)
-        # TODO save the tree_sequence to a file and verify equality
-        # between the two.
-
+        self.verify_parameters(sim, tree_sequence)
         self.verify_dump_load(tree_sequence)
 
     def test_random_parameters(self):
@@ -623,7 +689,7 @@ class TestTreeSequence(HighLevelTestCase):
             if ts.get_num_mutations() > 0:
                 all_zero = False
                 self.verify_mutations(ts)
-                muts = [[], [(0, 1)], [(0, 1), (0, 2)]]
+            muts = [[], [(0, 1)], [(0, 1), (0, 2)]]
             for mutations in muts:
                 ts.set_mutations(mutations)
                 self.assertEqual(ts.get_num_mutations(), len(mutations))

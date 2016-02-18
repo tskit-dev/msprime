@@ -80,7 +80,7 @@ def add_header_argument(parser):
 
 def add_max_memory_argument(parser):
     parser.add_argument(
-        "--max-memory", "-M", default="1G",
+        "--max-memory", "-M", default=None,
         help=(
             "Maximum memory to use. If the simulation exceeds this limit "
             "exit with error status. Supports K,M and G suffixes"))
@@ -110,9 +110,10 @@ class SimulationRunner(object):
     """
     def __init__(
             self, sample_size=1, num_loci=1, recombination_rate=0,
-            num_replicates=1, mutation_rate=0, print_trees=False,
-            max_memory="16M", precision=3, population_models=[],
-            random_seeds=None):
+            num_replicates=1, migration_matrix=None,
+            population_configurations=None, demographic_events=None,
+            mutation_rate=0, print_trees=False, max_memory="16M",
+            precision=3, random_seeds=None):
         self._sample_size = sample_size
         self._num_loci = num_loci
         self._num_replicates = num_replicates
@@ -121,15 +122,23 @@ class SimulationRunner(object):
         self._simulator = msprime.TreeSimulator(sample_size)
         self._simulator.set_max_memory(max_memory)
         self._simulator.set_num_loci(num_loci)
+        self._simulator.set_migration_matrix(migration_matrix)
+        self._simulator.set_population_configurations(
+            population_configurations)
+        self._simulator.set_demographic_events(demographic_events)
         self._simulator.set_scaled_recombination_rate(recombination_rate)
         self._precision = precision
         self._print_trees = print_trees
-        for m in population_models:
-            self._simulator.add_population_model(m)
         # sort out the random seeds
         python_seed, ms_seeds = get_seeds(random_seeds)
         self._ms_random_seeds = ms_seeds
         random.seed(python_seed)
+
+    def get_num_replicates(self):
+        """
+        Returns the number of replicates we are to run.
+        """
+        return self._num_replicates
 
     def get_simulator(self):
         """
@@ -190,44 +199,318 @@ class SimulationRunner(object):
             self._simulator.reset()
 
 
-def create_simulation_runner(args):
+def convert_int(value, parser):
+    """
+    Converts the specified value to an integer if possible. If
+    conversion fails, exit by calling parser.error.
+    """
+    try:
+        return int(value)
+    except ValueError:
+        parser.error("invalid int value '{}'".format(value))
+
+
+def convert_float(value, parser):
+    """
+    Converts the specified value to a float if possible. If
+    conversion fails, exit by calling parser.error.
+    """
+    try:
+        return float(value)
+    except ValueError:
+        parser.error("invalid float value '{}'".format(value))
+
+
+def convert_population_id(parser, population_id, num_populations):
+    """
+    Checks the specified population ID makes sense and returns
+    it as an integer, and converted into msprime's internal population
+    ID scheme (i.e., zero based).
+    """
+    pid = int(population_id)
+    if pid != population_id:
+        msg = "Bad population ID '{}': must be an integer"
+        parser.error(msg.format(population_id))
+    if pid < 1 or pid > num_populations:
+        msg = "Bad population ID '{}': must be 1 to num_populations"
+        parser.error(msg.format(pid))
+    return pid - 1
+
+
+def check_migration_rate(parser, rate):
+    """
+    Checks that the specified migration rate makes sense.
+    """
+    if rate < 0:
+        parser.error("Migration rates must be non-negative.")
+
+
+def check_event_time(parser, time):
+    """
+    Checks that the specified time for an event makes sense
+    """
+    if time < 0:
+        parser.error("Event times must be non-negative.")
+
+
+def convert_migration_matrix(parser, input_matrix, num_populations):
+    """
+    Converts the specified migration matrix into the internal format.
+    """
+    if len(input_matrix) != num_populations**2:
+        parser.error(
+            "Must be num_populations^2 migration matrix entries")
+    migration_matrix = [[
+        0 for j in range(num_populations)] for k in range(num_populations)]
+    for j in range(num_populations):
+        for k in range(num_populations):
+            if j != k:
+                rate = convert_float(
+                    input_matrix[j * num_populations + k], parser)
+                check_migration_rate(parser, rate)
+                migration_matrix[j][k] = rate
+    return migration_matrix
+
+
+def raise_admixture_incompatability_error(parser, other_option):
+    """
+    Because of the state dependency within ms, it is messy for us to
+    support options that affect all populations in conjunction with
+    population splits. For now, raise an error.
+    """
+    parser.error(
+        "Cannot currently use the -es and {} options together. "
+        "Please open an issue on GitHub if this functionality is "
+        "important to you.".format(other_option))
+
+
+def create_simulation_runner(parser, arg_list):
     """
     Parses the arguments and returns a SimulationRunner instance.
     """
+    args = parser.parse_args(arg_list)
+    if args.mutation_rate == 0 and not args.trees:
+        parser.error("Need to specify at least one of --theta or --trees")
     num_loci = int(args.recombination[1])
+    if args.recombination[1] != num_loci:
+        parser.error("Number of loci must be integer value")
+    if args.recombination[0] != 0.0 and num_loci < 2:
+        parser.error("Number of loci must > 1")
     r = 0.0
     # We don't scale recombination or mutation rates by the size
     # of the region.
     if num_loci > 1:
         r = args.recombination[0] / (num_loci - 1)
     mu = args.mutation_rate / num_loci
-    models = []
-    # Get the demography parameters
-    # TODO for strict ms compatability, we need to resolve the command line
-    # ordering of arguments when there are two or more events with the
-    # same start time. We should resolve this.
+
+    # Check the structure format.
+    symmetric_migration_rate = 0.0
+    num_populations = 1
+    population_configurations = [
+        msprime.PopulationConfiguration(args.sample_size)]
+    migration_matrix = [[0.0]]
+    if args.structure is not None:
+        num_populations = convert_int(args.structure[0], parser)
+        # We must have at least num_population sample_configurations
+        if len(args.structure) < num_populations + 1:
+            parser.error("Must have num_populations sample sizes")
+        population_configurations = [None for j in range(num_populations)]
+        for j in range(num_populations):
+            population_configurations[j] = msprime.PopulationConfiguration(
+                convert_int(args.structure[j + 1], parser))
+        total = sum(conf.sample_size for conf in population_configurations)
+        if total != args.sample_size:
+            parser.error("Population sample sizes must sum to sample_size")
+        # We optionally have the overall migration_rate here
+        if len(args.structure) == num_populations + 2:
+            symmetric_migration_rate = convert_float(
+                args.structure[num_populations + 1], parser)
+            check_migration_rate(parser, symmetric_migration_rate)
+        elif len(args.structure) > num_populations + 2:
+            parser.error("Too many arguments to --structure/-I")
+        if num_populations > 1:
+            migration_matrix = [[
+                symmetric_migration_rate / (num_populations - 1) * int(j != k)
+                for j in range(num_populations)]
+                for k in range(num_populations)]
+    else:
+        if len(args.migration_matrix_entry) > 0:
+            parser.error(
+                "Cannot specify migration matrix entries without "
+                "first providing a -I option")
+        if args.migration_matrix is not None:
+            parser.error(
+                "Cannot specify a migration matrix without "
+                "first providing a -I option")
+    if args.migration_matrix is not None:
+        migration_matrix = convert_migration_matrix(
+            parser, args.migration_matrix, num_populations)
+    for matrix_entry in args.migration_matrix_entry:
+        dest = convert_population_id(parser, matrix_entry[0], num_populations)
+        source = convert_population_id(
+            parser, matrix_entry[1], num_populations)
+        rate = matrix_entry[2]
+        if dest == source:
+            parser.error("Cannot set diagonal elements in migration matrix")
+        check_migration_rate(parser, rate)
+        migration_matrix[dest][source] = rate
+
+    # Set the initial demography
+    demographic_events = []
     if args.growth_rate is not None:
-        models.append(
-            msprime.ExponentialPopulationModel(0.0, args.growth_rate))
-    for t, alpha in args.growth_event:
-        models.append(msprime.ExponentialPopulationModel(t, alpha))
-    for t, x in args.size_event:
-        models.append(msprime.ConstantPopulationModel(t, x))
+        for config in population_configurations:
+            config.growth_rate = args.growth_rate
+    for population_id, growth_rate in args.population_growth_rate:
+        pid = convert_population_id(parser, population_id, num_populations)
+        population_configurations[pid].growth_rate = growth_rate
+    for population_id, size in args.population_size:
+        pid = convert_population_id(parser, population_id, num_populations)
+        population_configurations[pid].initial_size = size
+
+    # First we look at population split events. We do this differently
+    # to ms, as msprime requires a fixed number of population. Therefore,
+    # modify the number of populations to take into account populations
+    # splits. This is a messy hack, and will probably need to be changed.
+    for index, (t, population_id, proportion) in args.admixture:
+        check_event_time(parser, t)
+        pid = convert_population_id(parser, population_id, num_populations)
+        if proportion < 0 or proportion > 1:
+            parser.error("Proportion value must be 0 <= p <= 1.")
+        event = (index, msprime.MassMigrationEvent(
+            t, num_populations, pid, 1 - proportion))
+        demographic_events.append(event)
+
+        num_populations += 1
+        # We add another element to each row in the migration matrix
+        # along with an other row. All new entries are zero.
+        for row in migration_matrix:
+            row.append(0)
+        migration_matrix.append([0 for j in range(num_populations)])
+        # Add another PopulationConfiguration object with a sample size
+        # of zero.
+        population_configurations.append(msprime.PopulationConfiguration(0))
+
+    # Add the demographic events
+    for index, (t, alpha) in args.growth_rate_change:
+        if len(args.admixture) != 0:
+            raise_admixture_incompatability_error(parser, "-eG")
+        check_event_time(parser, t)
+        demographic_events.append(
+            (index, msprime.GrowthRateChangeEvent(t, alpha)))
+    for index, (t, population_id, alpha) in args.population_growth_rate_change:
+        pid = convert_population_id(parser, population_id, num_populations)
+        check_event_time(parser, t)
+        demographic_events.append(
+            (index, msprime.GrowthRateChangeEvent(t, alpha, pid)))
+    for index, (t, x) in args.size_change:
+        if len(args.admixture) != 0:
+            raise_admixture_incompatability_error(parser, "-eN")
+        check_event_time(parser, t)
+        demographic_events.append(
+            (index, msprime.SizeChangeEvent(t, x)))
+    for index, (t, population_id, x) in args.population_size_change:
+        check_event_time(parser, t)
+        pid = convert_population_id(parser, population_id, num_populations)
+        demographic_events.append(
+            (index, msprime.SizeChangeEvent(t, x, pid)))
+    for index, (t, dest, source) in args.population_split:
+        check_event_time(parser, t)
+        source_id = convert_population_id(parser, source, num_populations)
+        dest_id = convert_population_id(parser, dest, num_populations)
+        demographic_events.append(
+            (index, msprime.MassMigrationEvent(t, source_id, dest_id, 1.0)))
+        # Set the migration rates for source to 0
+        for j in range(num_populations):
+            if j != dest_id:
+                event = msprime.MigrationRateChangeEvent(t, 0.0, (j, dest_id))
+                demographic_events.append((index, event))
+
+    # Demographic events that affect the migration matrix
+    if num_populations == 1:
+        condition = (
+            len(args.migration_rate_change) > 0 or
+            len(args.migration_matrix_entry_change) > 0 or
+            len(args.migration_matrix_change) > 0)
+        if condition:
+            parser.error("Cannot change migration rates for 1 population")
+    for index, (t, x) in args.migration_rate_change:
+        if len(args.admixture) != 0:
+            raise_admixture_incompatability_error(parser, "-eM")
+        check_migration_rate(parser, x)
+        check_event_time(parser, t)
+        event = msprime.MigrationRateChangeEvent(
+            t, x / (num_populations - 1))
+        demographic_events.append((index, event))
+    for index, event in args.migration_matrix_entry_change:
+        t = event[0]
+        check_event_time(parser, t)
+        dest = convert_population_id(parser, event[1], num_populations)
+        source = convert_population_id(parser, event[2], num_populations)
+        if dest == source:
+            parser.error("Cannot set diagonal elements in migration matrix")
+        rate = event[3]
+        check_migration_rate(parser, rate)
+        msp_event = msprime.MigrationRateChangeEvent(t, rate, (dest, source))
+        demographic_events.append((index, msp_event))
+    for index, event in args.migration_matrix_change:
+        if len(event) < 3:
+            parser.error("Need at least three arguments to -ma")
+        if len(args.admixture) != 0:
+            raise_admixture_incompatability_error(parser, "-ema")
+        t = convert_float(event[0], parser)
+        check_event_time(parser, t)
+        if convert_int(event[1], parser) != num_populations:
+            parser.error(
+                "num_populations must be equal for new migration matrix")
+        matrix = convert_migration_matrix(parser, event[2:], num_populations)
+        for j in range(num_populations):
+            for k in range(num_populations):
+                if j != k:
+                    msp_event = msprime.MigrationRateChangeEvent(
+                        t, matrix[j][k], (j, k))
+                    demographic_events.append((index, msp_event))
+
+    demographic_events.sort(key=lambda x: (x[0], x[1].time))
+    time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
+    if demographic_events != time_sorted:
+        parser.error(
+            "Demographic events must be supplied in non-decreasing "
+            "time order")
     runner = SimulationRunner(
         sample_size=args.sample_size,
         num_loci=num_loci,
+        migration_matrix=migration_matrix,
+        population_configurations=population_configurations,
+        demographic_events=[event for _, event in demographic_events],
         num_replicates=args.num_replicates,
         recombination_rate=r,
         mutation_rate=mu,
         precision=args.precision,
         max_memory=args.max_memory,
         print_trees=args.trees,
-        population_models=models,
         random_seeds=args.random_seeds)
     return runner
 
 
+class IndexedAction(argparse._AppendAction):
+    """
+    Argparse action class that allows us to find the overall ordering
+    across several different options. We use this for the demographic
+    events, as the order in which the events are applied matters for
+    ms compatability.
+    """
+    index = 0
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        super(IndexedAction, self).__call__(
+            parser, namespace, (IndexedAction.index, values), option_string)
+        IndexedAction.index += 1
+
+
 def get_mspms_parser():
+    # Ensure that the IndexedAction counter is set to zero. This is useful
+    # for testing where we'll be creating lots of these parsers.
+    IndexedAction.index = 0
     parser = argparse.ArgumentParser(description=mscompat_description)
     add_sample_size_argument(parser)
     parser.add_argument(
@@ -248,18 +531,107 @@ def get_mspms_parser():
         "--recombination", "-r", type=float, nargs=2, default=(0, 1),
         metavar=("rho", "num_loci"), help=mscompat_recombination_help)
 
+    group = parser.add_argument_group("Structure and migration")
+    group.add_argument(
+        "--structure", "-I", nargs='+', metavar="value",
+        help=(
+            "Sample from populations with the specified deme structure. "
+            "The arguments are of the form 'num_populations "
+            "n1 n2 ... [4N0m]', specifying the number of populations, "
+            "the sample configuration, and optionally, the migration "
+            "rate for a symmetric island model"))
+    group.add_argument(
+        "--migration-matrix-entry", "-m", action="append",
+        metavar=("dest", "source", "rate"),
+        nargs=3, type=float, default=[],
+        help=(
+            "Sets an entry M[dest, source] in the migration matrix to the "
+            "specified rate. source and dest are (1-indexed) population "
+            "IDs. Multiple options can be specified."))
+    group.add_argument(
+        "--migration-matrix", "-ma", nargs='+', default=None, metavar="entry",
+        help=(
+            "Sets the migration matrix to the specified value. The "
+            "entries are in the order M[1,1], M[1, 2], ..., M[2, 1],"
+            "M[2, 2], ..., M[N, N], where N is the number of populations."))
+    group.add_argument(
+        "--migration-rate-change", "-eM", nargs=2, action=IndexedAction,
+        type=float, default=[], metavar=("t", "x"),
+        help=(
+            "Set the symmetric island model migration rate to "
+            "x / (npop - 1) at time t"))
+    group.add_argument(
+        "--migration-matrix-entry-change", "-em", action=IndexedAction,
+        metavar=("time", "dest", "source", "rate"),
+        nargs=4, type=float, default=[],
+        help=(
+            "Sets an entry M[dest, source] in the migration matrix to the "
+            "specified rate at the specified time. source and dest are "
+            "(1-indexed) population IDs."))
+    group.add_argument(
+        "--migration-matrix-change", "-ema", nargs='+', default=[],
+        action=IndexedAction, metavar="entry", help=(
+            "Sets the migration matrix to the specified value at time t."
+            "The entries are in the order M[1,1], M[1, 2], ..., M[2, 1],"
+            "M[2, 2], ..., M[N, N], where N is the number of populations."))
+
     group = parser.add_argument_group("Demography")
     group.add_argument(
         "--growth-rate", "-G", metavar="alpha", type=float,
-        help="Population growth rate alpha.")
+        help="Set the growth rate to alpha for all populations.")
     group.add_argument(
-        "--growth-event", "-eG", nargs=2, action="append",
+        "--population-growth-rate", "-g", action="append", default=[],
+        nargs=2, metavar=("population_id", "alpha"), type=float,
+        help="Set the growth rate to alpha for a specific population.")
+    group.add_argument(
+        "--population-size", "-n", action="append", default=[],
+        nargs=2, metavar=("population_id", "size"), type=float,
+        help="Set the size of a specific population to size*N0.")
+
+    group.add_argument(
+        "--growth-rate-change", "-eG", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "alpha"),
-        help="Set the growth rate to alpha at time t")
+        help="Set the growth rate for all populations to alpha at time t")
     group.add_argument(
-        "--size-event", "-eN", nargs=2, action="append",
+        "--population-growth-rate-change", "-eg", nargs=3,
+        action=IndexedAction, type=float, default=[],
+        metavar=("t", "population_id", "alpha"),
+        help=(
+            "Set the growth rate for a specific population to "
+            "alpha at time t"))
+    group.add_argument(
+        "--size-change", "-eN", nargs=2, action=IndexedAction,
         type=float, default=[], metavar=("t", "x"),
-        help="Set the population size to x * N0 at time t")
+        help="Set the population size for all populations to x * N0 at time t")
+    group.add_argument(
+        "--population-size-change", "-en", nargs=3,
+        action=IndexedAction, type=float, default=[],
+        metavar=("t", "population_id", "x"),
+        help=(
+            "Set the population size for a specific population to "
+            "x * N0 at time t"))
+    group.add_argument(
+        "--population-split", "-ej", nargs=3,
+        action=IndexedAction, type=float, default=[],
+        metavar=("t", "dest", "source"),
+        help=(
+            "Move all lineages in population dest to source at time t. "
+            "Forwards in time, this corresponds to a population split "
+            "in which lineages in source split into dest. All migration "
+            "rates for population source are set to zero."))
+    group.add_argument(
+        "--admixture", "-es", nargs=3,
+        action=IndexedAction, type=float, default=[],
+        metavar=("t", "population_id", "proportion"),
+        help=(
+            "Split the specified population into a new population, such "
+            "that the specified proportion of lineages remains in "
+            "the population population_id. Forwards in time this "
+            "corresponds to an admixture event. The new population has ID "
+            "num_populations + 1. Migration rates to and from the new "
+            "population are set to 0, and growth rate is 0 and the "
+            "population size for the new population is N0."))
+
     group = parser.add_argument_group("Miscellaneous")
     group.add_argument(
         "--random-seeds", "-seeds", nargs=3, type=positive_int,
@@ -274,10 +646,7 @@ def get_mspms_parser():
 
 def get_mspms_runner(arg_list):
     parser = get_mspms_parser()
-    args = parser.parse_args(arg_list)
-    if args.mutation_rate == 0 and not args.trees:
-        parser.error("Need to specify at least one of --theta or --trees")
-    return create_simulation_runner(args)
+    return create_simulation_runner(parser, arg_list)
 
 
 def mspms_main(arg_list=None):

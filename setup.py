@@ -19,7 +19,6 @@
 from __future__ import division
 from __future__ import print_function
 
-import re
 import subprocess
 
 # First, we try to use setuptools. If it's not available locally,
@@ -83,23 +82,27 @@ class PathConfigurator(object):
         self.include_dirs = self._get_pkgconfig_list("--cflags-only-I")
 
 
-# Following the recommendations of PEP 396 we parse the version number
-# out of the module.
-def parse_version(module_file):
-    """
-    Parses the version string from the specified file.
+# Now, setup the extension module. We have to do some quirky workarounds
+# here so that we can get the current version number from setuptools_scm
+# and also get this version provided as a compile time parameter to the
+# extension module.
+class DefineMacros(object):
+    def __init__(self):
+        self._msprime_version = None
 
-    This implementation is ugly, but there doesn't seem to be a good way
-    to do this in general at the moment.
-    """
-    f = open(module_file)
-    s = f.read()
-    f.close()
-    match = re.findall("__version__ = '([^']+)'", s)
-    return match[0]
+    def __getitem__(self, index):
+        if self._msprime_version is None:
+            import setuptools_scm
+            self._msprime_version = setuptools_scm.get_version()
+        l = [
+            # We define this macro to ensure we're using the v18 versions of
+            # the HDF5 API and not earlier deprecated versions.
+            ("H5_NO_DEPRECATED_SYMBOLS", None),
+            # Define the library version
+            ("MSP_LIBRARY_VERSION_STR", '"{}"'.format(self._msprime_version)),
+        ]
+        return l[index]
 
-# Now, setup the extension module.
-msprime_version = parse_version("msprime/__init__.py")
 configurator = PathConfigurator()
 d = "lib/"
 _msprime_module = Extension(
@@ -110,26 +113,19 @@ _msprime_module = Extension(
         d + "hapgen.c"],
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
-    # We define this macro to ensure we're using the v18 versions of the
-    # HDF5 API and not earlier deprecated versions.
-    define_macros=[
-        ("H5_NO_DEPRECATED_SYMBOLS", None),
-        ("MSP_LIBRARY_VERSION_STR", '"{}"'.format(msprime_version)),
-    ],
+    define_macros=DefineMacros(),
     libraries=["gsl", "gslcblas", "hdf5"],
     include_dirs=[d] + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
 )
 
-f = open("README.txt")
-msprime_readme = f.read()
-f.close()
+with open("README.txt") as f:
+    long_description = f.read()
 
 setup(
     name="msprime",
-    version=msprime_version,
     description="A fast and accurate coalescent simulator.",
-    long_description=msprime_readme,
+    long_description=long_description,
     packages=["msprime"],
     author="Jerome Kelleher",
     author_email="jerome.kelleher@well.ox.ac.uk",
@@ -165,4 +161,6 @@ setup(
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
+    setup_requires=['setuptools_scm'],
+    use_scm_version={"write_to": "msprime/_version.py"},
 )

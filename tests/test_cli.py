@@ -94,10 +94,10 @@ class TestMspmsRoundTrip(unittest.TestCase):
     """
     def test_msdoc_examples(self):
 
-        parser = cli.get_mspms_parser()
         arg_list = ["4", "1", "-T"]
         simulator = cli.get_mspms_runner(arg_list).get_simulator()
         line = simulator.get_ms_command_line()
+        parser = cli.get_mspms_parser()
         args = parser.parse_args(line[1:])
         self.assertEqual(args.sample_size, 4)
         self.assertEqual(args.num_replicates, 1)
@@ -107,124 +107,633 @@ class TestMspmsRoundTrip(unittest.TestCase):
         simulator = cli.get_mspms_runner(arg_list).get_simulator()
         line = simulator.get_ms_command_line(
             num_replicates=1000, scaled_mutation_rate=2.0)
+        parser = cli.get_mspms_parser()
         args = parser.parse_args(line[1:])
         self.assertEqual(args.sample_size, 15)
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 2.0)
-        self.assertEqual(args.size_event, [[1.0, 0.1], [2.0, 4.0]])
+        self.assertEqual(
+            args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
 
         arg_list = "15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split()
         simulator = cli.get_mspms_runner(arg_list).get_simulator()
         line = simulator.get_ms_command_line(
             num_replicates=1000, scaled_mutation_rate=6.4)
+        parser = cli.get_mspms_parser()
         args = parser.parse_args(line[1:])
         self.assertEqual(args.sample_size, 15)
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 6.4)
         self.assertEqual(args.growth_rate, 6.93)
-        self.assertEqual(args.growth_event, [[0.2, 0.0]])
-        self.assertEqual(args.size_event, [[0.3, 0.5]])
+        self.assertEqual(args.growth_rate_change, [(0, [0.2, 0.0])])
+        self.assertEqual(args.size_change, [(1, [0.3, 0.5])])
 
 
 class TestMspmsArgumentParser(unittest.TestCase):
     """
     Tests the parser to ensure it works correctly and is ms compatible.
     """
+    def parse_args(self, args):
+        parser = cli.get_mspms_parser()
+        return parser.parse_args(args)
 
     def test_msdoc_examples(self):
-        parser = cli.get_mspms_parser()
-
-        args = parser.parse_args(["4", "2", "-t", "5.0"])
+        args = self.parse_args(["4", "2", "-t", "5.0"])
         self.assertEqual(args.sample_size, 4)
         self.assertEqual(args.num_replicates, 2)
         self.assertEqual(args.mutation_rate, 5.0)
         self.assertEqual(args.trees, False)
 
-        args = parser.parse_args(["4", "2", "-T"])
+        args = self.parse_args(["4", "2", "-T"])
         self.assertEqual(args.sample_size, 4)
         self.assertEqual(args.num_replicates, 2)
         self.assertEqual(args.mutation_rate, 0.0)
         self.assertEqual(args.trees, True)
 
-        args = parser.parse_args("15 1000 -t 10.04 -r 100.0 2501".split())
+        args = self.parse_args("15 1000 -t 10.04 -r 100.0 2501".split())
         self.assertEqual(args.sample_size, 15)
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 10.04)
         self.assertEqual(args.trees, False)
         self.assertEqual(args.recombination, [100, 2501])
 
-        args = parser.parse_args(
+        args = self.parse_args(
             "15 1000 -t 2.0 -eN 1.0 .1 -eN 2.0 4.0".split())
         self.assertEqual(args.sample_size, 15)
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 2.0)
-        self.assertEqual(args.size_event, [[1.0, 0.1], [2.0, 4.0]])
+        self.assertEqual(
+            args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
 
-        args = parser.parse_args(
+        args = self.parse_args(
             "15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split())
         self.assertEqual(args.sample_size, 15)
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 6.4)
         self.assertEqual(args.growth_rate, 6.93)
-        self.assertEqual(args.growth_event, [[0.2, 0.0]])
-        self.assertEqual(args.size_event, [[0.3, 0.5]])
+        self.assertEqual(args.growth_rate_change, [(0, [0.2, 0.0])])
+        self.assertEqual(args.size_change, [(1, [0.3, 0.5])])
 
     def test_positional_arguments(self):
-        parser = cli.get_mspms_parser()
-        args = parser.parse_args(["40", "20"])
+        args = self.parse_args(["40", "20"])
         self.assertEqual(args.sample_size, 40)
         self.assertEqual(args.num_replicates, 20)
-        # TODO test errors here.
 
     def test_mutations(self):
-        parser = cli.get_mspms_parser()
-        args = parser.parse_args(["40", "20"])
+        args = self.parse_args(["40", "20"])
         self.assertEqual(args.mutation_rate, 0.0)
-        args = parser.parse_args(["40", "20", "-t", "10"])
+        args = self.parse_args(["40", "20", "-t", "10"])
         self.assertEqual(args.mutation_rate, 10.0)
-        args = parser.parse_args(["40", "20", "--mutation-rate=10"])
+        args = self.parse_args(["40", "20", "--mutation-rate=10"])
         self.assertEqual(args.mutation_rate, 10.0)
-        # TODO test errors
 
     def test_trees(self):
-        parser = cli.get_mspms_parser()
-        args = parser.parse_args(["40", "20"])
+        args = self.parse_args(["40", "20"])
         self.assertEqual(args.trees, False)
-        args = parser.parse_args(["40", "20", "-T"])
+        args = self.parse_args(["40", "20", "-T"])
         self.assertEqual(args.trees, True)
-        args = parser.parse_args(["40", "20", "--trees"])
+        args = self.parse_args(["40", "20", "--trees"])
         self.assertEqual(args.trees, True)
-        # TODO test errors
 
-    def test_size_events(self):
-        parser = cli.get_mspms_parser()
-        args = parser.parse_args(["40", "20"])
-        self.assertEqual(args.size_event, [])
-        args = parser.parse_args("10 1 -eN 2.0 0.5".split())
-        self.assertEqual(args.size_event, [[2.0, 0.5]])
-        args = parser.parse_args("10 1 -eN 2.0 0.5 -eN 1.0 5.0".split())
-        self.assertEqual(args.size_event, [[2.0, 0.5], [1.0, 5.0]])
-        # TODO test errors
+    def test_size_changes(self):
+        args = self.parse_args(["40", "20"])
+        self.assertEqual(args.size_change, [])
+        args = self.parse_args("10 1 -eN 2.0 0.5".split())
+        self.assertEqual(args.size_change, [(0, [2.0, 0.5])])
+        args = self.parse_args("10 1 -eN 1.0 0.5 -eN 2.0 5.0".split())
+        self.assertEqual(args.size_change, [(0, [1.0, 0.5]), (1, [2.0, 5.0])])
+        args = self.parse_args("10 1 -eN 1.0 0.5 -eN 2.0 5.0".split())
+        self.assertEqual(args.size_change, [(0, [1.0, 0.5]), (1, [2.0, 5.0])])
+        args = self.parse_args("10 1 -I 2 10 0 -en 1 2 3".split())
+        self.assertEqual(
+            args.population_size_change, [(0, [1, 2, 3])])
 
     def test_growth_rates(self):
-        parser = cli.get_mspms_parser()
-        args = parser.parse_args(["40", "20"])
+        args = self.parse_args(["40", "20"])
         self.assertEqual(args.growth_rate, None)
-        self.assertEqual(args.growth_event, [])
-        args = parser.parse_args("15 1000 -G 5.25".split())
+        self.assertEqual(args.growth_rate_change, [])
+
+        args = self.parse_args("15 1000 -G 5.25".split())
         self.assertEqual(args.growth_rate, 5.25)
-        self.assertEqual(args.growth_event, [])
-        args = parser.parse_args("15 1000 -eG 1.0 5.25".split())
+        self.assertEqual(args.growth_rate_change, [])
+
+        args = self.parse_args("15 1000 -eG 1.0 5.25".split())
         self.assertEqual(args.growth_rate, None)
-        self.assertEqual(args.growth_event, [[1.0, 5.25]])
-        args = parser.parse_args("15 1000 -eG 1.0 5.25 -eG 2.0 10".split())
+        self.assertEqual(args.growth_rate_change, [(0, [1.0, 5.25])])
+        args = self.parse_args("15 1000 -eG 1.0 5.25 -eG 2.0 10".split())
         self.assertEqual(args.growth_rate, None)
-        self.assertEqual(args.growth_event, [[1.0, 5.25], [2.0, 10.0]])
-        args = parser.parse_args(
+        self.assertEqual(
+            args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
+        args = self.parse_args(
             "15 1000 -eG 1.0 5.25 -eG 2.0 10 -G 4".split())
         self.assertEqual(args.growth_rate, 4.0)
-        self.assertEqual(args.growth_event, [[1.0, 5.25], [2.0, 10.0]])
-        # TODO test errors
+        self.assertEqual(
+            args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
+        args = self.parse_args("10 1 -I 2 10 0 -eg 1 2 3".split())
+        self.assertEqual(
+            args.population_growth_rate_change, [(0, [1, 2, 3])])
+
+    def test_migration_rates(self):
+        args = self.parse_args("15 1 -I 2 15 0 -eM 2 3 ".split())
+        self.assertEqual(
+            args.migration_rate_change, [(0, [2, 3])])
+        args = self.parse_args(
+            "15 1 -I 2 15 0 -eM 2 3 -eG 3 4 -eM 4 5".split())
+        self.assertEqual(
+            args.migration_rate_change, [(0, [2, 3]), (2, [4, 5])])
+
+
+class CustomExceptionForTesting(Exception):
+    """
+    This exception class is used to check that errors are correctly
+    thrown.
+    """
+
+
+class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
+    """
+    Tests for errors that can be thrown when creating the simulation runner.
+    """
+
+    def setUp(self):
+        self.parser = cli.get_mspms_parser()
+
+        def f(message):
+            # print("error:", message)
+            raise CustomExceptionForTesting()
+        self.parser.error = f
+
+    def assert_parser_error(self, command_line):
+        self.assertRaises(
+            CustomExceptionForTesting, cli.create_simulation_runner,
+            self.parser, command_line.split())
+
+    def test_trees_or_mutations(self):
+        self.assert_parser_error("10 1")
+        self.assert_parser_error("10 1 -G 1")
+
+    def test_structure(self):
+        self.assert_parser_error("2 1 -T -I")
+        self.assert_parser_error("2 1 -T -I x")
+        self.assert_parser_error("2 1 -T -I 2")
+        self.assert_parser_error("2 1 -T -I 2 1")
+        self.assert_parser_error("2 1 -T -I 2 1x")
+        self.assert_parser_error("2 1 -T -I 2 1x 1")
+        self.assert_parser_error("2 1 -T -I 2 1 100")
+        # We can also optionally have a migration rate
+        self.assert_parser_error("2 1 -T -I 2 1 100 sd")
+        self.assert_parser_error("2 1 -T -I 2 1 1 0.1 1")
+        # Check for some higher values
+        self.assert_parser_error("10 1 -T -I 4 1 1")
+        self.assert_parser_error("10 1 -T -I 5 1 1 1 1 6 1 1")
+        # Negative migration rates not allowed
+        self.assert_parser_error("2 1 -T -I 2 1 1 -1")
+
+    def test_migration_matrix_entry(self):
+        # -m without -I raises an error
+        self.assert_parser_error("10 1 -T -m 1 1 1")
+        # Non int values not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1.1 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 1.1 1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 0 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 0 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 3 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 3 1")
+        # Diagonal elements cannot be set.
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 1 1")
+        # Negative rates not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -m 1 2 -1")
+
+    def test_migration_matrix_entry_change(self):
+        # -em without -I raises an error
+        self.assert_parser_error("10 1 -T -em 1 1 1 1")
+        # Non int values not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1.1 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 1.1 1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 0 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 0 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 3 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 3 1")
+        # Diagonal elements cannot be set.
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 1 1")
+        # Negative rates not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -em 1 1 2 -1")
+
+    def test_migration_matrix(self):
+        # -ma without -I raises an error
+        self.assert_parser_error("10 1 -T -ma 1 1 1")
+        # Incorrect lengths
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma ")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 0 0 0")
+        # Non float values in non-diagonals not allowed
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 x 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 0 x 0")
+        # Negative values
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ma 0 -1 0 0")
+
+    def test_migration_matrix_change(self):
+        # -ema without -I raises an error
+        self.assert_parser_error("10 1 -T -ema 1 1 1 1")
+        # Incorrect lengths
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 ")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 0 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 0 0 0 0 0")
+        # Non float values in non-diagonals not allowed
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 2 0 x 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 2 0 0 x 0")
+        # Negative values
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema 1 2 0 -1 0 0")
+        # Non float times.
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema x 2 0 0 0 0")
+        # Change in migration matrix size.
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema x 1 0")
+        self.assert_parser_error(
+            "10 1 -T -I 2 5 5 -ema x 3 0 0 0 0 0 0 0 0 0")
+
+    def test_migration_rate_change(self):
+        # -eM without -I raises error
+        self.assert_parser_error("10 1 -T -eM 1 1")
+        # Non int values
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM x 1")
+        # Wrong number of args
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM 1 1 1")
+        # Negative migration rates not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM 1 -1")
+        # Negative times are not allowed
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eM -1 1")
+
+    def test_unordered_demographic_events(self):
+        self.assert_parser_error("10 1 -T -eN 0.2 1 -eN 0.1 1")
+        self.assert_parser_error("10 1 -T -eG 0.2 1 -eN 0.1 1")
+        self.assert_parser_error("10 1 -T -eG 0.2 1 -eG 0.1 1")
+        self.assert_parser_error("10 1 -T -eG 0.1 1 -eN 0.21 1 -eG 0.2 1")
+        self.assert_parser_error("10 1 -T -eG 0.1 1 -eG 0.21 1 -eG 0.2 1")
+        self.assert_parser_error(
+            "10 1 -T -I 2 10 0 -eG 0.1 1 -eM 0.21 1 -eG 0.2 1")
+
+    def test_recombination(self):
+        self.assert_parser_error("10 1 -T -r x 20")
+        # Cannot have non-integer numbers of loci
+        self.assert_parser_error("10 1 -T -r 1 x")
+        self.assert_parser_error("10 1 -T -r 1 x")
+        self.assert_parser_error("10 1 -T -r 1 1.1")
+        # Number of loci must be > 1
+        self.assert_parser_error("10 1 -T -r 1 0")
+        self.assert_parser_error("10 1 -T -r 1 1")
+        self.assert_parser_error("10 1 -T -r 1 -1")
+
+    def test_population_growth_rate(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g x 1")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g 1.1 1.1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g 0 1.1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g -1 1.1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -g 3 1.1")
+        self.assert_parser_error("10 1 -T -I 4 10 0 0 0 -g 5 1.1")
+
+    def test_population_size(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n x 1")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n 1.1 1.1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n 0 1.1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n -1 1.1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -n 3 1.1")
+        self.assert_parser_error("10 1 -T -I 4 10 0 0 0 -n 5 1.1")
+
+    def test_population_growth_rate_change(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg 1 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg x 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg 1 x 1")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg 0.1 1.1 1.1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg 0.1 -1 1.1")
+        # Negative times raise an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eg -1 1 1")
+
+    def test_population_size_change(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en 1 1 x")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en x 1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en 1 x 1")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en 0.1 1.1 1.1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en 0.1 -1 1.1")
+        # Negative times raise an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -en -1 1 1")
+
+    def test_population_split(self):
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 1 ")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 1 2")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 1 2 3 4")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 0.1 1.1 2")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 0.1 1 2.2")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej 0.1 -1 2")
+        # Negative times raise an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -ej -1 1 2")
+
+    def test_admixture(self):
+        self.assert_parser_error("10 1 -T -es")
+        self.assert_parser_error("10 1 -T -es 1")
+        self.assert_parser_error("10 1 -T -es 1 1")
+        self.assert_parser_error("10 1 -T -es 1 1 1 2")
+        # Non int values not allowed for pop_id
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 1.1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 x 1")
+        # Out-of-bounds raises an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 -1 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 3 1")
+        # After an -ej, num_populations is increased by one
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 0.1 2 1 -en 0.2 4 1")
+        # Negative times raise an error
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es -1 1 1")
+        # We don't support -es and any options that affect all pops.
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 1 1 1 -eM 1 2")
+        self.assert_parser_error(
+            "10 1 -T -I 2 10 0 -es 1 1 1 -ema 0.5 2 1 2 3 4")
+        self.assert_parser_error("10 1 -t 2.0 -eG 0.001 5.0 -es 0.01 1 0.0")
+        self.assert_parser_error("10 1 -t 2.0 -eN 0.001 5.0 -es 0.01 1 0.0")
+
+
+class TestMspmsCreateSimulationRunner(unittest.TestCase):
+    """
+    Test that we correctly create a simulator instance based on the
+    command line arguments.
+    """
+
+    def create_simulator(self, command_line):
+        parser = cli.get_mspms_parser()
+        runner = cli.create_simulation_runner(parser, command_line.split())
+        return runner.get_simulator()
+
+    def test_structure_args(self):
+        sim = self.create_simulator("2 1 -T")
+        self.assertEqual(sim.get_sample_configuration(), [2])
+        self.assertEqual(sim.get_migration_matrix(), [[0]])
+
+        # Specifying 1 population is the same as the default.
+        sim = self.create_simulator("2 1 -T -I 1 2")
+        self.assertEqual(sim.get_sample_configuration(), [2])
+        self.assertEqual(sim.get_migration_matrix(), [[0]])
+
+        sim = self.create_simulator("2 1 -T -I 2 1 1")
+        self.assertEqual(sim.get_sample_configuration(), [1, 1])
+        self.assertEqual(sim.get_migration_matrix(), [[0, 0], [0, 0]])
+
+        # Default migration matrix is zeros
+        sim = self.create_simulator("2 1 -T -I 2 2 0")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 0], [0, 0]])
+        self.assertEqual(sim.get_sample_configuration(), [2, 0])
+
+        sim = self.create_simulator("2 1 -T -I 2 1 1 0.1")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 0.1], [0.1, 0]])
+        self.assertEqual(sim.get_sample_configuration(), [1, 1])
+
+        # Initial migration matrix is M / (num_pops - 1)
+        sim = self.create_simulator("3 1 -T -I 3 1 1 1 2")
+        self.assertEqual(sim.get_sample_configuration(), [1, 1, 1])
+        self.assertEqual(
+            sim.get_migration_matrix(), [[0, 1, 1], [1, 0, 1], [1, 1, 0]])
+        sim = self.create_simulator("15 1 -T -I 6 5 4 3 2 1 0")
+        self.assertEqual(sim.get_sample_configuration(), [5, 4, 3, 2, 1, 0])
+
+    def test_migration_matrix_entry(self):
+        sim = self.create_simulator("3 1 -T -I 2 3 0 -m 1 2 1.1 -m 2 1 9.0")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1.1], [9.0, 0]])
+        sim = self.create_simulator("3 1 -T -I 3 3 0 0 -m 1 2 1.1 -m 2 1 9.0")
+        self.assertEqual(
+            sim.get_migration_matrix(),
+            [[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]])
+
+    def test_migration_matrix(self):
+        # Diagonal values are ignored
+        sim = self.create_simulator("2 1 -T -I 2 2 0 -ma 0 1 2 3")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1], [2, 0]])
+        sim = self.create_simulator("2 1 -T -I 2 2 0 -ma x 1 2 x")
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1], [2, 0]])
+        sim = self.create_simulator("3 1 -T -I 3 1 1 1 -ma 1 2 3 4 5 6 7 8 9")
+        self.assertEqual(
+            sim.get_migration_matrix(), [[0, 2, 3], [4, 0, 6], [7, 8, 0]])
+
+    def test_simultaneous_events(self):
+        sim = self.create_simulator("2 1 -T -eN 1 2.0 -eG 1.0 3 -eN 1 4")
+        events = sim.get_demographic_events()
+        self.assertEqual(len(events), 3)
+        for event in events:
+            self.assertEqual(event.time, 1.0)
+        self.assertEqual(events[0].type, "size_change")
+        self.assertEqual(events[0].size, 2.0)
+        self.assertEqual(events[1].type, "growth_rate_change")
+        self.assertEqual(events[1].growth_rate, 3)
+        self.assertEqual(events[2].type, "size_change")
+        self.assertEqual(events[2].size, 4)
+
+    def test_population_growth_rate(self):
+        def f(args):
+            sim = self.create_simulator(args)
+            return [
+                (c.initial_size, c.growth_rate)
+                for c in sim.get_population_configurations()]
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -g 1 -1"),
+            [(1, -1), (1, 0), (1, 0)])
+        self.assertEqual(
+            f("2 1 -T -I 4 2 0 0 0 -g 1 1 -g 2 2 -g 3 3"),
+            [(1, 1), (1, 2), (1, 3), (1, 0)])
+        # A -g should override a -G
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -g 1 2 -G -1"),
+            [(1, 2), (1, -1), (1, -1)])
+        # The last -g should be effective
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -g 1 1 -g 1 -1"),
+            [(1, -1), (1, 0), (1, 0)])
+
+    def test_population_size(self):
+        def f(args):
+            sim = self.create_simulator(args)
+            return [
+                (c.initial_size, c.growth_rate)
+                for c in sim.get_population_configurations()]
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -n 1 2"),
+            [(2, 0), (1, 0), (1, 0)])
+        self.assertEqual(
+            f("2 1 -T -I 4 2 0 0 0 -n 1 1 -n 2 2 -n 3 3"),
+            [(1, 0), (2, 0), (3, 0), (1, 0)])
+        # The last -n should be effective
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -n 1 1 -n 1 0.1"),
+            [(0.1, 0), (1, 0), (1, 0)])
+        self.assertEqual(
+            f("2 1 -T -I 3 2 0 0 -g 1 2 -n 1 0.1"),
+            [(0.1, 2), (1, 0), (1, 0)])
+
+    def test_population_growth_rate_change(self):
+        def f(args):
+            sim = self.create_simulator(args)
+            return sim.get_demographic_events()
+        events = f("2 1 -T -eg 0.1 1 2")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, "growth_rate_change")
+        self.assertEqual(events[0].growth_rate, 2.0)
+        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].population_id, 0)
+        events = f("2 1 -T -I 2 1 1 -eg 0.1 1 2 -eg 0.2 2 3")
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].type, "growth_rate_change")
+        self.assertEqual(events[0].growth_rate, 2.0)
+        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].population_id, 0)
+        self.assertEqual(events[1].type, "growth_rate_change")
+        self.assertEqual(events[1].growth_rate, 3.0)
+        self.assertEqual(events[1].time, 0.2)
+        self.assertEqual(events[1].population_id, 1)
+
+    def test_population_size_change(self):
+        def f(args):
+            sim = self.create_simulator(args)
+            return sim.get_demographic_events()
+        events = f("2 1 -T -en 0.1 1 2")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, "size_change")
+        self.assertEqual(events[0].size, 2.0)
+        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].population_id, 0)
+        events = f("2 1 -T -I 2 1 1 -en 0.1 1 2 -en 0.2 2 3")
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].type, "size_change")
+        self.assertEqual(events[0].size, 2.0)
+        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].population_id, 0)
+        self.assertEqual(events[1].type, "size_change")
+        self.assertEqual(events[1].size, 3.0)
+        self.assertEqual(events[1].time, 0.2)
+        self.assertEqual(events[1].population_id, 1)
+
+    def test_migration_rate_change(self):
+        def check(args, results):
+            sim = self.create_simulator(args)
+            events = sim.get_demographic_events()
+            self.assertEqual(len(events), len(results))
+            for event, result in zip(events, results):
+                self.assertEqual(event.type, "migration_rate_change")
+                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.rate, result[1])
+                self.assertEqual(event.matrix_index, result[2])
+        check("2 1 -T -I 3 2 0 0 -eM 2.2 2", [(2.2, 1, None)])
+        check(
+            "2 1 -T -I 3 2 0 0 -eM 2.2 2 -eM 3.3 4",
+            [(2.2, 1, None), (3.3, 2, None)])
+
+    def test_migration_matrix_entry_change(self):
+        def check(args, results):
+            sim = self.create_simulator(args)
+            events = sim.get_demographic_events()
+            self.assertEqual(len(events), len(results))
+            for event, result in zip(events, results):
+                self.assertEqual(event.type, "migration_rate_change")
+                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.rate, result[1])
+                self.assertEqual(event.matrix_index, result[2])
+        check("2 1 -T -I 3 2 0 0 -em 2.2 1 2 2", [(2.2, 2, (0, 1))])
+        check(
+            "2 1 -T -I 3 2 0 0 -eM 2.2 2 -em 3.3 3 1 5.5",
+            [(2.2, 1, None), (3.3, 5.5, (2, 0))])
+
+    def test_migration_matrix_change(self):
+        def check(args, results):
+            sim = self.create_simulator(args)
+            # Make sure we haven't changed the initial matrix.
+            matrix = sim.get_migration_matrix()
+            for row in matrix:
+                for entry in row:
+                    self.assertEqual(entry, 0.0)
+            events = sim.get_demographic_events()
+            self.assertEqual(len(events), len(results))
+            for event, result in zip(events, results):
+                self.assertEqual(event.type, "migration_rate_change")
+                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.rate, result[1])
+                self.assertEqual(event.matrix_index, result[2])
+        check(
+            "2 1 -T -I 2 2 0 -ema 2.2 2 x 1 2 x",
+            [(2.2, 1, (0, 1)), (2.2, 2, (1, 0))])
+        check(
+            "2 1 -T -I 3 2 0 0 -ema 2.2 3 x 1 2 3 x 4 5 6 x",
+            [
+                (2.2, 1, (0, 1)), (2.2, 2, (0, 2)),
+                (2.2, 3, (1, 0)), (2.2, 4, (1, 2)),
+                (2.2, 5, (2, 0)), (2.2, 6, (2, 1)),
+            ])
+
+    def test_population_split(self):
+        def check(N, args, results):
+            sim = self.create_simulator(args)
+            events = sim.get_demographic_events()
+            self.assertEqual(len(events), len(results) * N)
+            k = 0
+            for result in results:
+                event = events[k]
+                dest = event.destination
+                self.assertEqual(event.type, "mass_migration")
+                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.destination, result[1])
+                self.assertEqual(event.source, result[2])
+                # We also have to set the migration rates to 0 for the
+                # population that didn't exist before now.
+                k += 1
+                for j in range(N):
+                    if j != dest:
+                        event = events[k]
+                        self.assertEqual(event.type, "migration_rate_change")
+                        self.assertEqual(event.time, result[0])
+                        self.assertEqual(event.rate, 0.0)
+                        self.assertEqual(event.matrix_index, (j, dest))
+                        k += 1
+        check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 0, 1)])
+        check(
+            3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
+            [(2.2, 0, 1), (2.3, 0, 2)])
+        check(
+            4, "2 1 -T -I 4 2 0 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
+            [(2.2, 0, 1), (2.3, 0, 2)])
+
+    def test_admixture(self):
+        def check(N, args, results):
+            sim = self.create_simulator(args)
+            events = sim.get_demographic_events()
+            self.assertEqual(sim.get_num_populations(), N)
+            self.assertEqual(len(events), len(results))
+            matrix = [[0 for _ in range(N)] for _ in range(N)]
+            self.assertEqual(sim.get_migration_matrix(), matrix)
+            for result, event in zip(results, events):
+                self.assertEqual(event.type, "mass_migration")
+                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.destination, result[1])
+                self.assertEqual(event.source, result[2])
+        check(2, "2 1 -T -es 2.2 1 1", [(2.2, 0, 1, 0)])
+        check(
+            3, "2 1 -T -es 2.2 1 1 -es 3.3 2 0",
+            [(2.2, 0, 1, 0), (3.3, 1, 2, 1.0)])
+        check(
+            4, "2 1 -T -I 2 2 0 -es 2.2 1 1 -es 3.3 2 0",
+            [(2.2, 0, 2, 0), (3.3, 1, 3, 1.0)])
 
 
 class TestMspmsOutput(unittest.TestCase):
@@ -249,8 +758,7 @@ class TestMspmsOutput(unittest.TestCase):
     def verify_output(
             self, sample_size=2, num_loci=1, recombination_rate=0,
             num_replicates=1, mutation_rate=0.0, print_trees=True,
-            max_memory="16M", precision=3, population_models=[],
-            random_seeds=[1, 2, 3]):
+            max_memory="16M", precision=3, random_seeds=[1, 2, 3]):
         """
         Runs the UI for the specified parameters, and parses the output
         to ensure it's consistent.
@@ -260,7 +768,6 @@ class TestMspmsOutput(unittest.TestCase):
             recombination_rate=recombination_rate,
             num_replicates=num_replicates, mutation_rate=mutation_rate,
             print_trees=print_trees, precision=precision,
-            population_models=population_models,
             random_seeds=random_seeds)
         with tempfile.TemporaryFile("w+") as f:
             sr.run(f)
@@ -405,7 +912,7 @@ class TestMspArgumentParser(unittest.TestCase):
         self.assertEqual(args.mutation_rate, 0.0)
         self.assertEqual(args.num_loci, 1)
         self.assertEqual(args.random_seed, None)
-        self.assertEqual(args.max_memory, "1G")
+        self.assertEqual(args.max_memory, None)
         self.assertEqual(args.compress, False)
 
     def test_simulate_short_args(self):

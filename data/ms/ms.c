@@ -141,10 +141,6 @@ main(argc,argv)
 #ifndef SUPPRESS_OUTPUT
 	for( i=0; i<argc; i++) printf("%s ",argv[i]);
 #endif
-#ifdef SUMMARY_STATS
-    /* print out the header*/
-    printf("t\tnum_trees\tre_events\tca_events\n");
-#endif
 
 	for( i =0; i<argc; i++) tbsparamstrs[i] = (char *)malloc(30*sizeof(char) ) ;
 	for( i = 1; i<argc ; i++)
@@ -171,6 +167,24 @@ main(argc,argv)
 		 }
 	}
 
+#ifdef SUMMARY_STATS
+    /* print out the header*/
+    printf("t\tnum_trees\tre_events\tca_events");
+    int N = pars.cp.npop;
+	struct devent *event ;
+
+    for (event = pars.cp.deventlist; event != NULL; event = event->nextde) {
+        if (event->detype == 's') {
+            N++;
+        }
+    }
+
+    for (i = 0; i < N * N; i++) {
+        printf("\tmig_events_%d", i);
+    }
+    printf("\n");
+#endif
+
     while( howmany-count++ ) {
 	   if( (ntbs > 0) && (count >1 ) ){
 	         for( k=0; k<ntbs; k++){
@@ -190,6 +204,7 @@ main(argc,argv)
 		printf("\n");
 #endif
         segsites = gensam( list, &probss, &tmrca, &ttot ) ;
+#ifndef SUPPRESS_OUTPUT
   		if( pars.mp.timeflag ) fprintf(pf,"time:\t%lf\t%lf\n",tmrca, ttot ) ;
         if( (segsites > 0 ) || ( pars.mp.theta > 0.0 ) ) {
    	       if( (pars.mp.segsitesin > 0 ) && ( pars.mp.theta > 0.0 ))
@@ -202,6 +217,7 @@ main(argc,argv)
 	       if( segsites > 0 )
 	          for(i=0;i<pars.cp.nsam; i++) { fprintf(pf,"%s\n", list[i] ); }
 	    }
+#endif
     }
 	if( !pars.commandlineseedflag ) seedit( "end" );
 

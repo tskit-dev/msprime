@@ -91,8 +91,18 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 	double *size, *alphag, *tlast ;
 	struct devent *nextevent ;
 #ifdef SUMMARY_STATS
+    unsigned int jk_pop_j, jk_pop_k;
     unsigned int recombination_events = 0;
     unsigned int coancestry_events = 0;
+    int N = cp->npop;
+	struct devent *e;
+
+    for (e= cp->deventlist; e != NULL; e = e->nextde) {
+        if (e->detype == 's') {
+            N++;
+        }
+    }
+    unsigned int *migration_events = calloc(N * N, sizeof(unsigned int));
 #endif
 
 	nsam = cp->nsam;
@@ -374,6 +384,10 @@ segtre_mig(struct c_params *cp, int *pnsegs )
                         if( x < sum ) break;
                     }
                 }
+#ifdef SUMMARY_STATS
+                jk_pop_j = chrom[migrant].pop;
+                jk_pop_k = i;
+#endif
                 source_pop = i;
                 config[chrom[migrant].pop] -= 1;
                 config[source_pop] += 1;
@@ -385,23 +399,29 @@ segtre_mig(struct c_params *cp, int *pnsegs )
                 dec = ca(nsam,nsites,c1,c2 );
                 config[cpop] -= dec ;
             }
-        }
 #ifdef SUMMARY_STATS
-        /* verify that the events are what we think and count*/
-        if (event == 'r') {
-            recombination_events++;
-        } else if (event == 'c') {
-            coancestry_events++;
-        } else {
-            printf("ERROR!\n");
-            exit(1);
-        }
+            /* verify that the events are what we think and count*/
+            if (event == 'r') {
+                recombination_events++;
+            } else if (event == 'c') {
+                coancestry_events++;
+            } else if (event == 'm') {
+                migration_events[jk_pop_j * N + jk_pop_k]++;
+            } else {
+                printf("ERROR!: %c\n", event);
+                exit(1);
+            }
 #endif
+        }
 
 }
 #ifdef SUMMARY_STATS
     /* print out the events */
-    printf("%f\t%d\t%d\t%d\n", t, nsegs, recombination_events, coancestry_events);
+    printf("%f\t%d\t%d\t%d", t, nsegs, recombination_events, coancestry_events);
+    for (i = 0; i < N * N; i++) {
+        printf("\t%d", migration_events[i]);
+    }
+    printf("\n");
 #endif
 	*pnsegs = nsegs ;
 	free(config);
