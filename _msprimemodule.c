@@ -1463,6 +1463,30 @@ out:
 }
 
 static PyObject *
+TreeSequence_rescale_coordinates(TreeSequence *self, PyObject *args,
+        PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    PyObject *py_rates = NULL;
+    PyObject *py_coordinates = NULL;
+    static char *kwlist[] = {"coordinates", "rates", NULL};
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!", kwlist,
+            &PyList_Type, &py_coordinates,
+            &PyList_Type, &py_rates)) {
+        goto out;
+    }
+    /* FILL in C level code */
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+
+static PyObject *
 TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
@@ -1815,6 +1839,10 @@ static PyMemberDef TreeSequence_members[] = {
 static PyMethodDef TreeSequence_methods[] = {
     {"create", (PyCFunction) TreeSequence_create, METH_VARARGS,
         "Creates a new TreeSequence from the specified simulator."},
+    {"rescale_coordinates", (PyCFunction) TreeSequence_rescale_coordinates,
+        METH_VARARGS,
+        "Rescales the coordinates for all records according to a "
+        "recombination map"},
     {"dump", (PyCFunction) TreeSequence_dump,
         METH_VARARGS|METH_KEYWORDS,
         "Writes the tree sequence out to the specified path."},

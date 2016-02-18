@@ -308,7 +308,7 @@ def get_recombinatation_map(parser, args):
             coordinates.append(position)
     rates.append(None)
     coordinates.append(num_loci)
-    return msprime.GeneticMap(coordinates, rates)
+    return msprime.RecombinationMap(coordinates, rates)
 
 
 def create_simulation_runner(parser, arg_list):
