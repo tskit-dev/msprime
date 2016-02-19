@@ -629,7 +629,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    recomb_map_print_state(recomb_map);
+    /* recomb_map_print_state(recomb_map); */
     ret = msp_initialise(msp);
     if (ret != 0) {
         goto out;
@@ -650,20 +650,18 @@ run_simulate(char *conf_file)
     }
 
     /* Create the tree_sequence from the state of the simulator. */
-    ret = tree_sequence_create(tree_seq, msp, recomb_map);
+    ret = tree_sequence_create(tree_seq, msp);
     if (ret != 0) {
         goto out;
     }
-    print_tree_sequence(tree_seq);
-    ret = tree_sequence_generate_mutations(tree_seq,
+    ret = tree_sequence_generate_mutations(tree_seq, recomb_map,
             mutation_params.mutation_rate, mutation_params.random_seed);
     if (ret != 0) {
         goto out;
     }
-    print_haplotypes(tree_seq);
-
+    print_tree_sequence(tree_seq);
     if (0) {
-
+        print_haplotypes(tree_seq);
         int j;
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);

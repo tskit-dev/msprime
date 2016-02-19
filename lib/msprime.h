@@ -368,12 +368,12 @@ size_t msp_get_num_recombination_events(msp_t *self);
 char *msp_get_configuration_json(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self);
-int tree_sequence_create(tree_sequence_t *self, msp_t *sim,
-        recomb_map_t *recomb_map);
+int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
-int tree_sequence_generate_mutations(tree_sequence_t *self, double mutation_rate, 
+int tree_sequence_generate_mutations(tree_sequence_t *self, 
+        recomb_map_t *recomb_map, double mutation_rate,
         unsigned long random_seed);
 size_t tree_sequence_get_num_breakpoints(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
