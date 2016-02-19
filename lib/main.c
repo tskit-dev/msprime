@@ -620,8 +620,10 @@ run_simulate(char *conf_file)
     char *output_file = NULL;
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
+    mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
 
-    if (msp == NULL || tree_seq == NULL || recomb_map == NULL) {
+    if (msp == NULL || tree_seq == NULL || recomb_map == NULL
+            || mutgen == NULL) {
         goto out;
     }
     ret = get_configuration(msp, &mutation_params, recomb_map,
@@ -654,12 +656,13 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_generate_mutations(tree_seq, recomb_map,
+    ret = mutgen_alloc(mutgen, tree_seq, recomb_map,
             mutation_params.mutation_rate, mutation_params.random_seed);
     if (ret != 0) {
         goto out;
     }
-    print_tree_sequence(tree_seq);
+    mutgen_print_state(mutgen);
+    /* print_tree_sequence(tree_seq); */
     if (0) {
         print_haplotypes(tree_seq);
         int j;
@@ -697,6 +700,10 @@ out:
     if (recomb_map != NULL) {
         recomb_map_free(recomb_map);
         free(recomb_map);
+    }
+    if (mutgen != NULL) {
+        mutgen_free(mutgen);
+        free(mutgen);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));

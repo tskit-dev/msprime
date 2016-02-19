@@ -35,8 +35,6 @@
 #include "msprime.h"
 
 #define MSP_HDF5_ERR_MSG_SIZE 1024
-/* printf pattern to print out double values losslessly */
-#define MSP_LOSSLESS_DBL "%.17g"
 
 static char _hdf5_error[MSP_HDF5_ERR_MSG_SIZE];
 

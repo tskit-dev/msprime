@@ -47,6 +47,10 @@
 
 #define MAX_BRANCH_LENGTH_STRING 24
 
+/* printf pattern to print out double values losslessly;
+ * TODO put this into a private header file somewhere so it's not exported */
+#define MSP_LOSSLESS_DBL "%.17g"
+
 typedef struct segment_t_t {
     uint8_t population_id;
     uint32_t left;
@@ -308,6 +312,16 @@ typedef struct {
     sparse_tree_iterator_t tree_iterator;
 } hapgen_t;
 
+typedef struct {
+    double mutation_rate;
+    tree_sequence_t *tree_sequence;
+    recomb_map_t *recomb_map;
+    size_t num_mutations;
+    mutation_t *mutations;
+    unsigned long random_seed;
+    char *parameters;
+    gsl_rng *rng;
+} mutgen_t;
 
 int msp_alloc(msp_t *self, size_t sample_size);
 int msp_set_random_seed(msp_t *self, unsigned long random_seed);
@@ -372,9 +386,6 @@ int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
-int tree_sequence_generate_mutations(tree_sequence_t *self, 
-        recomb_map_t *recomb_map, double mutation_rate,
-        unsigned long random_seed);
 size_t tree_sequence_get_num_breakpoints(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
@@ -455,6 +466,12 @@ int recomb_map_free(recomb_map_t *self);
 double recomb_map_get_effective_rate(recomb_map_t *self);
 double recomb_map_genetic_to_phys(recomb_map_t *self, double x);
 void recomb_map_print_state(recomb_map_t *self);
+
+int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence, 
+        recomb_map_t *recomb_map, double mutation_rate,
+        unsigned long random_seed);
+int mutgen_free(mutgen_t *self);
+void mutgen_print_state(mutgen_t *self);
 
 const char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/

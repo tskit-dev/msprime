@@ -64,38 +64,6 @@ cmp_index_sort(const void *a, const void *b) {
 }
 
 static int
-encode_mutation_parameters(double mutation_rate, unsigned long random_seed,
-        char **result)
-{
-    int ret = -1;
-    const char *pattern = "{"
-        "\"random_seed\":%lu,"
-        "\"scaled_mutation_rate\":%.15f}";
-    int written;
-    size_t size = 1 + (size_t) snprintf(NULL, 0, pattern,
-            random_seed,
-            mutation_rate);
-    char *str = malloc(size);
-
-    if (str == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    written = snprintf(str, size, pattern,
-            random_seed,
-            mutation_rate);
-    if (written < 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    assert(written == (int) size - 1);
-    *result = str;
-    ret = 0;
-out:
-    return ret;
-}
-
-static int
 encode_environment(char **result)
 {
     int ret = -1;
@@ -151,6 +119,7 @@ encode_environment(char **result)
 out:
     return ret;
 }
+
 
 void
 tree_sequence_print_state(tree_sequence_t *self)
@@ -1317,103 +1286,7 @@ out:
     return ret;
 }
 
-/* TODO mutations generation should be spun out into a separate class.
- * We should really just do this in Python and send the resulting
- * mutation objects here for storage. It's not an expensive operation.
- */
-int
-tree_sequence_generate_mutations(tree_sequence_t *self,
-        recomb_map_t *recomb_map, double mutation_rate,
-        unsigned long random_seed)
-{
-    int ret = -1;
-    coalescence_record_t cr;
-    uint32_t j, k, l, child;
-    gsl_rng *rng = NULL;
-    double *times = NULL;
-    mutation_t *mutations = NULL;
-    unsigned int branch_mutations;
-    size_t num_mutations;
-    double branch_length, distance, mu, position;
-    size_t buffer_size;
-    size_t block_size = 2 << 10; /* alloc in blocks of 1M */
-    void *p;
-    char *parameters = NULL;
-    char *environment = NULL;
 
-    buffer_size = block_size;
-    num_mutations = 0;
-    rng = gsl_rng_alloc(gsl_rng_default);
-    if (rng == NULL) {
-        goto out;
-    }
-    gsl_rng_set(rng, random_seed);
-    times = calloc(self->num_nodes + 1, sizeof(double));
-    mutations = malloc(buffer_size * sizeof(mutation_t));
-    if (times == NULL || mutations == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    for (j = 0; j < self->num_records; j++) {
-        ret = tree_sequence_get_record(self, j, &cr, MSP_ORDER_TIME);
-        if (ret != 0) {
-            goto out;
-        }
-        times[cr.node] = cr.time;
-        distance = cr.right - cr.left;
-        for (k = 0; k < 2; k++) {
-            child = cr.children[k];
-            branch_length = cr.time - times[child];
-            mu = branch_length * distance * mutation_rate;
-            branch_mutations = gsl_ran_poisson(rng, mu);
-            for (l = 0; l < branch_mutations; l++) {
-                position = gsl_ran_flat(rng, cr.left, cr.right);
-                if (num_mutations >= buffer_size) {
-                    buffer_size += block_size;
-                    p = realloc(mutations, buffer_size * sizeof(mutation_t));
-                    if (p == NULL) {
-                        ret = MSP_ERR_NO_MEMORY;
-                        goto out;
-                    }
-                    mutations = p;
-                }
-                mutations[num_mutations].node = child;
-                mutations[num_mutations].position = position;
-                num_mutations++;
-            }
-        }
-    }
-    ret = encode_mutation_parameters(mutation_rate, random_seed, &parameters);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = encode_environment(&environment);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_set_mutations(self, num_mutations, mutations,
-            parameters, environment);
-    if (ret != 0) {
-        goto out;
-    }
-out:
-    if (times != NULL) {
-        free(times);
-    }
-    if (mutations != NULL) {
-        free(mutations);
-    }
-    if (rng != NULL) {
-        gsl_rng_free(rng);
-    }
-    if (parameters != NULL) {
-        free(parameters);
-    }
-    if (environment != NULL) {
-        free(environment);
-    }
-    return ret;
-}
 
 
 /* ======================================================== *
