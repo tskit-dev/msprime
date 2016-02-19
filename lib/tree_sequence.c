@@ -308,11 +308,14 @@ out:
 }
 
 int
-tree_sequence_create(tree_sequence_t *self, msp_t *sim)
+tree_sequence_create(tree_sequence_t *self, msp_t *sim,
+        recomb_map_t *recomb_map)
 {
     int ret = -1;
     uint32_t j;
+    double phys_left, phys_right;
     coalescence_record_t *records = NULL;
+    double m = sim->num_loci;
     char *parameters;
 
     memset(self, 0, sizeof(tree_sequence_t));
@@ -334,8 +337,23 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
         goto out;
     }
     for (j = 0; j < self->num_records; j++) {
-        self->trees.left[j] = records[j].left;
-        self->trees.right[j] = records[j].right;
+        phys_left = recomb_map_genetic_to_phys(recomb_map,
+                records[j].left / m);
+        phys_right = recomb_map_genetic_to_phys(recomb_map,
+                records[j].right / m);
+        self->trees.left[j] = (uint32_t) nearbyint(phys_left * m);
+        self->trees.right[j] = (uint32_t) nearbyint(phys_right * m);
+        printf("%d -> %f -> %f -> %d\n", records[j].left, phys_left, (phys_left * m),
+                self->trees.left[j]);
+        printf("%d -> %f -> %f -> %d\n", records[j].right, phys_right, (phys_right * m),
+                self->trees.right[j]);
+        /* Sanity check in the important case of a uniform recomb rate */
+        if (recomb_map->size == 2) {
+            assert(self->trees.left[j] == records[j].left);
+            assert(self->trees.right[j] == records[j].right);
+        }
+        assert(self->trees.left[j] <= self->num_loci);
+        assert(self->trees.right[j] <= self->num_loci);
         self->trees.node[j] = records[j].node;
         self->trees.children[2 * j] = records[j].children[0];
         self->trees.children[2 * j + 1] = records[j].children[1];

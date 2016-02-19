@@ -252,7 +252,7 @@ read_recomb_map(recomb_map_t *recomb_map, config_t *config)
     int ret = 0;
     size_t j, size;
     double *rates = NULL;
-    uint32_t *coordinates = NULL;
+    double *coordinates = NULL;
     config_setting_t *row, *s;
     config_setting_t *setting = config_lookup(config, "recombination_map");
 
@@ -264,7 +264,7 @@ read_recomb_map(recomb_map_t *recomb_map, config_t *config)
     }
     size = (size_t) config_setting_length(setting);
     rates = malloc(size * sizeof(double));
-    coordinates = malloc(size * sizeof(uint32_t));
+    coordinates = malloc(size * sizeof(double));
     if (rates == NULL || coordinates == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -285,7 +285,7 @@ read_recomb_map(recomb_map_t *recomb_map, config_t *config)
         if (!config_setting_is_number(s)) {
             fatal_error("recombination_map entries must be numbers");
         }
-        coordinates[j] = (uint32_t) config_setting_get_float(s);
+        coordinates[j] = config_setting_get_float(s);
         s = config_setting_get_elem(row, 1);
         if (!config_setting_is_number(s)) {
             fatal_error("recombination_map entries must be numbers");
@@ -648,17 +648,22 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+
+    /* Create the tree_sequence from the state of the simulator. */
+    ret = tree_sequence_create(tree_seq, msp, recomb_map);
+    if (ret != 0) {
+        goto out;
+    }
+    print_tree_sequence(tree_seq);
+    ret = tree_sequence_generate_mutations(tree_seq,
+            mutation_params.mutation_rate, mutation_params.random_seed);
+    if (ret != 0) {
+        goto out;
+    }
+    print_haplotypes(tree_seq);
+
     if (0) {
-        /* Create the tree_sequence from the state of the simulator. */
-        ret = tree_sequence_create(tree_seq, msp);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = tree_sequence_generate_mutations(tree_seq,
-                mutation_params.mutation_rate, mutation_params.random_seed);
-        if (ret != 0) {
-            goto out;
-        }
+
         int j;
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);

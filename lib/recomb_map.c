@@ -28,46 +28,53 @@ recomb_map_print_state(recomb_map_t *self)
 {
     size_t j;
 
-    printf("recombination_map::\n");
-    printf("size = %d\n", (int) self->size);
+    printf("recombination_map:: size = %d\n", (int) self->size);
+    printf("\tlocation\trate\n");
     for (j = 0; j < self->size; j++) {
-        printf("\t%d\t%f\n", self->coordinates[j], self->rates[j]);
+        printf("\t%f\t%f\n", self->positions[j], self->rates[j]);
     }
 }
 
 int WARN_UNUSED
-recomb_map_alloc(recomb_map_t *self, uint32_t *coordinates, double *rates,
+recomb_map_alloc(recomb_map_t *self, double *positions, double *rates,
         size_t size)
 {
     int ret = MSP_ERR_BAD_RECOMBINATION_MAP;
+    double length;
     size_t j;
 
     memset(self, 0, sizeof(recomb_map_t));
     if (size < 2) {
         goto out;
     }
-    self->coordinates = malloc(size * sizeof(uint32_t));
+    self->positions = malloc(size * sizeof(double));
     self->rates = malloc(size * sizeof(double));
-    if (self->coordinates == NULL || self->rates == NULL) {
+    if (self->positions == NULL || self->rates == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    self->total_mass = 0.0;
     self->size = size;
-    if (coordinates[0] != 0) {
+    if (positions[0] != 0.0 || positions[self->size -1] != 1.0) {
         goto out;
     }
     for (j = 0; j < size; j++) {
         if (rates[j] < 0) {
             goto out;
         }
+        if (positions[j] < 0 || positions[j] > 1.0) {
+            goto out;
+        }
         if (j > 0) {
             /* Coordinates must be sorted */
-            if (coordinates[j] <= coordinates[j - 1]) {
+            if (positions[j] <= positions[j - 1]) {
                 goto out;
             }
+            length = positions[j] - positions[j - 1];
+            self->total_mass += length * rates[j - 1];
         }
         self->rates[j] = rates[j];
-        self->coordinates[j] = coordinates[j];
+        self->positions[j] = positions[j];
     }
     ret = 0;
 out:
@@ -77,8 +84,8 @@ out:
 int
 recomb_map_free(recomb_map_t *self)
 {
-    if (self->coordinates != NULL) {
-        free(self->coordinates);
+    if (self->positions != NULL) {
+        free(self->positions);
     }
     if (self->rates != NULL) {
         free(self->rates);
@@ -89,14 +96,30 @@ recomb_map_free(recomb_map_t *self)
 double
 recomb_map_get_effective_rate(recomb_map_t *self)
 {
-    double effective_rate = 0.0;
-    double length;
-    size_t j;
+    return self->total_mass;
+}
 
-    for (j = 0; j < self->size - 1; j++) {
-        length = self->coordinates[j + 1] - self->coordinates[j];
-        effective_rate += self->rates[j] * length;
+double
+recomb_map_genetic_to_phys(recomb_map_t *self, double x)
+{
+    size_t j;
+    double s = 0.0;
+    double ret = 0.0;
+    double rate = 1.0;
+    double last_phys_x, phys_x;
+    /* the coordinate x is provided as a fraction from 0 to 1 so we
+     * rescale into the rate [0, total_mass). */
+    double genetic_x = x * self->total_mass;
+    /* double phys_length; */
+
+    last_phys_x = 0;
+    for (j = 1; j < self->size && s < genetic_x; j++) {
+        phys_x = self->positions[j];
+        rate = self->rates[j - 1];
+        s += (phys_x - last_phys_x) * rate;
+        last_phys_x = phys_x;
     }
-    effective_rate /= self->coordinates[self->size - 1];
-    return effective_rate;
+    ret = last_phys_x - (s - genetic_x) / rate;
+    assert(ret >= 0 && ret <= 1.0);
+    return ret;
 }
