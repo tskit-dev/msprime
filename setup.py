@@ -110,7 +110,8 @@ _msprime_module = Extension(
     sources=[
         "_msprimemodule.c", d + "msprime.c", d + "fenwick.c", d + "avl.c",
         d + "tree_sequence.c", d + "object_heap.c", d + "newick.c",
-        d + "hapgen.c"],
+        d + "hapgen.c", d + "recomb_map.c", d + "mutgen.c",
+        d + "environment.c"],
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
     define_macros=DefineMacros(),

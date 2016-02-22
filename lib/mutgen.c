@@ -103,7 +103,7 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
     }
     gsl_rng_set(self->rng, random_seed);
     self->num_mutations = 0;
-    self->mutation_block_size = 1024 * 1024;
+    self->mutation_block_size = 1024 * 1024 * 1024;
     self->max_num_mutations = self->mutation_block_size;
     self->mutations = malloc(self->max_num_mutations * sizeof(mutation_t));
     if (self->mutations == NULL) {

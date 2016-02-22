@@ -1102,11 +1102,6 @@ class TreeSequence(object):
                 pi += k * (n - k) / denom
         return pi
 
-    def rescale_coordinates(self, recombination_map):
-        self._ll_tree_sequence.rescale_coordinates(
-            recombination_map.get_coordinates(),
-            recombination_map.get_rates())
-
 
 class HaplotypeGenerator(object):
 

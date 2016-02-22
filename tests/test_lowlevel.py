@@ -1477,7 +1477,7 @@ class TestTreeSequence(LowLevelTestCase):
         parameters = json.loads(json_str.decode())
         self.assertIn("scaled_mutation_rate", parameters)
         self.assertIn("random_seed", parameters)
-        self.assertIsInstance(parameters["scaled_mutation_rate"], float)
+        self.assertIsInstance(parameters["scaled_mutation_rate"], int, float)
         self.assertIsInstance(parameters["random_seed"], int)
 
     def verify_tree_parameters_json(self, json_str):

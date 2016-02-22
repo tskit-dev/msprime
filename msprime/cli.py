@@ -160,7 +160,6 @@ class SimulationRunner(object):
             self._simulator.set_random_seed(random.randint(0, 2**30))
             self._simulator.run()
             tree_sequence = self._simulator.get_tree_sequence()
-            tree_sequence.rescale_coordinates(self._recombination_map)
             breakpoints = self._simulator.get_breakpoints()
             print(file=output)
             print("//", file=output)
