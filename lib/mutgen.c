@@ -21,6 +21,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include <gsl/gsl_randist.h>
+
 #include "err.h"
 #include "msprime.h"
 
@@ -33,10 +35,20 @@ mutgen_check_state(mutgen_t *self)
 void
 mutgen_print_state(mutgen_t *self)
 {
+    size_t j;
+
     printf("Mutgen state\n");
     printf("\tparamters = %s\n", self->parameters);
+    printf("\tenvironment = %s\n", self->environment);
     printf("\trandom_seed = %d\n", (int) self->random_seed);
     printf("\tmutation_rate = %f\n", (double) self->mutation_rate);
+    printf("\tmutation_block_size = %d\n", (int) self->mutation_block_size);
+    printf("\tmax_num_mutations  = %d\n", (int) self->max_num_mutations);
+    printf("\tMUTATIONS\t%d\n", (int) self->num_mutations);
+    for (j = 0; j < self->num_mutations; j++) {
+        printf("\t\t%d\t%f\n", self->mutations[j].node,
+            self->mutations[j].position);
+    }
     mutgen_check_state(self);
 }
 
@@ -90,7 +102,18 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         goto out;
     }
     gsl_rng_set(self->rng, random_seed);
+    self->num_mutations = 0;
+    self->mutation_block_size = 1024 * 1024;
+    self->max_num_mutations = self->mutation_block_size;
+    self->mutations = malloc(self->max_num_mutations * sizeof(mutation_t));
+    if (self->mutations == NULL) {
+        goto out;
+    }
     ret = mutgen_encode_parameters(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_encode_environment(&self->environment);
 out:
     return ret;
 }
@@ -98,56 +121,66 @@ out:
 int
 mutgen_free(mutgen_t *self)
 {
-
     if (self->rng != NULL) {
         gsl_rng_free(self->rng);
+    }
+    if (self->mutations != NULL) {
+        free(self->mutations);
     }
     if (self->parameters != NULL) {
         free(self->parameters);
     }
+    if (self->environment != NULL) {
+        free(self->environment);
+    }
     return 0;
 }
 
-#if 0
-/* TODO mutations generation should be spun out into a separate class.
- * We should really just do this in Python and send the resulting
- * mutation objects here for storage. It's not an expensive operation.
- */
-int
-tree_sequence_generate_mutations(tree_sequence_t *self,
-        recomb_map_t *recomb_map, double mutation_rate,
-        unsigned long random_seed)
+static int WARN_UNUSED
+mutgen_add_mutation(mutgen_t *self, uint32_t node, double position)
+{
+    int ret = 0;
+    mutation_t *tmp_buffer;
+
+    assert(self->num_mutations <= self->max_num_mutations);
+
+    if (self->num_mutations == self->max_num_mutations) {
+        self->max_num_mutations += self->mutation_block_size;
+        tmp_buffer = realloc(self->mutations,
+            self->max_num_mutations * sizeof(mutation_t));
+        if (tmp_buffer == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        self->mutations = tmp_buffer;
+    }
+    self->mutations[self->num_mutations].node = node;
+    self->mutations[self->num_mutations].position = position;
+    self->num_mutations++;
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+mutgen_generate(mutgen_t *self)
 {
     int ret = -1;
     coalescence_record_t cr;
-    uint32_t j, k, l, child;
-    gsl_rng *rng = NULL;
+    tree_sequence_t *ts = self->tree_sequence;
+    size_t j, k;
+    double distance, branch_length, mu, position;
+    unsigned int branch_mutations, l;
+    uint32_t child;
     double *times = NULL;
-    mutation_t *mutations = NULL;
-    unsigned int branch_mutations;
-    size_t num_mutations;
-    double branch_length, distance, mu, position;
-    size_t buffer_size;
-    size_t block_size = 2 << 10; /* alloc in blocks of 1M */
-    void *p;
-    char *parameters = NULL;
-    char *environment = NULL;
 
-    buffer_size = block_size;
-    num_mutations = 0;
-    rng = gsl_rng_alloc(gsl_rng_default);
-    if (rng == NULL) {
-        goto out;
-    }
-    gsl_rng_set(rng, random_seed);
-    times = calloc(self->num_nodes + 1, sizeof(double));
-    mutations = malloc(buffer_size * sizeof(mutation_t));
-    if (times == NULL || mutations == NULL) {
+    times = calloc(tree_sequence_get_num_nodes(ts) + 1, sizeof(double));
+    if (times == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    for (j = 0; j < self->num_records; j++) {
-        ret = tree_sequence_get_record(self, j, &cr, MSP_ORDER_TIME);
+
+    for (j = 0; j < tree_sequence_get_num_coalescence_records(ts); j++) {
+        ret = tree_sequence_get_record(ts, j, &cr, MSP_ORDER_TIME);
         if (ret != 0) {
             goto out;
         }
@@ -156,54 +189,21 @@ tree_sequence_generate_mutations(tree_sequence_t *self,
         for (k = 0; k < 2; k++) {
             child = cr.children[k];
             branch_length = cr.time - times[child];
-            mu = branch_length * distance * mutation_rate;
-            branch_mutations = gsl_ran_poisson(rng, mu);
+            mu = branch_length * distance * self->mutation_rate;
+            branch_mutations = gsl_ran_poisson(self->rng, mu);
             for (l = 0; l < branch_mutations; l++) {
-                position = gsl_ran_flat(rng, cr.left, cr.right);
-                if (num_mutations >= buffer_size) {
-                    buffer_size += block_size;
-                    p = realloc(mutations, buffer_size * sizeof(mutation_t));
-                    if (p == NULL) {
-                        ret = MSP_ERR_NO_MEMORY;
-                        goto out;
-                    }
-                    mutations = p;
+                position = gsl_ran_flat(self->rng, cr.left, cr.right);
+                ret = mutgen_add_mutation(self, child, position);
+                if (ret != 0) {
+                    goto out;
                 }
-                mutations[num_mutations].node = child;
-                mutations[num_mutations].position = position;
-                num_mutations++;
             }
         }
     }
-    ret = encode_mutation_parameters(mutation_rate, random_seed, &parameters);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = encode_environment(&environment);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_set_mutations(self, num_mutations, mutations,
-            parameters, environment);
-    if (ret != 0) {
-        goto out;
-    }
+    ret = 0;
 out:
     if (times != NULL) {
         free(times);
     }
-    if (mutations != NULL) {
-        free(mutations);
-    }
-    if (rng != NULL) {
-        gsl_rng_free(rng);
-    }
-    if (parameters != NULL) {
-        free(parameters);
-    }
-    if (environment != NULL) {
-        free(environment);
-    }
     return ret;
 }
-#endif

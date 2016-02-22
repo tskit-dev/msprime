@@ -661,10 +661,20 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+    ret = mutgen_generate(mutgen);
+    if (ret != 0) {
+        goto out;
+    }
     mutgen_print_state(mutgen);
-    /* print_tree_sequence(tree_seq); */
+    ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
+            mutgen->mutations, mutgen->parameters, mutgen->environment);
+    if (ret != 0) {
+        goto out;
+    }
+    tree_sequence_print_state(tree_seq);
+    print_haplotypes(tree_seq);
     if (0) {
-        print_haplotypes(tree_seq);
+        print_tree_sequence(tree_seq);
         int j;
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);
@@ -678,7 +688,6 @@ run_simulate(char *conf_file)
                 goto out;
             }
         }
-        tree_sequence_print_state(tree_seq);
         print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);
         tree_sequence_print_state(tree_seq);

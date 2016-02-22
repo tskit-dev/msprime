@@ -317,9 +317,12 @@ typedef struct {
     tree_sequence_t *tree_sequence;
     recomb_map_t *recomb_map;
     size_t num_mutations;
+    size_t max_num_mutations;
+    size_t mutation_block_size;
     mutation_t *mutations;
     unsigned long random_seed;
     char *parameters;
+    char *environment;
     gsl_rng *rng;
 } mutgen_t;
 
@@ -471,7 +474,9 @@ int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         recomb_map_t *recomb_map, double mutation_rate,
         unsigned long random_seed);
 int mutgen_free(mutgen_t *self);
+int mutgen_generate(mutgen_t *self);
 void mutgen_print_state(mutgen_t *self);
 
+int msp_encode_environment(char **destination);
 const char * msp_strerror(int err);
 #endif /*__MSPRIME_H__*/

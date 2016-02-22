@@ -19,13 +19,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include <sys/utsname.h>
 
 #include <hdf5.h>
 
 #include <gsl/gsl_math.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_version.h>
 
 #include "err.h"
 #include "msprime.h"
@@ -60,63 +57,6 @@ cmp_index_sort(const void *a, const void *b) {
     if (ret == 0) {
         ret = (ca->time > cb->time) - (ca->time < cb->time);
     }
-    return ret;
-}
-
-static int
-encode_environment(char **result)
-{
-    int ret = -1;
-    /* TODO add more environment: endianess, and word size at a minimum */
-    const char *pattern = "{"
-        "\"msprime_version\":\"%s\", "
-        "\"hdf5_version\":\"%d.%d.%d\", "
-        "\"gsl_version\":\"%d.%d\", "
-        "\"kernel_name\":\"%s\", "
-        "\"kernel_release\":\"%s\", "
-        "\"kernel_version\":\"%s\", "
-        "\"hardware_identifier\":\"%s\""
-        "}";
-    herr_t status;
-    unsigned int major, minor, release;
-    int written;
-    size_t size;
-    char *str;
-    struct utsname system_info;
-
-    if (uname(&system_info) < 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    status = H5get_libversion(&major, &minor, &release);
-    if (status != 0) {
-        goto out;
-    }
-    size = 1 + (size_t) snprintf(NULL, 0, pattern,
-            MSP_LIBRARY_VERSION_STR,
-            major, minor, release,
-            GSL_MAJOR_VERSION, GSL_MINOR_VERSION,
-            system_info.sysname, system_info.release, system_info.version,
-            system_info.machine);
-    str = malloc(size);
-    if (str == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    written = snprintf(str, size, pattern,
-            MSP_LIBRARY_VERSION_STR,
-            major, minor, release,
-            GSL_MAJOR_VERSION, GSL_MINOR_VERSION,
-            system_info.sysname, system_info.release, system_info.version,
-            system_info.machine);
-    if (written < 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    assert(written == (int) size - 1);
-    *result = str;
-    ret = 0;
-out:
     return ret;
 }
 
@@ -331,11 +271,6 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
     if (ret != 0) {
         goto out;
     }
-    /* Set the environment and parameter metadata */
-    ret = encode_environment(&self->trees.environment);
-    if (ret != 0) {
-        goto out;
-    }
     parameters = msp_get_configuration_json(sim);
     assert(parameters != NULL);
     self->trees.parameters = malloc(strlen(parameters) + 1);
@@ -344,7 +279,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
         goto out;
     }
     strcpy(self->trees.parameters, parameters);
-    ret = 0;
+    ret = msp_encode_environment(&self->trees.environment);
 out:
     if (records != NULL) {
         free(records);
