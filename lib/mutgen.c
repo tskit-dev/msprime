@@ -21,8 +21,6 @@
 #include <string.h>
 #include <assert.h>
 
-#include <gsl/gsl_randist.h>
-
 #include "err.h"
 #include "msprime.h"
 
@@ -114,6 +112,14 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         goto out;
     }
     ret = msp_encode_environment(&self->environment);
+    if (ret != 0) {
+        goto out;
+    }
+    self->times = calloc(
+        tree_sequence_get_num_nodes(tree_sequence) + 1, sizeof(double));
+    if (self->times == NULL) {
+        goto out;
+    }
 out:
     return ret;
 }
@@ -133,10 +139,13 @@ mutgen_free(mutgen_t *self)
     if (self->environment != NULL) {
         free(self->environment);
     }
+    if (self->times != NULL) {
+        free(self->times);
+    }
     return 0;
 }
 
-static int WARN_UNUSED
+int WARN_UNUSED
 mutgen_add_mutation(mutgen_t *self, uint32_t node, double position)
 {
     int ret = 0;
@@ -161,49 +170,54 @@ out:
     return ret;
 }
 
+
+static int WARN_UNUSED
+mutgen_generate_record_mutations(mutgen_t *self, coalescence_record_t *cr)
+{
+    int ret = -1;
+    size_t k;
+    double branch_length;
+    uint32_t child;
+
+    self->times[cr->node] = cr->time;
+    for (k = 0; k < 2; k++) {
+        child = cr->children[k];
+        branch_length = cr->time - self->times[child];
+        /* We hand over to the recombination map to generate the
+         * actual mutations as we need to rescale to physicaly coordinates
+         * and back to get positions of mutations.
+         */
+        ret = recomb_map_generate_interval_mutations(self->recomb_map, self,
+                child, cr->left, cr->right, branch_length);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+
 int WARN_UNUSED
 mutgen_generate(mutgen_t *self)
 {
     int ret = -1;
-    coalescence_record_t cr;
     tree_sequence_t *ts = self->tree_sequence;
-    size_t j, k;
-    double distance, branch_length, mu, position;
-    unsigned int branch_mutations, l;
-    uint32_t child;
-    double *times = NULL;
-
-    times = calloc(tree_sequence_get_num_nodes(ts) + 1, sizeof(double));
-    if (times == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
+    coalescence_record_t cr;
+    size_t j;
 
     for (j = 0; j < tree_sequence_get_num_coalescence_records(ts); j++) {
         ret = tree_sequence_get_record(ts, j, &cr, MSP_ORDER_TIME);
         if (ret != 0) {
             goto out;
         }
-        times[cr.node] = cr.time;
-        distance = cr.right - cr.left;
-        for (k = 0; k < 2; k++) {
-            child = cr.children[k];
-            branch_length = cr.time - times[child];
-            mu = branch_length * distance * self->mutation_rate;
-            branch_mutations = gsl_ran_poisson(self->rng, mu);
-            for (l = 0; l < branch_mutations; l++) {
-                position = gsl_ran_flat(self->rng, cr.left, cr.right);
-                ret = mutgen_add_mutation(self, child, position);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
+        ret = mutgen_generate_record_mutations(self, &cr);
+        if (ret != 0) {
+            goto out;
         }
     }
     ret = 0;
 out:
-    if (times != NULL) {
-        free(times);
-    }
     return ret;
 }

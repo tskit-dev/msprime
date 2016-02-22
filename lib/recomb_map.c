@@ -20,6 +20,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include <gsl/gsl_randist.h>
+
 #include "err.h"
 #include "msprime.h"
 
@@ -121,5 +123,38 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double x)
     }
     ret = last_phys_x - (s - genetic_x) / rate;
     assert(ret >= 0 && ret <= 1.0);
+    return ret;
+}
+
+int
+recomb_map_generate_interval_mutations(recomb_map_t *self, mutgen_t *mutgen,
+        uint32_t node, uint32_t left, uint32_t right, double branch_length)
+{
+    int ret = -1;
+    double mu, position;
+    double mutation_rate = mutgen->mutation_rate;
+    double distance = right - left;
+    unsigned int branch_mutations, l;
+
+    /* TODO Need to find the left-most segment of the recombination map,
+     * and figure out the physical distance to either the next segment in the
+     * map or right. Once we have the physical distance, we can then generate
+     * mutations. We should be able to do all translations within a given
+     * recombination map segment in constant time once we've found the starting
+     * point. This should be a log-time operation if we store the end points in
+     * an AVL tree and keep some accumulators for translating back and forth
+     * between coordinate systems.
+     */
+    mu = branch_length * distance * mutation_rate;
+    branch_mutations = gsl_ran_poisson(mutgen->rng, mu);
+    for (l = 0; l < branch_mutations; l++) {
+        position = gsl_ran_flat(mutgen->rng, (double) left, (double) right);
+        ret = mutgen_add_mutation(mutgen, node, position);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
     return ret;
 }

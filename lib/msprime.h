@@ -316,6 +316,7 @@ typedef struct {
     double mutation_rate;
     tree_sequence_t *tree_sequence;
     recomb_map_t *recomb_map;
+    double *times;
     size_t num_mutations;
     size_t max_num_mutations;
     size_t mutation_block_size;
@@ -469,12 +470,15 @@ int recomb_map_free(recomb_map_t *self);
 double recomb_map_get_effective_rate(recomb_map_t *self);
 double recomb_map_genetic_to_phys(recomb_map_t *self, double x);
 void recomb_map_print_state(recomb_map_t *self);
+int recomb_map_generate_interval_mutations(recomb_map_t *self, mutgen_t *mutgen,
+        uint32_t node, uint32_t left, uint32_t right, double branch_length);
 
 int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence, 
         recomb_map_t *recomb_map, double mutation_rate,
         unsigned long random_seed);
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self);
+int mutgen_add_mutation(mutgen_t *self, uint32_t node, double position);
 void mutgen_print_state(mutgen_t *self);
 
 int msp_encode_environment(char **destination);
