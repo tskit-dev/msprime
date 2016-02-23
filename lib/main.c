@@ -661,6 +661,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+    recomb_map_print_state(recomb_map);
     ret = mutgen_generate(mutgen);
     if (ret != 0) {
         goto out;
@@ -673,6 +674,7 @@ run_simulate(char *conf_file)
     }
     tree_sequence_print_state(tree_seq);
     print_haplotypes(tree_seq);
+    if (0) {
         print_tree_sequence(tree_seq);
         int j;
         for (j = 0; j < 1; j++) {
@@ -689,7 +691,6 @@ run_simulate(char *conf_file)
         }
         print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);
-    if (0) {
         tree_sequence_print_state(tree_seq);
         print_newick_trees(tree_seq);
         tree_sequence_print_state(tree_seq);

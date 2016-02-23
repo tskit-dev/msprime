@@ -314,6 +314,7 @@ typedef struct {
 
 typedef struct {
     double mutation_rate;
+    uint32_t num_loci;
     tree_sequence_t *tree_sequence;
     recomb_map_t *recomb_map;
     double *times;

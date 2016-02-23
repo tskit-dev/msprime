@@ -40,6 +40,7 @@ mutgen_print_state(mutgen_t *self)
     printf("\tenvironment = %s\n", self->environment);
     printf("\trandom_seed = %d\n", (int) self->random_seed);
     printf("\tmutation_rate = %f\n", (double) self->mutation_rate);
+    printf("\tnum_loci = %f\n", (double) self->num_loci);
     printf("\tmutation_block_size = %d\n", (int) self->mutation_block_size);
     printf("\tmax_num_mutations  = %d\n", (int) self->max_num_mutations);
     printf("\tMUTATIONS\t%d\n", (int) self->num_mutations);
@@ -94,6 +95,7 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
     self->random_seed = random_seed;
     self->mutation_rate = mutation_rate;
     self->tree_sequence = tree_sequence;
+    self->num_loci = tree_sequence_get_num_loci(tree_sequence);
     self->recomb_map = recomb_map;
     self->rng = gsl_rng_alloc(gsl_rng_default);
     if (self->rng == NULL) {
@@ -101,7 +103,7 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
     }
     gsl_rng_set(self->rng, random_seed);
     self->num_mutations = 0;
-    self->mutation_block_size = 1024 * 1024 * 1024;
+    self->mutation_block_size = 1024 * 1024;
     self->max_num_mutations = self->mutation_block_size;
     self->mutations = malloc(self->max_num_mutations * sizeof(mutation_t));
     if (self->mutations == NULL) {
@@ -170,7 +172,6 @@ out:
     return ret;
 }
 
-
 static int WARN_UNUSED
 mutgen_generate_record_mutations(mutgen_t *self, coalescence_record_t *cr)
 {
@@ -197,7 +198,6 @@ mutgen_generate_record_mutations(mutgen_t *self, coalescence_record_t *cr)
 out:
     return ret;
 }
-
 
 int WARN_UNUSED
 mutgen_generate(mutgen_t *self)
