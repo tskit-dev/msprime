@@ -190,7 +190,7 @@ recomb_map_generate_interval_mutations(recomb_map_t *self, mutgen_t *mutgen,
         phys_right = recomb_map_genetic_to_phys(self, interval_right);
         phys_distance = phys_right - phys_left;
 
-        mu = branch_length * phys_distance * mutation_rate;
+        mu = branch_length * phys_distance * mutation_rate * num_loci;
         branch_mutations = gsl_ran_poisson(mutgen->rng, mu);
         for (l = 0; l < branch_mutations; l++) {
             phys_position = gsl_ran_flat(mutgen->rng, phys_left, phys_right);

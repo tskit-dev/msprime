@@ -2194,3 +2194,27 @@ class TestLeafListIterator(LowLevelTestCase):
             leaves = list(_msprime.LeafListIterator(t, t.get_root()))
             self.assertEqual(
                 sorted(leaves), list(range(1, t.get_sample_size() + 1)))
+
+
+class TestRecombinationMap(LowLevelTestCase):
+    """
+    Tests for the low-level Recombination Map.
+    """
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.RecombinationMap)
+        self.assertRaises(TypeError, _msprime.RecombinationMap, None)
+        self.assertRaises(TypeError, _msprime.RecombinationMap, None, None)
+        self.assertRaises(TypeError, _msprime.RecombinationMap, {}, {})
+        self.assertRaises(
+            ValueError, _msprime.RecombinationMap, [0, 0.1], [1, 2, 3])
+        self.assertRaises(
+            ValueError, _msprime.RecombinationMap, [], [0, 0])
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap, [], [])
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap, [0, 2], [0, 0])
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap, [1, 0], [0, 0])
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap,
+            [0, 1, 0.5], [0, 0, 0])

@@ -292,21 +292,22 @@ def get_recombinatation_map(parser, args):
         parser.error("Number of loci must be integer value")
     if args.recombination[0] != 0.0 and num_loci < 2:
         parser.error("Number of loci must > 1")
-    rates = []
-    coordinates = []
+    rates = [0, 0]
+    coordinates = [0, 1]
     if num_loci > 1:
         r = args.recombination[0] / (num_loci - 1)
-        for position, rate in sorted(args.recombination_rate_change):
-            rate /= (num_loci - 1)
-            if position != 0 and len(rates) == 0:
-                rates.append(r)
-                coordinates.append(0)
-            if position < 0 or position >= num_loci:
-                parser.error("Genomic position out of bounds")
-            rates.append(rate)
-            coordinates.append(position)
-    rates.append(None)
-    coordinates.append(num_loci)
+        rates[0] = r
+    #     for position, rate in sorted(args.recombination_rate_change):
+    #         rate /= (num_loci - 1)
+    #         if position != 0 and len(rates) == 0:
+    #             rates.append(r)
+    #             coordinates.append(0)
+    #         if position < 0 or position >= num_loci:
+    #             parser.error("Genomic position out of bounds")
+    #         rates.append(rate)
+    #         coordinates.append(position)
+    # rates.append(None)
+    # coordinates.append(num_loci)
     return msprime.RecombinationMap(coordinates, rates)
 
 

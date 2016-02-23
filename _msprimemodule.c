@@ -45,6 +45,11 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    recomb_map_t *recomb_map;
+} RecombinationMap;
+
+typedef struct {
+    PyObject_HEAD
     tree_sequence_t *tree_sequence;
 } TreeSequence;
 
@@ -1390,6 +1395,146 @@ static PyTypeObject SimulatorType = {
 };
 
 /*===================================================================
+ * RecombinationMap
+ *===================================================================
+ */
+
+static int
+RecombinationMap_check_recomb_map(RecombinationMap *self)
+{
+    int ret = 0;
+    if (self->recomb_map == NULL) {
+        PyErr_SetString(PyExc_ValueError, "recomb_map not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+RecombinationMap_dealloc(RecombinationMap* self)
+{
+    if (self->recomb_map != NULL) {
+        recomb_map_free(self->recomb_map);
+        PyMem_Free(self->recomb_map);
+        self->recomb_map = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"positions", "rates", NULL};
+    Py_ssize_t size, j;
+    PyObject *py_positions = NULL;
+    PyObject *py_rates = NULL;
+    double *positions = NULL;
+    double *rates = NULL;
+    PyObject *item;
+
+    self->recomb_map = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!", kwlist,
+            &PyList_Type, &py_positions, &PyList_Type,
+            &py_rates)) {
+        goto out;
+    }
+    if (PyList_Size(py_positions) != PyList_Size(py_rates)) {
+        PyErr_SetString(PyExc_ValueError,
+            "positions and rates list must be the same length");
+        goto out;
+    }
+    size = PyList_Size(py_positions);
+    positions = PyMem_Malloc(size * sizeof(double));
+    rates = PyMem_Malloc(size * sizeof(double));
+    if (positions == NULL || rates == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        item = PyList_GetItem(py_positions, j);
+        if (!PyNumber_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "position must be a number");
+            goto out;
+        }
+        positions[j] = PyFloat_AsDouble(item);
+        item = PyList_GetItem(py_rates, j);
+        if (!PyNumber_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "rates must be a number");
+            goto out;
+        }
+        rates[j] = PyFloat_AsDouble(item);
+    }
+    self->recomb_map = PyMem_Malloc(sizeof(recomb_map_t));
+    if (self->recomb_map == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = recomb_map_alloc(self->recomb_map, positions, rates, size);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    if (positions != NULL) {
+        PyMem_Free(positions);
+    }
+    if (rates != NULL) {
+        PyMem_Free(rates);
+    }
+    return ret;
+}
+
+static PyMemberDef RecombinationMap_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef RecombinationMap_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject RecombinationMapType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.RecombinationMap",             /* tp_name */
+    sizeof(RecombinationMap),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)RecombinationMap_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "RecombinationMap objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    RecombinationMap_methods,             /* tp_methods */
+    RecombinationMap_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)RecombinationMap_init,      /* tp_init */
+};
+
+/*===================================================================
  * TreeSequence
  *===================================================================
  */
@@ -1552,9 +1697,12 @@ TreeSequence_generate_mutations(TreeSequence *self,
 {
     int err;
     PyObject *ret = NULL;
-    static char *kwlist[] = {"mutation_rate", "random_seed", NULL};
+    static char *kwlist[] = {
+        "mutation_rate", "random_seed", "recombination_map", NULL};
     double mutation_rate;
     unsigned long random_seed;
+    RecombinationMap *py_recomb_map = NULL;
+    /* These are used if the recombination map is not provided */
     recomb_map_t *recomb_map = NULL;
     mutgen_t *mutgen = NULL;
     double positions[] = {0.0, 1.0};
@@ -1563,19 +1711,31 @@ TreeSequence_generate_mutations(TreeSequence *self,
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dk", kwlist,
-            &mutation_rate, &random_seed)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dk|O!", kwlist,
+            &mutation_rate, &random_seed,
+            RecombinationMapType, &py_recomb_map)) {
         goto out;
     }
-    recomb_map = PyMem_Malloc(sizeof(recomb_map_t));
-    if (recomb_map == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = recomb_map_alloc(recomb_map, positions, rates, 2);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
+    if (py_recomb_map == NULL) {
+        /* If we don't provide a recombination map create one that'll
+         * result in uniform mapping between genetic and physical
+         * coordinates.
+         */
+        recomb_map = PyMem_Malloc(sizeof(recomb_map_t));
+        if (recomb_map == NULL) {
+            PyErr_NoMemory();
+            goto out;
+        }
+        err = recomb_map_alloc(recomb_map, positions, rates, 2);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    } else {
+        if (RecombinationMap_check_recomb_map(py_recomb_map) != 0) {
+            goto out;
+        }
+        recomb_map = py_recomb_map->recomb_map;
     }
     mutgen = PyMem_Malloc(sizeof(mutgen_t));
     if (mutgen == NULL) {
@@ -1601,9 +1761,14 @@ TreeSequence_generate_mutations(TreeSequence *self,
     }
     ret = Py_BuildValue("");
 out:
-    if (recomb_map != NULL) {
-        recomb_map_free(recomb_map);
-        PyMem_Free(recomb_map);
+    if (py_recomb_map != NULL) {
+        /* We only free this recomb_map if we created one locally as the
+         * default.
+         */
+        if (recomb_map != NULL) {
+            recomb_map_free(recomb_map);
+            PyMem_Free(recomb_map);
+        }
     }
     if (mutgen != NULL) {
         mutgen_free(mutgen);
@@ -3218,6 +3383,13 @@ init_msprime(void)
     }
     Py_INCREF(&TreeSequenceType);
     PyModule_AddObject(module, "TreeSequence", (PyObject *) &TreeSequenceType);
+    /* RecombinationMap type */
+    RecombinationMapType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&RecombinationMapType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&RecombinationMapType);
+    PyModule_AddObject(module, "RecombinationMap", (PyObject *) &RecombinationMapType);
     /* SparseTree type */
     SparseTreeType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&SparseTreeType) < 0) {
