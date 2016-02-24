@@ -1645,7 +1645,7 @@ class TestTreeSequence(LowLevelTestCase):
             with tempfile.NamedTemporaryFile() as f:
                 self.verify_dump_equality(ts, f)
 
-    def test_mutations(self):
+    def test_generate_mutations_interface(self):
         ts = _msprime.TreeSequence()
         # This hasn't been initialised, so should fail.
         self.assertRaises(ValueError, ts.generate_mutations, ts)
@@ -1656,22 +1656,16 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(TypeError, ts.generate_mutations, mutation_rate=1.0)
         self.assertRaises(TypeError, ts.generate_mutations, random_seed=1.0)
         self.assertRaises(
+            TypeError, ts.generate_mutations, mutation_rate=1.0,
+            random_seed=10, recombination_map=None)
+        self.assertRaises(
+            TypeError, ts.generate_mutations, 10, 1, None)
+        self.assertRaises(
             TypeError, ts.generate_mutations, mutation_rate=10,
             random_seed=1.0, invalid_param=7)
         self.assertIsNone(ts.get_mutation_parameters())
-        # A mutation rate of 0 should give 0 mutations
-        ts.generate_mutations(0.0, random_seed=1)
-        for j in range(3):
-            self.assertEqual(ts.get_num_mutations(), 0)
-            self.assertEqual(len(ts.get_mutations()), 0)
-            self.assertIsNone(ts.get_mutation_parameters())
-        # A non-zero mutation rate will give more than 0 mutations.
-        ts.generate_mutations(10.0, random_seed=2)
-        json_str = ts.get_mutation_parameters()
-        self.assertIsNotNone(json_str)
-        params = json.loads(json_str)
-        self.assertEqual(params["scaled_mutation_rate"], 10.0)
-        self.assertEqual(params["random_seed"], 2)
+
+    def verify_mutations(self, ts):
         mutations = ts.get_mutations()
         self.assertGreater(ts.get_num_mutations(), 0)
         self.assertEqual(len(mutations), ts.get_num_mutations())
@@ -1686,7 +1680,36 @@ class TestTreeSequence(LowLevelTestCase):
         for j in range(3):
             self.assertEqual(mutations, ts.get_mutations())
         # mutations must be sorted by position order.
-        self.assertEqual(mutations, sorted(mutations, key=lambda x: x[0]))
+        self.assertEqual(mutations, sorted(mutations))
+
+    def test_mutations(self):
+        # A mutation rate of 0 should give 0 mutations
+        for ts in self.get_example_tree_sequences():
+            ts.generate_mutations(0.0, random_seed=1)
+            self.assertEqual(ts.get_num_mutations(), 0)
+            self.assertEqual(len(ts.get_mutations()), 0)
+            self.assertIsNone(ts.get_mutation_parameters())
+            # A non-zero mutation rate will give more than 0 mutations.
+            ts.generate_mutations(10.0, random_seed=2)
+            self.verify_mutations(ts)
+            json_str = ts.get_mutation_parameters()
+            self.assertIsNotNone(json_str)
+            params = json.loads(json_str)
+            self.assertEqual(params["scaled_mutation_rate"], 10.0)
+            self.assertEqual(params["random_seed"], 2)
+
+    def test_mutations_simple_recomb_map(self):
+        mu = 2.0
+        seed = 1
+        recomb_map = _msprime.RecombinationMap(
+            positions=[0, 1], rates=[1, 0])
+        for ts in self.get_example_tree_sequences():
+            ts.generate_mutations(mu, random_seed=seed)
+            self.verify_mutations(ts)
+            m1 = ts.get_mutations()
+            ts.generate_mutations(mu, seed, recomb_map)
+            m2 = ts.get_mutations()
+            self.assertEqual(m1, m2)
 
     def test_mutation_persistence(self):
         ts = self.get_tree_sequence(mutation_rate=0.0)
@@ -2218,3 +2241,26 @@ class TestRecombinationMap(LowLevelTestCase):
         self.assertRaises(
             _msprime.LibraryError, _msprime.RecombinationMap,
             [0, 1, 0.5], [0, 0, 0])
+
+    def verify_random_recomb_map(self, size, num_random_checks):
+        positions = [0] + sorted(
+            random.random() for j in range(size - 2)) + [1]
+        rates = [random.uniform(0, 5) for j in range(size - 1)] + [0]
+        rm = _msprime.RecombinationMap(positions=positions, rates=rates)
+        for bad_type in [{}, None, "10", []]:
+            self.assertRaises(TypeError, rm.genetic_to_physical, bad_type)
+        for bad_value in [-1, 1.1, 1e7, 2**32]:
+            self.assertRaises(ValueError, rm.genetic_to_physical, bad_value)
+        self.assertEqual(rm.genetic_to_physical(0), 0)
+        self.assertEqual(rm.genetic_to_physical(1), 1)
+        for j in range(num_random_checks):
+            x = random.random()
+            y = rm.genetic_to_physical(x)
+            self.assertTrue(0 <= y <= 1)
+            z = rm.physical_to_genetic(y)
+            self.assertAlmostEqual(x, z)
+
+    def test_coordinate_conversions(self):
+        num_random_checks = 100
+        for size in [2, 3, 4, 5, 100]:
+            self.verify_random_recomb_map(size, num_random_checks)

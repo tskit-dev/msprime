@@ -102,7 +102,7 @@ recomb_map_get_effective_rate(recomb_map_t *self)
     return self->total_mass;
 }
 
-static double
+double
 recomb_map_phys_to_genetic(recomb_map_t *self, double x)
 {
     size_t j;
@@ -119,7 +119,7 @@ recomb_map_phys_to_genetic(recomb_map_t *self, double x)
     }
     rate = self->rates[j - 1];
     s += (x - last_phys_x) * rate;
-    assert(s >= 0 && s <= 1.0);
+    assert(s >= 0 && s <= self->total_mass);
     return s / self->total_mass;
 }
 

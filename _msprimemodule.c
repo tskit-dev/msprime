@@ -1487,11 +1487,59 @@ out:
     return ret;
 }
 
+static PyObject *
+RecombinationMap_genetic_to_physical(RecombinationMap *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double genetic_x, physical_x;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &genetic_x)) {
+        goto out;
+    }
+    if (genetic_x < 0 || genetic_x > 1) {
+        PyErr_SetString(PyExc_ValueError, "coordinates must be 0 <= x <= 1");
+        goto out;
+    }
+    physical_x = recomb_map_genetic_to_phys(self->recomb_map, genetic_x);
+    ret = Py_BuildValue("d", physical_x);
+out:
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_physical_to_genetic(RecombinationMap *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double genetic_x, physical_x;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &physical_x)) {
+        goto out;
+    }
+    if (physical_x < 0 || physical_x > 1) {
+        PyErr_SetString(PyExc_ValueError, "coordinates must be 0 <= x <= 1");
+        goto out;
+    }
+    genetic_x = recomb_map_phys_to_genetic(self->recomb_map, physical_x);
+    ret = Py_BuildValue("d", genetic_x);
+out:
+    return ret;
+}
+
 static PyMemberDef RecombinationMap_members[] = {
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef RecombinationMap_methods[] = {
+    {"genetic_to_physical", (PyCFunction) RecombinationMap_genetic_to_physical,
+        METH_VARARGS, "Converts the specified value into physical coordinates."},
+    {"physical_to_genetic", (PyCFunction) RecombinationMap_physical_to_genetic,
+        METH_VARARGS, "Converts the specified value into genetic coordinates."},
     {NULL}  /* Sentinel */
 };
 
@@ -1713,7 +1761,7 @@ TreeSequence_generate_mutations(TreeSequence *self,
     }
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "dk|O!", kwlist,
             &mutation_rate, &random_seed,
-            RecombinationMapType, &py_recomb_map)) {
+            &RecombinationMapType, &py_recomb_map)) {
         goto out;
     }
     if (py_recomb_map == NULL) {
@@ -1761,7 +1809,7 @@ TreeSequence_generate_mutations(TreeSequence *self,
     }
     ret = Py_BuildValue("");
 out:
-    if (py_recomb_map != NULL) {
+    if (py_recomb_map == NULL) {
         /* We only free this recomb_map if we created one locally as the
          * default.
          */
