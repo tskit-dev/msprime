@@ -1121,35 +1121,22 @@ class HaplotypeGenerator(object):
 class RecombinationMap(object):
     """
     A class representing the changing recombination rate along a
-    chromosome. It is represented by a list of tuples, (x, rate)
-    where x is the start coordinate and rate is the recombination
-    rate until the next interval. The last element of this list
-    must always be (num_loci, None).
+    chromosome.
+
+    TODO document.
     """
-    def __init__(self, coordinates, rates):
-        assert len(coordinates) == len(rates)
-        assert len(coordinates) >= 1
-        self._coordinates = coordinates
-        self._rates = rates
+    def __init__(self, positions, rates):
+        self._ll_recombination_map = _msprime.RecombinationMap(
+            positions, rates)
 
-    def get_coordinates(self):
-        return self._coordinates
+    def physical_to_genetic(self, physical_x):
+        return self._ll_recombination_map.physical_to_genetic(physical_x)
 
-    def get_rates(self):
-        return self._rates
+    def genetic_to_physical(self, genetic_x):
+        return self._ll_recombination_map.genetic_to_physical(genetic_x)
 
-    def get_effective_rate(self):
-        """
-        Returns the effective recombination rate for this genetic map.
-        This is the weighted mean of the rates across all intervals.
-        """
-        effective_rate = 0
-        x = self._coordinates
-        num_loci = x[-1]
-        for j in range(len(self._coordinates) - 1):
-            length = (x[j + 1] - x[j]) / num_loci
-            effective_rate += self._rates[j] * length
-        return effective_rate
+    def get_total_recombination_rate(self):
+        return self._ll_recombination_map.get_total_recombination_rate()
 
 
 class PopulationConfiguration(object):

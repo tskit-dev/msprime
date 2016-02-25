@@ -128,7 +128,7 @@ class SimulationRunner(object):
             population_configurations)
         self._simulator.set_demographic_events(demographic_events)
         self._simulator.set_scaled_recombination_rate(
-            recombination_map.get_effective_rate())
+            recombination_map.get_total_recombination_rate())
         self._precision = precision
         self._print_trees = print_trees
         # sort out the random seeds
@@ -293,7 +293,7 @@ def get_recombinatation_map(parser, args):
     if args.recombination[0] != 0.0 and num_loci < 2:
         parser.error("Number of loci must > 1")
     rates = [0, 0]
-    coordinates = [0, 1]
+    positions = [0, 1]
     if num_loci > 1:
         r = args.recombination[0] / (num_loci - 1)
         rates[0] = r
@@ -308,7 +308,7 @@ def get_recombinatation_map(parser, args):
     #         coordinates.append(position)
     # rates.append(None)
     # coordinates.append(num_loci)
-    return msprime.RecombinationMap(coordinates, rates)
+    return msprime.RecombinationMap(positions, rates)
 
 
 def create_simulation_runner(parser, arg_list):

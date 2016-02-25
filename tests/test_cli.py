@@ -763,8 +763,7 @@ class TestMspmsOutput(unittest.TestCase):
         Runs the UI for the specified parameters, and parses the output
         to ensure it's consistent.
         """
-        rm = msprime.RecombinationMap(
-            [0, num_loci], [recombination_rate, None])
+        rm = msprime.RecombinationMap([0, 1], [recombination_rate, 0])
         sr = cli.SimulationRunner(
             sample_size=sample_size, num_loci=num_loci,
             recombination_map=rm,

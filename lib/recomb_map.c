@@ -97,7 +97,7 @@ recomb_map_free(recomb_map_t *self)
 }
 
 double
-recomb_map_get_effective_rate(recomb_map_t *self)
+recomb_map_get_total_recombination_rate(recomb_map_t *self)
 {
     return self->total_mass;
 }
@@ -107,20 +107,24 @@ recomb_map_phys_to_genetic(recomb_map_t *self, double x)
 {
     size_t j;
     double s = 0.0;
+    double ret = 0.0;
     double rate = 1.0;
     double last_phys_x, phys_x;
 
-    last_phys_x = 0;
-    for (j = 1; j < self->size && x > self->positions[j]; j++) {
-        phys_x = self->positions[j];
+    if (self->total_mass > 0) {
+        last_phys_x = 0;
+        for (j = 1; j < self->size && x > self->positions[j]; j++) {
+            phys_x = self->positions[j];
+            rate = self->rates[j - 1];
+            s += (phys_x - last_phys_x) * rate;
+            last_phys_x = phys_x;
+        }
         rate = self->rates[j - 1];
-        s += (phys_x - last_phys_x) * rate;
-        last_phys_x = phys_x;
+        s += (x - last_phys_x) * rate;
+        assert(s >= 0 && s <= self->total_mass);
+        ret = s / self->total_mass;
     }
-    rate = self->rates[j - 1];
-    s += (x - last_phys_x) * rate;
-    assert(s >= 0 && s <= self->total_mass);
-    return s / self->total_mass;
+    return ret;
 }
 
 double
@@ -134,17 +138,23 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double x)
     /* the coordinate x is provided as a fraction from 0 to 1 so we
      * rescale into the rate [0, total_mass). */
     double genetic_x = x * self->total_mass;
-    /* double phys_length; */
 
-    last_phys_x = 0;
-    for (j = 1; j < self->size && s < genetic_x; j++) {
-        phys_x = self->positions[j];
-        rate = self->rates[j - 1];
-        s += (phys_x - last_phys_x) * rate;
-        last_phys_x = phys_x;
+    assert(x >= 0 && x <= 1.0);
+    if (self->total_mass == 0.0) {
+        if (x != 0.0) {
+            ret = GSL_NAN;
+        }
+    } else {
+        last_phys_x = 0;
+        for (j = 1; j < self->size && s < genetic_x; j++) {
+            phys_x = self->positions[j];
+            rate = self->rates[j - 1];
+            s += (phys_x - last_phys_x) * rate;
+            last_phys_x = phys_x;
+        }
+        ret = last_phys_x - (s - genetic_x) / rate;
+        assert(ret >= 0 && ret <= 1.0);
     }
-    ret = last_phys_x - (s - genetic_x) / rate;
-    assert(ret >= 0 && ret <= 1.0);
     return ret;
 }
 

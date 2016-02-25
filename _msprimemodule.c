@@ -1492,6 +1492,7 @@ RecombinationMap_genetic_to_physical(RecombinationMap *self, PyObject *args)
 {
     PyObject *ret = NULL;
     double genetic_x, physical_x;
+    double total_rate;
 
     if (RecombinationMap_check_recomb_map(self) != 0) {
         goto out;
@@ -1501,6 +1502,12 @@ RecombinationMap_genetic_to_physical(RecombinationMap *self, PyObject *args)
     }
     if (genetic_x < 0 || genetic_x > 1) {
         PyErr_SetString(PyExc_ValueError, "coordinates must be 0 <= x <= 1");
+        goto out;
+    }
+    total_rate = recomb_map_get_total_recombination_rate(self->recomb_map);
+    if (total_rate == 0.0 && genetic_x != 0.0) {
+        PyErr_SetString(PyExc_ValueError,
+            "Cannot convert non-zero genetic coordinate with total_rate = 0");
         goto out;
     }
     physical_x = recomb_map_genetic_to_phys(self->recomb_map, genetic_x);
@@ -1531,6 +1538,20 @@ out:
     return ret;
 }
 
+static PyObject *
+RecombinationMap_get_total_recombination_rate(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d",
+        recomb_map_get_total_recombination_rate(self->recomb_map));
+out:
+    return ret;
+}
+
 static PyMemberDef RecombinationMap_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -1540,6 +1561,9 @@ static PyMethodDef RecombinationMap_methods[] = {
         METH_VARARGS, "Converts the specified value into physical coordinates."},
     {"physical_to_genetic", (PyCFunction) RecombinationMap_physical_to_genetic,
         METH_VARARGS, "Converts the specified value into genetic coordinates."},
+    {"get_total_recombination_rate",
+        (PyCFunction) RecombinationMap_get_total_recombination_rate,
+        METH_NOARGS, "Returns the total recombination rate over the region."},
     {NULL}  /* Sentinel */
 };
 
@@ -1923,7 +1947,7 @@ out:
 }
 
 static PyObject *
-TreeSequence_get_mutations(TreeSequence *self, PyObject *args)
+TreeSequence_get_mutations(TreeSequence *self)
 {
     PyObject *ret = NULL;
     mutation_t *mutations = NULL;

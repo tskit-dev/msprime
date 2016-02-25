@@ -210,6 +210,72 @@ class PythonTreeSequence(object):
             st.left = st.right
 
 
+class PythonRecombinationMap(object):
+    """
+    A Python implementation of the RecombinationMap interface.
+    """
+    def __init__(self, positions, rates):
+        assert len(positions) == len(rates)
+        assert len(positions) >= 2
+        assert sorted(positions) == positions
+        assert positions[0] == 0
+        assert positions[-1] == 1
+        self._positions = positions
+        self._rates = rates
+
+    def get_total_recombination_rate(self):
+        """
+        Returns the effective recombination rate for this genetic map.
+        This is the weighted mean of the rates across all intervals.
+        """
+        x = self._positions
+        effective_rate = 0
+        for j in range(len(x) - 1):
+            length = (x[j + 1] - x[j])
+            effective_rate += self._rates[j] * length
+        return effective_rate
+
+    def physical_to_genetic(self, x):
+        s = 0
+        last_phys_x = 0
+        j = 1
+        while j < len(self._positions) - 1 and x > self._positions[j]:
+            phys_x = self._positions[j]
+            rate = self._rates[j - 1]
+            s += (phys_x - last_phys_x) * rate
+            j += 1
+            last_phys_x = phys_x
+        rate = self._rates[j - 1]
+        s += (x - last_phys_x) * rate
+        ret = 0
+        if self.get_total_recombination_rate() > 0:
+            ret = s / self.get_total_recombination_rate()
+        return ret
+
+    def genetic_to_physical(self, v):
+        # v is expressed in the unit range. Rescale it back into the range
+        # (0, total_mass).
+        if self.get_total_recombination_rate() == 0:
+            if v == 0:
+                return 0
+            raise ValueError(
+                "Cannot have non-zero genetic coordinate with 0 "
+                "recombination rate")
+        u = v * self.get_total_recombination_rate()
+        s = 0
+        last_phys_x = 0
+        rate = self._rates[0]
+        j = 1
+        while j < len(self._positions) and s < u:
+            phys_x = self._positions[j]
+            rate = self._rates[j - 1]
+            s += (phys_x - last_phys_x) * rate
+            j += 1
+            last_phys_x = phys_x
+        y = last_phys_x - (s - u) / rate
+        return y
+
+
 class MRCACalculator(object):
     """
     Class to that allows us to compute the nearest common ancestor of arbitrary

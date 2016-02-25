@@ -398,8 +398,8 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = msp_set_scaled_recombination_rate(msp,
-            recomb_map_get_effective_rate(recomb_map));
+    ret = msp_set_scaled_recombination_rate(msp, (double) msp_get_num_loci(msp)
+        * recomb_map_get_total_recombination_rate(recomb_map));
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }

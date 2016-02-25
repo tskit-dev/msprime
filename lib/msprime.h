@@ -468,7 +468,7 @@ void hapgen_print_state(hapgen_t *self);
 int recomb_map_alloc(recomb_map_t *self, double *coordinates, double *rates,
         size_t size);
 int recomb_map_free(recomb_map_t *self);
-double recomb_map_get_effective_rate(recomb_map_t *self);
+double recomb_map_get_total_recombination_rate(recomb_map_t *self);
 double recomb_map_genetic_to_phys(recomb_map_t *self, double x);
 double recomb_map_phys_to_genetic(recomb_map_t *self, double x);
 void recomb_map_print_state(recomb_map_t *self);

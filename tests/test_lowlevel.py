@@ -2253,6 +2253,8 @@ class TestRecombinationMap(LowLevelTestCase):
             self.assertRaises(ValueError, rm.genetic_to_physical, bad_value)
         self.assertEqual(rm.genetic_to_physical(0), 0)
         self.assertEqual(rm.genetic_to_physical(1), 1)
+        total_rate = rm.get_total_recombination_rate()
+        self.assertGreater(total_rate, 0)
         for j in range(num_random_checks):
             x = random.random()
             y = rm.genetic_to_physical(x)
