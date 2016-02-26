@@ -76,37 +76,6 @@ def mutations():
     # for tree in tree_sequence.trees():
     #     print(tree.get_interval())
 
-
-def physical_to_genetic(x, recomb_rates):
-    s = 0
-    last_phys_x = 0
-    j = 0
-    while j < len(recomb_rates) and x > recomb_rates[j][0]:
-        phys_x, recomb_rate = recomb_rates[j]
-        s += (phys_x - last_phys_x) * recomb_rate
-        j += 1
-        last_phys_x = phys_x
-    if x != last_phys_x:
-        _, recomb_rate = recomb_rates[j]
-        s += (x - last_phys_x) * recomb_rate
-    return s
-
-
-def genetic_to_physical(x, recomb_rates):
-    s = 0
-    last_phys_x = 0
-    j = 0
-    while j < len(recomb_rates) and s < x:
-        phys_x, recomb_rate = recomb_rates[j]
-        s += (phys_x - last_phys_x) * recomb_rate
-        j += 1
-        last_phys_x = phys_x
-    y = last_phys_x
-    if x != s:
-        y -= (s - x) / recomb_rate
-    return y
-
-
 def plot_distance_maps(recomb_rates):
     # Plot the piecewise map of physical distance to recombination rate
     x = np.zeros(2 * len(recomb_rates))
@@ -176,12 +145,33 @@ def plot_1kg_map():
     pyplot.savefig("1kg.png")
 
 
+def simulations():
+    n = 10
+    recomb_map = msprime.RecombinationMap(
+        [0, 0.5, 0.6, 0.7, 1], [0.1, 10, 0, 0.1, 0])
+    m = 1000
+    sim = msprime.TreeSimulator(n)
+    sim.set_random_seed(1)
+    sim.set_num_loci(m)
+    sim.set_scaled_recombination_rate(
+        recomb_map.get_total_recombination_rate())
+    sim.run()
+    ts = sim.get_tree_sequence()
+    ts.generate_mutations(2, 1, recomb_map)
+    for t in ts.trees():
+        l, r = t.get_interval()
+        print("tree:", recomb_map.genetic_to_physical(l / m),
+                recomb_map.genetic_to_physical(l / m))
+        for pos, node in t.mutations():
+            print("\t", node, pos, recomb_map.genetic_to_physical(pos / m),
+                    sep="\t")
 
 if __name__ == "__main__":
     # mutations()
 
-    plot_distance_maps(
-        [(10, 0.1), (11, 1), (20, 0.1), (21, 1), (30, 0.1)]
-    )
+    # plot_distance_maps(
+    #     [(10, 0.1), (11, 1), (20, 0.1), (21, 1), (30, 0.1)]
+    # )
     # plot_1kg_map()
 
+    simulations()

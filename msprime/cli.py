@@ -170,23 +170,37 @@ class SimulationRunner(object):
                     for l, ns in iterator:
                         print(ns, file=output)
                 else:
-                    for l, ns in iterator:
+                    last_pos = 0
+                    # TODO Fix this! Experimental hacky code to shoehorn
+                    # physical coordinates into ms type output.
+                    rm = self._recombination_map
+                    m = self._num_loci
+                    for genetic_length, ns in iterator:
+                        pos = last_pos + genetic_length
+                        physical_length = (
+                            rm.genetic_to_physical(pos / m) -
+                            rm.genetic_to_physical(last_pos / m)) * m
+                        last_pos = pos
                         # Print these seperately to avoid the cost of creating
                         # another string.
-                        print("[{0}]".format(l), end="", file=output)
+                        print("[{0:g}]".format(
+                            physical_length), end="", file=output)
                         print(ns, file=output)
             if self._mutation_rate > 0:
                 # The mutation rate in ms is multiplied by the size of the
                 # region
                 seed = self._simulator.get_random_seed()
-                tree_sequence.generate_mutations(self._mutation_rate, seed)
+                tree_sequence.generate_mutations(
+                    self._mutation_rate, seed, self._recombination_map)
                 hg = msprime.HaplotypeGenerator(tree_sequence)
                 s = tree_sequence.get_num_mutations()
                 print("segsites:", s, file=output)
                 if s != 0:
                     print("positions: ", end="", file=output)
+                    rm = self._recombination_map
+                    m = self._num_loci
                     positions = [
-                        p / self._num_loci for p, _ in
+                        rm.genetic_to_physical(p / m) for p, _ in
                         tree_sequence.get_mutations()]
                     positions.sort()
                     for position in positions:
@@ -297,17 +311,15 @@ def get_recombinatation_map(parser, args):
     if num_loci > 1:
         r = args.recombination[0] / (num_loci - 1)
         rates[0] = r
-    #     for position, rate in sorted(args.recombination_rate_change):
-    #         rate /= (num_loci - 1)
-    #         if position != 0 and len(rates) == 0:
-    #             rates.append(r)
-    #             coordinates.append(0)
-    #         if position < 0 or position >= num_loci:
-    #             parser.error("Genomic position out of bounds")
-    #         rates.append(rate)
-    #         coordinates.append(position)
-    # rates.append(None)
-    # coordinates.append(num_loci)
+        for position, rate in sorted(args.recombination_rate_change):
+            rate /= (num_loci - 1)
+            position /= num_loci
+            if position < 0 or position > 1:
+                parser.error("Genomic position out of bounds")
+            rates[-1] = rate
+            rates.append(0)
+            positions[-1] = position
+            positions.append(1)
     return msprime.RecombinationMap(positions, rates)
 
 

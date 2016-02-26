@@ -675,6 +675,24 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in self.get_example_tree_sequences():
             self.verify_sparse_trees(ts)
 
+    def test_no_recombination_map(self):
+        seed = 1
+        all_zero = True
+        for ts in self.get_example_tree_sequences():
+            mu = 100 / ts.get_num_loci()
+            ts.generate_mutations(mu, seed)
+            if ts.get_num_mutations() > 0:
+                all_zero = False
+                self.verify_mutations(ts)
+            m1 = list(ts.mutations())
+            positions = [0, 1]
+            rates = [1, 0]
+            rm = msprime.RecombinationMap(positions, rates)
+            ts.generate_mutations(mu, seed, rm)
+            m2 = list(ts.mutations())
+            self.assertEqual(m1, m2)
+        self.assertFalse(all_zero)
+
     def test_mutations(self):
         all_zero = True
         for ts in self.get_example_tree_sequences():
@@ -865,8 +883,11 @@ class TestRecombinationMap(unittest.TestCase):
 
     def test_one_rate(self):
         for rate in [0.1, 1.0, 10]:
-            # self.assertEqual(rate, gm.get_effective_rate())
-            self.verify_coordinate_conversion([0, 1], [rate, 0])
+            positions = [0, 1]
+            rates = [rate, 0]
+            rm = msprime.RecombinationMap(positions, rates)
+            self.assertEqual(rate, rm.get_total_recombination_rate())
+            self.verify_coordinate_conversion(positions, rates)
 
     def test_simple_map(self):
         positions = [0, 0.25, 0.5, 0.75, 1]

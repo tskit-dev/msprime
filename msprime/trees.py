@@ -1054,7 +1054,9 @@ class TreeSequence(object):
         """
         return HaplotypeGenerator(self).haplotypes()
 
-    def generate_mutations(self, scaled_mutation_rate, random_seed=None):
+    def generate_mutations(
+            self, scaled_mutation_rate, random_seed=None,
+            recombination_map=None):
         """
         Generates mutation according to the infinite sites model. This
         method over-writes any existing mutations stored in the tree
@@ -1065,10 +1067,18 @@ class TreeSequence(object):
         :param int random_seed: The random seed to use when generating
             mutations.
         """
+        # TODO document recombination_map parameter and remove the separate
+        # code paths.
         seed = random_seed
         if random_seed is None:
             seed = random.randint(0, 2**31)
-        self._ll_tree_sequence.generate_mutations(scaled_mutation_rate, seed)
+        if recombination_map is None:
+            self._ll_tree_sequence.generate_mutations(
+                scaled_mutation_rate, seed)
+        else:
+            self._ll_tree_sequence.generate_mutations(
+                scaled_mutation_rate, seed,
+                recombination_map.get_ll_recombination_map())
 
     def set_mutations(self, mutations):
         """
@@ -1128,6 +1138,9 @@ class RecombinationMap(object):
     def __init__(self, positions, rates):
         self._ll_recombination_map = _msprime.RecombinationMap(
             positions, rates)
+
+    def get_ll_recombination_map(self):
+        return self._ll_recombination_map
 
     def physical_to_genetic(self, physical_x):
         return self._ll_recombination_map.physical_to_genetic(physical_x)
