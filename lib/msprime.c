@@ -1679,6 +1679,7 @@ msp_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
 
     search.left = l;
     node1 = avl_search(&self->overlap_counts, &search);
+    assert(node1 != NULL);
     if (node1->prev != NULL) {
         node1 = node1->prev;
     }
