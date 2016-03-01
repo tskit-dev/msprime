@@ -461,7 +461,6 @@ void newick_converter_print_state(newick_converter_t *self);
 int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);
 size_t hapgen_get_num_segregating_sites(hapgen_t *self);
-int hapget_get_locations(hapgen_t *self, double *);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
 
@@ -485,4 +484,5 @@ void mutgen_print_state(mutgen_t *self);
 
 int msp_encode_environment(char **destination);
 const char * msp_strerror(int err);
+
 #endif /*__MSPRIME_H__*/
