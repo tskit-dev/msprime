@@ -714,8 +714,8 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         void *source;
     };
     struct _hdf5_field_write fields[] = {
-        {"/trees/left", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
-        {"/trees/right", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
+        {"/trees/left", H5T_IEEE_F32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
+        {"/trees/right", H5T_IEEE_F32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/node", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/children", H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, 0, NULL},
         {"/trees/time", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},

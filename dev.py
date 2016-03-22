@@ -166,6 +166,21 @@ def simulations():
             print("\t", node, pos, recomb_map.genetic_to_physical(pos / m),
                     sep="\t")
 
+def convert_hdf5():
+    in_filename = "tmp__NOBACKUP__/mutations.hdf5"
+    out_filename = "tmp__NOBACKUP__/mutations_double_coords.hdf5"
+    import h5py
+    infile = h5py.File(in_filename, "r")
+    outfile = h5py.File(out_filename, "w")
+    # print(root)
+    # g = root["trees"]
+    # fields = [
+    #     ("left", uint32, 1), ("right", uint32, 1),
+    #     ("node", uint32, 1), ("children", uint32, 2),
+    #     ("time", float64, 1)]
+    #         self.assertEqual(g[name].shape[0], ts.get_num_records())
+
+
 if __name__ == "__main__":
     # mutations()
 
@@ -174,4 +189,5 @@ if __name__ == "__main__":
     # )
     # plot_1kg_map()
 
-    simulations()
+    #simulations()
+    convert_hdf5()
