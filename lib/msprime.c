@@ -803,6 +803,7 @@ msp_free(msp_t *self)
     if (self->configuration_json != NULL) {
         free(self->configuration_json);
     }
+    ret = 0;
     return ret;
 }
 
