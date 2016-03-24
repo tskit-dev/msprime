@@ -500,7 +500,7 @@ int vcf_converter_alloc(vcf_converter_t *self,
 int vcf_converter_get_header(vcf_converter_t *self, char **header);
 int vcf_converter_next(vcf_converter_t *self, char **record);
 int vcf_converter_free(vcf_converter_t *self);
-void vcf_converter_print_state(vcf_converter_t *self);
+void vcf_converter_print_state(vcf_converter_t *self, FILE *out);
 
 int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);

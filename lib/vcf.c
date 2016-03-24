@@ -25,16 +25,16 @@
 #include "msprime.h"
 
 void
-vcf_converter_print_state(vcf_converter_t *self)
+vcf_converter_print_state(vcf_converter_t *self, FILE* out)
 {
-    printf("VCF converter state\n");
-    printf("ploidy = %d\n", self->ploidy);
-    printf("sample_size = %d\n", self->sample_size);
-    printf("num_vcf_samples = %d\n", self->num_vcf_samples);
-    printf("header = %d bytes\n", (int) strlen(self->header));
-    printf("genotypes = %d bytes: %s", (int) self->genotypes_size,
+    fprintf(out, "VCF converter state\n");
+    fprintf(out, "ploidy = %d\n", self->ploidy);
+    fprintf(out, "sample_size = %d\n", self->sample_size);
+    fprintf(out, "num_vcf_samples = %d\n", self->num_vcf_samples);
+    fprintf(out, "header = %d bytes\n", (int) strlen(self->header));
+    fprintf(out, "genotypes = %d bytes: %s", (int) self->genotypes_size,
             self->genotypes);
-    printf("record = %d bytes\n", (int) self->record_size);
+    fprintf(out, "record = %d bytes\n", (int) self->record_size);
 }
 
 static int WARN_UNUSED
