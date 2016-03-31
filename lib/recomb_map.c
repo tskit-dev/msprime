@@ -176,7 +176,7 @@ recomb_map_get_interval_index(recomb_map_t *self, double x)
 
 int
 recomb_map_generate_interval_mutations(recomb_map_t *self, mutgen_t *mutgen,
-        uint32_t node, uint32_t left, uint32_t right, double branch_length)
+        uint32_t node, double left, double right, double branch_length)
 {
     int ret = -1;
     double mu, position;

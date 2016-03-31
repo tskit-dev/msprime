@@ -414,7 +414,7 @@ out:
 }
 
 int
-newick_converter_next(newick_converter_t *self, uint32_t *length, char **tree)
+newick_converter_next(newick_converter_t *self, double *length, char **tree)
 {
     int ret = -1;
     int err;

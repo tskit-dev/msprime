@@ -64,8 +64,8 @@ The order of the records is arbitrary, and should not be relied on.
 ===============     ==============      =====
 Path                Type                Dim
 ===============     ==============      =====
-/trees/left         H5T_STD_U32LE       N
-/trees/right        H5T_STD_U32LE       N
+/trees/left         H5T_IEEE_F64LE      N
+/trees/right        H5T_IEEE_F64LE      N
 /trees/node         H5T_STD_U32LE       N
 /trees/time         H5T_IEEE_F64LE      N
 /trees/children     H5T_STD_U32LE       (N, 2)

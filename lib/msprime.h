@@ -37,7 +37,7 @@
 #define MSP_SKIP_H5CLOSE 2
 
 #define MSP_FILE_FORMAT_VERSION_MAJOR 0
-#define MSP_FILE_FORMAT_VERSION_MINOR 1
+#define MSP_FILE_FORMAT_VERSION_MINOR 2
 
 #define MSP_ORDER_TIME 0
 #define MSP_ORDER_LEFT 1
@@ -53,6 +53,7 @@
 
 typedef struct segment_t_t {
     uint8_t population_id;
+    /* During simulation we use genetic coordinates */
     uint32_t left;
     uint32_t right;
     uint32_t value;
@@ -62,8 +63,10 @@ typedef struct segment_t_t {
 } segment_t;
 
 typedef struct {
-    uint32_t left;
-    uint32_t right;
+    /* After simulation, all coordinates are converted to physical coordinates 
+     * using a genetic map */
+    double left;
+    double right;
     uint32_t node;
     double time;
     uint32_t children[2];
@@ -190,10 +193,10 @@ typedef struct {
     uint32_t sample_size;
     uint32_t num_loci;
     struct {
-        uint32_t *left;
-        uint32_t *right;
-        uint32_t *node;
+        double *left;
+        double *right;
         double *time;
+        uint32_t *node;
         uint32_t *children;
         uint32_t *insertion_order;
         uint32_t *removal_order;
@@ -233,7 +236,7 @@ typedef struct {
     uint32_t num_loci;
     size_t num_nodes;
     size_t num_records;
-    uint32_t tree_left;
+    double tree_left;
     tree_sequence_t *tree_sequence;
     size_t insertion_index;
     size_t removal_index;
@@ -245,8 +248,8 @@ typedef struct {
     uint32_t sample_size;
     size_t num_nodes;
     uint32_t root;
-    uint32_t left;
-    uint32_t right;
+    double left;
+    double right;
     uint32_t *parent;
     uint32_t *children;
     double *time;
@@ -415,7 +418,7 @@ int tree_sequence_set_mutations(tree_sequence_t *self,
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
         tree_sequence_t *tree_sequence);
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
-int tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
+int tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
         node_record_t **nodes_out, node_record_t **nodes_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
 
@@ -441,19 +444,7 @@ void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
 
 int newick_converter_alloc(newick_converter_t *self, 
         tree_sequence_t *tree_sequence, size_t precision);
-int newick_converter_next(newick_converter_t *self, uint32_t *length, 
-        char **tree);
-int newick_converter_free(newick_converter_t *self);
-
-int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
-        tree_sequence_t *tree_sequence, sparse_tree_t *tree);
-int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
-int sparse_tree_iterator_next(sparse_tree_iterator_t *self);
-void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
-
-int newick_converter_alloc(newick_converter_t *self, 
-        tree_sequence_t *tree_sequence, size_t precision);
-int newick_converter_next(newick_converter_t *self, uint32_t *length, 
+int newick_converter_next(newick_converter_t *self, double *length, 
         char **tree);
 int newick_converter_free(newick_converter_t *self);
 void newick_converter_print_state(newick_converter_t *self);
@@ -472,7 +463,7 @@ double recomb_map_genetic_to_phys(recomb_map_t *self, double x);
 double recomb_map_phys_to_genetic(recomb_map_t *self, double x);
 void recomb_map_print_state(recomb_map_t *self);
 int recomb_map_generate_interval_mutations(recomb_map_t *self, mutgen_t *mutgen,
-        uint32_t node, uint32_t left, uint32_t right, double branch_length);
+        uint32_t node, double left, double right, double branch_length);
 
 int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence, 
         recomb_map_t *recomb_map, double mutation_rate,

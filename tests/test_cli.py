@@ -1109,8 +1109,8 @@ class TestMspConversionOutput(unittest.TestCase):
         self.assertEqual(len(records), len(output_records))
         for (l, r, u, c, t), line in zip(records, output_records):
             splits = line.split()
-            self.assertEqual(l, int(splits[0]))
-            self.assertEqual(r, int(splits[1]))
+            self.assertEqual(l, float(splits[0]))
+            self.assertEqual(r, float(splits[1]))
             self.assertEqual(u, int(splits[2]))
             self.assertEqual(c[0], int(splits[3]))
             self.assertEqual(c[1], int(splits[4]))

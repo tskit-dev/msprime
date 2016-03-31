@@ -29,7 +29,7 @@
 
 
 typedef struct {
-    uint32_t value;
+    double value;
     uint32_t index;
     double time;
 } index_sort_t;
@@ -73,10 +73,10 @@ tree_sequence_print_state(tree_sequence_t *self)
     printf("\tparameters = '%s'\n", self->trees.parameters);
     printf("\tenvironment = '%s'\n", self->trees.environment);
     for (j = 0; j < self->num_records; j++) {
-        printf("\t%d\t%d\t%d\t%d\t%d\t%d\t%f\t|\t%d\t%d\n",
+        printf("\t%d\t%f\t%f\t%d\t%d\t%d\t%f\t|\t%d\t%d\n",
                 (int) j,
-                (int) self->trees.left[j],
-                (int) self->trees.right[j],
+                self->trees.left[j],
+                self->trees.right[j],
                 (int) self->trees.node[j],
                 (int) self->trees.children[2 * j],
                 (int) self->trees.children[2 * j + 1],
@@ -102,8 +102,8 @@ tree_sequence_alloc(tree_sequence_t *self)
 {
     int ret = MSP_ERR_NO_MEMORY;
 
-    self->trees.left = malloc(self->num_records * sizeof(uint32_t));
-    self->trees.right = malloc(self->num_records * sizeof(uint32_t));
+    self->trees.left = malloc(self->num_records * sizeof(double));
+    self->trees.right = malloc(self->num_records * sizeof(double));
     self->trees.children = malloc(2 * self->num_records * sizeof(uint32_t));
     self->trees.node = malloc(self->num_records * sizeof(uint32_t));
     self->trees.time = malloc(self->num_records * sizeof(double));
@@ -514,8 +514,8 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         void *dest;
     };
     struct _hdf5_field_read fields[] = {
-        {"/trees/left", H5T_NATIVE_UINT32, 0, NULL},
-        {"/trees/right", H5T_NATIVE_UINT32, 0, NULL},
+        {"/trees/left", H5T_NATIVE_DOUBLE, 0, NULL},
+        {"/trees/right", H5T_NATIVE_DOUBLE, 0, NULL},
         {"/trees/node", H5T_NATIVE_UINT32, 0, NULL},
         {"/trees/children", H5T_NATIVE_UINT32, 0, NULL},
         {"/trees/time", H5T_NATIVE_DOUBLE, 0, NULL},
@@ -714,8 +714,8 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         void *source;
     };
     struct _hdf5_field_write fields[] = {
-        {"/trees/left", H5T_IEEE_F32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
-        {"/trees/right", H5T_IEEE_F32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
+        {"/trees/left", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
+        {"/trees/right", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
         {"/trees/node", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/children", H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, 0, NULL},
         {"/trees/time", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
@@ -1255,16 +1255,16 @@ tree_diff_iterator_print_state(tree_diff_iterator_t *self)
     printf("num_records = %d\n", (int) self->num_records);
     printf("insertion_index = %d\n", (int) self->insertion_index);
     printf("removal_index = %d\n", (int) self->removal_index);
-    printf("tree_left = %d\n", (int) self->tree_left);
+    printf("tree_left = %f\n", self->tree_left);
 }
 
 int
-tree_diff_iterator_next(tree_diff_iterator_t *self, uint32_t *length,
+tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
         node_record_t **nodes_out, node_record_t **nodes_in)
 {
     int ret = 0;
     uint32_t k;
-    uint32_t last_left = self->tree_left;
+    double last_left = self->tree_left;
     size_t next_node_record = 0;
     tree_sequence_t *s = self->tree_sequence;
     node_record_t *out_head = NULL;
@@ -1679,8 +1679,8 @@ sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
     printf("mutation_index = %d\n", (int) self->mutation_index);
     printf("num_records = %d\n", (int) self->num_records);
     printf("tree.flags = %d\n", self->tree->flags);
-    printf("tree.left = %d\n", self->tree->left);
-    printf("tree.right = %d\n", self->tree->right);
+    printf("tree.left = %f\n", self->tree->left);
+    printf("tree.right = %f\n", self->tree->right);
     printf("tree.root = %d\n", self->tree->root);
     printf("tree.index = %d\n", self->tree->index);
     for (j = 0; j < self->tree->num_nodes + 1; j++) {

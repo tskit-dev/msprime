@@ -484,7 +484,7 @@ print_newick_trees(tree_sequence_t *ts)
 {
     int ret = 0;
     newick_converter_t *nc = calloc(1, sizeof(newick_converter_t));
-    uint32_t length;
+    double length;
     char *tree;
 
     printf("converting newick trees\n");
@@ -497,7 +497,7 @@ print_newick_trees(tree_sequence_t *ts)
         goto out;
     }
     while ((ret = newick_converter_next(nc, &length, &tree)) == 1) {
-        printf("Tree: %d: %s\n", length, tree);
+        printf("Tree: %f: %s\n", length, tree);
     }
     if (ret != 0) {
         goto out;
@@ -518,7 +518,8 @@ print_tree_sequence(tree_sequence_t *ts)
     int ret = 0;
     size_t j;
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
-    uint32_t length, mrca;
+    uint32_t mrca;
+    double length;
     sparse_tree_t tree;
     node_record_t *records_in, *records_out, *record;
     coalescence_record_t cr;
@@ -535,7 +536,7 @@ print_tree_sequence(tree_sequence_t *ts)
         if (tree_sequence_get_record(ts, j, &cr, MSP_ORDER_TIME) != 0) {
             fatal_error("tree sequence out of bounds\n");
         }
-        printf("\t%d\t%d\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
+        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
                 cr.children[1], cr.node, cr.time);
     }
     ret = tree_diff_iterator_alloc(iter, ts);
@@ -547,7 +548,7 @@ print_tree_sequence(tree_sequence_t *ts)
     while ((ret = tree_diff_iterator_next(
                     iter, &length, &records_out, &records_in)) == 1) {
         tree_diff_iterator_print_state(iter);
-        printf("New tree: %d\n", length);
+        printf("New tree: %f\n", length);
         printf("Nodes In:\n");
         record = records_in;
         while (record != NULL) {
@@ -583,7 +584,7 @@ print_tree_sequence(tree_sequence_t *ts)
     }
     printf("Sparse trees:\n");
     while ((ret = sparse_tree_iterator_next(sparse_iter)) == 1) {
-        printf("New tree: %d (%d)\n", tree.right - tree.left,
+        printf("New tree: %f (%d)\n", tree.right - tree.left,
                 (int) tree.num_nodes);
         sparse_tree_iterator_print_state(sparse_iter);
         /* print some mrcas */
@@ -674,6 +675,7 @@ run_simulate(char *conf_file)
     }
     tree_sequence_print_state(tree_seq);
     print_haplotypes(tree_seq);
+    print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
         int j;
         for (j = 0; j < 1; j++) {
@@ -692,7 +694,6 @@ run_simulate(char *conf_file)
         print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);
         tree_sequence_print_state(tree_seq);
-        print_newick_trees(tree_seq);
         tree_sequence_print_state(tree_seq);
     }
 out:

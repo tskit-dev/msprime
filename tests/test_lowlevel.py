@@ -1536,7 +1536,7 @@ class TestTreeSequence(LowLevelTestCase):
         # Check the basic root attributes
         format_version = root.attrs['format_version']
         self.assertEqual(format_version[0], 0)
-        self.assertEqual(format_version[1], 1)
+        self.assertEqual(format_version[1], 2)
         self.assertEqual(root.attrs["sample_size"], ts.get_sample_size())
         self.assertEqual(root.attrs["num_loci"], ts.get_num_loci())
         if ts.get_num_mutations() > 0:
@@ -1554,7 +1554,7 @@ class TestTreeSequence(LowLevelTestCase):
         self.verify_tree_parameters_json(g.attrs["parameters"])
         self.verify_environment_json(g.attrs["environment"])
         fields = [
-            ("left", uint32, 1), ("right", uint32, 1),
+            ("left", float64, 1), ("right", float64, 1),
             ("node", uint32, 1), ("children", uint32, 2),
             ("time", float64, 1)]
         self.assertEqual(set(g.keys()), set([name for name, _, _ in fields]))
@@ -1830,7 +1830,7 @@ class TestNewickConverter(LowLevelTestCase):
         self.assertEqual(before, after)
         # make sure the basic form of the output is correct.
         for length, tree in before:
-            self.assertIsInstance(length, int)
+            self.assertIsInstance(length, float)
             self.assertIsInstance(tree, str)
 
     def test_iterator(self):

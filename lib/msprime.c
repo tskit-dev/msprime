@@ -1079,7 +1079,7 @@ msp_print_state(msp_t *self)
     printf("Coalescence records = %ld\n", (long) self->num_coalescence_records);
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
-        printf("\t%d\t%d\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
+        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
                 cr->children[1], cr->node, cr->time);
     }
     printf("Memory heaps\n");

@@ -106,10 +106,10 @@ handle_input_error(int err)
 static PyObject *
 convert_coalescence_record(coalescence_record_t *cr)
 {
-    return Py_BuildValue("III(II)d",
-            (unsigned int) cr->left, (unsigned int) cr->right,
-            (unsigned int) cr->node, (unsigned int) cr->children[0],
-            (unsigned int) cr->children[1], cr->time);
+    return Py_BuildValue("ddI(II)d",
+            cr->left, cr->right, (unsigned int) cr->node,
+            (unsigned int) cr->children[0], (unsigned int) cr->children[1],
+            cr->time);
 }
 
 /*
@@ -986,7 +986,8 @@ Simulator_individual_to_python(Simulator *self, segment_t *ind)
     u = ind;
     j = 0;
     while (u != NULL) {
-        t = Py_BuildValue("(I,I,I,I)", u->left, u->right, u->value, u->population_id);
+        t = Py_BuildValue("(I,I,I,I)", u->left, u->right, u->value,
+                u->population_id);
         if (t == NULL) {
             Py_DECREF(l);
             goto out;
@@ -2325,7 +2326,7 @@ SparseTree_get_left(SparseTree *self)
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->left);
+    ret = Py_BuildValue("d", self->sparse_tree->left);
 out:
     return ret;
 }
@@ -2338,7 +2339,7 @@ SparseTree_get_right(SparseTree *self)
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->right);
+    ret = Py_BuildValue("d", self->sparse_tree->right);
 out:
     return ret;
 }
@@ -2692,7 +2693,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
     PyObject *in_list = NULL;
     PyObject *value = NULL;
     int err;
-    uint32_t length;
+    double length;
     size_t list_size, j;
     node_record_t *records_out, *records_in, *record;
 
@@ -3155,7 +3156,7 @@ static PyObject *
 NewickConverter_next(NewickConverter  *self)
 {
     PyObject *ret = NULL;
-    uint32_t length;
+    double length;
     char *tree;
     int err;
 
@@ -3168,7 +3169,7 @@ NewickConverter_next(NewickConverter  *self)
         goto out;
     }
     if (err == 1) {
-        ret = Py_BuildValue("Is", (unsigned int) length, tree);
+        ret = Py_BuildValue("ds", length, tree);
     }
 out:
     return ret;
