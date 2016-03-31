@@ -44,6 +44,12 @@ from msprime import __version__ as _library_version
 # below for more discussion on this)
 enable_h5py_tests = True
 
+def uniform_recombination_map():
+    """
+    Returns a uniform recombination map that genetic locations to the
+    range 0 to scale.
+    """
+    return _msprime.RecombinationMap([0, 1])
 
 def get_population_configuration(
         sample_size=0, growth_rate=0.0, initial_size=1.0):
@@ -1415,8 +1421,8 @@ class TestTreeSequence(LowLevelTestCase):
             sim2.run()
             t1 = _msprime.TreeSequence()
             t2 = _msprime.TreeSequence()
-            t1.create(sim1)
-            t2.create(sim1)
+            t1.create(sim1, get_simple_recomb_map(sim.get_num_loci()))
+            t2.create(sim1, get_simple_recomb_map(sim.get_num_loci()))
             self.assertEqual(t1.get_num_records(), t2.get_num_records())
             r1 = [t1.get_record(j) for j in range(t1.get_num_records())]
             r2 = [t2.get_record(j) for j in range(t2.get_num_records())]
@@ -1697,19 +1703,6 @@ class TestTreeSequence(LowLevelTestCase):
             params = json.loads(json_str)
             self.assertEqual(params["scaled_mutation_rate"], 10.0)
             self.assertEqual(params["random_seed"], 2)
-
-    def test_mutations_simple_recomb_map(self):
-        mu = 2.0
-        seed = 1
-        recomb_map = _msprime.RecombinationMap(
-            positions=[0, 1], rates=[1, 0])
-        for ts in self.get_example_tree_sequences():
-            ts.generate_mutations(mu, random_seed=seed)
-            self.verify_mutations(ts)
-            m1 = ts.get_mutations()
-            ts.generate_mutations(mu, seed, recomb_map)
-            m2 = ts.get_mutations()
-            self.assertEqual(m1, m2)
 
     def test_mutation_persistence(self):
         ts = self.get_tree_sequence(mutation_rate=0.0)

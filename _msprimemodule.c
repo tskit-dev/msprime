@@ -1647,12 +1647,15 @@ TreeSequence_create(TreeSequence *self, PyObject *args)
     int err;
     PyObject *ret = NULL;
     Simulator *sim = NULL;
+    RecombinationMap *recomb_map = NULL;
 
     if (self->tree_sequence != NULL) {
         PyErr_SetString(PyExc_ValueError, "tree_sequence already created");
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "O!", &SimulatorType, &sim)) {
+    if (!PyArg_ParseTuple(args, "O!O!",
+                &SimulatorType, &sim,
+                &RecombinationMapType, &recomb_map)) {
         goto out;
     }
     if (Simulator_check_sim(sim) != 0) {
@@ -1662,13 +1665,17 @@ TreeSequence_create(TreeSequence *self, PyObject *args)
         PyErr_SetString(PyExc_ValueError, "Simulation not completed");
         goto out;
     }
+    if (RecombinationMap_check_recomb_map(recomb_map) != 0) {
+        goto out;
+    }
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
     if (self->tree_sequence == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
-    err = tree_sequence_create(self->tree_sequence, sim->sim);
+    err = tree_sequence_create(self->tree_sequence, sim->sim,
+            recomb_map->recomb_map);
     if (err != 0) {
         PyMem_Free(self->tree_sequence);
         self->tree_sequence = NULL;
@@ -1770,53 +1777,24 @@ TreeSequence_generate_mutations(TreeSequence *self,
 {
     int err;
     PyObject *ret = NULL;
-    static char *kwlist[] = {
-        "mutation_rate", "random_seed", "recombination_map", NULL};
+    static char *kwlist[] = {"mutation_rate", "random_seed", NULL};
+    mutgen_t *mutgen = NULL;
     double mutation_rate;
     unsigned long random_seed;
-    RecombinationMap *py_recomb_map = NULL;
-    /* These are used if the recombination map is not provided */
-    recomb_map_t *recomb_map = NULL;
-    mutgen_t *mutgen = NULL;
-    double positions[] = {0.0, 1.0};
-    double rates[] = {1.0, 0.0};
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dk|O!", kwlist,
-            &mutation_rate, &random_seed,
-            &RecombinationMapType, &py_recomb_map)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dk", kwlist,
+            &mutation_rate, &random_seed)) {
         goto out;
-    }
-    if (py_recomb_map == NULL) {
-        /* If we don't provide a recombination map create one that'll
-         * result in uniform mapping between genetic and physical
-         * coordinates.
-         */
-        recomb_map = PyMem_Malloc(sizeof(recomb_map_t));
-        if (recomb_map == NULL) {
-            PyErr_NoMemory();
-            goto out;
-        }
-        err = recomb_map_alloc(recomb_map, positions, rates, 2);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    } else {
-        if (RecombinationMap_check_recomb_map(py_recomb_map) != 0) {
-            goto out;
-        }
-        recomb_map = py_recomb_map->recomb_map;
     }
     mutgen = PyMem_Malloc(sizeof(mutgen_t));
     if (mutgen == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = mutgen_alloc(mutgen, self->tree_sequence, recomb_map,
-            mutation_rate, random_seed);
+    err = mutgen_alloc(mutgen, self->tree_sequence, mutation_rate, random_seed);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1834,15 +1812,6 @@ TreeSequence_generate_mutations(TreeSequence *self,
     }
     ret = Py_BuildValue("");
 out:
-    if (py_recomb_map == NULL) {
-        /* We only free this recomb_map if we created one locally as the
-         * default.
-         */
-        if (recomb_map != NULL) {
-            recomb_map_free(recomb_map);
-            PyMem_Free(recomb_map);
-        }
-    }
     if (mutgen != NULL) {
         mutgen_free(mutgen);
         PyMem_Free(mutgen);

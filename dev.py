@@ -180,6 +180,13 @@ def convert_hdf5():
     #     ("time", float64, 1)]
     #         self.assertEqual(g[name].shape[0], ts.get_num_records())
 
+def read_1kg_map():
+    infile = "tmp__NOBACKUP__/genetic_map_b36/genetic_map_chr1_b36.txt.gz"
+    # infile = "genetic_map_chr22_b36.txt"
+    infile = "tmp__NOBACKUP__/genetic_map_GRCh37_chr1.txt"
+    recomb_map = msprime.RecombinationMap.read_hapmap(infile)
+    print(recomb_map.get_total_recombination_rate())
+
 
 if __name__ == "__main__":
     # mutations()
@@ -188,6 +195,8 @@ if __name__ == "__main__":
     #     [(10, 0.1), (11, 1), (20, 0.1), (21, 1), (30, 0.1)]
     # )
     # plot_1kg_map()
+
+    read_1kg_map()
 
     #simulations()
     convert_hdf5()

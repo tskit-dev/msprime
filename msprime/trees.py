@@ -22,6 +22,7 @@ Module responsible to generating and reading tree files.
 from __future__ import division
 from __future__ import print_function
 
+import gzip
 import json
 import math
 import random
@@ -1138,6 +1139,39 @@ class RecombinationMap(object):
     def __init__(self, positions, rates):
         self._ll_recombination_map = _msprime.RecombinationMap(
             positions, rates)
+
+    @classmethod
+    def read_hapmap(cls, filename):
+        """
+        Parses the specified file in HapMap format.
+        """
+        positions = []
+        rates = []
+        if filename.endswith(".gz"):
+            f = gzip.open(filename)
+        else:
+            f = open(filename)
+        try:
+            # Skip the header line
+            f.readline()
+            for j, line in enumerate(f):
+                pos, rate, morgans = map(float, line.split()[1:])
+                if j == 0:
+                    assert morgans == 0
+                    if pos != 0:
+                        positions.append(0)
+                        rates.append(0)
+                positions.append(pos)
+                # Rate is expressed in centimorgans per megabase, which
+                # we convert to per-base rates
+                rates.append(rate * 1e-8)
+            assert rate == 0
+        finally:
+            f.close()
+        # TEMP to rescaled to 0 - 1
+        for j in range(len(positions)):
+            positions[j] /= positions[-1]
+        return cls(positions, rates)
 
     def get_ll_recombination_map(self):
         return self._ll_recombination_map
