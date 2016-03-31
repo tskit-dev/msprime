@@ -216,8 +216,26 @@ out:
     return ret;
 }
 
+static int
+tree_sequence_remap_coordinates(tree_sequence_t *self,
+        recomb_map_t *recomb_map)
+{
+    int ret = 0;
+    double m = self->num_loci;
+    uint32_t j;
+
+    for (j = 0; j < self->num_records; j++) {
+        self->trees.left[j] = recomb_map_genetic_to_phys(recomb_map,
+                self->trees.left[j] / m);
+        self->trees.right[j] = recomb_map_genetic_to_phys(recomb_map,
+                self->trees.right[j] / m);
+    }
+    return ret;
+}
+
 int
-tree_sequence_create(tree_sequence_t *self, msp_t *sim)
+tree_sequence_create(tree_sequence_t *self, msp_t *sim,
+        recomb_map_t *recomb_map)
 {
     int ret = -1;
     uint32_t j;
@@ -253,6 +271,10 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim)
         self->trees.time[j] = records[j].time;
     }
     ret = tree_sequence_make_indexes(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_remap_coordinates(self, recomb_map);
     if (ret != 0) {
         goto out;
     }

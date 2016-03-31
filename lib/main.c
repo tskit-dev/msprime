@@ -651,18 +651,17 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-
-    /* Create the tree_sequence from the state of the simulator. */
-    ret = tree_sequence_create(tree_seq, msp);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutgen_alloc(mutgen, tree_seq, recomb_map,
-            mutation_params.mutation_rate, mutation_params.random_seed);
-    if (ret != 0) {
-        goto out;
-    }
     recomb_map_print_state(recomb_map);
+    /* Create the tree_sequence from the state of the simulator. */
+    ret = tree_sequence_create(tree_seq, msp, recomb_map);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate,
+            mutation_params.random_seed);
+    if (ret != 0) {
+        goto out;
+    }
     ret = mutgen_generate(mutgen);
     if (ret != 0) {
         goto out;

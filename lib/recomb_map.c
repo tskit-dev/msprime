@@ -21,7 +21,6 @@
 #include <assert.h>
 
 #include <gsl/gsl_math.h>
-#include <gsl/gsl_randist.h>
 
 #include "err.h"
 #include "msprime.h"
@@ -155,68 +154,5 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double x)
         ret = last_phys_x - (s - genetic_x) / rate;
         assert(ret >= 0 && ret <= 1.0);
     }
-    return ret;
-}
-
-/*
- * Returns the index of the interval in which the specified genetic
- * coordinate (unit scaled) lies.
- */
-static size_t
-recomb_map_get_interval_index(recomb_map_t *self, double x)
-{
-    size_t j = 0;
-
-    assert(x >= 0 && x <= 1);
-    while (j < self->size - 1 && self->positions[j + 1] < x) {
-        j++;
-    }
-    return j;
-}
-
-int
-recomb_map_generate_interval_mutations(recomb_map_t *self, mutgen_t *mutgen,
-        uint32_t node, double left, double right, double branch_length)
-{
-    int ret = -1;
-    double mu, position;
-    double mutation_rate = mutgen->mutation_rate / self->total_mass;
-    double num_loci = mutgen->num_loci;
-    unsigned int branch_mutations, l;
-    double genetic_left = left / num_loci;
-    double genetic_right = right / num_loci;
-    double interval_left, interval_right, phys_distance, phys_left, phys_right,
-           phys_position;
-    size_t index = recomb_map_get_interval_index(self, genetic_left);
-
-    interval_right = genetic_left;
-    while (interval_right != genetic_right) {
-        index++;
-        assert(index < self->size);
-        interval_left = interval_right;
-        interval_right = gsl_min(genetic_right, self->positions[index]);
-
-        phys_left = recomb_map_genetic_to_phys(self, interval_left);
-        phys_right = recomb_map_genetic_to_phys(self, interval_right);
-        phys_distance = phys_right - phys_left;
-
-        mu = branch_length * phys_distance * mutation_rate * num_loci;
-        branch_mutations = gsl_ran_poisson(mutgen->rng, mu);
-        for (l = 0; l < branch_mutations; l++) {
-            phys_position = gsl_ran_flat(mutgen->rng, phys_left, phys_right);
-
-            position = recomb_map_phys_to_genetic(self, phys_position);
-            assert(interval_left <= position && position < interval_right);
-            /* rescale back into num_loci space */
-            position *= num_loci;
-            assert(left <= position && position < right);
-            ret = mutgen_add_mutation(mutgen, node, position);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-    }
-    ret = 0;
-out:
     return ret;
 }

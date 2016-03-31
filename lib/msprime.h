@@ -319,7 +319,6 @@ typedef struct {
     double mutation_rate;
     uint32_t num_loci;
     tree_sequence_t *tree_sequence;
-    recomb_map_t *recomb_map;
     double *times;
     size_t num_mutations;
     size_t max_num_mutations;
@@ -390,7 +389,8 @@ size_t msp_get_num_recombination_events(msp_t *self);
 char *msp_get_configuration_json(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self);
-int tree_sequence_create(tree_sequence_t *self, msp_t *sim);
+int tree_sequence_create(tree_sequence_t *self, msp_t *sim,
+        recomb_map_t *recomb_map);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
@@ -462,15 +462,11 @@ double recomb_map_get_total_recombination_rate(recomb_map_t *self);
 double recomb_map_genetic_to_phys(recomb_map_t *self, double x);
 double recomb_map_phys_to_genetic(recomb_map_t *self, double x);
 void recomb_map_print_state(recomb_map_t *self);
-int recomb_map_generate_interval_mutations(recomb_map_t *self, mutgen_t *mutgen,
-        uint32_t node, double left, double right, double branch_length);
 
 int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence, 
-        recomb_map_t *recomb_map, double mutation_rate,
-        unsigned long random_seed);
+        double mutation_rate, unsigned long random_seed);
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self);
-int mutgen_add_mutation(mutgen_t *self, uint32_t node, double position);
 void mutgen_print_state(mutgen_t *self);
 
 int msp_encode_environment(char **destination);

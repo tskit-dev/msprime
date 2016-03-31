@@ -21,6 +21,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include <gsl/gsl_randist.h>
+
 #include "err.h"
 #include "msprime.h"
 
@@ -84,19 +86,16 @@ out:
 
 int
 mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
-        recomb_map_t *recomb_map, double mutation_rate,
-        unsigned long random_seed)
+        double mutation_rate, unsigned long random_seed)
 {
     int ret = MSP_ERR_NO_MEMORY;
 
     assert(tree_sequence != NULL);
-    assert(recomb_map != NULL);
     memset(self, 0, sizeof(mutgen_t));
     self->random_seed = random_seed;
     self->mutation_rate = mutation_rate;
     self->tree_sequence = tree_sequence;
     self->num_loci = tree_sequence_get_num_loci(tree_sequence);
-    self->recomb_map = recomb_map;
     self->rng = gsl_rng_alloc(gsl_rng_default);
     if (self->rng == NULL) {
         goto out;
@@ -147,7 +146,7 @@ mutgen_free(mutgen_t *self)
     return 0;
 }
 
-int WARN_UNUSED
+static int WARN_UNUSED
 mutgen_add_mutation(mutgen_t *self, uint32_t node, double position)
 {
     int ret = 0;
@@ -176,22 +175,24 @@ static int WARN_UNUSED
 mutgen_generate_record_mutations(mutgen_t *self, coalescence_record_t *cr)
 {
     int ret = -1;
-    size_t k;
-    double branch_length;
+    size_t k, l, branch_mutations;
+    double branch_length, position, mu;
+    double distance = cr->right - cr->left;
     uint32_t child;
 
     self->times[cr->node] = cr->time;
     for (k = 0; k < 2; k++) {
         child = cr->children[k];
         branch_length = cr->time - self->times[child];
-        /* We hand over to the recombination map to generate the
-         * actual mutations as we need to rescale to physicaly coordinates
-         * and back to get positions of mutations.
-         */
-        ret = recomb_map_generate_interval_mutations(self->recomb_map, self,
-                child, cr->left, cr->right, branch_length);
-        if (ret != 0) {
-            goto out;
+        mu = branch_length * distance * self->mutation_rate;
+        branch_mutations = gsl_ran_poisson(self->rng, mu);
+        for (l = 0; l < branch_mutations; l++) {
+            position = gsl_ran_flat(self->rng, cr->left, cr->right);
+            assert(cr->left <= position && position < cr->right);
+            ret = mutgen_add_mutation(self, cr->node, position);
+            if (ret != 0) {
+                goto out;
+            }
         }
     }
     ret = 0;
