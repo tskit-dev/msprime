@@ -1,3 +1,16 @@
+********************
+[0.1.9] - 2016-04-01
+********************
+
+Bugfix release. Fixes serious issue affecting random seeds in mspms.
+
+https://github.com/jeromekelleher/msprime/issues/6
+
+All users of mspms should update immediately and any analyses using
+the ``-seeds`` option in mspms should be repeated.
+
+Many thanks to Derek Setter for identifying the issue.
+
 
 ********************
 [0.1.8] - 2016-02-17
