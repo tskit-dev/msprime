@@ -23,6 +23,7 @@ from __future__ import print_function
 from __future__ import division
 
 import io
+import itertools
 import os
 import random
 import sys
@@ -69,22 +70,50 @@ class TestRandomSeeds(unittest.TestCase):
     """
     Test the random seed generation for the ms compatability layer.
     """
-    def test_within_range(self):
+    def test_seed_conversion(self):
         num_random_tests = 100
-        max_seed = 2**16 - 1
-        generated_seeds = {}
-        for j in range(num_random_tests):
-            seeds = [random.randint(1, max_seed) for k in range(3)]
-            python_seed, ms_seeds = cli.get_seeds(seeds)
-            self.assertEqual(ms_seeds, seeds)
-            self.assertGreater(python_seed, 0)
-            generated_seeds[tuple(seeds)] = python_seed
-            # Make sure it's deterministic
-            python_seed2, ms_seeds2 = cli.get_seeds(seeds)
-            self.assertEqual(ms_seeds, ms_seeds2)
-            self.assertEqual(python_seed, python_seed2)
-        self.assertEqual(
-            len(generated_seeds), len(set(generated_seeds.keys())))
+        for max_seed in [1024, 2**16 - 1, 2**32 - 1]:
+            input_seeds = set()
+            python_seeds = set()
+            values = set()
+            for j in range(num_random_tests):
+                input_seed = tuple(
+                    [random.randint(1, max_seed) for k in range(3)])
+                python_seed = cli.get_single_seed(input_seed)
+                self.assertNotIn(input_seed, input_seeds)
+                self.assertNotIn(python_seed, python_seeds)
+                input_seeds.add(input_seed)
+                python_seeds.add(python_seed)
+                self.assertGreater(python_seed, 0)
+                # Make sure it's deterministic
+                python_seed2 = cli.get_single_seed(input_seed)
+                self.assertEqual(python_seed, python_seed2)
+                # Make sure it results in a distinct first draw.
+                rng = random.Random()
+                rng.seed(python_seed)
+                u = rng.random()
+                self.assertNotIn(u, values)
+                values.add(u)
+            self.assertEqual(len(values), num_random_tests)
+            self.assertEqual(len(python_seeds), num_random_tests)
+            self.assertEqual(len(input_seeds), num_random_tests)
+
+    def test_seed_generation(self):
+        num_random_tests = 100
+        seeds = set()
+        for _ in range(num_random_tests):
+            s = tuple(cli.generate_seeds())
+            self.assertEqual(len(set(s)), 3)
+            self.assertNotIn(s, seeds)
+            seeds.add(s)
+        self.assertEqual(len(seeds), num_random_tests)
+
+    def test_seed_conversion_order(self):
+        seeds = set()
+        for p in itertools.permutations([1, 2, 3]):
+            s = cli.get_single_seed(p)
+            self.assertNotIn(s, seeds)
+            seeds.add(s)
 
 
 class TestMspmsRoundTrip(unittest.TestCase):
@@ -895,6 +924,28 @@ class TestMspmsOutput(unittest.TestCase):
         # We've already tested the output pretty thoroughly above so a
         # simple test is fine here.
         self.assertEqual(len(stdout.splitlines()), 5)
+
+    def test_seed_equivalence(self):
+        sample_size = 10
+        mutation_rate = 10
+        # Run without seeds to get automatically generated seeds
+        sr = cli.SimulationRunner(
+            sample_size=sample_size, mutation_rate=mutation_rate)
+        with tempfile.TemporaryFile("w+") as f:
+            sr.run(f)
+            f.seek(0)
+            output1 = f.read()
+        # Get the seeds
+        seeds = list(map(int, output1.splitlines()[1].split()))
+        # Run with the same seeds to get the same output.
+        sr = cli.SimulationRunner(
+            sample_size=sample_size, mutation_rate=mutation_rate,
+            random_seeds=seeds)
+        with tempfile.TemporaryFile("w+") as f:
+            sr.run(f)
+            f.seek(0)
+            output2 = f.read()
+        self.assertEqual(output1, output2)
 
 
 class TestMspArgumentParser(unittest.TestCase):
