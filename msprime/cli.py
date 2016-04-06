@@ -23,10 +23,10 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import hashlib
 import os
 import random
 import signal
-import struct
 import sys
 
 import msprime
@@ -87,22 +87,27 @@ def add_max_memory_argument(parser):
             "exit with error status. Supports K,M and G suffixes"))
 
 
-def get_seeds(random_seeds):
+def generate_seeds():
     """
-    Takes the specified command line seeds and truncates them to 16
-    bits if necessary. Then convert them to a single value that can
-    be used to seed the python random number generator, and return
-    both values.
+    Generate seeds to seed the RNG and output on the command line.
     """
-    max_seed = 2**16 - 1
-    if random_seeds is None:
-        seeds = [random.randint(1, max_seed) for j in range(3)]
-    else:
-        # Follow ms behaviour and truncate back to shorts
-        seeds = [s if s < max_seed else max_seed for s in random_seeds]
-    # Combine the together to get a 64 bit number
-    seed = struct.unpack(">Q", struct.pack(">HHHH", 0, *seeds))[0]
-    return seed, seeds
+    # Pull three numbers from the SystemRandom generator
+    rng = random.SystemRandom()
+    return [rng.randint(0, 2**31) for _ in range(3)]
+
+
+def get_single_seed(seeds):
+    """
+    Takes the specified command line seeds convert them to a single value
+    that can be used to seed the python random number generator.
+    """
+    assert len(seeds) == 3
+    m = hashlib.md5()
+    for s in seeds:
+        # Colon separate the values to ensure that we don't have
+        # collisions in situations like 1:23:45, 12:3:45.
+        m.update("{}:".format(s).encode())
+    return int(m.hexdigest(), 16)
 
 
 class SimulationRunner(object):
@@ -132,9 +137,12 @@ class SimulationRunner(object):
         self._precision = precision
         self._print_trees = print_trees
         # sort out the random seeds
-        python_seed, ms_seeds = get_seeds(random_seeds)
-        self._ms_random_seeds = ms_seeds
+        ms_seeds = random_seeds
+        if random_seeds is None:
+            ms_seeds = generate_seeds()
+        python_seed = get_single_seed(ms_seeds)
         random.seed(python_seed)
+        self._ms_random_seeds = ms_seeds
 
     def get_num_replicates(self):
         """
