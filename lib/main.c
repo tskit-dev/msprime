@@ -313,6 +313,7 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     int int_tmp;
     char *str;
     const char *str_tmp;
+    double rho;
     config_t *config = malloc(sizeof(config_t));
 
     if (config == NULL) {
@@ -398,8 +399,9 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = msp_set_scaled_recombination_rate(msp, (double) msp_get_num_loci(msp)
-        * recomb_map_get_total_recombination_rate(recomb_map));
+    rho = recomb_map_get_total_recombination_rate(recomb_map) /
+        (double) msp_get_num_loci(msp);
+    ret = msp_set_scaled_recombination_rate(msp, rho);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }

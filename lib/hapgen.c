@@ -118,7 +118,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(hapgen_t));
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
-    self->num_loci = tree_sequence_get_num_loci(tree_sequence);
+    self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->tree_sequence = tree_sequence;
 

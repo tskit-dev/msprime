@@ -37,7 +37,7 @@
 #define MSP_SKIP_H5CLOSE 2
 
 #define MSP_FILE_FORMAT_VERSION_MAJOR 0
-#define MSP_FILE_FORMAT_VERSION_MINOR 2
+#define MSP_FILE_FORMAT_VERSION_MINOR 3
 
 #define MSP_ORDER_TIME 0
 #define MSP_ORDER_LEFT 1
@@ -187,11 +187,10 @@ typedef struct {
     double *rates;
 } recomb_map_t;
 
-
 /* Tree sequences */
 typedef struct {
     uint32_t sample_size;
-    uint32_t num_loci;
+    double sequence_length;
     struct {
         double *left;
         double *right;
@@ -233,7 +232,7 @@ typedef struct leaf_list_node {
 
 typedef struct {
     uint32_t sample_size;
-    uint32_t num_loci;
+    double sequence_length;
     size_t num_nodes;
     size_t num_records;
     double tree_left;
@@ -273,7 +272,7 @@ typedef struct {
 
 typedef struct {
     uint32_t sample_size;
-    uint32_t num_loci;
+    double sequence_length;
     size_t num_nodes;
     size_t num_records;
     tree_sequence_t *tree_sequence;
@@ -294,7 +293,7 @@ typedef struct newick_tree_node {
 
 typedef struct {
     uint32_t sample_size;
-    uint32_t num_loci;
+    double sequence_length;
     size_t precision;
     newick_tree_node_t *root;
     tree_diff_iterator_t diff_iterator;
@@ -304,7 +303,7 @@ typedef struct {
 
 typedef struct {
     uint32_t sample_size;
-    uint32_t num_loci;
+    double sequence_length;
     size_t num_mutations;
     tree_sequence_t *tree_sequence;
     /* the haplotype binary matrix */
@@ -317,7 +316,7 @@ typedef struct {
 
 typedef struct {
     double mutation_rate;
-    uint32_t num_loci;
+    double sequence_length;
     tree_sequence_t *tree_sequence;
     double *times;
     size_t num_mutations;
@@ -399,7 +398,7 @@ size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
-uint32_t tree_sequence_get_num_loci(tree_sequence_t *self);
+double tree_sequence_get_sequence_length(tree_sequence_t *self);
 
 int tree_sequence_get_record(tree_sequence_t *self, size_t index, 
         coalescence_record_t *record, int order);
@@ -455,9 +454,10 @@ size_t hapgen_get_num_segregating_sites(hapgen_t *self);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
 
-int recomb_map_alloc(recomb_map_t *self, double *coordinates, double *rates,
+int recomb_map_alloc(recomb_map_t *self, double *positions, double *rates, 
         size_t size);
 int recomb_map_free(recomb_map_t *self);
+double recomb_map_get_sequence_length(recomb_map_t *self);
 double recomb_map_get_total_recombination_rate(recomb_map_t *self);
 double recomb_map_genetic_to_phys(recomb_map_t *self, double x);
 double recomb_map_phys_to_genetic(recomb_map_t *self, double x);

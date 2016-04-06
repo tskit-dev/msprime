@@ -68,7 +68,7 @@ tree_sequence_print_state(tree_sequence_t *self)
 
     printf("tree_sequence state\n");
     printf("sample_size = %d\n", self->sample_size);
-    printf("num_loci = %d\n", self->num_loci);
+    printf("sequence_length = %f\n", self->sequence_length);
     printf("trees = (%d records)\n", (int) self->num_records);
     printf("\tparameters = '%s'\n", self->trees.parameters);
     printf("\tenvironment = '%s'\n", self->trees.environment);
@@ -217,18 +217,18 @@ out:
 }
 
 static int
-tree_sequence_remap_coordinates(tree_sequence_t *self,
+tree_sequence_remap_coordinates(tree_sequence_t *self, uint32_t num_loci,
         recomb_map_t *recomb_map)
 {
     int ret = 0;
-    double m = self->num_loci;
+    double m = num_loci;
     uint32_t j;
 
     for (j = 0; j < self->num_records; j++) {
-        self->trees.left[j] = recomb_map_genetic_to_phys(recomb_map,
-                self->trees.left[j] / m);
-        self->trees.right[j] = recomb_map_genetic_to_phys(recomb_map,
-                self->trees.right[j] / m);
+        self->trees.left[j] = recomb_map_genetic_to_phys(
+            recomb_map, self->trees.left[j] / m);
+        self->trees.right[j] = recomb_map_genetic_to_phys(
+            recomb_map, self->trees.right[j] / m);
     }
     return ret;
 }
@@ -246,7 +246,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     self->num_records = msp_get_num_coalescence_records(sim);
     assert(self->num_records > 0);
     self->sample_size = sim->sample_size;
-    self->num_loci = sim->num_loci;
+    self->sequence_length = recomb_map_get_sequence_length(recomb_map);
     self->num_mutations = 0;
     ret = tree_sequence_alloc(self);
     if (ret != 0) {
@@ -263,8 +263,8 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     for (j = 0; j < self->num_records; j++) {
         self->trees.left[j] = records[j].left;
         self->trees.right[j] = records[j].right;
-        assert(self->trees.left[j] <= self->num_loci);
-        assert(self->trees.right[j] <= self->num_loci);
+        assert(self->trees.left[j] <= sim->num_loci);
+        assert(self->trees.right[j] <= sim->num_loci);
         self->trees.node[j] = records[j].node;
         self->trees.children[2 * j] = records[j].children[0];
         self->trees.children[2 * j + 1] = records[j].children[1];
@@ -274,7 +274,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_remap_coordinates(self, recomb_map);
+    ret = tree_sequence_remap_coordinates(self, sim->num_loci, recomb_map);
     if (ret != 0) {
         goto out;
     }
@@ -316,14 +316,14 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     struct _hdf5_metadata_read fields[] = {
         {"/", "format_version", H5T_NATIVE_UINT32, 2, NULL},
         {"/", "sample_size", H5T_NATIVE_UINT32, 0, NULL},
-        {"/", "num_loci", H5T_NATIVE_UINT32, 0, NULL},
+        {"/", "sequence_length", H5T_NATIVE_DOUBLE, 0, NULL},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_read);
     size_t j;
 
     fields[0].dest = version;
     fields[1].dest = &self->sample_size;
-    fields[2].dest = &self->num_loci;
+    fields[2].dest = &self->sequence_length;
     for (j = 0; j < num_fields; j++) {
         attr_id = H5Aopen_by_name(file_id, fields[j].prefix, fields[j].name,
                 H5P_DEFAULT, H5P_DEFAULT);
@@ -355,7 +355,7 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
                 goto out;
             }
         }
-        status = H5Aread(attr_id, H5T_NATIVE_UINT32, fields[j].dest);
+        status = H5Aread(attr_id, fields[j].memory_type, fields[j].dest);
         if (status < 0) {
             goto out;
         }
@@ -954,7 +954,7 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     struct _hdf5_metadata_write fields[] = {
         {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, NULL},
         {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 0, NULL},
-        {"num_loci", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 0, NULL},
+        {"sequence_length", 0, H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 0, NULL},
     };
     /* TODO random_seed, population_models, etc. */
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_write);
@@ -962,7 +962,7 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
 
     fields[0].source = version;
     fields[1].source = &self->sample_size;
-    fields[2].source = &self->num_loci;
+    fields[2].source = &self->sequence_length;
 
     for (j = 0; j < num_fields; j++) {
         if (fields[j].size == 0) {
@@ -1036,10 +1036,10 @@ out:
     return ret;
 }
 
-uint32_t
-tree_sequence_get_num_loci(tree_sequence_t *self)
+double
+tree_sequence_get_sequence_length(tree_sequence_t *self)
 {
-    return self->num_loci;
+    return self->sequence_length;
 }
 
 uint32_t
@@ -1187,7 +1187,7 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
         for (j = 0; j < num_mutations; j++) {
             mutation_ptrs[j] = mutations + j;
             if (mutations[j].position < 0
-                    || mutations[j].position > self->num_loci
+                    || mutations[j].position > self->sequence_length
                     || mutations[j].node == 0
                     || mutations[j].node > self->num_nodes) {
                 ret = MSP_ERR_BAD_MUTATION;

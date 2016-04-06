@@ -31,6 +31,8 @@ recomb_map_print_state(recomb_map_t *self)
     size_t j;
 
     printf("recombination_map:: size = %d\n", (int) self->size);
+    printf("\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
+    printf("\ttotal_rate = %f\n", recomb_map_get_total_recombination_rate(self));
     printf("\tindex\tlocation\trate\n");
     for (j = 0; j < self->size; j++) {
         printf("\t%d\t%f\t%f\n", (int) j, self->positions[j], self->rates[j]);
@@ -57,14 +59,11 @@ recomb_map_alloc(recomb_map_t *self, double *positions, double *rates,
     }
     self->total_mass = 0.0;
     self->size = size;
-    if (positions[0] != 0.0 || positions[self->size -1] != 1.0) {
+    if (positions[0] != 0.0) {
         goto out;
     }
     for (j = 0; j < size; j++) {
-        if (rates[j] < 0) {
-            goto out;
-        }
-        if (positions[j] < 0 || positions[j] > 1.0) {
+        if (rates[j] < 0 || positions[j] < 0) {
             goto out;
         }
         if (j > 0) {
@@ -95,12 +94,23 @@ recomb_map_free(recomb_map_t *self)
     return 0;
 }
 
+/* Returns the total recombination rate along the entire sequence.
+ */
 double
 recomb_map_get_total_recombination_rate(recomb_map_t *self)
 {
     return self->total_mass;
 }
 
+double
+recomb_map_get_sequence_length(recomb_map_t *self)
+{
+    return self->positions[self->size - 1];
+}
+
+/* Remaps the specified genetic coordinate in the range {0, 1} to
+ * the physical coordinate space in the range (0, sequence_length)
+ */
 double
 recomb_map_phys_to_genetic(recomb_map_t *self, double x)
 {
@@ -152,7 +162,7 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double x)
             last_phys_x = phys_x;
         }
         ret = last_phys_x - (s - genetic_x) / rate;
-        assert(ret >= 0 && ret <= 1.0);
+        assert(ret >= 0 && ret <= self->positions[self->size - 1]);
     }
     return ret;
 }

@@ -445,11 +445,10 @@ newick_converter_alloc(newick_converter_t *self,
 {
     int ret = -1;
     uint32_t j;
-    uint32_t n = tree_sequence->sample_size;
     avl_node_t *avl_node;
 
-    self->sample_size = tree_sequence->sample_size;
-    self->num_loci = tree_sequence->num_loci;
+    self->sample_size = tree_sequence_get_sample_size(tree_sequence);
+    self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->precision = precision;
     memset(&self->diff_iterator, 0, sizeof(tree_diff_iterator_t));
     ret = tree_diff_iterator_alloc(&self->diff_iterator, tree_sequence);
@@ -457,13 +456,14 @@ newick_converter_alloc(newick_converter_t *self,
         goto out;
     }
     ret = object_heap_init(&self->avl_node_heap,
-            sizeof(avl_node_t) + sizeof(newick_tree_node_t), 3 * n, NULL);
+            sizeof(avl_node_t) + sizeof(newick_tree_node_t),
+            3 * self->sample_size, NULL);
     if (ret != 0) {
         goto out;
     }
     avl_init_tree(&self->tree, cmp_newick_tree_node, NULL);
     /* Add in the leaf nodes */
-    for (j = 1; j <= n; j++) {
+    for (j = 1; j <= self->sample_size; j++) {
         avl_node = newick_converter_alloc_avl_node(self, j, 0.0);
         if (avl_node == NULL) {
             ret = MSP_ERR_NO_MEMORY;
