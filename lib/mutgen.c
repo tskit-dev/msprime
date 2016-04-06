@@ -189,7 +189,7 @@ mutgen_generate_record_mutations(mutgen_t *self, coalescence_record_t *cr)
         for (l = 0; l < branch_mutations; l++) {
             position = gsl_ran_flat(self->rng, cr->left, cr->right);
             assert(cr->left <= position && position < cr->right);
-            ret = mutgen_add_mutation(self, cr->node, position);
+            ret = mutgen_add_mutation(self, child, position);
             if (ret != 0) {
                 goto out;
             }
