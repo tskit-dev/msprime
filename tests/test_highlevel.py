@@ -122,8 +122,7 @@ class TestMsCommandLine(tests.MsprimeTestCase):
             for r in [0.125, 1.0, 10]:
                 rho = r * (m - 1)
                 sim = msprime.TreeSimulator(10)
-                sim.set_num_loci(m)
-                sim.set_scaled_recombination_rate(r)
+                sim.set_uniform_recombination_map(r, m)
                 args = sim.get_ms_command_line()
                 self.assertEqual(args[-3], "-r")
                 self.assertEqual(args[-2], str(rho))
@@ -134,8 +133,7 @@ class TestMsCommandLine(tests.MsprimeTestCase):
             for u in [0.125, 1.0, 10]:
                 mu = u * m
                 sim = msprime.TreeSimulator(10)
-                sim.set_scaled_recombination_rate(1.0)
-                sim.set_num_loci(m)
+                sim.set_uniform_recombination_map(1, m)
                 args = sim.get_ms_command_line(scaled_mutation_rate=u)
                 self.assertEqual(args[-2], "-t")
                 self.assertEqual(args[-1], str(mu))
@@ -258,10 +256,10 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertEqual(l, length)
             self.assertGreaterEqual(l, 0)
             self.assertGreater(r, l)
-            self.assertLessEqual(r, ts.get_num_loci())
+            self.assertLessEqual(r, ts.get_sequence_length())
             length += r - l
             self.verify_sparse_tree(st1)
-        self.assertEqual(length, ts.get_num_loci())
+        self.assertEqual(length, ts.get_sequence_length())
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
 
@@ -447,9 +445,8 @@ class TestTreeSimulator(HighLevelTestCase):
         sim = msprime.TreeSimulator(n)
         # TODO verify all the setters.
         self.assertEqual(sim.get_sample_size(), n)
-        sim.set_scaled_recombination_rate(r)
+        self.set_uniform_recombination_map(r, m)
         self.assertEqual(sim.get_scaled_recombination_rate(), r)
-        sim.set_num_loci(m)
         self.assertEqual(sim.get_num_loci(), m)
         seed = 1
         sim.set_random_seed(seed)
@@ -512,11 +509,11 @@ class TestTreeSimulator(HighLevelTestCase):
         for bad_type in ["xd", None, [], 4.4]:
             self.assertRaises(TypeError, msprime.TreeSimulator, bad_type)
             self.assertRaises(TypeError, sim.set_num_loci, bad_type)
+            self.assertRaises(TypeError, sim.set_recombination_map, bad_type)
         for bad_value in [-1, 0, 2**32]:
             self.assertRaises(ValueError, msprime.TreeSimulator, bad_value)
             self.assertRaises(ValueError, sim.set_num_loci, bad_value)
         self.assertRaises(ValueError, msprime.TreeSimulator, 1)
-        self.assertRaises(ValueError, sim.set_scaled_recombination_rate, -1)
 
 
 class TestHaplotypeGenerator(HighLevelTestCase):
@@ -548,8 +545,7 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         Verifies a simulation for the specified parameters.
         """
         ts = msprime.TreeSimulator(n)
-        ts.set_scaled_recombination_rate(r)
-        ts.set_num_loci(m)
+        ts.set_uniform_recombination_map(r, m)
         ts.run()
         tree_sequence = ts.get_tree_sequence()
         tree_sequence.generate_mutations(theta)
@@ -604,7 +600,7 @@ class TestNewickConversion(HighLevelTestCase):
         the all_breakpoints option for newick generation.
         """
         trees = list(tree_sequence.newick_trees(2, breakpoints))
-        bp = [0] + breakpoints + [tree_sequence.get_num_loci()]
+        bp = [0] + breakpoints + [tree_sequence.get_sequence_length()]
         self.assertEqual(len(trees), len(bp) - 1)
         j = 0
         s = 0
@@ -613,7 +609,7 @@ class TestNewickConversion(HighLevelTestCase):
             self.assertEqual(s, bp[j])
             s += length
             j += 1
-        self.assertEqual(s, tree_sequence.get_num_loci())
+        self.assertEqual(s, tree_sequence.get_sequence_length())
         pts = tests.PythonTreeSequence(
             tree_sequence.get_ll_tree_sequence(), bp)
         diffs = list(pts.diffs(all_breaks=True))
@@ -637,8 +633,7 @@ class TestNewickConversion(HighLevelTestCase):
         for n, m, r in cases:
             ts = msprime.TreeSimulator(n)
             ts.set_random_seed(1)
-            ts.set_scaled_recombination_rate(r)
-            ts.set_num_loci(m)
+            ts.set_uniform_recombination_map(r, m)
             ts.run()
             tree_sequence = ts.get_tree_sequence()
             breakpoints = ts.get_breakpoints()
@@ -652,8 +647,7 @@ class TestNewickConversion(HighLevelTestCase):
             m = random.randint(10, 1000)
             r = random.random()
             ts = msprime.TreeSimulator(n)
-            ts.set_scaled_recombination_rate(r)
-            ts.set_num_loci(m)
+            ts.set_uniform_recombination_map(r, m)
             ts.run()
             tree_sequence = ts.get_tree_sequence()
             breakpoints = ts.get_breakpoints()
@@ -667,31 +661,14 @@ class TestTreeSequence(HighLevelTestCase):
     """
     def get_example_tree_sequences(self):
         for n in [2, 3, 10, 100]:
-            for m in [1, 2, 10, 100]:
+            for m in [1, 2, 64, 128]:
                 for rho in [0, 0.1, 10]:
+                    print(n, m , rho)
                     yield msprime.simulate(n, m, rho)
 
     def test_sparse_trees(self):
         for ts in self.get_example_tree_sequences():
             self.verify_sparse_trees(ts)
-
-    def test_no_recombination_map(self):
-        seed = 1
-        all_zero = True
-        for ts in self.get_example_tree_sequences():
-            mu = 100 / ts.get_num_loci()
-            ts.generate_mutations(mu, seed)
-            if ts.get_num_mutations() > 0:
-                all_zero = False
-                self.verify_mutations(ts)
-            m1 = list(ts.mutations())
-            positions = [0, 1]
-            rates = [1, 0]
-            rm = msprime.RecombinationMap(positions, rates)
-            ts.generate_mutations(mu, seed, rm)
-            m2 = list(ts.mutations())
-            self.assertEqual(m1, m2)
-        self.assertFalse(all_zero)
 
     def test_mutations(self):
         all_zero = True
@@ -702,7 +679,7 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(st.get_num_mutations(), 0)
             # choose a mutation rate that hopefully guarantees mutations,
             # but not too many.
-            mu = 100 / ts.get_num_loci()
+            mu = 100 / ts.get_sequence_length()
             ts.generate_mutations(mu)
             if ts.get_num_mutations() > 0:
                 all_zero = False
@@ -721,6 +698,9 @@ class TestTreeSequence(HighLevelTestCase):
         iter2 = pts.diffs()
         for t1, t2 in zip(iter1, iter2):
             self.assertEqual(t1, t2)
+            # if t1 != t2:
+            #     print("ERROR")
+            #     print(t1, t2)
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
 
@@ -908,16 +888,12 @@ class TestRecombinationMap(unittest.TestCase):
         other_rm = tests.PythonRecombinationMap(positions, rates)
         self.assertEqual(0.0, rm.get_total_recombination_rate())
         self.assertEqual(0.0, other_rm.get_total_recombination_rate())
-        self.assertEqual(rm.genetic_to_physical(0), 0)
-        self.assertEqual(other_rm.genetic_to_physical(0), 0)
-        # We should raise an error when trying to convert non-zero genetic
-        # coordinates.
-        self.assertRaises(ValueError, other_rm.genetic_to_physical, 0.1)
-        self.assertRaises(ValueError, rm.genetic_to_physical, 0.1)
-        # All physical coordinates map to a genetic coordinate of 0.
-        for x in [0, 0.5, 1]:
-            self.assertEqual(other_rm.physical_to_genetic(x), 0)
-            self.assertEqual(rm.physical_to_genetic(x), 0)
+        # All values should map directly to themselves.
+        for x in [0, 0.24, 0.33, 0.99, 1]:
+            self.assertEqual(rm.genetic_to_physical(x), x)
+            self.assertEqual(other_rm.genetic_to_physical(x), x)
+            self.assertEqual(other_rm.physical_to_genetic(x), x)
+            self.assertEqual(rm.physical_to_genetic(x), x)
 
     def test_simple_examples(self):
         rm = msprime.RecombinationMap([0, 0.9, 1], [2, 1, 0])

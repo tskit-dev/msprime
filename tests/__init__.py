@@ -236,6 +236,8 @@ class PythonRecombinationMap(object):
         return effective_rate
 
     def physical_to_genetic(self, x):
+        if self.get_total_recombination_rate() == 0:
+            return x
         s = 0
         last_phys_x = 0
         j = 1
@@ -253,14 +255,10 @@ class PythonRecombinationMap(object):
         return ret
 
     def genetic_to_physical(self, v):
+        if self.get_total_recombination_rate() == 0:
+            return v
         # v is expressed in the unit range. Rescale it back into the range
         # (0, total_mass).
-        if self.get_total_recombination_rate() == 0:
-            if v == 0:
-                return 0
-            raise ValueError(
-                "Cannot have non-zero genetic coordinate with 0 "
-                "recombination rate")
         u = v * self.get_total_recombination_rate()
         s = 0
         last_phys_x = 0

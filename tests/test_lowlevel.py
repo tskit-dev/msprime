@@ -2279,7 +2279,12 @@ class TestRecombinationMap(LowLevelTestCase):
         self.assertEqual(rm.get_total_recombination_rate(), 7.5)
 
     def test_zero_rate(self):
-        # An overall total rate of zero should raise an error.
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap,
-            [0, 10], [0.0, 0])
+        m = 10
+        rm = _msprime.RecombinationMap([0, m], [0, 0])
+        self.assertEqual(rm.get_total_recombination_rate(), 0)
+        self.assertEqual(rm.genetic_to_physical(0), 0)
+        for j in range(m + 1):
+            # There is an annoying problem here where the coordinates are not
+            # quite mapped exactly back into the correct values. This is a
+            # pretty remote corner case, so let's not worry about it for now.
+            self.assertAlmostEqual(rm.genetic_to_physical(j / m), j)

@@ -466,8 +466,7 @@ def simulate(
     :rtype: :class:`.TreeSequence`
     """
     sim = TreeSimulator(sample_size)
-    sim.set_num_loci(num_loci)
-    sim.set_scaled_recombination_rate(scaled_recombination_rate)
+    sim.set_uniform_recombination_map(scaled_recombination_rate, num_loci)
     sim.set_random_seed(random_seed)
     sim.set_max_memory(max_memory)
     # Reinterpret the population models in terms of the new interface.
@@ -558,8 +557,9 @@ class TreeSimulator(object):
         if sample_size >= 2**32:
             raise ValueError("sample_size must be < 2**32")
         self._sample_size = sample_size
-        self._scaled_recombination_rate = 0.0
-        self._num_loci = 1
+        self._recombination_map = None
+        self._effective_population_size = None
+        self._num_loci = None
         self._migration_matrix = None
         self._population_configurations = None
         self._demographic_events = []
@@ -574,8 +574,11 @@ class TreeSimulator(object):
     def get_sample_size(self):
         return self._sample_size
 
-    def get_scaled_recombination_rate(self):
-        return self._scaled_recombination_rate
+    def get_recombinatation_map(self):
+        return self._recombination_map
+
+    def get_effective_population_size(self):
+        return self._effective_population_size
 
     def get_migration_matrix(self):
         return self._migration_matrix
@@ -661,6 +664,14 @@ class TreeSimulator(object):
     def get_configuration(self):
         return json.loads(self._ll_sim.get_configuration_json())
 
+    def set_effective_population_size(self, effective_population_size):
+        self._effective_population_size = effective_population_size
+
+    def set_recombination_map(self, recombination_map):
+        if not isinstance(recombination_map, RecombinationMap):
+            raise TypeError("RecombinationMap instance required")
+        self._recombination_map = recombination_map
+
     def set_num_loci(self, num_loci):
         if not isinstance(num_loci, int):
             raise TypeError("num_loci must be an integer")
@@ -670,10 +681,14 @@ class TreeSimulator(object):
             raise ValueError("num_loci must be < 2**32")
         self._num_loci = num_loci
 
-    def set_scaled_recombination_rate(self, scaled_recombination_rate):
-        if scaled_recombination_rate < 0:
-            raise ValueError("Recombination rate cannot be negative")
-        self._scaled_recombination_rate = scaled_recombination_rate
+    def set_uniform_recombination_map(self, recombination_rate, num_loci):
+        """
+        Creates a uniform recombination map for the specified per-base
+        recombination rate and number of loci.
+        """
+        self.set_num_loci(num_loci)
+        self._recombination_map = RecombinationMap(
+            [0, num_loci], [recombination_rate, 0])
 
     def set_migration_matrix(self, migration_matrix):
         self._migration_matrix = migration_matrix
@@ -724,7 +739,6 @@ class TreeSimulator(object):
         """
         # Set the block sizes using our estimates.
         n = self._sample_size
-        m = self._num_loci
         if self._population_configurations is None:
             self._population_configurations = [PopulationConfiguration(n)]
         N = len(self._population_configurations)
@@ -733,7 +747,16 @@ class TreeSimulator(object):
                 [0.0 for j in range(N)] for k in range(N)]
         if self._demographic_events is None:
             self._demographic_events = []
-        rho = 4 * self._scaled_recombination_rate * (m - 1)
+
+        if self._effective_population_size is None:
+            self._effective_population_size = 1
+        if self._recombination_map is None:
+            # No recombination map means a single-locus simulation.
+            self._recombination_map = RecombinationMap([0, 1], [1, 0])
+            self._num_loci = 1
+
+        m = self._num_loci
+        rho = 4 * self.get_scaled_recombination_rate()
         num_trees = min(m // 2, rho * harmonic_number(n - 1))
         b = 10  # Baseline maximum
         num_trees = max(b, int(num_trees))
@@ -755,6 +778,18 @@ class TreeSimulator(object):
             self._random_seed = random.randint(0, 2**31 - 1)
         if self._max_memory is None:
             self._max_memory = sys.maxsize  # Unlimited
+
+    def get_scaled_recombination_rate(self):
+        """
+        Returns the per-locus scaled recombination rate Ne r.
+        """
+        m = self._num_loci
+        total_rate = self._recombination_map.get_total_recombination_rate()
+        Ne = self._effective_population_size
+        if m == 1:
+            return 0
+        else:
+            return Ne * total_rate / (m - 1)
 
     def run(self):
         """
@@ -780,7 +815,7 @@ class TreeSimulator(object):
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
-            scaled_recombination_rate=self._scaled_recombination_rate,
+            scaled_recombination_rate=self.get_scaled_recombination_rate(),
             random_seed=self._random_seed,
             max_memory=self._max_memory,
             segment_block_size=self._segment_block_size,
@@ -794,7 +829,8 @@ class TreeSimulator(object):
         Returns a TreeSequence representing the state of the simulation.
         """
         ll_tree_sequence = _msprime.TreeSequence()
-        ll_tree_sequence.create(self._ll_sim)
+        ll_recomb_map = self._recombination_map.get_ll_recombination_map()
+        ll_tree_sequence.create(self._ll_sim, ll_recomb_map)
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
@@ -877,7 +913,7 @@ class TreeSequence(object):
             j = 0
             # TODO this is ugly. Update the alg so we don't need this
             # bracketing.
-            bp = [0] + breakpoints + [self.get_num_loci()]
+            bp = [0] + breakpoints + [self.get_sequence_length()]
             for length, tree in iterator:
                 trees_covered += length
                 while bp[j] < trees_covered:
@@ -906,20 +942,19 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_sample_size()
 
-    def get_num_loci(self):
+    def get_sequence_length(self):
         """
-        Returns the number of loci in this tree sequence. This defined the
-        genomic scaler over which tree coordinates are defined. Given a
-        tree sequence with :math:`m` loci, the constituent trees will be
-        defined over the half-closed interval :math:`(0, m])`. Each tree
-        then covers some subset of this interval --- see
-        :meth:`msprime.SparseTree.get_interval` for details.
+        Returns the sequence length in this tree sequence. This defines the
+        genomic scale over which tree coordinates are defined. Given a
+        tree sequence with a sequence length :math:`L`, the constituent
+        trees will be defined over the half-closed interval
+        :math:`(0, L])`. Each tree then covers some subset of this
+        interval --- see :meth:`msprime.SparseTree.get_interval` for details.
 
-        :return: The number of discrete non-recombining loci in this tree
-            sequence.
-        :rtype: int
+        :return: The length of the sequence in this tree sequence in bases.
+        :rtype: float
         """
-        return self._ll_tree_sequence.get_num_loci()
+        return self._ll_tree_sequence.get_sequence_length()
 
     def get_num_records(self):
         """
@@ -1056,8 +1091,7 @@ class TreeSequence(object):
         return HaplotypeGenerator(self).haplotypes()
 
     def generate_mutations(
-            self, scaled_mutation_rate, random_seed=None,
-            recombination_map=None):
+            self, scaled_mutation_rate, random_seed=None):
         """
         Generates mutation according to the infinite sites model. This
         method over-writes any existing mutations stored in the tree
@@ -1073,13 +1107,9 @@ class TreeSequence(object):
         seed = random_seed
         if random_seed is None:
             seed = random.randint(0, 2**31)
-        if recombination_map is None:
-            self._ll_tree_sequence.generate_mutations(
-                scaled_mutation_rate, seed)
-        else:
-            self._ll_tree_sequence.generate_mutations(
-                scaled_mutation_rate, seed,
-                recombination_map.get_ll_recombination_map())
+        self._ll_tree_sequence.generate_mutations(
+            scaled_mutation_rate, seed)
+
 
     def set_mutations(self, mutations):
         """

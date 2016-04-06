@@ -1493,7 +1493,6 @@ RecombinationMap_genetic_to_physical(RecombinationMap *self, PyObject *args)
 {
     PyObject *ret = NULL;
     double genetic_x, physical_x;
-    double total_rate;
 
     if (RecombinationMap_check_recomb_map(self) != 0) {
         goto out;
@@ -1503,12 +1502,6 @@ RecombinationMap_genetic_to_physical(RecombinationMap *self, PyObject *args)
     }
     if (genetic_x < 0 || genetic_x > 1) {
         PyErr_SetString(PyExc_ValueError, "coordinates must be 0 <= x <= 1");
-        goto out;
-    }
-    total_rate = recomb_map_get_total_recombination_rate(self->recomb_map);
-    if (total_rate == 0.0 && genetic_x != 0.0) {
-        PyErr_SetString(PyExc_ValueError,
-            "Cannot convert non-zero genetic coordinate with total_rate = 0");
         goto out;
     }
     physical_x = recomb_map_genetic_to_phys(self->recomb_map, genetic_x);

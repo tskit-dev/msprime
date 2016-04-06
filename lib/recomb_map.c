@@ -77,9 +77,6 @@ recomb_map_alloc(recomb_map_t *self, double *positions, double *rates,
         self->rates[j] = rates[j];
         self->positions[j] = positions[j];
     }
-    if (self->total_mass == 0.0) {
-        goto out;
-    }
     ret = 0;
 out:
     return ret;
@@ -123,7 +120,9 @@ recomb_map_phys_to_genetic(recomb_map_t *self, double x)
     double rate = 1.0;
     double last_phys_x, phys_x;
 
-    if (self->total_mass > 0) {
+    if (self->total_mass == 0) {
+        ret = x;
+    } else {
         last_phys_x = 0;
         for (j = 1; j < self->size && x > self->positions[j]; j++) {
             phys_x = self->positions[j];
@@ -153,9 +152,7 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double x)
 
     assert(x >= 0 && x <= 1.0);
     if (self->total_mass == 0.0) {
-        if (x != 0.0) {
-            ret = GSL_NAN;
-        }
+        ret = x * self->positions[self->size - 1];
     } else {
         last_phys_x = 0;
         for (j = 1; j < self->size && s < genetic_x; j++) {
