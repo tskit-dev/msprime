@@ -691,6 +691,8 @@ run_simulate(char *conf_file)
                 goto out;
             }
         }
+
+    tree_sequence_print_state(tree_seq);
     if (0) {
         print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);

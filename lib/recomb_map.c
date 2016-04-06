@@ -77,6 +77,9 @@ recomb_map_alloc(recomb_map_t *self, double *positions, double *rates,
         self->rates[j] = rates[j];
         self->positions[j] = positions[j];
     }
+    if (self->total_mass == 0.0) {
+        goto out;
+    }
     ret = 0;
 out:
     return ret;

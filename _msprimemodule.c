@@ -1521,16 +1521,18 @@ static PyObject *
 RecombinationMap_physical_to_genetic(RecombinationMap *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    double genetic_x, physical_x;
+    double genetic_x, physical_x, sequence_length;
 
     if (RecombinationMap_check_recomb_map(self) != 0) {
         goto out;
     }
+    sequence_length = recomb_map_get_sequence_length(self->recomb_map);
     if (!PyArg_ParseTuple(args, "d", &physical_x)) {
         goto out;
     }
-    if (physical_x < 0 || physical_x > 1) {
-        PyErr_SetString(PyExc_ValueError, "coordinates must be 0 <= x <= 1");
+    if (physical_x < 0 || physical_x > sequence_length) {
+        PyErr_SetString(PyExc_ValueError,
+            "coordinates must be 0 <= x <= sequence_length");
         goto out;
     }
     genetic_x = recomb_map_phys_to_genetic(self->recomb_map, physical_x);
@@ -1962,16 +1964,15 @@ out:
 }
 
 static PyObject *
-TreeSequence_get_num_loci(TreeSequence  *self)
+TreeSequence_get_sequence_length(TreeSequence  *self)
 {
     PyObject *ret = NULL;
-    size_t num_loci;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    num_loci = tree_sequence_get_num_loci(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) num_loci);
+    ret = Py_BuildValue("d",
+        tree_sequence_get_sequence_length(self->tree_sequence));
 out:
     return ret;
 }
@@ -2077,9 +2078,9 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
         "Returns the record at the specified index."},
     {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
-            METH_NOARGS, "Returns the number of coalescence records." },
-    {"get_num_loci", (PyCFunction) TreeSequence_get_num_loci, METH_NOARGS,
-            "Returns the number of loci" },
+        METH_NOARGS, "Returns the number of coalescence records." },
+    {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
+        METH_NOARGS, "Returns the sequence length in bases." },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
             "Returns the number of loci" },
     {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
