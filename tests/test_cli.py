@@ -795,10 +795,9 @@ class TestMspmsOutput(unittest.TestCase):
         # TODO there is a problem here when we have a zero recombination
         # rate, as we can't convert between physical and genetic coords
         # in this case.
-        rm = msprime.RecombinationMap([0, 1], [recombination_rate, 0])
         sr = cli.SimulationRunner(
             sample_size=sample_size, num_loci=num_loci,
-            recombination_map=rm,
+            recombination_rate=recombination_rate,
             num_replicates=num_replicates, mutation_rate=mutation_rate,
             print_trees=print_trees, precision=precision,
             random_seeds=random_seeds)
@@ -878,7 +877,6 @@ class TestMspmsOutput(unittest.TestCase):
                         self.assertEqual(sequences_found, sample_size)
             self.assertEqual(num_replicates, num_replicates_found)
 
-    @unittest.skip("Zero recombination rates problem")
     def test_zero_recombination_rate(self):
         self.verify_output(
             sample_size=10, mutation_rate=1, num_loci=10,
@@ -1124,7 +1122,7 @@ class TestMspSimulateOutput(unittest.TestCase):
 
         tree_sequence = msprime.load(self._history_file)
         self.assertEqual(tree_sequence.get_sample_size(), sample_size)
-        self.assertEqual(tree_sequence.get_num_loci(), 1)
+        self.assertEqual(tree_sequence.get_sequence_length(), 1)
         self.assertEqual(tree_sequence.get_num_mutations(), 0)
 
     def test_simulate_short_args(self):
@@ -1133,7 +1131,7 @@ class TestMspSimulateOutput(unittest.TestCase):
             cmd, "100", self._history_file, "-m", "1e2", "-r", "5", "-u", "2"])
         tree_sequence = msprime.load(self._history_file)
         self.assertEqual(tree_sequence.get_sample_size(), 100)
-        self.assertEqual(tree_sequence.get_num_loci(), 100)
+        self.assertEqual(tree_sequence.get_sequence_length(), 100)
         self.assertGreater(tree_sequence.get_num_mutations(), 0)
 
 
@@ -1160,8 +1158,8 @@ class TestMspConversionOutput(unittest.TestCase):
         self.assertEqual(len(records), len(output_records))
         for (l, r, u, c, t), line in zip(records, output_records):
             splits = line.split()
-            self.assertEqual(l, float(splits[0]))
-            self.assertEqual(r, float(splits[1]))
+            self.assertEqual(str(l), splits[0])
+            self.assertEqual(str(r), splits[1])
             self.assertEqual(u, int(splits[2]))
             self.assertEqual(c[0], int(splits[3]))
             self.assertEqual(c[1], int(splits[4]))
@@ -1247,7 +1245,7 @@ class TestMspConversionOutput(unittest.TestCase):
         self.assertEqual(
             len(output), 2 + self._tree_sequence.get_num_mutations())
         n = self._tree_sequence.get_sample_size()
-        m = self._tree_sequence.get_num_loci()
+        m = self._tree_sequence.get_sequence_length()
         mutations = list(self._tree_sequence.mutations())
         haplotypes = list(self._tree_sequence.haplotypes())
         for site, line in enumerate(output[2:]):
