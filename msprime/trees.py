@@ -602,7 +602,13 @@ class TreeSimulator(object):
         return self._ll_sim.get_num_breakpoints()
 
     def get_breakpoints(self):
-        return self._ll_sim.get_breakpoints()
+        """
+        Returns the recombination breakpoints translated into physical
+        coordinates.
+        """
+        return [
+            self._recombination_map.genetic_to_physical(x)
+            for x in self._ll_sim.get_breakpoints()]
 
     def get_used_memory(self):
         return self._ll_sim.get_used_memory()

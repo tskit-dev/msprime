@@ -125,7 +125,7 @@ class TestMsCommandLine(tests.MsprimeTestCase):
                 sim.set_uniform_recombination_map(r, m)
                 args = sim.get_ms_command_line()
                 self.assertEqual(args[-3], "-r")
-                self.assertEqual(args[-2], str(rho))
+                self.assertEqual(float(args[-2]), float(str(rho)))
                 self.assertEqual(args[-1], str(m))
 
     def test_mutation(self):

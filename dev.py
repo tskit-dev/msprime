@@ -147,9 +147,9 @@ def plot_1kg_map():
 
 def simulations():
     n = 10
-    recomb_map = msprime.RecombinationMap(
-        [0, 0.5, 0.6, 0.7, 1], [0.1, 10, 0, 0.1, 0])
     m = 1000
+    recomb_map = msprime.RecombinationMap(
+        m, [0, 0.5, 0.6, 0.7, 1], [0.1, 10, 0, 0.1, 0])
     sim = msprime.TreeSimulator(n)
     sim.set_random_seed(1)
     sim.set_num_loci(m)
@@ -166,6 +166,8 @@ def simulations():
     for t in ts.trees():
         l, r = t.get_interval()
         # print(l, r)
+    for l, ns in ts.newick_trees():
+        print(l, ns)
     # ts.generate_mutations(2, 1)
     # for t in ts.trees():
     #     l, r = t.get_interval()
@@ -237,6 +239,6 @@ if __name__ == "__main__":
 
     # read_1kg_map()
 
-    # simulations()
+    simulations()
     # convert_hdf5()
-    map_stuff()
+    # map_stuff()
