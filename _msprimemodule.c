@@ -2718,7 +2718,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
             record = record->next;
             j++;
         }
-        ret = Py_BuildValue("IOO", (unsigned int) length, out_list, in_list);
+        ret = Py_BuildValue("dOO", length, out_list, in_list);
     }
 out:
     Py_XDECREF(out_list);

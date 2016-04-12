@@ -445,7 +445,7 @@ class TestTreeSimulator(HighLevelTestCase):
         sim = msprime.TreeSimulator(n)
         # TODO verify all the setters.
         self.assertEqual(sim.get_sample_size(), n)
-        self.set_uniform_recombination_map(r, m)
+        sim.set_uniform_recombination_map(r, m)
         self.assertEqual(sim.get_scaled_recombination_rate(), r)
         self.assertEqual(sim.get_num_loci(), m)
         seed = 1
@@ -663,7 +663,6 @@ class TestTreeSequence(HighLevelTestCase):
         for n in [2, 3, 10, 100]:
             for m in [1, 2, 64, 128]:
                 for rho in [0, 0.1, 10]:
-                    print(n, m , rho)
                     yield msprime.simulate(n, m, rho)
 
     def test_sparse_trees(self):
@@ -698,9 +697,6 @@ class TestTreeSequence(HighLevelTestCase):
         iter2 = pts.diffs()
         for t1, t2 in zip(iter1, iter2):
             self.assertEqual(t1, t2)
-            # if t1 != t2:
-            #     print("ERROR")
-            #     print(t1, t2)
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
 

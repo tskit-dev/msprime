@@ -558,7 +558,7 @@ class TreeSimulator(object):
             raise ValueError("sample_size must be < 2**32")
         self._sample_size = sample_size
         self._recombination_map = None
-        self._effective_population_size = None
+        self._effective_population_size = 1
         self._num_loci = None
         self._migration_matrix = None
         self._population_configurations = None
@@ -748,8 +748,6 @@ class TreeSimulator(object):
         if self._demographic_events is None:
             self._demographic_events = []
 
-        if self._effective_population_size is None:
-            self._effective_population_size = 1
         if self._recombination_map is None:
             # No recombination map means a single-locus simulation.
             self._recombination_map = RecombinationMap([0, 1], [1, 0])
@@ -1109,7 +1107,6 @@ class TreeSequence(object):
             seed = random.randint(0, 2**31)
         self._ll_tree_sequence.generate_mutations(
             scaled_mutation_rate, seed)
-
 
     def set_mutations(self, mutations):
         """

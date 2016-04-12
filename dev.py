@@ -153,18 +153,27 @@ def simulations():
     sim = msprime.TreeSimulator(n)
     sim.set_random_seed(1)
     sim.set_num_loci(m)
-    sim.set_scaled_recombination_rate(
-        recomb_map.get_total_recombination_rate())
+    sim.set_recombination_map(recomb_map)
+    # sim.set_scaled_recombination_rate(
+    #     recomb_map.get_total_recombination_rate())
     sim.run()
     ts = sim.get_tree_sequence()
-    ts.generate_mutations(2, 1, recomb_map)
+    size = 0
+    for l, records_in, records_out in ts.diffs():
+        # print(l, records_in, records_out)
+        size += l
+    print("size", size, ts.get_sequence_length())
     for t in ts.trees():
         l, r = t.get_interval()
-        print("tree:", recomb_map.genetic_to_physical(l / m),
-                recomb_map.genetic_to_physical(l / m))
-        for pos, node in t.mutations():
-            print("\t", node, pos, recomb_map.genetic_to_physical(pos / m),
-                    sep="\t")
+        # print(l, r)
+    # ts.generate_mutations(2, 1)
+    # for t in ts.trees():
+    #     l, r = t.get_interval()
+    #     print("tree:", recomb_map.genetic_to_physical(l / m),
+    #             recomb_map.genetic_to_physical(l / m))
+    #     for pos, node in t.mutations():
+    #         print("\t", node, pos, recomb_map.genetic_to_physical(pos / m),
+    #                 sep="\t")
 
 def convert_hdf5():
     in_filename = "tmp__NOBACKUP__/mutations.hdf5"
@@ -198,5 +207,5 @@ if __name__ == "__main__":
 
     read_1kg_map()
 
-    #simulations()
-    convert_hdf5()
+    simulations()
+    # convert_hdf5()
