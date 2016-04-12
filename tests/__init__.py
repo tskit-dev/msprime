@@ -214,7 +214,7 @@ class PythonRecombinationMap(object):
     """
     A Python implementation of the RecombinationMap interface.
     """
-    def __init__(self, positions, rates):
+    def __init__(self, num_loci, positions, rates):
         assert len(positions) == len(rates)
         assert len(positions) >= 2
         assert sorted(positions) == positions
@@ -222,6 +222,7 @@ class PythonRecombinationMap(object):
         assert positions[-1] == 1
         self._positions = positions
         self._rates = rates
+        self._num_loci = num_loci
 
     def get_total_recombination_rate(self):
         """
@@ -237,29 +238,30 @@ class PythonRecombinationMap(object):
 
     def physical_to_genetic(self, x):
         if self.get_total_recombination_rate() == 0:
-            return x
-        s = 0
-        last_phys_x = 0
-        j = 1
-        while j < len(self._positions) - 1 and x > self._positions[j]:
-            phys_x = self._positions[j]
+            ret = x
+        else:
+            s = 0
+            last_phys_x = 0
+            j = 1
+            while j < len(self._positions) - 1 and x > self._positions[j]:
+                phys_x = self._positions[j]
+                rate = self._rates[j - 1]
+                s += (phys_x - last_phys_x) * rate
+                j += 1
+                last_phys_x = phys_x
             rate = self._rates[j - 1]
-            s += (phys_x - last_phys_x) * rate
-            j += 1
-            last_phys_x = phys_x
-        rate = self._rates[j - 1]
-        s += (x - last_phys_x) * rate
-        ret = 0
-        if self.get_total_recombination_rate() > 0:
-            ret = s / self.get_total_recombination_rate()
-        return ret
+            s += (x - last_phys_x) * rate
+            ret = 0
+            if self.get_total_recombination_rate() > 0:
+                ret = s / self.get_total_recombination_rate()
+        return ret * self._num_loci
 
     def genetic_to_physical(self, v):
         if self.get_total_recombination_rate() == 0:
-            return v
-        # v is expressed in the unit range. Rescale it back into the range
+            return v / self._num_loci
+        # v is expressed in [0, m]. Rescale it back into the range
         # (0, total_mass).
-        u = v * self.get_total_recombination_rate()
+        u = (v / self._num_loci) * self.get_total_recombination_rate()
         s = 0
         last_phys_x = 0
         rate = self._rates[0]

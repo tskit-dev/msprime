@@ -1427,17 +1427,18 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"positions", "rates", NULL};
+    static char *kwlist[] = {"num_loci", "positions", "rates", NULL};
     Py_ssize_t size, j;
     PyObject *py_positions = NULL;
     PyObject *py_rates = NULL;
     double *positions = NULL;
     double *rates = NULL;
+    unsigned int num_loci = 0;
     PyObject *item;
 
     self->recomb_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!", kwlist,
-            &PyList_Type, &py_positions, &PyList_Type,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "IO!O!", kwlist,
+            &num_loci, &PyList_Type, &py_positions, &PyList_Type,
             &py_rates)) {
         goto out;
     }
@@ -1472,7 +1473,8 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = recomb_map_alloc(self->recomb_map, positions, rates, size);
+    err = recomb_map_alloc(self->recomb_map, (uint32_t) num_loci,
+            positions[size - 1], positions, rates, size);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1493,15 +1495,18 @@ RecombinationMap_genetic_to_physical(RecombinationMap *self, PyObject *args)
 {
     PyObject *ret = NULL;
     double genetic_x, physical_x;
+    uint32_t num_loci;
 
     if (RecombinationMap_check_recomb_map(self) != 0) {
         goto out;
     }
+    num_loci = recomb_map_get_num_loci(self->recomb_map);
     if (!PyArg_ParseTuple(args, "d", &genetic_x)) {
         goto out;
     }
-    if (genetic_x < 0 || genetic_x > 1) {
-        PyErr_SetString(PyExc_ValueError, "coordinates must be 0 <= x <= 1");
+    if (genetic_x < 0 || genetic_x > num_loci) {
+        PyErr_SetString(PyExc_ValueError,
+                "coordinates must be 0 <= x <= num_loci");
         goto out;
     }
     physical_x = recomb_map_genetic_to_phys(self->recomb_map, genetic_x);
@@ -1535,6 +1540,20 @@ out:
 }
 
 static PyObject *
+RecombinationMap_get_per_locus_recombination_rate(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d",
+        recomb_map_get_per_locus_recombination_rate(self->recomb_map));
+out:
+    return ret;
+}
+
+static PyObject *
 RecombinationMap_get_total_recombination_rate(RecombinationMap *self)
 {
     PyObject *ret = NULL;
@@ -1548,6 +1567,7 @@ out:
     return ret;
 }
 
+
 static PyMemberDef RecombinationMap_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -1559,7 +1579,12 @@ static PyMethodDef RecombinationMap_methods[] = {
         METH_VARARGS, "Converts the specified value into genetic coordinates."},
     {"get_total_recombination_rate",
         (PyCFunction) RecombinationMap_get_total_recombination_rate,
-        METH_NOARGS, "Returns the total recombination rate over the region."},
+        METH_VARARGS,
+        "Returns the total product of physical distance times recombination rate"},
+    {"get_per_locus_recombination_rate",
+        (PyCFunction) RecombinationMap_get_per_locus_recombination_rate,
+        METH_NOARGS,
+        "Returns the recombination rate between loci implied by this map"},
     {NULL}  /* Sentinel */
 };
 

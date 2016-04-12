@@ -687,8 +687,12 @@ class TreeSimulator(object):
         recombination rate and number of loci.
         """
         self.set_num_loci(num_loci)
+        # TODO this is a nasty hack caused by us mixing discrete and
+        # continuous coordinates for calculating overall recombination
+        # rates. Do we really need this functionality?
+        rescaled_rate = ((num_loci - 1) * recombination_rate) / num_loci
         self._recombination_map = RecombinationMap(
-            [0, num_loci], [recombination_rate, 0])
+            num_loci, [0, num_loci], [rescaled_rate, 0])
 
     def set_migration_matrix(self, migration_matrix):
         self._migration_matrix = migration_matrix
@@ -750,7 +754,7 @@ class TreeSimulator(object):
 
         if self._recombination_map is None:
             # No recombination map means a single-locus simulation.
-            self._recombination_map = RecombinationMap([0, 1], [1, 0])
+            self._recombination_map = RecombinationMap(1, [0, 1], [1, 0])
             self._num_loci = 1
 
         m = self._num_loci
@@ -781,13 +785,8 @@ class TreeSimulator(object):
         """
         Returns the per-locus scaled recombination rate Ne r.
         """
-        m = self._num_loci
-        total_rate = self._recombination_map.get_total_recombination_rate()
-        Ne = self._effective_population_size
-        if m == 1:
-            return 0
-        else:
-            return Ne * total_rate / (m - 1)
+        rate = self._recombination_map.get_per_locus_recombination_rate()
+        return rate * self._effective_population_size
 
     def run(self):
         """
@@ -1163,9 +1162,9 @@ class RecombinationMap(object):
 
     TODO document.
     """
-    def __init__(self, positions, rates):
+    def __init__(self, num_loci, positions, rates):
         self._ll_recombination_map = _msprime.RecombinationMap(
-            positions, rates)
+            num_loci, positions, rates)
 
     @classmethod
     def read_hapmap(cls, filename):
@@ -1196,8 +1195,6 @@ class RecombinationMap(object):
         finally:
             f.close()
         # TEMP to rescaled to 0 - 1
-        for j in range(len(positions)):
-            positions[j] /= positions[-1]
         return cls(positions, rates)
 
     def get_ll_recombination_map(self):
@@ -1211,6 +1208,9 @@ class RecombinationMap(object):
 
     def get_total_recombination_rate(self):
         return self._ll_recombination_map.get_total_recombination_rate()
+
+    def get_per_locus_recombination_rate(self):
+        return self._ll_recombination_map.get_per_locus_recombination_rate()
 
 
 class PopulationConfiguration(object):

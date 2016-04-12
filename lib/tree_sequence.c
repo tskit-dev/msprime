@@ -221,14 +221,13 @@ tree_sequence_remap_coordinates(tree_sequence_t *self, uint32_t num_loci,
         recomb_map_t *recomb_map)
 {
     int ret = 0;
-    double m = num_loci;
     uint32_t j;
 
     for (j = 0; j < self->num_records; j++) {
         self->trees.left[j] = recomb_map_genetic_to_phys(
-            recomb_map, self->trees.left[j] / m);
+            recomb_map, self->trees.left[j]);
         self->trees.right[j] = recomb_map_genetic_to_phys(
-            recomb_map, self->trees.right[j] / m);
+            recomb_map, self->trees.right[j]);
     }
     return ret;
 }

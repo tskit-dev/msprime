@@ -31,8 +31,10 @@ recomb_map_print_state(recomb_map_t *self)
     size_t j;
 
     printf("recombination_map:: size = %d\n", (int) self->size);
+    printf("\tnum_loci = %d\n", recomb_map_get_num_loci(self));
     printf("\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
-    printf("\ttotal_rate = %f\n", recomb_map_get_total_recombination_rate(self));
+    printf("\tper_locus_rate = %f\n",
+            recomb_map_get_per_locus_recombination_rate(self));
     printf("\tindex\tlocation\trate\n");
     for (j = 0; j < self->size; j++) {
         printf("\t%d\t%f\t%f\n", (int) j, self->positions[j], self->rates[j]);
@@ -40,8 +42,8 @@ recomb_map_print_state(recomb_map_t *self)
 }
 
 int WARN_UNUSED
-recomb_map_alloc(recomb_map_t *self, double *positions, double *rates,
-        size_t size)
+recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
+        double *positions, double *rates, size_t size)
 {
     int ret = MSP_ERR_BAD_RECOMBINATION_MAP;
     double length;
@@ -57,9 +59,15 @@ recomb_map_alloc(recomb_map_t *self, double *positions, double *rates,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    self->total_mass = 0.0;
+    self->total_recombination_rate = 0.0;
     self->size = size;
-    if (positions[0] != 0.0) {
+    self->num_loci = num_loci;
+    self->sequence_length = sequence_length;
+    /* Check the framing positions */
+    if (positions[0] != 0.0 || positions[size - 1] != sequence_length) {
+        goto out;
+    }
+    if (num_loci == 0) {
         goto out;
     }
     for (j = 0; j < size; j++) {
@@ -72,7 +80,7 @@ recomb_map_alloc(recomb_map_t *self, double *positions, double *rates,
                 goto out;
             }
             length = positions[j] - positions[j - 1];
-            self->total_mass += length * rates[j - 1];
+            self->total_recombination_rate += length * rates[j - 1];
         }
         self->rates[j] = rates[j];
         self->positions[j] = positions[j];
@@ -94,22 +102,47 @@ recomb_map_free(recomb_map_t *self)
     return 0;
 }
 
-/* Returns the total recombination rate along the entire sequence.
+/* Returns the equivalent recombination rate between pairs of
+ * adjacent loci.
  */
 double
 recomb_map_get_total_recombination_rate(recomb_map_t *self)
 {
-    return self->total_mass;
+    return self->total_recombination_rate;
 }
 
+/* Returns the equivalent recombination rate between pairs of
+ * adjacent loci.
+ */
+double
+recomb_map_get_per_locus_recombination_rate(recomb_map_t *self)
+{
+    double ret = 0.0;
+    if (self->num_loci > 1) {
+        ret = self->total_recombination_rate / (self->num_loci - 1);
+    }
+    return ret;
+}
+
+/* Returns the total physical length of the sequence.
+ */
 double
 recomb_map_get_sequence_length(recomb_map_t *self)
 {
-    return self->positions[self->size - 1];
+    return self->sequence_length;
 }
 
-/* Remaps the specified genetic coordinate in the range {0, 1} to
- * the physical coordinate space in the range (0, sequence_length)
+/* Returns the total number of discrete loci, between which
+ * recombination can occur.
+ */
+uint32_t
+recomb_map_get_num_loci(recomb_map_t *self)
+{
+    return self->num_loci;
+}
+
+/* Remaps the specified physical coordinate in the range (0, sequence_length)
+ * to the genetic coordinate space in the range (0, num_loci)
  */
 double
 recomb_map_phys_to_genetic(recomb_map_t *self, double x)
@@ -120,7 +153,7 @@ recomb_map_phys_to_genetic(recomb_map_t *self, double x)
     double rate = 1.0;
     double last_phys_x, phys_x;
 
-    if (self->total_mass == 0) {
+    if (self->total_recombination_rate == 0) {
         ret = x;
     } else {
         last_phys_x = 0;
@@ -132,37 +165,47 @@ recomb_map_phys_to_genetic(recomb_map_t *self, double x)
         }
         rate = self->rates[j - 1];
         s += (x - last_phys_x) * rate;
-        assert(s >= 0 && s <= self->total_mass);
-        ret = s / self->total_mass;
+        assert(s >= 0 && s <= self->total_recombination_rate);
+        ret = s / self->total_recombination_rate;
     }
-    return ret;
+    return ret * self->num_loci;
 }
 
+/* Remaps the specified genetic coordinate in the range (0, num_loci) to
+ * the physical coordinate space in the range (0, sequence_length)
+ */
 double
-recomb_map_genetic_to_phys(recomb_map_t *self, double x)
+recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
 {
-    size_t j;
-    double s = 0.0;
+    size_t k;
     double ret = 0.0;
-    double rate = 1.0;
-    double last_phys_x, phys_x;
-    /* the coordinate x is provided as a fraction from 0 to 1 so we
-     * rescale into the rate [0, total_mass). */
-    double genetic_x = x * self->total_mass;
+    double x, s, excess;
 
-    assert(x >= 0 && x <= 1.0);
-    if (self->total_mass == 0.0) {
-        ret = x * self->positions[self->size - 1];
-    } else {
-        last_phys_x = 0;
-        for (j = 1; j < self->size && s < genetic_x; j++) {
-            phys_x = self->positions[j];
-            rate = self->rates[j - 1];
-            s += (phys_x - last_phys_x) * rate;
-            last_phys_x = phys_x;
+    assert(genetic_x >= 0 && genetic_x <= self->num_loci);
+    if (self->total_recombination_rate == 0) {
+        /* Avoid roundoff when num_loci == self->sequence_length */
+        ret = genetic_x;
+        if (self->sequence_length != self->num_loci) {
+            ret = (genetic_x / self->num_loci) * self->sequence_length;
         }
-        ret = last_phys_x - (s - genetic_x) / rate;
-        assert(ret >= 0 && ret <= self->positions[self->size - 1]);
+    } else {
+        /* genetic_x is in the range [0,num_loci], and so we rescale
+         * this into [0,total_recombination_rate] so that we can
+         * map back into physical coordinates. */
+        x = (genetic_x / self->num_loci) * self->total_recombination_rate;
+        if (x > 0) {
+            s = 0;
+            k = 0;
+            while (s < x) {
+                assert(k < self->size - 1);
+                s += (self->positions[k + 1] - self->positions[k])
+                    * self->rates[k];
+                k++;
+            }
+            excess = (s - x) / self->rates[k - 1];
+            ret = self->positions[k] - excess;
+        }
     }
+    assert(ret >= 0 && ret <= self->sequence_length);
     return ret;
 }

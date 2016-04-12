@@ -45,13 +45,15 @@ from msprime import __version__ as _library_version
 enable_h5py_tests = True
 
 
-def uniform_recombination_map(recombination_rate=1, sequence_length=1):
+def uniform_recombination_map(sim):
     """
-    Returns a uniform recombination map that genetic locations to the
+    Returns a uniform recombination map for the specified simulator.
     range 0 to scale.
     """
     return _msprime.RecombinationMap(
-        [0, sequence_length], [recombination_rate, 0])
+        sim.get_num_loci(),
+        [0, sim.get_num_loci()],
+        [sim.get_scaled_recombination_rate(), 0])
 
 
 def get_population_configuration(
@@ -370,7 +372,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
             scaled_recombination_rate=rho)
         sim.run()
         ts = _msprime.TreeSequence()
-        recomb_map = uniform_recombination_map(rho, num_loci)
+        recomb_map = uniform_recombination_map(sim)
         ts.create(sim, recomb_map)
         ts.generate_mutations(mutation_rate, random_seed)
         return ts
@@ -501,7 +503,7 @@ class TestSimulationState(LowLevelTestCase):
         corresponds to correct trees for the specified simulation.
         """
         ts = _msprime.TreeSequence()
-        ts.create(sim, uniform_recombination_map())
+        ts.create(sim, uniform_recombination_map(sim))
         st = _msprime.SparseTree(ts)
         st_iter = _msprime.SparseTreeIterator(ts, st)
         n = sim.get_sample_size()
@@ -605,8 +607,7 @@ class TestSimulationState(LowLevelTestCase):
         # Check the TreeSequence. Ensure we get the records back in the
         # correct orders.
         ts = _msprime.TreeSequence()
-        recomb_map = uniform_recombination_map(
-            sequence_length=sim.get_num_loci())
+        recomb_map = uniform_recombination_map(sim)
         ts.create(sim, recomb_map)
         ts_records = [
             ts.get_record(j, _msprime.MSP_ORDER_TIME)
@@ -787,7 +788,7 @@ class TestSimulationState(LowLevelTestCase):
         self.verify_completed_simulation(sim)
         # Check the tree sequence.
         tree_sequence = _msprime.TreeSequence()
-        recomb_map = uniform_recombination_map(sequence_length=m)
+        recomb_map = uniform_recombination_map(sim)
         tree_sequence.create(sim, recomb_map)
         self.verify_tree_diffs(tree_sequence)
         self.verify_leaf_counts(tree_sequence)
@@ -1429,8 +1430,8 @@ class TestTreeSequence(LowLevelTestCase):
             sim2.run()
             t1 = _msprime.TreeSequence()
             t2 = _msprime.TreeSequence()
-            t1.create(sim1, uniform_recombination_map())
-            t2.create(sim1, uniform_recombination_map())
+            t1.create(sim1, uniform_recombination_map(sim1))
+            t2.create(sim1, uniform_recombination_map(sim1))
             self.assertEqual(t1.get_num_records(), t2.get_num_records())
             r1 = [t1.get_record(j) for j in range(t1.get_num_records())]
             r2 = [t2.get_record(j) for j in range(t2.get_num_records())]
@@ -1443,7 +1444,7 @@ class TestTreeSequence(LowLevelTestCase):
     def test_create_empty_tree_sequence(self):
         sim = _msprime.Simulator(sample_size=10, random_seed=1)
         ts = _msprime.TreeSequence()
-        recomb_map = uniform_recombination_map()
+        recomb_map = uniform_recombination_map(sim)
         self.assertRaises(ValueError, ts.create, sim, recomb_map)
         sim.run(0.001)
         self.assertRaises(ValueError, ts.create, sim, recomb_map)
@@ -1667,7 +1668,7 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(ValueError, ts.generate_mutations, ts)
         sim = _msprime.Simulator(10, 1)
         sim.run()
-        ts.create(sim, uniform_recombination_map())
+        ts.create(sim, uniform_recombination_map(sim))
         self.assertRaises(TypeError, ts.generate_mutations)
         self.assertRaises(TypeError, ts.generate_mutations, mutation_rate=1.0)
         self.assertRaises(TypeError, ts.generate_mutations, random_seed=1.0)
@@ -1758,8 +1759,8 @@ class TestTreeSequence(LowLevelTestCase):
 
     def test_constructor_interface(self):
         tree_sequence = _msprime.TreeSequence()
-        recomb_map = uniform_recombination_map()
         sim = _msprime.Simulator(10, 1)
+        recomb_map = uniform_recombination_map(sim)
         for x in [None, "", {}, [], 1]:
             self.assertRaises(TypeError, tree_sequence.create, x, recomb_map)
             self.assertRaises(TypeError, tree_sequence.create, sim, x)
@@ -1822,7 +1823,7 @@ class TestNewickConverter(LowLevelTestCase):
         self.assertRaises(ValueError, _msprime.NewickConverter, ts)
         sim = _msprime.Simulator(10, 1)
         sim.run()
-        ts.create(sim, uniform_recombination_map())
+        ts.create(sim, uniform_recombination_map(sim))
         for bad_type in [None, "", 2.3, [], {}]:
             self.assertRaises(
                 TypeError, _msprime.NewickConverter, ts, precision=bad_type)
@@ -1890,7 +1891,7 @@ class TestTreeDiffIterator(LowLevelTestCase):
         self.assertRaises(ValueError, _msprime.TreeDiffIterator, ts)
         sim = _msprime.Simulator(10, 1)
         sim.run()
-        ts.create(sim, uniform_recombination_map())
+        ts.create(sim, uniform_recombination_map(sim))
         before = list(_msprime.TreeDiffIterator(ts))
         iterator = _msprime.TreeDiffIterator(ts)
         del ts
@@ -1918,7 +1919,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
         self.assertRaises(ValueError, _msprime.SparseTreeIterator, ts, tree)
         sim = _msprime.Simulator(10, 1)
         sim.run()
-        ts.create(sim, uniform_recombination_map())
+        ts.create(sim, uniform_recombination_map(sim))
         tree = _msprime.SparseTree(ts)
         n_before = 0
         parents_before = []
@@ -1962,7 +1963,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
         sim = _msprime.Simulator(**params)
         sim.run()
         ts = _msprime.TreeSequence()
-        ts.create(sim, uniform_recombination_map())
+        ts.create(sim, uniform_recombination_map(sim))
         st = _msprime.SparseTree(ts)
         for st in _msprime.SparseTreeIterator(ts, st):
             root = 1
@@ -2230,38 +2231,49 @@ class TestRecombinationMap(LowLevelTestCase):
     """
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.RecombinationMap)
-        self.assertRaises(TypeError, _msprime.RecombinationMap, None)
-        self.assertRaises(TypeError, _msprime.RecombinationMap, None, None)
-        self.assertRaises(TypeError, _msprime.RecombinationMap, {}, {})
+        self.assertRaises(TypeError, _msprime.RecombinationMap, 1, None)
+        self.assertRaises(TypeError, _msprime.RecombinationMap, 1, None, None)
+        self.assertRaises(TypeError, _msprime.RecombinationMap, 1, {}, {})
+        self.assertRaises(TypeError, _msprime.RecombinationMap, "1", [], [])
         self.assertRaises(
-            ValueError, _msprime.RecombinationMap, [0, 0.1], [1, 2, 3])
+            ValueError, _msprime.RecombinationMap, 1, [0, 0.1], [1, 2, 3])
         self.assertRaises(
-            ValueError, _msprime.RecombinationMap, [], [0, 0])
+            ValueError, _msprime.RecombinationMap, 1, [], [0, 0])
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [], [])
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [0, -2], [0, 0])
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [1, 0], [0, 0])
+            _msprime.LibraryError, _msprime.RecombinationMap, 1, [], [])
         self.assertRaises(
             _msprime.LibraryError, _msprime.RecombinationMap,
-            [0, 1, 0.5], [0, 0, 0])
+            1, [0, -2], [0, 0])
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap,
+            1, [1, 0], [0, 0])
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap,
+            1, [0, 1, 0.5], [0, 0, 0])
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap,
+            0, [0, 1], [0.1, 0])
 
     def verify_random_recomb_map(self, size, num_random_checks):
         positions = [0] + sorted(
             random.random() for j in range(size - 2)) + [1]
         rates = [random.uniform(0, 5) for j in range(size - 1)] + [0]
-        rm = _msprime.RecombinationMap(positions=positions, rates=rates)
+        num_loci = 1000
+        rm = _msprime.RecombinationMap(
+            num_loci=num_loci, positions=positions, rates=rates)
         for bad_type in [{}, None, "10", []]:
             self.assertRaises(TypeError, rm.genetic_to_physical, bad_type)
-        for bad_value in [-1, 1.1, 1e7, 2**32]:
+        for bad_value in [-1, num_loci + 0.001, 1e7, 2**32]:
             self.assertRaises(ValueError, rm.genetic_to_physical, bad_value)
         self.assertEqual(rm.genetic_to_physical(0), 0)
-        self.assertEqual(rm.genetic_to_physical(1), 1)
+        self.assertEqual(rm.genetic_to_physical(num_loci), 1)
         total_rate = rm.get_total_recombination_rate()
         self.assertGreater(total_rate, 0)
+        self.assertEqual(
+            total_rate / (num_loci - 1),
+            rm.get_per_locus_recombination_rate())
         for j in range(num_random_checks):
-            x = random.random()
+            x = random.uniform(0, num_loci)
             y = rm.genetic_to_physical(x)
             self.assertTrue(0 <= y <= 1)
             z = rm.physical_to_genetic(y)
@@ -2273,18 +2285,17 @@ class TestRecombinationMap(LowLevelTestCase):
             self.verify_random_recomb_map(size, num_random_checks)
 
     def test_total_rate(self):
-        rm = _msprime.RecombinationMap([0, 10], [0.25, 0])
+        m = 1000
+        rm = _msprime.RecombinationMap(m, [0, 10], [0.25, 0])
         self.assertEqual(rm.get_total_recombination_rate(), 2.5)
-        rm = _msprime.RecombinationMap([0, 10, 20], [0.25, 0.5, 0])
+        rm = _msprime.RecombinationMap(m, [0, 10, 20], [0.25, 0.5, 0])
         self.assertEqual(rm.get_total_recombination_rate(), 7.5)
 
     def test_zero_rate(self):
-        m = 10
-        rm = _msprime.RecombinationMap([0, m], [0, 0])
-        self.assertEqual(rm.get_total_recombination_rate(), 0)
-        self.assertEqual(rm.genetic_to_physical(0), 0)
-        for j in range(m + 1):
-            # There is an annoying problem here where the coordinates are not
-            # quite mapped exactly back into the correct values. This is a
-            # pretty remote corner case, so let's not worry about it for now.
-            self.assertAlmostEqual(rm.genetic_to_physical(j / m), j)
+        for m in [1, 10, 1000]:
+            rm = _msprime.RecombinationMap(m, [0, m], [0, 0])
+            self.assertEqual(rm.get_total_recombination_rate(), 0)
+            self.assertEqual(rm.genetic_to_physical(0), 0)
+            self.assertEqual(rm.get_per_locus_recombination_rate(), 0)
+            for j in range(m + 1):
+                self.assertEqual(rm.genetic_to_physical(j), j)

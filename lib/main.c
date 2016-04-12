@@ -247,7 +247,7 @@ out:
 
 
 static int
-read_recomb_map(recomb_map_t *recomb_map, config_t *config)
+read_recomb_map(uint32_t num_loci, recomb_map_t *recomb_map, config_t *config)
 {
     int ret = 0;
     size_t j, size;
@@ -292,7 +292,8 @@ read_recomb_map(recomb_map_t *recomb_map, config_t *config)
         }
         rates[j] = config_setting_get_float(s);
     }
-    ret = recomb_map_alloc(recomb_map, coordinates, rates, size);
+    ret = recomb_map_alloc(recomb_map, num_loci, coordinates[size - 1],
+            coordinates, rates, size);
 out:
     if (rates != NULL) {
         free(rates);
@@ -395,12 +396,12 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
             == CONFIG_FALSE) {
         fatal_error("output_file is a required parameter");
     }
-    ret = read_recomb_map(recomb_map, config);
+    ret = read_recomb_map((uint32_t) msp_get_num_loci(msp),
+            recomb_map, config);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    rho = recomb_map_get_total_recombination_rate(recomb_map) /
-        (double) msp_get_num_loci(msp);
+    rho = recomb_map_get_per_locus_recombination_rate(recomb_map);
     ret = msp_set_scaled_recombination_rate(msp, rho);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
@@ -675,8 +676,10 @@ run_simulate(char *conf_file)
         goto out;
     }
     tree_sequence_print_state(tree_seq);
-    print_haplotypes(tree_seq);
-    print_newick_trees(tree_seq);
+    if (0) {
+
+        print_haplotypes(tree_seq);
+        print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
         int j;
         for (j = 0; j < 1; j++) {
@@ -692,8 +695,7 @@ run_simulate(char *conf_file)
             }
         }
 
-    tree_sequence_print_state(tree_seq);
-    if (0) {
+        tree_sequence_print_state(tree_seq);
         print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);
         tree_sequence_print_state(tree_seq);

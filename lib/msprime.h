@@ -181,8 +181,10 @@ typedef struct demographic_event_t_t {
 /* Recombination map */
 
 typedef struct {
-    size_t size;
-    double total_mass;
+    uint32_t num_loci;      /* size of the genetic coordinate space  */
+    double sequence_length; /* size of the physical coordinate space */
+    double total_recombination_rate;
+    size_t size;            /* the total number of values in the map */
     double *positions;
     double *rates;
 } recomb_map_t;
@@ -454,13 +456,16 @@ size_t hapgen_get_num_segregating_sites(hapgen_t *self);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
 
-int recomb_map_alloc(recomb_map_t *self, double *positions, double *rates, 
+int recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, 
+        double sequence_length, double *positions, double *rates, 
         size_t size);
 int recomb_map_free(recomb_map_t *self);
+uint32_t recomb_map_get_num_loci(recomb_map_t *self);
 double recomb_map_get_sequence_length(recomb_map_t *self);
+double recomb_map_get_per_locus_recombination_rate(recomb_map_t *self);
 double recomb_map_get_total_recombination_rate(recomb_map_t *self);
-double recomb_map_genetic_to_phys(recomb_map_t *self, double x);
-double recomb_map_phys_to_genetic(recomb_map_t *self, double x);
+double recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x);
+double recomb_map_phys_to_genetic(recomb_map_t *self, double phys_x);
 void recomb_map_print_state(recomb_map_t *self);
 
 int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence, 

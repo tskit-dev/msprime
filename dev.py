@@ -196,6 +196,36 @@ def read_1kg_map():
     recomb_map = msprime.RecombinationMap.read_hapmap(infile)
     print(recomb_map.get_total_recombination_rate())
 
+def genetic_to_phys(genetic_x, num_loci, positions, rates):
+    total_recomb_rate = 0
+    size = len(positions)
+    for j in range(1, size):
+        phys_length = positions[j] - positions[j - 1]
+        total_recomb_rate += phys_length * rates[j - 1]
+    if total_recomb_rate == 0:
+        ret = (genetic_x / num_loci) * phys_length
+    else:
+        x = (genetic_x / num_loci) * total_recomb_rate
+        ret = 0
+        if x > 0:
+            s = 0
+            k = 0
+            while s < x:
+                s += (positions[k + 1] - positions[k]) * rates[k]
+                k += 1
+            excess = (s - x) / rates[k - 1]
+            ret = positions[k] - excess
+    return ret
+
+
+def map_stuff():
+    num_loci = 1000
+    positions = [0, 50, 80, 100]
+    rates =     [0.2, 0.1, 0.0, 0]
+
+    for x in [0, 10, 50, 100, 900, 1000]:
+        phys = genetic_to_phys(x, num_loci, positions, rates)
+        print(x, "\t", phys)
 
 if __name__ == "__main__":
     # mutations()
@@ -205,7 +235,8 @@ if __name__ == "__main__":
     # )
     # plot_1kg_map()
 
-    read_1kg_map()
+    # read_1kg_map()
 
-    simulations()
+    # simulations()
     # convert_hdf5()
+    map_stuff()
