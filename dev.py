@@ -7,10 +7,13 @@ from __future__ import division
 
 import time
 import math
+import glob
 import subprocess
 
 import numpy as np
+import numpy.ma as ma
 import matplotlib
+import scipy.stats
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
 import matplotlib.pyplot as pyplot
@@ -195,31 +198,51 @@ def convert_hdf5():
 def read_1kg_map():
     infile = "tmp__NOBACKUP__/genetic_map_b36/genetic_map_chr1_b36.txt.gz"
     # infile = "genetic_map_chr22_b36.txt"
-    infile = "tmp__NOBACKUP__/genetic_map_GRCh37_chr1.txt"
-    recomb_map = msprime.RecombinationMap.read_hapmap(infile)
-    # positions = np.array(recomb_map.get_positions())
-    # rates = np.array(recomb_map.get_rates())
-    # print(positions)
-    # print(rates)
-    # pyplot.plot(positions, rates)
-    # pyplot.savefig("1kg.png")
+    infile = "tmp__NOBACKUP__/genetic_map_GRCh37_chr2.txt"
+    pattern = "tmp__NOBACKUP__/genetic_map_GRCh37_chr*.txt"
+    # pattern = "tmp__NOBACKUP__/genetic_map_GRCh37_chrX_par1.txt"
+    for infile in glob.glob(pattern):
+        name = infile.split("_")[-1].split(".")[0]
+        print(infile, name)
+        recomb_map = msprime.RecombinationMap.read_hapmap(infile)
+        positions = np.array(recomb_map.get_positions())
+        rates = np.array(recomb_map.get_rates())
 
-    # tree_seq = msprime.simulate(10, recombination_map=recomb_map)
-    n = 10
-    sim = msprime.TreeSimulator(n)
-    sim.set_effective_population_size(10**4)
-    sim.set_recombination_map(recomb_map)
+        # tree_seq = msprime.simulate(10, recombination_map=recomb_map)
+        n = 10
+        sim = msprime.TreeSimulator(n)
+        sim.set_effective_population_size(10**4)
+        sim.set_recombination_map(recomb_map)
 
-    before = time.clock()
-    sim.run()
-    print("Simulation ran in ", time.clock() - before)
-    before = time.clock()
-    ts = sim.get_tree_sequence()
-    print("Created tree sequence in ", time.clock() - before)
-    filename = "tmp__NOBACKUP__/1kg_in.hdf5"
-    ts.dump(filename)
-    # ts = msprime.load(filename)
-    # for t in ts.trees():
+        before = time.clock()
+        sim.run()
+        print("Simulation ran in ", time.clock() - before)
+        before = time.clock()
+        ts = sim.get_tree_sequence()
+        print("Created tree sequence in ", time.clock() - before)
+        # filename = "tmp__NOBACKUP__/1kg_in.hdf5"
+        # ts.dump(filename)
+        # ts = msprime.load(filename)
+        breakpoints = []
+        for t in ts.trees():
+            breakpoints.append(t.get_interval()[0])
+        b = np.array(breakpoints)
+
+        N = 500
+        fig, ax1 = pyplot.subplots(figsize=(16, 6))
+        v, bin_edges, bin_number = scipy.stats.binned_statistic(
+            positions, rates, bins=N)
+        x = bin_edges[:-1][np.logical_not(np.isnan(v))]
+        y = v[np.logical_not(np.isnan(v))]
+        ax1.plot(x, y, "-")
+
+        ax2 = ax1.twinx()
+        v, bin_edges = np.histogram(b, N)
+        ax2.plot(bin_edges[:-1], v, color="green")
+
+        fig.savefig("tmp__NOBACKUP__/hapmap_{}.png".format(name))
+
+
     #     print(t.get_interval())
     # print(ts.get_num_records())
 
