@@ -197,6 +197,8 @@ def read_1kg_map():
     infile = "tmp__NOBACKUP__/genetic_map_GRCh37_chr1.txt"
     recomb_map = msprime.RecombinationMap.read_hapmap(infile)
     print(recomb_map.get_total_recombination_rate())
+    positions = np.array(recomb_map.get_positions())
+    print(positions)
 
 def genetic_to_phys(genetic_x, num_loci, positions, rates):
     total_recomb_rate = 0
@@ -237,8 +239,8 @@ if __name__ == "__main__":
     # )
     # plot_1kg_map()
 
-    # read_1kg_map()
+    read_1kg_map()
 
-    simulations()
+    # simulations()
     # convert_hdf5()
     # map_stuff()

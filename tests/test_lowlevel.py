@@ -2265,6 +2265,9 @@ class TestRecombinationMap(LowLevelTestCase):
             self.assertRaises(TypeError, rm.genetic_to_physical, bad_type)
         for bad_value in [-1, num_loci + 0.001, 1e7, 2**32]:
             self.assertRaises(ValueError, rm.genetic_to_physical, bad_value)
+        self.assertEqual(rm.get_size(), size)
+        self.assertEqual(rm.get_positions(), positions)
+        self.assertEqual(rm.get_rates(), rates)
         self.assertEqual(rm.genetic_to_physical(0), 0)
         self.assertEqual(rm.genetic_to_physical(num_loci), 1)
         total_rate = rm.get_total_recombination_rate()
@@ -2297,5 +2300,6 @@ class TestRecombinationMap(LowLevelTestCase):
             self.assertEqual(rm.get_total_recombination_rate(), 0)
             self.assertEqual(rm.genetic_to_physical(0), 0)
             self.assertEqual(rm.get_per_locus_recombination_rate(), 0)
+            self.assertEqual(rm.get_size(), 2)
             for j in range(m + 1):
                 self.assertEqual(rm.genetic_to_physical(j), j)

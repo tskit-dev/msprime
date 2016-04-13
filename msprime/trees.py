@@ -1200,8 +1200,7 @@ class RecombinationMap(object):
             assert rate == 0
         finally:
             f.close()
-        # TEMP to rescaled to 0 - 1
-        return cls(positions, rates)
+        return cls(2**32 - 1, positions, rates)
 
     def get_ll_recombination_map(self):
         return self._ll_recombination_map
@@ -1217,6 +1216,12 @@ class RecombinationMap(object):
 
     def get_per_locus_recombination_rate(self):
         return self._ll_recombination_map.get_per_locus_recombination_rate()
+
+    def get_positions(self):
+        return self._ll_recombination_map.get_positions()
+
+    def get_rates(self):
+        return self._ll_recombination_map.get_rates()
 
 
 class PopulationConfiguration(object):

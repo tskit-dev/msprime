@@ -209,3 +209,23 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
     assert(ret >= 0 && ret <= self->sequence_length);
     return ret;
 }
+
+size_t
+recomb_map_get_size(recomb_map_t *self)
+{
+    return self->size;
+}
+
+int
+recomb_map_get_positions(recomb_map_t *self, double *positions)
+{
+    memcpy(positions, self->positions, sizeof(double) * self->size);
+    return 0;
+}
+
+int recomb_map_get_rates(recomb_map_t *self, double *rates)
+{
+    memcpy(rates, self->rates, sizeof(double) * self->size);
+    return 0;
+
+}

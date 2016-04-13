@@ -1567,6 +1567,80 @@ out:
     return ret;
 }
 
+static PyObject *
+RecombinationMap_get_size(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) recomb_map_get_size(self->recomb_map));
+out:
+    return ret;
+}
+
+
+static PyObject *
+RecombinationMap_get_positions(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+    double *positions = NULL;
+    size_t size;
+    int err;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    size = recomb_map_get_size(self->recomb_map);
+    positions = PyMem_Malloc(size * sizeof(double));
+    if (positions == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = recomb_map_get_positions(self->recomb_map, positions);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_float_list(positions, size);
+out:
+    if (positions != NULL) {
+        PyMem_Free(positions);
+    }
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_get_rates(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+    double *rates = NULL;
+    size_t size;
+    int err;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    size = recomb_map_get_size(self->recomb_map);
+    rates = PyMem_Malloc(size * sizeof(double));
+    if (rates == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = recomb_map_get_rates(self->recomb_map, rates);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_float_list(rates, size);
+out:
+    if (rates != NULL) {
+        PyMem_Free(rates);
+    }
+    return ret;
+}
 
 static PyMemberDef RecombinationMap_members[] = {
     {NULL}  /* Sentinel */
@@ -1578,13 +1652,20 @@ static PyMethodDef RecombinationMap_methods[] = {
     {"physical_to_genetic", (PyCFunction) RecombinationMap_physical_to_genetic,
         METH_VARARGS, "Converts the specified value into genetic coordinates."},
     {"get_total_recombination_rate",
-        (PyCFunction) RecombinationMap_get_total_recombination_rate,
-        METH_VARARGS,
+        (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS,
         "Returns the total product of physical distance times recombination rate"},
     {"get_per_locus_recombination_rate",
         (PyCFunction) RecombinationMap_get_per_locus_recombination_rate,
         METH_NOARGS,
         "Returns the recombination rate between loci implied by this map"},
+    {"get_size", (PyCFunction) RecombinationMap_get_size, METH_NOARGS,
+        "Returns the number of positions in this map."},
+    {"get_positions",
+        (PyCFunction) RecombinationMap_get_positions, METH_NOARGS,
+        "Returns the positions in this recombination map."},
+    {"get_rates",
+        (PyCFunction) RecombinationMap_get_rates, METH_NOARGS,
+        "Returns the rates in this recombination map."},
     {NULL}  /* Sentinel */
 };
 
