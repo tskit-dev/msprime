@@ -217,17 +217,47 @@ out:
 }
 
 static int
-tree_sequence_remap_coordinates(tree_sequence_t *self, uint32_t num_loci,
-        recomb_map_t *recomb_map)
+tree_sequence_remap_coordinates(tree_sequence_t *self, recomb_map_t *recomb_map)
 {
     int ret = 0;
-    uint32_t j;
+    size_t j;
+    double *phys_left = NULL;
+    double *phys_right = NULL;
 
+    phys_left = malloc(self->num_records * sizeof(double));
+    phys_right = malloc(self->num_records * sizeof(double));
+    if (phys_left == NULL || phys_right == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* we know that these orders ensure that the left and right coordinates
+     * are sorted, and we use this to make bulk remapping to physical coordinates
+     * efficient.
+     */
     for (j = 0; j < self->num_records; j++) {
-        self->trees.left[j] = recomb_map_genetic_to_phys(
-            recomb_map, self->trees.left[j]);
-        self->trees.right[j] = recomb_map_genetic_to_phys(
-            recomb_map, self->trees.right[j]);
+        phys_left[j] = self->trees.left[self->trees.insertion_order[j]];
+        phys_right[j] = self->trees.right[self->trees.removal_order[j]];
+    }
+    ret = recomb_map_genetic_to_phys_bulk(
+        recomb_map, phys_left, self->num_records);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = recomb_map_genetic_to_phys_bulk(
+        recomb_map, phys_right, self->num_records);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_records; j++) {
+        self->trees.left[self->trees.insertion_order[j]] = phys_left[j];
+        self->trees.right[self->trees.removal_order[j]] = phys_right[j];
+    }
+out:
+    if (phys_left != NULL) {
+        free(phys_left);
+    }
+    if (phys_right != NULL) {
+        free(phys_right);
     }
     return ret;
 }
@@ -273,7 +303,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_remap_coordinates(self, sim->num_loci, recomb_map);
+    ret = tree_sequence_remap_coordinates(self, recomb_map);
     if (ret != 0) {
         goto out;
     }

@@ -466,6 +466,8 @@ double recomb_map_get_per_locus_recombination_rate(recomb_map_t *self);
 double recomb_map_get_total_recombination_rate(recomb_map_t *self);
 double recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x);
 double recomb_map_phys_to_genetic(recomb_map_t *self, double phys_x);
+int recomb_map_genetic_to_phys_bulk(recomb_map_t *self, double *genetic_x, 
+        size_t n);
 size_t recomb_map_get_size(recomb_map_t *self);
 int recomb_map_get_positions(recomb_map_t *self, double *positions);
 int recomb_map_get_rates(recomb_map_t *self, double *rates);

@@ -180,9 +180,11 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
     size_t k;
     double ret = 0.0;
     double x, s, excess;
+    double *p = self->positions;
+    double *r = self->rates;
 
     assert(genetic_x >= 0 && genetic_x <= self->num_loci);
-    if (self->total_recombination_rate == 0) {
+    if (self->total_recombination_rate == 0 || self->size == 2) {
         /* Avoid roundoff when num_loci == self->sequence_length */
         ret = genetic_x;
         if (self->sequence_length != self->num_loci) {
@@ -198,15 +200,69 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
             k = 0;
             while (s < x) {
                 assert(k < self->size - 1);
-                s += (self->positions[k + 1] - self->positions[k])
-                    * self->rates[k];
+                s += (p[k + 1] - p[k]) * r[k];
                 k++;
             }
-            excess = (s - x) / self->rates[k - 1];
-            ret = self->positions[k] - excess;
+            excess = (s - x) / r[k - 1];
+            ret = p[k] - excess;
         }
     }
     assert(ret >= 0 && ret <= self->sequence_length);
+    return ret;
+}
+
+/* Remap the specified sorted list of genetic coordinates to physical
+ * coordinates in place. This is logically equivalent to calling
+ * genetic_to_physical on each coordinate in turn, but is much more
+ * efficient.
+ */
+int
+recomb_map_genetic_to_phys_bulk(recomb_map_t *self, double *values, size_t n)
+{
+    int ret = 0;
+    size_t j, k;
+    double s, excess, x, last_value;
+    double *p = self->positions;
+    double *r = self->rates;
+
+    if (self->total_recombination_rate == 0 || self->size == 2) {
+        /* Deal with the special cases using the other method as
+         * they have no real overhead and these special cases should
+         * be handled in one place. */
+        for (j = 0; j < n; j++) {
+            values[j] = recomb_map_genetic_to_phys(self, values[j]);
+        }
+    } else {
+        /* Skip over any leading zeros */
+        j = 0;
+        while (values[j] == 0.0) {
+            j++;
+        }
+        s = 0;
+        k = 0;
+        last_value = 0;
+        for (; j < n; j++) {
+            /* Make sure the list is sorted */
+            if (last_value > values[j]) {
+                ret = MSP_ERR_GENERIC;
+                goto out;
+            }
+            last_value = values[j];
+            if (values[j] < 0 || values[j] > self->num_loci) {
+                ret = MSP_ERR_GENERIC;
+                goto out;
+            }
+            x = (values[j] / self->num_loci) * self->total_recombination_rate;
+            while (s < x) {
+                assert(k < self->size - 1);
+                s += (p[k + 1] - p[k]) * r[k];
+                k++;
+            }
+            excess = (s - x) / r[k - 1];
+            values[j] = p[k] - excess;
+        }
+    }
+out:
     return ret;
 }
 

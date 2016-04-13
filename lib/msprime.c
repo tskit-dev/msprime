@@ -1658,8 +1658,8 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         }
     }
     if (cr != NULL) {
-        cr->left = left;
-        cr->right = right;
+        cr->left = (double) left;
+        cr->right = (double) right;
         cr->children[0] = c1;
         cr->children[1] = c2;
         cr->node = node;

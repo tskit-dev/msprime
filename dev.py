@@ -5,6 +5,7 @@ Simple client code for development purposes.
 from __future__ import print_function
 from __future__ import division
 
+import time
 import math
 import subprocess
 
@@ -196,9 +197,32 @@ def read_1kg_map():
     # infile = "genetic_map_chr22_b36.txt"
     infile = "tmp__NOBACKUP__/genetic_map_GRCh37_chr1.txt"
     recomb_map = msprime.RecombinationMap.read_hapmap(infile)
-    print(recomb_map.get_total_recombination_rate())
-    positions = np.array(recomb_map.get_positions())
-    print(positions)
+    # positions = np.array(recomb_map.get_positions())
+    # rates = np.array(recomb_map.get_rates())
+    # print(positions)
+    # print(rates)
+    # pyplot.plot(positions, rates)
+    # pyplot.savefig("1kg.png")
+
+    # tree_seq = msprime.simulate(10, recombination_map=recomb_map)
+    n = 10
+    sim = msprime.TreeSimulator(n)
+    sim.set_effective_population_size(10**4)
+    sim.set_recombination_map(recomb_map)
+
+    before = time.clock()
+    sim.run()
+    print("Simulation ran in ", time.clock() - before)
+    before = time.clock()
+    ts = sim.get_tree_sequence()
+    print("Created tree sequence in ", time.clock() - before)
+    filename = "tmp__NOBACKUP__/1kg_in.hdf5"
+    ts.dump(filename)
+    # ts = msprime.load(filename)
+    # for t in ts.trees():
+    #     print(t.get_interval())
+    # print(ts.get_num_records())
+
 
 def genetic_to_phys(genetic_x, num_loci, positions, rates):
     total_recomb_rate = 0
@@ -221,15 +245,49 @@ def genetic_to_phys(genetic_x, num_loci, positions, rates):
             ret = positions[k] - excess
     return ret
 
+def genetic_to_phys_bulk(values, num_loci, positions, rates):
+    total_recomb_rate = 0
+    size = len(positions)
+    n = len(values)
+    for j in range(1, size):
+        phys_length = positions[j] - positions[j - 1]
+        total_recomb_rate += phys_length * rates[j - 1]
+    ret = list(values)
+    if total_recomb_rate == 0:
+        for j in range(n):
+            ret[j] = genetic_to_phys(
+                values[j], num_loci, positions, rates)
+    else:
+        # Get rid of zero values
+        j = 0
+        while values[j] == 0:
+            j += 1
+        s = 0
+        k = 0
+        while j < n:
+            if j > 0 and values[j - 1] > values[j]:
+                raise Exception("Input list not sorted")
+            x = (values[j] / num_loci) * total_recomb_rate
+            while s < x:
+                s += (positions[k + 1] - positions[k]) * rates[k]
+                k += 1
+            excess = (s - x) / rates[k - 1]
+            ret[j] = positions[k] - excess
+            j += 1
+    return ret
+
 
 def map_stuff():
     num_loci = 1000
     positions = [0, 50, 80, 100]
     rates =     [0.2, 0.1, 0.0, 0]
 
-    for x in [0, 10, 50, 100, 900, 1000]:
+    values = [0, 10, 50, 100, 900, 1000]
+    bulk = genetic_to_phys_bulk(values, num_loci, positions, rates)
+
+    for x, y in zip(values, bulk):
         phys = genetic_to_phys(x, num_loci, positions, rates)
-        print(x, "\t", phys)
+        print(x, "\t", phys, "\t", y)
 
 if __name__ == "__main__":
     # mutations()

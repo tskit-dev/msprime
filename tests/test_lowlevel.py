@@ -2303,3 +2303,14 @@ class TestRecombinationMap(LowLevelTestCase):
             self.assertEqual(rm.get_size(), 2)
             for j in range(m + 1):
                 self.assertEqual(rm.genetic_to_physical(j), j)
+
+    def test_uniform_rate(self):
+        for m in [1, 10, 100]:
+            rm = _msprime.RecombinationMap(m, [0, m], [0.001, 0])
+            # For a uniform map with an equal number of loci and physical
+            # length we should map 1-1 exactly.
+            for v in range(0, m + 1):
+                self.assertEqual(v, rm.genetic_to_physical(v))
+                # We don't bother special casing for physical to genetic as
+                # this isn't really used.
+                self.assertAlmostEqual(v, rm.physical_to_genetic(v))

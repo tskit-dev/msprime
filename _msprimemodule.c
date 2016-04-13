@@ -1568,6 +1568,20 @@ out:
 }
 
 static PyObject *
+RecombinationMap_get_num_loci(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) recomb_map_get_num_loci(self->recomb_map));
+out:
+    return ret;
+}
+
+static PyObject *
 RecombinationMap_get_size(RecombinationMap *self)
 {
     PyObject *ret = NULL;
@@ -1658,8 +1672,10 @@ static PyMethodDef RecombinationMap_methods[] = {
         (PyCFunction) RecombinationMap_get_per_locus_recombination_rate,
         METH_NOARGS,
         "Returns the recombination rate between loci implied by this map"},
+    {"get_num_loci", (PyCFunction) RecombinationMap_get_num_loci, METH_NOARGS,
+        "Returns the number discrete loci in the genetic map."},
     {"get_size", (PyCFunction) RecombinationMap_get_size, METH_NOARGS,
-        "Returns the number of positions in this map."},
+        "Returns the number of physical  positions in this map."},
     {"get_positions",
         (PyCFunction) RecombinationMap_get_positions, METH_NOARGS,
         "Returns the positions in this recombination map."},

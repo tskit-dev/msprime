@@ -677,6 +677,7 @@ class TreeSimulator(object):
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
         self._recombination_map = recombination_map
+        self.set_num_loci(self._recombination_map.get_num_loci())
 
     def set_num_loci(self, num_loci):
         if not isinstance(num_loci, int):
@@ -1216,6 +1217,12 @@ class RecombinationMap(object):
 
     def get_per_locus_recombination_rate(self):
         return self._ll_recombination_map.get_per_locus_recombination_rate()
+
+    def get_size(self):
+        return self._ll_recombination_map.get_size()
+
+    def get_num_loci(self):
+        return self._ll_recombination_map.get_num_loci()
 
     def get_positions(self):
         return self._ll_recombination_map.get_positions()

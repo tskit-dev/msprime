@@ -178,14 +178,9 @@ class SimulationRunner(object):
                         print(ns, file=output)
                 else:
                     for l, ns in iterator:
-                        # Length is a float, but we know that it is always an
-                        # integer under these conditions. We need to round here
-                        # because of tiny differences can cause the value to
-                        # go below, causing incorrect truncation.
-                        length = int(round(l))
                         # Print these seperately to avoid the cost of creating
                         # another string.
-                        print("[{0}]".format(length), end="", file=output)
+                        print("[{0}]".format(int(l)), end="", file=output)
                         print(ns, file=output)
             if self._mutation_rate > 0:
                 # The mutation rate in ms is multiplied by the size of the
