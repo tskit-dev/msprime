@@ -214,7 +214,7 @@ class PythonRecombinationMap(object):
     """
     A Python implementation of the RecombinationMap interface.
     """
-    def __init__(self, num_loci, positions, rates):
+    def __init__(self, positions, rates, num_loci):
         assert len(positions) == len(rates)
         assert len(positions) >= 2
         assert sorted(positions) == positions

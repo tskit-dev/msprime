@@ -312,6 +312,11 @@ def map_stuff():
         phys = genetic_to_phys(x, num_loci, positions, rates)
         print(x, "\t", phys, "\t", y)
 
+
+def new_api():
+    ts = msprime.simulate(10)
+
+
 if __name__ == "__main__":
     # mutations()
 
@@ -320,8 +325,9 @@ if __name__ == "__main__":
     # )
     # plot_1kg_map()
 
-    read_1kg_map()
+    # read_1kg_map()
 
     # simulations()
     # convert_hdf5()
     # map_stuff()
+    new_api()

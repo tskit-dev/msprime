@@ -1203,7 +1203,7 @@ class TestSimulator(LowLevelTestCase):
         sim = _msprime.Simulator(2, 1)
 
         def get_events(s):
-            d = json.loads(sim.get_configuration_json())
+            d = json.loads(s.get_configuration_json())
             return d["demographic_events"]
 
         self.assertEqual([], get_events(sim))

@@ -22,6 +22,7 @@ Module responsible to generating and reading tree files.
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import gzip
 import json
 import math
@@ -438,75 +439,162 @@ class SparseTree(object):
         return not self.__eq__(other)
 
 
+def simulator_factory(
+        sample_size,
+        Ne=1,
+        length=None,
+        recombination_rate=None,
+        recombination_map=None,
+        population_configurations=None,
+        migration_matrix=None,
+        demographic_events=[],
+        random_seed=None):
+    """
+    Convenience method to create a simulator instance using the same
+    parameters as the `simulate` function. Primarily used for testing.
+    """
+    if recombination_map is None:
+        the_length = 1 if length is None else length
+        the_rate = 0 if recombination_rate is None else recombination_rate
+        if the_length <= 0:
+            raise ValueError("Cannot provide non-positive sequence length")
+        if the_rate < 0:
+            raise ValueError("Cannot provide negative recombination rate")
+        recomb_map = RecombinationMap.uniform_map(the_length, the_rate)
+    else:
+        if length is not None or recombination_rate is not None:
+            raise ValueError(
+                "Cannot specify length/recombination_rate along with "
+                "a recombination map")
+        recomb_map = recombination_map
+    sim = TreeSimulator(sample_size, recomb_map)
+    sim.set_effective_population_size(Ne)
+    if population_configurations is not None:
+        sim.set_population_configurations(population_configurations)
+    if migration_matrix is not None:
+        sim.set_migration_matrix(migration_matrix)
+    if demographic_events is not None:
+        sim.set_demographic_events(demographic_events)
+    if random_seed is not None:
+        sim.set_random_seed(random_seed)
+    return sim
+
+
 def simulate(
-        sample_size, num_loci=1, scaled_recombination_rate=0.0,
-        scaled_mutation_rate=None,
-        population_models=[], random_seed=None, max_memory=None):
+        sample_size,
+        Ne=1,
+        length=None,
+        recombination_rate=None,
+        recombination_map=None,
+        mutation_rate=None,
+        population_configurations=None,
+        migration_matrix=None,
+        demographic_events=[],
+        random_seed=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`.
 
     :param int sample_size: The number of individuals in our sample.
-    :param int num_loci: The length of the simulated region in
-        discrete non-recombining loci.
-    :param float scaled_recombination_rate: The rate of recombination
-        between adjacent loci per :math:`4N_0` generations.
-    :param float scaled_mutation_rate: The rate of mutation
-        per locus per :math:`4N_0` generations.
-    :param list population_models: The list of :class:`.PopulationModel`
-        instances describing the demographic history of the population.
+    :param float Ne: The effective population size. This determines the
+        factor by which the per-generation recombination and mutation
+        rates are scaled in the simulation. This defaults to 1 if not
+        specified.
+    :param float length: The length of the simulated region in bases.
+        This parameter cannot be used along with `recombination_map`.
+        Defaults to 1 if not specified.
+    :param float recombination_rate: The rate of recombination per base
+        per generation. This parameter cannot be used along with
+        `recombination_map`. Defaults to 0 if not specified.
+    :param :class:`.RecombinationMap`: The map describing the
+        changing rates of recombination along the simulated chromosome.
+        This parameter cannot be used along with the `recombination_rate`
+        or `length` parameters, as these values are encoded within
+        the map. Defaults to a uniform rate as described in the
+        ``recombination_rate`` parameter if not specified.
+    :param float mutation_rate: The rate of mutation per base per
+        generation. If not specified, no mutations are generated.
+    :param list population_configurations: The list of
+        :class`.PopulationConfiguration` instances describing the
+        sampling configuration, relative sizes and growth rates of
+        the populations to be simulated.
+    :param list migration_matrix: The matrix describing the rates
+        of migration between all pairs of populations.
+        **TODO** describe structure and interpretation.
+    :param list :class:`.DemographicEvent`: The list of demographic
+        events to simulate.
+        **TODO** describe these and document.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated.
-    :param int,str max_memory: The maximum amount of memory used
-        during the simulation. If this is exceeded, the simulation will
-        terminate with a :class:`LibraryError` exception. By default
-        this is not set, and no memory limits are imposed.
     :return: The :class:`.TreeSequence` object representing the results
         of the simulation.
     :rtype: :class:`.TreeSequence`
     """
-    sim = TreeSimulator(sample_size)
-    sim.set_uniform_recombination_map(scaled_recombination_rate, num_loci)
-    sim.set_random_seed(random_seed)
-    sim.set_max_memory(max_memory)
-    # Reinterpret the population models in terms of the new interface.
-    # This will be deprecated in later releases in favour of a direct
-    # approach.
-    initial_size = 1
-    initial_growth_rate = 0
-    demographic_events = []
-    for model in population_models:
-        if isinstance(model, ConstantPopulationModel):
-            if model.start_time == 0:
-                initial_size = model.size
-            else:
-                demographic_events.append(SizeChangeEvent(
-                    model.start_time, model.size))
-        elif isinstance(model, ExponentialPopulationModel):
-            if model.start_time == 0:
-                initial_growth_rate = model.alpha
-            else:
-                demographic_events.append(GrowthRateChangeEvent(
-                    model.start_time, model.alpha))
-        else:
-            raise TypeError("Arguments must be PopulationModel instances")
-    sim.set_population_configurations([PopulationConfiguration(
-        sample_size, initial_size, initial_growth_rate)])
-    sim.set_demographic_events(demographic_events)
+    sim = simulator_factory(
+        sample_size, Ne=Ne, length=length,
+        recombination_rate=recombination_rate,
+        recombination_map=recombination_map,
+        population_configurations=population_configurations,
+        migration_matrix=migration_matrix,
+        demographic_events=demographic_events,
+        random_seed=random_seed)
     sim.run()
     tree_sequence = sim.get_tree_sequence()
-    if scaled_mutation_rate is not None:
+    if mutation_rate is not None:
+        scaled_mutation_rate = 4 * Ne * mutation_rate
         tree_sequence.generate_mutations(scaled_mutation_rate, random_seed)
     return tree_sequence
 
 
+#     sim.set_uniform_recombination_map(scaled_recombination_rate, num_loci)
+#     sim.set_random_seed(random_seed)
+#     sim.set_max_memory(max_memory)
+#     # Reinterpret the population models in terms of the new interface.
+#     # This will be deprecated in later releases in favour of a direct
+#     # approach.
+#     initial_size = 1
+#     initial_growth_rate = 0
+#     demographic_events = []
+#     for model in population_models:
+#         if isinstance(model, ConstantPopulationModel):
+#             if model.start_time == 0:
+#                 initial_size = model.size
+#             else:
+#                 demographic_events.append(SizeChangeEvent(
+#                     model.start_time, model.size))
+#         elif isinstance(model, ExponentialPopulationModel):
+#             if model.start_time == 0:
+#                 initial_growth_rate = model.alpha
+#             else:
+#                 demographic_events.append(GrowthRateChangeEvent(
+#                     model.start_time, model.alpha))
+#         else:
+#             raise TypeError("Arguments must be PopulationModel instances")
+#     sim.set_population_configurations([PopulationConfiguration(
+#         sample_size, initial_size, initial_growth_rate)])
+#     sim.set_demographic_events(demographic_events)
+#     sim.run()
+#     tree_sequence = sim.get_tree_sequence()
+#     if scaled_mutation_rate is not None:
+#         tree_sequence.generate_mutations(scaled_mutation_rate, random_seed)
+#     return tree_sequence
+
+
 def simulate_tree(
-        sample_size, scaled_mutation_rate=None, population_models=[],
-        random_seed=None, max_memory=None):
+        sample_size,
+        Ne=1,
+        length=None,
+        mutation_rate=None,
+        population_configurations=None,
+        migration_matrix=None,
+        demographic_events=[],
+        random_seed=None):
     """
     Simulates the coalescent at a single locus for the specified sample size
     under the specified list of population models. Returns a
     :class:`.SparseTree` representing the results.
+
+    TODO document.
 
     :param int sample_size: The number of individuals in our sample.
     :param float scaled_mutation_rate: The rate of mutation
@@ -524,9 +612,10 @@ def simulate_tree(
     :rtype: :class:`.SparseTree`
     """
     tree_sequence = simulate(
-        sample_size, scaled_mutation_rate=scaled_mutation_rate,
-        population_models=population_models, random_seed=random_seed,
-        max_memory=max_memory)
+        sample_size, Ne=Ne, length=length, mutation_rate=mutation_rate,
+        population_configurations=population_configurations,
+        migration_matrix=migration_matrix, demographic_events=demographic_events,
+        random_seed=random_seed)
     return next(tree_sequence.trees())
 
 
@@ -549,7 +638,7 @@ class TreeSimulator(object):
     Class to simulate trees under the standard neutral coalescent with
     recombination.
     """
-    def __init__(self, sample_size):
+    def __init__(self, sample_size, recombination_map):
         if not isinstance(sample_size, int):
             raise TypeError("Sample size must be an integer")
         if sample_size < 2:
@@ -557,19 +646,28 @@ class TreeSimulator(object):
         if sample_size >= 2**32:
             raise ValueError("sample_size must be < 2**32")
         self._sample_size = sample_size
-        self._recombination_map = None
+        if not isinstance(recombination_map, RecombinationMap):
+            raise TypeError("RecombinationMap instance required")
+        self._recombination_map = recombination_map
         self._effective_population_size = 1
-        self._num_loci = None
         self._migration_matrix = None
         self._population_configurations = None
-        self._demographic_events = []
         self._random_seed = None
-        self._segment_block_size = None
-        self._avl_node_block_size = None
-        self._node_mapping_block_size = None
-        self._coalescence_record_block_size = None
-        self._max_memory = None
+        self._demographic_events = []
+        # Set default block sizes to 64K objects.
+        # TODO does this give good performance in a range of scenarios?
+        block_size = 64 * 1024
+        # We always need at least n segments, so no point in making
+        # allocation any smaller than this.
+        self._segment_block_size = max(block_size, sample_size)
+        self._avl_node_block_size = block_size
+        self._node_mapping_block_size = block_size
+        self._coalescence_record_block_size = block_size
+        # TODO is it useful to bring back the API to set this? Mostly
+        # the amount of memory required is tiny.
+        self._max_memory = sys.maxsize
         self._ll_sim = None
+        self._max_seed = 2**32 - 1
 
     def get_sample_size(self):
         return self._sample_size
@@ -580,11 +678,22 @@ class TreeSimulator(object):
     def get_effective_population_size(self):
         return self._effective_population_size
 
+    def get_per_locus_scaled_recombination_rate(self):
+        """
+        Returns the rate of recombination between pair of adjacent
+        loci per 4 Ne generations. This is the rate at which recombination
+        occurs in the underlying simulation in genetic coordinates. This
+        is _not_ the per-base rate of recombination.
+        """
+        return (
+            4 * self.get_effective_population_size() *
+            self._recombination_map.get_per_locus_recombination_rate())
+
     def get_migration_matrix(self):
         return self._migration_matrix
 
     def get_num_loci(self):
-        return self._num_loci
+        return self._recombination_map.get_num_loci()
 
     def get_random_seed(self):
         return self._random_seed
@@ -671,46 +780,64 @@ class TreeSimulator(object):
         return json.loads(self._ll_sim.get_configuration_json())
 
     def set_effective_population_size(self, effective_population_size):
+        if effective_population_size <= 0:
+            raise ValueError("Cannot set Ne to a non-positive value.")
         self._effective_population_size = effective_population_size
 
-    def set_recombination_map(self, recombination_map):
-        if not isinstance(recombination_map, RecombinationMap):
-            raise TypeError("RecombinationMap instance required")
-        self._recombination_map = recombination_map
-        self.set_num_loci(self._recombination_map.get_num_loci())
-
-    def set_num_loci(self, num_loci):
-        if not isinstance(num_loci, int):
-            raise TypeError("num_loci must be an integer")
-        if num_loci < 1:
-            raise ValueError("Positive number of loci required")
-        if num_loci >= 2**32:
-            raise ValueError("num_loci must be < 2**32")
-        self._num_loci = num_loci
-
-    def set_uniform_recombination_map(self, recombination_rate, num_loci):
-        """
-        Creates a uniform recombination map for the specified per-base
-        recombination rate and number of loci.
-        """
-        self.set_num_loci(num_loci)
-        # TODO this is a nasty hack caused by us mixing discrete and
-        # continuous coordinates for calculating overall recombination
-        # rates. Do we really need this functionality?
-        rescaled_rate = ((num_loci - 1) * recombination_rate) / num_loci
-        self._recombination_map = RecombinationMap(
-            num_loci, [0, num_loci], [rescaled_rate, 0])
-
     def set_migration_matrix(self, migration_matrix):
+        err = (
+            "migration matrix must be a N x N square matrix encoded "
+            "as a list-of-lists, where N is the number of populations "
+            "defined in the population_configurations. The diagonal "
+            "elements of this matrix must be zero. For example, a "
+            "valid matrix for a 3 population system is "
+            "[[0, 1, 1], [1, 0, 1], [1, 1, 0]]")
+        if self._population_configurations is None:
+            raise ValueError(
+                "Cannot specify a migration matrix without also providing a "
+                "population_configurations argument.")
+        N = len(self._population_configurations)
+        if not isinstance(migration_matrix, list):
+            raise TypeError(err)
+        if len(migration_matrix) != N:
+            raise ValueError(err)
+        for row in migration_matrix:
+            if not isinstance(row, list):
+                raise TypeError(err)
+            if len(row) != N:
+                raise ValueError(err)
         self._migration_matrix = migration_matrix
 
     def set_population_configurations(self, population_configurations):
+        err = (
+            "Population configurations must be a list of "
+            "PopulationConfiguration instances")
+        if not isinstance(population_configurations, collections.Iterable):
+            raise TypeError(err)
+        for config in population_configurations:
+            if not isinstance(config, PopulationConfiguration):
+                raise TypeError(err)
         self._population_configurations = population_configurations
 
     def set_demographic_events(self, demographic_events):
+        err = (
+            "Demographic events must be a list of DemographicEvent instances "
+            "sorted in non-decreasing order of time.")
+        if not isinstance(demographic_events, collections.Iterable):
+            raise TypeError(err)
+        for event in demographic_events:
+            if not isinstance(event, DemographicEvent):
+                raise TypeError(err)
         self._demographic_events = demographic_events
 
     def set_random_seed(self, random_seed):
+        if random_seed is not None:
+            if not isinstance(random_seed, int):
+                raise TypeError("Random seed must be an integer")
+            if random_seed < 1 or random_seed > self._max_seed:
+                raise ValueError(
+                    "Random seeds must be in integers in the range "
+                    "1 <= seed <= {}".format(self._max_seed))
         self._random_seed = random_seed
 
     def set_segment_block_size(self, segment_block_size):
@@ -725,107 +852,56 @@ class TreeSimulator(object):
     def set_coalescence_record_block_size(self, coalescence_record_block_size):
         self._coalescence_record_block_size = coalescence_record_block_size
 
-    def set_max_memory(self, max_memory):
-        """
-        Sets the approximate maximum memory used by the simulation
-        to the specified value.  This can be suffixed with
-        K, M or G to specify units of Kibibytes, Mibibytes or Gibibytes.
-        """
-        if max_memory is None:
-            self._max_memory = max_memory
-        else:
-            s = max_memory
-            d = {"K": 2**10, "M": 2**20, "G": 2**30}
-            multiplier = 1
-            value = s
-            if s.endswith(tuple(d.keys())):
-                value = s[:-1]
-                multiplier = d[s[-1]]
-            n = int(value)
-            self._max_memory = n * multiplier
-
-    def _set_environment_defaults(self):
-        """
-        Sets sensible default values for the memory usage parameters.
-        """
-        # Set the block sizes using our estimates.
+    def create_ll_instance(self):
+        # Set the defaults for the various arguments.
         n = self._sample_size
+        population_configurations = self._population_configurations
         if self._population_configurations is None:
-            self._population_configurations = [PopulationConfiguration(n)]
-        N = len(self._population_configurations)
+            population_configurations = [PopulationConfiguration(n)]
+        N = len(population_configurations)
+        migration_matrix = self._migration_matrix
         if self._migration_matrix is None:
-            self._migration_matrix = [
-                [0.0 for j in range(N)] for k in range(N)]
+            migration_matrix = [[0.0 for j in range(N)] for k in range(N)]
+        demographic_events = self._demographic_events
         if self._demographic_events is None:
             self._demographic_events = []
-
-        if self._recombination_map is None:
-            # No recombination map means a single-locus simulation.
-            self._recombination_map = RecombinationMap(1, [0, 1], [1, 0])
-            self._num_loci = 1
-
-        m = self._num_loci
-        rho = 4 * self.get_scaled_recombination_rate()
-        num_trees = min(m // 2, rho * harmonic_number(n - 1))
-        b = 10  # Baseline maximum
-        num_trees = max(b, int(num_trees))
-        num_avl_nodes = max(b, 4 * n + num_trees)
-        # TODO This is total guesswork. We need to plot this for a range
-        # of values and see what a good approximation is.
-        num_segments = max(b, int(math.log(n) * rho))
-        if self._avl_node_block_size is None:
-            self._avl_node_block_size = num_avl_nodes
-        if self._segment_block_size is None:
-            self._segment_block_size = num_segments
-        if self._node_mapping_block_size is None:
-            self._node_mapping_block_size = num_trees
-        if self._coalescence_record_block_size is None:
-            memory = 16 * 2**10  # 16M
-            # Each coalescence record is 32bytes
-            self._coalescence_record_block_size = memory // 32
+        random_seed = self._random_seed
         if self._random_seed is None:
-            self._random_seed = random.randint(0, 2**31 - 1)
-        if self._max_memory is None:
-            self._max_memory = sys.maxsize  # Unlimited
-
-    def get_scaled_recombination_rate(self):
-        """
-        Returns the per-locus scaled recombination rate Ne r.
-        """
-        rate = self._recombination_map.get_per_locus_recombination_rate()
-        return rate * self._effective_population_size
+            random_seed = random.randint(0, self._max_seed)
+        # Now, convert the high-level values into their low-level
+        # counterparts.
+        N = len(population_configurations)
+        # The migration matrix must be flattened.
+        ll_migration_matrix = [0 for j in range(N**2)]
+        for j in range(N):
+            for k in range(N):
+                ll_migration_matrix[j * N + k] = migration_matrix[j][k]
+        ll_population_configuration = [
+            conf.get_ll_representation() for conf in population_configurations]
+        ll_demographic_events = [
+            event.get_ll_representation(N) for event in demographic_events]
+        ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
+        ll_sim = _msprime.Simulator(
+            sample_size=self._sample_size,
+            num_loci=self._recombination_map.get_num_loci(),
+            migration_matrix=ll_migration_matrix,
+            population_configuration=ll_population_configuration,
+            demographic_events=ll_demographic_events,
+            scaled_recombination_rate=ll_recombination_rate,
+            random_seed=random_seed,
+            max_memory=self._max_memory,
+            segment_block_size=self._segment_block_size,
+            avl_node_block_size=self._avl_node_block_size,
+            node_mapping_block_size=self._node_mapping_block_size,
+            coalescence_record_block_size=self._coalescence_record_block_size)
+        return ll_sim
 
     def run(self):
         """
         Runs the simulation until complete coalescence has occurred.
         """
         assert self._ll_sim is None
-        self._set_environment_defaults()
-        # We flatten the migration matrix for the low-level interface.
-        N = len(self._population_configurations)
-        ll_migration_matrix = [0 for j in range(N**2)]
-        for j in range(N):
-            for k in range(N):
-                ll_migration_matrix[j * N + k] = self._migration_matrix[j][k]
-        ll_population_configuration = [
-            conf.get_ll_representation()
-            for conf in self._population_configurations]
-        ll_demographic_events = [
-            event.get_ll_representation(N)
-            for event in self._demographic_events]
-        self._ll_sim = _msprime.Simulator(
-            sample_size=self._sample_size,
-            num_loci=self._num_loci,
-            migration_matrix=ll_migration_matrix,
-            population_configuration=ll_population_configuration,
-            demographic_events=ll_demographic_events,
-            scaled_recombination_rate=self.get_scaled_recombination_rate(),
-            random_seed=self._random_seed,
-            max_memory=self._max_memory,
-            segment_block_size=self._segment_block_size,
-            avl_node_block_size=self._avl_node_block_size,
-            node_mapping_block_size=self._node_mapping_block_size,
-            coalescence_record_block_size=self._coalescence_record_block_size)
+        self._ll_sim = self.create_ll_instance()
         self._ll_sim.run()
 
     def get_tree_sequence(self):
@@ -858,7 +934,6 @@ class TreeSimulator(object):
             ms with equivalent parameters to this simulator.
         :rtype: list
         """
-        self._set_environment_defaults()
         m = self._num_loci
         rho = self.get_scaled_recombination_rate() * (m - 1)
         args = [executable, str(self._sample_size), str(num_replicates)]
@@ -1169,9 +1244,20 @@ class RecombinationMap(object):
 
     TODO document.
     """
-    def __init__(self, num_loci, positions, rates):
+    DEFAULT_NUM_LOCI = 2**32 - 1
+    """
+    The default number of non-recombining loci in a RecombinationMap.
+    """
+    def __init__(self, positions, rates, num_loci=None):
+        m = self.DEFAULT_NUM_LOCI
+        if num_loci is not None:
+            m = num_loci
         self._ll_recombination_map = _msprime.RecombinationMap(
-            num_loci, positions, rates)
+            m, positions, rates)
+
+    @classmethod
+    def uniform_map(cls, length, rate, num_loci=None):
+        return cls([0, length], [rate, 0], num_loci)
 
     @classmethod
     def read_hapmap(cls, filename):
@@ -1201,7 +1287,7 @@ class RecombinationMap(object):
             assert rate == 0
         finally:
             f.close()
-        return cls(2**32 - 1, positions, rates)
+        return cls(positions, rates)
 
     def get_ll_recombination_map(self):
         return self._ll_recombination_map
@@ -1234,6 +1320,7 @@ class RecombinationMap(object):
 class PopulationConfiguration(object):
     """
     TODO document.
+    Each population has
     """
     def __init__(self, sample_size=0, initial_size=1.0, growth_rate=0.0):
         self.sample_size = sample_size
@@ -1357,46 +1444,46 @@ class MassMigrationEvent(DemographicEvent):
 ##############################
 
 
-class PopulationModel(object):
-    """
-    Superclass of simulation population models.
-    """
-    def __init__(self, start_time):
-        self.start_time = start_time
+# class PopulationModel(object):
+#     """
+#     Superclass of simulation population models.
+#     """
+#     def __init__(self, start_time):
+#         self.start_time = start_time
 
 
-class ConstantPopulationModel(PopulationModel):
-    """
-    A population model in which the size of the population
-    is a fixed multiple ``size`` of :math:`N_0` (the Wright-Fisher population
-    size at time 0), which starts at the specified time.
+# class ConstantPopulationModel(PopulationModel):
+#     """
+#     A population model in which the size of the population
+#     is a fixed multiple ``size`` of :math:`N_0` (the Wright-Fisher population
+#     size at time 0), which starts at the specified time.
 
-    :param float start_time: The time (in coalescent units) at which
-        this population model begins.
-    :param float size: The size of the population under this model
-        relative to :math:`N_0`.
-    """
-    def __init__(self, start_time, size):
-        super(ConstantPopulationModel, self).__init__(start_time)
-        self.size = size
+#     :param float start_time: The time (in coalescent units) at which
+#         this population model begins.
+#     :param float size: The size of the population under this model
+#         relative to :math:`N_0`.
+#     """
+#     def __init__(self, start_time, size):
+#         super(ConstantPopulationModel, self).__init__(start_time)
+#         self.size = size
 
 
-class ExponentialPopulationModel(PopulationModel):
-    """
-    A population model in which the size is exponentially growing (or
-    shrinking). If we have a :attr:`start_time` of :math:`s`, the population
-    size at a time :math:`t` (measured in units of :math:`4N_0` generations)
-    is :math:`N_s e^{\\alpha (t - s)}`, where :math:`N_s` is the population
-    size at time :math:`s`.
+# class ExponentialPopulationModel(PopulationModel):
+#     """
+#     A population model in which the size is exponentially growing (or
+#     shrinking). If we have a :attr:`start_time` of :math:`s`, the population
+#     size at a time :math:`t` (measured in units of :math:`4N_0` generations)
+#     is :math:`N_s e^{\\alpha (t - s)}`, where :math:`N_s` is the population
+#     size at time :math:`s`.
 
-    :param float start_time: The time (in coalescent units) at which
-        this population model begins.
-    :param float alpha: The exponential growth (or contraction) rate
-        :math:`\\alpha`.
-    """
-    def __init__(self, start_time, alpha):
-        super(ExponentialPopulationModel, self).__init__(start_time)
-        self.alpha = alpha
+#     :param float start_time: The time (in coalescent units) at which
+#         this population model begins.
+#     :param float alpha: The exponential growth (or contraction) rate
+#         :math:`\\alpha`.
+#     """
+#     def __init__(self, start_time, alpha):
+#         super(ExponentialPopulationModel, self).__init__(start_time)
+#         self.alpha = alpha
 
 
 def harmonic_number(n):
