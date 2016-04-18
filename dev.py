@@ -306,11 +306,13 @@ def map_stuff():
 def new_api():
     # ts = msprime.simulate(10)
 
-    infile = "tmp__NOBACKUP__/genetic_map_GRCh37_chr2.txt"
+    infile = "hapmap/genetic_map_GRCh37_chr22.txt"
     recomb_map = msprime.RecombinationMap.read_hapmap(infile)
-    sim = msprime.simulator_factory(
-        100, Ne=10**4, recombination_map=recomb_map)
-
+    ts = msprime.simulate(
+        100, Ne=10**4,
+        recombination_map=recomb_map,
+        mutation_rate=1e-8)
+    ts.dump("tmp__NOBACKUP__/chr22.hdf5")
 
 if __name__ == "__main__":
     # mutations()
@@ -320,7 +322,7 @@ if __name__ == "__main__":
     # )
     # plot_1kg_map()
 
-    read_1kg_map()
+    # read_1kg_map()
 
     # simulations()
     # convert_hdf5()

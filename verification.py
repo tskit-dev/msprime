@@ -75,7 +75,7 @@ class SimulationVerifier(object):
         mig_events = [None for j in range(replicates)]
         for j in range(replicates):
             sim.reset()
-            sim.set_random_seed(j)
+            sim.set_random_seed(j + 1)
             sim.run()
             num_trees[j] = sim.get_num_breakpoints() + 1
             time[j] = sim.get_time()
