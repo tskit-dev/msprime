@@ -787,7 +787,7 @@ class TestMspmsOutput(unittest.TestCase):
     def verify_output(
             self, sample_size=2, num_loci=1, recombination_rate=0,
             num_replicates=1, mutation_rate=0.0, print_trees=True,
-            max_memory="16M", precision=3, random_seeds=[1, 2, 3]):
+            precision=3, random_seeds=[1, 2, 3]):
         """
         Runs the UI for the specified parameters, and parses the output
         to ensure it's consistent.
@@ -797,8 +797,8 @@ class TestMspmsOutput(unittest.TestCase):
         # in this case.
         sr = cli.SimulationRunner(
             sample_size=sample_size, num_loci=num_loci,
-            recombination_rate=recombination_rate,
-            num_replicates=num_replicates, mutation_rate=mutation_rate,
+            scaled_recombination_rate=recombination_rate,
+            num_replicates=num_replicates, scaled_mutation_rate=mutation_rate,
             print_trees=print_trees, precision=precision,
             random_seeds=random_seeds)
         with tempfile.TemporaryFile("w+") as f:
@@ -938,7 +938,7 @@ class TestMspmsOutput(unittest.TestCase):
         mutation_rate = 10
         # Run without seeds to get automatically generated seeds
         sr = cli.SimulationRunner(
-            sample_size=sample_size, mutation_rate=mutation_rate)
+            sample_size=sample_size, scaled_mutation_rate=mutation_rate)
         with tempfile.TemporaryFile("w+") as f:
             sr.run(f)
             f.seek(0)
@@ -947,7 +947,7 @@ class TestMspmsOutput(unittest.TestCase):
         seeds = list(map(int, output1.splitlines()[1].split()))
         # Run with the same seeds to get the same output.
         sr = cli.SimulationRunner(
-            sample_size=sample_size, mutation_rate=mutation_rate,
+            sample_size=sample_size, scaled_mutation_rate=mutation_rate,
             random_seeds=seeds)
         with tempfile.TemporaryFile("w+") as f:
             sr.run(f)
@@ -969,42 +969,42 @@ class TestMspArgumentParser(unittest.TestCase):
         self.assertEqual(args.history_file, "out.hdf5")
         self.assertEqual(args.recombination_rate, 0.0)
         self.assertEqual(args.mutation_rate, 0.0)
-        self.assertEqual(args.num_loci, 1)
+        self.assertEqual(args.length, 1)
+        self.assertEqual(args.effective_population_size, 1)
         self.assertEqual(args.random_seed, None)
-        self.assertEqual(args.max_memory, None)
         self.assertEqual(args.compress, False)
 
     def test_simulate_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "simulate"
         args = parser.parse_args([
-            cmd, "100", "out2.hdf5", "-m", "1e3", "-r", "5", "-u", "2",
-            "-s", "1234", "-M", "2G", "-z"])
+            cmd, "100", "out2.hdf5", "-L", "1e3", "-r", "5", "-u", "2",
+            "-s", "1234", "-z", "-N", "11"])
         self.assertEqual(args.sample_size, 100)
         self.assertEqual(args.history_file, "out2.hdf5")
         self.assertEqual(args.recombination_rate, 5)
-        self.assertEqual(args.num_loci, 1000)
+        self.assertEqual(args.length, 1000)
         self.assertEqual(args.random_seed, 1234)
-        self.assertEqual(args.max_memory, "2G")
         self.assertEqual(args.compress, True)
+        self.assertEqual(args.effective_population_size, 11)
 
     def test_simulate_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "simulate"
         args = parser.parse_args([
             cmd, "1000", "out3.hdf5",
-            "--num-loci", "1e4",
+            "--length", "1e4",
             "--recombination-rate", "6",
+            "--effective-population-size", "1e5",
             "--mutation-rate", "1",
             "--random-seed", "123",
-            "--max-memory", "20M",
             "--compress"])
         self.assertEqual(args.sample_size, 1000)
         self.assertEqual(args.history_file, "out3.hdf5")
         self.assertEqual(args.recombination_rate, 6)
-        self.assertEqual(args.num_loci, 10000)
+        self.assertEqual(args.length, 10000)
+        self.assertEqual(args.effective_population_size, 10**5)
         self.assertEqual(args.random_seed, 123)
-        self.assertEqual(args.max_memory, "20M")
         self.assertEqual(args.compress, True)
 
     def test_records_default_values(self):
@@ -1128,7 +1128,7 @@ class TestMspSimulateOutput(unittest.TestCase):
     def test_simulate_short_args(self):
         cmd = "simulate"
         stdout, stdearr = capture_output(cli.msp_main, [
-            cmd, "100", self._history_file, "-m", "1e2", "-r", "5", "-u", "2"])
+            cmd, "100", self._history_file, "-L", "1e2", "-r", "5", "-u", "2"])
         tree_sequence = msprime.load(self._history_file)
         self.assertEqual(tree_sequence.get_sample_size(), 100)
         self.assertEqual(tree_sequence.get_sequence_length(), 100)
@@ -1142,8 +1142,8 @@ class TestMspConversionOutput(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls._tree_sequence = msprime.simulate(
-            10, 10, scaled_recombination_rate=10,
-            scaled_mutation_rate=10, random_seed=1)
+            10, length=10, recombination_rate=10,
+            mutation_rate=10, random_seed=1)
         fd, cls._history_file = tempfile.mkstemp(
             prefix="msp_cli", suffix=".hdf5")
         os.close(fd)

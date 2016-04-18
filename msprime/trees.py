@@ -546,40 +546,6 @@ def simulate(
     return tree_sequence
 
 
-#     sim.set_uniform_recombination_map(scaled_recombination_rate, num_loci)
-#     sim.set_random_seed(random_seed)
-#     sim.set_max_memory(max_memory)
-#     # Reinterpret the population models in terms of the new interface.
-#     # This will be deprecated in later releases in favour of a direct
-#     # approach.
-#     initial_size = 1
-#     initial_growth_rate = 0
-#     demographic_events = []
-#     for model in population_models:
-#         if isinstance(model, ConstantPopulationModel):
-#             if model.start_time == 0:
-#                 initial_size = model.size
-#             else:
-#                 demographic_events.append(SizeChangeEvent(
-#                     model.start_time, model.size))
-#         elif isinstance(model, ExponentialPopulationModel):
-#             if model.start_time == 0:
-#                 initial_growth_rate = model.alpha
-#             else:
-#                 demographic_events.append(GrowthRateChangeEvent(
-#                     model.start_time, model.alpha))
-#         else:
-#             raise TypeError("Arguments must be PopulationModel instances")
-#     sim.set_population_configurations([PopulationConfiguration(
-#         sample_size, initial_size, initial_growth_rate)])
-#     sim.set_demographic_events(demographic_events)
-#     sim.run()
-#     tree_sequence = sim.get_tree_sequence()
-#     if scaled_mutation_rate is not None:
-#         tree_sequence.generate_mutations(scaled_mutation_rate, random_seed)
-#     return tree_sequence
-
-
 def simulate_tree(
         sample_size,
         Ne=1,
@@ -614,7 +580,8 @@ def simulate_tree(
     tree_sequence = simulate(
         sample_size, Ne=Ne, length=length, mutation_rate=mutation_rate,
         population_configurations=population_configurations,
-        migration_matrix=migration_matrix, demographic_events=demographic_events,
+        migration_matrix=migration_matrix,
+        demographic_events=demographic_events,
         random_seed=random_seed)
     return next(tree_sequence.trees())
 
@@ -650,8 +617,9 @@ class TreeSimulator(object):
             raise TypeError("RecombinationMap instance required")
         self._recombination_map = recombination_map
         self._effective_population_size = 1
-        self._migration_matrix = None
-        self._population_configurations = None
+        self._population_configurations = [
+            PopulationConfiguration(sample_size)]
+        self._migration_matrix = [[0]]
         self._random_seed = None
         self._demographic_events = []
         # Set default block sizes to 64K objects.
@@ -818,6 +786,9 @@ class TreeSimulator(object):
             if not isinstance(config, PopulationConfiguration):
                 raise TypeError(err)
         self._population_configurations = population_configurations
+        # Now set the default migration matrix.
+        N = len(self._population_configurations)
+        self._migration_matrix = [[0 for j in range(N)] for k in range(N)]
 
     def set_demographic_events(self, demographic_events):
         err = (
@@ -853,33 +824,23 @@ class TreeSimulator(object):
         self._coalescence_record_block_size = coalescence_record_block_size
 
     def create_ll_instance(self):
-        # Set the defaults for the various arguments.
-        n = self._sample_size
-        population_configurations = self._population_configurations
-        if self._population_configurations is None:
-            population_configurations = [PopulationConfiguration(n)]
-        N = len(population_configurations)
-        migration_matrix = self._migration_matrix
-        if self._migration_matrix is None:
-            migration_matrix = [[0.0 for j in range(N)] for k in range(N)]
-        demographic_events = self._demographic_events
-        if self._demographic_events is None:
-            self._demographic_events = []
         random_seed = self._random_seed
         if self._random_seed is None:
             random_seed = random.randint(0, self._max_seed)
         # Now, convert the high-level values into their low-level
         # counterparts.
-        N = len(population_configurations)
+        N = len(self._population_configurations)
         # The migration matrix must be flattened.
         ll_migration_matrix = [0 for j in range(N**2)]
         for j in range(N):
             for k in range(N):
-                ll_migration_matrix[j * N + k] = migration_matrix[j][k]
+                ll_migration_matrix[j * N + k] = self._migration_matrix[j][k]
         ll_population_configuration = [
-            conf.get_ll_representation() for conf in population_configurations]
+            conf.get_ll_representation()
+            for conf in self._population_configurations]
         ll_demographic_events = [
-            event.get_ll_representation(N) for event in demographic_events]
+            event.get_ll_representation(N)
+            for event in self._demographic_events]
         ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
         ll_sim = _msprime.Simulator(
             sample_size=self._sample_size,
@@ -934,15 +895,20 @@ class TreeSimulator(object):
             ms with equivalent parameters to this simulator.
         :rtype: list
         """
-        m = self._num_loci
-        rho = self.get_scaled_recombination_rate() * (m - 1)
+        L = self._recombination_map.get_length()
+        m = self._recombination_map.get_num_loci()
+        if m != L:
+            raise ValueError(
+                "Only recombination maps where L = m are supported")
+        r = self._recombination_map.get_total_recombination_rate()
+        rho = r
         args = [executable, str(self._sample_size), str(num_replicates)]
         if output_trees:
             args += ["-T"]
-        if m > 1:
-            args += ["-r", str(rho), str(m)]
+        if rho > 0 or L > 1:
+            args += ["-r", str(rho), str(L)]
         if scaled_mutation_rate is not None:
-            mu = scaled_mutation_rate * m
+            mu = scaled_mutation_rate * L
             args += ["-t", str(mu)]
         for conf in self._population_configurations:
             if conf.growth_rate > 0:
@@ -1312,6 +1278,11 @@ class RecombinationMap(object):
 
     def get_positions(self):
         return self._ll_recombination_map.get_positions()
+
+    def get_length(self):
+        # this is a wasteful creation of a list; push the method down
+        # into the low-level API.
+        return self._ll_recombination_map.get_positions()[-1]
 
     def get_rates(self):
         return self._ll_recombination_map.get_rates()

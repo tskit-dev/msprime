@@ -16,4 +16,4 @@ docs: ext2 figs
 
 	
 tags:
-	ctags -f TAGS *.c *.py lib/*.[c,h] msprime/*.py tests/*.py
+	ctags -f TAGS *.c lib/*.[c,h] msprime/*.py tests/*.py

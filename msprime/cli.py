@@ -78,14 +78,6 @@ def add_header_argument(parser):
         help="Print a header line in the output.")
 
 
-def add_max_memory_argument(parser):
-    parser.add_argument(
-        "--max-memory", "-M", default=None,
-        help=(
-            "Maximum memory to use. If the simulation exceeds this limit "
-            "exit with error status. Supports K,M and G suffixes"))
-
-
 def generate_seeds():
     """
     Generate seeds to seed the RNG and output on the command line.
@@ -114,25 +106,29 @@ class SimulationRunner(object):
     Class to run msprime simulation and output the results.
     """
     def __init__(
-            self, sample_size=1, num_loci=1, recombination_rate=0,
+            self, sample_size=1, num_loci=1, scaled_recombination_rate=0,
             num_replicates=1, migration_matrix=None,
             population_configurations=None, demographic_events=None,
-            mutation_rate=0, print_trees=False, max_memory="16M",
+            scaled_mutation_rate=0, print_trees=False,
             precision=3, random_seeds=None):
         self._sample_size = sample_size
         self._num_loci = num_loci
         self._num_replicates = num_replicates
-        self._recombination = recombination_rate
-        self._mutation_rate = mutation_rate
-        self._simulator = msprime.TreeSimulator(sample_size)
-        self._simulator.set_max_memory(max_memory)
-        self._simulator.set_num_loci(num_loci)
-        self._simulator.set_uniform_recombination_map(
-            recombination_rate, num_loci)
-        self._simulator.set_migration_matrix(migration_matrix)
-        self._simulator.set_population_configurations(
-            population_configurations)
-        self._simulator.set_demographic_events(demographic_events)
+        # We use unscaled per-generation rates. By setting Ne = 1 we
+        # don't need to rescale, but we still need to divide by 4 to
+        # cancel the factor introduced when calculated the scaled rates.
+        self._recombination_rate = scaled_recombination_rate / 4
+        self._mutation_rate = scaled_mutation_rate / 4
+        # For strict ms-compability we want to have m non-recombining loci
+        recomb_map = msprime.RecombinationMap.uniform_map(
+            num_loci, self._recombination_rate, num_loci)
+        self._simulator = msprime.simulator_factory(
+                sample_size,
+                Ne=1,
+                recombination_map=recomb_map,
+                population_configurations=population_configurations,
+                migration_matrix=migration_matrix,
+                demographic_events=demographic_events)
         self._precision = precision
         self._print_trees = print_trees
         # sort out the random seeds
@@ -183,8 +179,6 @@ class SimulationRunner(object):
                         print("[{0}]".format(int(l)), end="", file=output)
                         print(ns, file=output)
             if self._mutation_rate > 0:
-                # The mutation rate in ms is multiplied by the size of the
-                # region
                 seed = self._simulator.get_random_seed()
                 tree_sequence.generate_mutations(self._mutation_rate, seed)
                 hg = msprime.HaplotypeGenerator(tree_sequence)
@@ -492,10 +486,9 @@ def create_simulation_runner(parser, arg_list):
         population_configurations=population_configurations,
         demographic_events=[event for _, event in demographic_events],
         num_replicates=args.num_replicates,
-        recombination_rate=r,
-        mutation_rate=mu,
+        scaled_recombination_rate=r,
+        scaled_mutation_rate=mu,
         precision=args.precision,
-        max_memory=args.max_memory,
         print_trees=args.trees,
         random_seeds=args.random_seeds)
     return runner
@@ -649,7 +642,6 @@ def get_mspms_parser():
     group.add_argument(
         "--precision", "-p", type=positive_int, default=3,
         help="Number of values after decimal place to print")
-    add_max_memory_argument(group)
     return parser
 
 
@@ -720,10 +712,10 @@ def run_dump_macs(args):
 def run_simulate(args):
     tree_sequence = msprime.simulate(
         sample_size=int(args.sample_size),
-        num_loci=int(args.num_loci),
-        scaled_recombination_rate=args.recombination_rate,
-        scaled_mutation_rate=args.mutation_rate,
-        max_memory=args.max_memory,
+        Ne=args.effective_population_size,
+        length=args.length,
+        recombination_rate=args.recombination_rate,
+        mutation_rate=args.mutation_rate,
         random_seed=args.random_seed)
     tree_sequence.dump(args.history_file, zlib_compression=args.compress)
 
@@ -744,22 +736,20 @@ def get_msp_parser():
     add_sample_size_argument(simulate_parser)
     add_history_file_argument(simulate_parser)
     simulate_parser.add_argument(
-        "--num-loci", "-m", type=float, default=1,
-        help="The number of non-recombining loci")
+        "--length", "-L", type=float, default=1,
+        help="The length of the simulated region in base pairs.")
     simulate_parser.add_argument(
         "--recombination-rate", "-r", type=float, default=0,
-        help=(
-            "The rate at which recombination occurs between adjacent loci "
-            "in units of 4N generations"))
+        help="The recombination rate per base per generation")
     simulate_parser.add_argument(
         "--mutation-rate", "-u", type=float, default=0,
-        help=(
-            "The rate at which mutations occur within a single locus "
-            "in units of 4N generations"))
+        help="The mutation rate per base per generation")
+    simulate_parser.add_argument(
+        "--effective-population-size", "-N", type=float, default=1,
+        help="The effective population size Ne")
     simulate_parser.add_argument(
         "--random-seed", "-s", type=int, default=None,
         help="The random seed. If not specified one is chosen randomly")
-    add_max_memory_argument(simulate_parser)
     simulate_parser.add_argument(
         "--compress", "-z", action="store_true",
         help="Enable HDF5's transparent zlib compression")

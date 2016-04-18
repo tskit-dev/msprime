@@ -210,37 +210,27 @@ def read_1kg_map():
 
         # tree_seq = msprime.simulate(10, recombination_map=recomb_map)
         n = 10
-        sim = msprime.TreeSimulator(n)
-        sim.set_effective_population_size(10**4)
-        sim.set_recombination_map(recomb_map)
-
         before = time.clock()
-        sim.run()
+        ts = msprime.simulate(
+            n, Ne=10**4, recombination_map=recomb_map)
         print("Simulation ran in ", time.clock() - before)
-        before = time.clock()
-        ts = sim.get_tree_sequence()
-        print("Created tree sequence in ", time.clock() - before)
-        # filename = "tmp__NOBACKUP__/1kg_in.hdf5"
-        # ts.dump(filename)
-        # ts = msprime.load(filename)
-        breakpoints = []
-        for t in ts.trees():
-            breakpoints.append(t.get_interval()[0])
-        b = np.array(breakpoints)
+        # for t in ts.trees():
+        #     breakpoints.append(t.get_interval()[0])
+        # b = np.array(breakpoints)
 
-        N = 500
-        fig, ax1 = pyplot.subplots(figsize=(16, 6))
-        v, bin_edges, bin_number = scipy.stats.binned_statistic(
-            positions, rates, bins=N)
-        x = bin_edges[:-1][np.logical_not(np.isnan(v))]
-        y = v[np.logical_not(np.isnan(v))]
-        ax1.plot(x, y, "-")
+        # N = 500
+        # fig, ax1 = pyplot.subplots(figsize=(16, 6))
+        # v, bin_edges, bin_number = scipy.stats.binned_statistic(
+        #     positions, rates, bins=N)
+        # x = bin_edges[:-1][np.logical_not(np.isnan(v))]
+        # y = v[np.logical_not(np.isnan(v))]
+        # ax1.plot(x, y, "-")
 
-        ax2 = ax1.twinx()
-        v, bin_edges = np.histogram(b, N)
-        ax2.plot(bin_edges[:-1], v, color="green")
+        # ax2 = ax1.twinx()
+        # v, bin_edges = np.histogram(b, N)
+        # ax2.plot(bin_edges[:-1], v, color="green")
 
-        fig.savefig("tmp__NOBACKUP__/hapmap_{}.png".format(name))
+        # fig.savefig("tmp__NOBACKUP__/hapmap_{}.png".format(name))
 
 
     #     print(t.get_interval())
@@ -314,7 +304,12 @@ def map_stuff():
 
 
 def new_api():
-    ts = msprime.simulate(10)
+    # ts = msprime.simulate(10)
+
+    infile = "tmp__NOBACKUP__/genetic_map_GRCh37_chr2.txt"
+    recomb_map = msprime.RecombinationMap.read_hapmap(infile)
+    sim = msprime.simulator_factory(
+        100, Ne=10**4, recombination_map=recomb_map)
 
 
 if __name__ == "__main__":
@@ -325,9 +320,9 @@ if __name__ == "__main__":
     # )
     # plot_1kg_map()
 
-    # read_1kg_map()
+    read_1kg_map()
 
     # simulations()
     # convert_hdf5()
     # map_stuff()
-    new_api()
+    # new_api()

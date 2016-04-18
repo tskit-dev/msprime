@@ -107,38 +107,55 @@ class TestMsCommandLine(tests.MsprimeTestCase):
     Tests the output of the get_ms_command_line method.
     """
     def test_executable(self):
-        sim = msprime.simulator_factory(10)
+        L = 1
+        recomb_map = msprime.RecombinationMap.uniform_map(
+            length=L, rate=0, num_loci=L)
+        sim = msprime.simulator_factory(10, recombination_map=recomb_map)
         line = sim.get_ms_command_line()
         self.assertEqual(line[0], "ms")
         line = sim.get_ms_command_line("otherms")
         self.assertEqual(line[0], "otherms")
 
     def test_sample_size(self):
+        L = 1
+        recomb_map = msprime.RecombinationMap.uniform_map(
+            length=L, rate=0, num_loci=L)
         for n in [2, 10, 100]:
-            sim = msprime.TreeSimulator(n)
+            sim = msprime.simulator_factory(n, recombination_map=recomb_map)
             self.assertEqual(sim.get_ms_command_line()[1], str(n))
 
     def test_recombination(self):
-        for m in [10, 100, 1000]:
+        for L in [10, 100, 1000]:
             for r in [0.125, 1.0, 10]:
-                rho = r * (m - 1)
-                sim = msprime.simulator_factory(10)
+                rho = r * L
+                recomb_map = msprime.RecombinationMap.uniform_map(
+                    length=L, rate=r, num_loci=L)
+                sim = msprime.simulator_factory(
+                    10, recombination_map=recomb_map)
                 args = sim.get_ms_command_line()
                 self.assertEqual(args[-3], "-r")
                 self.assertEqual(float(args[-2]), float(str(rho)))
-                self.assertEqual(args[-1], str(m))
+                self.assertEqual(float(args[-1]), L)
 
     def test_mutation(self):
-        for m in [1, 10, 100, 1000]:
+        for L in [1, 10, 100, 1000]:
             for u in [0.125, 1.0, 10]:
-                mu = u * m
-                sim = msprime.simulator_factory(10)
+                mu = u * L
+                recomb_map = msprime.RecombinationMap.uniform_map(
+                    length=L, rate=0, num_loci=L)
+                sim = msprime.simulator_factory(
+                    10, recombination_map=recomb_map)
                 args = sim.get_ms_command_line(scaled_mutation_rate=u)
                 self.assertEqual(args[-2], "-t")
-                self.assertEqual(args[-1], str(mu))
+                self.assertEqual(float(args[-1]), mu)
 
     def test_trees(self):
-        sim = msprime.simulator_factory(10)
+        r = 0
+        L = 1
+        recomb_map = msprime.RecombinationMap.uniform_map(
+            length=L, rate=r, num_loci=L)
+        sim = msprime.simulator_factory(
+            10, recombination_map=recomb_map)
         self.assertIn("-T", sim.get_ms_command_line())
         self.assertIn("-T", sim.get_ms_command_line(output_trees=True))
         self.assertNotIn("-T", sim.get_ms_command_line(output_trees=False))
@@ -149,8 +166,12 @@ class TestMsCommandLine(tests.MsprimeTestCase):
             scaled_mutation_rate=1.0, output_trees=False))
 
     def test_num_replicates(self):
+        L = 1
         for j in [1, 100, 1000]:
-            sim = msprime.simulator_factory(10)
+            recomb_map = msprime.RecombinationMap.uniform_map(
+                length=L, rate=0, num_loci=L)
+            sim = msprime.simulator_factory(
+                10, recombination_map=recomb_map)
             args = sim.get_ms_command_line(num_replicates=j)
             self.assertEqual(str(j), args[2])
 
@@ -329,6 +350,7 @@ class TestSingleLocusSimulation(HighLevelTestCase):
                 n, random_seed=1, population_configurations=[m2])
             self.assertEqual(st1, st2)
         # TODO add more tests!
+
 
 class TestMultiLocusSimulation(HighLevelTestCase):
     """
@@ -598,12 +620,13 @@ class TestTreeSequence(HighLevelTestCase):
     """
     def get_example_tree_sequences(self):
         for n in [2, 3, 10, 100]:
-            for m in [1, 2, 64, 128]:
-                for rho in [0, 0.1, 1]:
+            for m in [1, 2, 32]:
+                for rho in [0, 0.1, 0.5]:
                     recomb_map = msprime.RecombinationMap.uniform_map(
                         m, rho, num_loci=m)
-                    yield msprime.simulate(
+                    ts = msprime.simulate(
                         n, recombination_map=recomb_map)
+                    yield ts
 
     def test_sparse_trees(self):
         for ts in self.get_example_tree_sequences():
@@ -941,12 +964,13 @@ class TestSimulatorFactory(unittest.TestCase):
             # If we don't specify a matrix, it's 0 everywhere.
             matrix = [0 for j in range(N * N)]
             self.assertEqual(ll_sim.get_migration_matrix(), matrix)
+
             def f(hl_matrix):
                 return msprime.simulator_factory(
                     N * 5, population_configurations=pop_configs,
                     migration_matrix=hl_matrix)
             hl_matrix = [
-                [(j + k) * int(j != k)  for j in range(N)] for k in range(N)]
+                [(j + k) * int(j != k) for j in range(N)] for k in range(N)]
             sim = f(hl_matrix)
             self.assertEqual(sim.get_migration_matrix(), hl_matrix)
             ll_sim = sim.create_ll_instance()
@@ -982,7 +1006,8 @@ class TestSimulatorFactory(unittest.TestCase):
 
     def test_recombination_rate(self):
         def f(recomb_rate):
-            return msprime.simulator_factory(10, recombination_rate=recomb_rate)
+            return msprime.simulator_factory(
+                10, recombination_rate=recomb_rate)
         for bad_type in ["", {}, []]:
             self.assertRaises(TypeError, f, bad_type)
         for bad_value in [-1, -1e15]:
