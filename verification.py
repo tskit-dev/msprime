@@ -5,19 +5,24 @@ Hudson's ms.
 from __future__ import print_function
 from __future__ import division
 
+import math
 import os
 import random
 import subprocess
 import sys
 import tempfile
 
+import scipy.special
 import pandas as pd
+import numpy as np
+import numpy.random
 import statsmodels.api as sm
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
 from matplotlib import pyplot
 
+import dendropy
 import msprime.cli as cli
 
 
@@ -29,6 +34,13 @@ class SimulationVerifier(object):
     def __init__(self, output_dir):
         self._output_dir = output_dir
         self._instances = {}
+        self._ms_executable = ["./data/ms/ms"]
+        self._mspms_executable = ["python", "mspms_dev.py"]
+
+    def get_ms_seeds(self):
+        max_seed = 2**16
+        seeds = [random.randint(1, max_seed) for j in range(3)]
+        return ["-seed"] + map(str, seeds)
 
     def _run_sample_stats(self, args):
         print("\t", " ".join(args))
@@ -45,17 +57,17 @@ class SimulationVerifier(object):
         return df
 
     def _run_ms_mutation_stats(self, args):
-        executable = "./data/ms/ms"
-        return self._run_sample_stats([executable] + args.split())
+        return self._run_sample_stats(
+            self._ms_executable + args.split() + self.get_ms_seeds())
 
     def _run_msprime_mutation_stats(self, args):
-        executable = ["python", "mspms_dev.py"]
-        return self._run_sample_stats(executable + args.split())
+        return self._run_sample_stats(
+            self._mspms_executable + args.split() + self.get_ms_seeds())
 
     def _run_ms_coalescent_stats(self, args):
         executable = ["./data/ms/ms_summary_stats"]
         with tempfile.TemporaryFile() as f:
-            argList = executable + args.split()
+            argList = executable + args.split() + self.get_ms_seeds()
             print("\t", " ".join(argList))
             subprocess.call(argList, stdout=f)
             f.seek(0)
@@ -75,7 +87,7 @@ class SimulationVerifier(object):
         mig_events = [None for j in range(replicates)]
         for j in range(replicates):
             sim.reset()
-            sim.set_random_seed(j)
+            sim.set_random_seed(None)
             sim.run()
             num_trees[j] = sim.get_num_breakpoints() + 1
             time[j] = sim.get_time()
@@ -125,16 +137,157 @@ class SimulationVerifier(object):
             the_keys = keys
 
         for key in the_keys:
-            args = self._instances[key]
-            print(key, args)
-            self._run_coalescent_stats(key, args)
-            self._run_mutation_stats(key, args)
+            runner = self._instances[key]
+            runner()
 
     def add_ms_instance(self, key, command_line):
         """
         Adds a test instance with the specified ms command line.
         """
-        self._instances[key] = command_line
+        def f():
+            print(key, command_line)
+            self._run_coalescent_stats(key, command_line)
+            self._run_mutation_stats(key, command_line)
+        self._instances[key] = f
+
+    def get_segregating_sites_histogram(self, cmd):
+        print("\t", " ".join(cmd))
+        output = subprocess.check_output(cmd)
+        max_s = 200
+        hist = np.zeros(max_s)
+        for line in output.splitlines():
+            if line.startswith("segsites"):
+                s = int(line.split()[1])
+                if s <= max_s:
+                    hist[s] += 1
+        return hist / np.sum(hist)
+
+    def get_S_distribution(self, k, n, theta):
+        """
+        Returns the probability of having k segregating sites in a sample of
+        size n. Wakely pg 94.
+        """
+        s = 0.0
+        for i in range(2, n + 1):
+            t1 = (-1)**i
+            t2 = scipy.special.binom(n - 1, i - 1)
+            t3 = (i - 1) / (theta + i - 1)
+            t4 = (theta / (theta + i - 1))**k
+            s += t1 * t2 * t3 * t4
+        return s
+
+    def run_s_analytical_check(self):
+        """
+        Runs the check for the number of segregating sites against the
+        analytical prediction.
+        """
+        R = 100000
+        theta = 2
+        max_s = 20
+        basedir = "tmp__NOBACKUP__/analytical_s"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        for n in range(2, 15):
+            cmd = "{} {} -t {}".format(n, R, theta)
+            S_ms = self.get_segregating_sites_histogram(
+                self._ms_executable + cmd.split() + self.get_ms_seeds())
+            S_msp = self.get_segregating_sites_histogram(
+                self._mspms_executable + cmd.split() + self.get_ms_seeds())
+            filename = os.path.join(basedir, "{}.png".format(n))
+
+            fig, ax = pyplot.subplots()
+            index = np.arange(10)
+            S_analytical = [self.get_S_distribution(j, n, theta) for j in index]
+            bar_width = 0.35
+            rects1 = pyplot.bar(
+                index, S_ms[index], bar_width, color='b', label="ms")
+            rects2 = pyplot.bar(
+                index + bar_width, S_msp[index], bar_width, color='r', label="msp")
+            pyplot.plot(index + bar_width, S_analytical, "o", color='k')
+            pyplot.legend()
+            pyplot.xticks(index + bar_width, [str(j) for j in index])
+            pyplot.tight_layout()
+            pyplot.savefig(filename)
+
+    def get_tbl_distribution(self, n, R, executable):
+        """
+        Returns an array of the R total branch length values from
+        the specified ms-like executable.
+        """
+        cmd = executable + "{} {} -T -p 10".format(n, R).split()
+        cmd += self.get_ms_seeds()
+        print("\t", " ".join(cmd))
+        output = subprocess.check_output(cmd)
+        tbl = np.zeros(R)
+        j = 0
+        for line in output.splitlines():
+            if line.startswith("("):
+                t = dendropy.Tree.get_from_string(line, schema="newick")
+                tbl[j] = t.length()
+                j += 1
+        return tbl
+
+    def get_analytical_tbl(self, n, t):
+        """
+        Returns the probabily density of the total branch length t with
+        a sample of n lineages. Wakeley Page 78.
+        """
+        t1 = (n - 1) / 2
+        t2 = math.exp(-t / 2)
+        t3 = pow(1 - math.exp(-t / 2), n - 2)
+        return t1 * t2 * t3
+
+    def run_tbl_analytical_check(self):
+        """
+        Runs the check for the total branch length.
+        """
+        R = 10000
+        basedir = "tmp__NOBACKUP__/analytical_tbl"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        for n in range(2, 15):
+            tbl_ms = self.get_tbl_distribution(n, R, self._ms_executable)
+            tbl_msp = self.get_tbl_distribution(n, R, self._mspms_executable)
+
+            sm.graphics.qqplot(tbl_ms)
+            sm.qqplot_2samples(tbl_ms, tbl_msp, line="45")
+            filename = os.path.join(basedir, "qqplot_{}.png".format(n))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            hist_ms, bin_edges = np.histogram(tbl_ms, 20, density=True)
+            hist_msp, _ = np.histogram(tbl_msp, bin_edges, density=True)
+
+            index = bin_edges[:-1]
+            # We don't seem to have the analytical value quite right here,
+            # but since the value is so very close to ms's, there doesn't
+            # seem to be much point in trying to fix it.
+            analytical = [self.get_analytical_tbl(n, x * 2) for x in index]
+            fig, ax = pyplot.subplots()
+            bar_width = 0.15
+            rects1 = pyplot.bar(
+                index, hist_ms, bar_width, color='b', label="ms")
+            rects2 = pyplot.bar(
+                index + bar_width, hist_msp, bar_width, color='r', label="msp")
+            pyplot.plot(index + bar_width, analytical, "o", color='k')
+            pyplot.legend()
+            # pyplot.xticks(index + bar_width, [str(j) for j in index])
+            pyplot.tight_layout()
+            filename = os.path.join(basedir, "hist_{}.png".format(n))
+            pyplot.savefig(filename)
+
+    def add_s_analytical_check(self):
+        """
+        Adds a check for the analytical predictions about the distribution
+        of S, the number of segregating sites.
+        """
+        self._instances["analytical_s"] = self.run_s_analytical_check
+
+    def add_total_branch_length_analytical_check(self):
+        """
+        Adds a check for the analytical check for the total branch length.
+        """
+        self._instances["analytical_tbl"] = self.run_tbl_analytical_check
 
     def add_random_instance(
             self, key, num_populations=1, num_replicates=1000,
@@ -191,11 +344,11 @@ class SimulationVerifier(object):
             else:
                 cmd += " -eN {} {}".format(t, random.random())
 
-        self._instances[key] = cmd
+        self.add_ms_instance(key, cmd)
 
 
 def main():
-    random.seed(2)
+    # random.seed(2)
     verifier = SimulationVerifier("tmp__NOBACKUP__")
 
     # Try various options independently
@@ -328,6 +481,10 @@ def main():
     verifier.add_random_instance("random1")
     verifier.add_random_instance("random2", num_demographic_events=10)
     # verifier.add_random_instance("random2", num_populations=3)
+
+    # Add analytical checks
+    verifier.add_s_analytical_check()
+    verifier.add_total_branch_length_analytical_check()
 
     keys = None
     if len(sys.argv) > 1:

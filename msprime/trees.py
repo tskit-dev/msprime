@@ -496,7 +496,14 @@ def simulate(
     sim.run()
     tree_sequence = sim.get_tree_sequence()
     if scaled_mutation_rate is not None:
-        tree_sequence.generate_mutations(scaled_mutation_rate, random_seed)
+        # Due to some deeply weird problem here, if we use the same random
+        # seed to generate the mutations as the tree sequence we get some
+        # departures from the coalescent expectations. So, as a workaround,
+        # add 1.
+        seed = None
+        if random_seed is not None:
+            seed = random_seed + 1
+        tree_sequence.generate_mutations(scaled_mutation_rate, seed)
     return tree_sequence
 
 
