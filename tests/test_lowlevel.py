@@ -681,7 +681,7 @@ class TestSimulationState(LowLevelTestCase):
         config = {
             "sample_size": n, "num_loci": m,
             "scaled_recombination_rate": rho,
-            "random_seed": random_seed,  "migration_matrix": migration_matrix,
+            "migration_matrix": migration_matrix,
             "demographic_events": demographic_events,
             "population_configuration": population_configuration
         }
@@ -706,7 +706,6 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(n, sim.get_sample_size())
             self.assertEqual(m, sim.get_num_loci())
             self.assertEqual(rho, sim.get_scaled_recombination_rate())
-            self.assertEqual(random_seed, sim.get_random_seed())
             self.assertEqual(max_memory, sim.get_max_memory())
             self.assertEqual(segment_block_size, sim.get_segment_block_size())
             self.assertEqual(
@@ -916,6 +915,7 @@ class TestSimulator(LowLevelTestCase):
     """
     def test_bad_parameters(self):
         rng = _msprime.RandomGenerator(1)
+
         def f(sample_size=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 sample_size, _msprime.RandomGenerator(random_seed), **kwargs)
@@ -999,6 +999,7 @@ class TestSimulator(LowLevelTestCase):
 
     def test_bad_sample_configurations(self):
         rng = _msprime.RandomGenerator(1)
+
         def f(sample_size, pop_sample_sizes):
             population_configuration = [
                 get_population_configuration(n) for n in pop_sample_sizes]
@@ -1260,9 +1261,9 @@ class TestSimulator(LowLevelTestCase):
         ]
         seed = 10
         for params in simulations:
-            params["random_generator"] =  _msprime.RandomGenerator(seed)
+            params["random_generator"] = _msprime.RandomGenerator(seed)
             sim1 = _msprime.Simulator(**params)
-            params["random_generator"] =  _msprime.RandomGenerator(seed)
+            params["random_generator"] = _msprime.RandomGenerator(seed)
             sim2 = _msprime.Simulator(**params)
             sim1.run()
             sim2.run()
@@ -1527,14 +1528,11 @@ class TestTreeSequence(LowLevelTestCase):
     def verify_mutation_parameters_json(self, json_str):
         parameters = json.loads(json_str.decode())
         self.assertIn("scaled_mutation_rate", parameters)
-        self.assertIn("random_seed", parameters)
         self.assertIsInstance(parameters["scaled_mutation_rate"], int, float)
-        self.assertIsInstance(parameters["random_seed"], int)
 
     def verify_tree_parameters_json(self, json_str):
         parameters = json.loads(json_str.decode())
         self.assertIn("scaled_recombination_rate", parameters)
-        self.assertIn("random_seed", parameters)
         self.assertIn("sample_size", parameters)
         self.assertIn("num_loci", parameters)
         self.assertIn("population_configuration", parameters)
@@ -1542,7 +1540,6 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertIn("demographic_events", parameters)
         self.assertIsInstance(
             parameters["scaled_recombination_rate"], int, float)
-        self.assertIsInstance(parameters["random_seed"], int)
         self.assertIsInstance(parameters["sample_size"], int)
         self.assertIsInstance(parameters["num_loci"], int)
         self.assertIsInstance(parameters["population_configuration"], list)
@@ -1748,7 +1745,6 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertIsNotNone(json_str)
             params = json.loads(json_str)
             self.assertEqual(params["scaled_mutation_rate"], 10.0)
-            self.assertEqual(params["random_seed"], 2)
 
     def test_mutation_persistence(self):
         ts = self.get_tree_sequence(mutation_rate=0.0)

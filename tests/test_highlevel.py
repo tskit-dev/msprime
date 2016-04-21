@@ -390,7 +390,6 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertEqual(
             parameters["scaled_recombination_rate"],
             sim.get_per_locus_scaled_recombination_rate())
-        self.assertEqual(parameters["random_seed"], sim.get_random_seed())
         config = sim.get_configuration()
         self.assertEqual(config, parameters)
 
@@ -898,34 +897,6 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertEqual(sim.get_effective_population_size(), Ne)
         # Test the default.
         sim = msprime.simulator_factory(10)
-
-    def test_random_seed(self):
-        def f(seed):
-            return msprime.simulator_factory(10, random_seed=seed)
-        for seed in [1, 100, 2**32 - 1]:
-            sim = f(seed)
-            self.assertEqual(sim.get_random_seed(), seed)
-            ll_sim = sim.create_ll_instance()
-            self.assertEqual(ll_sim.get_random_seed(), seed)
-        for bad_type in ["2", {}, self, 1.01, 1e100]:
-            self.assertRaises(TypeError, f, bad_type)
-        for bad_value in [-1, 0, 2**32]:
-            self.assertRaises(ValueError, f, bad_value)
-        # Test the default
-        sim = msprime.simulator_factory(2)
-        self.assertIsNone(sim.get_random_seed())
-
-    def test_default_seed_generation(self):
-        seeds = []
-        for j in range(100):
-            sim = msprime.simulator_factory(3)
-            self.assertIsNone(sim.get_random_seed())
-            ll_sim = sim.create_ll_instance()
-            seed = ll_sim.get_random_seed()
-            self.assertGreater(seed, 0)
-            self.assertLess(seed, 2**32 - 1)
-            seeds.append(seed)
-        self.assertEqual(len(set(seeds)), len(seeds))
 
     def test_population_configurations(self):
         def f(configs):

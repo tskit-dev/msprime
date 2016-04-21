@@ -57,12 +57,9 @@ mutgen_encode_parameters(mutgen_t *self)
 {
     int ret = -1;
     const char *pattern = "{"
-        "\"random_seed\":%lu,"
         "\"scaled_mutation_rate\":" MSP_LOSSLESS_DBL "}";
     int written;
     size_t size = 1 + (size_t) snprintf(NULL, 0, pattern,
-            0, // FIXME
-            /* self->random_seed, */
             self->mutation_rate);
     char *str = malloc(size);
 
@@ -71,8 +68,6 @@ mutgen_encode_parameters(mutgen_t *self)
         goto out;
     }
     written = snprintf(str, size, pattern,
-            /* self->random_seed, */
-            0, // FIXME
             self->mutation_rate);
     if (written < 0) {
         ret = MSP_ERR_IO;

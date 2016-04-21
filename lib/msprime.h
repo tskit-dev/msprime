@@ -97,13 +97,13 @@ typedef struct {
 } population_t;
 
 typedef struct {
+    gsl_rng *rng;
     /* input parameters */
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
     uint32_t num_populations;
     double *migration_matrix;
-    unsigned long random_seed;
     /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
@@ -123,7 +123,6 @@ typedef struct {
     size_t used_memory;
     double time;
     uint32_t next_node;
-    gsl_rng *rng;
     population_t *populations;
     avl_tree_t breakpoints;
     avl_tree_t overlap_counts;

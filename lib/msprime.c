@@ -579,7 +579,6 @@ msp_generate_provenance_strings(msp_t *self)
     const char *pattern = "{"
         "\"sample_size\": %d, "
         "\"num_loci\": %d, "
-        "\"random_seed\": %ld, "
         "\"scaled_recombination_rate\": " MSP_LOSSLESS_DBL ", "
         "\"migration_matrix\": %s, "
         "\"population_configuration\": %s, "
@@ -601,7 +600,6 @@ msp_generate_provenance_strings(msp_t *self)
     written = snprintf(NULL, 0, pattern,
         self->sample_size,
         self->num_loci,
-        self->random_seed,
         self->scaled_recombination_rate,
         migration_matrix,
         population_configuration,
@@ -620,7 +618,6 @@ msp_generate_provenance_strings(msp_t *self)
     written = snprintf(buffer, buffer_size, pattern,
         self->sample_size,
         self->num_loci,
-        self->random_seed,
         self->scaled_recombination_rate,
         migration_matrix,
         population_configuration,
@@ -1005,7 +1002,6 @@ msp_print_state(msp_t *self)
     printf("max_memory  = %f MiB\n", (double) self->max_memory / gig);
     printf("n = %d\n", self->sample_size);
     printf("m = %d\n", self->num_loci);
-    printf("random seed = %ld\n", self->random_seed);
     printf("configuration = %s\n", self->configuration_json);
 
     printf("Demographic events:\n");

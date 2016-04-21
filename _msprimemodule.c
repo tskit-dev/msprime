@@ -254,7 +254,7 @@ RandomGenerator_check_state(RandomGenerator *self)
 {
     int ret = 0;
     if (self->rng == NULL) {
-        PyErr_SetString(PyExc_SystemError, "RandonGenerator not initialised");
+        PyErr_SetString(PyExc_SystemError, "RandomGenerator not initialised");
         ret = -1;
     }
     return ret;
@@ -283,7 +283,7 @@ RandomGenerator_init(RandomGenerator *self, PyObject *args, PyObject *kwds)
     }
     if (seed == 0 || seed >= (1UL<<32)) {
         PyErr_Format(PyExc_ValueError,
-            "seeds greated than 0 and less than 2^32");
+            "seeds must be greater than 0 and less than 2^32");
         goto out;
     }
     self->seed = seed;
@@ -829,19 +829,6 @@ Simulator_get_scaled_recombination_rate(Simulator  *self)
         goto out;
     }
     ret = Py_BuildValue("d", self->sim->scaled_recombination_rate);
-out:
-    return ret;
-}
-
-
-static PyObject *
-Simulator_get_random_seed(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("k", self->sim->random_seed);
 out:
     return ret;
 }
@@ -1404,8 +1391,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_scaled_recombination_rate",
             (PyCFunction) Simulator_get_scaled_recombination_rate, METH_NOARGS,
             "Returns the scaled recombination rate." },
-    {"get_random_seed", (PyCFunction) Simulator_get_random_seed, METH_NOARGS,
-            "Returns the random seed" },
     {"get_max_memory", (PyCFunction) Simulator_get_max_memory, METH_NOARGS,
             "Returns the maximum memory used by the simulator" },
     {"get_segment_block_size",
