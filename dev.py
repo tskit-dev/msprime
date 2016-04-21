@@ -314,6 +314,22 @@ def new_api():
         mutation_rate=1e-8)
     ts.dump("tmp__NOBACKUP__/chr22.hdf5")
 
+
+def replicate_example():
+    theta = 5
+    R = 1000
+    replicates = msprime.simulate(
+        sample_size=100, recombination_rate=2, mutation_rate=theta/4,
+        num_replicates=R, random_seed=None)
+    S = np.zeros(R)
+    T = np.zeros(R)
+    for j, tree_sequence in enumerate(replicates):
+        S[j] = tree_sequence.get_num_mutations()
+        T[j] = tree_sequence.get_num_trees()
+    print("theta =", theta, "mean(S) = ", np.mean(S))
+    print(np.mean(T))
+
+
 if __name__ == "__main__":
     # mutations()
 
@@ -328,3 +344,4 @@ if __name__ == "__main__":
     # convert_hdf5()
     # map_stuff()
     # new_api()
+    replicate_example()

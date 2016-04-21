@@ -37,6 +37,9 @@ except ImportError:
 
 import _msprime
 
+# Make the low-level generator appear like its from this module
+from _msprime import RandomGenerator
+
 
 class TreeDrawer(object):
     """
@@ -439,16 +442,20 @@ class SparseTree(object):
         return not self.__eq__(other)
 
 
+def _get_random_seed():
+    return random.randint(1, 2**32 - 1)
+
+
 def simulator_factory(
         sample_size,
         Ne=1,
+        random_generator=None,
         length=None,
         recombination_rate=None,
         recombination_map=None,
         population_configurations=None,
         migration_matrix=None,
-        demographic_events=[],
-        random_seed=None):
+        demographic_events=[]):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -469,14 +476,16 @@ def simulator_factory(
         recomb_map = recombination_map
     sim = TreeSimulator(sample_size, recomb_map)
     sim.set_effective_population_size(Ne)
+    rng = random_generator
+    if rng is None:
+        rng = RandomGenerator(_get_random_seed())
+    sim.set_random_generator(rng)
     if population_configurations is not None:
         sim.set_population_configurations(population_configurations)
     if migration_matrix is not None:
         sim.set_migration_matrix(migration_matrix)
     if demographic_events is not None:
         sim.set_demographic_events(demographic_events)
-    if random_seed is not None:
-        sim.set_random_seed(random_seed)
     return sim
 
 
@@ -490,7 +499,8 @@ def simulate(
         population_configurations=None,
         migration_matrix=None,
         demographic_events=[],
-        random_seed=None):
+        random_seed=None,
+        num_replicates=1):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`.
@@ -530,67 +540,26 @@ def simulate(
         of the simulation.
     :rtype: :class:`.TreeSequence`
     """
+    seed = random_seed
+    if random_seed is None:
+        seed = _get_random_seed()
+    rng = RandomGenerator(seed)
     sim = simulator_factory(
-        sample_size, Ne=Ne, length=length,
+        sample_size, random_generator=rng,
+        Ne=Ne, length=length,
         recombination_rate=recombination_rate,
         recombination_map=recombination_map,
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
-        demographic_events=demographic_events,
-        random_seed=random_seed)
-    sim.run()
-    tree_sequence = sim.get_tree_sequence()
+        demographic_events=demographic_events)
+    scaled_mutation_rate = 0
     if mutation_rate is not None:
         scaled_mutation_rate = 4 * Ne * mutation_rate
-        # Due to some deeply weird problem here, if we use the same random
-        # seed to generate the mutations as the tree sequence we get some
-        # departures from the coalescent expectations. So, as a workaround,
-        # add 1.
-        seed = None
-        if random_seed is not None:
-            seed = random_seed + 1
-        tree_sequence.generate_mutations(scaled_mutation_rate, seed)
+
+    sim.run()
+    tree_sequence = sim.get_tree_sequence()
+    tree_sequence.generate_mutations(scaled_mutation_rate, rng)
     return tree_sequence
-
-
-def simulate_tree(
-        sample_size,
-        Ne=1,
-        length=None,
-        mutation_rate=None,
-        population_configurations=None,
-        migration_matrix=None,
-        demographic_events=[],
-        random_seed=None):
-    """
-    Simulates the coalescent at a single locus for the specified sample size
-    under the specified list of population models. Returns a
-    :class:`.SparseTree` representing the results.
-
-    TODO document.
-
-    :param int sample_size: The number of individuals in our sample.
-    :param float scaled_mutation_rate: The rate of mutation
-        per :math:`4N_0` generations.
-    :param int random_seed: The random seed. If this is `None`, a
-        random seed will be automatically generated.
-    :param list population_models: The list of :class:`.PopulationModel`
-        instances describing the demographic history of the population.
-    :param int,str max_memory: The maximum amount of memory used
-        during the simulation. If this is exceeded, the simulation will
-        terminate with a :class:`LibraryError` exception. By default
-        this is not set, and no memory limits are imposed.
-    :return: The :class:`.SparseTree` object representing the results
-        of the simulation.
-    :rtype: :class:`.SparseTree`
-    """
-    tree_sequence = simulate(
-        sample_size, Ne=Ne, length=length, mutation_rate=mutation_rate,
-        population_configurations=population_configurations,
-        migration_matrix=migration_matrix,
-        demographic_events=demographic_events,
-        random_seed=random_seed)
-    return next(tree_sequence.trees())
 
 
 def load(path):
@@ -623,11 +592,11 @@ class TreeSimulator(object):
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
         self._recombination_map = recombination_map
+        self._random_generator = None
         self._effective_population_size = 1
         self._population_configurations = [
             PopulationConfiguration(sample_size)]
         self._migration_matrix = [[0]]
-        self._random_seed = None
         self._demographic_events = []
         # Set default block sizes to 64K objects.
         # TODO does this give good performance in a range of scenarios?
@@ -642,7 +611,16 @@ class TreeSimulator(object):
         # the amount of memory required is tiny.
         self._max_memory = sys.maxsize
         self._ll_sim = None
-        self._max_seed = 2**32 - 1
+
+    def set_random_generator(self, random_generator):
+        """
+        Sets the random generator instance for this simulator to the specified
+        value.
+        """
+        self._random_generator = random_generator
+
+    def get_random_generator(self):
+        return self._random_generator
 
     def get_sample_size(self):
         return self._sample_size
@@ -669,9 +647,6 @@ class TreeSimulator(object):
 
     def get_num_loci(self):
         return self._recombination_map.get_num_loci()
-
-    def get_random_seed(self):
-        return self._random_seed
 
     def get_population_configurations(self):
         return self._population_configurations
@@ -808,16 +783,6 @@ class TreeSimulator(object):
                 raise TypeError(err)
         self._demographic_events = demographic_events
 
-    def set_random_seed(self, random_seed):
-        if random_seed is not None:
-            if not isinstance(random_seed, int):
-                raise TypeError("Random seed must be an integer")
-            if random_seed < 1 or random_seed > self._max_seed:
-                raise ValueError(
-                    "Random seeds must be in integers in the range "
-                    "1 <= seed <= {}".format(self._max_seed))
-        self._random_seed = random_seed
-
     def set_segment_block_size(self, segment_block_size):
         self._segment_block_size = segment_block_size
 
@@ -831,9 +796,6 @@ class TreeSimulator(object):
         self._coalescence_record_block_size = coalescence_record_block_size
 
     def create_ll_instance(self):
-        random_seed = self._random_seed
-        if self._random_seed is None:
-            random_seed = random.randint(0, self._max_seed)
         # Now, convert the high-level values into their low-level
         # counterparts.
         N = len(self._population_configurations)
@@ -849,11 +811,9 @@ class TreeSimulator(object):
             event.get_ll_representation(N)
             for event in self._demographic_events]
         ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
-        # TMP --- we need a long-term management of the RNG
-        ll_rng = _msprime.RandomGenerator(random_seed)
         ll_sim = _msprime.Simulator(
             sample_size=self._sample_size,
-            random_generator=ll_rng,
+            random_generator=self._random_generator,
             num_loci=self._recombination_map.get_num_loci(),
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
@@ -871,6 +831,8 @@ class TreeSimulator(object):
         Runs the simulation until complete coalescence has occurred.
         """
         assert self._ll_sim is None
+        if self._random_generator is None:
+            raise ValueError("A random generator instance must be set")
         self._ll_sim = self.create_ll_instance()
         self._ll_sim.run()
 
@@ -1021,6 +983,20 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_num_records()
 
+    def get_num_trees(self):
+        """
+        Returns the number of distinct trees in this tree sequence. This
+        is equal to the number of trees returned by the :meth:`.trees`
+        method.
+
+        :return: The number of trees in this tree sequence.
+        :rtype: int
+        """
+        count = 0
+        for _ in self.trees():
+            count += 1
+        return count
+
     def get_num_mutations(self):
         """
         Returns the number of mutations in this tree sequence. See
@@ -1145,7 +1121,7 @@ class TreeSequence(object):
         return HaplotypeGenerator(self).haplotypes()
 
     def generate_mutations(
-            self, scaled_mutation_rate, random_seed=None):
+            self, scaled_mutation_rate, random_generator):
         """
         Generates mutation according to the infinite sites model. This
         method over-writes any existing mutations stored in the tree
@@ -1153,16 +1129,11 @@ class TreeSequence(object):
 
         :param float scaled_mutation_rate: The rate of mutation
             per locus per :math:`4N_0` generations.
-        :param int random_seed: The random seed to use when generating
-            mutations.
+        :param :class:`.RandomGenerator` random_generator: The random
+            generator instance to use when generating mutations.
         """
-        seed = random_seed
-        if random_seed is None:
-            seed = random.randint(0, 2**31)
-        # TMP --- we need proper random generator management here.
-        ll_rng = _msprime.RandomGenerator(seed)
         self._ll_tree_sequence.generate_mutations(
-            scaled_mutation_rate, ll_rng)
+            scaled_mutation_rate, random_generator)
 
     def set_mutations(self, mutations):
         """

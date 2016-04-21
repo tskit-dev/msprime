@@ -264,6 +264,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         iter1 = ts.trees()
         iter2 = pts.trees()
         length = 0
+        num_trees = 0
         for st1, st2 in zip(iter1, iter2):
             self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
             root = 1
@@ -279,7 +280,9 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertLessEqual(r, ts.get_sequence_length())
             length += r - l
             self.verify_sparse_tree(st1)
+            num_trees += 1
         self.assertEqual(length, ts.get_sequence_length())
+        self.assertEqual(ts.get_num_trees(), num_trees)
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
 
@@ -327,27 +330,21 @@ class TestSingleLocusSimulation(HighLevelTestCase):
     """
     def test_simple_cases(self):
         for n in range(2, 10):
-            st = msprime.simulate_tree(n)
+            st = next(msprime.simulate(n).trees())
             self.verify_sparse_tree(st)
         for n in [11, 13, 19, 101]:
-            st = msprime.simulate_tree(n)
+            st = next(msprime.simulate(n).trees())
             self.verify_sparse_tree(st)
-
-    def test_error_cases(self):
-        for n in [-100, -1, 0, 1]:
-            self.assertRaises(ValueError, msprime.simulate_tree, n)
-        for n in ["", None, "2", 2.2, 1e5]:
-            self.assertRaises(TypeError, msprime.simulate_tree, n)
 
     def test_models(self):
         # Exponential growth of 0 and constant model should be identical.
         for n in [2, 10, 100]:
             m1 = msprime.PopulationConfiguration(n, growth_rate=0)
             m2 = msprime.PopulationConfiguration(n, initial_size=1.0)
-            st1 = msprime.simulate_tree(
-                n, random_seed=1, population_configurations=[m1])
-            st2 = msprime.simulate_tree(
-                n, random_seed=1, population_configurations=[m2])
+            st1 = next(msprime.simulate(
+                n, random_seed=1, population_configurations=[m1]).trees())
+            st2 = next(msprime.simulate(
+                n, random_seed=1, population_configurations=[m2]).trees())
             self.assertEqual(st1, st2)
         # TODO add more tests!
 
@@ -410,10 +407,10 @@ class TestTreeSimulator(HighLevelTestCase):
         Verifies a simulation for the specified parameters.
         """
         recomb_map = msprime.RecombinationMap.uniform_map(m, r, num_loci=m)
-        seed = 1
+        rng = msprime.RandomGenerator(1)
         sim = msprime.simulator_factory(
-            n, recombination_map=recomb_map, random_seed=seed)
-        self.assertEqual(sim.get_random_seed(), seed)
+            n, recombination_map=recomb_map, random_generator=rng)
+        self.assertEqual(sim.get_random_generator(), rng)
         sim.run()
         self.assertEqual(sim.get_num_breakpoints(), len(sim.get_breakpoints()))
         self.assertGreater(sim.get_used_memory(), 0)
@@ -504,8 +501,8 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         Verifies a simulation for the specified parameters.
         """
         recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-        tree_sequence = msprime.simulate(n, recombination_map=recomb_map)
-        tree_sequence.generate_mutations(theta)
+        tree_sequence = msprime.simulate(
+            n, recombination_map=recomb_map, mutation_rate=theta)
         haplotypes = list(tree_sequence.haplotypes())
         for h in haplotypes:
             self.assertEqual(len(h), tree_sequence.get_num_mutations())
@@ -589,8 +586,7 @@ class TestNewickConversion(HighLevelTestCase):
         ]
         for n, m, r in cases:
             recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-            ts = msprime.simulator_factory(
-                n, recombination_map=recomb_map, random_seed=1)
+            ts = msprime.simulator_factory(n, recombination_map=recomb_map)
             ts.run()
             tree_sequence = ts.get_tree_sequence()
             breakpoints = ts.get_breakpoints()
@@ -604,8 +600,7 @@ class TestNewickConversion(HighLevelTestCase):
             m = random.randint(10, 1000)
             r = random.random()
             recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-            ts = msprime.simulator_factory(
-                n, recombination_map=recomb_map, random_seed=1)
+            ts = msprime.simulator_factory(n, recombination_map=recomb_map)
             ts.run()
             tree_sequence = ts.get_tree_sequence()
             breakpoints = ts.get_breakpoints()
@@ -632,16 +627,17 @@ class TestTreeSequence(HighLevelTestCase):
             self.verify_sparse_trees(ts)
 
     def test_mutations(self):
+        rng = msprime.RandomGenerator(3)
         all_zero = True
         for ts in self.get_example_tree_sequences():
-            ts.generate_mutations(0)
+            ts.generate_mutations(0, rng)
             self.assertEqual(ts.get_num_mutations(), 0)
             for st in ts.trees():
                 self.assertEqual(st.get_num_mutations(), 0)
             # choose a mutation rate that hopefully guarantees mutations,
             # but not too many.
             mu = 100 / ts.get_sequence_length()
-            ts.generate_mutations(mu)
+            ts.generate_mutations(mu, rng)
             if ts.get_num_mutations() > 0:
                 all_zero = False
                 self.verify_mutations(ts)
@@ -692,8 +688,8 @@ class TestSparseTree(HighLevelTestCase):
     Some simple tests on the API for the sparse tree.
     """
     def get_tree(self):
-        return msprime.simulate_tree(
-            10, random_seed=1, mutation_rate=1)
+        ts = msprime.simulate(10, random_seed=1, mutation_rate=1)
+        return next(ts.trees())
 
     def test_str(self):
         t = self.get_tree()

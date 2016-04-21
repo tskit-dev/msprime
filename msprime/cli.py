@@ -98,7 +98,9 @@ def get_single_seed(seeds):
         # Colon separate the values to ensure that we don't have
         # collisions in situations like 1:23:45, 12:3:45.
         m.update("{}:".format(s).encode())
-    return int(m.hexdigest(), 16)
+    # Now take the integer value of this modulo 2^32, as this is
+    # the largest seed value we'll accept.
+    return int(m.hexdigest(), 16) % (2**32)
 
 
 class SimulationRunner(object):
@@ -135,9 +137,10 @@ class SimulationRunner(object):
         ms_seeds = random_seeds
         if random_seeds is None:
             ms_seeds = generate_seeds()
-        python_seed = get_single_seed(ms_seeds)
-        random.seed(python_seed)
+        seed = get_single_seed(ms_seeds)
+        self._random_generator = msprime.RandomGenerator(seed)
         self._ms_random_seeds = ms_seeds
+        self._simulator.set_random_generator(self._random_generator)
 
     def get_num_replicates(self):
         """
@@ -160,7 +163,6 @@ class SimulationRunner(object):
         print(" ".join(sys.argv), file=output)
         print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
         for j in range(self._num_replicates):
-            self._simulator.set_random_seed(random.randint(0, 2**30))
             self._simulator.run()
             tree_sequence = self._simulator.get_tree_sequence()
             breakpoints = self._simulator.get_breakpoints()
@@ -179,14 +181,8 @@ class SimulationRunner(object):
                         print("[{0}]".format(int(l)), end="", file=output)
                         print(ns, file=output)
             if self._mutation_rate > 0:
-                # The mutation rate in ms is multiplied by the size of the
-                # region
-                # FIXME if we use the same seed as the simulation we get some
-                # departures from the coalescent. We need to update this to
-                # use an efficient and straightforward mechanism for
-                # replication.
-                seed = self._simulator.get_random_seed() + 1
-                tree_sequence.generate_mutations(self._mutation_rate, seed)
+                tree_sequence.generate_mutations(
+                    self._mutation_rate, self._random_generator)
                 hg = msprime.HaplotypeGenerator(tree_sequence)
                 s = tree_sequence.get_num_mutations()
                 print("segsites:", s, file=output)
