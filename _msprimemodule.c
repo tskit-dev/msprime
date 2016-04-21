@@ -40,7 +40,14 @@ static PyObject *MsprimeLibraryError;
 
 typedef struct {
     PyObject_HEAD
+    unsigned long seed;
+    gsl_rng* rng;
+} RandomGenerator;
+
+typedef struct {
+    PyObject_HEAD
     msp_t *sim;
+    RandomGenerator *random_generator;
 } Simulator;
 
 typedef struct {
@@ -89,7 +96,7 @@ typedef struct {
     PyObject_HEAD
     TreeSequence *tree_sequence;
     hapgen_t *haplotype_generator;
-} HaplotypeGenerator;;
+} HaplotypeGenerator;
 
 static void
 handle_library_error(int err)
@@ -236,6 +243,119 @@ convert_mutations(mutation_t *mutations, size_t num_mutations)
 out:
     return ret;
 }
+
+/*===================================================================
+ * RandomGenerator
+ *===================================================================
+ */
+
+static int
+RandomGenerator_check_state(RandomGenerator *self)
+{
+    int ret = 0;
+    if (self->rng == NULL) {
+        PyErr_SetString(PyExc_SystemError, "RandonGenerator not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+RandomGenerator_dealloc(RandomGenerator* self)
+{
+    if (self->rng != NULL) {
+        gsl_rng_free(self->rng);
+        self->rng = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+RandomGenerator_init(RandomGenerator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    static char *kwlist[] = {"seed", NULL};
+    unsigned long seed = 0;
+
+    self->rng  = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "k", kwlist, &seed)) {
+        goto out;
+    }
+    if (seed == 0 || seed >= (1UL<<32)) {
+        PyErr_Format(PyExc_ValueError,
+            "seeds greated than 0 and less than 2^32");
+        goto out;
+    }
+    self->seed = seed;
+    self->rng = gsl_rng_alloc(gsl_rng_default);
+    gsl_rng_set(self->rng, self->seed);
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+RandomGenerator_get_seed(RandomGenerator *self)
+{
+    PyObject *ret = NULL;
+
+    if (RandomGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("k", self->seed);
+out:
+    return ret;
+}
+
+static PyMemberDef RandomGenerator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef RandomGenerator_methods[] = {
+    {"get_seed", (PyCFunction) RandomGenerator_get_seed,
+        METH_NOARGS, "Returns the random seed for this generator."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject RandomGeneratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.RandomGenerator",             /* tp_name */
+    sizeof(RandomGenerator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)RandomGenerator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "RandomGenerator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    RandomGenerator_methods,             /* tp_methods */
+    RandomGenerator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)RandomGenerator_init,      /* tp_init */
+};
+
 
 /*===================================================================
  * Simulator
@@ -524,6 +644,7 @@ Simulator_dealloc(Simulator* self)
         PyMem_Free(self->sim);
         self->sim = NULL;
     }
+    Py_XDECREF(self->random_generator);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -532,7 +653,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int sim_ret;
-    static char *kwlist[] = {"sample_size", "random_seed",
+    static char *kwlist[] = {"sample_size", "random_generator",
         "num_loci", "scaled_recombination_rate",
         "population_configuration", "migration_matrix", "demographic_events",
         "max_memory", "avl_node_block_size", "segment_block_size",
@@ -540,10 +661,10 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
+    RandomGenerator *random_generator = NULL;
     /* parameter defaults */
     Py_ssize_t sample_size = 2;
     Py_ssize_t num_loci = 1;
-    unsigned long random_seed = 1;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
@@ -552,9 +673,11 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t coalescence_record_block_size = 10;
 
     self->sim = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "nl|ndO!O!O!nnnnn", kwlist,
-            &sample_size, &random_seed, &num_loci,
-            &scaled_recombination_rate,
+    self->random_generator = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "nO!|ndO!O!O!nnnnn", kwlist,
+            &sample_size,
+            &RandomGeneratorType, &random_generator,
+            &num_loci, &scaled_recombination_rate,
             &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
@@ -562,22 +685,23 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &node_mapping_block_size, &coalescence_record_block_size)) {
         goto out;
     }
+    self->random_generator = random_generator;
+    Py_INCREF(self->random_generator);
+    if (RandomGenerator_check_state(self->random_generator) != 0) {
+        goto out;
+    }
     self->sim = PyMem_Malloc(sizeof(msp_t));
     if (self->sim == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    sim_ret = msp_alloc(self->sim, (size_t) sample_size);
+    sim_ret = msp_alloc(self->sim, (size_t) sample_size,
+            self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
     }
     sim_ret = msp_set_num_loci(self->sim, (size_t) num_loci);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_random_seed(self->sim, (unsigned long) random_seed);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -1894,16 +2018,19 @@ TreeSequence_generate_mutations(TreeSequence *self,
 {
     int err;
     PyObject *ret = NULL;
-    static char *kwlist[] = {"mutation_rate", "random_seed", NULL};
+    static char *kwlist[] = {"mutation_rate", "random_generator", NULL};
     mutgen_t *mutgen = NULL;
     double mutation_rate;
-    unsigned long random_seed;
+    RandomGenerator *random_generator = NULL;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dk", kwlist,
-            &mutation_rate, &random_seed)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dO!", kwlist,
+            &mutation_rate, &RandomGeneratorType, &random_generator)) {
+        goto out;
+    }
+    if (RandomGenerator_check_state(random_generator) != 0) {
         goto out;
     }
     mutgen = PyMem_Malloc(sizeof(mutgen_t));
@@ -1911,7 +2038,8 @@ TreeSequence_generate_mutations(TreeSequence *self,
         PyErr_NoMemory();
         goto out;
     }
-    err = mutgen_alloc(mutgen, self->tree_sequence, mutation_rate, random_seed);
+    err = mutgen_alloc(mutgen, self->tree_sequence, mutation_rate,
+            random_generator->rng);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3527,6 +3655,13 @@ init_msprime(void)
     if (module == NULL) {
         INITERROR;
     }
+    /* RandomGenerator type */
+    RandomGeneratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&RandomGeneratorType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&RandomGeneratorType);
+    PyModule_AddObject(module, "RandomGenerator", (PyObject *) &RandomGeneratorType);
     /* Simulator type */
     SimulatorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&SimulatorType) < 0) {

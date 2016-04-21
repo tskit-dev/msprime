@@ -34,7 +34,6 @@
 
 typedef struct {
     double mutation_rate;
-    unsigned long random_seed;
 } mutation_params_t;
 
 static void
@@ -305,9 +304,8 @@ out:
 }
 
 static int
-get_configuration(msp_t *msp, mutation_params_t *mutation_params,
-        recomb_map_t *recomb_map,
-        char **output_file, const char *filename)
+get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
+        recomb_map_t *recomb_map, char **output_file, const char *filename)
 {
     int ret = 0;
     int err;
@@ -327,10 +325,14 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
                 config_error_text(config), config_error_line(config),
                 filename);
     }
+    if (config_lookup_int(config, "random_seed", &int_tmp) == CONFIG_FALSE) {
+        fatal_error("random_seed is a required parameter");
+    }
+    gsl_rng_set(rng,  (unsigned long) int_tmp);
     if (config_lookup_int(config, "sample_size", &int_tmp) == CONFIG_FALSE) {
         fatal_error("sample_size is a required parameter");
     }
-    ret = msp_alloc(msp, (size_t) int_tmp);
+    ret = msp_alloc(msp, (size_t) int_tmp, rng);
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
@@ -341,13 +343,6 @@ get_configuration(msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    if (config_lookup_int(config, "random_seed", &int_tmp) == CONFIG_FALSE) {
-        fatal_error("random_seed is a required parameter");
-    }
-    msp_set_random_seed(msp, (unsigned long) int_tmp);
-    /* Set the random seed for mutations to the same value */
-    mutation_params->random_seed = (unsigned long) int_tmp;
-
     /* Set the mutation rate */
     if (config_lookup_float(config,
             "mutation_rate", &mutation_params->mutation_rate)
@@ -620,17 +615,18 @@ run_simulate(char *conf_file)
     int ret = -1;
     int result;
     mutation_params_t mutation_params;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     msp_t *msp = calloc(1, sizeof(msp_t));
     char *output_file = NULL;
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
 
-    if (msp == NULL || tree_seq == NULL || recomb_map == NULL
+    if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL) {
         goto out;
     }
-    ret = get_configuration(msp, &mutation_params, recomb_map,
+    ret = get_configuration(rng, msp, &mutation_params, recomb_map,
             &output_file, conf_file);
     if (ret != 0) {
         goto out;
@@ -660,8 +656,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate,
-            mutation_params.random_seed);
+    ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
     if (ret != 0) {
         goto out;
     }
@@ -720,6 +715,9 @@ out:
     if (mutgen != NULL) {
         mutgen_free(mutgen);
         free(mutgen);
+    }
+    if (rng != NULL) {
+        gsl_rng_free(rng);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));

@@ -317,6 +317,7 @@ typedef struct {
 } hapgen_t;
 
 typedef struct {
+    gsl_rng *rng;
     double mutation_rate;
     double sequence_length;
     tree_sequence_t *tree_sequence;
@@ -325,14 +326,11 @@ typedef struct {
     size_t max_num_mutations;
     size_t mutation_block_size;
     mutation_t *mutations;
-    unsigned long random_seed;
     char *parameters;
     char *environment;
-    gsl_rng *rng;
 } mutgen_t;
 
-int msp_alloc(msp_t *self, size_t sample_size);
-int msp_set_random_seed(msp_t *self, unsigned long random_seed);
+int msp_alloc(msp_t *self, size_t sample_size, gsl_rng *rng);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_scaled_recombination_rate(msp_t *self, 
@@ -475,7 +473,7 @@ int recomb_map_get_rates(recomb_map_t *self, double *rates);
 void recomb_map_print_state(recomb_map_t *self);
 
 int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence, 
-        double mutation_rate, unsigned long random_seed);
+        double mutation_rate, gsl_rng *rng);
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self);
 void mutgen_print_state(mutgen_t *self);

@@ -849,14 +849,16 @@ class TreeSimulator(object):
             event.get_ll_representation(N)
             for event in self._demographic_events]
         ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
+        # TMP --- we need a long-term management of the RNG
+        ll_rng = _msprime.RandomGenerator(random_seed)
         ll_sim = _msprime.Simulator(
             sample_size=self._sample_size,
+            random_generator=ll_rng,
             num_loci=self._recombination_map.get_num_loci(),
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
             scaled_recombination_rate=ll_recombination_rate,
-            random_seed=random_seed,
             max_memory=self._max_memory,
             segment_block_size=self._segment_block_size,
             avl_node_block_size=self._avl_node_block_size,
@@ -1154,13 +1156,13 @@ class TreeSequence(object):
         :param int random_seed: The random seed to use when generating
             mutations.
         """
-        # TODO document recombination_map parameter and remove the separate
-        # code paths.
         seed = random_seed
         if random_seed is None:
             seed = random.randint(0, 2**31)
+        # TMP --- we need proper random generator management here.
+        ll_rng = _msprime.RandomGenerator(seed)
         self._ll_tree_sequence.generate_mutations(
-            scaled_mutation_rate, seed)
+            scaled_mutation_rate, ll_rng)
 
     def set_mutations(self, mutations):
         """

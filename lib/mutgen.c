@@ -38,9 +38,8 @@ mutgen_print_state(mutgen_t *self)
     size_t j;
 
     printf("Mutgen state\n");
-    printf("\tparamters = %s\n", self->parameters);
+    printf("\tparameters = %s\n", self->parameters);
     printf("\tenvironment = %s\n", self->environment);
-    printf("\trandom_seed = %d\n", (int) self->random_seed);
     printf("\tmutation_rate = %f\n", (double) self->mutation_rate);
     printf("\tsequence_length = %f\n", (double) self->sequence_length);
     printf("\tmutation_block_size = %d\n", (int) self->mutation_block_size);
@@ -62,7 +61,8 @@ mutgen_encode_parameters(mutgen_t *self)
         "\"scaled_mutation_rate\":" MSP_LOSSLESS_DBL "}";
     int written;
     size_t size = 1 + (size_t) snprintf(NULL, 0, pattern,
-            self->random_seed,
+            0, // FIXME
+            /* self->random_seed, */
             self->mutation_rate);
     char *str = malloc(size);
 
@@ -71,7 +71,8 @@ mutgen_encode_parameters(mutgen_t *self)
         goto out;
     }
     written = snprintf(str, size, pattern,
-            self->random_seed,
+            /* self->random_seed, */
+            0, // FIXME
             self->mutation_rate);
     if (written < 0) {
         ret = MSP_ERR_IO;
@@ -86,21 +87,17 @@ out:
 
 int
 mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
-        double mutation_rate, unsigned long random_seed)
+        double mutation_rate, gsl_rng *rng)
 {
     int ret = MSP_ERR_NO_MEMORY;
 
     assert(tree_sequence != NULL);
+    assert(rng != NULL);
     memset(self, 0, sizeof(mutgen_t));
-    self->random_seed = random_seed;
     self->mutation_rate = mutation_rate;
     self->tree_sequence = tree_sequence;
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
-    self->rng = gsl_rng_alloc(gsl_rng_default);
-    if (self->rng == NULL) {
-        goto out;
-    }
-    gsl_rng_set(self->rng, random_seed);
+    self->rng = rng;
     self->num_mutations = 0;
     self->mutation_block_size = 1024 * 1024;
     self->max_num_mutations = self->mutation_block_size;
@@ -128,9 +125,6 @@ out:
 int
 mutgen_free(mutgen_t *self)
 {
-    if (self->rng != NULL) {
-        gsl_rng_free(self->rng);
-    }
     if (self->mutations != NULL) {
         free(self->mutations);
     }

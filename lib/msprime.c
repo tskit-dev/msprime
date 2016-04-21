@@ -209,14 +209,6 @@ msp_get_num_recombination_events(msp_t *self)
 }
 
 int
-msp_set_random_seed(msp_t *self, unsigned long random_seed)
-{
-    self->random_seed = random_seed;
-    gsl_rng_set(self->rng, self->random_seed);
-    return 0;
-}
-
-int
 msp_set_num_loci(msp_t *self, size_t num_loci)
 {
     int ret = 0;
@@ -653,7 +645,7 @@ out:
 /* Top level allocators and initialisation */
 
 int
-msp_alloc(msp_t *self, size_t sample_size)
+msp_alloc(msp_t *self, size_t sample_size, gsl_rng *rng)
 {
     int ret = -1;
 
@@ -663,13 +655,7 @@ msp_alloc(msp_t *self, size_t sample_size)
         goto out;
     }
     self->sample_size = (uint32_t) sample_size;
-    self->rng = gsl_rng_alloc(gsl_rng_default);
-    if (self->rng == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    /* Set the parameter defaults */
-    msp_set_random_seed(self, 1);
+    self->rng = rng;
     self->num_loci = 1;
     self->scaled_recombination_rate = 0.0;
     ret = msp_set_num_populations(self, 1);
@@ -771,9 +757,6 @@ msp_free(msp_t *self)
         tmp = de->next;
         free(de);
         de = tmp;
-    }
-    if (self->rng != NULL) {
-        gsl_rng_free(self->rng);
     }
     if (self->migration_matrix != NULL) {
         free(self->migration_matrix);
