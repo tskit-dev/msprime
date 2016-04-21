@@ -874,6 +874,20 @@ class TestSimulatorFactory(unittest.TestCase):
     Tests that the simulator factory high-level function correctly
     creates simulators with the required parameter values.
     """
+    def test_default_random_seed(self):
+        sim = msprime.simulator_factory(10)
+        rng = sim.get_random_generator()
+        self.assertIsInstance(rng, msprime.RandomGenerator)
+        self.assertNotEqual(rng.get_seed(), 0)
+
+    def test_random_seed(self):
+        seed = 12345
+        rng = msprime.RandomGenerator(seed)
+        sim = msprime.simulator_factory(10, random_generator=rng)
+        rng = sim.get_random_generator()
+        self.assertEqual(rng, sim.get_random_generator())
+        self.assertEqual(rng.get_seed(), seed)
+
     def test_sample_size(self):
         self.assertRaises(TypeError, msprime.simulator_factory)
         self.assertRaises(ValueError, msprime.simulator_factory, 1)
@@ -1034,3 +1048,43 @@ class TestSimulatorFactory(unittest.TestCase):
             ValueError, msprime.simulator_factory, 10,
             recombination_map=recomb_map, length=1,
             recombination_rate=1)
+
+
+class TestSimulateInterface(unittest.TestCase):
+    """
+    Some simple test cases for the simulate() interface.
+    """
+    def test_defaults(self):
+        n = 10
+        ts = msprime.simulate(n)
+        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertEqual(ts.get_sample_size(), n)
+        self.assertEqual(ts.get_num_trees(), 1)
+        self.assertEqual(ts.get_num_mutations(), 0)
+
+    def test_replicates(self):
+        n = 20
+        num_replicates = 10
+        count = 0
+        for ts in msprime.simulate(n, num_replicates=num_replicates):
+            count += 1
+            self.assertIsInstance(ts, msprime.TreeSequence)
+            self.assertEqual(ts.get_sample_size(), n)
+            self.assertEqual(ts.get_num_trees(), 1)
+        self.assertEqual(num_replicates, count)
+
+    def test_mutations(self):
+        n = 10
+        ts = msprime.simulate(n, mutation_rate=10)
+        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertEqual(ts.get_sample_size(), n)
+        self.assertEqual(ts.get_num_trees(), 1)
+        self.assertGreater(ts.get_num_mutations(), 0)
+
+    def test_recombination(self):
+        n = 10
+        ts = msprime.simulate(n, recombination_rate=10)
+        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertEqual(ts.get_sample_size(), n)
+        self.assertGreater(ts.get_num_trees(), 1)
+        self.assertEqual(ts.get_num_mutations(), 0)

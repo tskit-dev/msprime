@@ -446,6 +446,23 @@ def _get_random_seed():
     return random.randint(1, 2**32 - 1)
 
 
+def _replicate_generator(
+        sim, rng, scaled_mutation_rate, num_replicates):
+    """
+    Generator function for the many-replicates case of the simulate
+    function.
+    """
+    # Should use range here, but Python 2 makes this awkward...
+    j = 0
+    while j < num_replicates:
+        j += 1
+        sim.run()
+        tree_sequence = sim.get_tree_sequence()
+        tree_sequence.generate_mutations(scaled_mutation_rate, rng)
+        yield tree_sequence
+        sim.reset()
+
+
 def simulator_factory(
         sample_size,
         Ne=1,
@@ -555,11 +572,14 @@ def simulate(
     scaled_mutation_rate = 0
     if mutation_rate is not None:
         scaled_mutation_rate = 4 * Ne * mutation_rate
-
-    sim.run()
-    tree_sequence = sim.get_tree_sequence()
-    tree_sequence.generate_mutations(scaled_mutation_rate, rng)
-    return tree_sequence
+    if num_replicates == 1:
+        sim.run()
+        tree_sequence = sim.get_tree_sequence()
+        tree_sequence.generate_mutations(scaled_mutation_rate, rng)
+        return tree_sequence
+    else:
+        return _replicate_generator(
+            sim, rng, scaled_mutation_rate, num_replicates)
 
 
 def load(path):
