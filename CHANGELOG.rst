@@ -1,3 +1,17 @@
+*********************
+[0.1.10] - 2016-04-21
+*********************
+
+Bugfix release. Fixes serious issue affecting simulations with small
+sample sizes.
+
+https://github.com/jeromekelleher/msprime/issues/7
+
+All users of mspms should update immediately and any analyses using
+a small sample size (< 10) with mutations should be repeated.
+
+Many thanks to Konrad Lohse for identifying the issue.
+
 ********************
 [0.1.9] - 2016-04-01
 ********************
@@ -10,7 +24,6 @@ All users of mspms should update immediately and any analyses using
 the ``-seeds`` option in mspms should be repeated.
 
 Many thanks to Derek Setter for identifying the issue.
-
 
 ********************
 [0.1.8] - 2016-02-17

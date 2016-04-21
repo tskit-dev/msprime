@@ -179,7 +179,13 @@ class SimulationRunner(object):
                         print("[{0}]".format(int(l)), end="", file=output)
                         print(ns, file=output)
             if self._mutation_rate > 0:
-                seed = self._simulator.get_random_seed()
+                # The mutation rate in ms is multiplied by the size of the
+                # region
+                # FIXME if we use the same seed as the simulation we get some
+                # departures from the coalescent. We need to update this to
+                # use an efficient and straightforward mechanism for
+                # replication.
+                seed = self._simulator.get_random_seed() + 1
                 tree_sequence.generate_mutations(self._mutation_rate, seed)
                 hg = msprime.HaplotypeGenerator(tree_sequence)
                 s = tree_sequence.get_num_mutations()
