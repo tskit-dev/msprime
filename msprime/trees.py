@@ -533,26 +533,31 @@ def simulate(
     :param float recombination_rate: The rate of recombination per base
         per generation. This parameter cannot be used along with
         `recombination_map`. Defaults to 0 if not specified.
-    :param :class:`.RecombinationMap`: The map describing the
-        changing rates of recombination along the simulated chromosome.
-        This parameter cannot be used along with the `recombination_rate`
-        or `length` parameters, as these values are encoded within
-        the map. Defaults to a uniform rate as described in the
-        ``recombination_rate`` parameter if not specified.
+    :param recombination_map: The map
+        describing the changing rates of recombination along the simulated
+        chromosome. This parameter cannot be used along with the
+        `recombination_rate` or `length` parameters, as these values
+        are encoded within the map. Defaults to a uniform rate as
+        described in the ``recombination_rate`` parameter if not specified.
+    :type recombination_map: :class:`.RecombinationMap`
     :param float mutation_rate: The rate of mutation per base per
         generation. If not specified, no mutations are generated.
     :param list population_configurations: The list of
-        :class`.PopulationConfiguration` instances describing the
+        :class:`.PopulationConfiguration` instances describing the
         sampling configuration, relative sizes and growth rates of
         the populations to be simulated.
+    :type population_configurations: list or None.
     :param list migration_matrix: The matrix describing the rates
         of migration between all pairs of populations.
         **TODO** describe structure and interpretation.
-    :param list :class:`.DemographicEvent`: The list of demographic
-        events to simulate.
+    :param list demographic_events: The list of demographic events to
+        simulate.
         **TODO** describe these and document.
     :param int random_seed: The random seed. If this is `None`, a
-        random seed will be automatically generated.
+        random seed will be automatically generated. Valid random
+        seeds must be between 1 and :math:`2^{32} - 1`.
+    :param int num_replicates: The number of replicates of the specified
+        parameters to simulate.
     :return: The :class:`.TreeSequence` object representing the results
         of the simulation.
     :rtype: :class:`.TreeSequence`
@@ -984,7 +989,7 @@ class TreeSequence(object):
         genomic scale over which tree coordinates are defined. Given a
         tree sequence with a sequence length :math:`L`, the constituent
         trees will be defined over the half-closed interval
-        :math:`(0, L])`. Each tree then covers some subset of this
+        :math:`(0, L]`. Each tree then covers some subset of this
         interval --- see :meth:`msprime.SparseTree.get_interval` for details.
 
         :return: The length of the sequence in this tree sequence in bases.
@@ -1142,16 +1147,9 @@ class TreeSequence(object):
 
     def generate_mutations(
             self, scaled_mutation_rate, random_generator):
-        """
-        Generates mutation according to the infinite sites model. This
-        method over-writes any existing mutations stored in the tree
-        sequence.
-
-        :param float scaled_mutation_rate: The rate of mutation
-            per locus per :math:`4N_0` generations.
-        :param :class:`.RandomGenerator` random_generator: The random
-            generator instance to use when generating mutations.
-        """
+        # TODO document this function when it's ready to be brought back
+        # into the public interface. We would need to document the
+        # RandomGenerator as well.
         self._ll_tree_sequence.generate_mutations(
             scaled_mutation_rate, random_generator)
 
@@ -1161,10 +1159,11 @@ class TreeSequence(object):
         `(position, node)` tuples.  Each entry in the list must be a tuple of
         the form :math:`(x, u)`, where :math:`x` is a floating point value
         defining a genomic position and :math:`u` is an integer defining a tree
-        node. A genomic position :math:`x` must satisfy :math:`0 \leq x < m`
-        where :math:`m` is the number of loci (see :meth:`.get_num_loci`). A
-        node :math:`u` must satisfy :math:`0 < u \leq N` where :math:`N` is the
-        largest valued node in the tree sequence (see :meth:`.get_num_nodes`).
+        node. A genomic position :math:`x` must satisfy :math:`0 \leq x < L`
+        where :math:`L` is the sequence length (see
+        :meth:`.get_sequence_length`). A node :math:`u` must satisfy
+        :math:`0 < u \leq N` where :math:`N` is the largest valued node in
+        the tree sequence (see :meth:`.get_num_nodes`).
 
         :param list mutations: The list of mutations to be assigned to this
             tree sequence.

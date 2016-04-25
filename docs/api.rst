@@ -35,35 +35,41 @@ fall per unit length per :math:`4N_0` generations.
     However, the ``mspms`` command line application is fully :program:`ms`
     compatible.
 
-++++++++++++++++++
-Demographic events
-++++++++++++++++++
-
-Demographic events in the history of the population are specified via
-:class:`PopulationModel` instances. Each population model has a starting time
-(which may be zero), and some associated parameters. Arbitrarily complex
-demographic histories can specified by providing a list of these population
-model to :func:`simulate`. This method of specifying demographic events
-closely follows the ``-eG`` and ``-eN`` options to :program:`ms`, and the models
-are equivalent to these options.
-
-.. autoclass:: msprime.ConstantPopulationModel
-
-.. autoclass:: msprime.ExponentialPopulationModel
-
 
 *******************
 Running simulations
 *******************
 
-The :func:`.simulate` function provides the basic interface to running the
-coalescent with recombination simulation. The :func:`.simulate_tree` function
-provides a simplified interface for the special case in which we have no
-recombination.
+The :func:`.simulate` function provides the primary interface to running
+coalescent simulations in msprime.
 
 .. autofunction:: msprime.simulate
 
-.. autofunction:: msprime.simulate_tree
++++++++++++++++++++++++++++++++++++
+Population structure and demography
++++++++++++++++++++++++++++++++++++
+
+.. Demographic events in the history of the population are specified via
+.. :class:`PopulationModel` instances. Each population model has a starting time
+.. (which may be zero), and some associated parameters. Arbitrarily complex
+.. demographic histories can specified by providing a list of these population
+.. model to :func:`simulate`. This method of specifying demographic events
+.. closely follows the ``-eG`` and ``-eN`` options to :program:`ms`, and the models
+.. are equivalent to these options.
+
+.. .. autoclass:: msprime.ConstantPopulationModel
+
+.. .. autoclass:: msprime.ExponentialPopulationModel
+
+.. autoclass:: msprime.PopulationConfiguration
+
+
+
+++++++++++++++++++++++++++++
+Variable recombination rates
+++++++++++++++++++++++++++++
+
+.. autoclass:: msprime.RecombinationMap
 
 
 *******************
