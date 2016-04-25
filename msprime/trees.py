@@ -517,7 +517,7 @@ def simulate(
         migration_matrix=None,
         demographic_events=[],
         random_seed=None,
-        num_replicates=1):
+        num_replicates=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`.
@@ -532,12 +532,12 @@ def simulate(
         Defaults to 1 if not specified.
     :param float recombination_rate: The rate of recombination per base
         per generation. This parameter cannot be used along with
-        `recombination_map`. Defaults to 0 if not specified.
+        ``recombination_map``. Defaults to 0 if not specified.
     :param recombination_map: The map
         describing the changing rates of recombination along the simulated
         chromosome. This parameter cannot be used along with the
-        `recombination_rate` or `length` parameters, as these values
-        are encoded within the map. Defaults to a uniform rate as
+        ``recombination_rate`` or ``length`` parameters, as these
+        values are encoded within the map. Defaults to a uniform rate as
         described in the ``recombination_rate`` parameter if not specified.
     :type recombination_map: :class:`.RecombinationMap`
     :param float mutation_rate: The rate of mutation per base per
@@ -557,10 +557,21 @@ def simulate(
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
     :param int num_replicates: The number of replicates of the specified
-        parameters to simulate.
+        parameters to simulate. If this is not specified or None,
+        no replication is performed and a :class:`.TreeSequence` object
+        returned. If :obj:`num_replicates` is provided, the specified
+        number of replicates is performed, and an iterator over the
+        resulting :class:`.TreeSequence` objects returned.
     :return: The :class:`.TreeSequence` object representing the results
-        of the simulation.
-    :rtype: :class:`.TreeSequence`
+        of the simulation if no replication is performed, or an
+        iterator over the independent replicates simulated if the
+        :obj:`num_replicates` parameter has been used.
+    :rtype: :class:`.TreeSequence` or an iterator over
+        :class:`.TreeSequence` replicates.
+    :warning: If using replication, do not store the results of the
+        iterator in a list! For performance reasons, the same
+        underlying object may be used for every TreeSequence
+        returned which will most likely lead to unexpected behaviour.
     """
     seed = random_seed
     if random_seed is None:
@@ -577,7 +588,7 @@ def simulate(
     scaled_mutation_rate = 0
     if mutation_rate is not None:
         scaled_mutation_rate = 4 * Ne * mutation_rate
-    if num_replicates == 1:
+    if num_replicates is None:
         sim.run()
         tree_sequence = sim.get_tree_sequence()
         tree_sequence.generate_mutations(scaled_mutation_rate, rng)
