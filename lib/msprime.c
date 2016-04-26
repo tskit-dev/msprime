@@ -1987,7 +1987,7 @@ msp_initialise(msp_t *self)
     }
     self->next_demographic_event = self->demographic_events_head;
     /* Set up the initial segments and algorithm state */
-    sample_id = 1;
+    sample_id = 0;
     for (population_id = 0; population_id < self->num_populations;
             population_id++) {
         for (j = 0; j < self->populations[population_id].sample_size; j++) {
@@ -2005,8 +2005,8 @@ msp_initialise(msp_t *self)
             sample_id++;
         }
     }
-    assert(sample_id == self->sample_size + 1);
-    self->next_node = self->sample_size + 1;
+    assert(sample_id == self->sample_size);
+    self->next_node = self->sample_size;
     /* Store the JSON strings now because we need to store the initial
      * state of the migration matrix and population configuration.
      */

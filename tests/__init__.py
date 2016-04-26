@@ -292,7 +292,10 @@ class MRCACalculator(object):
     LAMBDA = 0
 
     def __init__(self, oriented_forest):
-        self.__preprocess(oriented_forest)
+        # We turn this oriened forest into a 1 based array by adding 1
+        # to everything
+        converted = [0] + [x + 1 for x in oriented_forest]
+        self.__preprocess(converted)
 
     def __preprocess(self, oriented_forest):
         """
@@ -371,15 +374,16 @@ class MRCACalculator(object):
     def get_mrca(self, x, y):
         """
         Returns the most recent common ancestor of the nodes x and y,
-        or 0 if the nodes belong to different trees.
+        or -1 if the nodes belong to different trees.
 
         :param x: the first node
-        :type x: positive integer
         :param y: the second node
-        :type y: positive integer
         :return: the MRCA of nodes x and y
-        :type: non-negative integer
         """
+        # WE need to rescale here because SV expects 1-based arrays.
+        return self._sv_mrca(x + 1, y + 1) - 1
+
+    def _sv_mrca(self, x, y):
         if self.__beta[x] <= self.__beta[y]:
             h = self.__lambda[self.__beta[y] & -self.__beta[x]]
         else:

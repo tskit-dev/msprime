@@ -1215,8 +1215,11 @@ class HaplotypeGenerator(object):
         return self._ll_haplotype_generator.get_haplotype(sample_id)
 
     def haplotypes(self):
-        for j in range(1, self._tree_sequence.get_sample_size() + 1):
+        j = 0
+        # Would use range here except for Python 2..
+        while j < self._tree_sequence.get_sample_size():
             yield self.get_haplotype(j)
+            j += 1
 
 
 class RecombinationMap(object):

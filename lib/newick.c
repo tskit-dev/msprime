@@ -42,7 +42,7 @@ newick_converter_check_state(newick_converter_t *self)
     newick_tree_node_t search;
 
     assert(avl_count(&self->tree) == 2 * self->sample_size - 1);
-    for (j = 1; j <= self->sample_size; j++) {
+    for (j = 0; j < self->sample_size; j++) {
         search.id = j;
         avl_node = avl_search(&self->tree, &search);
         assert(avl_node != NULL);
@@ -240,10 +240,10 @@ newick_converter_update_root(newick_converter_t *self)
     newick_tree_node_t *node = NULL;
     newick_tree_node_t search;
 
-    search.id = 1;
+    search.id = 0;
     while ((avl_node = avl_search(&self->tree, &search)) != NULL) {
         node = (newick_tree_node_t *) avl_node->item;
-        search.id = node->parent == NULL? 0 : node->parent->id;
+        search.id = node->parent == NULL? MSP_LAMBDA : node->parent->id;
     }
     if (node->parent != NULL) {
         node->parent = NULL;
@@ -261,17 +261,22 @@ newick_converter_generate_subtree(newick_converter_t *self,
     size_t size, s1_len, s2_len;
     const char *leaf_format = "%d:%s";
     char sep, *s, *s1, *s2;
+    int label;
 
     if (node->children[0] == NULL) {
         /* leaf node */
-        size = (size_t) snprintf(NULL, 0, leaf_format, node->id,
+        /* TODO For ms compatablility we set the ID to 1 here. We should make
+         * this a configurable behaviour.
+         */
+        label = (int) node->id + 1;
+        size = (size_t) snprintf(NULL, 0, leaf_format, label,
                 node->branch_length);
         node->subtree = malloc(size + 1);
         if (node->subtree == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        sprintf(node->subtree, leaf_format, node->id, node->branch_length);
+        sprintf(node->subtree, leaf_format, label, node->branch_length);
     } else {
         s1 = node->children[0]->subtree;
         assert(s1 != NULL);
@@ -463,7 +468,7 @@ newick_converter_alloc(newick_converter_t *self,
     }
     avl_init_tree(&self->tree, cmp_newick_tree_node, NULL);
     /* Add in the leaf nodes */
-    for (j = 1; j <= self->sample_size; j++) {
+    for (j = 0; j < self->sample_size; j++) {
         avl_node = newick_converter_alloc_avl_node(self, j, 0.0);
         if (avl_node == NULL) {
             ret = MSP_ERR_NO_MEMORY;

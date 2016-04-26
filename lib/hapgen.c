@@ -78,7 +78,7 @@ hapgen_apply_tree_mutation(hapgen_t *self, size_t site, mutation_t *mut)
     }
     while (not_done) {
         assert(w != NULL);
-        hapgen_set_bit(self, w->node - 1, site);
+        hapgen_set_bit(self, w->node, site);
         not_done = w != tail;
         w = w->next;
     }
@@ -171,13 +171,13 @@ hapgen_get_haplotype(hapgen_t *self, uint32_t sample_id, char **haplotype)
     size_t j, k, l;
     uint64_t word;
 
-    if (sample_id < 1 || sample_id > self->sample_size) {
+    if (sample_id >= self->sample_size) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
     l = 0;
     for (j = 0; j < self->words_per_row; j++) {
-        word = self->haplotype_matrix[(sample_id - 1) * self->words_per_row + j];
+        word = self->haplotype_matrix[sample_id * self->words_per_row + j];
         for (k = 0; k < HG_WORD_SIZE; k++) {
             self->haplotype[l] = (word >> k) & 1ULL ? '1': '0';
             l++;

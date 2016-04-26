@@ -51,6 +51,9 @@
  * TODO put this into a private header file somewhere so it's not exported */
 #define MSP_LOSSLESS_DBL "%.17g"
 
+/* The root node indicator */
+#define MSP_LAMBDA UINT32_MAX
+
 typedef struct segment_t_t {
     uint8_t population_id;
     /* During simulation we use genetic coordinates */

@@ -432,7 +432,7 @@ print_haplotypes(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    for (j = 1; j <= ts->sample_size; j++) {
+    for (j = 0; j < ts->sample_size; j++) {
         ret = hapgen_get_haplotype(hg, j, &haplotype);
         if (ret < 0) {
             goto out;
@@ -455,7 +455,7 @@ print_haplotypes(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    for (j = 1; j <= ts->sample_size; j++) {
+    for (j = 0; j < ts->sample_size; j++) {
         ret = hapgen_get_haplotype(hg, j, &haplotype);
         if (ret < 0) {
             goto out;
@@ -496,6 +496,7 @@ print_newick_trees(tree_sequence_t *ts)
     }
     while ((ret = newick_converter_next(nc, &length, &tree)) == 1) {
         printf("Tree: %f: %s\n", length, tree);
+        newick_converter_print_state(nc);
     }
     if (ret != 0) {
         goto out;
@@ -587,7 +588,7 @@ print_tree_sequence(tree_sequence_t *ts)
         sparse_tree_iterator_print_state(sparse_iter);
         /* print some mrcas */
         printf("MRCAS:\n");
-        for (j = 1; j <= tree.num_nodes; j++) {
+        for (j = 0; j < tree.num_nodes; j++) {
             ret = sparse_tree_get_mrca(&tree, 1, (uint32_t) j, &mrca);
             if (ret != 0) {
                 goto out;
@@ -650,12 +651,16 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+
     recomb_map_print_state(recomb_map);
     /* Create the tree_sequence from the state of the simulator. */
     ret = tree_sequence_create(tree_seq, msp, recomb_map);
     if (ret != 0) {
         goto out;
     }
+
+    print_tree_sequence(tree_seq);
+
     ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
     if (ret != 0) {
         goto out;
@@ -671,8 +676,8 @@ run_simulate(char *conf_file)
         goto out;
     }
     tree_sequence_print_state(tree_seq);
-    if (0) {
 
+    if (1) {
         print_haplotypes(tree_seq);
         print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);

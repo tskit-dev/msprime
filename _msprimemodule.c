@@ -2383,7 +2383,7 @@ static int
 SparseTree_check_bounds(SparseTree *self, unsigned int node)
 {
     int ret = 0;
-    if (node > self->sparse_tree->num_nodes) {
+    if (node >= self->sparse_tree->num_nodes) {
         PyErr_SetString(PyExc_ValueError, "Node index out of bounds");
         ret = -1;
     }
@@ -2511,7 +2511,7 @@ SparseTree_get_root(SparseTree *self)
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->root);
+    ret = Py_BuildValue("i", (int) self->sparse_tree->root);
 out:
     return ret;
 }
@@ -2559,8 +2559,8 @@ static PyObject *
 SparseTree_get_parent(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    unsigned int parent;
     unsigned int node;
+    uint32_t parent;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
@@ -2572,7 +2572,7 @@ SparseTree_get_parent(SparseTree *self, PyObject *args)
         goto out;
     }
     parent = self->sparse_tree->parent[node];
-    ret = Py_BuildValue("I", parent);
+    ret = Py_BuildValue("i", (int) parent);
 out:
     return ret;
 }
@@ -2603,7 +2603,7 @@ static PyObject *
 SparseTree_get_children(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    unsigned int children[2];
+    uint32_t children[2];
     unsigned int node;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
@@ -2617,7 +2617,7 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
     }
     children[0] = self->sparse_tree->children[2 * node];
     children[1] = self->sparse_tree->children[2 * node + 1];
-    ret = Py_BuildValue("II", children[0], children[1]);
+    ret = Py_BuildValue("ii", (int) children[0], (int) children[1]);
 out:
     return ret;
 }
@@ -2648,7 +2648,7 @@ SparseTree_get_mrca(SparseTree *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    ret = Py_BuildValue("I", mrca);
+    ret = Py_BuildValue("i", (int) mrca);
 out:
     return ret;
 }
@@ -2708,8 +2708,6 @@ SparseTree_get_num_tracked_leaves(SparseTree *self, PyObject *args)
 out:
     return ret;
 }
-
-
 
 static PyObject *
 SparseTree_get_mutations(SparseTree *self, PyObject *args)
