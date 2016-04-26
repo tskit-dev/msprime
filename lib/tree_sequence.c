@@ -708,8 +708,8 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
         ret = MSP_ERR_HDF5;
         goto out;
     }
-    status = tree_sequence_read_hdf5_metadata(self, file_id);
-    if (status < 0) {
+    ret = tree_sequence_read_hdf5_metadata(self, file_id);
+    if (ret < 0) {
         goto out;
     }
     ret = tree_sequence_read_hdf5_dimensions(self, file_id);
@@ -724,9 +724,8 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
-    status = tree_sequence_read_hdf5_provenance(self, file_id);
-    if (status < 0) {
-        ret = MSP_ERR_HDF5;
+    ret = tree_sequence_read_hdf5_provenance(self, file_id);
+    if (ret < 0) {
         goto out;
     }
     status = H5Fclose(file_id);

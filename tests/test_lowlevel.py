@@ -1583,8 +1583,8 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertIn("mutations", keys)
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 0)
-        self.assertEqual(format_version[1], 3)
+        self.assertEqual(format_version[0], 1)
+        self.assertEqual(format_version[1], 0)
         self.assertEqual(root.attrs["sample_size"], ts.get_sample_size())
         self.assertEqual(
             root.attrs["sequence_length"], ts.get_sequence_length())
@@ -1592,6 +1592,7 @@ class TestTreeSequence(LowLevelTestCase):
             g = root["mutations"]
             # Check the parameters and environment attributes
             self.verify_mutation_parameters_json(g.attrs["parameters"])
+
             self.verify_environment_json(g.attrs["environment"])
             fields = [("node", uint32), ("position", float64)]
             self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
@@ -1631,8 +1632,22 @@ class TestTreeSequence(LowLevelTestCase):
                 hfile.flush()
                 self.assertRaises(
                     _msprime.LibraryError, ts.load, f.name, skip_h5close=True)
-                # TODO create a legitimate hdf5 file and copy parts of
-                # it to a local hdf5 file. Try opening this then.
+
+    @unittest.skip("Skipping due to weird h5py behaviour")
+    def test_version_load_error(self):
+        if enable_h5py_tests:
+            # See above for why we import h5py here.
+            import h5py
+            ts = list(self.get_example_tree_sequences())[0]
+            for bad_version in [(0, 1), (0, 8), (2, 0)]:
+                with tempfile.NamedTemporaryFile() as f:
+                    ts.dump(f.name, skip_h5close=True)
+                    hfile = h5py.File(f.name, "r+")
+                    hfile.attrs['format_version'] = bad_version
+                    hfile.close()
+                    other_ts = _msprime.TreeSequence()
+                    self.assertRaises(
+                        _msprime.LibraryError, other_ts.load, f.name)
 
     def test_load_bad_formats(self):
         # try loading a bunch of files in various formats.

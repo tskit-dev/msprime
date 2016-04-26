@@ -25,14 +25,14 @@ contextual information.
 The root group contains a number of attributes, describing the basic
 properties of data set. The ``format_version`` attribute is a
 pair ``(major, minor)`` describing the file format version. This is
-document describes version 0.1.
+document describes version 1.0.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
 ================    ==============      ======      ===========
 /format_version     H5T_STD_U32LE       2           The (major, minor) file format version.
 /sample_size        H5T_STD_U32LE       Scalar      The simulated sample size :math:`n`.
-/num_loci           H5T_STD_U32LE       Scalar      The simulated number of loci :math:`m`.
+/sequence_length    H5T_IEEE_F64LE      Scalar      The simulated sequence length :math:`L`.
 ================    ==============      ======      ===========
 
 +++++++++++
@@ -45,9 +45,9 @@ record consists of
 five fields. The ``left`` and ``right`` fields define the genomic interval
 over which the record applies. The interval is half-open, so that the
 left coordinate is inclusive and the right coordinate is exclusive. Every
-genomic coordinate :math:`x` must lie in the range :math:`0 \leq x < m`,
-where :math:`m` is the number of loci defined in the root attribute
-``num_loci``.
+genomic coordinate :math:`x` must lie in the range :math:`0 \leq x < L`,
+where :math:`L` is the sequence length defined in the root attribute
+``sequence_length``.
 
 The ``node`` and ``children`` fields in a coalescence record define the
 event of the given node becoming the parent of the given pair of
@@ -99,7 +99,7 @@ consists of a node (which must be defined in the ``trees`` group) and a
 position. Positions are defined as a floating point value to allow us to
 express infinite sites mutations. A mutation position :math:`x` is defined on the same
 scale as the genomic coordinates for trees, and so we must have
-:math:`0 \leq x < m`.
+:math:`0 \leq x < L`.
 
 As for the coalescence records in the `trees` group, mutation records are
 stored as seperate vectors for efficiency reasons. The ordering of the mutation
