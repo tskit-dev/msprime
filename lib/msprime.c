@@ -578,7 +578,7 @@ msp_generate_provenance_strings(msp_t *self)
     int written;
     const char *pattern = "{"
         "\"sample_size\": %d, "
-        "\"num_loci\": %d, "
+        "\"num_loci\": %u, "
         "\"scaled_recombination_rate\": " MSP_LOSSLESS_DBL ", "
         "\"migration_matrix\": %s, "
         "\"population_configuration\": %s, "
