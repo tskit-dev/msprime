@@ -523,10 +523,10 @@ def simulate(
     parameters and returns the resulting :class:`.TreeSequence`.
 
     :param int sample_size: The number of individuals in our sample.
-    :param float Ne: The effective population size. This determines the
-        factor by which the per-generation recombination and mutation
-        rates are scaled in the simulation. This defaults to 1 if not
-        specified.
+    :param float Ne: The effective population size for the reference
+        population. This determines the factor by which the
+        per-generation recombination and mutation rates are scaled
+        in the simulation. This defaults to 1 if not specified.
     :param float length: The length of the simulated region in bases.
         This parameter cannot be used along with `recombination_map`.
         Defaults to 1 if not specified.
@@ -548,11 +548,17 @@ def simulate(
         the populations to be simulated.
     :type population_configurations: list or None.
     :param list migration_matrix: The matrix describing the rates
-        of migration between all pairs of populations.
-        **TODO** describe structure and interpretation.
+        of migration between all pairs of populations. If :math:`N`
+        populations are defined in the ``population_configurations``
+        parameter, then the migration matrix must be an
+        :math:`N\\times N` matrix consisting of :math:`N` lists of
+        length :math:`N`.
     :param list demographic_events: The list of demographic events to
-        simulate.
-        **TODO** describe these and document.
+        simulate. Demographic events describe changes to the populations
+        in the past. Events should be supplied in non-decreasing
+        order of time. Events with the same time value will be applied
+        sequentially in the order that they were supplied before the
+        simulation algorithm continues with the next time step.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
@@ -1215,10 +1221,26 @@ class HaplotypeGenerator(object):
 
 class RecombinationMap(object):
     """
-    A class representing the changing recombination rate along a
-    chromosome.
+    A RecombinationMap represents the changing rates of recombination
+    along a chromosome. This is defined via two lists of numbers:
+    ``positions`` and ``rates``, which must be of the same length.
+    Given an index j in these lists, the rate of recombination
+    per base per generation is ``rates[j]`` over the interval
+    ``positions[j]`` to ``positions[j + 1]``. Consequently, the first
+    position must be zero, and by convention the last rate value
+    is also required to be zero (although it does not used).
 
-    TODO document.
+    :param list positions: The positions (in bases) denoting the
+        distinct intervals where recombination rates change. These can
+        be floating point values.
+    :param list rates: The list of rates corresponding to the supplied
+        ``positions``. Recombination rates are specified per base,
+        per generation.
+    :param int num_loci: The maximum number of non-recombining loci
+        in the underlying simulation. By default this is set to
+        the largest possible value, allowing the maximum resolution
+        in the recombination process. However, for a finite sites
+        model this can be set to smaller values.
     """
     DEFAULT_NUM_LOCI = 2**32 - 1
     """
@@ -1238,7 +1260,22 @@ class RecombinationMap(object):
     @classmethod
     def read_hapmap(cls, filename):
         """
-        Parses the specified file in HapMap format.
+        Parses the specified file in HapMap format. These files must contain
+        a single header line (which is ignored), and then each subsequent
+        line denotes a position/rate pair. Positions are in units of bases,
+        and recombination rates in centimorgans/Megabase. The first column
+        in this file is ignored, as are subsequence columns after the
+        Position and Rate. A sample of this format is as follows::
+
+            Chromosome	Position(bp)	Rate(cM/Mb)	Map(cM)
+            chr1	55550	2.981822	0.000000
+            chr1	82571	2.082414	0.080572
+            chr1	88169	2.081358	0.092229
+            chr1	254996	3.354927	0.439456
+            chr1	564598	2.887498	1.478148
+
+        :param str filename: The name of the file to be parsed. This may be
+            in plain text or gzipped plain text.
         """
         positions = []
         rates = []
@@ -1300,8 +1337,14 @@ class RecombinationMap(object):
 
 class PopulationConfiguration(object):
     """
-    TODO document.
-    Each population has
+    The initial configuration of a population (or deme) in a simulation.
+
+    :param int sample_size: The number of initial samples that are drawn
+        from this population.
+    :param float initial_size: The size of the population at time zero
+        relative to :math:`N_e`.
+    :param float growth_rate: The exponential growth rate of the population.
+        This is zero for a constant population size.
     """
     def __init__(self, sample_size=0, initial_size=1.0, growth_rate=0.0):
         self.sample_size = sample_size
@@ -1322,12 +1365,22 @@ class DemographicEvent(object):
 
 
 class GrowthRateChangeEvent(DemographicEvent):
-    def __init__(self, time, growth_rate, population_id=-1):
+    """
+    Changes the exponential growth rate at a particular time.
+
+    :param float time: The time at which this event occurs in coalescent
+        time units.
+    :param float growth_rate: The new growth rate.
+    :param int population_id: The ID of the population affected. If
+        ``population_id`` is None, the size is changed simultaneously for
+        all populations.
+    """
+    def __init__(self, time, growth_rate, population_id=None):
         super(GrowthRateChangeEvent, self).__init__(
             "growth_rate_change", time)
         self.time = time
         self.growth_rate = growth_rate
-        self.population_id = population_id
+        self.population_id = -1 if population_id is None else population_id
 
     def get_ll_representation(self, num_populations):
         return {
@@ -1347,10 +1400,22 @@ class GrowthRateChangeEvent(DemographicEvent):
 
 
 class SizeChangeEvent(DemographicEvent):
-    def __init__(self, time, size, population_id=-1):
+    """
+    Changes the size of the population at a give time to the specified
+    value. This is relative to the reference effective population size
+    :math:`N_e`.
+
+    :param float time: The time at which this event occurs in coalescent
+        time units.
+    :param float size: The new population size.
+    :param int population_id: The ID of the population affected. If
+        ``population_id`` is None, the size is changed simultaneously for
+        all populations.
+    """
+    def __init__(self, time, size, population_id=None):
         super(SizeChangeEvent, self).__init__("size_change", time)
         self.size = size
-        self.population_id = population_id
+        self.population_id = -1 if population_id is None else population_id
 
     def get_ll_representation(self, num_populations):
         return {
@@ -1370,6 +1435,17 @@ class SizeChangeEvent(DemographicEvent):
 
 
 class MigrationRateChangeEvent(DemographicEvent):
+    """
+    Changes the rate of migration to a new value at a specific time.
+
+    :param float time: The time at which this event occurs in coalescent
+        time units.
+    :param float rate: The new migration rate.
+    :param tuple matrix_index: A tuple of two population IDs descibing
+        the matrix index of interest. If ``matrix_index`` is None, all
+        non-diagonal entries of the migration matrix are changed
+        simultaneously.
+    """
     def __init__(self, time, rate, matrix_index=None):
         super(MigrationRateChangeEvent, self).__init__(
             "migration_rate_change", time)
@@ -1399,6 +1475,17 @@ class MigrationRateChangeEvent(DemographicEvent):
 
 
 class MassMigrationEvent(DemographicEvent):
+    """
+    A mass migration event in which some fraction of the population in
+    one deme simultaneously migrate to another deme.
+
+    :param float time: The time at which this event occurs in coalescent
+        time units.
+    :param int source: The ID of the population from which the migration
+        started.
+    :param int destination: The probability that any given lineage within
+        the source population migrates to the destination population.
+    """
     def __init__(self, time, source, destination, proportion):
         super(MassMigrationEvent, self).__init__("mass_migration", time)
         self.source = source
@@ -1416,55 +1503,6 @@ class MassMigrationEvent(DemographicEvent):
 
     def get_ms_arguments(self):
         raise NotImplemented()
-
-
-##############################
-#
-# Deprecated interface for specifying population demography
-#
-##############################
-
-
-# class PopulationModel(object):
-#     """
-#     Superclass of simulation population models.
-#     """
-#     def __init__(self, start_time):
-#         self.start_time = start_time
-
-
-# class ConstantPopulationModel(PopulationModel):
-#     """
-#     A population model in which the size of the population
-#     is a fixed multiple ``size`` of :math:`N_0` (the Wright-Fisher population
-#     size at time 0), which starts at the specified time.
-
-#     :param float start_time: The time (in coalescent units) at which
-#         this population model begins.
-#     :param float size: The size of the population under this model
-#         relative to :math:`N_0`.
-#     """
-#     def __init__(self, start_time, size):
-#         super(ConstantPopulationModel, self).__init__(start_time)
-#         self.size = size
-
-
-# class ExponentialPopulationModel(PopulationModel):
-#     """
-#     A population model in which the size is exponentially growing (or
-#     shrinking). If we have a :attr:`start_time` of :math:`s`, the population
-#     size at a time :math:`t` (measured in units of :math:`4N_0` generations)
-#     is :math:`N_s e^{\\alpha (t - s)}`, where :math:`N_s` is the population
-#     size at time :math:`s`.
-
-#     :param float start_time: The time (in coalescent units) at which
-#         this population model begins.
-#     :param float alpha: The exponential growth (or contraction) rate
-#         :math:`\\alpha`.
-#     """
-#     def __init__(self, start_time, alpha):
-#         super(ExponentialPopulationModel, self).__init__(start_time)
-#         self.alpha = alpha
 
 
 def harmonic_number(n):
