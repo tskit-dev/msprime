@@ -80,19 +80,9 @@ IDs are zero indexed, and correspond to their position in the list.
 Samples are drawn sequentially from populations in increasing order of
 population ID. For example, if we specified an overall sample size of
 5, and specify that 2 samples are drawn from population 0 and 3 from
-population 1, then individuals 1 and 2 will be initially located in
-population 0, and individuals 3, 4 and 5 will be drawn from
+population 1, then individuals 0 and 1 will be initially located in
+population 0, and individuals 2, 3 and 4 will be drawn from
 population 2.
-
-.. warning:: Note that population IDs are zero-indexed while sample
-    IDs (i.e., leaf nodes) are one-indexed. Sample IDs are the
-    exception here, in that all other objects should be seen as
-    zero indexed following the usual Python conventions. The choice
-    of using one-indexed sample IDs was taken to follow conventions
-    in the combinatorial literature where 0 is used as the root node
-    indicator. This convention may be changed in future versions if
-    there is sufficient interest from community.
-
 
 Given :math:`N` populations, migration matrices are specified using an :math:`N
 x N` matrix of deme-to-deme migration rates. See the documentation for
@@ -125,7 +115,6 @@ Variable recombination rates
     :members:
 
 
-
 *******************
 Processing results
 *******************
@@ -134,7 +123,11 @@ The :class:`.TreeSequence` class represents a sequence of correlated trees
 output by a simulation. The :class:`.SparseTree` class represents a single
 tree in this sequence.
 
-.. autodata:: msprime.NULL
+.. data:: msprime.NULL_NODE = - 1
+
+    Special reserved value, representing the null node. If the parent of a
+    given node is null, then this node is a root. Similarly, if the children of
+    a node are null, this node is a leaf.
 
 .. autofunction:: msprime.load
 

@@ -40,9 +40,6 @@ import _msprime
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
 
-#: The null node. If the parent of a given node is NULL_NODE, then
-#: that node is a root. Simularly, if the children of a given
-#: node are NULL, then the the node is a leaf.
 NULL_NODE = -1
 
 

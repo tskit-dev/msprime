@@ -28,10 +28,10 @@ Here, we simulate the coalescent for a sample of size
 :func:`.simulate` function returns a
 :class:`.TreeSequence` object, which provides a very
 efficient way to access the correlated trees in simulations
-involving recombination. In this example, however, we know that
-there can only be one tree as there is no recombination (we
-have not provided a value for ``recombination_rate``, and it
-defaults to zero), and so we access the only tree in the
+involving recombination. In this example we know that
+there can only be one tree because we have not provided
+a value for ``recombination_rate``, and it
+defaults to zero. Therefore, we access the only tree in the
 sequence using the call ``next(tree_sequence.trees())``.
 
 Trees are represented within ``msprime`` in a slightly unusual way. In
@@ -75,9 +75,11 @@ back to the root for a particular sample using the
     node 8: time = 0.446340881302
 
 
-In this code chunk we iterate up the tree starting at node 1 and
-stopping when we get to the root. We know that a node is the root
-if its parent is 0, which is a special reserved node. We also use
+In this code chunk we iterate up the tree starting at node 0 and
+stop when we get to the root. We know that a node is the root
+if its parent is :const:`msprime.NULL_NODE`, which is a special
+reserved node. (The value of the null node is -1, but we recommend
+using the symbolic constant to make code more readable.) We also use
 the :meth:`~.SparseTree.get_time` method to get the time
 for each node, which corresponds to the time at which the coalescence
 event happened during the simulation (in coalescent time units).
@@ -104,8 +106,8 @@ two parameters to the :func:`.simulate()` function.
 The ``length`` parameter specifies the length of the simulated sequence
 in bases, and may be a floating point number. If ``length`` is not
 supplied, it is assumed to be 1. The ``recombination_rate``
-parameter specifies the rate of crossing over per generation per
-base, and is zero by default. See the :ref:`sec-api` for a discussion of the precise
+parameter specifies the rate of crossing over per base per generation,
+and is zero by default. See the :ref:`sec-api` for a discussion of the precise
 recombination model used.
 
 We simulate the trees across over a sequence as follows::
@@ -189,16 +191,16 @@ to our example above, we can use::
     (4.7014225005874, 10.0) [(5.461212369738916, 6)]
 
 In this example (which has the same genealogies as our example above because
-we use the same random seed), we generate a total of two mutations, which
-happen to fall as one on each tree. Mutations are represented as a
+we use the same random seed), we have one mutation which
+falls on the second tree. Mutations are represented as a
 tuple ``(position, node)``, where ``position`` is the location of the mutation
 in genomic coordinates and ``node`` is the node in the tree above which the
 mutation occurs. Positions are given as a floating point value as we are
 using the infinite sites model. Every mutation falls on exactly one tree
 and we obtain the mutations for a particular tree using the
 :meth:`~.TreeSequence.mutations` method. Mutations are always returned
-in increasing order of position. The mutations for this example are shown
-on the trees here as red boxes:
+in increasing order of position. The mutation in this example is shown
+as a red box on the corresponding branch:
 
 .. image:: _static/mutations-tree-sequence-0.svg
    :width: 200px
