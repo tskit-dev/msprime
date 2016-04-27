@@ -25,6 +25,8 @@ from matplotlib import pyplot
 import dendropy
 import msprime.cli as cli
 
+import msprime
+
 
 class SimulationVerifier(object):
     """
@@ -78,6 +80,8 @@ class SimulationVerifier(object):
         print("\t msprime:", args)
         runner = cli.get_mspms_runner(args.split())
         sim = runner.get_simulator()
+        rng = msprime.RandomGenerator(random.randint(1, 2**32 - 1))
+        sim.set_random_generator(rng)
         num_populations = sim.get_num_populations()
         replicates = runner.get_num_replicates()
         num_trees = [0 for j in range(replicates)]
@@ -87,7 +91,6 @@ class SimulationVerifier(object):
         mig_events = [None for j in range(replicates)]
         for j in range(replicates):
             sim.reset()
-            sim.set_random_seed(None)
             sim.run()
             num_trees[j] = sim.get_num_breakpoints() + 1
             time[j] = sim.get_time()
