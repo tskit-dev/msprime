@@ -77,7 +77,7 @@ hapgen_apply_tree_mutation(hapgen_t *self, size_t site, mutation_t *mut)
     if (ret != 0) {
         goto out;
     }
-    if (parent == MSP_LAMBDA) {
+    if (parent == MSP_NULL_NODE) {
         ret = MSP_ERR_BAD_MUTATION;
         goto out;
     }

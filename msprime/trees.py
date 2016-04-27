@@ -40,10 +40,10 @@ import _msprime
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
 
-#: The null node. If the parent of a given node is NULL, then
+#: The null node. If the parent of a given node is NULL_NODE, then
 #: that node is a root. Simularly, if the children of a given
 #: node are NULL, then the the node is a leaf.
-NULL = -1
+NULL_NODE = -1
 
 
 class TreeDrawer(object):
@@ -104,7 +104,7 @@ class TreeDrawer(object):
                     "t = {:.2f}".format(self._tree.get_time(u)), x, dx=dx,
                     dy=dy)
                 )
-            if v != NULL:
+            if v != NULL_NODE:
                 y = self._x_coords[v], self._y_coords[v]
                 lines.add(dwg.line(x, y))
         for x in self._mutations:
@@ -144,10 +144,10 @@ class SparseTree(object):
     leaves. Each node in the tree has a parent, which is non-zero for all
     non-root nodes reachable from the leaves. This value is obtained using the
     :meth:`.get_parent` method. The parent of the root node is the
-    :const:`.NULL` node, :math:`-1`.  Similarly, each internal node has a pair
-    of children, which are obtained using the :meth:`.get_children` method.
-    Each node in the tree has a time associated with it in coalescent time
-    units. This value is obtained using the :meth:`.get_time` method.
+    :const:`.NULLNODE` node, :math:`-1`. Similarly, each internal node has a
+    pair of children, which are obtained using the :meth:`.get_children`
+    method. Each node in the tree has a time associated with it in coalescent
+    time units. This value is obtained using the :meth:`.get_time` method.
 
     Sparse trees are not intended to be instantiated directly, and are
     obtained as part of a :class:`.TreeSequence` using the
@@ -416,7 +416,7 @@ class SparseTree(object):
         pi = {}
         for j in range(self.get_sample_size()):
             u = j
-            while u != NULL and u not in pi:
+            while u != NULL_NODE and u not in pi:
                 pi[u] = self.get_parent(u)
                 u = pi[u]
         return pi
@@ -425,7 +425,7 @@ class SparseTree(object):
         tau = {}
         for j in range(self.get_sample_size()):
             u = j
-            while u != NULL and u not in tau:
+            while u != NULL_NODE and u not in tau:
                 tau[u] = self.get_time(u)
                 u = self.get_parent(u)
         return tau

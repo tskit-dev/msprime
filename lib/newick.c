@@ -243,7 +243,7 @@ newick_converter_update_root(newick_converter_t *self)
     search.id = 0;
     while ((avl_node = avl_search(&self->tree, &search)) != NULL) {
         node = (newick_tree_node_t *) avl_node->item;
-        search.id = node->parent == NULL? MSP_LAMBDA : node->parent->id;
+        search.id = node->parent == NULL? MSP_NULL_NODE : node->parent->id;
     }
     if (node->parent != NULL) {
         node->parent = NULL;

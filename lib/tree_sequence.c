@@ -1216,7 +1216,7 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
             mutation_ptrs[j] = mutations + j;
             if (mutations[j].position < 0
                     || mutations[j].position > self->sequence_length
-                    || mutations[j].node == MSP_LAMBDA
+                    || mutations[j].node == MSP_NULL_NODE
                     || mutations[j].node >= self->num_nodes) {
                 ret = MSP_ERR_BAD_MUTATION;
                 goto out;
@@ -1507,9 +1507,9 @@ sparse_tree_clear(sparse_tree_t *self)
     self->right = 0;
     self->root = 0;
     self->index = UINT32_MAX;
-    memset(self->parent, (int) MSP_LAMBDA, N * sizeof(uint32_t));
+    memset(self->parent, (int) MSP_NULL_NODE, N * sizeof(uint32_t));
     memset(self->time, 0, N * sizeof(double));
-    memset(self->children, (int) MSP_LAMBDA, 2 * N * sizeof(uint32_t));
+    memset(self->children, (int) MSP_NULL_NODE, 2 * N * sizeof(uint32_t));
     if (self->flags & MSP_COUNT_LEAVES) {
         memset(self->num_leaves + n, 0, (N - n) * sizeof(uint32_t));
         memset(self->num_tracked_leaves + n, 0, (N - n) * sizeof(uint32_t));
@@ -1538,22 +1538,22 @@ sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
     }
     j = u;
     l1 = 0;
-    while (j != MSP_LAMBDA) {
+    while (j != MSP_NULL_NODE) {
         assert(l1 < (int) self->sample_size);
         s1[l1] = j;
         l1++;
         j = self->parent[j];
     }
-    s1[l1] = MSP_LAMBDA;
+    s1[l1] = MSP_NULL_NODE;
     j = v;
     l2 = 0;
-    while (j != MSP_LAMBDA) {
+    while (j != MSP_NULL_NODE) {
         assert(l2 < (int) self->sample_size);
         s2[l2] = j;
         l2++;
         j = self->parent[j];
     }
-    s2[l2] = MSP_LAMBDA;
+    s2[l2] = MSP_NULL_NODE;
     do {
         w = s1[l1];
         l1--;
@@ -1591,7 +1591,7 @@ sparse_tree_get_num_leaves_by_traversal(sparse_tree_t *self, uint32_t u,
         stack_top--;
         if (v < self->sample_size) {
             count++;
-        } else if (self->children[2 * v] != MSP_LAMBDA) {
+        } else if (self->children[2 * v] != MSP_NULL_NODE) {
             for (c = 0; c < 2; c++) {
                 stack_top++;
                 stack[stack_top] = self->children[2 * v + c];
@@ -1738,9 +1738,9 @@ sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
     for (j = 0; j < self->sample_size; j++) {
         u = j;
         assert(self->tree->time[u] == 0.0);
-        assert(self->tree->children[2 * j] == MSP_LAMBDA);
-        assert(self->tree->children[2 * j + 1] == MSP_LAMBDA);
-        while (self->tree->parent[u] != MSP_LAMBDA) {
+        assert(self->tree->children[2 * j] == MSP_NULL_NODE);
+        assert(self->tree->children[2 * j + 1] == MSP_NULL_NODE);
+        while (self->tree->parent[u] != MSP_NULL_NODE) {
             v = self->tree->parent[u];
             assert(self->tree->children[2 * v] == u
                     || self->tree->children[2 * v + 1] == u);
@@ -1821,8 +1821,8 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
             c[0] = s->trees.children[2 * k];
             c[1] = s->trees.children[2 * k + 1];
             for (j = 0; j < 2; j++) {
-                t->parent[c[j]] = MSP_LAMBDA;
-                t->children[2 * u + j] = MSP_LAMBDA;
+                t->parent[c[j]] = MSP_NULL_NODE;
+                t->children[2 * u + j] = MSP_NULL_NODE;
             }
             t->time[u] = 0;
             if (u == t->root) {
@@ -1834,7 +1834,7 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
                 tracked_leaves_diff = t->num_tracked_leaves[u];
                 /* propogate this loss up as far as we can */
                 v = u;
-                while (v != MSP_LAMBDA) {
+                while (v != MSP_NULL_NODE) {
                     t->num_leaves[v] -= all_leaves_diff;
                     t->num_tracked_leaves[v] -= tracked_leaves_diff;
                     t->leaf_list_head[v] = NULL;
@@ -1869,7 +1869,7 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
                     + t->num_tracked_leaves[c[1]];
                 /* propogate this gain up as far as we can */
                 v = u;
-                while (v != MSP_LAMBDA) {
+                while (v != MSP_NULL_NODE) {
                     t->num_leaves[v] += all_leaves_diff;
                     t->num_tracked_leaves[v] += tracked_leaves_diff;
                     c[0] = t->children[2 * v];
@@ -1894,7 +1894,7 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
         /* In very rare situations, we have to traverse upwards to find the
          * new root.
          */
-        while (t->parent[t->root] != MSP_LAMBDA) {
+        while (t->parent[t->root] != MSP_NULL_NODE) {
             t->root = t->parent[t->root];
         }
         /* now update the mutations */

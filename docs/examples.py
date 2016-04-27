@@ -30,12 +30,11 @@ def single_locus_example():
     tree = next(tree_sequence.trees())
     print(tree)
     tree.draw("_static/simple-tree.svg", show_times=True)
-    u = 1
-    while u != 0:
+    u = 0
+    while u != msprime.NULL_NODE:
         print("node {}: time = {}".format(u, tree.get_time(u)))
         u = tree.get_parent(u)
-
-    print(tree.get_branch_length(7))
+    print(tree.get_branch_length(6))
 
 def multi_locus_example():
     tree_sequence = msprime.simulate(

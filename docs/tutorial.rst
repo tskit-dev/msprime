@@ -21,7 +21,7 @@ Running simulations is very straightforward in ``msprime``::
     >>> tree_sequence = msprime.simulate(5)
     >>> tree = next(tree_sequence.trees())
     >>> print(tree)
-    {1: 6, 2: 8, 3: 6, 4: 8, 5: 7, 6: 7, 7: 9, 8: 9, 9: 0}
+    {0: 5, 1: 7, 2: 5, 3: 7, 4: 6, 5: 6, 6: 8, 7: 8, 8: -1}
 
 Here, we simulate the coalescent for a sample of size
 5 and print out a summary of the resulting tree. The
@@ -39,11 +39,11 @@ the majority of libraries dealing with trees, each node is
 represented as an object in memory and the relationship
 between nodes as pointers between these objects. In ``msprime``,
 however, nodes are *integers*: the leaves (i.e., our sample) are the
-integers :math:`1` to :math:`n`, and every internal node is
-some positive integer greater than :math:`n`. The result of printing
+integers :math:`0` to :math:`n - 1`, and every internal node is
+some positive integer :math:`\geq n`. The result of printing
 the tree is a summary of how these nodes relate to each other
 in terms of their parents. For example, we can see that the parent
-of nodes 1 and 3 is node 6.
+of nodes 1 and 3 is node 7.
 
 This relationship can be seen more clearly in a picture:
 
@@ -55,24 +55,25 @@ This image shows the same tree as in the example but drawn out in
 a more familiar format (images like this can be drawn for any
 tree using the :meth:`~.SparseTree.draw` method).
 We can see that the leaves of the tree
-are labelled with 1 to 5, and all the internal nodes of the tree
-are also integers with the root of the tree being 9. Also shown here
+are labelled with 0 to 4, and all the internal nodes of the tree
+are also integers with the root of the tree being 8. Also shown here
 are the times for each internal node, in coalescent time units. (The
 time for all leaves is 0, and so we don't show this information
 to avoid clutter.)
 
-Knowing that our leaves are 1 to 5, we can easily trace our path
+Knowing that our leaves are 0 to 4, we can easily trace our path
 back to the root for a particular sample using the
 :meth:`~.SparseTree.get_parent` method::
 
-    >>> u = 1
-    >>> while u != 0:
+    >>> u = 0
+    >>> while u != msprime.NULL_NODE:
     >>>     print("node {}: time = {}".format(u, tree.get_time(u)))
     >>>     u = tree.get_parent(u)
-    node 1: time = 0.0
-    node 6: time = 0.0269802913256
-    node 7: time = 0.251686777821
-    node 9: time = 0.446340881302
+    node 0: time = 0.0
+    node 5: time = 0.0269802913256
+    node 6: time = 0.251686777821
+    node 8: time = 0.446340881302
+
 
 In this code chunk we iterate up the tree starting at node 1 and
 stopping when we get to the root. We know that a node is the root
@@ -84,10 +85,10 @@ We can also obtain the length of a branch joining a node to
 its parent using the :meth:`~.SparseTree.get_branch_length`
 method::
 
-    >>> print(tree.get_branch_length(7))
+    >>> print(tree.get_branch_length(6))
     0.194654103481
 
-The branch length for node 7 is 0.19 as the time for node 7 is 0.25,
+The branch length for node 6 is 0.19 as the time for node 6 is 0.25,
 and the time of its parent is 0.44.
 
 *************
@@ -113,8 +114,8 @@ We simulate the trees across over a sequence as follows::
     ... sample_size=5, length=10, recombination_rate=0.02, random_seed=19)
     >>> for tree in tree_sequence.trees():
     ...     print(tree.get_interval(), str(tree), sep="\t")
-    (0.0, 4.7014225005874)  {1: 7, 2: 6, 3: 7, 4: 10, 5: 6, 6: 8, 7: 8, 8: 10, 10: 0}
-    (4.7014225005874, 10.0) {1: 7, 2: 6, 3: 7, 4: 9, 5: 6, 6: 9, 7: 10, 9: 10, 10: 0}
+    (0.0, 4.7014225005874)  {0: 6, 1: 5, 2: 6, 3: 9, 4: 5, 5: 7, 6: 7, 7: 9, 9: -1}
+    (4.7014225005874, 10.0) {0: 6, 1: 5, 2: 6, 3: 8, 4: 5, 5: 8, 6: 9, 8: 9, 9: -1}
 
 In this example, we simulate the history of our sample of 5 individuals
 over a sequence of length 10 bases, with a recombination rate of 0.2
@@ -185,7 +186,7 @@ to our example above, we can use::
     >>>     print(tree.get_interval(), list(tree.mutations()), sep="\t")
     Total mutations =  1
     (0.0, 4.7014225005874)  []
-    (4.7014225005874, 10.0) [(5.461212369738916, 7)]
+    (4.7014225005874, 10.0) [(5.461212369738916, 6)]
 
 In this example (which has the same genealogies as our example above because
 we use the same random seed), we generate a total of two mutations, which

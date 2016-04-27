@@ -75,7 +75,7 @@ def sparse_tree_to_newick(st, precision):
 
 def _build_newick(node, root, tree, branch_lengths):
     c1, c2 = tree.get_children(node)
-    if c1 != msprime.NULL:
+    if c1 != msprime.NULL_NODE:
         s1 = _build_newick(c1, root, tree, branch_lengths)
         s2 = _build_newick(c2, root, tree, branch_lengths)
         if node == root:
@@ -192,13 +192,13 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         for j in range(st.get_root() + 1):
             mrca = st.get_mrca(0, j)
             self.assertEqual(mrca, mrca_calc.get_mrca(0, j))
-            if mrca != msprime.NULL:
+            if mrca != msprime.NULL_NODE:
                 self.assertEqual(st.get_time(mrca), st.get_tmrca(0, j))
 
     def verify_sparse_tree_branch_lengths(self, st):
         for j in range(st.get_sample_size()):
             u = j
-            while st.get_parent(u) != msprime.NULL:
+            while st.get_parent(u) != msprime.NULL_NODE:
                 l = st.get_time(st.get_parent(u)) - st.get_time(u)
                 self.assertGreater(l, 0.0)
                 self.assertEqual(st.get_branch_length(u), l)
@@ -211,7 +211,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             # verify the path to root
             u = j
             times = []
-            while st.get_parent(u) != msprime.NULL:
+            while st.get_parent(u) != msprime.NULL_NODE:
                 used_nodes.add(u)
                 v = st.get_parent(u)
                 times.append(st.get_time(v))
@@ -225,20 +225,20 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         # for every entry other than used_nodes we should have an empty row
         for j in range(st.get_root()):
             if j not in used_nodes:
-                self.assertEqual(st.get_parent(j), msprime.NULL)
+                self.assertEqual(st.get_parent(j), msprime.NULL_NODE)
                 self.assertEqual(st.get_time(j), 0)
                 for c in st.get_children(j):
-                    self.assertEqual(c, msprime.NULL)
+                    self.assertEqual(c, msprime.NULL_NODE)
         # To a top-down traversal, and make sure we meet all the leaves.
         stack = [st.get_root()]
         leaves = []
         while len(stack) > 0:
             u = stack.pop()
-            self.assertNotEqual(u, msprime.NULL)
+            self.assertNotEqual(u, msprime.NULL_NODE)
             if st.is_leaf(u):
                 leaves.append(u)
-                self.assertEqual(st.get_children(u)[0], msprime.NULL)
-                self.assertEqual(st.get_children(u)[1], msprime.NULL)
+                self.assertEqual(st.get_children(u)[0], msprime.NULL_NODE)
+                self.assertEqual(st.get_children(u)[1], msprime.NULL_NODE)
             else:
                 for c in reversed(st.get_children(u)):
                     stack.append(c)
@@ -250,7 +250,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         # Check the parent dict
         pi = st.get_parent_dict()
         self.assertEqual(len(pi), 2 * st.get_sample_size() - 1)
-        self.assertEqual(pi[st.get_root()], msprime.NULL)
+        self.assertEqual(pi[st.get_root()], msprime.NULL_NODE)
         for k, v in pi.items():
             self.assertEqual(st.get_parent(k), v)
 
@@ -268,7 +268,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         for st1, st2 in zip(iter1, iter2):
             self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
             root = 0
-            while st1.get_parent(root) != msprime.NULL:
+            while st1.get_parent(root) != msprime.NULL_NODE:
                 root = st1.get_parent(root)
             self.assertEqual(root, st1.get_root())
             self.assertEqual(st1, st2)
@@ -315,7 +315,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             for position, node in tree_mutations:
                 left, right = st.get_interval()
                 self.assertTrue(left <= position < right)
-                self.assertNotEqual(st.get_parent(node), msprime.NULL)
+                self.assertNotEqual(st.get_parent(node), msprime.NULL_NODE)
         self.assertEqual(all_tree_mutations, all_mutations)
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
         iter1 = ts.trees()
@@ -672,7 +672,7 @@ class TestTreeSequence(HighLevelTestCase):
             nu = [0 for j in range(ts.get_num_nodes())]
             for j in tracked_leaves:
                 u = j
-                while u != msprime.NULL:
+                while u != msprime.NULL_NODE:
                     nu[u] += 1
                     u = tree.get_parent(u)
             for u, count in enumerate(nu):

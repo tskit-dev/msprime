@@ -45,7 +45,7 @@ from msprime import __version__ as _library_version
 enable_h5py_tests = True
 
 # Root node marker
-LAMBDA = -1
+NULL_NODE = -1
 
 
 def uniform_recombination_map(sim):
@@ -176,7 +176,7 @@ def get_leaf_counts(st):
     nu = [0 for j in range(st.get_num_nodes())]
     for j in range(st.get_sample_size()):
         u = j
-        while u != LAMBDA:
+        while u != NULL_NODE:
             nu[u] += 1
             u = st.get_parent(u)
     return nu
@@ -192,7 +192,7 @@ def get_tracked_leaf_counts(st, tracked_leaves):
         # Duplicates not permitted.
         assert nu[j] == 0
         u = j
-        while u != LAMBDA:
+        while u != NULL_NODE:
             nu[u] += 1
             u = st.get_parent(u)
     return nu
@@ -321,16 +321,16 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         self.assertEqual(set(pi.keys()), set(tau.keys()))
         self.assertEqual(len(pi), 2 * n - 1)
         self.assertEqual(len(tau), 2 * n - 1)
-        # LAMBDA should not be a node
-        self.assertNotIn(LAMBDA, pi)
-        self.assertNotIn(LAMBDA, tau)
+        # NULL_NODE should not be a node
+        self.assertNotIn(NULL_NODE, pi)
+        self.assertNotIn(NULL_NODE, tau)
         # verify the root is equal for all leaves
         root = 0
-        while pi[root] != LAMBDA:
+        while pi[root] != NULL_NODE:
             root = pi[root]
         for j in range(n):
             k = j
-            while pi[k] != LAMBDA:
+            while pi[k] != NULL_NODE:
                 k = pi[k]
             self.assertEqual(k, root)
         self.assertIn(root, tau)
@@ -478,13 +478,13 @@ class TestSimulationState(LowLevelTestCase):
         tau_p = {}
         for j in range(n):
             u = j
-            while u != LAMBDA and u not in pi_p:
+            while u != NULL_NODE and u not in pi_p:
                 pi_p[u] = sparse_tree.get_parent(u)
                 tau_p[u] = sparse_tree.get_time(u)
                 u = pi_p[u]
         self.assertEqual(pi_p, pi)
         self.assertEqual(tau_p, tau)
-        self.assertEqual(pi_p[sparse_tree.get_root()], LAMBDA)
+        self.assertEqual(pi_p[sparse_tree.get_root()], NULL_NODE)
 
     def verify_mrcas(self, sparse_tree):
         """
@@ -2017,7 +2017,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
         st = _msprime.SparseTree(ts)
         for st in _msprime.SparseTreeIterator(ts, st):
             root = 0
-            while st.get_parent(root) != LAMBDA:
+            while st.get_parent(root) != NULL_NODE:
                 root = st.get_parent(root)
             self.assertEqual(st.get_root(), root)
 
@@ -2116,8 +2116,8 @@ class TestSparseTree(LowLevelTestCase):
             self.assertEqual(st.get_left(), 0)
             self.assertEqual(st.get_right(), 0)
             for j in range(n):
-                self.assertEqual(st.get_parent(j), LAMBDA)
-                self.assertEqual(st.get_children(j), (LAMBDA, LAMBDA))
+                self.assertEqual(st.get_parent(j), NULL_NODE)
+                self.assertEqual(st.get_children(j), (NULL_NODE, NULL_NODE))
                 self.assertEqual(st.get_time(j), 0)
 
     def test_bad_tracked_leaves(self):
@@ -2203,13 +2203,13 @@ class TestSparseTree(LowLevelTestCase):
                     num_loci=num_loci, sample_size=sample_size)
                 num_nodes = ts.get_num_nodes()
                 st = _msprime.SparseTree(ts)
-                for v in [num_nodes, 10**6, LAMBDA]:
+                for v in [num_nodes, 10**6, NULL_NODE]:
                     self.assertRaises(ValueError, st.get_mrca, v, v)
                     self.assertRaises(ValueError, st.get_mrca, v, 1)
                     self.assertRaises(ValueError, st.get_mrca, 1, v)
-                # All the mrcas for an uninitialised tree should be LAMBDA
+                # All the mrcas for an uninitialised tree should be NULL_NODE
                 for u, v in itertools.combinations(range(num_nodes), 2):
-                    self.assertEqual(st.get_mrca(u, v), LAMBDA)
+                    self.assertEqual(st.get_mrca(u, v), NULL_NODE)
 
     def test_index(self):
         for num_loci in [1, 100]:
@@ -2233,7 +2233,7 @@ class TestSparseTree(LowLevelTestCase):
             # the tree, we have to wait until later to detect it.
             other_ts = self.get_tree_sequence(2, num_loci=200, random_seed=1)
             for u in range(ts.get_num_nodes()):
-                if st.get_parent(u) == LAMBDA:
+                if st.get_parent(u) == NULL_NODE:
                     other_ts.set_mutations([(x, u)])
                     self.assertRaises(
                         _msprime.LibraryError, _msprime.HaplotypeGenerator,

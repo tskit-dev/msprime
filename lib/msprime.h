@@ -52,7 +52,7 @@
 #define MSP_LOSSLESS_DBL "%.17g"
 
 /* The root node indicator */
-#define MSP_LAMBDA UINT32_MAX
+#define MSP_NULL_NODE UINT32_MAX
 
 typedef struct segment_t_t {
     uint8_t population_id;
