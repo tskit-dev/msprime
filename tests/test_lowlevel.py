@@ -2218,6 +2218,27 @@ class TestSparseTree(LowLevelTestCase):
             for index, st in enumerate(_msprime.SparseTreeIterator(ts, st)):
                 self.assertEqual(index, st.get_index())
 
+    def test_bad_mutations(self):
+        ts = self.get_tree_sequence(2, num_loci=200, random_seed=1)
+        # Anything bigger than num_nodes should be caught immediately.
+        u = ts.get_num_nodes()
+        for bad_node in [u, u + 1, 2 * u, -1]:
+            self.assertRaises(
+                _msprime.LibraryError, ts.set_mutations, [(0.1, bad_node)])
+        # We shouldn't be able to assign mutations to the root node
+        st = _msprime.SparseTree(ts)
+        for st in _msprime.SparseTreeIterator(ts, st):
+            x = st.get_left()
+            # For more subtle issues where we put mutations on nodes not in
+            # the tree, we have to wait until later to detect it.
+            other_ts = self.get_tree_sequence(2, num_loci=200, random_seed=1)
+            for u in range(ts.get_num_nodes()):
+                if st.get_parent(u) == LAMBDA:
+                    other_ts.set_mutations([(x, u)])
+                    self.assertRaises(
+                        _msprime.LibraryError, _msprime.HaplotypeGenerator,
+                        other_ts)
+
 
 class TestLeafListIterator(LowLevelTestCase):
     """

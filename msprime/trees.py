@@ -40,6 +40,11 @@ import _msprime
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
 
+#: The null node. If the parent of a given node is NULL, then
+#: that node is a root. Simularly, if the children of a given
+#: node are NULL, then the the node is a leaf.
+NULL = -1
+
 
 class TreeDrawer(object):
     """
@@ -99,7 +104,7 @@ class TreeDrawer(object):
                     "t = {:.2f}".format(self._tree.get_time(u)), x, dx=dx,
                     dy=dy)
                 )
-            if v != 0:
+            if v != NULL:
                 y = self._x_coords[v], self._y_coords[v]
                 lines.add(dwg.line(x, y))
         for x in self._mutations:
@@ -132,17 +137,17 @@ class TreeDrawer(object):
 class SparseTree(object):
     """
     A SparseTree is a single tree in a :class:`.TreeSequence`. In a sparse tree
-    for a sample of size :math:`n`, the leaves are nodes :math:`1` to :math:`n`
-    inclusive and internal nodes are integers :math:`> n`. The value of these
-    nodes is strictly increasing as we ascend the tree and the root of the tree
-    is the node with the largest value that is reachable from  the leaves.
-    Each node in the tree has a parent, which is non-zero for all non-root
-    nodes reachable from the leaves. This value is obtained using the
-    :meth:`.get_parent` method. The parent of the root node is 0. Similarly,
-    each internal node has a pair of children, which are obtained using
-    the :meth:`.get_children` method. Each node in the tree has a time
-    associated with it in coalescent time units. This value is obtained using
-    the :meth:`.get_time` method.
+    for a sample of size :math:`n`, the leaves are nodes :math:`0` to :math:`n
+    - 1` inclusive and internal nodes are integers :math:`\geq n`. The value of
+    these nodes is strictly increasing as we ascend the tree and the root of
+    the tree is the node with the largest value that is reachable from  the
+    leaves. Each node in the tree has a parent, which is non-zero for all
+    non-root nodes reachable from the leaves. This value is obtained using the
+    :meth:`.get_parent` method. The parent of the root node is the
+    :const:`.NULL` node, :math:`-1`.  Similarly, each internal node has a pair
+    of children, which are obtained using the :meth:`.get_children` method.
+    Each node in the tree has a time associated with it in coalescent time
+    units. This value is obtained using the :meth:`.get_time` method.
 
     Sparse trees are not intended to be instantiated directly, and are
     obtained as part of a :class:`.TreeSequence` using the
@@ -245,7 +250,7 @@ class SparseTree(object):
         :return: True if u is a leaf node.
         :rtype: bool
         """
-        return 1 <= u <= self.get_sample_size()
+        return 0 <= u < self.get_sample_size()
 
     def get_root(self):
         """
@@ -409,18 +414,18 @@ class SparseTree(object):
 
     def get_parent_dict(self):
         pi = {}
-        for j in range(1, self.get_sample_size() + 1):
+        for j in range(self.get_sample_size()):
             u = j
-            while u != 0 and u not in pi:
+            while u != NULL and u not in pi:
                 pi[u] = self.get_parent(u)
                 u = pi[u]
         return pi
 
     def get_time_dict(self):
         tau = {}
-        for j in range(1, self.get_sample_size() + 1):
+        for j in range(self.get_sample_size()):
             u = j
-            while u != 0 and u not in tau:
+            while u != NULL and u not in tau:
                 tau[u] = self.get_time(u)
                 u = self.get_parent(u)
         return tau

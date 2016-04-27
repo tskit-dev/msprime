@@ -134,6 +134,8 @@ The :class:`.TreeSequence` class represents a sequence of correlated trees
 output by a simulation. The :class:`.SparseTree` class represents a single
 tree in this sequence.
 
+.. autodata:: msprime.NULL
+
 .. autofunction:: msprime.load
 
 .. autoclass:: msprime.TreeSequence()

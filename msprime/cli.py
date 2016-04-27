@@ -704,7 +704,7 @@ def run_dump_macs(args):
         for position, node in tree.mutations():
             h = ['0' for _ in range(n)]
             for u in tree.leaves(node):
-                h[u - 1] = '1'
+                h[u] = '1'
             print(
                 "SITE:", site, position / m, 0.0, "".join(h), sep="\t"
             )

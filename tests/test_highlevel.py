@@ -75,7 +75,7 @@ def sparse_tree_to_newick(st, precision):
 
 def _build_newick(node, root, tree, branch_lengths):
     c1, c2 = tree.get_children(node)
-    if c1 != 0:
+    if c1 != msprime.NULL:
         s1 = _build_newick(c1, root, tree, branch_lengths)
         s2 = _build_newick(c2, root, tree, branch_lengths)
         if node == root:
@@ -86,7 +86,7 @@ def _build_newick(node, root, tree, branch_lengths):
                 s1, s2, branch_lengths[node])
     else:
         # Leaf node
-        s = "{0}:{1}".format(node, branch_lengths[node])
+        s = "{0}:{1}".format(node + 1, branch_lengths[node])
     return s
 
 
@@ -189,15 +189,16 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         mrca_calc = tests.MRCACalculator(oriented_forest)
         # We've done exhaustive tests elsewhere, no need to go
         # through the combinations.
-        for j in range(1, st.get_root() + 1):
-            mrca = st.get_mrca(1, j)
-            self.assertEqual(mrca, mrca_calc.get_mrca(1, j))
-            self.assertEqual(st.get_time(mrca), st.get_tmrca(1, j))
+        for j in range(st.get_root() + 1):
+            mrca = st.get_mrca(0, j)
+            self.assertEqual(mrca, mrca_calc.get_mrca(0, j))
+            if mrca != msprime.NULL:
+                self.assertEqual(st.get_time(mrca), st.get_tmrca(0, j))
 
     def verify_sparse_tree_branch_lengths(self, st):
-        for j in range(1, st.get_sample_size() + 1):
+        for j in range(st.get_sample_size()):
             u = j
-            while st.get_parent(u) != 0:
+            while st.get_parent(u) != msprime.NULL:
                 l = st.get_time(st.get_parent(u)) - st.get_time(u)
                 self.assertGreater(l, 0.0)
                 self.assertEqual(st.get_branch_length(u), l)
@@ -205,12 +206,12 @@ class HighLevelTestCase(tests.MsprimeTestCase):
 
     def verify_sparse_tree_structure(self, st):
         used_nodes = set()
-        for j in range(1, st.get_sample_size() + 1):
+        for j in range(st.get_sample_size()):
             self.assertEqual(st.get_time(j), 0)
             # verify the path to root
             u = j
             times = []
-            while st.get_parent(u) != 0:
+            while st.get_parent(u) != msprime.NULL:
                 used_nodes.add(u)
                 v = st.get_parent(u)
                 times.append(st.get_time(v))
@@ -224,20 +225,20 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         # for every entry other than used_nodes we should have an empty row
         for j in range(st.get_root()):
             if j not in used_nodes:
-                self.assertEqual(st.get_parent(j), 0)
+                self.assertEqual(st.get_parent(j), msprime.NULL)
                 self.assertEqual(st.get_time(j), 0)
                 for c in st.get_children(j):
-                    self.assertEqual(c, 0)
+                    self.assertEqual(c, msprime.NULL)
         # To a top-down traversal, and make sure we meet all the leaves.
         stack = [st.get_root()]
         leaves = []
         while len(stack) > 0:
             u = stack.pop()
-            self.assertNotEqual(u, 0)
+            self.assertNotEqual(u, msprime.NULL)
             if st.is_leaf(u):
                 leaves.append(u)
-                self.assertEqual(st.get_children(u)[0], 0)
-                self.assertEqual(st.get_children(u)[1], 0)
+                self.assertEqual(st.get_children(u)[0], msprime.NULL)
+                self.assertEqual(st.get_children(u)[1], msprime.NULL)
             else:
                 for c in reversed(st.get_children(u)):
                     stack.append(c)
@@ -245,12 +246,11 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             # node.
             self.assertEqual(st.get_num_leaves(u), len(list(st.leaves(u))))
             self.assertEqual(st.get_num_tracked_leaves(u), 0)
-        self.assertEqual(
-            sorted(leaves), list(range(1, st.get_sample_size() + 1)))
+        self.assertEqual(sorted(leaves), list(range(st.get_sample_size())))
         # Check the parent dict
         pi = st.get_parent_dict()
         self.assertEqual(len(pi), 2 * st.get_sample_size() - 1)
-        self.assertEqual(pi[st.get_root()], 0)
+        self.assertEqual(pi[st.get_root()], msprime.NULL)
         for k, v in pi.items():
             self.assertEqual(st.get_parent(k), v)
 
@@ -267,8 +267,8 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         num_trees = 0
         for st1, st2 in zip(iter1, iter2):
             self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
-            root = 1
-            while st1.get_parent(root) != 0:
+            root = 0
+            while st1.get_parent(root) != msprime.NULL:
                 root = st1.get_parent(root)
             self.assertEqual(root, st1.get_root())
             self.assertEqual(st1, st2)
@@ -315,7 +315,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             for position, node in tree_mutations:
                 left, right = st.get_interval()
                 self.assertTrue(left <= position < right)
-                self.assertNotEqual(st.get_parent(node), 0)
+                self.assertNotEqual(st.get_parent(node), msprime.NULL)
         self.assertEqual(all_tree_mutations, all_mutations)
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
         iter1 = ts.trees()
@@ -641,7 +641,7 @@ class TestTreeSequence(HighLevelTestCase):
             if ts.get_num_mutations() > 0:
                 all_zero = False
                 self.verify_mutations(ts)
-            muts = [[], [(0, 1)], [(0, 1), (0, 2)]]
+            muts = [[], [(0, 0)], [(0, 0), (0, 1)]]
             for mutations in muts:
                 ts.set_mutations(mutations)
                 self.assertEqual(ts.get_num_mutations(), len(mutations))
@@ -667,12 +667,12 @@ class TestTreeSequence(HighLevelTestCase):
         for tree in ts.trees():
             for u in tree.nodes():
                 self.assertEqual(tree.get_num_tracked_leaves(u), 0)
-        tracked_leaves = [1, 2]
+        tracked_leaves = [0, 1]
         for tree in ts.trees(tracked_leaves):
-            nu = [0 for j in range(ts.get_num_nodes() + 1)]
+            nu = [0 for j in range(ts.get_num_nodes())]
             for j in tracked_leaves:
                 u = j
-                while u != 0:
+                while u != msprime.NULL:
                     nu[u] += 1
                     u = tree.get_parent(u)
             for u, count in enumerate(nu):
@@ -700,8 +700,8 @@ class TestSparseTree(HighLevelTestCase):
         t = self.get_tree()
         n = t.get_sample_size()
         all_leaves = list(t.leaves(t.get_root()))
-        self.assertEqual(sorted(all_leaves), list(range(1, n + 1)))
-        for j in range(1, n + 1):
+        self.assertEqual(sorted(all_leaves), list(range(n)))
+        for j in range(n):
             self.assertEqual(list(t.leaves(j)), [j])
 
         def test_func(t, u):

@@ -29,6 +29,8 @@ import unittest
 
 import _msprime
 
+NULL_NODE = -1
+
 
 def setUp():
     # Make random tests reproducible.
@@ -74,7 +76,7 @@ class PythonSparseTree(object):
                 for child in c:
                     ret.parent[child] = u
                 ret.children[u] = c
-        ret.parent[sparse_tree.get_root()] = 0
+        ret.parent[sparse_tree.get_root()] = NULL_NODE
         assert ret == sparse_tree
         return ret
 
@@ -179,7 +181,7 @@ class PythonTreeSequence(object):
         st = PythonSparseTree()
         st.sample_size = self._tree_sequence.get_sample_size()
         st.left = 0
-        st.time = {j: 0 for j in range(1, st.sample_size + 1)}
+        st.time = {j: 0 for j in range(st.sample_size)}
         for length, records_out, records_in in self.diffs():
             for node, children, t in records_out:
                 del st.time[node]
@@ -192,10 +194,10 @@ class PythonTreeSequence(object):
                 for c in children:
                     st.parent[c] = node
             # Insert the root
-            root = 1
+            root = 0
             while root in st.parent:
                 root = st.parent[root]
-            st.parent[root] = 0
+            st.parent[root] = NULL_NODE
             st.root = root
             st.index += 1
             st.right += length
