@@ -1566,6 +1566,16 @@ out:
 }
 
 static int
+sparse_tree_check_node(sparse_tree_t *self, uint32_t u)
+{
+    int ret = 0;
+    if (u > self->num_nodes) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+    }
+    return ret;
+}
+
+static int
 sparse_tree_get_num_leaves_by_traversal(sparse_tree_t *self, uint32_t u,
         uint32_t *num_leaves)
 {
@@ -1598,11 +1608,17 @@ sparse_tree_get_num_leaves(sparse_tree_t *self, uint32_t u,
 {
     int ret = 0;
 
+    ret = sparse_tree_check_node(self, u);
+    if (ret != 0) {
+        goto out;
+    }
+
     if (self->flags & MSP_COUNT_LEAVES) {
         *num_leaves = self->num_leaves[u];
     } else {
         ret = sparse_tree_get_num_leaves_by_traversal(self, u, num_leaves);
     }
+out:
     return ret;
 }
 
@@ -1612,6 +1628,10 @@ sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, uint32_t u,
 {
     int ret = 0;
 
+    ret = sparse_tree_check_node(self, u);
+    if (ret != 0) {
+        goto out;
+    }
     if (! (self->flags & MSP_COUNT_LEAVES)) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
@@ -1627,8 +1647,20 @@ sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
 {
     int ret = 0;
 
+    ret = sparse_tree_check_node(self, u);
+    if (ret != 0) {
+        goto out;
+    }
     if (! (self->flags & MSP_COUNT_LEAVES)) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
+    if (self->leaf_list_head[u] == NULL ||
+            self->leaf_list_tail[u] == NULL) {
+        /* This sigifies that we're trying to get the leaf list
+         * for a node that is not in the current tree.
+         */
+        ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
     *head = self->leaf_list_head[u];
@@ -1637,6 +1669,19 @@ out:
     return ret;
 }
 
+int
+sparse_tree_get_parent(sparse_tree_t *self, uint32_t u, uint32_t *parent)
+{
+    int ret = 0;
+
+    ret = sparse_tree_check_node(self, u);
+    if (ret != 0) {
+        goto out;
+    }
+    *parent = self->parent[u];
+out:
+    return ret;
+}
 
 /* ======================================================== *
  * sparse tree iterator

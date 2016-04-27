@@ -428,6 +428,7 @@ int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size,
         uint32_t num_tracked_leaves, int flags);
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_clear(sparse_tree_t *self);
+int sparse_tree_get_parent(sparse_tree_t *self, uint32_t u, uint32_t *parent);
 int sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
         uint32_t *mrca);
 int sparse_tree_get_num_leaves(sparse_tree_t *self, uint32_t u,
