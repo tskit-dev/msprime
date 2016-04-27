@@ -955,7 +955,8 @@ class TestSimulatorFactory(unittest.TestCase):
             sim = f(hl_matrix)
             self.assertEqual(sim.get_migration_matrix(), hl_matrix)
             ll_sim = sim.create_ll_instance()
-            ll_matrix = [v for row in hl_matrix for v in row]
+            Ne = sim.get_effective_population_size()
+            ll_matrix = [4 * Ne * v for row in hl_matrix for v in row]
             self.assertEqual(ll_sim.get_migration_matrix(), ll_matrix)
             for bad_type in ["", {}, 234]:
                 self.assertRaises(TypeError, f, bad_type)

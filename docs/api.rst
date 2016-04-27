@@ -41,16 +41,23 @@ behaviour of a small number of loci can be modelled using the
 feature and the majority of cases should be well served with the default
 recombination model and number of loci.
 
-.. warning:: This parameterisation of recombination and mutation rate is
-    different to :program:`ms`, which states these rates over the entire region
-    and in coalescent time units. The
+Population structure is modelled by specifying a fixed number of demes
+:math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation
+migration probabilities. The matrix entry :math:`M_{j, k}` is the
+probability that a lineage in deme :math:`k` migrates to deme :math:`j`
+in a single generation. Thus, the rate of migration in coalescent
+time units between a given pair of demes is :math:`4 N_e M_{j, k}`.
+
+.. warning:: This parameterisation of recombination, mutation and
+    migration rates is different to :program:`ms`, which states these
+    rates over the entire region and in coalescent time units. The
     motivation for this is to allow the user change the size of the simulated
     region without having to rescale the recombination and mutation rates,
     and to allow users to easily state per-generation recombination rates.
     However, the ``mspms`` command line application is fully :program:`ms`
     compatible.
 
-.. todo:: Describe the full demography model.
+
 
 
 *******************

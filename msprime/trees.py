@@ -686,6 +686,14 @@ class TreeSimulator(object):
             4 * self.get_effective_population_size() *
             self._recombination_map.get_per_locus_recombination_rate())
 
+    def get_scaled_migration_matrix(self):
+        """
+        Returns the migratation matrix scaled in coalescent time units.
+        """
+        return [
+            [4 * self.get_effective_population_size() * m
+                for m in row] for row in self.get_migration_matrix()]
+
     def get_migration_matrix(self):
         return self._migration_matrix
 
@@ -842,17 +850,19 @@ class TreeSimulator(object):
     def create_ll_instance(self):
         # Now, convert the high-level values into their low-level
         # counterparts.
-        N = len(self._population_configurations)
+        d = len(self._population_configurations)
+        Ne = self.get_effective_population_size()
         # The migration matrix must be flattened.
-        ll_migration_matrix = [0 for j in range(N**2)]
-        for j in range(N):
-            for k in range(N):
-                ll_migration_matrix[j * N + k] = self._migration_matrix[j][k]
+        scaled_migration_matrix = self.get_scaled_migration_matrix()
+        ll_migration_matrix = [0 for j in range(d**2)]
+        for j in range(d):
+            for k in range(d):
+                ll_migration_matrix[j * d + k] = scaled_migration_matrix[j][k]
         ll_population_configuration = [
             conf.get_ll_representation()
             for conf in self._population_configurations]
         ll_demographic_events = [
-            event.get_ll_representation(N)
+            event.get_ll_representation(d, Ne)
             for event in self._demographic_events]
         ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
         ll_sim = _msprime.Simulator(
@@ -1387,7 +1397,7 @@ class GrowthRateChangeEvent(DemographicEvent):
         self.growth_rate = growth_rate
         self.population_id = -1 if population_id is None else population_id
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self, num_populations, Ne):
         return {
             "type": self.type,
             "time": self.time,
@@ -1422,7 +1432,7 @@ class SizeChangeEvent(DemographicEvent):
         self.size = size
         self.population_id = -1 if population_id is None else population_id
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self, num_populations, Ne):
         return {
             "type": self.type,
             "time": self.time,
@@ -1463,15 +1473,16 @@ class MigrationRateChangeEvent(DemographicEvent):
             ret = matrix_index[0] * self._num_populations + matrix_index[1]
         return ret
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self, num_populations, Ne):
         matrix_index = -1
+        scaled_rate = 4 * Ne * self.rate
         if self.matrix_index is not None:
             matrix_index = (
                 self.matrix_index[0] * num_populations + self.matrix_index[1])
         return {
             "type": self.type,
             "time": self.time,
-            "migration_rate": self.rate,
+            "migration_rate": scaled_rate,
             "matrix_index": matrix_index
         }
 
@@ -1497,7 +1508,7 @@ class MassMigrationEvent(DemographicEvent):
         self.destination = destination
         self.proportion = proportion
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self, num_populations, Ne):
         return {
             "type": self.type,
             "time": self.time,

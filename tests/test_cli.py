@@ -550,14 +550,16 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             [[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]])
 
     def test_migration_matrix(self):
+        # All migration rates are divided by 4 to get per-generation rates.
         # Diagonal values are ignored
         sim = self.create_simulator("2 1 -T -I 2 2 0 -ma 0 1 2 3")
-        self.assertEqual(sim.get_migration_matrix(), [[0, 1], [2, 0]])
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1/4], [2/4, 0]])
         sim = self.create_simulator("2 1 -T -I 2 2 0 -ma x 1 2 x")
-        self.assertEqual(sim.get_migration_matrix(), [[0, 1], [2, 0]])
+        self.assertEqual(sim.get_migration_matrix(), [[0, 1/4], [2/4, 0]])
         sim = self.create_simulator("3 1 -T -I 3 1 1 1 -ma 1 2 3 4 5 6 7 8 9")
         self.assertEqual(
-            sim.get_migration_matrix(), [[0, 2, 3], [4, 0, 6], [7, 8, 0]])
+            sim.get_migration_matrix(),
+            [[0, 2/4, 3/4], [4/4, 0, 6/4], [7/4, 8/4, 0]])
 
     def test_simultaneous_events(self):
         sim = self.create_simulator("2 1 -T -eN 1 2.0 -eG 1.0 3 -eN 1 4")
@@ -700,15 +702,17 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 self.assertEqual(event.time, result[0])
                 self.assertEqual(event.rate, result[1])
                 self.assertEqual(event.matrix_index, result[2])
+        # Migration rates are divide by 4 to get per generation rates,
+        # assuming Ne = 1
         check(
             "2 1 -T -I 2 2 0 -ema 2.2 2 x 1 2 x",
-            [(2.2, 1, (0, 1)), (2.2, 2, (1, 0))])
+            [(2.2, 1/4, (0, 1)), (2.2, 2/4, (1, 0))])
         check(
             "2 1 -T -I 3 2 0 0 -ema 2.2 3 x 1 2 3 x 4 5 6 x",
             [
-                (2.2, 1, (0, 1)), (2.2, 2, (0, 2)),
-                (2.2, 3, (1, 0)), (2.2, 4, (1, 2)),
-                (2.2, 5, (2, 0)), (2.2, 6, (2, 1)),
+                (2.2, 1/4, (0, 1)), (2.2, 2/4, (0, 2)),
+                (2.2, 3/4, (1, 0)), (2.2, 4/4, (1, 2)),
+                (2.2, 5/4, (2, 0)), (2.2, 6/4, (2, 1)),
             ])
 
     def test_population_split(self):

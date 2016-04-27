@@ -62,8 +62,10 @@ def mutations_example():
                 position, tree.get_num_leaves(node) / tree.get_sample_size()))
 
 
+
 if __name__ == "__main__":
     # segregating_sites_example(10, 5, 10000)
     single_locus_example()
     multi_locus_example()
     mutations_example()
+    structure_example()

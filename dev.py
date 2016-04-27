@@ -329,6 +329,20 @@ def replicate_example():
     print("theta =", theta, "mean(S) = ", np.mean(S))
     print(np.mean(T))
 
+def migration_example():
+    m = 0.1
+    Ne = 100
+    migration_matrix = [
+        [0, m],
+        [1-m, 0]]
+    ts = msprime.simulate(
+        sample_size=10, Ne=Ne,
+        population_configurations=[
+            msprime.PopulationConfiguration(sample_size=10),
+            msprime.PopulationConfiguration(sample_size=0)],
+        migration_matrix=migration_matrix)
+    tree = next(ts.trees())
+    print(tree.get_time(tree.get_root()))
 
 if __name__ == "__main__":
     # mutations()
@@ -344,4 +358,5 @@ if __name__ == "__main__":
     # convert_hdf5()
     # map_stuff()
     # new_api()
-    replicate_example()
+    # replicate_example()
+    migration_example()

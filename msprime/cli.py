@@ -273,7 +273,9 @@ def convert_migration_matrix(parser, input_matrix, num_populations):
                 rate = convert_float(
                     input_matrix[j * num_populations + k], parser)
                 check_migration_rate(parser, rate)
-                migration_matrix[j][k] = rate
+                # We must divide by 4 to make it a per generation rate,
+                # assuming Ne = 1
+                migration_matrix[j][k] = rate / 4
     return migration_matrix
 
 
@@ -474,7 +476,11 @@ def create_simulation_runner(parser, arg_list):
                     msp_event = msprime.MigrationRateChangeEvent(
                         t, matrix[j][k], (j, k))
                     demographic_events.append((index, msp_event))
-
+    # We've created all the events, now we need to rescale the migration rates
+    for msp_event in demographic_events:
+        if isinstance(msp_event, msprime.MigrationRateChangeEvent):
+            # Divide by 4 to get a per-generation rate, assuming Ne=1
+            msp_event.rate /= 4
     demographic_events.sort(key=lambda x: (x[0], x[1].time))
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
     if demographic_events != time_sorted:

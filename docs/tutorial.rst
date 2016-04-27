@@ -261,3 +261,12 @@ Running this code, we get::
                   mean              variance
     Observed      14.0834           52.68804444
     Analytical    14.14484          52.63903
+
+********************
+Population structure
+********************
+
+Population structure in ``msprime`` closely follows the model used in the
+``ms`` simulator: we have a :math:`N` demes with an :math:`N\times N`
+matrix describing the migration rates between these subpopulations.
+
