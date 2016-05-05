@@ -1,3 +1,73 @@
+********************
+[0.2.0] - 2016-05-05
+********************
+
+Major update release, adding significant new functionality to the Python
+API and several breaking changes. All code written for the 0.1.x API
+will be affected, unfortunately.
+
+Breaking changes:
+
+- Sample IDs are now zero indexed. In previous versions of msprime, the
+  samples were numbered from 1 to n inclusive, which is not Pythonic.
+  This change has been made to make the API more usable, but will
+  cause issues for existing code.
+
+- There is now an Ne parameter to simulate(), and recombination,
+  mutation and migration rates are now all per-generation. The
+  keyword arguments have been changed to recombination_rate
+  and mutation_rate, which should mean that silent errors will
+  be avoided. All rates in existing code will need to be
+  divided by 4 as a result of this. This change was made to make
+  working with recombination maps and per generation recombination
+  rates easier.
+
+- Msprime now uses continuous values to represent coordinates, and
+  the num_loci parameter has been replaced with a new length parameter
+  to simulate(). Internally, a discrete recombination model is still
+  used, but by default the potential number of discrete sites is
+  very large and effectively continuous. True discrete recombination
+  models can still be specified by using the recombination_map
+  argument to simulate.
+
+- The population_models argument to simulate() has been removed, and
+  replaced with the population_configuration and demographic_events
+  parameters. This was necessary to provide the full demographic
+  model.
+
+- The HDF5 file format has been updated to accommodate the continuous
+  coordinates, along with other minor changes. As a consequence,
+  simulation results will be somewhat larger. Stored simulations will
+  need to be re-run and saved.
+
+- Removed the random_seed key from the provenance JSON strings.
+
+- Removed the simulate_tree() function, as it seemed to offer little
+  extra value.
+
+
+New features:
+
+- Simulation of variable recombination rates via arbitrary recombination
+  maps.
+
+- Full support for population structure and demographic events.
+
+- API support for replication via the num_replicates argument to simulate().
+
+- Fully reworked random generation mechanisms, so that in the nominal
+  case a single instance of gsl_rng is used throughout the entire
+  simulation session.
+
+- Addition of several miscellaneous methods to the TreeSequence API.
+
+- Added NULL_NODE constant to make tree traversals more readable.
+
+
+
+
+
+
 *********************
 [0.1.10] - 2016-04-21
 *********************
