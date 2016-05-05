@@ -128,12 +128,11 @@ class SimulationRunner(object):
         recomb_map = msprime.RecombinationMap.uniform_map(
             num_loci, self._recombination_rate, num_loci)
         self._simulator = msprime.simulator_factory(
-                sample_size,
-                Ne=1,
-                recombination_map=recomb_map,
-                population_configurations=population_configurations,
-                migration_matrix=migration_matrix,
-                demographic_events=demographic_events)
+            sample_size=sample_size,
+            recombination_map=recomb_map,
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            demographic_events=demographic_events)
         self._precision = precision
         self._print_trees = print_trees
         # sort out the random seeds
@@ -276,9 +275,7 @@ def convert_migration_matrix(parser, input_matrix, num_populations):
                 rate = convert_float(
                     input_matrix[j * num_populations + k], parser)
                 check_migration_rate(parser, rate)
-                # We must divide by 4 to make it a per generation rate,
-                # assuming Ne = 1
-                migration_matrix[j][k] = rate / 4
+                migration_matrix[j][k] = rate
     return migration_matrix
 
 

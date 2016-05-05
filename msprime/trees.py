@@ -448,6 +448,17 @@ def _get_random_seed():
     return random.randint(1, 2**32 - 1)
 
 
+def _check_population_configurations(population_configurations):
+    err = (
+        "Population configurations must be a list of "
+        "PopulationConfiguration instances")
+    if not isinstance(population_configurations, collections.Iterable):
+        raise TypeError(err)
+    for config in population_configurations:
+        if not isinstance(config, PopulationConfiguration):
+            raise TypeError(err)
+
+
 def _replicate_generator(
         sim, rng, scaled_mutation_rate, num_replicates):
     """
@@ -466,7 +477,7 @@ def _replicate_generator(
 
 
 def simulator_factory(
-        sample_size,
+        sample_size=None,
         Ne=1,
         random_generator=None,
         length=None,
@@ -479,6 +490,18 @@ def simulator_factory(
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
     """
+    if sample_size is None and population_configurations is None:
+        raise ValueError(
+            "Either sample_size or population_configurations must "
+            "be specified")
+    n = sample_size
+    if population_configurations is not None:
+        _check_population_configurations(population_configurations)
+        n = sum(conf.sample_size for conf in population_configurations)
+        if sample_size is not None and n != sample_size:
+            raise ValueError(
+                "Overall sample_size and the sum of population sample sizes "
+                "must be equal")
     if recombination_map is None:
         the_length = 1 if length is None else length
         the_rate = 0 if recombination_rate is None else recombination_rate
@@ -493,7 +516,7 @@ def simulator_factory(
                 "Cannot specify length/recombination_rate along with "
                 "a recombination map")
         recomb_map = recombination_map
-    sim = TreeSimulator(sample_size, recomb_map)
+    sim = TreeSimulator(n, recomb_map)
     sim.set_effective_population_size(Ne)
     rng = random_generator
     if rng is None:
@@ -509,7 +532,7 @@ def simulator_factory(
 
 
 def simulate(
-        sample_size,
+        sample_size=None,
         Ne=1,
         length=None,
         recombination_rate=None,
@@ -525,6 +548,9 @@ def simulate(
     parameters and returns the resulting :class:`.TreeSequence`.
 
     :param int sample_size: The number of individuals in our sample.
+        If not specified or None, this defaults to the sum of the
+        subpopulation sample sizes. Either ``sample_size`` or
+        ``population_configurations`` must be specified.
     :param float Ne: The effective population size for the reference
         population. This determines the factor by which the
         per-generation recombination and mutation rates are scaled
@@ -547,7 +573,9 @@ def simulate(
     :param list population_configurations: The list of
         :class:`.PopulationConfiguration` instances describing the
         sampling configuration, relative sizes and growth rates of
-        the populations to be simulated.
+        the populations to be simulated. If this is not specified,
+        a single population with a sample of size ``sample_size``
+        is assumed.
     :type population_configurations: list or None.
     :param list migration_matrix: The matrix describing the rates
         of migration between all pairs of populations. If :math:`N`
@@ -586,7 +614,7 @@ def simulate(
         seed = _get_random_seed()
     rng = RandomGenerator(seed)
     sim = simulator_factory(
-        sample_size, random_generator=rng,
+        sample_size=sample_size, random_generator=rng,
         Ne=Ne, length=length,
         recombination_rate=recombination_rate,
         recombination_map=recombination_map,
@@ -691,8 +719,8 @@ class TreeSimulator(object):
         Returns the migratation matrix scaled in coalescent time units.
         """
         return [
-            [4 * self.get_effective_population_size() * m
-                for m in row] for row in self.get_migration_matrix()]
+            [4 * self.get_effective_population_size() * m for m in row]
+            for row in self.get_migration_matrix()]
 
     def get_migration_matrix(self):
         return self._migration_matrix
@@ -811,14 +839,7 @@ class TreeSimulator(object):
         self._migration_matrix = migration_matrix
 
     def set_population_configurations(self, population_configurations):
-        err = (
-            "Population configurations must be a list of "
-            "PopulationConfiguration instances")
-        if not isinstance(population_configurations, collections.Iterable):
-            raise TypeError(err)
-        for config in population_configurations:
-            if not isinstance(config, PopulationConfiguration):
-                raise TypeError(err)
+        _check_population_configurations(population_configurations)
         self._population_configurations = population_configurations
         # Now set the default migration matrix.
         N = len(self._population_configurations)

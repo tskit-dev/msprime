@@ -9,6 +9,7 @@ import time
 import math
 import glob
 import subprocess
+import itertools
 
 import numpy as np
 import numpy.ma as ma
@@ -330,19 +331,46 @@ def replicate_example():
     print(np.mean(T))
 
 def migration_example():
-    m = 0.1
-    Ne = 100
+    M = 0.2
+    m = M / 4
+    d = 3
+    num_replicates = 10000
+    T = np.zeros(num_replicates)
+    population_configurations = [
+        msprime.PopulationConfiguration(sample_size=1),
+        msprime.PopulationConfiguration(sample_size=1),
+        msprime.PopulationConfiguration(sample_size=0)]
     migration_matrix = [
-        [0, m],
-        [1-m, 0]]
-    ts = msprime.simulate(
-        sample_size=10, Ne=Ne,
-        population_configurations=[
-            msprime.PopulationConfiguration(sample_size=10),
-            msprime.PopulationConfiguration(sample_size=0)],
-        migration_matrix=migration_matrix)
-    tree = next(ts.trees())
-    print(tree.get_time(tree.get_root()))
+        [0, m, m],
+        [m, 0, m],
+        [m, m, 0]]
+    replicates = msprime.simulate(
+        population_configurations=population_configurations,
+        migration_matrix=migration_matrix,
+        num_replicates=num_replicates)
+    for i, tree_sequence in enumerate(replicates):
+        tree = next(tree_sequence.trees())
+        T[i] = tree.get_time(tree.get_root())
+    T_mean_a = d / 2 + (d - 1) / (2 * M)
+    print(np.mean(T), T_mean_a)
+
+def segregating_sites_example(n, theta, num_replicates):
+    S = np.zeros(num_replicates)
+    replicates = msprime.simulate(
+        sample_size=n,
+        mutation_rate=theta / 4,
+        num_replicates=num_replicates)
+    for j, tree_sequence in enumerate(replicates):
+        S[j] = tree_sequence.get_num_mutations()
+    # Now, calculate the analytical predictions
+    S_mean_a = np.sum(1 / np.arange(1, n)) * theta
+    S_var_a = (
+        theta * np.sum(1 / np.arange(1, n)) +
+        theta**2 * np.sum(1 / np.arange(1, n)**2))
+    print("              mean              variance")
+    print("Observed      {}\t\t{}".format(np.mean(S), np.var(S)))
+    print("Analytical    {:.5f}\t\t{:.5f}".format(S_mean_a, S_var_a))
+
 
 if __name__ == "__main__":
     # mutations()
@@ -360,3 +388,4 @@ if __name__ == "__main__":
     # new_api()
     # replicate_example()
     migration_example()
+    # segregating_sites_example(2, 5, 10000)

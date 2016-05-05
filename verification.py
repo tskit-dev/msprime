@@ -153,6 +153,58 @@ class SimulationVerifier(object):
             self._run_mutation_stats(key, command_line)
         self._instances[key] = f
 
+    def get_pairwise_coalescence_time(self, cmd, R):
+        # print("\t", " ".join(cmd))
+        output = subprocess.check_output(cmd)
+        T = np.zeros(R)
+        j = 0
+        for line in output.splitlines():
+            if line.startswith("("):
+                t = dendropy.Tree.get_from_string(line, schema="newick")
+                a = t.calc_node_ages()
+                T[j] = a[-1]
+                j += 1
+        return T
+
+    def run_pairwise_island_model(self):
+        """
+        Runs the check for the pairwise coalscence times for within
+        and between populations.
+        """
+        R = 10000
+        M = 0.2
+        basedir = "tmp__NOBACKUP__/analytical_pairwise_island"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        for d in range(2, 6):
+            cmd = "2 {} -T -I {} 2 {} {}".format(R, d, "0 " * (d - 1), M)
+            T_w_ms = self.get_pairwise_coalescence_time(
+                self._ms_executable + cmd.split() + self.get_ms_seeds(), R)
+            T_w_msp = self.get_pairwise_coalescence_time(
+                self._mspms_executable + cmd.split() + self.get_ms_seeds(), R)
+
+            cmd = "2 {} -T -I {} 1 1 {} {}".format(R, d, "0 " * (d - 2), M)
+            T_b_ms = self.get_pairwise_coalescence_time(
+                self._ms_executable + cmd.split() + self.get_ms_seeds(), R)
+            T_b_msp = self.get_pairwise_coalescence_time(
+                self._mspms_executable + cmd.split() + self.get_ms_seeds(), R)
+            print(d, np.mean(T_w_ms), np.mean(T_w_msp), d / 2,
+                    np.mean(T_b_ms), np.mean(T_b_msp), (d + (d - 1) / M) / 2,
+                    sep="\t")
+
+            sm.graphics.qqplot(T_w_ms)
+            sm.qqplot_2samples(T_w_ms, T_w_msp, line="45")
+            f = os.path.join(basedir, "within_{}.png".format(d))
+            pyplot.savefig(f, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(T_b_ms)
+            sm.qqplot_2samples(T_b_ms, T_b_msp, line="45")
+            f = os.path.join(basedir, "between_{}.png".format(d))
+            pyplot.savefig(f, dpi=72)
+            pyplot.close('all')
+
     def get_segregating_sites_histogram(self, cmd):
         print("\t", " ".join(cmd))
         output = subprocess.check_output(cmd)
@@ -291,6 +343,13 @@ class SimulationVerifier(object):
         Adds a check for the analytical check for the total branch length.
         """
         self._instances["analytical_tbl"] = self.run_tbl_analytical_check
+
+    def add_pairwise_island_model_analytical_check(self):
+        """
+        Adds a check for the analytical check for pairwise island model
+        """
+        self._instances[
+            "analytical_pairwise_island"] = self.run_pairwise_island_model
 
     def add_random_instance(
             self, key, num_populations=1, num_replicates=1000,
@@ -488,6 +547,7 @@ def main():
     # Add analytical checks
     verifier.add_s_analytical_check()
     verifier.add_total_branch_length_analytical_check()
+    verifier.add_pairwise_island_model_analytical_check()
 
     keys = None
     if len(sys.argv) > 1:

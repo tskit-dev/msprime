@@ -368,10 +368,11 @@ class TestMultiLocusSimulation(HighLevelTestCase):
 
     def test_error_cases(self):
         def f(n, m, r):
-            return msprime.simulate(n, m, r)
-        for n in [-100, -1, 0, 1]:
+            return msprime.simulate(
+                sample_size=n, length=m, recombination_rate=r)
+        for n in [-100, -1, 0, 1, None]:
             self.assertRaises(ValueError, f, n, 1, 1.0)
-        for n in ["", None, "2", 2.2, 1e5]:
+        for n in ["", "2", 2.2, 1e5]:
             self.assertRaises(TypeError, f, n, 1, 1.0)
 
 
@@ -889,8 +890,10 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertEqual(rng.get_seed(), seed)
 
     def test_sample_size(self):
-        self.assertRaises(TypeError, msprime.simulator_factory)
+        self.assertRaises(ValueError, msprime.simulator_factory)
         self.assertRaises(ValueError, msprime.simulator_factory, 1)
+        self.assertRaises(
+            ValueError, msprime.simulator_factory, sample_size=1)
         for n in [2, 100, 1000]:
             sim = msprime.simulator_factory(n)
             self.assertEqual(sim.get_sample_size(), n)
@@ -911,7 +914,7 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_population_configurations(self):
         def f(configs):
             return msprime.simulator_factory(
-                10, population_configurations=configs)
+                population_configurations=configs)
         for bad_type in [10, ["sdf"], "sdfsd"]:
             self.assertRaises(TypeError, f, bad_type)
         # Just test the basic equalities here. The actual
@@ -919,16 +922,33 @@ class TestSimulatorFactory(unittest.TestCase):
         for N in range(1, 10):
             pop_configs = [
                 msprime.PopulationConfiguration(5) for _ in range(N)]
+            sample_size = 5 * N
             sim = msprime.simulator_factory(
-                N * 5, population_configurations=pop_configs)
+                population_configurations=pop_configs)
             self.assertEqual(
                 sim.get_population_configurations(), pop_configs)
+            self.assertEqual(
+                sim.get_sample_size(), sample_size)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(len(ll_sim.get_population_configuration()), N)
         # The default is a single population
         sim = msprime.simulator_factory(10)
         ll_sim = sim.create_ll_instance()
         self.assertEqual(len(ll_sim.get_population_configuration()), 1)
+
+    def test_sample_size_population_configuration(self):
+        for d in range(1, 5):
+            # Zero sample size is always an error
+            configs = [msprime.PopulationConfiguration(0) for _ in range(d)]
+            self.assertRaises(
+                ValueError, msprime.simulator_factory,
+                population_configurations=configs)
+            # Disagreements between sample sizes raises and error
+            configs = [msprime.PopulationConfiguration(1) for _ in range(d)]
+            self.assertRaises(
+                ValueError,  msprime.simulator_factory,
+                sample_size=d - 1,
+                population_configurations=configs)
 
     def test_migration_matrix(self):
         # Cannot specify a migration matrix without population
