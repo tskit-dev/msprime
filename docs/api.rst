@@ -43,10 +43,15 @@ recombination model and number of loci.
 
 Population structure is modelled by specifying a fixed number of demes
 :math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation
-migration probabilities. The matrix entry :math:`M_{j, k}` is the
-probability that a lineage in deme :math:`k` migrates to deme :math:`j`
-in a single generation. Thus, the rate of migration in coalescent
-time units between a given pair of demes is :math:`4 N_e M_{j, k}`.
+migration rates. Therefore, the rate of migration in coalescent time units
+between a given pair of demes is :math:`4 N_e M_{j, k}`. Each deme has an
+initial size :math:`s` that is measured relative to :math:`N_e`, and an
+exponential growth rate :math:`\alpha`. The size of a given population at time
+:math:`t` in the past (assuming no demographic events have occured) is
+therefore given by :math:`s N_e e^{-\alpha t}`. Demographic events that occur
+in the history of the simulated population alter some aspect of this population
+configuration at a particular time in the past.
+
 
 .. warning:: This parameterisation of recombination, mutation and
     migration rates is different to :program:`ms`, which states these
@@ -56,8 +61,6 @@ time units between a given pair of demes is :math:`4 N_e M_{j, k}`.
     and to allow users to easily state per-generation recombination rates.
     However, the ``mspms`` command line application is fully :program:`ms`
     compatible.
-
-
 
 
 *******************

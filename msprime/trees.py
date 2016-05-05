@@ -1376,11 +1376,11 @@ class PopulationConfiguration(object):
     The initial configuration of a population (or deme) in a simulation.
 
     :param int sample_size: The number of initial samples that are drawn
-        from this population.
+        from this population. Defaults to 0.
     :param float initial_size: The size of the population at time zero
-        relative to :math:`N_e`.
+        relative to :math:`N_e`. Defaults to 1.
     :param float growth_rate: The exponential growth rate of the population.
-        This is zero for a constant population size.
+        This is zero for a constant population size. Defaults to 0.
     """
     def __init__(self, sample_size=0, initial_size=1.0, growth_rate=0.0):
         self.sample_size = sample_size

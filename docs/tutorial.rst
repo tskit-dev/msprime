@@ -267,6 +267,64 @@ Population structure
 ********************
 
 Population structure in ``msprime`` closely follows the model used in the
-``ms`` simulator: we have a :math:`N` demes with an :math:`N\times N`
-matrix describing the migration rates between these subpopulations.
+``ms`` simulator: we have :math:`N` demes with an :math:`N\times N`
+matrix describing the migration rates between these subpopulations. The
+sample sizes, relative population sizes and growth rates of all demes
+can be specified independently. Migration rates are specified using
+a migration matrix.
 
+In the following example, we calculate the mean coalescence time for
+a pair of lineages sampled in different demes in a symmetric island
+model, and compare this with the analytical expectation.
+
+
+.. code-block:: python
+
+    import msprime
+    import numpy as np
+
+    def migration_example():
+        # M is the overall symmetric migration rate, and d is the number
+        # of demes.
+        M = 0.2
+        d = 3
+        # We rescale m into per-generation values for msprime.
+        m = M / (4 * (d - 1))
+        # Allocate the initial sample. Because we are interested in the
+        # between deme coalescence times, we choose one sample each
+        # from the first two demes.
+        population_configurations = [
+            msprime.PopulationConfiguration(sample_size=1),
+            msprime.PopulationConfiguration(sample_size=1),
+            msprime.PopulationConfiguration(sample_size=0)]
+        # Now we set up the migration matrix. Since this is a symmetric
+        # island model, we have the same rate of migration between all
+        # pairs of demes. Diagonal elements must be zero.
+        migration_matrix = [
+            [0, m, m],
+            [m, 0, m],
+            [m, m, 0]]
+        # We pass these values to the simulate function, and ask it
+        # to run the required number of replicates.
+        num_replicates = 10000
+        replicates = msprime.simulate(
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            num_replicates=num_replicates)
+        # And then iterate over these replicates
+        T = np.zeros(num_replicates)
+        for i, tree_sequence in enumerate(replicates):
+            tree = next(tree_sequence.trees())
+            T[i] = tree.get_time(tree.get_root())
+        # Finally, calculate the analytical expectation and print
+        # out the results
+        analytical = d / 2 + (d - 1) / (2 * M)
+        print("Observed  =", np.mean(T))
+        print("Predicted =", analytical)
+
+
+Running this example we get::
+
+    >>> migration_example()
+    Observed  = 6.49747111358
+    Predicted = 6.5
