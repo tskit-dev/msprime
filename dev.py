@@ -388,6 +388,42 @@ def segregating_sites_example(n, theta, num_replicates):
     print("Analytical    {:.5f}\t\t{:.5f}".format(S_mean_a, S_var_a))
 
 
+
+def variable_recomb_example():
+    infile = "hapmap/genetic_map_GRCh37_chr22.txt"
+    recomb_map = msprime.RecombinationMap.read_hapmap(infile)
+    positions = np.array(recomb_map.get_positions()[1:])
+    rates = np.array(recomb_map.get_rates()[1:])
+
+    ts = msprime.simulate(
+        sample_size=100,
+        Ne=10**4,
+        recombination_map=recomb_map)
+
+    num_bins = 500
+    v, bin_edges, _ = scipy.stats.binned_statistic(
+        positions, rates, bins=num_bins)
+    x = bin_edges[:-1][np.logical_not(np.isnan(v))]
+    y = v[np.logical_not(np.isnan(v))]
+
+    fig, ax1 = pyplot.subplots(figsize=(16, 6))
+    ax1.plot(x, y, color="blue")
+    ax1.set_ylabel("Recombination rate")
+    ax1.set_xlabel("Chromosome position")
+
+    b = np.array(list(ts.breakpoints()))
+    ax2 = ax1.twinx()
+    v, bin_edges = np.histogram(b, num_bins, density=True)
+    ax2.plot(bin_edges[:-1], v, color="green")
+    ax2.set_ylabel("Breakpoint density")
+
+    ax2.set_xlim(1.5e7, 5.3e7)
+    fig.savefig("tmp__NOBACKUP__/hapmap_chr22.png")
+
+
+
+
+
 if __name__ == "__main__":
     # mutations()
 
@@ -403,5 +439,6 @@ if __name__ == "__main__":
     # map_stuff()
     # new_api()
     # replicate_example()
-    migration_example()
+    # migration_example()
     # segregating_sites_example(2, 5, 10000)
+    variable_recomb_example()

@@ -1150,6 +1150,23 @@ class TreeSequence(object):
         """
         return iter(self._ll_tree_sequence.get_mutations())
 
+    def breakpoints(self):
+        """
+        Returns an iterator over the breakpoints along the chromosome,
+        including the two extreme points 0 and L. This is equivalent to
+
+        >>> [0] + [t.get_interval()[1] for t in self.trees()]
+
+        although we do not build an explicit list.
+
+        :return: An iterator over all the breakpoints along the simulated
+            sequence.
+        :rtype: iter
+        """
+        yield 0
+        for t in self.trees():
+            yield t.get_interval()[1]
+
     def trees(self, tracked_leaves=[]):
         """
         Returns an iterator over the trees in this tree sequence. Each value
