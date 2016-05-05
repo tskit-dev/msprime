@@ -391,35 +391,37 @@ def segregating_sites_example(n, theta, num_replicates):
 
 def variable_recomb_example():
     infile = "hapmap/genetic_map_GRCh37_chr22.txt"
+    # Read in the recombination map using the read_hapmap method,
     recomb_map = msprime.RecombinationMap.read_hapmap(infile)
+
+    # Now we get the positions and rates from the recombination
+    # map and plot these using 500 bins.
     positions = np.array(recomb_map.get_positions()[1:])
     rates = np.array(recomb_map.get_rates()[1:])
-
-    ts = msprime.simulate(
-        sample_size=100,
-        Ne=10**4,
-        recombination_map=recomb_map)
-
     num_bins = 500
     v, bin_edges, _ = scipy.stats.binned_statistic(
         positions, rates, bins=num_bins)
     x = bin_edges[:-1][np.logical_not(np.isnan(v))]
     y = v[np.logical_not(np.isnan(v))]
-
     fig, ax1 = pyplot.subplots(figsize=(16, 6))
     ax1.plot(x, y, color="blue")
     ax1.set_ylabel("Recombination rate")
     ax1.set_xlabel("Chromosome position")
 
-    b = np.array(list(ts.breakpoints()))
+    # Now we run the simulation for this map. We assume Ne=10^4
+    # and have a sample of 100 individuals
+    tree_sequence = msprime.simulate(
+        sample_size=100,
+        Ne=10**4,
+        recombination_map=recomb_map)
+    # Now plot the density of breakpoints along the chromosome
+    breakpoints = np.array(list(tree_sequence.breakpoints()))
     ax2 = ax1.twinx()
-    v, bin_edges = np.histogram(b, num_bins, density=True)
+    v, bin_edges = np.histogram(breakpoints, num_bins, density=True)
     ax2.plot(bin_edges[:-1], v, color="green")
     ax2.set_ylabel("Breakpoint density")
-
     ax2.set_xlim(1.5e7, 5.3e7)
-    fig.savefig("tmp__NOBACKUP__/hapmap_chr22.png")
-
+    fig.savefig("hapmap_chr22.svg")
 
 
 
