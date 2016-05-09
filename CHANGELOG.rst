@@ -63,11 +63,6 @@ New features:
 
 - Added NULL_NODE constant to make tree traversals more readable.
 
-
-
-
-
-
 *********************
 [0.1.10] - 2016-04-21
 *********************
