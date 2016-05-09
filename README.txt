@@ -14,7 +14,12 @@ for large sample sizes and has very reasonable memory requirements. Msprime
 makes it possible to simulate chromosome sized regions with hundreds of
 thousands of samples.
 
-Please see the `documentation <https://msprime.readthedocs.org/en/latest/>`_
+If you use ``msprime`` in your work, please cite the `PLOS Computational
+Biology <http://dx.doi.org/10.1371/journal.pcbi.1004842>`_ paper.
+See `here <https://msprime.readthedocs.org/en/stable/CITATION.html>`_ for
+full citation details.
+
+Please see the `documentation <https://msprime.readthedocs.org/en/stable/>`_
 for further details.
 
 ***********

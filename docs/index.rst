@@ -20,6 +20,7 @@ Contents:
    api
    cli
    file-format
+   CITATION
 
 Indices and tables
 ==================

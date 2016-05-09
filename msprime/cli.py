@@ -51,6 +51,12 @@ mscompat_recombination_help = (
     "Recombination at rate rho=4*N0*r where r is the rate of recombination "
     "between the ends of the region being simulated; num_loci is the number "
     "of sites between which recombination can occur")
+msprime_citation_text = """
+If you use msprime in your work, please cite the following paper:
+Jerome Kelleher, Alison M Etheridge and Gilean McVean (2016), "Efficient
+Coalescent Simulation and Genealogical Analysis for Large Sample Sizes",
+PLoS Comput Biol 12(5): e1004842. doi: 10.1371/journal.pcbi.1004842
+"""
 
 
 def positive_int(value):
@@ -525,7 +531,9 @@ def get_mspms_parser():
     # Ensure that the IndexedAction counter is set to zero. This is useful
     # for testing where we'll be creating lots of these parsers.
     IndexedAction.index = 0
-    parser = argparse.ArgumentParser(description=mscompat_description)
+    parser = argparse.ArgumentParser(
+        description=mscompat_description,
+        epilog=msprime_citation_text)
     add_sample_size_argument(parser)
     parser.add_argument(
         "num_replicates", type=positive_int,
@@ -734,7 +742,8 @@ def run_simulate(args):
 
 def get_msp_parser():
     parser = argparse.ArgumentParser(
-        description="Command line interface for msprime.")
+        description="Command line interface for msprime.",
+        epilog=msprime_citation_text)
     parser.add_argument(
         "-V", "--version", action='version',
         version='%(prog)s {}'.format(msprime.__version__))
