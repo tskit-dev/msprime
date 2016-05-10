@@ -481,24 +481,30 @@ class TestHaplotypeGenerator(HighLevelTestCase):
     Tests the haplotype generation code.
     """
 
-    def verify_haplotypes(self, n, haplotype_strings):
+    def verify_haplotypes_variants(self, n, haplotypes, variants):
         """
-        Verify that the specified set of haplotypes are consistent.
+        Verify that the specified set of haplotypes and variants are
+        consistent.
         """
-        self.assertEqual(len(haplotype_strings), n)
-        for h in haplotype_strings:
-            self.assertEqual(len(h), len(haplotype_strings[0]))
-        # Examine each column; we must have a mixture of 0s and 1s
-        for k in range(len(haplotype_strings[0])):
+        self.assertEqual(len(haplotypes), n)
+        m = len(haplotypes[0])
+        for h in haplotypes:
+            self.assertEqual(len(h), m)
+        self.assertEqual(len(variants), m)
+        # Examine each column in H; we must have a mixture of 0s and 1s
+        for k in range(m):
             zeros = 0
             ones = 0
+            col = ""
             for j in range(n):
-                b = haplotype_strings[j][k]
+                b = haplotypes[j][k]
                 zeros += b == '0'
                 ones += b == '1'
+                col += b
             self.assertGreater(zeros, 0)
             self.assertGreater(ones, 0)
             self.assertEqual(zeros + ones, n)
+            self.assertEqual(col, variants[k])
 
     def verify_simulation(self, n, m, r, theta):
         """
@@ -510,7 +516,10 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         haplotypes = list(tree_sequence.haplotypes())
         for h in haplotypes:
             self.assertEqual(len(h), tree_sequence.get_num_mutations())
-        self.verify_haplotypes(n, haplotypes)
+        variants = list(tree_sequence.variants())
+        for v in variants:
+            self.assertEqual(len(v), tree_sequence.get_sample_size())
+        self.verify_haplotypes_variants(n, haplotypes, variants)
 
     def test_random_parameters(self):
         num_random_sims = 10

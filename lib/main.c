@@ -421,7 +421,7 @@ print_variants(tree_sequence_t *ts)
     uint32_t j;
     char *variant;
 
-    printf("variants (%d) \n", ts->num_mutations);
+    printf("variants (%d) \n", (int) ts->num_mutations);
     if (vg == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;

@@ -1212,6 +1212,9 @@ class TreeSequence(object):
         """
         return HaplotypeGenerator(self).haplotypes()
 
+    def variants(self):
+        return _msprime.VariantGenerator(self._ll_tree_sequence)
+
     def generate_mutations(
             self, scaled_mutation_rate, random_generator):
         # TODO document this function when it's ready to be brought back

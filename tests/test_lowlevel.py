@@ -2052,6 +2052,37 @@ class TestHaplotypeGenerator(LowLevelTestCase):
             self.assertEqual(len(h), num_mutations)
 
 
+class TestVariantGenerator(LowLevelTestCase):
+    """
+    Tests for the low-level variant generator.
+    """
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.VariantGenerator)
+        ts = _msprime.TreeSequence()
+        # This hasn't been initialised, so should fail.
+        self.assertRaises(ValueError, _msprime.VariantGenerator, ts)
+        ts = self.get_tree_sequence(num_loci=10)
+
+        for bad_type in ["", {}, [], None]:
+            self.assertRaises(
+                TypeError, _msprime.VariantGenerator, ts, bad_type)
+        vg = _msprime.VariantGenerator(ts)
+        before = list(vg)
+        vg = _msprime.VariantGenerator(ts)
+        del ts
+        # We should keep a reference to the tree sequence.
+        after = list(vg)
+        self.assertEqual(before, after)
+
+    def test_form(self):
+        ts = self.get_tree_sequence(num_loci=10)
+        variants = list(_msprime.VariantGenerator(ts))
+        self.assertGreater(len(variants), 0)
+        self.assertEqual(len(variants), ts.get_num_mutations())
+        for variant in variants:
+            self.assertEqual(len(variant), ts.get_sample_size())
+
+
 class TestSparseTree(LowLevelTestCase):
     """
     Tests on the low-level sparse tree interface.
@@ -2238,6 +2269,9 @@ class TestSparseTree(LowLevelTestCase):
                     self.assertRaises(
                         _msprime.LibraryError, _msprime.HaplotypeGenerator,
                         other_ts)
+                    self.assertRaises(
+                        _msprime.LibraryError, list,
+                        _msprime.VariantGenerator(other_ts))
 
 
 class TestLeafListIterator(LowLevelTestCase):

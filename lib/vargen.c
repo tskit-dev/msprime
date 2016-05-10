@@ -130,7 +130,7 @@ vargen_next(vargen_t *self, char **variant)
     int ret = 0;
     int not_done = 1;
 
-    if (self->tree_mutation_index == self->tree.num_mutations) {
+    while (not_done && self->tree_mutation_index == self->tree.num_mutations) {
         ret = vargen_next_tree(self);
         if (ret < 0) {
             goto out;

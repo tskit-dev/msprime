@@ -98,6 +98,12 @@ typedef struct {
     hapgen_t *haplotype_generator;
 } HaplotypeGenerator;
 
+typedef struct {
+    PyObject_HEAD
+    TreeSequence *tree_sequence;
+    vargen_t *variant_generator;
+} VariantGenerator;
+
 static void
 handle_library_error(int err)
 {
@@ -3556,6 +3562,140 @@ static PyTypeObject HaplotypeGeneratorType = {
     (initproc)HaplotypeGenerator_init,      /* tp_init */
 };
 
+
+/*===================================================================
+ * VariantGenerator
+ *===================================================================
+ */
+
+static int
+VariantGenerator_check_state(VariantGenerator *self)
+{
+    int ret = 0;
+    if (self->variant_generator == NULL) {
+        PyErr_SetString(PyExc_SystemError, "converter not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+VariantGenerator_dealloc(VariantGenerator* self)
+{
+    if (self->variant_generator != NULL) {
+        vargen_free(self->variant_generator);
+        PyMem_Free(self->variant_generator);
+        self->variant_generator = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", NULL};
+    TreeSequence *tree_sequence;
+
+    self->variant_generator = NULL;
+    self->tree_sequence = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    self->variant_generator = PyMem_Malloc(sizeof(hapgen_t));
+    if (self->variant_generator == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->variant_generator, 0, sizeof(hapgen_t));
+    err = vargen_alloc(self->variant_generator,
+            self->tree_sequence->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+VariantGenerator_next(VariantGenerator *self)
+{
+    PyObject *ret = NULL;
+    char *variant;
+    int err;
+
+    if (VariantGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    err = vargen_next(self->variant_generator, &variant);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (err == 1) {
+        ret = Py_BuildValue("s", variant);
+    }
+out:
+    return ret;
+}
+
+static PyMemberDef VariantGenerator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef VariantGenerator_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject VariantGeneratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.VariantGenerator",             /* tp_name */
+    sizeof(VariantGenerator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)VariantGenerator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "VariantGenerator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) VariantGenerator_next, /* tp_iternext */
+    VariantGenerator_methods,             /* tp_methods */
+    VariantGenerator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)VariantGenerator_init,      /* tp_init */
+};
+
 /*===================================================================
  * Module level functions
  *===================================================================
@@ -3713,7 +3853,15 @@ init_msprime(void)
     Py_INCREF(&HaplotypeGeneratorType);
     PyModule_AddObject(module, "HaplotypeGenerator",
             (PyObject *) &HaplotypeGeneratorType);
-     /* Errors and constants */
+    /* VariantGenerator type */
+    VariantGeneratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&VariantGeneratorType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&VariantGeneratorType);
+    PyModule_AddObject(module, "VariantGenerator",
+            (PyObject *) &VariantGeneratorType);
+    /* Errors and constants */
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);
