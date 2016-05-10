@@ -16,10 +16,10 @@ def main():
     # Run the actual simulations
     tree_sequence = msprime.simulate(
         sample_size=10**5,
-        num_loci=100 * 10**6,
-        scaled_recombination_rate=0.001,
-        scaled_mutation_rate=0.001,
-        max_memory="5G",
+        length=100 * 10**6,
+        Ne=1e4,
+        recombination_rate=1e-8,
+        mutation_rate=1e-8,
         random_seed=1  # Arbitrary - make this reproducible.
     )
     duration = time.clock() - before
@@ -28,18 +28,7 @@ def main():
     # Write the results to file, which is small and can be quickly reloaded
     # to avoid the cost of re-running the simulation. We can reload the
     # file in a few seconds using msprime.load(filename).
-    tree_sequence.dump("large-example.hdf5")
-
-    # Now write the haplotypes to a file.
-    # WARNING! This takes a lot of memory (>100G), so make sure you don't
-    # crash your server. This memory requirement will be drastically reduced
-    # in future versions.
-    before = time.clock()
-    with open("large-example-haplotypes.txt", "w") as f:
-        for h in tree_sequence.haplotypes():
-            print(h, file=f)
-    duration = time.clock() - before
-    print("Wrote 100k haplotypes to file in {0:.3f} seconds".format(duration))
+    tree_sequence.dump("tmp__NOBACKUP__/large-example.hdf5")
 
 
 if __name__ == "__main__":

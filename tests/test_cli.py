@@ -1082,6 +1082,13 @@ class TestMspArgumentParser(unittest.TestCase):
         args = parser.parse_args([cmd, history_file])
         self.assertEqual(args.history_file, history_file)
 
+    def test_variants_default_values(self):
+        parser = cli.get_msp_parser()
+        cmd = "variants"
+        history_file = "test1.hdf5"
+        args = parser.parse_args([cmd, history_file])
+        self.assertEqual(args.history_file, history_file)
+
     def test_macs_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "macs"
@@ -1235,6 +1242,20 @@ class TestMspConversionOutput(unittest.TestCase):
         self.assertEqual(len(stderr), 0)
         output_haplotypes = stdout.splitlines()
         self.verify_haplotypes(output_haplotypes)
+
+    def verify_variants(self, output_variants):
+        variants = list(self._tree_sequence.variants())
+        self.assertEqual(len(variants), len(output_variants))
+        for h, line in zip(variants, output_variants):
+            self.assertEqual(h, line)
+
+    def test_variants(self):
+        cmd = "variants"
+        stdout, stderr = capture_output(cli.msp_main, [
+            cmd, self._history_file])
+        self.assertEqual(len(stderr), 0)
+        output_variants = stdout.splitlines()
+        self.verify_variants(output_variants)
 
     def verify_newick(self, output_newick):
         newick = list(self._tree_sequence.newick_trees())

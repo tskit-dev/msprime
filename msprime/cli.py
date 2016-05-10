@@ -29,6 +29,8 @@ import random
 import signal
 import sys
 
+from builtins import zip
+
 import msprime
 
 
@@ -692,6 +694,12 @@ def run_dump_haplotypes(args):
         print(h)
 
 
+def run_dump_variants(args):
+    tree_sequence = msprime.load(args.history_file)
+    for v in tree_sequence.variants():
+        print(v)
+
+
 def run_dump_records(args):
     tree_sequence = msprime.load(args.history_file)
     if args.header:
@@ -718,15 +726,12 @@ def run_dump_macs(args):
     print("COMMAND:\tnot_macs {} {}".format(n, m))
     print("SEED:\tASEED")
     site = 0
-    for tree in tree_sequence.trees():
-        for position, node in tree.mutations():
-            h = ['0' for _ in range(n)]
-            for u in tree.leaves(node):
-                h[u] = '1'
-            print(
-                "SITE:", site, position / m, 0.0, "".join(h), sep="\t"
-            )
-            site += 1
+    iterator = zip(tree_sequence.mutations(), tree_sequence.variants())
+    for (position, _), variant in iterator:
+        print(
+            "SITE:", site, position / m, 0.0, variant, sep="\t"
+        )
+        site += 1
 
 
 def run_simulate(args):
@@ -792,9 +797,15 @@ def get_msp_parser():
 
     haplotypes_parser = subparsers.add_parser(
         "haplotypes",
-        help="Dump results in tabular format.")
+        help="Dump haplotypes in text format.")
     add_history_file_argument(haplotypes_parser)
     haplotypes_parser.set_defaults(runner=run_dump_haplotypes)
+
+    variants_parser = subparsers.add_parser(
+        "variants",
+        help="Dump variants in text format.")
+    add_history_file_argument(variants_parser)
+    variants_parser.set_defaults(runner=run_dump_variants)
 
     macs_parser = subparsers.add_parser(
         "macs",

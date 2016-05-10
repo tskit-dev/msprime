@@ -1,5 +1,6 @@
 coverage
 flake8
+future
 mock
 nose
 sphinx
