@@ -414,6 +414,41 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
 }
 
 static void
+print_variants(tree_sequence_t *ts)
+{
+    int ret = 0;
+    vargen_t *vg = calloc(1, sizeof(vargen_t));
+    uint32_t j;
+    char *variant;
+
+    printf("variants (%d) \n", ts->num_mutations);
+    if (vg == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = vargen_alloc(vg, ts);
+    if (ret != 0) {
+        goto out;
+    }
+    j = 0;
+    while ((ret = vargen_next(vg, &variant)) == 1) {
+        printf("%d\t%s\n", j, variant);
+        j++;
+    }
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    if (vg != NULL) {
+        vargen_free(vg);
+        free(vg);
+    }
+    if (ret != 0) {
+        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
+    }
+}
+
+static void
 print_haplotypes(tree_sequence_t *ts)
 {
     int ret = 0;
@@ -677,8 +712,10 @@ run_simulate(char *conf_file)
     }
     tree_sequence_print_state(tree_seq);
 
-    if (1) {
-        print_haplotypes(tree_seq);
+    print_haplotypes(tree_seq);
+    print_variants(tree_seq);
+
+    if (0) {
         print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
         int j;

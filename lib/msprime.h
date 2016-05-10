@@ -319,6 +319,17 @@ typedef struct {
 } hapgen_t;
 
 typedef struct {
+    uint32_t sample_size;
+    double sequence_length;
+    size_t num_mutations;
+    tree_sequence_t *tree_sequence;
+    char *variant;
+    size_t tree_mutation_index;
+    sparse_tree_t tree;
+    sparse_tree_iterator_t tree_iterator;
+} vargen_t;
+
+typedef struct {
     gsl_rng *rng;
     double mutation_rate;
     double sequence_length;
@@ -456,6 +467,11 @@ int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);
 size_t hapgen_get_num_segregating_sites(hapgen_t *self);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
+
+int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence);
+int vargen_next(vargen_t *self, char **variant);
+int vargen_free(vargen_t *self);
+void vargen_print_state(vargen_t *self);
 
 int recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, 
         double sequence_length, double *positions, double *rates, 
