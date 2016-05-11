@@ -6,3 +6,6 @@ sphinx
 sphinx-argparse
 sphinx_rtd_theme
 svgwrite
+# Seems to be a problem with Python 3. svgwrite imports
+# pyparsing.
+pyparsing < 2.1
