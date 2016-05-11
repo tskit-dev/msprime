@@ -3632,18 +3632,19 @@ VariantGenerator_next(VariantGenerator *self)
 {
     PyObject *ret = NULL;
     char *variant;
+    double position;
     int err;
 
     if (VariantGenerator_check_state(self) != 0) {
         goto out;
     }
-    err = vargen_next(self->variant_generator, &variant);
+    err = vargen_next(self->variant_generator, &position, &variant);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     if (err == 1) {
-        ret = Py_BuildValue("s", variant);
+        ret = Py_BuildValue("ds", position, variant);
     }
 out:
     return ret;

@@ -516,10 +516,13 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         haplotypes = list(tree_sequence.haplotypes())
         for h in haplotypes:
             self.assertEqual(len(h), tree_sequence.get_num_mutations())
-        variants = list(tree_sequence.variants())
+        variants = [variant for _, variant in tree_sequence.variants()]
         for v in variants:
             self.assertEqual(len(v), tree_sequence.get_sample_size())
         self.verify_haplotypes_variants(n, haplotypes, variants)
+        self.assertEqual(
+            [pos for pos, _ in tree_sequence.variants()],
+            [pos for pos, _ in tree_sequence.mutations()])
 
     def test_random_parameters(self):
         num_random_sims = 10

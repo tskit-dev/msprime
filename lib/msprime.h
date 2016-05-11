@@ -469,7 +469,7 @@ int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self);
 
 int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence);
-int vargen_next(vargen_t *self, char **variant);
+int vargen_next(vargen_t *self, double *position, char **variant);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self);
 

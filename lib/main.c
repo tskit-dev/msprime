@@ -419,6 +419,7 @@ print_variants(tree_sequence_t *ts)
     int ret = 0;
     vargen_t *vg = calloc(1, sizeof(vargen_t));
     uint32_t j;
+    double x;
     char *variant;
 
     printf("variants (%d) \n", (int) ts->num_mutations);
@@ -431,8 +432,8 @@ print_variants(tree_sequence_t *ts)
         goto out;
     }
     j = 0;
-    while ((ret = vargen_next(vg, &variant)) == 1) {
-        printf("%d\t%s\n", j, variant);
+    while ((ret = vargen_next(vg, &x, &variant)) == 1) {
+        printf("%d\t%f\t%s\n", j, x, variant);
         j++;
     }
     if (ret != 0) {

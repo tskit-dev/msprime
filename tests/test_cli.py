@@ -1246,8 +1246,8 @@ class TestMspConversionOutput(unittest.TestCase):
     def verify_variants(self, output_variants):
         variants = list(self._tree_sequence.variants())
         self.assertEqual(len(variants), len(output_variants))
-        for h, line in zip(variants, output_variants):
-            self.assertEqual(h, line)
+        for (pos, v), line in zip(variants, output_variants):
+            self.assertEqual("{}\t{}".format(pos, v), line)
 
     def test_variants(self):
         cmd = "variants"

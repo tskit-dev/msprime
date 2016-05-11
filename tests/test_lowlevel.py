@@ -2079,8 +2079,13 @@ class TestVariantGenerator(LowLevelTestCase):
         variants = list(_msprime.VariantGenerator(ts))
         self.assertGreater(len(variants), 0)
         self.assertEqual(len(variants), ts.get_num_mutations())
-        for variant in variants:
+        positions = []
+        for pos, variant in variants:
+            positions.append(pos)
             self.assertEqual(len(variant), ts.get_sample_size())
+        self.assertEqual(
+            positions,
+            [pos for pos, _ in ts.get_mutations()])
 
 
 class TestSparseTree(LowLevelTestCase):

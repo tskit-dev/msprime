@@ -125,10 +125,11 @@ out:
 }
 
 int
-vargen_next(vargen_t *self, char **variant)
+vargen_next(vargen_t *self, double *position, char **variant)
 {
     int ret = 0;
     int not_done = 1;
+    mutation_t *mutation;
 
     while (not_done && self->tree_mutation_index == self->tree.num_mutations) {
         ret = vargen_next_tree(self);
@@ -139,13 +140,14 @@ vargen_next(vargen_t *self, char **variant)
     }
     if (not_done) {
         memset(self->variant, '0', self->sample_size);
-        ret = vargen_apply_tree_mutation(
-            self, &self->tree.mutations[self->tree_mutation_index]);
+        mutation = &self->tree.mutations[self->tree_mutation_index];
+        ret = vargen_apply_tree_mutation(self, mutation);
         if (ret != 0) {
             goto out;
         }
         self->tree_mutation_index++;
         *variant = self->variant;
+        *position = mutation->position;
         ret = 1;
     }
 out:

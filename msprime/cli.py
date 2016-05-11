@@ -29,8 +29,6 @@ import random
 import signal
 import sys
 
-from builtins import zip
-
 import msprime
 
 
@@ -696,7 +694,8 @@ def run_dump_haplotypes(args):
 
 def run_dump_variants(args):
     tree_sequence = msprime.load(args.history_file)
-    for v in tree_sequence.variants():
+    for pos, v in tree_sequence.variants():
+        print(pos, end="\t")
         print(v)
 
 
@@ -726,8 +725,7 @@ def run_dump_macs(args):
     print("COMMAND:\tnot_macs {} {}".format(n, m))
     print("SEED:\tASEED")
     site = 0
-    iterator = zip(tree_sequence.mutations(), tree_sequence.variants())
-    for (position, _), variant in iterator:
+    for position, variant in tree_sequence.variants():
         print(
             "SITE:", site, position / m, 0.0, variant, sep="\t"
         )
