@@ -1540,10 +1540,11 @@ class MassMigrationEvent(DemographicEvent):
         time units.
     :param int source: The ID of the population from which the migration
         started.
-    :param int destination: The probability that any given lineage within
+    :param int destination: The ID of the destination population.
+    :param flaot proportion: The probability that any given lineage within
         the source population migrates to the destination population.
     """
-    def __init__(self, time, source, destination, proportion):
+    def __init__(self, time, source, destination, proportion=1.0):
         super(MassMigrationEvent, self).__init__("mass_migration", time)
         self.source = source
         self.destination = destination
