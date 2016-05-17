@@ -34,7 +34,7 @@
 #define MSP_ERR_IO                                                  -3
 #define MSP_ERR_FILE_FORMAT                                         -4
 #define MSP_ERR_FILE_VERSION                                        -5
-#define MSP_ERR_NOT_INITIALISED                                     -6
+#define MSP_ERR_BAD_STATE                                           -6
 #define MSP_ERR_BAD_PARAM_VALUE                                     -7
 #define MSP_ERR_OUT_OF_BOUNDS                                       -8
 #define MSP_ERR_NEWICK_OVERFLOW                                     -9

@@ -36,6 +36,12 @@
 
 #define MSP_HDF5_ERR_MSG_SIZE 1024
 
+/* State machine for the simulator object. */
+#define MSP_STATE_NEW 0
+#define MSP_STATE_INITIALISED 1
+#define MSP_STATE_SIMULATING 2
+#define MSP_STATE_DEBUGGING 3
+
 static char _hdf5_error[MSP_HDF5_ERR_MSG_SIZE];
 
 static herr_t
@@ -63,8 +69,8 @@ msp_strerror(int err)
         ret = "File format error";
     } else if (err == MSP_ERR_FILE_VERSION) {
         ret = "Unsupported file format version";
-    } else if (err == MSP_ERR_NOT_INITIALISED) {
-        ret = "Simulator not initialised";
+    } else if (err == MSP_ERR_BAD_STATE) {
+        ret = "Bad simulator state. initialise or reset must be called.";
     } else if (err == MSP_ERR_NEWICK_OVERFLOW) {
         ret = "Newick string generation overflow.";
     } else if (err == MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS) {
@@ -234,23 +240,34 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
     }
     self->num_populations = (uint32_t) num_populations;
     /* Free any memory, if it has been allocated */
+    if (self->initial_migration_matrix != NULL) {
+        free(self->initial_migration_matrix);
+    }
     if (self->migration_matrix != NULL) {
         free(self->migration_matrix);
     }
     if (self->num_migration_events != NULL) {
         free(self->num_migration_events);
     }
+    if (self->initial_populations != NULL) {
+        free(self->initial_populations);
+    }
     if (self->populations != NULL) {
         free(self->populations);
     }
     /* Allocate storage for new num_populations */
+    self->initial_migration_matrix = calloc(num_populations * num_populations,
+            sizeof(double));
     self->migration_matrix = calloc(num_populations * num_populations,
             sizeof(double));
     self->num_migration_events = calloc(num_populations * num_populations,
             sizeof(size_t));
+    self->initial_populations = calloc(num_populations, sizeof(population_t));
     self->populations = calloc(num_populations, sizeof(population_t));
     if (self->migration_matrix == NULL
+            || self->initial_migration_matrix == NULL
             || self->num_migration_events == NULL
+            || self->initial_populations == NULL
             || self->populations == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -258,10 +275,10 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
     for (j = 0; j < num_populations; j++) {
         avl_init_tree(&self->populations[j].ancestors, cmp_individual, NULL);
         /* Set the default sizes and growth rates. */
-        self->populations[j].sample_size = 0;
-        self->populations[j].growth_rate = 0.0;
-        self->populations[j].initial_size = 1.0;
-        self->populations[j].start_time = 0.0;
+        self->initial_populations[j].sample_size = 0;
+        self->initial_populations[j].growth_rate = 0.0;
+        self->initial_populations[j].initial_size = 1.0;
+        self->initial_populations[j].start_time = 0.0;
     }
 out:
     return ret;
@@ -292,9 +309,9 @@ msp_set_population_configuration(msp_t *self, int population_id,
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
-    self->populations[population_id].sample_size = (uint32_t) sample_size;
-    self->populations[population_id].initial_size = initial_size;
-    self->populations[population_id].growth_rate = growth_rate;
+    self->initial_populations[population_id].sample_size = (uint32_t) sample_size;
+    self->initial_populations[population_id].initial_size = initial_size;
+    self->initial_populations[population_id].growth_rate = growth_rate;
     ret = 0;
 out:
     return ret;
@@ -325,7 +342,7 @@ msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
         }
     }
     for (j = 0; j < N * N; j++) {
-        self->migration_matrix[j] = migration_matrix[j];
+        self->initial_migration_matrix[j] = migration_matrix[j];
     }
     ret = 0;
 out:
@@ -417,7 +434,7 @@ msp_generate_migration_matrix_json(msp_t *self, char **output)
 
     assert(self->num_populations > 0);
     for (j = 0; j < N * N; j++) {
-        written = snprintf(NULL, 0, pattern, self->migration_matrix[j]);
+        written = snprintf(NULL, 0, pattern, self->initial_migration_matrix[j]);
         if (written < 0) {
             ret = MSP_ERR_IO;
             goto out;
@@ -435,7 +452,7 @@ msp_generate_migration_matrix_json(msp_t *self, char **output)
     offset = 1;
     for (j = 0; j < N * N; j++) {
         written = snprintf(buffer + offset, buffer_size - offset, pattern,
-            self->migration_matrix[j]);
+            self->initial_migration_matrix[j]);
         if (written < 0) {
             ret = MSP_ERR_IO;
             goto out;
@@ -473,7 +490,7 @@ msp_generate_population_configuration_json(msp_t *self, char **output)
 
     assert(self->num_populations > 0);
     for (j = 0; j < self->num_populations; j++) {
-        pop = &self->populations[j];
+        pop = &self->initial_populations[j];
         written = snprintf(NULL, 0, pattern, pop->initial_size,
                 pop->growth_rate, pop->sample_size);
         if (written < 0) {
@@ -492,7 +509,7 @@ msp_generate_population_configuration_json(msp_t *self, char **output)
     buffer[0] = '[';
     offset = 1;
     for (j = 0; j < self->num_populations; j++) {
-        pop = &self->populations[j];
+        pop = &self->initial_populations[j];
         written = snprintf(buffer + offset, buffer_size - offset, pattern,
                 pop->initial_size, pop->growth_rate, pop->sample_size);
         if (written < 0) {
@@ -660,8 +677,8 @@ msp_alloc(msp_t *self, size_t sample_size, gsl_rng *rng)
         goto out;
     }
     /* Set sensible defaults for the sample_config and migration matrix */
-    self->migration_matrix[0] = 0.0;
-    self->populations[0].sample_size = (uint32_t) sample_size;
+    self->initial_migration_matrix[0] = 0.0;
+    self->initial_populations[0].sample_size = (uint32_t) sample_size;
     /* Set the memory defaults */
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
@@ -675,6 +692,7 @@ msp_alloc(msp_t *self, size_t sample_size, gsl_rng *rng)
     self->demographic_events_head = NULL;
     self->demographic_events_tail = NULL;
     self->next_demographic_event = NULL;
+    self->state = MSP_STATE_NEW;
 out:
     return ret;
 }
@@ -726,12 +744,6 @@ out:
     return ret;
 }
 
-static int
-msp_is_initialised(msp_t *self)
-{
-    return self->used_memory != 0;
-}
-
 /*
  * Returns true if the simulation has completed.
  */
@@ -740,7 +752,7 @@ msp_is_completed(msp_t *self)
 {
     size_t n = msp_get_num_ancestors(self);
 
-    return msp_is_initialised(self) && n == 0;
+    return self->state == MSP_STATE_SIMULATING && n == 0;
 }
 
 int
@@ -755,11 +767,17 @@ msp_free(msp_t *self)
         free(de);
         de = tmp;
     }
+    if (self->initial_migration_matrix != NULL) {
+        free(self->initial_migration_matrix);
+    }
     if (self->migration_matrix != NULL) {
         free(self->migration_matrix);
     }
     if (self->num_migration_events != NULL) {
         free(self->num_migration_events);
+    }
+    if (self->initial_populations != NULL) {
+        free(self->initial_populations);
     }
     if (self->populations != NULL) {
         free(self->populations);
@@ -1941,6 +1959,106 @@ msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
     return ret;
 }
 
+
+static int WARN_UNUSED
+msp_reset_memory_state(msp_t *self)
+{
+    int ret = 0;
+    avl_node_t *node;
+    node_mapping_t *nm;
+    population_t *pop;
+    segment_t *u, *v;
+    size_t j;
+
+    for (j = 0; j < self->num_populations; j++) {
+        pop = &self->populations[j];
+        for (node = pop->ancestors.head; node != NULL; node = node->next) {
+            u = (segment_t *) node->item;
+            while (u != NULL) {
+                v = u->next;
+                msp_free_segment(self, u);
+                u = v;
+            }
+            avl_unlink_node(&pop->ancestors, node);
+            msp_free_avl_node(self, node);
+        }
+    }
+    for (node = self->breakpoints.head; node != NULL; node = node->next) {
+        nm = (node_mapping_t *) node->item;
+        avl_unlink_node(&self->breakpoints, node);
+        msp_free_avl_node(self, node);
+        msp_free_node_mapping(self, nm);
+    }
+    for (node = self->overlap_counts.head; node != NULL; node = node->next) {
+        nm = (node_mapping_t *) node->item;
+        avl_unlink_node(&self->overlap_counts, node);
+        msp_free_avl_node(self, node);
+        msp_free_node_mapping(self, nm);
+    }
+    return ret;
+}
+
+int
+msp_reset(msp_t *self)
+{
+    int ret = 0;
+    segment_t *u;
+    uint32_t j, sample_id, population_id;
+    population_t *pop, *initial_pop;
+    size_t N = self->num_populations;
+
+    ret = msp_reset_memory_state(self);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Set up the initial segments and algorithm state */
+    sample_id = 0;
+    for (population_id = 0; population_id < N; population_id++) {
+        pop = &self->populations[population_id];
+        assert(avl_count(&pop->ancestors) == 0);
+        /* Set the initial population parameters */
+        initial_pop = &self->initial_populations[population_id];
+        pop->sample_size = initial_pop->sample_size;
+        pop->growth_rate = initial_pop->growth_rate;
+        pop->initial_size = initial_pop->initial_size;
+        pop->start_time = 0.0;
+        /* Set up the sample */
+        for (j = 0; j < self->populations[population_id].sample_size; j++) {
+            u = msp_alloc_segment(self, 0, self->num_loci, sample_id,
+                    population_id, NULL, NULL);
+            if (u == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            ret = msp_insert_individual(self, u);
+            if (ret != 0) {
+                goto out;
+            }
+            fenwick_set_value(&self->links, u->id, self->num_loci - 1);
+            sample_id++;
+        }
+    }
+    assert(sample_id == self->sample_size);
+    self->next_node = self->sample_size;
+    self->next_demographic_event = self->demographic_events_head;
+    memcpy(self->migration_matrix, self->initial_migration_matrix,
+            N * N * sizeof(double));
+    ret = msp_insert_overlap_count(self, 0, self->sample_size);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_insert_overlap_count(self, self->num_loci,
+            self->sample_size + 1);
+    if (ret != 0) {
+        goto out;
+    }
+    self->time = 0.0;
+    self->num_coalescence_records = 0;
+    self->state = MSP_STATE_INITIALISED;
+out:
+    return ret;
+}
+
 /*
  * Sets up the memory heaps, initial population and trees.
  */
@@ -1948,10 +2066,9 @@ int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
     int ret = -1;
-    segment_t *u;
-    demographic_event_t *de;
     double t;
-    uint32_t j, sample_id, total, population_id;
+    demographic_event_t *de;
+    uint32_t total, population_id;
 
     /* These should really be proper checks with a return value */
     assert(self->sample_size > 1);
@@ -1966,7 +2083,7 @@ msp_initialise(msp_t *self)
     total = 0;
     for (population_id = 0; population_id < self->num_populations;
             population_id++) {
-        total += self->populations[population_id].sample_size;
+        total += self->initial_populations[population_id].sample_size;
     }
     if (total != self->sample_size) {
         ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
@@ -1985,46 +2102,15 @@ msp_initialise(msp_t *self)
         }
         t = de->time;
     }
-    self->next_demographic_event = self->demographic_events_head;
-    /* Set up the initial segments and algorithm state */
-    sample_id = 0;
-    for (population_id = 0; population_id < self->num_populations;
-            population_id++) {
-        for (j = 0; j < self->populations[population_id].sample_size; j++) {
-            u = msp_alloc_segment(self, 0, self->num_loci, sample_id,
-                    population_id, NULL, NULL);
-            if (u == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            ret = msp_insert_individual(self, u);
-            if (ret != 0) {
-                goto out;
-            }
-            fenwick_set_value(&self->links, u->id, self->num_loci - 1);
-            sample_id++;
-        }
-    }
-    assert(sample_id == self->sample_size);
-    self->next_node = self->sample_size;
-    /* Store the JSON strings now because we need to store the initial
-     * state of the migration matrix and population configuration.
-     */
+    /* TODO generate these lazily on demand? */
     ret = msp_generate_provenance_strings(self);
     if (ret != 0) {
         goto out;
     }
-    ret = msp_insert_overlap_count(self, 0, self->sample_size);
+    ret = msp_reset(self);
     if (ret != 0) {
         goto out;
     }
-    ret = msp_insert_overlap_count(self, self->num_loci,
-            self->sample_size + 1);
-    if (ret != 0) {
-        goto out;
-    }
-    self->time = 0.0;
-    self->num_coalescence_records = 0;
 out:
     return ret;
 }
@@ -2082,19 +2168,50 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+msp_apply_demographic_events(msp_t *self)
+{
+    int ret = 0;
+    double t_event;
+    demographic_event_t *event;
+
+    assert(self->next_demographic_event != NULL);
+    /* Process all events with equal time in one block. */
+    t_event = self->next_demographic_event->time;
+    while (self->next_demographic_event != NULL
+            && self->next_demographic_event->time == t_event) {
+        /* We skip ahead to the start time for the next demographic
+         * event, and use its change_state method to update the
+         * state of the simulation.
+         */
+        event = self->next_demographic_event;
+        assert(event->change_state != NULL);
+        ret = event->change_state(self, event);
+        if (ret != 0) {
+            goto out;
+        }
+        self->time = event->time;
+        self->next_demographic_event = event->next;
+    }
+out:
+    return ret;
+}
+
 int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda, t_temp, t_event, t_wait, ca_t_wait, re_t_wait, mig_t_wait;
+    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait;
     int64_t num_links;
     uint32_t j, k, n;
     uint32_t ca_pop_id, mig_source_pop, mig_dest_pop;
-    demographic_event_t *event;
     unsigned long events = 0;
 
-    if (!msp_is_initialised(self)) {
-        ret = MSP_ERR_NOT_INITIALISED;
+    if (self->state == MSP_STATE_INITIALISED) {
+        self->state = MSP_STATE_SIMULATING;
+    }
+    if (self->state != MSP_STATE_SIMULATING) {
+        ret = MSP_ERR_BAD_STATE;
         goto out;
     }
     while (msp_get_num_ancestors(self) > 0
@@ -2146,32 +2263,16 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             }
         }
         t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
-        /* printf("t = %f min = %f re = %f ca = %f mig = %f\n", */
-        /*         self->time, t_wait, re_t_wait, ca_t_wait, mig_t_wait); */
         if (self->next_demographic_event == NULL && t_wait == DBL_MAX) {
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
         }
         if (self->next_demographic_event != NULL
                 && self->next_demographic_event->time < self->time + t_wait) {
-            /* Process all events with equal time in one block. */
-            t_event = self->next_demographic_event->time;
-            while (self->next_demographic_event != NULL
-                    && self->next_demographic_event->time == t_event) {
-                /* We skip ahead to the start time for the next demographic
-                 * event, and use it's change_state method to update the
-                 * state of the simulation.
-                 */
-                event = self->next_demographic_event;
-                assert(event->change_state != NULL);
-                ret = event->change_state(self, event);
-                if (ret != 0) {
-                    goto out;
-                }
-                self->time = event->time;
-                self->next_demographic_event = event->next;
+            ret = msp_apply_demographic_events(self);
+            if (ret != 0) {
+                goto out;
             }
-            /* msp_print_state(self); */
         } else {
             self->time += t_wait;
             if (re_t_wait == t_wait) {
@@ -2192,6 +2293,43 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             ret = 2;
         }
     }
+out:
+    return ret;
+}
+
+int
+msp_debug_demography(msp_t *self, double *end_time)
+{
+    int ret = 0;
+    double t = GSL_POSINF;
+    int first_call = 0;
+
+    if (self->state == MSP_STATE_INITIALISED) {
+        self->state = MSP_STATE_DEBUGGING;
+        first_call = 1;
+    }
+    if (self->state != MSP_STATE_DEBUGGING) {
+        ret = MSP_ERR_BAD_STATE;
+        goto out;
+    }
+    if (! first_call && self->next_demographic_event != NULL) {
+        ret = msp_apply_demographic_events(self);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (self->next_demographic_event != NULL) {
+        t = self->next_demographic_event->time;
+    }
+
+/*     if (self->next_demographic_event != NULL) { */
+/*         ret = msp_apply_demographic_events(self); */
+/*         if (ret != 0) { */
+/*             goto out; */
+/*         } */
+/*         *end_time = self->time; */
+/*     } */
+    *end_time = t;
 out:
     return ret;
 }
@@ -2319,6 +2457,21 @@ msp_get_population_configuration(msp_t *self, size_t population_id,
     *sample_size = pop->sample_size;
     *initial_size = pop->initial_size;
     *growth_rate = pop->growth_rate;
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+msp_get_population(msp_t *self, size_t population_id,
+        population_t **population)
+{
+    int ret = 0;
+
+    if (population_id > self->num_populations) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    *population = &self->populations[population_id];
 out:
     return ret;
 }

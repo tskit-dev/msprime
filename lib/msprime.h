@@ -106,7 +106,8 @@ typedef struct {
     uint32_t num_loci;
     double scaled_recombination_rate;
     uint32_t num_populations;
-    double *migration_matrix;
+    double *initial_migration_matrix;
+    population_t *initial_populations;
     /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
@@ -123,9 +124,11 @@ typedef struct {
     struct demographic_event_t_t *demographic_events_tail;
     struct demographic_event_t_t *next_demographic_event;
     /* algorithm state */
+    int state;
     size_t used_memory;
     double time;
     uint32_t next_node;
+    double *migration_matrix;
     population_t *populations;
     avl_tree_t breakpoints;
     avl_tree_t overlap_counts;
@@ -371,6 +374,8 @@ int msp_add_mass_migration(msp_t *self, double time, int source, int dest,
 
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
+int msp_debug_demography(msp_t *self, double *end_time);
+int msp_reset(msp_t *self);
 int msp_print_state(msp_t *self);
 int msp_free(msp_t *self);
 void msp_verify(msp_t *self);
@@ -382,6 +387,8 @@ int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         size_t *sample_size, double *initial_size, double *growth_rate);
+int msp_get_population(msp_t *self, size_t population_id, 
+        population_t **population);
 int msp_is_completed(msp_t *self);
 
 size_t msp_get_sample_size(msp_t *self);

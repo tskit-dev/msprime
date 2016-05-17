@@ -24,6 +24,7 @@
 #include <float.h>
 
 #include <libconfig.h>
+#include <gsl/gsl_math.h>
 
 #include "msprime.h"
 #include "err.h"
@@ -651,6 +652,7 @@ run_simulate(char *conf_file)
 {
     int ret = -1;
     int result;
+    double start_time, end_time;
     mutation_params_t mutation_params;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     msp_t *msp = calloc(1, sizeof(msp_t));
@@ -670,6 +672,22 @@ run_simulate(char *conf_file)
     }
     /* recomb_map_print_state(recomb_map); */
     ret = msp_initialise(msp);
+    if (ret != 0) {
+        goto out;
+    }
+    /* print out the demographic event debug state */
+    start_time = 0;
+    do {
+
+        ret = msp_debug_demography(msp, &end_time);
+        printf("interval %f - %f\n", start_time, end_time);
+        msp_print_state(msp);
+        start_time = end_time;
+    } while (! gsl_isinf(end_time));
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_reset(msp);
     if (ret != 0) {
         goto out;
     }
