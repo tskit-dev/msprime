@@ -408,6 +408,7 @@ class TestSimulationState(LowLevelTestCase):
         Verifies the state of the specified simulation that has run
         for at least one event.
         """
+        self.assertRaises(_msprime.LibraryError, sim.debug_demography)
         self.assertGreaterEqual(sim.get_num_breakpoints(), 0)
         self.assertGreater(sim.get_time(), 0.0)
         self.assertGreater(sim.get_num_ancestors(), 1)
@@ -858,14 +859,27 @@ class TestSimulationState(LowLevelTestCase):
             n, _msprime.RandomGenerator(1), migration_matrix=migration_matrix,
             population_configuration=population_configuration,
             demographic_events=demographic_events)
+        # Use a second instance to track the demographic events debugger.
+        sim2 = _msprime.Simulator(
+            n, _msprime.RandomGenerator(1), migration_matrix=migration_matrix,
+            population_configuration=population_configuration,
+            demographic_events=demographic_events)
         self.assertEqual(sim.get_migration_matrix(), migration_matrix)
         self.assertEqual(
             sim.get_population_configuration(), population_configuration)
+
+        # Now run the demography debug forward.
+        next_event_time = sim2.debug_demography()
+        self.assertEqual(sim2.get_migration_matrix(), migration_matrix)
+        self.assertEqual(
+            sim2.get_population_configuration(), population_configuration)
         # For each event we now run the simulator forward until this time
         # and make sure that the internal state is what it should be.
         for event in demographic_events:
             t = event["time"]
             event_type = event["type"]
+            self.assertEqual(next_event_time, t)
+            self.assertEqual(sim2.get_migration_matrix(), migration_matrix)
             sim.run(t)
             self.assertEqual(sim.get_time(), t)
             if event_type == "migration_rate_change":
@@ -910,6 +924,8 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(sim.get_migration_matrix(), migration_matrix)
             self.assertEqual(
                 sim.get_population_configuration(), population_configuration)
+            next_event_time = sim2.debug_demography()
+        self.assertTrue(math.isinf(next_event_time))
 
 
 class TestSimulator(LowLevelTestCase):
@@ -2434,3 +2450,30 @@ class TestRandomGenerator(unittest.TestCase):
         for s in [1, 10, 2**32 - 1]:
             rng = _msprime.RandomGenerator(s)
             self.assertEqual(rng.get_seed(), s)
+
+
+class TestDemographyDebugger(unittest.TestCase):
+    """
+    Tests for the demography debugging interface.
+    """
+    def get_simulator(self, events):
+        return _msprime.Simulator(
+            2, _msprime.RandomGenerator(1), demographic_events=events)
+
+    def test_zero_events(self):
+        sim = self.get_simulator([])
+        self.assertTrue(math.isinf(sim.debug_demography()))
+
+    def test_state_machine_errors(self):
+        sim = self.get_simulator([])
+        # It's an error to call debug_demography after run()
+        sim.run(1e-9)
+        self.assertRaises(_msprime.LibraryError, sim.debug_demography)
+        self.assertRaises(_msprime.LibraryError, sim.debug_demography)
+        sim.run()
+        # It's an error run after debug_demography
+        sim = self.get_simulator([])
+        self.assertTrue(math.isinf(sim.debug_demography()))
+        self.assertRaises(_msprime.LibraryError, sim.run)
+        self.assertRaises(_msprime.LibraryError, sim.run)
+        self.assertTrue(math.isinf(sim.debug_demography()))

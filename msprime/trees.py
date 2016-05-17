@@ -1419,6 +1419,12 @@ class DemographicEvent(object):
         self.type = type_
         self.time = time
 
+    def __str__(self):
+        raise NotImplementedError()
+
+    def apply(self, populations, migration_matrix):
+        raise NotImplementedError()
+
 
 class GrowthRateChangeEvent(DemographicEvent):
     """
@@ -1454,6 +1460,17 @@ class GrowthRateChangeEvent(DemographicEvent):
                 "-eg", str(self.time), str(self.population_id + 1),
                 str(self.growth_rate)]
 
+    def __str__(self):
+        return "Change growth rate for {} to {}".format(
+            self.population_id, self.growth_rate)
+
+    def apply(self, populations, migration_matrix):
+        if self.population_id == -1:
+            for pop in populations:
+                pop.growth_rate = self.growth_rate
+        else:
+            populations[self.population_id].growth_rate = self.growth_rate
+
 
 class SizeChangeEvent(DemographicEvent):
     """
@@ -1488,6 +1505,17 @@ class SizeChangeEvent(DemographicEvent):
             return [
                 "-en", str(self.time), str(self.population_id + 1),
                 str(self.growth_rate)]
+
+    def __str__(self):
+        return "Change size for {} to {}".format(
+            self.population_id, self.size)
+
+    def apply(self, populations, migration_matrix):
+        if self.population_id == -1:
+            for pop in populations:
+                pop.initial_size = self.initial_size
+        else:
+            populations[self.population_id].initial_size = self.size
 
 
 class MigrationRateChangeEvent(DemographicEvent):
@@ -1530,11 +1558,27 @@ class MigrationRateChangeEvent(DemographicEvent):
     def get_ms_arguments(self):
         raise NotImplemented()
 
+    def __str__(self):
+        return "Migration rate change for {} to {}".format(
+            self.matrix_index, self.rate)
+
+    def apply(self, populations, migration_matrix):
+        if self.matrix_index is None:
+            # Change all non-diagonal values.
+            for j in range(self._num_populations):
+                for k in range(self._num_populations):
+                    if j != k:
+                        migration_matrix[j][k] = self.rate
+        else:
+            j, k = self.matrix_index
+            migration_matrix[j][k] = self.rate
+
 
 class MassMigrationEvent(DemographicEvent):
     """
     A mass migration event in which some fraction of the population in
     one deme simultaneously migrate to another deme.
+
 
     :param float time: The time at which this event occurs in coalescent
         time units.
@@ -1561,6 +1605,115 @@ class MassMigrationEvent(DemographicEvent):
 
     def get_ms_arguments(self):
         raise NotImplemented()
+
+    def __str__(self):
+        return (
+            "Mass migration: lineages move from {} to {} with "
+            "probability {}".format(
+                self.source, self.destination, self.proportion))
+
+    def apply(self, populations, migration_matrix):
+        pass
+
+
+class Population(object):
+    """
+    Simple class to represent the state of a population in terms of its
+    demographic parameters.
+    """
+    def __init__(self, sample_size=None, initial_size=None, growth_rate=None):
+        self.initial_size = initial_size
+        self.growth_rate = growth_rate
+
+    def get_size(self, time):
+        """
+        Gets the size of the population after the specified amount of
+        time.
+        """
+        size = self.initial_size
+        if self.growth_rate != 0:
+            size = self.initial_size * math.exp(-self.growth_rate * time)
+        return size
+
+
+class DemographyPrinter(object):
+    """
+    A class to print out the state of the population structures
+    in the past.
+    """
+    def __init__(
+            self, population_configurations, migration_matrix,
+            demographic_events):
+        self._precision = 3
+        self._simulator = simulator_factory(
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            demographic_events=demographic_events)
+
+    def print_populations(
+            self, start_time, end_time, migration_matrix, populations):
+        field_width = self._precision + 6
+        growth_rate_field_width = 14
+        sep_str = " | "
+        N = len(migration_matrix)
+        fmt = (
+            "{id:<2} "
+            "{start_size:^{field_width}}"
+            "{end_size:^{field_width}}"
+            "{growth_rate:>{growth_rate_field_width}}")
+        print(fmt.format(
+            id="", start_size="start", end_size="end",
+            growth_rate="growth_rate", field_width=field_width,
+            growth_rate_field_width=growth_rate_field_width), end=sep_str)
+        for k in range(N):
+            print("{0:^{1}}".format(k, field_width), end="")
+        print()
+        h = "-" * (field_width - 1)
+        print(
+            fmt.format(
+                id="", start_size=h, end_size=h, growth_rate=h,
+                field_width=field_width,
+                growth_rate_field_width=growth_rate_field_width),
+            end=sep_str)
+        for k in range(N):
+            s = "-" * (field_width - 1)
+            print("{0:<{1}}".format(s, field_width), end="")
+        print()
+        for j, pop in enumerate(populations):
+            s = (
+                "{id:<2}|"
+                "{start_size:^{field_width}.{precision}f}"
+                "{end_size:^{field_width}.{precision}f}"
+                "{growth_rate:>{growth_rate_field_width}.{precision}f}"
+                ).format(
+                    id=j, start_size=pop.initial_size,
+                    end_size=pop.get_size(end_time - start_time),
+                    growth_rate=pop.growth_rate,
+                    precision=self._precision, field_width=field_width,
+                    growth_rate_field_width=growth_rate_field_width)
+            print(s, end=sep_str)
+            for k in range(N):
+                x = migration_matrix[j][k]
+                print("{0:^{1}.{2}f}".format(
+                    x, field_width, self._precision), end="")
+            print()
+
+    def print_all(self):
+        ll_sim = self._simulator.create_ll_instance()
+        N = self._simulator.get_num_populations()
+        start_time = 0
+        end_time = 0
+        while not math.isinf(end_time):
+            end_time = ll_sim.debug_demography()
+            m = ll_sim.get_migration_matrix()
+            migration_matrix = [
+                [m[j * N + k] for j in range(N)] for k in range(N)]
+            populations = [
+                Population(**d) for d in ll_sim.get_population_configuration()]
+            print("INTERVAL: {:.6f} -- {:.6f}".format(start_time, end_time))
+            self.print_populations(
+                start_time, end_time, migration_matrix, populations)
+            start_time = end_time
 
 
 def harmonic_number(n):

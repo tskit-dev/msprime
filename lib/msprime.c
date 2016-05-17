@@ -2321,14 +2321,6 @@ msp_debug_demography(msp_t *self, double *end_time)
     if (self->next_demographic_event != NULL) {
         t = self->next_demographic_event->time;
     }
-
-/*     if (self->next_demographic_event != NULL) { */
-/*         ret = msp_apply_demographic_events(self); */
-/*         if (ret != 0) { */
-/*             goto out; */
-/*         } */
-/*         *end_time = self->time; */
-/*     } */
     *end_time = t;
 out:
     return ret;

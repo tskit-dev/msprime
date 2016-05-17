@@ -1365,7 +1365,7 @@ out:
 }
 
 static PyObject *
-Simulator_run_event(Simulator *self, PyObject *args)
+Simulator_run_event(Simulator *self)
 {
     PyObject *ret = NULL;
     int status, coalesced;
@@ -1382,6 +1382,26 @@ Simulator_run_event(Simulator *self, PyObject *args)
     /* return True if complete coalescence has occured */
     ret = coalesced ? Py_True : Py_False;
     Py_INCREF(ret);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_debug_demography(Simulator *self)
+{
+    PyObject *ret = NULL;
+    int status;
+    double end_time;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    status = msp_debug_demography(self->sim, &end_time);
+    if (status < 0) {
+        handle_library_error(status);
+        goto out;
+    }
+    ret = Py_BuildValue("d", end_time);
 out:
     return ret;
 }
@@ -1467,6 +1487,8 @@ static PyMethodDef Simulator_methods[] = {
     {"run_event", (PyCFunction) Simulator_run_event, METH_NOARGS,
             "Simulates exactly one event. Returns True\
             if sample has coalesced and False otherwise." },
+    {"debug_demography", (PyCFunction) Simulator_debug_demography, METH_NOARGS,
+            "Runs the state of the simulator forward for one demographic event."},
     {NULL}  /* Sentinel */
 };
 
