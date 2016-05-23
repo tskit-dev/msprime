@@ -47,7 +47,7 @@ migration rates. Therefore, the rate of migration in coalescent time units
 between a given pair of demes is :math:`4 N_e M_{j, k}`. Each deme has an
 initial size :math:`s` that is measured relative to :math:`N_e`, and an
 exponential growth rate :math:`\alpha`. The size of a given population at time
-:math:`t` in the past (assuming no demographic events have occured) is
+:math:`t` in the past (assuming no demographic events have occurred) is
 therefore given by :math:`s N_e e^{-\alpha t}`. Demographic events that occur
 in the history of the simulated population alter some aspect of this population
 configuration at a particular time in the past.

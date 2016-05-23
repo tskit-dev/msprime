@@ -1124,3 +1124,57 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_sample_size(), n)
         self.assertGreater(ts.get_num_trees(), 1)
         self.assertEqual(ts.get_num_mutations(), 0)
+
+
+class TestDemographyPrinter(unittest.TestCase):
+    """
+    Tests for the demography printer interface.
+    """
+
+    def verify_debug(
+            self, population_configurations, migration_matrix,
+            demographic_events):
+        with tempfile.TemporaryFile("w+") as f:
+            dp = msprime.DemographyPrinter(
+                population_configurations, migration_matrix,
+                demographic_events=demographic_events, file=f)
+            dp.debug_history()
+            f.seek(0)
+            debug_output = f.read()
+        # TODO when there is better output, write some tests to
+        # verify its format.
+        self.assertGreater(len(debug_output), 0)
+
+    def test_one_population(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(10)]
+        migration_matrix = [[0]]
+        demographic_events = [
+            msprime.SizeChangeEvent(0.1, size=2),
+            msprime.GrowthRateChangeEvent(0.1, growth_rate=10)]
+        self.verify_debug(
+            population_configurations, migration_matrix,
+            demographic_events)
+
+    def test_no_events(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10)]
+        migration_matrix = [[0, 0], [0, 0]]
+        self.verify_debug(
+            population_configurations, migration_matrix, [])
+
+    def test_demographic_events(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10)]
+        migration_matrix = [[0, 0], [0, 0]]
+        demographic_events = [
+            msprime.SizeChangeEvent(0.1, size=2),
+            msprime.GrowthRateChangeEvent(0.1, growth_rate=10),
+            msprime.MassMigrationEvent(0.2, source=1, destination=0),
+            msprime.MigrationRateChangeEvent(0.2, rate=0),
+            msprime.MigrationRateChangeEvent(0.4, matrix_index=(0, 1), rate=1),
+            msprime.MigrationRateChangeEvent(0.4, matrix_index=(1, 0), rate=1)]
+        self.verify_debug(
+            population_configurations, migration_matrix, demographic_events)

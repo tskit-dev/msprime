@@ -1559,8 +1559,12 @@ class MigrationRateChangeEvent(DemographicEvent):
         raise NotImplemented()
 
     def __str__(self):
-        return "Migration rate change for {} to {}".format(
-            self.matrix_index, self.rate)
+        if self.matrix_index is None:
+            ret = "Migration rate change to {} everywhere".format(self.rate)
+        else:
+            ret = "Migration rate change for {} to {}".format(
+                self.matrix_index, self.rate)
+        return ret
 
     def apply(self, populations, migration_matrix):
         if self.matrix_index is None:
@@ -1577,12 +1581,18 @@ class MigrationRateChangeEvent(DemographicEvent):
 class MassMigrationEvent(DemographicEvent):
     """
     A mass migration event in which some fraction of the population in
-    one deme simultaneously migrate to another deme.
+    one deme simultaneously move to another deme, viewed backwards in
+    time. For each lineages currently present in the source population,
+    they move to the destination population with probability equal to
+    `proportion`.
+
+    This event class generalises the population split (``-ej``) and
+    admixture (``-es``) events from ``ms``. Note that MassMigrationEvents
+    do *not* have any side effects on the migration matrix.
 
     :param float time: The time at which this event occurs in coalescent
         time units.
-    :param int source: The ID of the population from which the migration
-        started.
+    :param int source: The ID of the source population.
     :param int destination: The ID of the destination population.
     :param float proportion: The probability that any given lineage within
         the source population migrates to the destination population.
@@ -1641,8 +1651,9 @@ class DemographyPrinter(object):
     in the past.
     """
     def __init__(
-            self, Ne, population_configurations, migration_matrix,
-            demographic_events):
+            self, population_configurations, migration_matrix,
+            demographic_events=[], Ne=1, file=sys.stdout):
+        self._file = file
         self._precision = 3
         self._Ne = Ne
         self._simulator = simulator_factory(
@@ -1654,7 +1665,7 @@ class DemographyPrinter(object):
         for event in demographic_events:
             self._demographic_events[event.time].append(event)
 
-    def print_populations(
+    def _print_populations(
             self, start_time, end_time, migration_matrix, populations):
         field_width = self._precision + 6
         growth_rate_field_width = 14
@@ -1668,21 +1679,23 @@ class DemographyPrinter(object):
         print(fmt.format(
             id="", start_size="start", end_size="end",
             growth_rate="growth_rate", field_width=field_width,
-            growth_rate_field_width=growth_rate_field_width), end=sep_str)
+            growth_rate_field_width=growth_rate_field_width), end=sep_str,
+            file=self._file)
         for k in range(N):
-            print("{0:^{1}}".format(k, field_width), end="")
-        print()
+            print(
+                "{0:^{1}}".format(k, field_width), end="", file=self._file)
+        print(file=self._file)
         h = "-" * (field_width - 1)
         print(
             fmt.format(
                 id="", start_size=h, end_size=h, growth_rate=h,
                 field_width=field_width,
                 growth_rate_field_width=growth_rate_field_width),
-            end=sep_str)
+            end=sep_str, file=self._file)
         for k in range(N):
             s = "-" * (field_width - 1)
-            print("{0:<{1}}".format(s, field_width), end="")
-        print()
+            print("{0:<{1}}".format(s, field_width), end="", file=self._file)
+        print(file=self._file)
         for j, pop in enumerate(populations):
             s = (
                 "{id:<2}|"
@@ -1695,35 +1708,35 @@ class DemographyPrinter(object):
                     growth_rate=pop.growth_rate,
                     precision=self._precision, field_width=field_width,
                     growth_rate_field_width=growth_rate_field_width)
-            print(s, end=sep_str)
+            print(s, end=sep_str, file=self._file)
             for k in range(N):
                 x = migration_matrix[j][k]
                 print("{0:^{1}.{2}f}".format(
-                    x, field_width, self._precision), end="")
-            print()
+                    x, field_width, self._precision), end="",
+                    file=self._file)
+            print(file=self._file)
 
-    def print_all(self):
+    def debug_history(self):
         ll_sim = self._simulator.create_ll_instance()
         N = self._simulator.get_num_populations()
-        # Ne = self._Ne
         start_time = 0
         end_time = 0
         while not math.isinf(end_time):
             for event in self._demographic_events[start_time]:
-                print("Event:@{}".format(event.time), event)
-            print()
+                print("Event:@{}".format(event.time), event, file=self._file)
+            print(file=self._file)
             end_time = ll_sim.debug_demography()
-            # TODO This is wrong --- we need to rescale this matrix by
-            # 4Ne.
             m = ll_sim.get_migration_matrix()
             migration_matrix = [
                 [m[j * N + k] for j in range(N)] for k in range(N)]
             populations = [
                 Population(**d) for d in ll_sim.get_population_configuration()]
-            print("INTERVAL: {:.6f} -- {:.6f}".format(start_time, end_time))
-            self.print_populations(
+            print(
+                "INTERVAL: {:.6f} -- {:.6f}".format(start_time, end_time),
+                file=self._file)
+            self._print_populations(
                 start_time, end_time, migration_matrix, populations)
-            print()
+            print(file=self._file)
             start_time = end_time
 
 
