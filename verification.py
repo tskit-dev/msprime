@@ -515,6 +515,10 @@ def main():
     verifier.add_ms_instance(
         "msdoc-outgroup-sequence", "11 1000 -t 2.0 -I 2 1 10 -ej 6.0 1 2")
     verifier.add_ms_instance(
+        "msdoc-two-species", (
+        "15 10000 -t 11.2 -I 2 3 12 -g 1 44.36 -n 2 0.125 -eg 0.03125 1 0.0 "
+        "-en 0.0625 2 0.05 -ej 0.09375 2 1"))
+    verifier.add_ms_instance(
         "msdoc-stepping-stone", (
         "15 10000 -t 3.0 -I 6 0 7 0 0 8 0 -m 1 2 2.5 -m 2 1 2.5 -m 2 3 2.5 "
         "-m 3 2 2.5 -m 4 5 2.5 -m 5 4 2.5 -m 5 6 2.5 -m 6 5 2.5 -em 2.0 3 4 "

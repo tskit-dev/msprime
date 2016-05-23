@@ -389,8 +389,10 @@ def create_simulation_runner(parser, arg_list):
         pid = convert_population_id(parser, population_id, num_populations)
         if proportion < 0 or proportion > 1:
             parser.error("Proportion value must be 0 <= p <= 1.")
+        # In ms, the probability of staying in source is p and the probabilty
+        # of moving to the new population is 1 - p.
         event = (index, msprime.MassMigrationEvent(
-            t, num_populations, pid, 1 - proportion))
+            t, pid, num_populations, 1 - proportion))
         demographic_events.append(event)
 
         num_populations += 1
@@ -426,7 +428,7 @@ def create_simulation_runner(parser, arg_list):
         pid = convert_population_id(parser, population_id, num_populations)
         demographic_events.append(
             (index, msprime.SizeChangeEvent(t, x, pid)))
-    for index, (t, dest, source) in args.population_split:
+    for index, (t, source, dest) in args.population_split:
         check_event_time(parser, t)
         source_id = convert_population_id(parser, source, num_populations)
         dest_id = convert_population_id(parser, dest, num_populations)

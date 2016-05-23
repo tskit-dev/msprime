@@ -1579,13 +1579,12 @@ class MassMigrationEvent(DemographicEvent):
     A mass migration event in which some fraction of the population in
     one deme simultaneously migrate to another deme.
 
-
     :param float time: The time at which this event occurs in coalescent
         time units.
     :param int source: The ID of the population from which the migration
         started.
     :param int destination: The ID of the destination population.
-    :param flaot proportion: The probability that any given lineage within
+    :param float proportion: The probability that any given lineage within
         the source population migrates to the destination population.
     """
     def __init__(self, time, source, destination, proportion=1.0):
@@ -1642,13 +1641,18 @@ class DemographyPrinter(object):
     in the past.
     """
     def __init__(
-            self, population_configurations, migration_matrix,
+            self, Ne, population_configurations, migration_matrix,
             demographic_events):
         self._precision = 3
+        self._Ne = Ne
         self._simulator = simulator_factory(
+            Ne=Ne,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
+        self._demographic_events = collections.defaultdict(list)
+        for event in demographic_events:
+            self._demographic_events[event.time].append(event)
 
     def print_populations(
             self, start_time, end_time, migration_matrix, populations):
@@ -1701,10 +1705,16 @@ class DemographyPrinter(object):
     def print_all(self):
         ll_sim = self._simulator.create_ll_instance()
         N = self._simulator.get_num_populations()
+        # Ne = self._Ne
         start_time = 0
         end_time = 0
         while not math.isinf(end_time):
+            for event in self._demographic_events[start_time]:
+                print("Event:@{}".format(event.time), event)
+            print()
             end_time = ll_sim.debug_demography()
+            # TODO This is wrong --- we need to rescale this matrix by
+            # 4Ne.
             m = ll_sim.get_migration_matrix()
             migration_matrix = [
                 [m[j * N + k] for j in range(N)] for k in range(N)]
@@ -1713,6 +1723,7 @@ class DemographyPrinter(object):
             print("INTERVAL: {:.6f} -- {:.6f}".format(start_time, end_time))
             self.print_populations(
                 start_time, end_time, migration_matrix, populations)
+            print()
             start_time = end_time
 
 

@@ -1467,15 +1467,15 @@ msp_mass_migration(msp_t *self, demographic_event_t *event)
         ret = MSP_ERR_ASSERTION_FAILED;
         goto out;
     }
-    /* dest and source are *forwards* in time, so from our perpective
-     * they are reversed. We move lineages from dest into source with
-     * propabality p */
-    pop = &self->populations[dest].ancestors;
+    /*
+     * Move lineages from source to dest with propabality p.
+     */
+    pop = &self->populations[source].ancestors;
     node = pop->head;
     while (node != NULL) {
         next = node->next;
         if (gsl_rng_uniform(self->rng) < p) {
-            ret = msp_move_individual(self, node, pop, (uint32_t) source);
+            ret = msp_move_individual(self, node, pop, (uint32_t) dest);
             if (ret != 0) {
                 goto out;
             }

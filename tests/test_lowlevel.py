@@ -893,14 +893,14 @@ class TestSimulationState(LowLevelTestCase):
                 else:
                     migration_matrix[matrix_index] = rate
             elif event_type == "mass_migration":
-                dest = event["destination"]
+                source = event["source"]
                 proportion = event["proportion"]
                 pop_sizes = [0 for j in range(N)]
                 for ind in sim.get_ancestors():
                     _, _, _, pop_id = ind[0]
                     pop_sizes[pop_id] += 1
                 if proportion == 1:
-                    self.assertEqual(pop_sizes[dest], 0)
+                    self.assertEqual(pop_sizes[source], 0)
             else:
                 population_id = event["population_id"]
                 indexes = [population_id]
@@ -1401,7 +1401,7 @@ class TestSimulator(LowLevelTestCase):
             demographic_events=[
                 get_migration_rate_change_event(t),
                 get_mass_migration_event(
-                    t + dt, source=1, destination=0, proportion=1)],
+                    t + dt, source=0, destination=1, proportion=1)],
             migration_matrix=[0, 0, 0, 0])
         sim.run(t)
         pop_sizes_before = [0, 0]

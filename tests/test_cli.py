@@ -738,8 +738,8 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 dest = event.destination
                 self.assertEqual(event.type, "mass_migration")
                 self.assertEqual(event.time, result[0])
-                self.assertEqual(event.destination, result[1])
-                self.assertEqual(event.source, result[2])
+                self.assertEqual(event.source, result[1])
+                self.assertEqual(event.destination, result[2])
                 # We also have to set the migration rates to 0 for the
                 # population that didn't exist before now.
                 k += 1
@@ -770,8 +770,9 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             for result, event in zip(results, events):
                 self.assertEqual(event.type, "mass_migration")
                 self.assertEqual(event.time, result[0])
-                self.assertEqual(event.destination, result[1])
-                self.assertEqual(event.source, result[2])
+                self.assertEqual(event.source, result[1])
+                self.assertEqual(event.destination, result[2])
+                self.assertEqual(event.proportion, result[3])
         check(2, "2 1 -T -es 2.2 1 1", [(2.2, 0, 1, 0)])
         check(
             3, "2 1 -T -es 2.2 1 1 -es 3.3 2 0",
