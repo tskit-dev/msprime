@@ -1137,14 +1137,13 @@ out:
     return ret;
 }
 
-/* Growth rate change */
+/* Population parameter change */
 
 static int
-msp_change_population_growth_rate(msp_t *self, size_t population_id, double time,
-        double growth_rate)
+msp_change_single_population_parameters(msp_t *self, size_t population_id,
+        double time, double initial_size, double growth_rate)
 {
     int ret = 0;
-    double current_size = 0;
     double dt;
     population_t *pop;
 
@@ -1152,38 +1151,47 @@ msp_change_population_growth_rate(msp_t *self, size_t population_id, double time
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
-    /* Calculate the size of the the population at this time */
     pop = &self->populations[population_id];
-    dt = time - pop->start_time;
-    current_size = pop->initial_size * exp(-pop->growth_rate * dt);
-
-    /* Change the growth_rate of the population to the specified multiple of N0,
-     * and set the initial_size of the population to its current size */
-    pop->initial_size = current_size;
+    /* If initial_size is not specified, calculate the initial_size of the
+     * population over the coming time period based on the growth rate over
+     * the preceeding period.
+     */
+    if (gsl_isnan(initial_size)) {
+        dt = time - pop->start_time;
+        pop->initial_size = pop->initial_size * exp(-pop->growth_rate * dt);
+    } else {
+        pop->initial_size = initial_size;
+    }
+    /* Do not change the growth_rate unless it is specified */
+    if (!gsl_isnan(growth_rate)) {
+        pop->growth_rate = growth_rate;
+    }
     pop->start_time = time;
-    pop->growth_rate = growth_rate;
 out:
     return ret;
 }
 
 static int
-msp_change_growth_rate(msp_t *self, demographic_event_t *event)
+msp_change_population_parameters(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    int pid = event->params.growth_rate_change.population_id;
-    double growth_rate = event->params.growth_rate_change.growth_rate;
+    int pid = event->params.population_parameters_change.population_id;
+    double initial_size =
+        event->params.population_parameters_change.initial_size;
+    double growth_rate =
+        event->params.population_parameters_change.growth_rate;
 
     if (pid == -1) {
         for (pid = 0; pid < (int) self->num_populations; pid++) {
-            ret = msp_change_population_growth_rate(self, (size_t) pid,
-                    event->time, growth_rate);
+            ret = msp_change_single_population_parameters(self, (size_t) pid,
+                    event->time, initial_size, growth_rate);
             if (ret != 0) {
                 goto out;
             }
         }
     } else {
-        ret = msp_change_population_growth_rate(self, (size_t) pid,
-                event->time, growth_rate);
+        ret = msp_change_single_population_parameters(self, (size_t) pid,
+                event->time, initial_size, growth_rate);
         if (ret != 0) {
             goto out;
         }
@@ -1193,128 +1201,62 @@ out:
 }
 
 static void
-msp_print_growth_rate_change(msp_t *self, demographic_event_t *event)
+msp_print_population_parameters_change(msp_t *self, demographic_event_t *event)
 {
-    printf("%f\tgrowth_rate_change: %d -> %f\n",
+    printf("%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
             event->time,
-            event->params.growth_rate_change.population_id,
-            event->params.growth_rate_change.growth_rate);
+            event->params.population_parameters_change.population_id,
+            event->params.population_parameters_change.initial_size,
+            event->params.population_parameters_change.growth_rate);
 }
 
 static int
-json_snprintf_growth_rate_change(demographic_event_t *event, char *buffer,
+json_snprintf_population_parameters_change(demographic_event_t *event, char *buffer,
         size_t size)
 {
-    const char *pattern = "{"
-        "\"type\": \"growth_rate_change\", "
-        "\"time\": " MSP_LOSSLESS_DBL ", "
-        "\"population_id\": %d, "
-        "\"growth_rate\": " MSP_LOSSLESS_DBL
-        "}, ";
-    return snprintf(buffer, size, pattern, event->time,
-            event->params.growth_rate_change.population_id,
-            event->params.growth_rate_change.growth_rate);
-}
+    const char *pattern;
+    int ret;
+    if (gsl_isnan(event->params.population_parameters_change.growth_rate)) {
+        pattern = "{"
+            "\"type\": \"population_parameters_change\", "
+            "\"time\": " MSP_LOSSLESS_DBL ", "
+            "\"population_id\": %d, "
+            "\"initial_size\": " MSP_LOSSLESS_DBL ", "
+            "}, ";
+        ret = snprintf(buffer, size, pattern, event->time,
+            event->params.population_parameters_change.population_id,
+            event->params.population_parameters_change.initial_size);
 
-int
-msp_add_growth_rate_change(msp_t *self, double time, int population_id,
-        double growth_rate)
-{
-    int ret = -1;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
-    int N = (int) self->num_populations;
-
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (population_id < -1 || population_id >= N) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    de->params.growth_rate_change.growth_rate = growth_rate;
-    de->params.growth_rate_change.population_id = population_id;
-    de->change_state = msp_change_growth_rate;
-    de->print_state = msp_print_growth_rate_change;
-    de->json_snprintf = json_snprintf_growth_rate_change;
-    ret = 0;
-out:
-    return ret;
-}
-
-/* Population size change */
-
-static int
-msp_change_population_size(msp_t *self, size_t population_id, double time,
-        double size)
-{
-    int ret = 0;
-
-    if (population_id >= self->num_populations) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    /* Change the size of the population to the specified multiple of N0,
-     * and set the growth rate to 0.
-     */
-    self->populations[population_id].initial_size = size;
-    self->populations[population_id].start_time = time;
-    self->populations[population_id].growth_rate = 0.0;
-out:
-    return ret;
-}
-
-static int
-msp_change_size(msp_t *self, demographic_event_t *event)
-{
-    int ret = 0;
-    int pid = event->params.size_change.population_id;
-    double size = event->params.size_change.size;
-
-    if (pid == -1) {
-        for (pid = 0; pid < (int) self->num_populations; pid++) {
-            ret = msp_change_population_size(self, (size_t) pid,
-                    event->time, size);
-            if (ret != 0) {
-                goto out;
-            }
-        }
+    } else if (gsl_isnan(
+            event->params.population_parameters_change.initial_size)) {
+        pattern = "{"
+            "\"type\": \"population_parameters_change\", "
+            "\"time\": " MSP_LOSSLESS_DBL ", "
+            "\"population_id\": %d, "
+            "\"growth_rate\": " MSP_LOSSLESS_DBL
+            "}, ";
+        ret = snprintf(buffer, size, pattern, event->time,
+            event->params.population_parameters_change.population_id,
+            event->params.population_parameters_change.growth_rate);
     } else {
-        ret = msp_change_population_size(self, (size_t) pid,
-                event->time, size);
-        if (ret != 0) {
-            goto out;
-        }
+        pattern = "{"
+            "\"type\": \"population_parameters_change\", "
+            "\"time\": " MSP_LOSSLESS_DBL ", "
+            "\"population_id\": %d, "
+            "\"initial_size\": " MSP_LOSSLESS_DBL ", "
+            "\"growth_rate\": " MSP_LOSSLESS_DBL
+            "}, ";
+        ret = snprintf(buffer, size, pattern, event->time,
+            event->params.population_parameters_change.population_id,
+            event->params.population_parameters_change.initial_size,
+            event->params.population_parameters_change.growth_rate);
     }
-out:
     return ret;
 }
 
-static void
-msp_print_size_change(msp_t *self, demographic_event_t *event)
-{
-    printf("%f\tsize_change: %d -> %f\n",
-            event->time,
-            event->params.size_change.population_id,
-            event->params.size_change.size);
-}
-
-static int
-json_snprintf_size_change(demographic_event_t *event, char *buffer, size_t size)
-{
-    const char *pattern = "{"
-        "\"type\": \"size_change\", "
-        "\"time\": " MSP_LOSSLESS_DBL ", "
-        "\"size\": " MSP_LOSSLESS_DBL ", "
-        "\"population_id\": %d"
-        "}, ";
-    return snprintf(buffer, size, pattern, event->time,
-            event->params.size_change.population_id,
-            event->params.size_change.size);
-}
-
 int
-msp_add_size_change(msp_t *self, double time, int population_id, double size)
+msp_add_population_parameters_change(msp_t *self, double time, int population_id,
+        double initial_size, double growth_rate)
 {
     int ret = -1;
     demographic_event_t *de = msp_add_demographic_event(self, time);
@@ -1328,15 +1270,20 @@ msp_add_size_change(msp_t *self, double time, int population_id, double size)
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
-    if (size < 0) {
+    if (initial_size < 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    de->params.size_change.size = size;
-    de->params.size_change.population_id = population_id;
-    de->change_state = msp_change_size;
-    de->print_state = msp_print_size_change;
-    de->json_snprintf = json_snprintf_size_change;
+    if (gsl_isnan(initial_size) && gsl_isnan(growth_rate)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    de->params.population_parameters_change.population_id = population_id;
+    de->params.population_parameters_change.initial_size = initial_size;
+    de->params.population_parameters_change.growth_rate = growth_rate;
+    de->change_state = msp_change_population_parameters;
+    de->print_state = msp_print_population_parameters_change;
+    de->json_snprintf = json_snprintf_population_parameters_change;
     ret = 0;
 out:
     return ret;

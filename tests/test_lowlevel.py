@@ -72,28 +72,37 @@ def get_population_configuration(
     }
 
 
+def get_population_parameters_change_event(
+        time=0.0, population_id=-1, initial_size=None, growth_rate=None):
+    """
+    Returns a population change event for the specified values.
+    """
+    ret = {
+        "type": "population_parameters_change",
+        "time": time,
+        "population_id": population_id
+    }
+    if initial_size is not None:
+        ret["initial_size"] = initial_size
+    if growth_rate is not None:
+        ret["growth_rate"] = growth_rate
+    return ret
+
+
 def get_size_change_event(time=0.0, size=1.0, population_id=-1):
     """
     Returns a size change demographic event.
     """
-    return {
-        "type": "size_change",
-        "size": size,
-        "time": time,
-        "population_id": population_id
-    }
+    return get_population_parameters_change_event(
+        time, population_id, initial_size=size, growth_rate=0)
 
 
 def get_growth_rate_change_event(time=0.0, growth_rate=1.0, population_id=-1):
     """
     Returns a growth_rate change demographic event.
     """
-    return {
-        "type": "growth_rate_change",
-        "growth_rate": growth_rate,
-        "time": time,
-        "population_id": population_id
-    }
+    return get_population_parameters_change_event(
+        time, population_id, growth_rate=growth_rate)
 
 
 def get_migration_rate_change_event(
@@ -906,21 +915,21 @@ class TestSimulationState(LowLevelTestCase):
                 indexes = [population_id]
                 if population_id == -1:
                     indexes = range(N)
-                if event_type == "size_change":
-                    size = event["size"]
-                    for j in indexes:
-                        population_configuration[j]["initial_size"] = size
-                        population_configuration[j]["growth_rate"] = 0
-                else:
-                    alpha = event["growth_rate"]
-                    for j in indexes:
-                        s = population_configuration[j]["initial_size"]
-                        a = population_configuration[j]["growth_rate"]
+                initial_size = event.get("initial_size", None)
+                growth_rate = event.get("growth_rate", None)
+                for j in indexes:
+                    s = population_configuration[j]["initial_size"]
+                    a = population_configuration[j]["growth_rate"]
+                    size = initial_size
+                    if initial_size is None:
                         # Calculate the new size
                         size = s * math.exp(-a * (t - start_times[j]))
-                        population_configuration[j]["initial_size"] = size
-                        population_configuration[j]["growth_rate"] = alpha
-                        start_times[j] = t
+                    alpha = a
+                    if growth_rate is not None:
+                        alpha = growth_rate
+                    population_configuration[j]["initial_size"] = size
+                    population_configuration[j]["growth_rate"] = alpha
+                    start_times[j] = t
             self.assertEqual(sim.get_migration_matrix(), migration_matrix)
             self.assertEqual(
                 sim.get_population_configuration(), population_configuration)
@@ -1154,7 +1163,7 @@ class TestSimulator(LowLevelTestCase):
             size_change_event = get_size_change_event()
             size_change_event["type"] = bad_event
             self.assertRaises(ValueError, f, [size_change_event])
-        for bad_type in [None, [], ""]:
+        for bad_type in [[], "", {}]:
             size_change_event = get_size_change_event(time=bad_type)
             self.assertRaises(TypeError, f, [size_change_event])
             size_change_event = get_size_change_event(population_id=bad_type)
@@ -1200,6 +1209,10 @@ class TestSimulator(LowLevelTestCase):
         # Negative size values not allowed
         size_change_event = get_size_change_event(size=-5)
         self.assertRaises(_msprime.InputError, f, [size_change_event])
+        # population changes where we specify neither initial_size
+        # or growth rate are illegal.
+        event = get_population_parameters_change_event()
+        self.assertRaises(_msprime.InputError, f, [event])
         # Check for bad matrix indexes
         event_generator = get_migration_rate_change_event
         for bad_index in [-2, 1, 10**6]:

@@ -150,13 +150,9 @@ typedef struct {
 /* Demographic events */
 typedef struct {
     int population_id;
-    double size;
-} size_change_t;
-
-typedef struct {
-    int population_id;
+    double initial_size;
     double growth_rate;
-} growth_rate_change_t;
+} population_parameters_change_t;
 
 typedef struct {
     int matrix_index;
@@ -175,10 +171,9 @@ typedef struct demographic_event_t_t {
     void (*print_state)(msp_t *, struct demographic_event_t_t *);
     int (*json_snprintf)(struct demographic_event_t_t *, char *, size_t);
     union {
-        size_change_t size_change;
-        growth_rate_change_t growth_rate_change;
-        migration_rate_change_t migration_rate_change;
         mass_migration_t mass_migration;
+        migration_rate_change_t migration_rate_change;
+        population_parameters_change_t population_parameters_change;
     } params;
     struct demographic_event_t_t *next;
 } demographic_event_t;
@@ -363,10 +358,8 @@ int msp_set_migration_matrix(msp_t *self, size_t size,
 int msp_set_population_configuration(msp_t *self, int population_id, 
         size_t sample_size, double initial_size, double growth_rate);
 
-int msp_add_growth_rate_change(msp_t *self, double time, int population_id,
-        double growth_rate);
-int msp_add_size_change(msp_t *self, double time, int population_id,
-        double size);
+int msp_add_population_parameters_change(msp_t *self, double time, 
+        int population_id, double size, double growth_rate);
 int msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate);
 int msp_add_mass_migration(msp_t *self, double time, int source, int dest,

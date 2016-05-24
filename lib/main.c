@@ -110,7 +110,7 @@ read_demographic_events(msp_t *msp, config_t *config)
     int ret = 0;
     int j;
     const char *type;
-    double time, growth_rate, size, migration_rate, proportion;
+    double time, growth_rate, initial_size, migration_rate, proportion;
     int num_demographic_events, population_id, matrix_index, source, dest;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "demographic_events");
@@ -143,31 +143,24 @@ read_demographic_events(msp_t *msp, config_t *config)
             fatal_error("type not specified");
         }
         type = config_setting_get_string(t);
-        if (strcmp(type, "growth_rate_change") == 0) {
+        if (strcmp(type, "population_parameters_change") == 0) {
+            growth_rate = GSL_NAN;
             t = config_setting_get_member(s, "growth_rate");
-            if (t == NULL) {
-                fatal_error("growth_rate not specified");
+            if (t != NULL) {
+                growth_rate = config_setting_get_float(t);
             }
-            growth_rate = config_setting_get_float(t);
+            initial_size = GSL_NAN;
+            t = config_setting_get_member(s, "initial_size");
+            if (t != NULL) {
+                initial_size = config_setting_get_float(t);
+            }
             t = config_setting_get_member(s, "population_id");
             if (t == NULL) {
                 fatal_error("population_id not specified");
             }
             population_id = config_setting_get_int(t);
-            ret = msp_add_growth_rate_change(msp, time, population_id,
-                    growth_rate);
-        } else if (strcmp(type, "size_change") == 0) {
-            t = config_setting_get_member(s, "size");
-            if (t == NULL) {
-                fatal_error("size not specified");
-            }
-            size = config_setting_get_float(t);
-            t = config_setting_get_member(s, "population_id");
-            if (t == NULL) {
-                fatal_error("population_id not specified");
-            }
-            population_id = config_setting_get_int(t);
-            ret = msp_add_size_change(msp, time, population_id, size);
+            ret = msp_add_population_parameters_change(msp, time,
+                    population_id, initial_size, growth_rate);
         } else if (strcmp(type, "migration_rate_change") == 0) {
             t = config_setting_get_member(s, "migration_rate");
             if (t == NULL) {

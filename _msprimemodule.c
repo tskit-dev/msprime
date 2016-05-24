@@ -25,6 +25,7 @@
 
 #include <hdf5.h>
 #include <gsl/gsl_version.h>
+#include <gsl/gsl_math.h>
 
 #include "msprime.h"
 
@@ -497,36 +498,44 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 {
     int ret = -1;
     Py_ssize_t j;
-    double time, size, growth_rate, migration_rate, proportion;
+    double time, initial_size, growth_rate, migration_rate, proportion;
     int err, population_id, matrix_index, source, destination;
-    int is_size_change, is_growth_rate_change, is_migration_rate_change,
+    int is_population_parameter_change, is_migration_rate_change,
         is_mass_migration;
     PyObject *item, *value, *type;
-    PyObject *size_change = NULL;
-    PyObject *growth_rate_change = NULL;
-    PyObject *migration_rate_change = NULL;
-    PyObject *mass_migration = NULL;
+    PyObject *population_parameter_change_s = NULL;
+    PyObject *migration_rate_change_s = NULL;
+    PyObject *mass_migration_s = NULL;
+    PyObject *initial_size_s = NULL;
+    PyObject *growth_rate_s = NULL;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    /* Create the Python strings for comparison with the types */
-    size_change = Py_BuildValue("s", "size_change");
-    if (size_change == NULL) {
+    /* Create the Python strings for comparison with the types and
+     * dictionary lookups */
+    population_parameter_change_s = Py_BuildValue("s",
+            "population_parameters_change");
+    if (population_parameter_change_s == NULL) {
         goto out;
     }
-    growth_rate_change = Py_BuildValue("s", "growth_rate_change");
-    if (growth_rate_change == NULL) {
+    migration_rate_change_s = Py_BuildValue("s", "migration_rate_change");
+    if (migration_rate_change_s == NULL) {
         goto out;
     }
-    migration_rate_change = Py_BuildValue("s", "migration_rate_change");
-    if (migration_rate_change == NULL) {
+    mass_migration_s = Py_BuildValue("s", "mass_migration");
+    if (mass_migration_s == NULL) {
         goto out;
     }
-    mass_migration = Py_BuildValue("s", "mass_migration");
-    if (mass_migration == NULL) {
+    initial_size_s = Py_BuildValue("s", "initial_size");
+    if (initial_size_s == NULL) {
         goto out;
     }
+    growth_rate_s = Py_BuildValue("s", "growth_rate");
+    if (growth_rate_s == NULL) {
+        goto out;
+    }
+
     for (j = 0; j < PyList_Size(py_events); j++) {
         item = PyList_GetItem(py_events, j);
         if (!PyDict_Check(item)) {
@@ -550,50 +559,45 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
          * handling in Python 3. By pushing the comparison up into Python
          * we don't need to worry about encodings, etc, etc.
          */
-        is_size_change = PyObject_RichCompareBool(type, size_change, Py_EQ);
-        if (is_size_change == -1) {
-            goto out;
-        }
-        is_growth_rate_change = PyObject_RichCompareBool(type,
-                growth_rate_change, Py_EQ);
-        if (is_growth_rate_change == -1) {
+        is_population_parameter_change = PyObject_RichCompareBool(type,
+                population_parameter_change_s, Py_EQ);
+        if (is_population_parameter_change == -1) {
             goto out;
         }
         is_migration_rate_change = PyObject_RichCompareBool(type,
-                migration_rate_change, Py_EQ);
+                migration_rate_change_s, Py_EQ);
         if (is_migration_rate_change == -1) {
             goto out;
         }
-        is_mass_migration = PyObject_RichCompareBool(type, mass_migration,
+        is_mass_migration = PyObject_RichCompareBool(type, mass_migration_s,
                 Py_EQ);
         if (is_mass_migration == -1) {
             goto out;
         }
-        if (is_size_change) {
-            value = get_dict_number(item, "size");
-            if (value == NULL) {
-                goto out;
+        if (is_population_parameter_change) {
+            initial_size = GSL_NAN;
+            if (PyDict_Contains(item, initial_size_s)) {
+                value = get_dict_number(item, "initial_size");
+                if (value == NULL) {
+                    goto out;
+                }
+                initial_size = PyFloat_AsDouble(value);
             }
-            size = PyFloat_AsDouble(value);
+            growth_rate = GSL_NAN;
+            if (PyDict_Contains(item, growth_rate_s)) {
+                value = get_dict_number(item, "growth_rate");
+                if (value == NULL) {
+                    goto out;
+                }
+                growth_rate = PyFloat_AsDouble(value);
+            }
             value = get_dict_number(item, "population_id");
             if (value == NULL) {
                 goto out;
             }
             population_id = (int) PyLong_AsLong(value);
-            err = msp_add_size_change(self->sim, time, population_id, size);
-        } else if (is_growth_rate_change) {
-            value = get_dict_number(item, "growth_rate");
-            if (value == NULL) {
-                goto out;
-            }
-            growth_rate = PyFloat_AsDouble(value);
-            value = get_dict_number(item, "population_id");
-            if (value == NULL) {
-                goto out;
-            }
-            population_id = (int) PyLong_AsLong(value);
-            err = msp_add_growth_rate_change(self->sim, time, population_id,
-                    growth_rate);
+            err = msp_add_population_parameters_change(self->sim, time,
+                    population_id, initial_size, growth_rate);
         } else if (is_migration_rate_change) {
             value = get_dict_number(item, "migration_rate");
             if (value == NULL) {
@@ -636,9 +640,11 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     }
     ret = 0;
 out:
-    Py_DECREF(size_change);
-    Py_DECREF(growth_rate_change);
-    Py_DECREF(migration_rate_change);
+    Py_DECREF(population_parameter_change_s);
+    Py_DECREF(migration_rate_change_s);
+    Py_DECREF(mass_migration_s);
+    Py_DECREF(initial_size_s);
+    Py_DECREF(growth_rate_s);
     return ret;
 }
 
