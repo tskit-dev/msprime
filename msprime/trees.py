@@ -880,7 +880,7 @@ class TreeSimulator(object):
             for k in range(d):
                 ll_migration_matrix[j * d + k] = scaled_migration_matrix[j][k]
         ll_population_configuration = [
-            conf.get_ll_representation()
+            conf.get_ll_representation(Ne)
             for conf in self._population_configurations]
         ll_demographic_events = [
             event.get_ll_representation(d, Ne)
@@ -1408,11 +1408,15 @@ class PopulationConfiguration(object):
         self.initial_size = initial_size
         self.growth_rate = growth_rate
 
-    def get_ll_representation(self):
+    def get_ll_representation(self, Ne):
         """
         Returns the low-level representation of this PopulationConfiguration.
         """
-        return self.__dict__
+        return {
+            "sample_size": self.sample_size,
+            "initial_size": self.initial_size / Ne,
+            "growth_rate": self.growth_rate * 4 * Ne
+        }
 
 
 class DemographicEvent(object):
@@ -1427,104 +1431,67 @@ class DemographicEvent(object):
         raise NotImplementedError()
 
 
-class GrowthRateChangeEvent(DemographicEvent):
+class PopulationParametersChange(DemographicEvent):
     """
-    Changes the exponential growth rate at a particular time.
+    Changes the demographic parameters of a population at a given time.
 
-    :param float time: The time at which this event occurs in coalescent
-        time units.
-    :param float growth_rate: The new growth rate.
+    This event generalises the ``-eg``, ``-eG``, ``-en`` and ``-eN``
+    options from ``ms``. Note that unlike ``ms`` we do not automatically
+    set growth rates to zero when the population size is changed.
+
+    :param float time: The time at which this event occurs in generations.
+    :param float initial_size: The absolute size of the population
+        at the beginning of the time slice starting at ``time``. If None,
+        this is calculated according to the initial population size and
+        growth rate over the preceding time slice.
+    :param float growth_rate: The new per-generation growth rate. If None,
+        the growth rate is not changed. Defaults to None.
     :param int population_id: The ID of the population affected. If
-        ``population_id`` is None, the size is changed simultaneously for
-        all populations.
+        ``population_id`` is None, the changes affect all populations
+        simultaneously.
     """
-    def __init__(self, time, growth_rate, population_id=None):
-        super(GrowthRateChangeEvent, self).__init__(
-            "growth_rate_change", time)
+    def __init__(
+            self, time, initial_size=None, growth_rate=None,
+            population_id=None):
+        super(PopulationParametersChange, self).__init__(
+            "population_parameters_change", time)
+        if growth_rate is None and initial_size is None:
+            raise ValueError(
+                "Must specify one or more of growth_rate and initial_size")
         self.time = time
         self.growth_rate = growth_rate
+        self.initial_size = initial_size
         self.population_id = -1 if population_id is None else population_id
 
     def get_ll_representation(self, num_populations, Ne):
-        return {
+        ret = {
             "type": self.type,
-            "time": self.time,
-            "growth_rate": self.growth_rate,
+            "time": self.time / (4 * Ne),
             "population_id": self.population_id
         }
+        if self.growth_rate is not None:
+            ret["growth_rate"] = self.growth_rate * 4 * Ne
+        if self.initial_size is not None:
+            ret["initial_size"] = self.initial_size / Ne
+        return ret
 
     def get_ms_arguments(self):
-        if self.population_id == -1:
-            return ["-eG", str(self.time), str(self.growth_rate)]
-        else:
-            return [
-                "-eg", str(self.time), str(self.population_id + 1),
-                str(self.growth_rate)]
+        raise NotImplementedError()
 
     def __str__(self):
-        return "Change growth rate for {} to {}".format(
-            self.population_id, self.growth_rate)
-
-    def apply(self, populations, migration_matrix):
-        if self.population_id == -1:
-            for pop in populations:
-                pop.growth_rate = self.growth_rate
-        else:
-            populations[self.population_id].growth_rate = self.growth_rate
+        s = "Population parameter change for {}: ".format(self.population_id)
+        if self.initial_size is not None:
+            s += "initial_size -> {} ".format(self.initial_size)
+        if self.growth_rate is not None:
+            s += "growth_rate -> {} ".format(self.growth_rate)
+        return s
 
 
-class SizeChangeEvent(DemographicEvent):
-    """
-    Changes the size of the population at a give time to the specified
-    value. This is relative to the reference effective population size
-    :math:`N_e`.
-
-    :param float time: The time at which this event occurs in coalescent
-        time units.
-    :param float size: The new population size.
-    :param int population_id: The ID of the population affected. If
-        ``population_id`` is None, the size is changed simultaneously for
-        all populations.
-    """
-    def __init__(self, time, size, population_id=None):
-        super(SizeChangeEvent, self).__init__("size_change", time)
-        self.size = size
-        self.population_id = -1 if population_id is None else population_id
-
-    def get_ll_representation(self, num_populations, Ne):
-        return {
-            "type": self.type,
-            "time": self.time,
-            "size": self.size,
-            "population_id": self.population_id
-        }
-
-    def get_ms_arguments(self):
-        if self.population_id == -1:
-            return ["-eN", str(self.time), str(self.size)]
-        else:
-            return [
-                "-en", str(self.time), str(self.population_id + 1),
-                str(self.growth_rate)]
-
-    def __str__(self):
-        return "Change size for {} to {}".format(
-            self.population_id, self.size)
-
-    def apply(self, populations, migration_matrix):
-        if self.population_id == -1:
-            for pop in populations:
-                pop.initial_size = self.initial_size
-        else:
-            populations[self.population_id].initial_size = self.size
-
-
-class MigrationRateChangeEvent(DemographicEvent):
+class MigrationRateChange(DemographicEvent):
     """
     Changes the rate of migration to a new value at a specific time.
 
-    :param float time: The time at which this event occurs in coalescent
-        time units.
+    :param float time: The time at which this event occurs in generations.
     :param float rate: The new migration rate.
     :param tuple matrix_index: A tuple of two population IDs descibing
         the matrix index of interest. If ``matrix_index`` is None, all
@@ -1532,7 +1499,7 @@ class MigrationRateChangeEvent(DemographicEvent):
         simultaneously.
     """
     def __init__(self, time, rate, matrix_index=None):
-        super(MigrationRateChangeEvent, self).__init__(
+        super(MigrationRateChange, self).__init__(
             "migration_rate_change", time)
         self.rate = rate
         self.matrix_index = matrix_index
@@ -1551,7 +1518,7 @@ class MigrationRateChangeEvent(DemographicEvent):
                 self.matrix_index[0] * num_populations + self.matrix_index[1])
         return {
             "type": self.type,
-            "time": self.time,
+            "time": self.time / 4 * Ne,
             "migration_rate": scaled_rate,
             "matrix_index": matrix_index
         }
@@ -1579,7 +1546,7 @@ class MigrationRateChangeEvent(DemographicEvent):
             migration_matrix[j][k] = self.rate
 
 
-class MassMigrationEvent(DemographicEvent):
+class MassMigration(DemographicEvent):
     """
     A mass migration event in which some fraction of the population in
     one deme simultaneously move to another deme, viewed backwards in
@@ -1588,18 +1555,17 @@ class MassMigrationEvent(DemographicEvent):
     `proportion`.
 
     This event class generalises the population split (``-ej``) and
-    admixture (``-es``) events from ``ms``. Note that MassMigrationEvents
+    admixture (``-es``) events from ``ms``. Note that MassMigrations
     do *not* have any side effects on the migration matrix.
 
-    :param float time: The time at which this event occurs in coalescent
-        time units.
+    :param float time: The time at which this event occurs in generations.
     :param int source: The ID of the source population.
     :param int destination: The ID of the destination population.
     :param float proportion: The probability that any given lineage within
         the source population migrates to the destination population.
     """
     def __init__(self, time, source, destination, proportion=1.0):
-        super(MassMigrationEvent, self).__init__("mass_migration", time)
+        super(MassMigration, self).__init__("mass_migration", time)
         self.source = source
         self.destination = destination
         self.proportion = proportion
@@ -1607,7 +1573,7 @@ class MassMigrationEvent(DemographicEvent):
     def get_ll_representation(self, num_populations, Ne):
         return {
             "type": self.type,
-            "time": self.time,
+            "time": self.time / (4 * Ne),
             "source": self.source,
             "destination": self.destination,
             "proportion": self.proportion
@@ -1629,21 +1595,23 @@ class MassMigrationEvent(DemographicEvent):
 class Population(object):
     """
     Simple class to represent the state of a population in terms of its
-    demographic parameters.
+    demographic parameters. This is intented to be initialised from the
+    corresponding low-level values so that they can be rescaled back into
+    input units.
     """
-    def __init__(self, sample_size=None, initial_size=None, growth_rate=None):
-        self.initial_size = initial_size
-        self.growth_rate = growth_rate
+    def __init__(
+            self, Ne=None, sample_size=None, initial_size=None,
+            growth_rate=None):
+        self.Ne = Ne
+        self.initial_size = initial_size * self.Ne
+        self.growth_rate = growth_rate / (4 * Ne)
 
     def get_size(self, time):
         """
         Gets the size of the population after the specified amount of
         time.
         """
-        size = self.initial_size
-        if self.growth_rate != 0:
-            size = self.initial_size * math.exp(-self.growth_rate * time)
-        return size
+        return self.initial_size * math.exp(-self.growth_rate * time)
 
 
 class DemographyPrinter(object):
@@ -1731,7 +1699,8 @@ class DemographyPrinter(object):
             migration_matrix = [
                 [m[j * N + k] for j in range(N)] for k in range(N)]
             populations = [
-                Population(**d) for d in ll_sim.get_population_configuration()]
+                Population(Ne=self._Ne, **d)
+                for d in ll_sim.get_population_configuration()]
             print(
                 "INTERVAL: {:.6f} -- {:.6f}".format(start_time, end_time),
                 file=self._file)

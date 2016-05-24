@@ -129,6 +129,9 @@ class TestMspmsRoundTrip(unittest.TestCase):
     Tests the mspms argument parsing to ensure that we correctly round-trip
     to the ms arguments.
     """
+    @unittest.skip
+    # Skip these tests until we've got the ms cmd line generation code
+    # reimplemented.
     def test_msdoc_examples(self):
 
         arg_list = ["4", "1", "-T"]
@@ -577,19 +580,22 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         events = sim.get_demographic_events()
         self.assertEqual(len(events), 3)
         for event in events:
-            self.assertEqual(event.time, 1.0)
-        self.assertEqual(events[0].type, "size_change")
-        self.assertEqual(events[0].size, 2.0)
-        self.assertEqual(events[1].type, "growth_rate_change")
-        self.assertEqual(events[1].growth_rate, 3)
-        self.assertEqual(events[2].type, "size_change")
-        self.assertEqual(events[2].size, 4)
+            self.assertEqual(event.time, 1.0 * 4)
+        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertEqual(events[0].initial_size, 2.0)
+        self.assertEqual(events[0].growth_rate, 0)
+        self.assertEqual(events[1].type, "population_parameters_change")
+        self.assertEqual(events[1].growth_rate, 3 / 4)
+        self.assertEqual(events[1].initial_size, None)
+        self.assertEqual(events[2].type, "population_parameters_change")
+        self.assertEqual(events[2].initial_size, 4)
+        self.assertEqual(events[2].growth_rate, 0)
 
     def test_population_growth_rate(self):
         def f(args):
             sim = self.create_simulator(args)
             return [
-                (c.initial_size, c.growth_rate)
+                (c.initial_size, c.growth_rate * 4)
                 for c in sim.get_population_configurations()]
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 -1"),
@@ -610,7 +616,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         def f(args):
             sim = self.create_simulator(args)
             return [
-                (c.initial_size, c.growth_rate)
+                (c.initial_size, c.growth_rate * 4)
                 for c in sim.get_population_configurations()]
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -n 1 2"),
@@ -632,19 +638,19 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             return sim.get_demographic_events()
         events = f("2 1 -T -eg 0.1 1 2")
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "growth_rate_change")
-        self.assertEqual(events[0].growth_rate, 2.0)
-        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertEqual(events[0].growth_rate, 2.0 / 4)
+        self.assertEqual(events[0].time, 0.1 * 4)
         self.assertEqual(events[0].population_id, 0)
         events = f("2 1 -T -I 2 1 1 -eg 0.1 1 2 -eg 0.2 2 3")
         self.assertEqual(len(events), 2)
-        self.assertEqual(events[0].type, "growth_rate_change")
-        self.assertEqual(events[0].growth_rate, 2.0)
-        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertEqual(events[0].growth_rate, 2.0 / 4)
+        self.assertEqual(events[0].time, 0.1 * 4)
         self.assertEqual(events[0].population_id, 0)
-        self.assertEqual(events[1].type, "growth_rate_change")
-        self.assertEqual(events[1].growth_rate, 3.0)
-        self.assertEqual(events[1].time, 0.2)
+        self.assertEqual(events[1].type, "population_parameters_change")
+        self.assertEqual(events[1].growth_rate, 3.0 / 4)
+        self.assertEqual(events[1].time, 0.2 * 4)
         self.assertEqual(events[1].population_id, 1)
 
     def test_population_size_change(self):
@@ -653,19 +659,22 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             return sim.get_demographic_events()
         events = f("2 1 -T -en 0.1 1 2")
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "size_change")
-        self.assertEqual(events[0].size, 2.0)
-        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertEqual(events[0].initial_size, 2.0)
+        self.assertEqual(events[0].growth_rate, 0)
+        self.assertEqual(events[0].time, 0.1 * 4)
         self.assertEqual(events[0].population_id, 0)
         events = f("2 1 -T -I 2 1 1 -en 0.1 1 2 -en 0.2 2 3")
         self.assertEqual(len(events), 2)
-        self.assertEqual(events[0].type, "size_change")
-        self.assertEqual(events[0].size, 2.0)
-        self.assertEqual(events[0].time, 0.1)
+        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertEqual(events[0].initial_size, 2.0)
+        self.assertEqual(events[0].growth_rate, 0)
+        self.assertEqual(events[0].time, 0.1 * 4)
         self.assertEqual(events[0].population_id, 0)
-        self.assertEqual(events[1].type, "size_change")
-        self.assertEqual(events[1].size, 3.0)
-        self.assertEqual(events[1].time, 0.2)
+        self.assertEqual(events[1].type, "population_parameters_change")
+        self.assertEqual(events[1].initial_size, 3.0)
+        self.assertEqual(events[1].growth_rate, 0)
+        self.assertEqual(events[1].time, 0.2 * 4)
         self.assertEqual(events[1].population_id, 1)
 
     def test_migration_rate_change(self):
@@ -675,7 +684,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
                 self.assertEqual(event.type, "migration_rate_change")
-                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.time, result[0] * 4)
                 # Need to divide by 4 to correct rates.
                 self.assertEqual(event.rate, result[1] / 4)
                 self.assertEqual(event.matrix_index, result[2])
@@ -691,7 +700,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
                 self.assertEqual(event.type, "migration_rate_change")
-                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.time, result[0] * 4)
                 # Need to divide by 4 to correct rates.
                 self.assertEqual(event.rate, result[1] / 4)
                 self.assertEqual(event.matrix_index, result[2])
@@ -712,7 +721,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
                 self.assertEqual(event.type, "migration_rate_change")
-                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.time, result[0] * 4)
                 # Need to divide by 4 to correct rates.
                 self.assertEqual(event.rate, result[1] / 4)
                 self.assertEqual(event.matrix_index, result[2])
@@ -737,7 +746,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 event = events[k]
                 dest = event.destination
                 self.assertEqual(event.type, "mass_migration")
-                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.time, result[0] * 4)
                 self.assertEqual(event.source, result[1])
                 self.assertEqual(event.destination, result[2])
                 # We also have to set the migration rates to 0 for the
@@ -747,7 +756,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                     if j != dest:
                         event = events[k]
                         self.assertEqual(event.type, "migration_rate_change")
-                        self.assertEqual(event.time, result[0])
+                        self.assertEqual(event.time, result[0] * 4)
                         self.assertEqual(event.rate, 0.0)
                         self.assertEqual(event.matrix_index, (j, dest))
                         k += 1
@@ -769,7 +778,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             self.assertEqual(sim.get_migration_matrix(), matrix)
             for result, event in zip(results, events):
                 self.assertEqual(event.type, "mass_migration")
-                self.assertEqual(event.time, result[0])
+                self.assertEqual(event.time, result[0] * 4)
                 self.assertEqual(event.source, result[1])
                 self.assertEqual(event.destination, result[2])
                 self.assertEqual(event.proportion, result[3])

@@ -111,10 +111,9 @@ parameter to :func:`.simulate`. Each element of this list must be an
 instance of one of the following demographic events
 that are currently supported.
 
-.. autoclass:: msprime.GrowthRateChangeEvent
-.. autoclass:: msprime.SizeChangeEvent
-.. autoclass:: msprime.MigrationRateChangeEvent
-.. autoclass:: msprime.MassMigrationEvent
+.. autoclass:: msprime.PopulationParametersChange
+.. autoclass:: msprime.MigrationRateChange
+.. autoclass:: msprime.MassMigration
 
 
 ++++++++++++++++++++++++++++

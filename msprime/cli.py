@@ -391,7 +391,7 @@ def create_simulation_runner(parser, arg_list):
             parser.error("Proportion value must be 0 <= p <= 1.")
         # In ms, the probability of staying in source is p and the probabilty
         # of moving to the new population is 1 - p.
-        event = (index, msprime.MassMigrationEvent(
+        event = (index, msprime.MassMigration(
             t, pid, num_populations, 1 - proportion))
         demographic_events.append(event)
 
@@ -411,33 +411,37 @@ def create_simulation_runner(parser, arg_list):
             raise_admixture_incompatability_error(parser, "-eG")
         check_event_time(parser, t)
         demographic_events.append(
-            (index, msprime.GrowthRateChangeEvent(t, alpha)))
+            (index, msprime.PopulationParametersChange(
+                time=t, growth_rate=alpha)))
     for index, (t, population_id, alpha) in args.population_growth_rate_change:
         pid = convert_population_id(parser, population_id, num_populations)
         check_event_time(parser, t)
         demographic_events.append(
-            (index, msprime.GrowthRateChangeEvent(t, alpha, pid)))
+            (index, msprime.PopulationParametersChange(
+                time=t, growth_rate=alpha, population_id=pid)))
     for index, (t, x) in args.size_change:
         if len(args.admixture) != 0:
             raise_admixture_incompatability_error(parser, "-eN")
         check_event_time(parser, t)
         demographic_events.append(
-            (index, msprime.SizeChangeEvent(t, x)))
+            (index, msprime.PopulationParametersChange(
+                time=t, initial_size=x, growth_rate=0)))
     for index, (t, population_id, x) in args.population_size_change:
         check_event_time(parser, t)
         pid = convert_population_id(parser, population_id, num_populations)
         demographic_events.append(
-            (index, msprime.SizeChangeEvent(t, x, pid)))
+            (index, msprime.PopulationParametersChange(
+                time=t, initial_size=x, growth_rate=0, population_id=pid)))
     for index, (t, source, dest) in args.population_split:
         check_event_time(parser, t)
         source_id = convert_population_id(parser, source, num_populations)
         dest_id = convert_population_id(parser, dest, num_populations)
         demographic_events.append(
-            (index, msprime.MassMigrationEvent(t, source_id, dest_id, 1.0)))
+            (index, msprime.MassMigration(t, source_id, dest_id, 1.0)))
         # Set the migration rates for source to 0
         for j in range(num_populations):
             if j != dest_id:
-                event = msprime.MigrationRateChangeEvent(t, 0.0, (j, dest_id))
+                event = msprime.MigrationRateChange(t, 0.0, (j, dest_id))
                 demographic_events.append((index, event))
 
     # Demographic events that affect the migration matrix
@@ -453,7 +457,7 @@ def create_simulation_runner(parser, arg_list):
             raise_admixture_incompatability_error(parser, "-eM")
         check_migration_rate(parser, x)
         check_event_time(parser, t)
-        event = msprime.MigrationRateChangeEvent(
+        event = msprime.MigrationRateChange(
             t, x / (num_populations - 1))
         demographic_events.append((index, event))
     for index, event in args.migration_matrix_entry_change:
@@ -465,7 +469,7 @@ def create_simulation_runner(parser, arg_list):
             parser.error("Cannot set diagonal elements in migration matrix")
         rate = event[3]
         check_migration_rate(parser, rate)
-        msp_event = msprime.MigrationRateChangeEvent(t, rate, (dest, source))
+        msp_event = msprime.MigrationRateChange(t, rate, (dest, source))
         demographic_events.append((index, msp_event))
     for index, event in args.migration_matrix_change:
         if len(event) < 3:
@@ -481,17 +485,23 @@ def create_simulation_runner(parser, arg_list):
         for j in range(num_populations):
             for k in range(num_populations):
                 if j != k:
-                    msp_event = msprime.MigrationRateChangeEvent(
+                    msp_event = msprime.MigrationRateChange(
                         t, matrix[j][k], (j, k))
                     demographic_events.append((index, msp_event))
 
     # We've created all the events, now we need to rescale the migration rates
+    # We assume Ne = 1 here.
     for _, msp_event in demographic_events:
-        if isinstance(msp_event, msprime.MigrationRateChangeEvent):
+        msp_event.time *= 4
+        if isinstance(msp_event, msprime.PopulationParametersChange):
+            msp_event.growth_rate /= 4
+        if isinstance(msp_event, msprime.MigrationRateChange):
             # Divide by 4 to get a per-generation rate, assuming Ne=1
             msp_event.rate /= 4
-    # We also need to rescale the migration matrix.
+    # We also need to rescale the migration matrix and growth rates.
     migration_matrix = [[m / 4 for m in row] for row in migration_matrix]
+    for config in population_configurations:
+        config.growth_rate /= 4
 
     demographic_events.sort(key=lambda x: (x[0], x[1].time))
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
