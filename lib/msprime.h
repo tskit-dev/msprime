@@ -53,6 +53,8 @@
 
 /* The root node indicator */
 #define MSP_NULL_NODE UINT32_MAX
+/* Indicates the that the population ID has not been set. */
+#define MSP_NULL_POPULATION_ID UINT8_MAX
 
 typedef struct segment_t_t {
     uint8_t population_id;
@@ -66,6 +68,7 @@ typedef struct segment_t_t {
 } segment_t;
 
 typedef struct {
+    uint8_t population_id;
     /* After simulation, all coordinates are converted to physical coordinates 
      * using a genetic map */
     double left;
@@ -197,6 +200,7 @@ typedef struct {
         double *left;
         double *right;
         double *time;
+        uint8_t *population_id;
         uint32_t *node;
         uint32_t *children;
         uint32_t *insertion_order;
@@ -251,6 +255,7 @@ typedef struct {
     uint32_t root;
     double left;
     double right;
+    uint8_t *population_id;
     uint32_t *parent;
     uint32_t *children;
     double *time;

@@ -684,6 +684,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+    printf("Simulation::\n");
     result = 1;
     while (result == 1) {
         result = msp_run(msp, DBL_MAX, 1);
@@ -727,7 +728,6 @@ run_simulate(char *conf_file)
     print_haplotypes(tree_seq);
     print_variants(tree_seq);
 
-    if (0) {
         print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
         int j;
@@ -744,6 +744,7 @@ run_simulate(char *conf_file)
             }
         }
 
+    if (0) {
         tree_sequence_print_state(tree_seq);
         print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);

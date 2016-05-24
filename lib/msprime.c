@@ -1076,8 +1076,8 @@ msp_print_state(msp_t *self)
     printf("Coalescence records = %ld\n", (long) self->num_coalescence_records);
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
-        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
-                cr->children[1], cr->node, cr->time);
+        printf("\t%f\t%f\t%d\t%d\t%d\t%f\t%d\n", cr->left, cr->right, cr->children[0],
+                cr->children[1], cr->node, cr->time, cr->population_id);
     }
     printf("Memory heaps\n");
     printf("avl_node_heap:");
@@ -1569,7 +1569,8 @@ msp_copy_overlap_count(msp_t *self, uint32_t k)
 
 static int WARN_UNUSED
 msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
-        uint32_t child1, uint32_t child2, uint32_t node)
+        uint32_t child1, uint32_t child2, uint32_t node,
+        uint32_t population_id)
 {
     int ret = 0;
     uint32_t c1 = GSL_MIN(child1, child2);
@@ -1608,6 +1609,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         cr->children[1] = c2;
         cr->node = node;
         cr->time = self->time;
+        cr->population_id = (uint8_t) population_id;
         self->num_coalescence_records++;
     }
 out:
@@ -1817,7 +1819,8 @@ msp_common_ancestor_event(msp_t *self, uint32_t population_id)
                         goto out;
                     }
                 }
-                ret = msp_record_coalescence(self, l, r, x->value, y->value, v);
+                ret = msp_record_coalescence(self, l, r, x->value, y->value, v,
+                        population_id);
                 if (ret != 0) {
                     goto out;
                 }
