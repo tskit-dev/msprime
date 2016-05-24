@@ -1424,6 +1424,9 @@ class DemographicEvent(object):
         self.type = type_
         self.time = time
 
+    def _get_scaled_time(self, Ne):
+        return self.time / (4 * Ne)
+
     def __str__(self):
         raise NotImplementedError()
 
@@ -1466,7 +1469,7 @@ class PopulationParametersChange(DemographicEvent):
     def get_ll_representation(self, num_populations, Ne):
         ret = {
             "type": self.type,
-            "time": self.time / (4 * Ne),
+            "time": self._get_scaled_time(Ne),
             "population_id": self.population_id
         }
         if self.growth_rate is not None:
@@ -1518,7 +1521,7 @@ class MigrationRateChange(DemographicEvent):
                 self.matrix_index[0] * num_populations + self.matrix_index[1])
         return {
             "type": self.type,
-            "time": self.time / 4 * Ne,
+            "time": self._get_scaled_time(Ne),
             "migration_rate": scaled_rate,
             "matrix_index": matrix_index
         }
@@ -1573,7 +1576,7 @@ class MassMigration(DemographicEvent):
     def get_ll_representation(self, num_populations, Ne):
         return {
             "type": self.type,
-            "time": self.time / (4 * Ne),
+            "time": self._get_scaled_time(Ne),
             "source": self.source,
             "destination": self.destination,
             "proportion": self.proportion
@@ -1611,7 +1614,10 @@ class Population(object):
         Gets the size of the population after the specified amount of
         time.
         """
-        return self.initial_size * math.exp(-self.growth_rate * time)
+        size = self.initial_size
+        if self.growth_rate != 0:
+            size = self.initial_size * math.exp(-self.growth_rate * time)
+        return size
 
 
 class DemographyPrinter(object):
@@ -1633,6 +1639,9 @@ class DemographyPrinter(object):
         self._demographic_events = collections.defaultdict(list)
         for event in demographic_events:
             self._demographic_events[event.time].append(event)
+
+    def _scaled_time_to_generations(self, t):
+        return 4 * self._Ne * t
 
     def _print_populations(
             self, start_time, end_time, migration_matrix, populations):
@@ -1668,9 +1677,9 @@ class DemographyPrinter(object):
         for j, pop in enumerate(populations):
             s = (
                 "{id:<2}|"
-                "{start_size:^{field_width}.{precision}f}"
-                "{end_size:^{field_width}.{precision}f}"
-                "{growth_rate:>{growth_rate_field_width}.{precision}f}"
+                "{start_size:^{field_width}.{precision}g}"
+                "{end_size:^{field_width}.{precision}g}"
+                "{growth_rate:>{growth_rate_field_width}.{precision}g}"
                 ).format(
                     id=j, start_size=pop.initial_size,
                     end_size=pop.get_size(end_time - start_time),
@@ -1680,7 +1689,7 @@ class DemographyPrinter(object):
             print(s, end=sep_str, file=self._file)
             for k in range(N):
                 x = migration_matrix[j][k]
-                print("{0:^{1}.{2}f}".format(
+                print("{0:^{1}.{2}g}".format(
                     x, field_width, self._precision), end="",
                     file=self._file)
             print(file=self._file)
@@ -1688,22 +1697,25 @@ class DemographyPrinter(object):
     def debug_history(self):
         ll_sim = self._simulator.create_ll_instance()
         N = self._simulator.get_num_populations()
+        Ne = self._Ne
         start_time = 0
-        end_time = 0
-        while not math.isinf(end_time):
+        scaled_end_time = 0
+        while not math.isinf(scaled_end_time):
             for event in self._demographic_events[start_time]:
+                assert event.time == start_time
                 print("Event:@{}".format(event.time), event, file=self._file)
             print(file=self._file)
-            end_time = ll_sim.debug_demography()
+            scaled_end_time = ll_sim.debug_demography()
+            end_time = self._scaled_time_to_generations(scaled_end_time)
             m = ll_sim.get_migration_matrix()
             migration_matrix = [
-                [m[j * N + k] for j in range(N)] for k in range(N)]
+                [m[j * N + k] / (4 * Ne) for j in range(N)] for k in range(N)]
             populations = [
                 Population(Ne=self._Ne, **d)
                 for d in ll_sim.get_population_configuration()]
             print(
-                "INTERVAL: {:.6f} -- {:.6f}".format(start_time, end_time),
-                file=self._file)
+                "INTERVAL: {:.2f} -- {:.2f} generations".format(
+                    start_time, end_time), file=self._file)
             self._print_populations(
                 start_time, end_time, migration_matrix, populations)
             print(file=self._file)

@@ -214,6 +214,48 @@ class TestRateConversions(unittest.TestCase):
         self.assertEqual(
             event.get_ll_representation(1, Ne), ll_event)
 
+    def test_migration_rate_change(self):
+        g = 1024
+        Ne = 4096
+        migration_rate = 0.125
+        d = 2
+        event = msprime.MigrationRateChange(time=g, rate=migration_rate)
+        ll_event = {
+            "type": "migration_rate_change",
+            "time": g / (4 * Ne),
+            "matrix_index": -1,
+            "migration_rate": migration_rate * (4 * Ne)
+        }
+        self.assertEqual(
+            event.get_ll_representation(d, Ne), ll_event)
+
+
+class TestTimeConversion(unittest.TestCase):
+    """
+    Tests the time conversion into scaled units.
+    """
+    def check_time(self, event, g, Ne):
+        ll_event = event.get_ll_representation(1, Ne)
+        self.assertEqual(ll_event["time"], g / (4 * Ne))
+
+    def test_population_parameter_change(self):
+        g = 8192
+        Ne = 1024
+        event = msprime.PopulationParametersChange(time=g, initial_size=1)
+        self.check_time(event, g, Ne)
+
+    def test_migration_rate_change(self):
+        g = 512
+        Ne = 8192
+        event = msprime.MigrationRateChange(time=g, rate=1)
+        self.check_time(event, g, Ne)
+
+    def test_mass_migration(self):
+        g = 100
+        Ne = 100
+        event = msprime.MassMigration(time=g, source=0, destination=1)
+        self.check_time(event, g, Ne)
+
 
 class TestDemographyPrinter(unittest.TestCase):
     """
