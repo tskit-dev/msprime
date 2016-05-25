@@ -24,6 +24,7 @@ from __future__ import division
 
 import io
 import itertools
+import json
 import os
 import random
 import sys
@@ -1189,14 +1190,14 @@ class TestMspConversionOutput(unittest.TestCase):
     def verify_records(self, output_records):
         records = list(self._tree_sequence.records())
         self.assertEqual(len(records), len(output_records))
-        for (l, r, u, c, t), line in zip(records, output_records):
-            splits = line.split()
-            self.assertEqual(str(l), splits[0])
-            self.assertEqual(str(r), splits[1])
-            self.assertEqual(u, int(splits[2]))
-            self.assertEqual(c[0], int(splits[3]))
-            self.assertEqual(c[1], int(splits[4]))
-            self.assertAlmostEqual(t, float(splits[5]))
+        for record, line in zip(records, output_records):
+            splits = line.split("\t")
+            self.assertEqual(str(record.left), splits[0])
+            self.assertEqual(str(record.right), splits[1])
+            self.assertEqual(record.node, int(splits[2]))
+            self.assertEqual(list(record.children), json.loads(splits[3]))
+            self.assertAlmostEqual(record.time, float(splits[4]))
+            self.assertEqual(record.population, int(splits[5]))
 
     def test_records(self):
         cmd = "records"
@@ -1212,7 +1213,7 @@ class TestMspConversionOutput(unittest.TestCase):
         output_records = stdout.splitlines()
         self.assertEqual(
             list(output_records[0].split()),
-            ["l", "r", "u", "c1", "c2", "t"])
+            ["left", "right", "node", "children", "time", "population"])
         self.verify_records(output_records[1:])
 
     def verify_mutations(self, output_mutations):

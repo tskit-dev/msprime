@@ -200,7 +200,7 @@ typedef struct {
         double *left;
         double *right;
         double *time;
-        uint8_t *population_id;
+        uint8_t *population;
         uint32_t *node;
         uint32_t *children;
         uint32_t *insertion_order;
@@ -255,7 +255,7 @@ typedef struct {
     uint32_t root;
     double left;
     double right;
-    uint8_t *population_id;
+    uint8_t *population;
     uint32_t *parent;
     uint32_t *children;
     double *time;

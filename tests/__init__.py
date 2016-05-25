@@ -146,7 +146,7 @@ class PythonTreeSequence(object):
         left = 0
         used_records = collections.defaultdict(list)
         records_in = []
-        for l, r, node, children, t in self.records():
+        for l, r, node, children, t, _ in self.records():
             if l != left:
                 # Out records must be sorted in reverse time order.
                 records_out = sorted(used_records[left], key=lambda x: -x[2])

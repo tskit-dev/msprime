@@ -46,6 +46,7 @@ enable_h5py_tests = True
 
 # Root node marker
 NULL_NODE = -1
+NULL_POPULATION = -1
 
 
 def uniform_recombination_map(sim):
@@ -448,11 +449,12 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(breakpoints, sorted(breakpoints))
         records = sim.get_coalescence_records()
         self.assertEqual(len(records), sim.get_num_coalescence_records())
-        for l, r, p, children, t in records:
+        for l, r, p, children, t, pop in records:
             self.assertEqual(children, tuple(sorted(children)))
             self.assertTrue(0 <= l < m)
             self.assertTrue(1 <= r <= m)
             self.assertGreater(t, 0.0)
+            self.assertTrue(0 <= pop < sim.get_num_populations())
             self.assertIn(l, breakpoints)
             self.assertIn(r, breakpoints)
         # The amount of ancestral material in the coalescence records and
@@ -467,7 +469,8 @@ class TestSimulationState(LowLevelTestCase):
                     segments_am[j] += 1
                     j += 1
         records_am = [0 for b in breakpoints[:-1]]
-        for l, r, _, _, _ in records:
+        for record in records:
+            l, r = record[0:2]
             j = breakpoints.index(l)
             while breakpoints[j] < r:
                 records_am[j] += 1
@@ -527,7 +530,7 @@ class TestSimulationState(LowLevelTestCase):
         last_t = 0
         num_trees = 0
         live_segments = []
-        for l, r, node, children, t in sorted_records:
+        for l, r, node, children, t, pop in sorted_records:
             if last_l != l:
                 last_l = l
                 last_t = 0
@@ -608,15 +611,15 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(len(records), 0)
         self.assertEqual(len(records), sim.get_num_coalescence_records())
         # Records should be in nondecreasing time order
-        times = [t for l, r, node, children, t in records]
+        times = [t for l, r, node, children, t, pop in records]
         # Children should always be sorted in order.
-        for _, _, _, children, _ in records:
+        for _, _, _, children, _, _ in records:
             self.assertEqual(children, tuple(sorted(children)))
         self.assertEqual(times, sorted(times))
         self.assertEqual(times[-1], sim.get_time())
         self.verify_squashed_records(records)
-        left_sorted_records = sorted(records, key=lambda r: (r[0], r[-1]))
-        right_sorted_records = sorted(records, key=lambda r: (r[1], -r[-1]))
+        left_sorted_records = sorted(records, key=lambda r: (r[0], r[-2]))
+        right_sorted_records = sorted(records, key=lambda r: (r[1], -r[-2]))
         self.verify_trees(sim, left_sorted_records)
         # Check the TreeSequence. Ensure we get the records back in the
         # correct orders.
@@ -1596,6 +1599,7 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertIn(key, environment)
 
     def verify_tree_dump_format(self, ts, outfile):
+        uint8 = "uint8"
         uint32 = "uint32"
         float64 = "float64"
         # This is an ugly hack here, but we have to do it to
@@ -1638,7 +1642,7 @@ class TestTreeSequence(LowLevelTestCase):
         fields = [
             ("left", float64, 1), ("right", float64, 1),
             ("node", uint32, 1), ("children", uint32, 2),
-            ("time", float64, 1)]
+            ("population", uint8, 1), ("time", float64, 1)]
         self.assertEqual(set(g.keys()), set([name for name, _, _ in fields]))
         for name, dtype, dims in fields:
             self.assertEqual(len(g[name].shape), dims)
@@ -1666,6 +1670,8 @@ class TestTreeSequence(LowLevelTestCase):
                     _msprime.LibraryError, ts.load, f.name, skip_h5close=True)
 
     @unittest.skip("Skipping due to weird h5py behaviour")
+    # This test works when it's run on its own, but fails when other tests
+    # are run.
     def test_version_load_error(self):
         if enable_h5py_tests:
             # See above for why we import h5py here.
@@ -1680,6 +1686,27 @@ class TestTreeSequence(LowLevelTestCase):
                     other_ts = _msprime.TreeSequence()
                     self.assertRaises(
                         _msprime.LibraryError, other_ts.load, f.name)
+
+    def test_optional_population(self):
+        if enable_h5py_tests:
+            ts = list(self.get_example_tree_sequences())[-1]
+            # See above for why we import h5py here.
+            import h5py
+            with tempfile.NamedTemporaryFile() as f:
+                ts.dump(f.name, skip_h5close=True)
+                hfile = h5py.File(f.name, "r+")
+                del hfile["trees"]["population"]
+                hfile.close()
+                other_ts = _msprime.TreeSequence()
+                other_ts.load(f.name)
+                self.assertEqual(
+                    ts.get_num_records(), other_ts.get_num_records())
+                for j in range(other_ts.get_num_records()):
+                    record = other_ts.get_record(j)
+                    pop = record[-1]
+                    self.assertEqual(pop, NULL_POPULATION)
+                    old_record = ts.get_record(j)
+                    self.assertEqual(record[:-1], old_record[:-1])
 
     def test_load_bad_formats(self):
         # try loading a bunch of files in various formats.
@@ -1708,7 +1735,7 @@ class TestTreeSequence(LowLevelTestCase):
         for ts in self.get_example_tree_sequences():
             max_node = 0
             for j in range(ts.get_num_records()):
-                _, _, node, _, _ = ts.get_record(j)
+                _, _, node, _, _, _ = ts.get_record(j)
                 if node > max_node:
                     max_node = node
             self.assertEqual(max_node + 1, ts.get_num_nodes())

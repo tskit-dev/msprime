@@ -714,9 +714,14 @@ def run_dump_variants(args):
 def run_dump_records(args):
     tree_sequence = msprime.load(args.history_file)
     if args.header:
-        print("l", "r", "u", "c1", "c2", "t", sep="\t")
-    for l, r, u, c, t in tree_sequence.records():
-        print(l, r, u, c[0], c[1], t, sep="\t")
+        print(
+            "left", "right", "node", "children",
+            "time", "population", sep="\t")
+    for record in tree_sequence.records():
+        print(
+            record.left, record.right, record.node,
+            list(record.children),
+            record.time, record.population, sep="\t")
 
 
 def run_dump_mutations(args):

@@ -43,6 +43,11 @@ from _msprime import RandomGenerator
 NULL_NODE = -1
 
 
+CoalescenceRecord = collections.namedtuple(
+    "CoalescenceRecord",
+    ["left", "right", "node", "children", "time", "population"])
+
+
 class TreeDrawer(object):
     """
     A class to draw sparse trees in SVG format.
@@ -1111,7 +1116,7 @@ class TreeSequence(object):
         :rtype: iter
         """
         for j in range(self.get_num_records()):
-            yield self._ll_tree_sequence.get_record(j)
+            yield CoalescenceRecord(*self._ll_tree_sequence.get_record(j))
 
     def diffs(self):
         """

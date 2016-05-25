@@ -120,10 +120,12 @@ handle_input_error(int err)
 static PyObject *
 convert_coalescence_record(coalescence_record_t *cr)
 {
-    return Py_BuildValue("ddI(II)d",
+    int population_id =
+        cr->population_id == MSP_NULL_POPULATION_ID ? -1: cr->population_id;
+    return Py_BuildValue("ddI(II)di",
             cr->left, cr->right, (unsigned int) cr->node,
             (unsigned int) cr->children[0], (unsigned int) cr->children[1],
-            cr->time);
+            cr->time, population_id);
 }
 
 /*

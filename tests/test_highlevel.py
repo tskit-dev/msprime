@@ -426,9 +426,9 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertGreater(sim.get_max_memory(), 0)
         tree_sequence = sim.get_tree_sequence()
         t = 0.0
-        for _, _, _, _, time in tree_sequence.records():
-            if time > t:
-                t = time
+        for record in tree_sequence.records():
+            if record.time > t:
+                t = record.time
         self.assertEqual(sim.get_time(), t)
         self.assertGreater(sim.get_num_common_ancestor_events(), 0)
         self.assertGreaterEqual(sim.get_num_recombination_events(), 0)
