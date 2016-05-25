@@ -95,6 +95,10 @@ typedef struct {
 } object_heap_t;
 
 typedef struct {
+    uint8_t population_id;
+} sample_t;
+
+typedef struct {
     uint32_t sample_size;
     double initial_size;
     double growth_rate;
@@ -109,6 +113,7 @@ typedef struct {
     uint32_t num_loci;
     double scaled_recombination_rate;
     uint32_t num_populations;
+    sample_t *samples;
     double *initial_migration_matrix;
     population_t *initial_populations;
     /* allocation block sizes */
@@ -196,6 +201,9 @@ typedef struct {
 typedef struct {
     uint32_t sample_size;
     double sequence_length;
+    struct {
+        uint8_t *population;
+    } samples;
     struct {
         double *left;
         double *right;
@@ -383,6 +391,7 @@ int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
+int msp_get_samples(msp_t *self, sample_t *samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         size_t *sample_size, double *initial_size, double *growth_rate);
 int msp_get_population(msp_t *self, size_t population_id, 

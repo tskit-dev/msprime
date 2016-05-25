@@ -672,6 +672,11 @@ msp_alloc(msp_t *self, size_t sample_size, gsl_rng *rng)
     self->rng = rng;
     self->num_loci = 1;
     self->scaled_recombination_rate = 0.0;
+    self->samples = malloc(sample_size * sizeof(sample_t));
+    if (self->samples == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     ret = msp_set_num_populations(self, 1);
     if (ret != 0) {
         goto out;
@@ -781,6 +786,9 @@ msp_free(msp_t *self)
     }
     if (self->populations != NULL) {
         free(self->populations);
+    }
+    if (self->samples != NULL) {
+        free(self->samples);
     }
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
@@ -1985,6 +1993,10 @@ msp_reset(msp_t *self)
                 goto out;
             }
             fenwick_set_value(&self->links, u->id, self->num_loci - 1);
+            /* TODO This should be an input parameter rather than
+             * something that gets filled out each time.
+             */
+            self->samples[sample_id].population_id = (uint8_t) population_id;
             sample_id++;
         }
     }
@@ -2381,6 +2393,13 @@ msp_get_coalescence_records(msp_t *self, coalescence_record_t *coalescence_recor
 {
     memcpy(coalescence_records, self->coalescence_records,
             self->num_coalescence_records * sizeof(coalescence_record_t));
+    return 0;
+}
+
+int WARN_UNUSED
+msp_get_samples(msp_t *self, sample_t *samples)
+{
+    memcpy(samples, self->samples, self->sample_size * sizeof(sample_t));
     return 0;
 }
 

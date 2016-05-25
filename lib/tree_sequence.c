@@ -60,7 +60,6 @@ cmp_index_sort(const void *a, const void *b) {
     return ret;
 }
 
-
 void
 tree_sequence_print_state(tree_sequence_t *self)
 {
@@ -69,6 +68,10 @@ tree_sequence_print_state(tree_sequence_t *self)
     printf("tree_sequence state\n");
     printf("sample_size = %d\n", self->sample_size);
     printf("sequence_length = %f\n", self->sequence_length);
+    printf("samples\n");
+    for (j = 0; j < self->sample_size; j++) {
+        printf("\t%d\t%d\n", (int) j, (int) self->samples.population[j]);
+    }
     printf("trees = (%d records)\n", (int) self->num_records);
     printf("\tparameters = '%s'\n", self->trees.parameters);
     printf("\tenvironment = '%s'\n", self->trees.environment);
@@ -103,6 +106,10 @@ tree_sequence_alloc(tree_sequence_t *self)
 {
     int ret = MSP_ERR_NO_MEMORY;
 
+    self->samples.population = malloc(self->sample_size * sizeof(uint8_t));
+    if (self->samples.population == NULL) {
+        goto out;
+    }
     self->trees.left = malloc(self->num_records * sizeof(double));
     self->trees.right = malloc(self->num_records * sizeof(double));
     self->trees.children = malloc(2 * self->num_records * sizeof(uint32_t));
@@ -119,7 +126,8 @@ tree_sequence_alloc(tree_sequence_t *self)
         goto out;
     }
     /* Set the optional fields to their unset values. */
-    memset(self->trees.population, UINT8_MAX, self->num_records);
+    memset(self->samples.population, MSP_NULL_POPULATION_ID, self->sample_size);
+    memset(self->trees.population, MSP_NULL_POPULATION_ID, self->num_records);
     if (self->num_mutations > 0) {
         self->mutations.node = malloc(self->num_mutations * sizeof(uint32_t));
         self->mutations.position = malloc(
@@ -136,6 +144,9 @@ out:
 int
 tree_sequence_free(tree_sequence_t *self)
 {
+    if (self->samples.population != NULL) {
+        free(self->samples.population);
+    }
     if (self->trees.left != NULL) {
         free(self->trees.left);
     }
@@ -277,6 +288,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     int ret = -1;
     uint32_t j;
     coalescence_record_t *records = NULL;
+    sample_t *samples = NULL;
     char *parameters;
 
     memset(self, 0, sizeof(tree_sequence_t));
@@ -290,7 +302,8 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
         goto out;
     }
     records = malloc(self->num_records * sizeof(coalescence_record_t));
-    if (records == NULL) {
+    samples = malloc(self->sample_size * sizeof(sample_t));
+    if (records == NULL || samples == NULL) {
         goto out;
     }
     ret = msp_get_coalescence_records(sim, records);
@@ -307,6 +320,13 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
         self->trees.children[2 * j] = records[j].children[0];
         self->trees.children[2 * j + 1] = records[j].children[1];
         self->trees.time[j] = records[j].time;
+    }
+    ret = msp_get_samples(sim, samples);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->sample_size; j++) {
+        self->samples.population[j] = samples[j].population_id;
     }
     ret = tree_sequence_make_indexes(self);
     if (ret != 0) {
@@ -328,6 +348,9 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
 out:
     if (records != NULL) {
         free(records);
+    }
+    if (samples != NULL) {
+        free(samples);
     }
     return ret;
 }
@@ -1543,8 +1566,7 @@ sparse_tree_clear(sparse_tree_t *self)
     self->root = 0;
     self->index = UINT32_MAX;
     memset(self->parent, (int) MSP_NULL_NODE, N * sizeof(uint32_t));
-    memset(self->population, (int) MSP_NULL_POPULATION_ID,
-            N * sizeof(uint8_t));
+    memset(self->population, (int) MSP_NULL_POPULATION_ID, N * sizeof(uint8_t));
     memset(self->time, 0, N * sizeof(double));
     memset(self->children, (int) MSP_NULL_NODE, 2 * N * sizeof(uint32_t));
     if (self->flags & MSP_COUNT_LEAVES) {
@@ -1729,6 +1751,7 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
         tree_sequence_t *tree_sequence, sparse_tree_t *tree)
 {
     int ret = MSP_ERR_NO_MEMORY;
+    uint32_t j;
 
     assert(tree_sequence != NULL);
     assert(tree != NULL);
@@ -1754,6 +1777,13 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
     self->removal_index = 0;
     self->mutation_index = 0;
     ret = sparse_tree_clear(self->tree);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Set the sample attributes */
+    for (j = 0; j < self->sample_size; j++) {
+        self->tree->population[j] = self->tree_sequence->samples.population[j];
+    }
 out:
     return ret;
 }
@@ -1775,10 +1805,10 @@ sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
     for (j = 0; j < self->sample_size; j++) {
         u = j;
         assert(self->tree->time[u] == 0.0);
-        assert(self->tree->population[u] == MSP_NULL_POPULATION_ID);
         assert(self->tree->children[2 * j] == MSP_NULL_NODE);
         assert(self->tree->children[2 * j + 1] == MSP_NULL_NODE);
         while (self->tree->parent[u] != MSP_NULL_NODE) {
+            assert(self->tree->population[u] != MSP_NULL_POPULATION_ID);
             v = self->tree->parent[u];
             assert(self->tree->children[2 * v] == u
                     || self->tree->children[2 * v + 1] == u);
