@@ -41,6 +41,7 @@ import _msprime
 from _msprime import RandomGenerator
 
 NULL_NODE = -1
+NULL_POPULATION = -1
 
 
 CoalescenceRecord = collections.namedtuple(
@@ -232,6 +233,21 @@ class SparseTree(object):
         :rtype: float
         """
         return self._ll_sparse_tree.get_time(u)
+
+    def get_population(self, u):
+        """
+        Returns the population associated with the specified node. For leaf
+        nodes this is the population of the sample, and for internal nodes this
+        is the population where the corresponding coalescence occured. If the
+        specified node is not a member of this tree or population level
+        information was not stored in the tree sequence, NULL_POPULATION is
+        returned.
+
+        :param int u: The node of interest.
+        :return: The ID of the population associated with node u.
+        :rtype: int
+        """
+        return self._ll_sparse_tree.get_population(u)
 
     def is_internal(self, u):
         """

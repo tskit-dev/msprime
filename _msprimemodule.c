@@ -2614,6 +2614,31 @@ out:
 }
 
 static PyObject *
+SparseTree_get_population(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int node;
+    int population;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    population = self->sparse_tree->population[node];
+    if (population == MSP_NULL_POPULATION_ID) {
+        population = -1;
+    }
+    ret = Py_BuildValue("i", population);
+out:
+    return ret;
+}
+
+static PyObject *
 SparseTree_get_time(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
@@ -2800,6 +2825,8 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the parent of node u" },
     {"get_time", (PyCFunction) SparseTree_get_time, METH_VARARGS,
             "Returns the time of node u" },
+    {"get_population", (PyCFunction) SparseTree_get_population, METH_VARARGS,
+            "Returns the population of node u" },
     {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
             "Returns the children of node u" },
     {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,

@@ -424,6 +424,21 @@ def variable_recomb_example():
     fig.savefig("hapmap_chr22.svg")
 
 
+def pop_example():
+    ts = msprime.simulate(
+        population_configurations=[
+            msprime.PopulationConfiguration(sample_size=4),
+            msprime.PopulationConfiguration(sample_size=4)],
+        demographic_events=[
+            msprime.MassMigration(time=5, source=1, destination=0)],
+        random_seed=1)
+    for t in ts.trees():
+        print("leaves:")
+        for u in t.leaves(t.get_root()):
+            print(u, "\t", t.get_population(u))
+        print("nodes:")
+        for u in t.nodes():
+            print(u, "\t", t.get_population(u))
 
 
 if __name__ == "__main__":
@@ -443,4 +458,5 @@ if __name__ == "__main__":
     # replicate_example()
     # migration_example()
     # segregating_sites_example(2, 5, 10000)
-    variable_recomb_example()
+    # variable_recomb_example()
+    pop_example()
