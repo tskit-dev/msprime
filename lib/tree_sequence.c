@@ -462,6 +462,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/trees/time", 1, 0, 1},
         {"/mutations/node", 1, 0, 1},
         {"/mutations/position", 1, 0, 1},
+        {"/samples/population", 1, 0, 0},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
@@ -473,6 +474,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         fields[j].size = self->num_mutations;
         fields[j].required = self->num_mutations > 0;
     }
+    fields[8].size = self->sample_size;
     for (j = 0; j < num_fields; j++) {
         if (fields[j].required) {
             dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
@@ -607,6 +609,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/trees/time", H5T_NATIVE_DOUBLE, 0, 1, NULL},
         {"/mutations/node", H5T_NATIVE_UINT32, 0, 1, NULL},
         {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1, NULL},
+        {"/samples/population", H5T_NATIVE_UINT8, 0, 0, NULL},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
     size_t j;
@@ -619,6 +622,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     fields[5].dest = self->trees.time;
     fields[6].dest = self->mutations.node;
     fields[7].dest = self->mutations.position;
+    fields[8].dest = self->samples.population;
     /* TODO We're sort of doing the same thing twice here as
      * the mutations _group_ is optional. However, we can't just
      * mark mutations/node and mutations/position as optional as we
@@ -822,6 +826,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/trees/time", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
         {"/mutations/node", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/mutations/position", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
+        {"/samples/population", H5T_STD_U8LE, H5T_NATIVE_UINT8, 1, 0, NULL},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
     struct _hdf5_group_write {
@@ -831,6 +836,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     struct _hdf5_group_write groups[] = {
         {"/trees", 1},
         {"/mutations", 1},
+        {"/samples", 1},
     };
     size_t num_groups = sizeof(groups) / sizeof(struct _hdf5_group_write);
     size_t j;
@@ -843,12 +849,14 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     fields[5].source = self->trees.time;
     fields[6].source = self->mutations.node;
     fields[7].source = self->mutations.position;
+    fields[8].source = self->samples.population;
     for (j = 0; j < 6; j++) {
         fields[j].size = self->num_records;
     }
     for (j = 6; j < 8; j++) {
         fields[j].size = self->num_mutations;
     }
+    fields[8].size = self->sample_size;
     if (self->num_mutations == 0) {
         groups[1].included = 0;
     }

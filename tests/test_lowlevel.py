@@ -1560,170 +1560,6 @@ class TestTreeSequence(LowLevelTestCase):
         ts = self.get_tree_sequence()
         self.assertRaises(ValueError, ts.load, "/tmp/file")
 
-    def verify_mutation_parameters_json(self, json_str):
-        parameters = json.loads(json_str.decode())
-        self.assertIn("scaled_mutation_rate", parameters)
-        self.assertIsInstance(parameters["scaled_mutation_rate"], int, float)
-
-    def verify_tree_parameters_json(self, json_str):
-        parameters = json.loads(json_str.decode())
-        self.assertIn("scaled_recombination_rate", parameters)
-        self.assertIn("sample_size", parameters)
-        self.assertIn("num_loci", parameters)
-        self.assertIn("population_configuration", parameters)
-        self.assertIn("migration_matrix", parameters)
-        self.assertIn("demographic_events", parameters)
-        self.assertIsInstance(
-            parameters["scaled_recombination_rate"], int, float)
-        self.assertIsInstance(parameters["sample_size"], int)
-        self.assertIsInstance(parameters["num_loci"], int)
-        self.assertIsInstance(parameters["population_configuration"], list)
-        self.assertIsInstance(parameters["migration_matrix"], list)
-        self.assertIsInstance(parameters["demographic_events"], list)
-
-    def verify_environment_json(self, json_str):
-        environment = json.loads(json_str.decode())
-        self.assertIn("msprime_version", environment)
-        version = environment["msprime_version"]
-        self.assertEqual(version, _library_version)
-        self.assertIn("hdf5_version", environment)
-        version = list(map(int, environment["hdf5_version"].split(".")))
-        self.assertEqual(len(version), 3)
-        self.assertIn("gsl_version", environment)
-        version = list(map(int, environment["gsl_version"].split(".")))
-        self.assertEqual(len(version), 2)
-        uname_keys = [
-            "kernel_name", "kernel_release", "kernel_version",
-            "hardware_identifier"]
-        for key in uname_keys:
-            self.assertIn(key, environment)
-
-    def verify_tree_dump_format(self, ts, outfile):
-        uint8 = "uint8"
-        uint32 = "uint32"
-        float64 = "float64"
-        # This is an ugly hack here, but we have to do it to
-        # be able to use h5py, as it keeps some global state
-        # open, and we nuke this when we call h5close() to clean up.
-        import h5py
-        ts.dump(outfile.name, skip_h5close=True)
-        self.assertTrue(os.path.exists(outfile.name))
-        self.assertGreater(os.path.getsize(outfile.name), 0)
-        root = h5py.File(outfile.name, "r")
-        keys = set(root.keys())
-        self.assertLessEqual(keys, set(["mutations", "trees"]))
-        self.assertIn("trees", keys)
-        if ts.get_num_mutations() == 0:
-            self.assertNotIn("mutations", keys)
-        else:
-            self.assertIn("mutations", keys)
-        # Check the basic root attributes
-        format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 1)
-        self.assertEqual(format_version[1], 0)
-        self.assertEqual(root.attrs["sample_size"], ts.get_sample_size())
-        self.assertEqual(
-            root.attrs["sequence_length"], ts.get_sequence_length())
-        if ts.get_num_mutations() > 0:
-            g = root["mutations"]
-            # Check the parameters and environment attributes
-            self.verify_mutation_parameters_json(g.attrs["parameters"])
-
-            self.verify_environment_json(g.attrs["environment"])
-            fields = [("node", uint32), ("position", float64)]
-            self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
-            for name, dtype in fields:
-                self.assertEqual(len(g[name].shape), 1)
-                self.assertEqual(g[name].shape[0], ts.get_num_mutations())
-                self.assertEqual(g[name].dtype, dtype)
-        g = root["trees"]
-        self.verify_tree_parameters_json(g.attrs["parameters"])
-        self.verify_environment_json(g.attrs["environment"])
-        fields = [
-            ("left", float64, 1), ("right", float64, 1),
-            ("node", uint32, 1), ("children", uint32, 2),
-            ("population", uint8, 1), ("time", float64, 1)]
-        self.assertEqual(set(g.keys()), set([name for name, _, _ in fields]))
-        for name, dtype, dims in fields:
-            self.assertEqual(len(g[name].shape), dims)
-            self.assertEqual(g[name].shape[0], ts.get_num_records())
-            if dims == 2:
-                self.assertEqual(g[name].shape[1], 2)
-            self.assertEqual(g[name].dtype, dtype)
-
-    def test_dump_format(self):
-        if enable_h5py_tests:
-            for ts in self.get_example_tree_sequences():
-                with tempfile.NamedTemporaryFile() as f:
-                    self.verify_tree_dump_format(ts, f)
-
-    def test_load_malformed_hdf5(self):
-        if enable_h5py_tests:
-            # See above for why we import h5py here.
-            import h5py
-            ts = _msprime.TreeSequence()
-            with tempfile.NamedTemporaryFile() as f:
-                hfile = h5py.File(f.name, "w")
-                # First try the empty hdf5 file.
-                hfile.flush()
-                self.assertRaises(
-                    _msprime.LibraryError, ts.load, f.name, skip_h5close=True)
-
-    @unittest.skip("Skipping due to weird h5py behaviour")
-    # This test works when it's run on its own, but fails when other tests
-    # are run.
-    def test_version_load_error(self):
-        if enable_h5py_tests:
-            # See above for why we import h5py here.
-            import h5py
-            ts = list(self.get_example_tree_sequences())[0]
-            for bad_version in [(0, 1), (0, 8), (2, 0)]:
-                with tempfile.NamedTemporaryFile() as f:
-                    ts.dump(f.name, skip_h5close=True)
-                    hfile = h5py.File(f.name, "r+")
-                    hfile.attrs['format_version'] = bad_version
-                    hfile.close()
-                    other_ts = _msprime.TreeSequence()
-                    self.assertRaises(
-                        _msprime.LibraryError, other_ts.load, f.name)
-
-    def test_optional_population(self):
-        if enable_h5py_tests:
-            ts = list(self.get_example_tree_sequences())[-1]
-            # See above for why we import h5py here.
-            import h5py
-            with tempfile.NamedTemporaryFile() as f:
-                ts.dump(f.name, skip_h5close=True)
-                hfile = h5py.File(f.name, "r+")
-                del hfile["trees"]["population"]
-                hfile.close()
-                other_ts = _msprime.TreeSequence()
-                other_ts.load(f.name)
-                self.assertEqual(
-                    ts.get_num_records(), other_ts.get_num_records())
-                for j in range(other_ts.get_num_records()):
-                    record = other_ts.get_record(j)
-                    pop = record[-1]
-                    self.assertEqual(pop, NULL_POPULATION)
-                    old_record = ts.get_record(j)
-                    self.assertEqual(record[:-1], old_record[:-1])
-
-    def test_load_bad_formats(self):
-        # try loading a bunch of files in various formats.
-        ts = _msprime.TreeSequence()
-        with tempfile.NamedTemporaryFile("wb") as f:
-            # First, check the emtpy file.
-            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
-            # Now some ascii text
-            f.write(b"Some ASCII text")
-            f.flush()
-            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
-            f.seek(0)
-            # Now write 8k of random bytes
-            f.write(os.urandom(8192))
-            f.flush()
-            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
-
     def test_not_initialised_after_init_error(self):
         ts = _msprime.TreeSequence()
         self.assertRaises(TypeError, ts.create)
@@ -1745,7 +1581,7 @@ class TestTreeSequence(LowLevelTestCase):
         Verifies that we can dump a copy of the specified tree sequence
         to the specified file, and load an identical copy.
         """
-        ts.dump(outfile.name)
+        ts.dump(outfile.name, skip_h5close=True)
         ts2 = _msprime.TreeSequence()
         ts2.load(outfile.name)
         self.assertEqual(ts.get_sample_size(), ts2.get_sample_size())
@@ -1914,6 +1750,218 @@ class TestTreeSequence(LowLevelTestCase):
     def test_get_record_interface(self):
         for ts in self.get_example_tree_sequences():
             self.verify_get_record_interface(ts)
+
+
+class TestHdf5Format(LowLevelTestCase):
+    """
+    Tests on the HDF5 file format.
+    """
+
+    def verify_mutation_parameters_json(self, json_str):
+        parameters = json.loads(json_str.decode())
+        self.assertIn("scaled_mutation_rate", parameters)
+        self.assertIsInstance(parameters["scaled_mutation_rate"], int, float)
+
+    def verify_tree_parameters_json(self, json_str):
+        parameters = json.loads(json_str.decode())
+        self.assertIn("scaled_recombination_rate", parameters)
+        self.assertIn("sample_size", parameters)
+        self.assertIn("num_loci", parameters)
+        self.assertIn("population_configuration", parameters)
+        self.assertIn("migration_matrix", parameters)
+        self.assertIn("demographic_events", parameters)
+        self.assertIsInstance(
+            parameters["scaled_recombination_rate"], int, float)
+        self.assertIsInstance(parameters["sample_size"], int)
+        self.assertIsInstance(parameters["num_loci"], int)
+        self.assertIsInstance(parameters["population_configuration"], list)
+        self.assertIsInstance(parameters["migration_matrix"], list)
+        self.assertIsInstance(parameters["demographic_events"], list)
+
+    def verify_environment_json(self, json_str):
+        environment = json.loads(json_str.decode())
+        self.assertIn("msprime_version", environment)
+        version = environment["msprime_version"]
+        self.assertEqual(version, _library_version)
+        self.assertIn("hdf5_version", environment)
+        version = list(map(int, environment["hdf5_version"].split(".")))
+        self.assertEqual(len(version), 3)
+        self.assertIn("gsl_version", environment)
+        version = list(map(int, environment["gsl_version"].split(".")))
+        self.assertEqual(len(version), 2)
+        uname_keys = [
+            "kernel_name", "kernel_release", "kernel_version",
+            "hardware_identifier"]
+        for key in uname_keys:
+            self.assertIn(key, environment)
+
+    def verify_tree_dump_format(self, ts, outfile):
+        uint8 = "uint8"
+        uint32 = "uint32"
+        float64 = "float64"
+        # This is an ugly hack here, but we have to do it to
+        # be able to use h5py, as it keeps some global state
+        # open, and we nuke this when we call h5close() to clean up.
+        import h5py
+        ts.dump(outfile.name, skip_h5close=True)
+        self.assertTrue(os.path.exists(outfile.name))
+        self.assertGreater(os.path.getsize(outfile.name), 0)
+        root = h5py.File(outfile.name, "r")
+        keys = set(root.keys())
+        self.assertLessEqual(keys, set(["mutations", "trees", "samples"]))
+        self.assertIn("trees", keys)
+        self.assertIn("samples", keys)
+        if ts.get_num_mutations() == 0:
+            self.assertNotIn("mutations", keys)
+        else:
+            self.assertIn("mutations", keys)
+        # Check the basic root attributes
+        format_version = root.attrs['format_version']
+        self.assertEqual(format_version[0], 1)
+        self.assertEqual(format_version[1], 0)
+        self.assertEqual(root.attrs["sample_size"], ts.get_sample_size())
+        self.assertEqual(
+            root.attrs["sequence_length"], ts.get_sequence_length())
+        if ts.get_num_mutations() > 0:
+            g = root["mutations"]
+            # Check the parameters and environment attributes
+            self.verify_mutation_parameters_json(g.attrs["parameters"])
+            self.verify_environment_json(g.attrs["environment"])
+            fields = [("node", uint32), ("position", float64)]
+            self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
+            for name, dtype in fields:
+                self.assertEqual(len(g[name].shape), 1)
+                self.assertEqual(g[name].shape[0], ts.get_num_mutations())
+                self.assertEqual(g[name].dtype, dtype)
+        g = root["trees"]
+        self.verify_tree_parameters_json(g.attrs["parameters"])
+        self.verify_environment_json(g.attrs["environment"])
+        fields = [
+            ("left", float64, 1), ("right", float64, 1),
+            ("node", uint32, 1), ("children", uint32, 2),
+            ("population", uint8, 1), ("time", float64, 1)]
+        self.assertEqual(set(g.keys()), set([name for name, _, _ in fields]))
+        for name, dtype, dims in fields:
+            self.assertEqual(len(g[name].shape), dims)
+            self.assertEqual(g[name].shape[0], ts.get_num_records())
+            if dims == 2:
+                self.assertEqual(g[name].shape[1], 2)
+            self.assertEqual(g[name].dtype, dtype)
+        g = root["samples"]
+        fields = [("population", uint8)]
+        self.assertEqual(set(g.keys()), set([name for name, _, in fields]))
+        for name, dtype in fields:
+            self.assertEqual(len(g[name].shape), 1)
+            self.assertEqual(g[name].shape[0], ts.get_sample_size())
+            self.assertEqual(g[name].dtype, dtype)
+        root.close()
+
+    def test_dump_format(self):
+        if enable_h5py_tests:
+            for ts in self.get_example_tree_sequences():
+                with tempfile.NamedTemporaryFile() as f:
+                    self.verify_tree_dump_format(ts, f)
+
+    # @unittest.skip("Skipping due to weird h5py behaviour")
+    def test_load_malformed_hdf5(self):
+        if enable_h5py_tests:
+            # See above for why we import h5py here.
+            import h5py
+            ts = _msprime.TreeSequence()
+            with tempfile.NamedTemporaryFile() as f:
+                hfile = h5py.File(f.name, "w")
+                # First try the empty hdf5 file.
+                hfile.close()
+                self.assertRaises(
+                    _msprime.LibraryError, ts.load, f.name, skip_h5close=True)
+
+    @unittest.skip("Skipping due to weird h5py behaviour")
+    # This test works when it's run on its own, but fails when other tests
+    # are run.
+    def test_version_load_error(self):
+        if enable_h5py_tests:
+            # See above for why we import h5py here.
+            import h5py
+            reload(h5py)
+            ts = list(self.get_example_tree_sequences())[0]
+            for bad_version in [(0, 1), (0, 8), (2, 0)]:
+                with tempfile.NamedTemporaryFile() as f:
+                    ts.dump(f.name, skip_h5close=True)
+                    hfile = h5py.File(f.name, "r+")
+                    hfile.attrs['format_version'] = bad_version
+                    hfile.close()
+                    other_ts = _msprime.TreeSequence()
+                    self.assertRaises(
+                        _msprime.LibraryError, other_ts.load, f.name)
+
+    @unittest.skip("Skipping due to weird h5py behaviour")
+    def test_optional_population(self):
+        if enable_h5py_tests:
+            ts = list(self.get_example_tree_sequences())[-1]
+            # See above for why we import h5py here.
+            import h5py
+            reload(h5py)
+            with tempfile.NamedTemporaryFile() as f:
+                ts.dump(f.name, skip_h5close=True)
+                hfile = h5py.File(f.name, "r+")
+                del hfile["trees"]["population"]
+                hfile.close()
+                del hfile
+                other_ts = _msprime.TreeSequence()
+                other_ts.load(f.name)
+                self.assertEqual(
+                    ts.get_num_records(), other_ts.get_num_records())
+                for j in range(other_ts.get_num_records()):
+                    record = other_ts.get_record(j)
+                    pop = record[-1]
+                    self.assertEqual(pop, NULL_POPULATION)
+                    old_record = ts.get_record(j)
+                    self.assertEqual(record[:-1], old_record[:-1])
+
+    def test_optional_samples(self):
+        if enable_h5py_tests:
+            ts = list(self.get_example_tree_sequences())[-1]
+            # See above for why we import h5py here.
+            import h5py
+            reload(h5py)
+            with tempfile.NamedTemporaryFile() as f:
+                ts.dump(f.name, skip_h5close=True)
+                hfile = h5py.File(f.name, "r+")
+                del hfile["samples"]["population"]
+                hfile.close()
+                del hfile
+                other_ts = _msprime.TreeSequence()
+                other_ts.load(f.name)
+                self.assertEqual(
+                    ts.get_num_records(), other_ts.get_num_records())
+                for j in range(ts.get_num_records()):
+                    record = other_ts.get_record(j)
+                    old_record = ts.get_record(j)
+                    self.assertEqual(record, old_record)
+                self.assertEqual(
+                    ts.get_mutations(), other_ts.get_mutations())
+                # Check that we get the NULL for leaf nodes.
+                st = _msprime.SparseTree(other_ts)
+                for _ in _msprime.SparseTreeIterator(other_ts, st):
+                    for j in range(ts.get_sample_size()):
+                        self.assertEqual(
+                            st.get_population(j), NULL_POPULATION)
+
+    def test_load_bad_formats(self):
+        # try loading a bunch of files in various formats.
+        ts = _msprime.TreeSequence()
+        with tempfile.NamedTemporaryFile("wb") as f:
+            # First, check the emtpy file.
+            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
+            # Now some ascii text
+            f.write(b"Some ASCII text")
+            f.flush()
+            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
+            f.seek(0)
+            # Now write 8k of random bytes
+            f.write(os.urandom(8192))
+            f.flush()
+            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
 
 
 class TestNewickConverter(LowLevelTestCase):
