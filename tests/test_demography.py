@@ -22,6 +22,7 @@ Test cases for demographic events in msprime.
 from __future__ import print_function
 from __future__ import division
 
+import itertools
 import math
 import tempfile
 import unittest
@@ -309,3 +310,169 @@ class TestDemographyPrinter(unittest.TestCase):
             msprime.MigrationRateChange(0.4, matrix_index=(1, 0), rate=1)]
         self.verify_debug(
             population_configurations, migration_matrix, demographic_events)
+
+
+class TestCoalescenceLocations(unittest.TestCase):
+    """
+    Tests that coalescences happen in demes that they are supposed to
+    for simple models.
+    """
+    def test_two_pops_single_sample(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(0),
+        ]
+        t = 5
+        demographic_events = [
+            msprime.MassMigration(time=t, source=0, destination=2),
+            msprime.MassMigration(time=t, source=1, destination=2),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1)
+        tree = next(ts.trees())
+        self.assertEqual(tree.get_root(), 2)
+        self.assertGreater(tree.get_time(2), t / 4)
+        self.assertEqual(tree.get_population(0), 0)
+        self.assertEqual(tree.get_population(1), 1)
+        self.assertEqual(tree.get_population(2), 2)
+
+    def test_two_pops_multiple_samples(self):
+        # Made absolutely sure that all samples have coalesced within
+        # the source deme
+        n = 10
+        t = 100
+        population_configurations = [
+            msprime.PopulationConfiguration(n // 2),
+            msprime.PopulationConfiguration(n // 2),
+            msprime.PopulationConfiguration(0),
+        ]
+        demographic_events = [
+            msprime.MassMigration(time=t, source=0, destination=2),
+            msprime.MassMigration(time=t, source=1, destination=2),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1)
+        scaled_t = t / 4
+        tree = next(ts.trees())
+        self.assertEqual(tree.get_root(), 2 * n - 2)
+        self.assertGreater(tree.get_time(tree.get_root()), scaled_t)
+        for j in range(n // 2):
+            self.assertEqual(tree.get_population(j), 0)
+            self.assertEqual(tree.get_population(n // 2 + j), 1)
+        self.assertEqual(tree.get_population(tree.get_root()), 2)
+
+    def test_three_pops_migration(self):
+        n = 9
+        t = 100
+        population_configurations = [
+            msprime.PopulationConfiguration(n // 3),
+            msprime.PopulationConfiguration(n // 3),
+            msprime.PopulationConfiguration(n // 3),
+        ]
+        # Start migrating everyone into 0 after t
+        demographic_events = [
+            msprime.MigrationRateChange(time=t, matrix_index=(1, 0), rate=1),
+            msprime.MigrationRateChange(time=t, matrix_index=(2, 0), rate=1),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1)
+        scaled_t = t / 4
+        tree = next(ts.trees())
+        self.assertEqual(tree.get_root(), 2 * n - 2)
+        self.assertGreater(tree.get_time(tree.get_root()), scaled_t)
+        for j in range(n // 3):
+            self.assertEqual(tree.get_population(j), 0)
+            self.assertEqual(tree.get_population(n // 3 + j), 1)
+            self.assertEqual(tree.get_population(2 * (n // 3) + j), 2)
+        # The MRCAs of 0, 1 and 3 must have occured in deme 0
+        self.assertEqual(tree.get_population(tree.get_mrca(0, n // 3)), 0)
+        self.assertEqual(
+            tree.get_population(tree.get_mrca(0, 2 * (n // 3))), 0)
+        # The MRCAs of all the samples within each deme must have
+        # occured within that deme
+        for k in range(3):
+            deme_samples = range(k * (n // 3), (k + 1) * (n // 3))
+            for u, v in itertools.combinations(deme_samples, 2):
+                mrca_pop = tree.get_population(tree.get_mrca(u, v))
+                self.assertEqual(k, mrca_pop)
+
+    def test_four_pops_three_mass_migrations(self):
+        t1 = 1
+        t2 = 100
+        t3 = 200
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+        ]
+        # We migrate the lineages to the next step by step.
+        demographic_events = [
+            msprime.MassMigration(time=t1, source=0, destination=1),
+            msprime.MassMigration(time=t2, source=1, destination=2),
+            msprime.MassMigration(time=t3, source=2, destination=3),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1)
+        tree = next(ts.trees())
+        # Check the leaves have the correct population.
+        for j in range(4):
+            self.assertEqual(tree.get_population(j), j)
+        # The MRCA of 0 and 1 should happen in 1 at time > t1, and < t2
+        u = tree.get_mrca(0, 1)
+        self.assertEqual(u, 4)
+        self.assertEqual(tree.get_population(u), 1)
+        g = tree.get_time(u) * 4
+        self.assertTrue(t1 < g < t2)
+        # The MRCA of 0, 1 and 2 should happen in 2 at time > t2 and < t3
+        u = tree.get_mrca(0, 2)
+        self.assertEqual(u, 5)
+        self.assertEqual(tree.get_population(u), 2)
+        g = tree.get_time(u) * 4
+        self.assertTrue(t2 < g < t3)
+        # The MRCA of 0, 1, 2 and 3 should happen in 3 at time > t3
+        u = tree.get_mrca(0, 3)
+        self.assertEqual(u, 6)
+        self.assertEqual(tree.get_population(u), 3)
+        g = tree.get_time(u) * 4
+        self.assertGreater(g, t3)
+
+    def test_empty_demes(self):
+        t1 = 1
+        t2 = 100
+        t3 = 200
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(0),
+            msprime.PopulationConfiguration(0),
+            msprime.PopulationConfiguration(1),
+        ]
+        # We migrate the lineages to the next step by step.
+        demographic_events = [
+            msprime.MassMigration(time=t1, source=0, destination=1),
+            msprime.MassMigration(time=t2, source=1, destination=2),
+            msprime.MassMigration(time=t3, source=2, destination=3),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1)
+        tree = next(ts.trees())
+        # Check the leaves have the correct population.
+        self.assertEqual(tree.get_population(0), 0)
+        self.assertEqual(tree.get_population(1), 3)
+        # The MRCA of 0, 1 in 3 at time > t3
+        u = tree.get_mrca(0, 1)
+        self.assertEqual(u, 2)
+        self.assertEqual(tree.get_population(u), 3)
+        g = tree.get_time(u) * 4
+        self.assertGreater(g, t3)

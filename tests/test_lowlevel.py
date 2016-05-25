@@ -481,7 +481,7 @@ class TestSimulationState(LowLevelTestCase):
             else:
                 self.assertEqual(segment_am + record_am, n)
 
-    def verify_trees_equal(self, n, pi, tau, sparse_tree):
+    def verify_trees_equal(self, n, pi, tau, pop, sparse_tree):
         """
         Verifies that the specified maps are equivalent to the specified
         sparse tree object.
@@ -489,13 +489,16 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(n, sparse_tree.get_sample_size())
         pi_p = {}
         tau_p = {}
+        pop_p = {}
         for j in range(n):
             u = j
             while u != NULL_NODE and u not in pi_p:
+                pop_p[u] = sparse_tree.get_population(u)
                 pi_p[u] = sparse_tree.get_parent(u)
                 tau_p[u] = sparse_tree.get_time(u)
                 u = pi_p[u]
         self.assertEqual(pi_p, pi)
+        self.assertEqual(pop_p, pop)
         self.assertEqual(tau_p, tau)
         self.assertEqual(pi_p[sparse_tree.get_root()], NULL_NODE)
 
@@ -526,6 +529,10 @@ class TestSimulationState(LowLevelTestCase):
         n = sim.get_sample_size()
         pi = {}
         tau = {j: 0 for j in range(n)}
+        pops = {j: 0 for j in range(n)}
+        # We only support single population here; tests for population
+        # assignment are done in the demography tests.
+        self.assertEqual(sim.get_num_populations(), 1)
         last_l = 0
         last_t = 0
         num_trees = 0
@@ -545,7 +552,7 @@ class TestSimulationState(LowLevelTestCase):
                 # Make sure this is equal to the sparse tree we get from
                 # the iterator.
                 st = next(st_iter)
-                self.verify_trees_equal(n, pi, tau, st)
+                self.verify_trees_equal(n, pi, tau, pops, st)
                 self.verify_mrcas(st)
                 del pi[v]
                 num_trees += 1
@@ -557,9 +564,11 @@ class TestSimulationState(LowLevelTestCase):
                 for c in other_children:
                     del pi[c]
                 del tau[p]
+                del pops[p]
             pi[children[0]] = node
             pi[children[1]] = node
             tau[node] = t
+            pops[node] = pop
             # Ensure that records are sorted by time within a block
             self.assertLessEqual(last_t, t)
         for j in range(n):
@@ -571,7 +580,7 @@ class TestSimulationState(LowLevelTestCase):
         pi[v] = -1
         self.verify_sparse_tree_dict(n, pi, tau)
         st = next(st_iter)
-        self.verify_trees_equal(n, pi, tau, st)
+        self.verify_trees_equal(n, pi, tau, pops, st)
         num_trees += 1
         self.assertLessEqual(num_trees, sim.get_num_breakpoints() + 2)
         self.assertRaises(StopIteration, next, st_iter)
@@ -1882,7 +1891,6 @@ class TestHdf5Format(LowLevelTestCase):
         if enable_h5py_tests:
             # See above for why we import h5py here.
             import h5py
-            reload(h5py)
             ts = list(self.get_example_tree_sequences())[0]
             for bad_version in [(0, 1), (0, 8), (2, 0)]:
                 with tempfile.NamedTemporaryFile() as f:
@@ -1900,7 +1908,6 @@ class TestHdf5Format(LowLevelTestCase):
             ts = list(self.get_example_tree_sequences())[-1]
             # See above for why we import h5py here.
             import h5py
-            reload(h5py)
             with tempfile.NamedTemporaryFile() as f:
                 ts.dump(f.name, skip_h5close=True)
                 hfile = h5py.File(f.name, "r+")
@@ -1923,7 +1930,6 @@ class TestHdf5Format(LowLevelTestCase):
             ts = list(self.get_example_tree_sequences())[-1]
             # See above for why we import h5py here.
             import h5py
-            reload(h5py)
             with tempfile.NamedTemporaryFile() as f:
                 ts.dump(f.name, skip_h5close=True)
                 hfile = h5py.File(f.name, "r+")
