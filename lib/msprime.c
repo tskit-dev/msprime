@@ -2016,6 +2016,11 @@ msp_reset(msp_t *self)
     }
     self->time = 0.0;
     self->num_coalescence_records = 0;
+    self->num_re_events = 0;
+    self->num_ca_events = 0;
+    self->num_trapped_re_events = 0;
+    self->num_multiple_re_events = 0;
+    memset(self->num_migration_events, 0, N * N * sizeof(size_t));
     self->state = MSP_STATE_INITIALISED;
 out:
     return ret;

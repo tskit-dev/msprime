@@ -644,7 +644,7 @@ static void
 run_simulate(char *conf_file)
 {
     int ret = -1;
-    int result;
+    int result, j;
     double start_time, end_time;
     mutation_params_t mutation_params;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -684,20 +684,26 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    printf("Simulation::\n");
-    result = 1;
-    while (result == 1) {
-        result = msp_run(msp, DBL_MAX, 1);
-        if (result < 0) {
-            ret = result;
+    for (j = 0; j < 4; j++) {
+        ret = msp_reset(msp);
+        if (ret != 0) {
             goto out;
         }
-        /* msp_verify(msp); */
-        /* ret = msp_print_state(msp); */
-    }
-    ret = msp_print_state(msp);
-    if (ret != 0) {
-        goto out;
+        printf("Simulation run %d::\n", j);
+        result = 1;
+        while (result == 1) {
+            result = msp_run(msp, DBL_MAX, 1);
+            if (result < 0) {
+                ret = result;
+                goto out;
+            }
+            msp_verify(msp);
+            /* ret = msp_print_state(msp); */
+        }
+        ret = msp_print_state(msp);
+        if (ret != 0) {
+            goto out;
+        }
     }
 
     recomb_map_print_state(recomb_map);
@@ -725,7 +731,6 @@ run_simulate(char *conf_file)
     }
     tree_sequence_print_state(tree_seq);
 
-        int j;
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);
             if (ret != 0) {

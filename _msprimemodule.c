@@ -1395,6 +1395,25 @@ out:
 }
 
 static PyObject *
+Simulator_reset(Simulator *self)
+{
+    PyObject *ret = NULL;
+    int status;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    status = msp_reset(self->sim);
+    if (status < 0) {
+        handle_library_error(status);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_debug_demography(Simulator *self)
 {
     PyObject *ret = NULL;
@@ -1492,6 +1511,8 @@ static PyMethodDef Simulator_methods[] = {
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\
             if sample has coalesced and False otherwise." },
+    {"reset", (PyCFunction) Simulator_reset, METH_NOARGS,
+            "Resets the simulation so it's ready for another replicate."},
     {"run_event", (PyCFunction) Simulator_run_event, METH_NOARGS,
             "Simulates exactly one event. Returns True\
             if sample has coalesced and False otherwise." },

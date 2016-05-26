@@ -685,65 +685,70 @@ class TestSimulationState(LowLevelTestCase):
             avl_node_block_size=avl_node_block_size,
             node_mapping_block_size=node_mapping_block_size,
             coalescence_record_block_size=coalescence_record_block_size)
-        # Check initial state
-        self.assertEqual(0, sim.get_num_breakpoints())
-        self.assertEqual(0.0, sim.get_time())
-        self.assertEqual(n, sim.get_num_ancestors())
-        self.assertEqual(0, sim.get_num_common_ancestor_events())
-        self.assertEqual(0, sim.get_num_recombination_events())
-        self.assertEqual(0, sum(sim.get_num_migration_events()))
-        self.assertGreater(sim.get_num_avl_node_blocks(), 0)
-        self.assertGreater(sim.get_num_segment_blocks(), 0)
-        self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
-        self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
-        self.assertEqual(sim.get_sample_size(), n)
-        self.assertEqual(sim.get_num_loci(), m)
-        self.assertEqual(n, len(sim.get_ancestors()))
-        self.assertEqual(sim.get_migration_matrix(), migration_matrix)
-        self.assertEqual(
-            sim.get_population_configuration(), population_configuration)
-        # Check the configuration json
-        config = {
-            "sample_size": n, "num_loci": m,
-            "scaled_recombination_rate": rho,
-            "migration_matrix": migration_matrix,
-            "demographic_events": demographic_events,
-            "population_configuration": population_configuration
-        }
-        self.assertEqual(json.loads(sim.get_configuration_json()), config)
-        a = 0
-        nodes = set()
-        pop_sizes = [0 for _ in population_configuration]
-        for ind in sim.get_ancestors():
-            self.assertEqual(len(ind), 1)
-            l, r, node, pop_id = ind[0]
-            pop_sizes[pop_id] += 1
-            self.assertEqual(l, 0)
-            self.assertEqual(r, m)
-            self.assertFalse(node in nodes)
-            nodes.add(node)
-            a += 1
-        for pop_config, pop_size in zip(population_configuration, pop_sizes):
-            self.assertEqual(pop_config["sample_size"], pop_size)
-        self.assertEqual(a, n)
-        for j in range(3):
-            # Check the getters to ensure we've got the right values.
-            self.assertEqual(n, sim.get_sample_size())
-            self.assertEqual(m, sim.get_num_loci())
-            self.assertEqual(rho, sim.get_scaled_recombination_rate())
-            self.assertEqual(max_memory, sim.get_max_memory())
-            self.assertEqual(segment_block_size, sim.get_segment_block_size())
+        for _ in range(3):
+            # Check initial state
+            self.assertEqual(0, sim.get_num_breakpoints())
+            self.assertEqual(0.0, sim.get_time())
+            self.assertEqual(n, sim.get_num_ancestors())
+            self.assertEqual(0, sim.get_num_common_ancestor_events())
+            self.assertEqual(0, sim.get_num_recombination_events())
+            self.assertEqual(0, sum(sim.get_num_migration_events()))
+            self.assertGreater(sim.get_num_avl_node_blocks(), 0)
+            self.assertGreater(sim.get_num_segment_blocks(), 0)
+            self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
+            self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
+            self.assertEqual(sim.get_sample_size(), n)
+            self.assertEqual(sim.get_num_loci(), m)
+            self.assertEqual(n, len(sim.get_ancestors()))
+            self.assertEqual(sim.get_migration_matrix(), migration_matrix)
             self.assertEqual(
-                avl_node_block_size, sim.get_avl_node_block_size())
-            self.assertEqual(
-                node_mapping_block_size, sim.get_node_mapping_block_size())
-            self.assertEqual(
-                coalescence_record_block_size,
-                sim.get_coalescence_record_block_size())
+                sim.get_population_configuration(), population_configuration)
+            # Check the configuration json
+            config = {
+                "sample_size": n, "num_loci": m,
+                "scaled_recombination_rate": rho,
+                "migration_matrix": migration_matrix,
+                "demographic_events": demographic_events,
+                "population_configuration": population_configuration
+            }
             self.assertEqual(json.loads(sim.get_configuration_json()), config)
-            # Run this for a tiny amount of time and check the state
-            self.assertFalse(sim.run(1e-8))
-            self.verify_running_simulation(sim)
+            a = 0
+            nodes = set()
+            pop_sizes = [0 for _ in population_configuration]
+            for ind in sim.get_ancestors():
+                self.assertEqual(len(ind), 1)
+                l, r, node, pop_id = ind[0]
+                pop_sizes[pop_id] += 1
+                self.assertEqual(l, 0)
+                self.assertEqual(r, m)
+                self.assertFalse(node in nodes)
+                nodes.add(node)
+                a += 1
+            for pop_config, pop_size in zip(
+                    population_configuration, pop_sizes):
+                self.assertEqual(pop_config["sample_size"], pop_size)
+            self.assertEqual(a, n)
+            for j in range(3):
+                # Check the getters to ensure we've got the right values.
+                self.assertEqual(n, sim.get_sample_size())
+                self.assertEqual(m, sim.get_num_loci())
+                self.assertEqual(rho, sim.get_scaled_recombination_rate())
+                self.assertEqual(max_memory, sim.get_max_memory())
+                self.assertEqual(
+                    segment_block_size, sim.get_segment_block_size())
+                self.assertEqual(
+                    avl_node_block_size, sim.get_avl_node_block_size())
+                self.assertEqual(
+                    node_mapping_block_size, sim.get_node_mapping_block_size())
+                self.assertEqual(
+                    coalescence_record_block_size,
+                    sim.get_coalescence_record_block_size())
+                self.assertEqual(
+                    json.loads(sim.get_configuration_json()), config)
+                # Run this for a tiny amount of time and check the state
+                self.assertFalse(sim.run(1e-8))
+                self.verify_running_simulation(sim)
+            sim.reset()
 
     def verify_tree_diffs(self, tree_sequence):
         n = tree_sequence.get_sample_size()
@@ -804,22 +809,24 @@ class TestSimulationState(LowLevelTestCase):
             max_memory=10 * mb, segment_block_size=1000,
             avl_node_block_size=1000, node_mapping_block_size=1000,
             coalescence_record_block_size=1000)
-        # Run the sim for a tiny amount of time and check.
-        self.assertFalse(sim.run(1e-8))
-        self.verify_running_simulation(sim)
-        increment = 0.01
-        t = sim.get_time() + increment
-        while not sim.run(t):
-            self.assertGreaterEqual(sim.get_time(), t)
+        for _ in range(3):
+            # Run the sim for a tiny amount of time and check.
+            self.assertFalse(sim.run(1e-8))
             self.verify_running_simulation(sim)
-            t += increment
-        self.verify_completed_simulation(sim)
-        # Check the tree sequence.
-        tree_sequence = _msprime.TreeSequence()
-        recomb_map = uniform_recombination_map(sim)
-        tree_sequence.create(sim, recomb_map)
-        self.verify_tree_diffs(tree_sequence)
-        self.verify_leaf_counts(tree_sequence)
+            increment = 0.01
+            t = sim.get_time() + increment
+            while not sim.run(t):
+                self.assertGreaterEqual(sim.get_time(), t)
+                self.verify_running_simulation(sim)
+                t += increment
+            self.verify_completed_simulation(sim)
+            # Check the tree sequence.
+            tree_sequence = _msprime.TreeSequence()
+            recomb_map = uniform_recombination_map(sim)
+            tree_sequence.create(sim, recomb_map)
+            self.verify_tree_diffs(tree_sequence)
+            self.verify_leaf_counts(tree_sequence)
+            sim.reset()
 
     def test_random_sims(self):
         num_random_sims = 10
@@ -1482,12 +1489,22 @@ class TestSimulator(LowLevelTestCase):
             else:
                 self.assertGreater(num_events, 0)
 
+    def test_reset(self):
+        sim = _msprime.Simulator(10, _msprime.RandomGenerator(1))
+        times = set()
+        for _ in range(10):
+            sim.run()
+            t = sim.get_time()
+            self.assertNotIn(t, times)
+            times.add(t)
+            sim.reset()
+            self.assertEqual(sim.get_time(), 0)
+
 
 class TestTreeSequence(LowLevelTestCase):
     """
     Tests for the low-level interface for the TreeSequence.
     """
-
     def test_seed_equality(self):
         rng = _msprime.RandomGenerator(10)
         simulations = [
