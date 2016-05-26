@@ -432,7 +432,7 @@ def create_simulation_runner(parser, arg_list):
         demographic_events.append(
             (index, msprime.PopulationParametersChange(
                 time=t, initial_size=x, growth_rate=0, population_id=pid)))
-    for index, (t, source, dest) in args.population_split:
+    for index, (t, dest, source) in args.population_split:
         check_event_time(parser, t)
         source_id = convert_population_id(parser, source, num_populations)
         dest_id = convert_population_id(parser, dest, num_populations)
