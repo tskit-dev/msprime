@@ -600,18 +600,18 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 for c in sim.get_population_configurations()]
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 -1"),
-            [(1, -1), (1, 0), (1, 0)])
+            [(None, -1), (None, 0), (None, 0)])
         self.assertEqual(
             f("2 1 -T -I 4 2 0 0 0 -g 1 1 -g 2 2 -g 3 3"),
-            [(1, 1), (1, 2), (1, 3), (1, 0)])
+            [(None, 1), (None, 2), (None, 3), (None, 0)])
         # A -g should override a -G
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 2 -G -1"),
-            [(1, 2), (1, -1), (1, -1)])
+            [(None, 2), (None, -1), (None, -1)])
         # The last -g should be effective
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 1 -g 1 -1"),
-            [(1, -1), (1, 0), (1, 0)])
+            [(None, -1), (None, 0), (None, 0)])
 
     def test_population_size(self):
         def f(args):
@@ -621,17 +621,17 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 for c in sim.get_population_configurations()]
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -n 1 2"),
-            [(2, 0), (1, 0), (1, 0)])
+            [(2, 0), (None, 0), (None, 0)])
         self.assertEqual(
             f("2 1 -T -I 4 2 0 0 0 -n 1 1 -n 2 2 -n 3 3"),
-            [(1, 0), (2, 0), (3, 0), (1, 0)])
+            [(1, 0), (2, 0), (3, 0), (None, 0)])
         # The last -n should be effective
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -n 1 1 -n 1 0.1"),
-            [(0.1, 0), (1, 0), (1, 0)])
+            [(0.1, 0), (None, 0), (None, 0)])
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 2 -n 1 0.1"),
-            [(0.1, 2), (1, 0), (1, 0)])
+            [(0.1, 2), (None, 0), (None, 0)])
 
     def test_population_growth_rate_change(self):
         def f(args):
@@ -761,13 +761,13 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                         self.assertEqual(event.rate, 0.0)
                         self.assertEqual(event.matrix_index, (j, dest))
                         k += 1
-        check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 0, 1)])
+        check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 1, 0)])
         check(
             3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
-            [(2.2, 0, 1), (2.3, 0, 2)])
+            [(2.2, 1, 0), (2.3, 2, 0)])
         check(
             4, "2 1 -T -I 4 2 0 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
-            [(2.2, 0, 1), (2.3, 0, 2)])
+            [(2.2, 1, 0), (2.3, 2, 0)])
 
     def test_admixture(self):
         def check(N, args, results):
