@@ -745,7 +745,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             k = 0
             for result in results:
                 event = events[k]
-                dest = event.destination
+                source = event.source
                 self.assertEqual(event.type, "mass_migration")
                 self.assertEqual(event.time, result[0] * 4)
                 self.assertEqual(event.source, result[1])
@@ -754,20 +754,20 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 # population that didn't exist before now.
                 k += 1
                 for j in range(N):
-                    if j != dest:
+                    if j != source:
                         event = events[k]
                         self.assertEqual(event.type, "migration_rate_change")
                         self.assertEqual(event.time, result[0] * 4)
                         self.assertEqual(event.rate, 0.0)
-                        self.assertEqual(event.matrix_index, (j, dest))
+                        self.assertEqual(event.matrix_index, (j, source))
                         k += 1
-        check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 1, 0)])
+        check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 0, 1)])
         check(
             3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
-            [(2.2, 1, 0), (2.3, 2, 0)])
+            [(2.2, 0, 1), (2.3, 0, 2)])
         check(
             4, "2 1 -T -I 4 2 0 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
-            [(2.2, 1, 0), (2.3, 2, 0)])
+            [(2.2, 0, 1), (2.3, 0, 2)])
 
     def test_admixture(self):
         def check(N, args, results):

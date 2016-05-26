@@ -432,7 +432,7 @@ def create_simulation_runner(parser, arg_list):
         demographic_events.append(
             (index, msprime.PopulationParametersChange(
                 time=t, initial_size=x, growth_rate=0, population_id=pid)))
-    for index, (t, dest, source) in args.population_split:
+    for index, (t, source, dest) in args.population_split:
         check_event_time(parser, t)
         source_id = convert_population_id(parser, source, num_populations)
         dest_id = convert_population_id(parser, dest, num_populations)
@@ -440,8 +440,8 @@ def create_simulation_runner(parser, arg_list):
             (index, msprime.MassMigration(t, source_id, dest_id, 1.0)))
         # Set the migration rates for source to 0
         for j in range(num_populations):
-            if j != dest_id:
-                event = msprime.MigrationRateChange(t, 0.0, (j, dest_id))
+            if j != source_id:
+                event = msprime.MigrationRateChange(t, 0.0, (j, source_id))
                 demographic_events.append((index, event))
 
     # Demographic events that affect the migration matrix
