@@ -25,7 +25,7 @@ contextual information.
 The root group contains a number of attributes, describing the basic
 properties of data set. The ``format_version`` attribute is a
 pair ``(major, minor)`` describing the file format version. This is
-document describes version 1.0.
+document describes version 1.1.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
@@ -61,15 +61,16 @@ this group (assuming we have N records).
 
 The order of the records is arbitrary, and should not be relied on.
 
-===============     ==============      =====
-Path                Type                Dim
-===============     ==============      =====
-/trees/left         H5T_IEEE_F64LE      N
-/trees/right        H5T_IEEE_F64LE      N
-/trees/node         H5T_STD_U32LE       N
-/trees/time         H5T_IEEE_F64LE      N
-/trees/children     H5T_STD_U32LE       (N, 2)
-===============     ==============      =====
+=================       ==============      ======  ========
+Path                    Type                Dim     Required
+=================       ==============      ======  ========
+/trees/left             H5T_IEEE_F64LE      N       Yes
+/trees/right            H5T_IEEE_F64LE      N       Yes
+/trees/node             H5T_STD_U32LE       N       Yes
+/trees/time             H5T_IEEE_F64LE      N       Yes
+/trees/children         H5T_STD_U32LE       (N, 2)  Yes
+/trees/population       H5T_STD_U8LE        N       No
+=================       ==============      ======  ========
 
 The ``trees`` group also contains some attributes defining provenance
 information required to replicate simulations.
@@ -122,3 +123,20 @@ Path                Type                Dim         Description
 /parameters         H5T_STRING          Scalar      The parameters used to simulate the trees.
 /environment        H5T_STRING          Scalar      The simulation environment.
 ================    ==============      ======      ===========
+
+
++++++++++++++++
+Samples group
++++++++++++++++
+
+The ``samples`` group is optional, and records information about the
+samples (i.e. leaf nodes). Currently the ``samples`` group contains
+a single vector ``population`` which records the population ID
+of each sample. The size of this vector must be equal to the
+``sample_size`` specified in the root attribute.
+
+===================     ==============      =====
+Path                    Type                Dim
+===================     ==============      =====
+/samples/population     H5T_STD_U8LE        n
+===================     ==============      =====
