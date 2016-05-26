@@ -926,10 +926,10 @@ class TreeSimulator(object):
         """
         Runs the simulation until complete coalescence has occurred.
         """
-        assert self._ll_sim is None
         if self._random_generator is None:
             raise ValueError("A random generator instance must be set")
-        self._ll_sim = self.create_ll_instance()
+        if self._ll_sim is None:
+            self._ll_sim = self.create_ll_instance()
         self._ll_sim.run()
 
     def get_tree_sequence(self):
@@ -945,7 +945,8 @@ class TreeSimulator(object):
         """
         Resets the simulation so that we can perform another replicate.
         """
-        self._ll_sim = None
+        if self._ll_sim is not None:
+            self._ll_sim.reset()
 
     def get_ms_command_line(
             self, executable="ms", num_replicates=1, output_trees=True,
