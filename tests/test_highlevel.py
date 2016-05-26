@@ -876,7 +876,7 @@ class TestRecombinationMap(unittest.TestCase):
         self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
 
     def test_read_hapmap(self):
-        with tempfile.NamedTemporaryFile() as f:
+        with tempfile.NamedTemporaryFile("w+") as f:
             print("HEADER", file=f)
             print("chr1 0 1", file=f)
             print("chr1 1 5 x", file=f)

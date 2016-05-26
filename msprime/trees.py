@@ -1528,12 +1528,6 @@ class MigrationRateChange(DemographicEvent):
         self.rate = rate
         self.matrix_index = matrix_index
 
-    def _convert_matrix_index(self, matrix_index):
-        ret = -1
-        if matrix_index is not None:
-            ret = matrix_index[0] * self._num_populations + matrix_index[1]
-        return ret
-
     def get_ll_representation(self, num_populations, Ne):
         matrix_index = -1
         scaled_rate = 4 * Ne * self.rate
