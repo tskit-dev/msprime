@@ -875,6 +875,17 @@ class TestRecombinationMap(unittest.TestCase):
         rm = msprime.RecombinationMap([0, 0.5, 0.6, 1], [2, 1, 2, 0], 100)
         self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
 
+    def test_read_hapmap(self):
+        with tempfile.NamedTemporaryFile() as f:
+            print("HEADER", file=f)
+            print("chr1 0 1", file=f)
+            print("chr1 1 5 x", file=f)
+            print("s    2 0 x x x", file=f)
+            f.flush()
+            rm = msprime.RecombinationMap.read_hapmap(f.name)
+            self.assertEqual(rm.get_positions(), [0, 1, 2])
+            self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
+
 
 def get_ll_demographic_events(ll_sim):
     """

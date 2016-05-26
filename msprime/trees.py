@@ -1364,9 +1364,8 @@ class RecombinationMap(object):
             # Skip the header line
             f.readline()
             for j, line in enumerate(f):
-                pos, rate, morgans = map(float, line.split()[1:])
+                pos, rate, = map(float, line.split()[1:3])
                 if j == 0:
-                    assert morgans == 0
                     if pos != 0:
                         positions.append(0)
                         rates.append(0)
