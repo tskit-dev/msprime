@@ -79,7 +79,8 @@ Population structure
 Population structure is modelled in ``msprime`` by specifying a fixed
 number of demes, with the migration rates between those demes defined by
 a migration matrix. Each deme has an ``initial_size`` that defines its
-size relative to :math:`N_e`, and a ``growth_rate`` which specifies exponential
+absolute size and a per-generation ``growth_rate``
+which specifies the exponential
 growth rate of the sub-population. We must also define the size of the
 sample to draw from each deme. The number of populations and their
 initial configuration is defined using the ``population_configuration``
@@ -109,12 +110,23 @@ Demographic events change some aspect of the population configuration
 at some time in the past, and are specified using the ``demographic_events``
 parameter to :func:`.simulate`. Each element of this list must be an
 instance of one of the following demographic events
-that are currently supported.
+that are currently supported. Note that all times are measured in
+generations, all sizes are absolute (i.e., *not* relative to :math:`N_e`),
+and all rates are per-generation.
 
 .. autoclass:: msprime.PopulationParametersChange
 .. autoclass:: msprime.MigrationRateChange
 .. autoclass:: msprime.MassMigration
 
+++++++++++++++++++++++++++++
+Debugging demographic models
+++++++++++++++++++++++++++++
+
+.. warning:: The ``DemographyPrinter`` class is very preliminary, and the API
+    is likely to change in the future.
+
+.. autoclass:: msprime.DemographyPrinter
+    :members:
 
 ++++++++++++++++++++++++++++
 Variable recombination rates
@@ -137,6 +149,14 @@ tree in this sequence.
     Special reserved value, representing the null node. If the parent of a
     given node is null, then this node is a root. Similarly, if the children of
     a node are null, this node is a leaf.
+
+.. data:: msprime.NULL_POPULATION = - 1
+
+    Special reserved value, representing the null population ID. If the
+    population associated with a particular tree node is not defined,
+    or population information was not available in the underlying
+    tree sequence, then this value will be returned by
+    :meth:`.SparseTree.get_population`.
 
 .. autofunction:: msprime.load
 

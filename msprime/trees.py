@@ -240,8 +240,8 @@ class SparseTree(object):
         nodes this is the population of the sample, and for internal nodes this
         is the population where the corresponding coalescence occured. If the
         specified node is not a member of this tree or population level
-        information was not stored in the tree sequence, NULL_POPULATION is
-        returned.
+        information was not stored in the tree sequence,
+        :data:`msprime.NULL_POPULATION` is returned.
 
         :param int u: The node of interest.
         :return: The ID of the population associated with node u.
@@ -1419,10 +1419,10 @@ class PopulationConfiguration(object):
     :param int sample_size: The number of initial samples that are drawn
         from this population. Defaults to 0.
     :param float initial_size: The absolute size of the population at time
-        zero. Defaults to the reference population size Ne.
+        zero. Defaults to the reference population size :math:`N_e`.
     :param float growth_rate: The exponential growth rate of the population
-        per generation. This is zero for a constant population size.
-        Defaults to 0.
+        per generation. Growth rates can be negative. This is zero for a
+        constant population size. Defaults to 0.
     """
     def __init__(self, sample_size=0, initial_size=None, growth_rate=0.0):
         self.sample_size = sample_size
@@ -1644,12 +1644,14 @@ class Population(object):
 
 class DemographyPrinter(object):
     """
-    A class to print out the state of the population structures
-    in the past.
+    A class to print out the state of population parameters and migration
+    rates in the past. This is primarily intended as a debugging tool, to
+    allow a user inspect the state of the population during past epochs.
+
     """
     def __init__(
-            self, population_configurations, migration_matrix,
-            demographic_events=[], Ne=1, file=sys.stdout):
+            self, Ne=1, population_configurations=None, migration_matrix=None,
+            demographic_events=[], file=sys.stdout):
         self._file = file
         self._precision = 3
         self._Ne = Ne
@@ -1717,6 +1719,9 @@ class DemographyPrinter(object):
             print(file=self._file)
 
     def debug_history(self):
+        """
+        Prints out a summary of the history of the populations.
+        """
         ll_sim = self._simulator.create_ll_instance()
         N = self._simulator.get_num_populations()
         Ne = self._Ne

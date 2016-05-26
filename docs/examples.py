@@ -11,6 +11,12 @@ sys.path.insert(0, os.path.abspath('..'))
 import math
 import msprime
 import numpy as np
+import matplotlib
+# Force matplotlib to not use any Xwindows backend.
+matplotlib.use('Agg')
+import matplotlib.pyplot as pyplot
+import matplotlib.collections
+
 
 
 def segregating_sites_example(n, theta, num_replicates):
@@ -107,35 +113,39 @@ def mutations_example():
 
 
 def out_of_africa():
-    generation_time = 25
-    # The ancestral population size.
+    # First we set out the maximum likelihood values of the various parameters
+    # given in Table 1.
     N_A = 7300
-    T_AF = 220e3 / generation_time
-    T_B = 140e3 / generation_time
-    T_EU_AS = 21.2e3 / generation_time
-    N_AF = 12300
     N_B = 2100
+    N_AF = 12300
     N_EU0 = 1000
     N_AS0 = 510
+    # We need to work out the starting population sizes based on the growth
+    # rates provided for these two populations
     r_EU = 0.004
     r_AS = 0.0055
     N_EU = N_EU0 / math.exp(-r_EU * T_EU_AS)
     N_AS = N_AS0 / math.exp(-r_AS * T_EU_AS)
+    # Times are provided in years, so we convert into generations.
+    generation_time = 25
+    T_AF = 220e3 / generation_time
+    T_B = 140e3 / generation_time
+    T_EU_AS = 21.2e3 / generation_time
+    # Migration rates during the various epochs.
     m_AF_B = 25e-5
     m_AF_EU = 3e-5
     m_AF_AS = 1.9e-5
     m_EU_AS = 9.6e-5
-    mutation_rate = 2.35e-8
     # Population IDs correspond to their indexes in the popupulation
     # configuration array. Therefore, we have 0=YRI, 1=CEU and 2=CHB
     # initially.
     population_configurations = [
         msprime.PopulationConfiguration(
-            sample_size=100, initial_size=N_AF),
+            sample_size=0, initial_size=N_AF),
         msprime.PopulationConfiguration(
-            sample_size=100, initial_size=N_EU, growth_rate=r_EU),
+            sample_size=1, initial_size=N_EU, growth_rate=r_EU),
         msprime.PopulationConfiguration(
-            sample_size=100, initial_size=N_AS, growth_rate=r_AS)
+            sample_size=1, initial_size=N_AS, growth_rate=r_AS)
     ]
     migration_matrix = [
         [      0, m_AF_EU, m_AF_AS],
@@ -160,26 +170,20 @@ def out_of_africa():
         msprime.PopulationParametersChange(
             time=T_AF, initial_size=N_A, population_id=0)
     ]
+    # Use the demography printer to debug the demographic history that
+    # we have just described.
     dp = msprime.DemographyPrinter(
-        population_configurations, migration_matrix,
-        demographic_events, Ne=N_A)
-    dp.debug_history()
-
-    ts = msprime.simulate(
-        length=10000,
-        mutation_rate=mutation_rate,
+        Ne=N_A,
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
         demographic_events=demographic_events)
-    for h in ts.haplotypes():
-        print(h)
-
+    dp.debug_history()
 
 
 if __name__ == "__main__":
-    # segregating_sites_example(10, 5, 10000)
+    segregating_sites_example(10, 5, 10000)
     # single_locus_example()
     # multi_locus_example()
     # mutations_example()
-    # structure_example()
-    out_of_africa()
+    # migration_example()
+    # out_of_africa()

@@ -268,7 +268,8 @@ class TestDemographyPrinter(unittest.TestCase):
             demographic_events):
         with tempfile.TemporaryFile("w+") as f:
             dp = msprime.DemographyPrinter(
-                population_configurations, migration_matrix,
+                population_configurations=population_configurations,
+                migration_matrix=migration_matrix,
                 demographic_events=demographic_events, file=f)
             dp.debug_history()
             f.seek(0)
