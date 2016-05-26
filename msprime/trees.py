@@ -1419,12 +1419,12 @@ class PopulationConfiguration(object):
     :param int sample_size: The number of initial samples that are drawn
         from this population. Defaults to 0.
     :param float initial_size: The absolute size of the population at time
-        zero. Defaults to 1.
+        zero. Defaults to the reference population size Ne.
     :param float growth_rate: The exponential growth rate of the population
         per generation. This is zero for a constant population size.
         Defaults to 0.
     """
-    def __init__(self, sample_size=0, initial_size=1.0, growth_rate=0.0):
+    def __init__(self, sample_size=0, initial_size=None, growth_rate=0.0):
         self.sample_size = sample_size
         self.initial_size = initial_size
         self.growth_rate = growth_rate
@@ -1433,9 +1433,10 @@ class PopulationConfiguration(object):
         """
         Returns the low-level representation of this PopulationConfiguration.
         """
+        initial_size = Ne if self.initial_size is None else self.initial_size
         return {
             "sample_size": self.sample_size,
-            "initial_size": self.initial_size / Ne,
+            "initial_size": initial_size / Ne,
             "growth_rate": self.growth_rate * 4 * Ne
         }
 
@@ -1619,7 +1620,7 @@ class MassMigration(DemographicEvent):
 class Population(object):
     """
     Simple class to represent the state of a population in terms of its
-    demographic parameters. This is intented to be initialised from the
+    demographic parameters. This is intended to be initialised from the
     corresponding low-level values so that they can be rescaled back into
     input units.
     """
