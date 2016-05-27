@@ -120,17 +120,17 @@ def out_of_africa():
     N_AF = 12300
     N_EU0 = 1000
     N_AS0 = 510
+    # Times are provided in years, so we convert into generations.
+    generation_time = 25
+    T_AF = 220e3 / generation_time
+    T_B = 140e3 / generation_time
+    T_EU_AS = 21.2e3 / generation_time
     # We need to work out the starting population sizes based on the growth
     # rates provided for these two populations
     r_EU = 0.004
     r_AS = 0.0055
     N_EU = N_EU0 / math.exp(-r_EU * T_EU_AS)
     N_AS = N_AS0 / math.exp(-r_AS * T_EU_AS)
-    # Times are provided in years, so we convert into generations.
-    generation_time = 25
-    T_AF = 220e3 / generation_time
-    T_B = 140e3 / generation_time
-    T_EU_AS = 21.2e3 / generation_time
     # Migration rates during the various epochs.
     m_AF_B = 25e-5
     m_AF_EU = 3e-5
@@ -170,20 +170,20 @@ def out_of_africa():
         msprime.PopulationParametersChange(
             time=T_AF, initial_size=N_A, population_id=0)
     ]
-    # Use the demography printer to debug the demographic history that
-    # we have just described.
-    dp = msprime.DemographyPrinter(
+    # Use the demography debugger to print out the demographic history
+    # that we have just described.
+    dp = msprime.DemographyDebugger(
         Ne=N_A,
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
         demographic_events=demographic_events)
-    dp.debug_history()
+    dp.print_history()
 
 
 if __name__ == "__main__":
-    segregating_sites_example(10, 5, 10000)
+    # segregating_sites_example(10, 5, 100000)
     # single_locus_example()
     # multi_locus_example()
     # mutations_example()
     # migration_example()
-    # out_of_africa()
+    out_of_africa()

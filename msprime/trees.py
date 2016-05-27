@@ -577,7 +577,7 @@ def simulate(
         per-generation recombination and mutation rates are scaled
         in the simulation. This defaults to 1 if not specified.
     :param float length: The length of the simulated region in bases.
-        This parameter cannot be used along with `recombination_map`.
+        This parameter cannot be used along with ``recombination_map``.
         Defaults to 1 if not specified.
     :param float recombination_rate: The rate of recombination per base
         per generation. This parameter cannot be used along with
@@ -1636,12 +1636,10 @@ class Population(object):
         return size
 
 
-class DemographyPrinter(object):
+class DemographyDebugger(object):
     """
-    A class to print out the state of population parameters and migration
-    rates in the past. This is primarily intended as a debugging tool, to
-    allow a user inspect the state of the population during past epochs.
-
+    A class to facilitate debugging of population parameters and migration
+    rates in the past.
     """
     def __init__(
             self, Ne=1, population_configurations=None, migration_matrix=None,
@@ -1712,7 +1710,7 @@ class DemographyPrinter(object):
                     file=self._file)
             print(file=self._file)
 
-    def debug_history(self):
+    def print_history(self):
         """
         Prints out a summary of the history of the populations.
         """
@@ -1722,9 +1720,14 @@ class DemographyPrinter(object):
         start_time = 0
         scaled_end_time = 0
         while not math.isinf(scaled_end_time):
-            for event in self._demographic_events[start_time]:
+            events = self._demographic_events[start_time]
+            if len(events) > 0:
+                print(
+                    "Events @ generation {}".format(start_time),
+                    file=self._file)
+            for event in events:
                 assert event.time == start_time
-                print("Event:@{}".format(event.time), event, file=self._file)
+                print("   -", event, file=self._file)
             print(file=self._file)
             scaled_end_time = ll_sim.debug_demography()
             end_time = self._scaled_time_to_generations(scaled_end_time)
@@ -1734,9 +1737,10 @@ class DemographyPrinter(object):
             populations = [
                 Population(Ne=self._Ne, **d)
                 for d in ll_sim.get_population_configuration()]
-            print(
-                "INTERVAL: {:.2f} -- {:.2f} generations".format(
-                    start_time, end_time), file=self._file)
+            s = "Epoch: {} -- {} generations".format(start_time, end_time)
+            print("=" * len(s), file=self._file)
+            print(s, file=self._file)
+            print("=" * len(s), file=self._file)
             self._print_populations(
                 start_time, end_time, migration_matrix, populations)
             print(file=self._file)

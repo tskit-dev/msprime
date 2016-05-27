@@ -5,14 +5,14 @@ Command line interface
 ======================
 
 Two command-line applications are provided with ``msprime``: :ref:`sec-msp` and
-:ref:`sec-mspms`. The :command:`msp` is the recommended way of interacting with
-the library, and is a fully POSIX compliant command line interface. The
-:command:`mspms` program is a fully-:command:`ms` compatible interface. This is
-useful for those who wish to get started quickly with using the library,
-and also as a means of plugging ``msprime`` into existing work flows. However,
-there is a substantial overhead involved in translating data from
-``msprime``'s native history file into legacy formats, and so new code should
-use the :ref:`Python API <sec-api>` where possible.
+:ref:`sec-mspms`. The :command:`msp` program is an experimental interface for
+interacting with the library, and is a POSIX compliant command line
+interface. The :command:`mspms` program is a fully-:command:`ms` compatible
+interface. This is useful for those who wish to get started quickly with using
+the library, and also as a means of plugging ``msprime`` into existing work
+flows. However, there is a substantial overhead involved in translating data
+from ``msprime``'s native history file into legacy formats, and so new code
+should use the :ref:`Python API <sec-api>` where possible.
 
 .. _sec-msp:
 

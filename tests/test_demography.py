@@ -258,20 +258,20 @@ class TestTimeConversion(unittest.TestCase):
         self.check_time(event, g, Ne)
 
 
-class TestDemographyPrinter(unittest.TestCase):
+class TestDemographyDebugger(unittest.TestCase):
     """
-    Tests for the demography printer interface.
+    Tests for the demography debug interface.
     """
 
     def verify_debug(
             self, population_configurations, migration_matrix,
             demographic_events):
         with tempfile.TemporaryFile("w+") as f:
-            dp = msprime.DemographyPrinter(
+            dp = msprime.DemographyDebugger(
                 population_configurations=population_configurations,
                 migration_matrix=migration_matrix,
                 demographic_events=demographic_events, file=f)
-            dp.debug_history()
+            dp.print_history()
             f.seek(0)
             debug_output = f.read()
         # TODO when there is better output, write some tests to
