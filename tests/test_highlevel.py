@@ -55,7 +55,7 @@ def get_pairwise_diversity(haplotypes):
     return 2 * pi / (n * (n - 1))
 
 
-def sparse_tree_to_newick(st, precision):
+def sparse_tree_to_newick(st, precision, Ne):
     """
     Converts the specified sparse tree to an ms-compatible Newick tree.
     """
@@ -67,8 +67,8 @@ def sparse_tree_to_newick(st, precision):
         if st.is_internal(node):
             for child in st.get_children(node):
                 stack.append(child)
-                s = "{0:.{1}f}".format(
-                    st.get_time(node) - st.get_time(child), precision)
+                length = (st.get_time(node) - st.get_time(child)) / (4 * Ne)
+                s = "{0:.{1}f}".format(length, precision)
                 branch_lengths[child] = s
     return _build_newick(root, root, st, branch_lengths)
 
@@ -538,7 +538,7 @@ class TestNewickConversion(HighLevelTestCase):
     """
     Test the newick tree generation code.
     """
-    def verify_trees(self, tree_sequence, breakpoints):
+    def verify_trees(self, tree_sequence, breakpoints, Ne):
         """
         Verifies that the specified tree is converted to Newick correctly.
         """
@@ -555,9 +555,9 @@ class TestNewickConversion(HighLevelTestCase):
         # structure of the trees.
         precision = 0
         old_trees = [
-            (st.get_length(), sparse_tree_to_newick(st, precision))
+            (st.get_length(), sparse_tree_to_newick(st, precision, Ne))
             for st in tree_sequence.trees()]
-        new_trees = list(tree_sequence.newick_trees(precision))
+        new_trees = list(tree_sequence.newick_trees(precision, Ne=Ne))
         self.assertEqual(len(new_trees), len(old_trees))
         for (l1, t1), (l2, t2) in zip(new_trees, old_trees):
             self.assertEqual(l1, l2)
@@ -592,35 +592,38 @@ class TestNewickConversion(HighLevelTestCase):
 
     def test_simple_cases(self):
         cases = [
-            (2, 1, 0),
-            (2, 10, 0.1),
-            (4, 10, 0.1),
-            (10, 10, 0.1),
-            (20, 1, 0),
-            (20, 10, 0.1),
-            (10, 50, 1.0),
+            (2, 1, 0, 0.25),
+            (2, 10, 0.1, 1),
+            (4, 10, 0.1, 100),
+            (10, 10, 0.1,  10),
+            (20, 1, 0, 1025),
+            (20, 10, 0.1, 100),
+            (10, 50, 1.0, 1e6),
         ]
-        for n, m, r in cases:
+        for n, m, r, Ne in cases:
             recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-            ts = msprime.simulator_factory(n, recombination_map=recomb_map)
+            ts = msprime.simulator_factory(
+                n, Ne=Ne, recombination_map=recomb_map)
             ts.run()
             tree_sequence = ts.get_tree_sequence()
             breakpoints = ts.get_breakpoints()
-            self.verify_trees(tree_sequence, breakpoints)
+            self.verify_trees(tree_sequence, breakpoints, Ne)
             self.verify_all_breakpoints(tree_sequence, breakpoints)
 
     def test_random_parameters(self):
         num_random_sims = 10
         for j in range(num_random_sims):
             n = random.randint(2, 100)
-            m = random.randint(10, 1000)
+            m = random.randint(10, 100)
             r = random.random()
+            Ne = random.uniform(1, 20)
             recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-            ts = msprime.simulator_factory(n, recombination_map=recomb_map)
+            ts = msprime.simulator_factory(
+                    n, Ne=Ne, recombination_map=recomb_map)
             ts.run()
             tree_sequence = ts.get_tree_sequence()
             breakpoints = ts.get_breakpoints()
-            self.verify_trees(tree_sequence, breakpoints)
+            self.verify_trees(tree_sequence, breakpoints, Ne)
             self.verify_all_breakpoints(tree_sequence, breakpoints)
 
 

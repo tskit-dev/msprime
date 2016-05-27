@@ -3396,14 +3396,15 @@ NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "precision", NULL};
+    static char *kwlist[] = {"tree_sequence", "precision", "Ne", NULL};
     int precision = 3;
+    double Ne = 0.25; /* default to 1/4 for coalescent time units. */
     TreeSequence *tree_sequence;
 
     self->newick_converter = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
-            &TreeSequenceType, &tree_sequence, &precision)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|id", kwlist,
+            &TreeSequenceType, &tree_sequence, &precision, &Ne)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -3423,7 +3424,7 @@ NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
     }
     memset(self->newick_converter, 0, sizeof(newick_converter_t));
     err = newick_converter_alloc(self->newick_converter,
-            self->tree_sequence->tree_sequence, (size_t) precision);
+            self->tree_sequence->tree_sequence, (size_t) precision, Ne);
     if (err != 0) {
         handle_library_error(err);
         goto out;

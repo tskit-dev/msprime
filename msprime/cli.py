@@ -185,7 +185,7 @@ class SimulationRunner(object):
             print("//", file=output)
             if self._print_trees:
                 iterator = tree_sequence.newick_trees(
-                    self._precision, breakpoints)
+                    self._precision, breakpoints, 1)
                 if self._num_loci == 1:
                     for l, ns in iterator:
                         print(ns, file=output)

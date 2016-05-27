@@ -310,6 +310,7 @@ typedef struct {
     uint32_t sample_size;
     double sequence_length;
     size_t precision;
+    double Ne;
     newick_tree_node_t *root;
     tree_diff_iterator_t diff_iterator;
     avl_tree_t tree;
@@ -470,7 +471,7 @@ int sparse_tree_iterator_next(sparse_tree_iterator_t *self);
 void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
 
 int newick_converter_alloc(newick_converter_t *self, 
-        tree_sequence_t *tree_sequence, size_t precision);
+        tree_sequence_t *tree_sequence, size_t precision, double Ne);
 int newick_converter_next(newick_converter_t *self, double *length, 
         char **tree);
 int newick_converter_free(newick_converter_t *self);

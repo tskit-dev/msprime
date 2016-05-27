@@ -185,6 +185,8 @@ newick_tree_set_branch_length(newick_converter_t *self,
     double length = parent_time - node->time;
     int r;
 
+    /* We rescale branch lengths to be in coalescent time units. */
+    length /= 4 * self->Ne;
     r = snprintf(node->branch_length, MAX_BRANCH_LENGTH_STRING,
             "%.*f", (int) self->precision, length);
     if (r >= MAX_BRANCH_LENGTH_STRING) {
@@ -446,7 +448,7 @@ out:
 
 int
 newick_converter_alloc(newick_converter_t *self,
-        tree_sequence_t *tree_sequence, size_t precision)
+        tree_sequence_t *tree_sequence, size_t precision, double Ne)
 {
     int ret = -1;
     uint32_t j;
@@ -455,6 +457,7 @@ newick_converter_alloc(newick_converter_t *self,
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->precision = precision;
+    self->Ne = Ne;
     memset(&self->diff_iterator, 0, sizeof(tree_diff_iterator_t));
     ret = tree_diff_iterator_alloc(&self->diff_iterator, tree_sequence);
     if (ret != 0) {

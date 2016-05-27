@@ -2034,9 +2034,11 @@ class TestNewickConverter(LowLevelTestCase):
         sim = _msprime.Simulator(10, _msprime.RandomGenerator(1))
         sim.run()
         ts.create(sim, uniform_recombination_map(sim))
-        for bad_type in [None, "", 2.3, [], {}]:
+        for bad_type in [None, "", [], {}]:
             self.assertRaises(
                 TypeError, _msprime.NewickConverter, ts, precision=bad_type)
+            self.assertRaises(
+                TypeError, _msprime.NewickConverter, ts, Ne=bad_type)
         before = list(_msprime.NewickConverter(ts))
         self.assertGreater(len(before), 0)
         iterator = _msprime.NewickConverter(ts)
@@ -2057,29 +2059,30 @@ class TestNewickConverter(LowLevelTestCase):
         for nc in ncs:
             self.verify_iterator(nc)
 
+    def get_times(self, tree):
+        """
+        Returns the time strings from the specified newick tree.
+        """
+        ret = []
+        current_time = None
+        for c in tree:
+            if c == ":":
+                current_time = ""
+            elif c in [",", ")"]:
+                ret.append(current_time)
+                current_time = None
+            elif current_time is not None:
+                current_time += c
+        return ret
+
     def test_precision(self):
-        def get_times(tree):
-            """
-            Returns the time strings from the specified newick tree.
-            """
-            ret = []
-            current_time = None
-            for c in tree:
-                if c == ":":
-                    current_time = ""
-                elif c in [",", ")"]:
-                    ret.append(current_time)
-                    current_time = None
-                elif current_time is not None:
-                    current_time += c
-            return ret
         ts = self.get_tree_sequence()
         self.assertRaises(ValueError, _msprime.NewickConverter, ts, -1)
         self.assertRaises(ValueError, _msprime.NewickConverter, ts, 17)
         self.assertRaises(ValueError, _msprime.NewickConverter, ts, 100)
         for precision in range(17):
             for l, tree in _msprime.NewickConverter(ts, precision=precision):
-                times = get_times(tree)
+                times = self.get_times(tree)
                 for t in times:
                     if precision == 0:
                         self.assertNotIn(".", t)

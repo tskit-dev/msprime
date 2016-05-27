@@ -1014,9 +1014,10 @@ class TreeSequence(object):
         # TODO should we provide this???
         return self._ll_tree_sequence.get_mutations()
 
-    def newick_trees(self, precision=3, breakpoints=None):
+    def newick_trees(self, precision=3, breakpoints=None, Ne=1):
         # TODO document this method.
-        iterator = _msprime.NewickConverter(self._ll_tree_sequence, precision)
+        iterator = _msprime.NewickConverter(
+            self._ll_tree_sequence, precision, Ne)
         if breakpoints is None:
             for length, tree in iterator:
                 yield length, tree

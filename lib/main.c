@@ -520,7 +520,8 @@ print_newick_trees(tree_sequence_t *ts)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = newick_converter_alloc(nc, ts, 4);
+    /* We're using an Ne of 0.25 here throughout to cancel 4Ne conversions */
+    ret = newick_converter_alloc(nc, ts, 4, 0.25);
     if (ret != 0) {
         goto out;
     }
@@ -747,11 +748,12 @@ run_simulate(char *conf_file)
         }
         tree_sequence_print_state(tree_seq);
 
+        print_newick_trees(tree_seq);
+
     if (0) {
 
         print_haplotypes(tree_seq);
         print_variants(tree_seq);
-        print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
 
         tree_sequence_print_state(tree_seq);

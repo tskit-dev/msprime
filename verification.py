@@ -93,7 +93,7 @@ class SimulationVerifier(object):
             sim.reset()
             sim.run()
             num_trees[j] = sim.get_num_breakpoints() + 1
-            time[j] = sim.get_time()
+            time[j] = sim.get_time() / 4  # Convert to coalescent units
             ca_events[j] = sim.get_num_common_ancestor_events()
             re_events[j] = sim.get_num_recombination_events()
             mig_events[j] = [
