@@ -135,7 +135,6 @@ class TreeDrawer(object):
 
 # TODO:
 # - Pre, post, and inorder traversals of the nodes as iterators.
-# - get_total_branch_length
 # - Pickle and copy support
 class SparseTree(object):
     """
@@ -161,7 +160,7 @@ class SparseTree(object):
 
     def get_branch_length(self, u):
         """
-        Returns the length of the branch (in time units) joining the
+        Returns the length of the branch (in generations) joining the
         specified node to its parent. This is equivalent to
 
         >>> tree.get_time(tree.get_parent(u)) - tree.get_time(u)
@@ -175,6 +174,21 @@ class SparseTree(object):
         :rtype: int
         """
         return self.get_time(self.get_parent(u)) - self.get_time(u)
+
+    def get_total_branch_length(self):
+        """
+        Returns the sum of all the branch lengths in this tree (in
+        units of generations). This is equivalent to
+
+        >>> sum(
+        >>>    tree.get_branch_length(u) for u in tree.nodes()
+        >>>    if u != tree.get_root())
+
+        :return: The sum of all the branch lengths in this tree.
+        """
+        root = self.get_root()
+        return sum(
+            self.get_branch_length(u) for u in self.nodes() if u != root)
 
     def get_mrca(self, u, v):
         """

@@ -769,6 +769,16 @@ class TestSparseTree(HighLevelTestCase):
             self.assertEqual(list(t1.nodes(u)), list(t2.nodes(u)))
         self.assertRaises(ValueError, t1.nodes, None, "bad order")
 
+    def test_total_branch_length(self):
+        t1 = self.get_tree()
+        bl = 0
+        root = t1.get_root()
+        for node in t1.nodes():
+            if node != root:
+                bl += t1.get_branch_length(node)
+        self.assertGreater(bl, 0)
+        self.assertEqual(t1.get_total_branch_length(), bl)
+
 
 class TestRecombinationMap(unittest.TestCase):
     """
