@@ -12,17 +12,23 @@ introduction to using this API to run simulations and analyse the results.
 Simulation model
 ****************
 
-We assume a standard diploid coalescent model in which time is measured in
-units of :math:`2N_e` generations, where :math:`N_e` is the Wright-Fisher
-population size of our reference population at time zero. As a convenience
-when converting from per-generation rates, we can specify :math:`N_e` using
-the simulation parameter ``Ne``. All other population
-sizes are defined with respect to the this population size. When running
-simulations we defined the length in bases :math:`L` of the sequence in question
+The simulation model in ``msprime`` closely follows tby he classical ``ms``
+program. Unlike ``ms``, however, time is measured in generations rather than
+"coalescent units". Internally, the same algorithm is used, but ``msprime``
+provides a convenient translation layer that allows the user to input times and
+rates in generations. Similarly, the times associated with tree nodes produced
+by ``msprime`` are in measured generations. To enable this translation from
+coalescent units into generations, a reference effective population size must
+be provided, which is given by the ``Ne`` parameter in the :func:`simulate`
+function. Population sizes for individual demes and for past demographic events
+are also defined as absolute values. All migration rates and growth rates are
+also per generation.
+
+When running
+simulations we define the length in bases :math:`L` of the sequence in question
 using the ``length`` parameter. This defines the coordinate space within
 which trees and mutations are defined. :math:`L` is a continuous value, and
 coordinates can take any value from :math:`0` to :math:`L`.
-
 Mutations occur in an infinite sites process along this sequence, and
 mutation rates are specified per generation, per unit of sequence length.
 Thus, given the per-generation mutation rate :math:`\mu`, the rate of mutation
@@ -43,13 +49,11 @@ recombination model and number of loci.
 
 Population structure is modelled by specifying a fixed number of demes
 :math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation
-migration rates. Therefore, the rate of migration in coalescent time units
-between a given pair of demes is :math:`4 N_e M_{j, k}`. Each deme has an
-initial size :math:`s` that is measured relative to :math:`N_e`, and an
-exponential growth rate :math:`\alpha`. The size of a given population at time
-:math:`t` in the past (assuming no demographic events have occurred) is
-therefore given by :math:`s N_e e^{-\alpha t}`. Demographic events that occur
-in the history of the simulated population alter some aspect of this population
+migration rates. Each deme has an initial absolute population size :math:`s`
+and a per generation exponential growth rate :math:`\alpha`. The size of a
+given population at time :math:`t` in the past (measured in generations) is
+therefore given by :math:`s e^{-\alpha t}`. Demographic events that occur in
+the history of the simulated population alter some aspect of this population
 configuration at a particular time in the past.
 
 
@@ -61,7 +65,6 @@ configuration at a particular time in the past.
     and to allow users to easily state per-generation recombination rates.
     However, the ``mspms`` command line application is fully :program:`ms`
     compatible.
-
 
 *******************
 Running simulations
@@ -76,24 +79,22 @@ coalescent simulations in msprime.
 Population structure
 ++++++++++++++++++++
 
-Population structure is modelled in ``msprime`` by specifying a fixed
-number of demes, with the migration rates between those demes defined by
-a migration matrix. Each deme has an ``initial_size`` that defines its
-absolute size and a per-generation ``growth_rate``
-which specifies the exponential
-growth rate of the sub-population. We must also define the size of the
-sample to draw from each deme. The number of populations and their
-initial configuration is defined using the ``population_configuration``
-parameter to :func:`.simulate`, which takes a list of
-:class:`.PopulationConfiguration` instances. Population
-IDs are zero indexed, and correspond to their position in the list.
+Population structure is modelled in ``msprime`` by specifying a fixed number of
+demes, with the migration rates between those demes defined by a migration
+matrix. Each deme has an ``initial_size`` that defines its absolute size at
+time zero and a per-generation ``growth_rate`` which specifies the exponential
+growth rate of the sub-population. We must also define the size of the sample
+to draw from each deme. The number of populations and their initial
+configuration is defined using the ``population_configurations`` parameter to
+:func:`.simulate`, which takes a list of :class:`.PopulationConfiguration`
+instances. Population IDs are zero indexed, and correspond to their position in
+the list.
 
 Samples are drawn sequentially from populations in increasing order of
-population ID. For example, if we specified an overall sample size of
-5, and specify that 2 samples are drawn from population 0 and 3 from
-population 1, then individuals 0 and 1 will be initially located in
-population 0, and individuals 2, 3 and 4 will be drawn from
-population 2.
+population ID. For example, if we specified an overall sample size of 5, and
+specify that 2 samples are drawn from population 0 and 3 from population 1,
+then individuals 0 and 1 will be initially located in population 0, and
+individuals 2, 3 and 4 will be drawn from population 2.
 
 Given :math:`N` populations, migration matrices are specified using an :math:`N
 x N` matrix of deme-to-deme migration rates. See the documentation for
@@ -122,10 +123,10 @@ and all rates are per-generation.
 Debugging demographic models
 ++++++++++++++++++++++++++++
 
-.. warning:: The ``DemographyPrinter`` class is very preliminary, and the API
+.. warning:: The ``DemographyDebugger`` class is preliminary, and the API
     is likely to change in the future.
 
-.. autoclass:: msprime.DemographyPrinter
+.. autoclass:: msprime.DemographyDebugger
     :members:
 
 ++++++++++++++++++++++++++++

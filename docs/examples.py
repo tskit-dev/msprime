@@ -11,12 +11,12 @@ sys.path.insert(0, os.path.abspath('..'))
 import math
 import msprime
 import numpy as np
+import scipy.stats
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
 import matplotlib.pyplot as pyplot
 import matplotlib.collections
-
 
 
 def segregating_sites_example(n, theta, num_replicates):
@@ -59,7 +59,7 @@ def migration_example():
         [m, m, 0]]
     # We pass these values to the simulate function, and ask it
     # to run the required number of replicates.
-    num_replicates = 10000
+    num_replicates = 1e6
     replicates = msprime.simulate(
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
@@ -68,7 +68,8 @@ def migration_example():
     T = np.zeros(num_replicates)
     for i, tree_sequence in enumerate(replicates):
         tree = next(tree_sequence.trees())
-        T[i] = tree.get_time(tree.get_root())
+        # Convert the TMRCA to coalecent units.
+        T[i] = tree.get_time(tree.get_root()) / 4
     # Finally, calculate the analytical expectation and print
     # out the results
     analytical = d / 2 + (d - 1) / (2 * M)
@@ -76,7 +77,7 @@ def migration_example():
     print("Predicted =", analytical)
 
 def single_locus_example():
-    tree_sequence = msprime.simulate(5, random_seed=1)
+    tree_sequence = msprime.simulate(sample_size=5, Ne=1000, random_seed=1)
     tree = next(tree_sequence.trees())
     print(tree)
     tree.draw("_static/simple-tree.svg", show_times=True)
@@ -85,10 +86,12 @@ def single_locus_example():
         print("node {}: time = {}".format(u, tree.get_time(u)))
         u = tree.get_parent(u)
     print(tree.get_branch_length(6))
+    print(tree.get_total_branch_length())
 
 def multi_locus_example():
     tree_sequence = msprime.simulate(
-        sample_size=5, length=10, recombination_rate=0.02, random_seed=19)
+        sample_size=5, Ne=1000, length=1e4, recombination_rate=2e-8,
+        random_seed=19)
     j = 0
     for tree in tree_sequence.trees():
         print(tree.get_interval(), str(tree), sep="\t")
@@ -96,9 +99,10 @@ def multi_locus_example():
         j += 1
 
 def mutations_example():
+
     tree_sequence = msprime.simulate(
-        sample_size=5, length=10, recombination_rate=0.02,
-        mutation_rate=0.02, random_seed=19)
+        sample_size=5, Ne=1000, length=1e4, recombination_rate=2e-8,
+        mutation_rate=2e-8, random_seed=19)
     print("Total mutations = ", tree_sequence.get_num_mutations())
     j = 0
     for tree in tree_sequence.trees():
@@ -180,10 +184,46 @@ def out_of_africa():
     dp.print_history()
 
 
+def variable_recomb_example():
+    infile = "../hapmap/genetic_map_GRCh37_chr22.txt"
+    # Read in the recombination map using the read_hapmap method,
+    recomb_map = msprime.RecombinationMap.read_hapmap(infile)
+
+    # Now we get the positions and rates from the recombination
+    # map and plot these using 500 bins.
+    positions = np.array(recomb_map.get_positions()[1:])
+    rates = np.array(recomb_map.get_rates()[1:])
+    num_bins = 500
+    v, bin_edges, _ = scipy.stats.binned_statistic(
+        positions, rates, bins=num_bins)
+    x = bin_edges[:-1][np.logical_not(np.isnan(v))]
+    y = v[np.logical_not(np.isnan(v))]
+    fig, ax1 = pyplot.subplots(figsize=(16, 6))
+    ax1.plot(x, y, color="blue")
+    ax1.set_ylabel("Recombination rate")
+    ax1.set_xlabel("Chromosome position")
+
+    # Now we run the simulation for this map. We assume Ne=10^4
+    # and have a sample of 100 individuals
+    tree_sequence = msprime.simulate(
+        sample_size=100,
+        Ne=10**4,
+        recombination_map=recomb_map)
+    # Now plot the density of breakpoints along the chromosome
+    breakpoints = np.array(list(tree_sequence.breakpoints()))
+    ax2 = ax1.twinx()
+    v, bin_edges = np.histogram(breakpoints, num_bins, density=True)
+    ax2.plot(bin_edges[:-1], v, color="green")
+    ax2.set_ylabel("Breakpoint density")
+    ax2.set_xlim(1.5e7, 5.3e7)
+    fig.savefig("_static/hapmap_chr22.svg")
+
+
 if __name__ == "__main__":
-    # segregating_sites_example(10, 5, 100000)
     # single_locus_example()
     # multi_locus_example()
     # mutations_example()
+    # segregating_sites_example(10, 5, 100000)
     # migration_example()
-    out_of_africa()
+    # out_of_africa()
+    variable_recomb_example()

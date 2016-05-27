@@ -18,13 +18,14 @@ Simulating trees
 Running simulations is very straightforward in ``msprime``::
 
     >>> import msprime
-    >>> tree_sequence = msprime.simulate(5)
+    >>> tree_sequence = msprime.simulate(sample_size=5, Ne=1000)
     >>> tree = next(tree_sequence.trees())
     >>> print(tree)
     {0: 5, 1: 7, 2: 5, 3: 7, 4: 6, 5: 6, 6: 8, 7: 8, 8: -1}
 
 Here, we simulate the coalescent for a sample of size
-5 and print out a summary of the resulting tree. The
+5 with an effective population size of 1000,
+and then print out a summary of the resulting tree. The
 :func:`.simulate` function returns a
 :class:`.TreeSequence` object, which provides a very
 efficient way to access the correlated trees in simulations
@@ -57,7 +58,7 @@ tree using the :meth:`~.SparseTree.draw` method).
 We can see that the leaves of the tree
 are labelled with 0 to 4, and all the internal nodes of the tree
 are also integers with the root of the tree being 8. Also shown here
-are the times for each internal node, in coalescent time units. (The
+are the times for each internal node in generations. (The
 time for all leaves is 0, and so we don't show this information
 to avoid clutter.)
 
@@ -70,9 +71,9 @@ back to the root for a particular sample using the
     >>>     print("node {}: time = {}".format(u, tree.get_time(u)))
     >>>     u = tree.get_parent(u)
     node 0: time = 0.0
-    node 5: time = 0.0269802913256
-    node 6: time = 0.251686777821
-    node 8: time = 0.446340881302
+    node 5: time = 107.921165302
+    node 6: time = 1006.74711128
+    node 8: time = 1785.36352521
 
 
 In this code chunk we iterate up the tree starting at node 0 and
@@ -81,17 +82,22 @@ if its parent is :const:`msprime.NULL_NODE`, which is a special
 reserved node. (The value of the null node is -1, but we recommend
 using the symbolic constant to make code more readable.) We also use
 the :meth:`~.SparseTree.get_time` method to get the time
-for each node, which corresponds to the time at which the coalescence
-event happened during the simulation (in coalescent time units).
+for each node, which corresponds to the time in generations
+at which the coalescence event happened during the simulation.
 We can also obtain the length of a branch joining a node to
 its parent using the :meth:`~.SparseTree.get_branch_length`
 method::
 
     >>> print(tree.get_branch_length(6))
-    0.194654103481
+    778.616413923
 
-The branch length for node 6 is 0.19 as the time for node 6 is 0.25,
-and the time of its parent is 0.44.
+The branch length for node 6 is 778.6 generations as the time for
+node 6 is 1006.7 and the time of its parent is 1785.4. It is also
+often useful to obtain the total branch length of the tree, i.e,
+the sum of the lengths of all branches::
+
+    >>> print(tree.get_total_branch_length())
+    >>> 5932.15093686
 
 *************
 Recombination
@@ -110,39 +116,23 @@ parameter specifies the rate of crossing over per base per generation,
 and is zero by default. See the :ref:`sec-api` for a discussion of the precise
 recombination model used.
 
-We simulate the trees across over a sequence as follows::
+Here, we simulate the trees across over a 10kb region with a recombination
+rate of :math:`2 \times 10^{-8}` per base per generation, with an
+effective population size of 1000::
 
     >>> tree_sequence = msprime.simulate(
-    ... sample_size=5, length=10, recombination_rate=0.02, random_seed=19)
+    ...    sample_size=5, Ne=1000, length=1e4, recombination_rate=2e-8)
     >>> for tree in tree_sequence.trees():
-    ...     print(tree.get_interval(), str(tree), sep="\t")
-    (0.0, 4.7014225005874)  {0: 6, 1: 5, 2: 6, 3: 9, 4: 5, 5: 7, 6: 7, 7: 9, 9: -1}
-    (4.7014225005874, 10.0) {0: 6, 1: 5, 2: 6, 3: 8, 4: 5, 5: 8, 6: 9, 8: 9, 9: -1}
-
-In this example, we simulate the history of our sample of 5 individuals
-over a sequence of length 10 bases, with a recombination rate of 0.2
-per generation per base. (We also provide the ``random_seed`` parameter here
-as we wish to use this exact example again later; if we don't provide
-a random seed, one is generated automatically.)
-The :func:`.simulate` function returns a *tree sequence*,
-which encapsulates all of the information in the
-sequence of correlated trees over the simulated region. The
-:class:`.TreeSequence` class provides an variety of methods to
-simplify working with these trees and some efficient methods for
-common tasks that take advantage of the strong correlation structure
-of the trees in the sequence.
-
-.. note:: The locations of breakpoints between trees are returned
-    as floating point values, and are continuous in nature. It is
-    also possible to specify a finite-sites recombination model
-    by using the  ``recombination_map`` parameter of
-    :func:`.simulate`, however.
+    ...    print(tree.get_interval(), str(tree), sep="\t")
+    (0.0, 4701.4225005874)	{0: 6, 1: 5, 2: 6, 3: 9, 4: 5, 5: 7, 6: 7, 7: 9, 9: -1}
+    (4701.4225005874, 10000.0)	{0: 6, 1: 5, 2: 6, 3: 8, 4: 5, 5: 8, 6: 9, 8: 9, 9: -1}
 
 In this example, we use the :meth:`~.TreeSequence.trees`
 method to iterate over the trees in the sequence. For each tree
 we print out the interval the tree covers (i.e., the genomic
 coordinates which all share precisely this tree) using the
-:meth:`~.SparseTree.get_interval` method.
+:meth:`~.SparseTree.get_interval` method. Thus, the first tree covers the
+first 4.7kb of sequence and the second tree covers the remaining 5.3kb.
 We also print out the summary of each tree in terms of the parent values for
 each tree. Again, these differences are best illustrated by
 some images:
@@ -182,13 +172,13 @@ is specified using the ``mutation_rate`` parameter of
 to our example above, we can use::
 
     >>> tree_sequence = msprime.simulate(
-    >>>     5, length=10, recombination_rate=0.02, mutation_rate=0.02, random_seed=19)
+    ...    sample_size=5, Ne=1000, length=1e4, recombination_rate=2e-8, mutation_rate=2e-8)
     >>> print("Total mutations = ", tree_sequence.get_num_mutations())
     >>> for tree in tree_sequence.trees():
     >>>     print(tree.get_interval(), list(tree.mutations()), sep="\t")
     Total mutations =  1
-    (0.0, 4.7014225005874)  []
-    (4.7014225005874, 10.0) [(5.461212369738916, 6)]
+    (0.0, 4701.4225005874)	[]
+    (4701.4225005874, 10000.0)	[(5461.212369738915, 6)]
 
 In this example (which has the same genealogies as our example above because
 we use the same random seed), we have one mutation which
@@ -219,7 +209,7 @@ For example,::
     ...    for position, node in tree.mutations():
     ...        print("Mutation @ position {} has frequency {}".format(
     ...            position, tree.get_num_leaves(node) / tree.get_sample_size()))
-    Mutation @ position 5.46121236974 has frequency 0.4
+    Mutation @ position 5461.21236974 has frequency 0.4
 
 ***********
 Replication
@@ -257,10 +247,16 @@ analytical results for the number of segregating sites with simulations:
 
 Running this code, we get::
 
-    >>> segregating_sites_example(10, 5, 10000)
-                  mean              variance
-    Observed      14.0834           52.68804444
-    Analytical    14.14484          52.63903
+    >>> segregating_sites_example(10, 5, 100000)
+                  mean                  variance
+    Observed      14.12173		52.4695318071
+    Analytical    14.14484		52.63903
+
+Note that in this example we did not provide a value for the ``Ne``
+argument to :func:`.simulate`. In this case the effective population
+size defaults to 1, which can be useful for theoretical work. However,
+it is essential to remember that all rates and times must still be
+scaled by 4 to convert into the coalescent time scale.
 
 ********************
 Population structure
@@ -271,12 +267,13 @@ Population structure in ``msprime`` closely follows the model used in the
 matrix describing the migration rates between these subpopulations. The
 sample sizes, population sizes and growth rates of all demes
 can be specified independently. Migration rates are specified using
-a migration matrix.
+a migration matrix. Unlike ``ms`` however, all times and rates are specified
+in generations and all populations sizes are absolute (that is, not
+multiples of :math:`N_e`).
 
 In the following example, we calculate the mean coalescence time for
 a pair of lineages sampled in different demes in a symmetric island
 model, and compare this with the analytical expectation.
-
 
 .. code-block:: python
 
@@ -306,7 +303,7 @@ model, and compare this with the analytical expectation.
             [m, m, 0]]
         # We pass these values to the simulate function, and ask it
         # to run the required number of replicates.
-        num_replicates = 10000
+        num_replicates = 1e6
         replicates = msprime.simulate(
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
@@ -315,7 +312,8 @@ model, and compare this with the analytical expectation.
         T = np.zeros(num_replicates)
         for i, tree_sequence in enumerate(replicates):
             tree = next(tree_sequence.trees())
-            T[i] = tree.get_time(tree.get_root())
+            # Convert the TMRCA to coalecent units.
+            T[i] = tree.get_time(tree.get_root()) / 4
         # Finally, calculate the analytical expectation and print
         # out the results
         analytical = d / 2 + (d - 1) / (2 * M)
@@ -323,17 +321,18 @@ model, and compare this with the analytical expectation.
         print("Predicted =", analytical)
 
 
+
 Running this example we get::
 
     >>> migration_example()
-    Observed  = 6.49747111358
+    Observed  = 6.50638181614
     Predicted = 6.5
 
 **********
 Demography
 **********
 
-Msprime provides a flexible and simple way past demographic events
+Msprime provides a flexible and simple way to model past demographic events
 in arbitrary combinations. Here is an example descibing the
 `Gutenkunst et al. <http://dx.doi.org/10.1371/journal.pgen.1000695>`_
 out-of-Africa model. See
@@ -341,6 +340,8 @@ out-of-Africa model. See
 for a schematic of this model, and
 `Table 1 <http://dx.doi.org/10.1371/journal.pgen.1000695.t001>`_ for
 the values used.
+
+.. todo:: Add a diagram of the model for convenience.
 
 .. code-block:: python
 
@@ -352,17 +353,17 @@ the values used.
         N_AF = 12300
         N_EU0 = 1000
         N_AS0 = 510
+        # Times are provided in years, so we convert into generations.
+        generation_time = 25
+        T_AF = 220e3 / generation_time
+        T_B = 140e3 / generation_time
+        T_EU_AS = 21.2e3 / generation_time
         # We need to work out the starting population sizes based on the growth
         # rates provided for these two populations
         r_EU = 0.004
         r_AS = 0.0055
         N_EU = N_EU0 / math.exp(-r_EU * T_EU_AS)
         N_AS = N_AS0 / math.exp(-r_AS * T_EU_AS)
-        # Times are provided in years, so we convert into generations.
-        generation_time = 25
-        T_AF = 220e3 / generation_time
-        T_B = 140e3 / generation_time
-        T_EU_AS = 21.2e3 / generation_time
         # Migration rates during the various epochs.
         m_AF_B = 25e-5
         m_AF_EU = 3e-5
@@ -402,63 +403,79 @@ the values used.
             msprime.PopulationParametersChange(
                 time=T_AF, initial_size=N_A, population_id=0)
         ]
-        # Use the demography printer to debug the demographic history that
-        # we have just described.
-        dp = msprime.DemographyPrinter(
+        # Use the demography debugger to print out the demographic history
+        # that we have just described.
+        dp = msprime.DemographyDebugger(
             Ne=N_A,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
-        dp.debug_history()
+        dp.print_history()
 
 
-The :class:`.DemographyPrinter` provides a method to debug the history that
+The :class:`.DemographyDebugger` provides a method to debug the history that
 you have described so that you can be sure that the migration rates, population
 sizes and growth rates are all as you intend during each epoch::
 
-    INTERVAL: 0.00 -- 848.00 generations
+    =============================
+    Epoch: 0 -- 848.0 generations
+    =============================
          start     end      growth_rate |     0        1        2
        -------- --------       -------- | -------- -------- --------
     0 |1.23e+04 1.23e+04              0 |     0      3e-05   1.9e-05
     1 |2.97e+04   1e+03           0.004 |   3e-05      0     9.6e-05
     2 |5.41e+04    510           0.0055 |  1.9e-05  9.6e-05     0
 
-    Event:@848.0 Mass migration: lineages move from 2 to 1 with probability 1.0
-    Event:@848.0 Migration rate change to 0 everywhere
-    Event:@848.0 Migration rate change for (0, 1) to 0.00025
-    Event:@848.0 Migration rate change for (1, 0) to 0.00025
-    Event:@848.0 Population parameter change for 1: initial_size -> 2100 growth_rate -> 0
+    Events @ generation 848.0
+       - Mass migration: lineages move from 2 to 1 with probability 1.0
+       - Migration rate change to 0 everywhere
+       - Migration rate change for (0, 1) to 0.00025
+       - Migration rate change for (1, 0) to 0.00025
+       - Population parameter change for 1: initial_size -> 2100 growth_rate -> 0
 
-    INTERVAL: 848.00 -- 5600.00 generations
+    ==================================
+    Epoch: 848.0 -- 5600.0 generations
+    ==================================
          start     end      growth_rate |     0        1        2
        -------- --------       -------- | -------- -------- --------
     0 |1.23e+04 1.23e+04              0 |     0     0.00025     0
     1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
     2 |5.41e+04 2.41e-07         0.0055 |     0        0        0
 
-    Event:@5600.0 Mass migration: lineages move from 1 to 0 with probability 1.0
+    Events @ generation 5600.0
+       - Mass migration: lineages move from 1 to 0 with probability 1.0
 
-    INTERVAL: 5600.00 -- 8800.00 generations
+    ===================================
+    Epoch: 5600.0 -- 8800.0 generations
+    ===================================
          start     end      growth_rate |     0        1        2
        -------- --------       -------- | -------- -------- --------
     0 |1.23e+04 1.23e+04              0 |     0     0.00025     0
     1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
     2 |5.41e+04  0.00123         0.0055 |     0        0        0
 
-    Event:@8800.0 Population parameter change for 0: initial_size -> 7300
+    Events @ generation 8800.0
+       - Population parameter change for 0: initial_size -> 7300
 
-    INTERVAL: 8800.00 -- inf generations
+    ================================
+    Epoch: 8800.0 -- inf generations
+    ================================
          start     end      growth_rate |     0        1        2
        -------- --------       -------- | -------- -------- --------
     0 | 7.3e+03  7.3e+03              0 |     0     0.00025     0
     1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
     2 |5.41e+04     0            0.0055 |     0        0        0
 
-.. warning:: The output of the :meth:`.DemographyPrinter.debug_history` method
+
+.. warning:: The output of the :meth:`.DemographyDebugger.print_history` method
     is intended only for debugging purposes, and is not meant to be machine
     readable. The format is also preliminary; if there is other information
     that you think would be useful, please `open an issue on GitHub
     <https://github.com/jeromekelleher/msprime/issues>`_
+
+Once you are satistied that the demographic history that you have built
+is correct, it can then be simulated by calling the :func:`.simulate`
+function.
 
 ******************
 Recombination maps

@@ -146,10 +146,10 @@ class SparseTree(object):
     leaves. Each node in the tree has a parent, which is non-zero for all
     non-root nodes reachable from the leaves. This value is obtained using the
     :meth:`.get_parent` method. The parent of the root node is the
-    :const:`.NULLNODE` node, :math:`-1`. Similarly, each internal node has a
+    :const:`.NULL_NODE` node, :math:`-1`. Similarly, each internal node has a
     pair of children, which are obtained using the :meth:`.get_children`
-    method. Each node in the tree has a time associated with it in coalescent
-    time units. This value is obtained using the :meth:`.get_time` method.
+    method. Each node in the tree has a time associated with it in generations.
+    This value is obtained using the :meth:`.get_time` method.
 
     Sparse trees are not intended to be instantiated directly, and are
     obtained as part of a :class:`.TreeSequence` using the
@@ -239,8 +239,8 @@ class SparseTree(object):
 
     def get_time(self, u):
         """
-        Returns the time of the specified node. Returns 0 if u is a leaf
-        or is not a node in the current tree.
+        Returns the time of the specified node in generations. Returns 0 if u
+        is a leaf or is not a node in the current tree.
 
         :param int u: The node of interest.
         :return: The time of u.
@@ -1656,8 +1656,7 @@ class DemographyDebugger(object):
     """
     def __init__(
             self, Ne=1, population_configurations=None, migration_matrix=None,
-            demographic_events=[], file=sys.stdout):
-        self._file = file
+            demographic_events=[]):
         self._precision = 3
         self._Ne = Ne
         self._simulator = simulator_factory(
@@ -1673,7 +1672,7 @@ class DemographyDebugger(object):
         return 4 * self._Ne * t
 
     def _print_populations(
-            self, start_time, end_time, migration_matrix, populations):
+            self, start_time, end_time, migration_matrix, populations, output):
         field_width = self._precision + 6
         growth_rate_field_width = 14
         sep_str = " | "
@@ -1687,22 +1686,22 @@ class DemographyDebugger(object):
             id="", start_size="start", end_size="end",
             growth_rate="growth_rate", field_width=field_width,
             growth_rate_field_width=growth_rate_field_width), end=sep_str,
-            file=self._file)
+            file=output)
         for k in range(N):
             print(
-                "{0:^{1}}".format(k, field_width), end="", file=self._file)
-        print(file=self._file)
+                "{0:^{1}}".format(k, field_width), end="", file=output)
+        print(file=output)
         h = "-" * (field_width - 1)
         print(
             fmt.format(
                 id="", start_size=h, end_size=h, growth_rate=h,
                 field_width=field_width,
                 growth_rate_field_width=growth_rate_field_width),
-            end=sep_str, file=self._file)
+            end=sep_str, file=output)
         for k in range(N):
             s = "-" * (field_width - 1)
-            print("{0:<{1}}".format(s, field_width), end="", file=self._file)
-        print(file=self._file)
+            print("{0:<{1}}".format(s, field_width), end="", file=output)
+        print(file=output)
         for j, pop in enumerate(populations):
             s = (
                 "{id:<2}|"
@@ -1715,17 +1714,17 @@ class DemographyDebugger(object):
                     growth_rate=pop.growth_rate,
                     precision=self._precision, field_width=field_width,
                     growth_rate_field_width=growth_rate_field_width)
-            print(s, end=sep_str, file=self._file)
+            print(s, end=sep_str, file=output)
             for k in range(N):
                 x = migration_matrix[j][k]
                 print("{0:^{1}.{2}g}".format(
                     x, field_width, self._precision), end="",
-                    file=self._file)
-            print(file=self._file)
+                    file=output)
+            print(file=output)
 
-    def print_history(self):
+    def print_history(self, output=sys.stdout):
         """
-        Prints out a summary of the history of the populations.
+        Prints a summary of the history of the populations.
         """
         ll_sim = self._simulator.create_ll_instance()
         N = self._simulator.get_num_populations()
@@ -1737,11 +1736,11 @@ class DemographyDebugger(object):
             if len(events) > 0:
                 print(
                     "Events @ generation {}".format(start_time),
-                    file=self._file)
+                    file=output)
             for event in events:
                 assert event.time == start_time
-                print("   -", event, file=self._file)
-            print(file=self._file)
+                print("   -", event, file=output)
+            print(file=output)
             scaled_end_time = ll_sim.debug_demography()
             end_time = self._scaled_time_to_generations(scaled_end_time)
             m = ll_sim.get_migration_matrix()
@@ -1751,12 +1750,12 @@ class DemographyDebugger(object):
                 Population(Ne=self._Ne, **d)
                 for d in ll_sim.get_population_configuration()]
             s = "Epoch: {} -- {} generations".format(start_time, end_time)
-            print("=" * len(s), file=self._file)
-            print(s, file=self._file)
-            print("=" * len(s), file=self._file)
+            print("=" * len(s), file=output)
+            print(s, file=output)
+            print("=" * len(s), file=output)
             self._print_populations(
-                start_time, end_time, migration_matrix, populations)
-            print(file=self._file)
+                start_time, end_time, migration_matrix, populations, output)
+            print(file=output)
             start_time = end_time
 
 

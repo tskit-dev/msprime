@@ -270,8 +270,8 @@ class TestDemographyDebugger(unittest.TestCase):
             dp = msprime.DemographyDebugger(
                 population_configurations=population_configurations,
                 migration_matrix=migration_matrix,
-                demographic_events=demographic_events, file=f)
-            dp.print_history()
+                demographic_events=demographic_events)
+            dp.print_history(f)
             f.seek(0)
             debug_output = f.read()
         # TODO when there is better output, write some tests to
