@@ -438,14 +438,12 @@ class TestCoalescenceLocations(unittest.TestCase):
         u = tree.get_mrca(0, 2)
         self.assertEqual(u, 5)
         self.assertEqual(tree.get_population(u), 2)
-        g = tree.get_time(u) * 4
-        self.assertTrue(t2 < g < t3)
+        self.assertTrue(t2 < tree.get_time(u) < t3)
         # The MRCA of 0, 1, 2 and 3 should happen in 3 at time > t3
         u = tree.get_mrca(0, 3)
         self.assertEqual(u, 6)
         self.assertEqual(tree.get_population(u), 3)
-        g = tree.get_time(u) * 4
-        self.assertGreater(g, t3)
+        self.assertGreater(tree.get_time(u), t3)
 
     def test_empty_demes(self):
         t1 = 1
@@ -508,8 +506,7 @@ class TestTimeUnits(unittest.TestCase):
             tree = next(ts.trees())
             u = tree.get_mrca(0, 1)
             self.assertEqual(u, 2)
-            generation = tree.get_time(u) * 4 * Ne
-            self.assertAlmostEqual(g, generation, places=1)
+            self.assertAlmostEqual(g, tree.get_time(u), places=1)
 
     def test_coalescence_after_size_change(self):
         Ne = 20000
@@ -535,8 +532,7 @@ class TestTimeUnits(unittest.TestCase):
             tree = next(ts.trees())
             u = tree.get_mrca(0, 1)
             self.assertEqual(u, 2)
-            generation = tree.get_time(u) * 4 * Ne
-            self.assertAlmostEqual(g, generation, places=1)
+            self.assertAlmostEqual(g, tree.get_time(u), places=1)
 
 
 class TestLowLevelConversions(unittest.TestCase):

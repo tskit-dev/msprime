@@ -1505,6 +1505,7 @@ class TestTreeSequence(LowLevelTestCase):
     """
     Tests for the low-level interface for the TreeSequence.
     """
+
     def test_seed_equality(self):
         rng = _msprime.RandomGenerator(10)
         simulations = [
@@ -1680,7 +1681,7 @@ class TestTreeSequence(LowLevelTestCase):
             json_str = ts.get_mutation_parameters()
             self.assertIsNotNone(json_str)
             params = json.loads(json_str)
-            self.assertEqual(params["scaled_mutation_rate"], 10.0)
+            self.assertEqual(params["mutation_rate"], 10.0)
 
     def test_mutation_persistence(self):
         ts = self.get_tree_sequence(mutation_rate=0.0)
@@ -1777,6 +1778,38 @@ class TestTreeSequence(LowLevelTestCase):
         for ts in self.get_example_tree_sequences():
             self.verify_get_record_interface(ts)
 
+    def test_create_interface(self):
+        tree_sequence = _msprime.TreeSequence()
+        sim = _msprime.Simulator(10, _msprime.RandomGenerator(1))
+        recomb_map = uniform_recombination_map(sim)
+        # First two params are mandatory.
+        self.assertRaises(TypeError, tree_sequence.create)
+        self.assertRaises(TypeError, tree_sequence.create, sim)
+        self.assertRaises(TypeError, tree_sequence.create, recomb_map, sim)
+        for bad_type in ["", {}, [], None]:
+            self.assertRaises(TypeError, tree_sequence.create, sim, bad_type)
+            self.assertRaises(
+                TypeError, tree_sequence.create, bad_type, recomb_map)
+            # Ne argument is optional, must be a number
+            self.assertRaises(
+                TypeError, tree_sequence.create, sim, recomb_map, bad_type)
+
+    def test_record_scaling(self):
+        sim = _msprime.Simulator(10, _msprime.RandomGenerator(1))
+        sim.run()
+        recomb_map = uniform_recombination_map(sim)
+        for Ne in [0.25, 1, 10, 1e6]:
+            tree_sequence = _msprime.TreeSequence()
+            tree_sequence.create(sim, recomb_map, Ne)
+            self.assertEqual(
+                sim.get_num_coalescence_records(),
+                tree_sequence.get_num_records())
+            sim_times = [
+                r[-2] for r in sim.get_coalescence_records()]
+            for j in range(tree_sequence.get_num_records()):
+                generation = tree_sequence.get_record(j)[-2]
+                self.assertEqual(generation, sim_times[j] * 4 * Ne)
+
 
 class TestHdf5Format(LowLevelTestCase):
     """
@@ -1785,8 +1818,8 @@ class TestHdf5Format(LowLevelTestCase):
 
     def verify_mutation_parameters_json(self, json_str):
         parameters = json.loads(json_str.decode())
-        self.assertIn("scaled_mutation_rate", parameters)
-        self.assertIsInstance(parameters["scaled_mutation_rate"], int, float)
+        self.assertIn("mutation_rate", parameters)
+        self.assertIsInstance(parameters["mutation_rate"], int, float)
 
     def verify_tree_parameters_json(self, json_str):
         parameters = json.loads(json_str.decode())

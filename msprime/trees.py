@@ -480,8 +480,7 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
-def _replicate_generator(
-        sim, rng, scaled_mutation_rate, num_replicates):
+def _replicate_generator(sim, rng, mutation_rate, num_replicates):
     """
     Generator function for the many-replicates case of the simulate
     function.
@@ -492,7 +491,7 @@ def _replicate_generator(
         j += 1
         sim.run()
         tree_sequence = sim.get_tree_sequence()
-        tree_sequence.generate_mutations(scaled_mutation_rate, rng)
+        tree_sequence.generate_mutations(mutation_rate, rng)
         yield tree_sequence
         sim.reset()
 
@@ -642,17 +641,14 @@ def simulate(
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
         demographic_events=demographic_events)
-    scaled_mutation_rate = 0
-    if mutation_rate is not None:
-        scaled_mutation_rate = 4 * Ne * mutation_rate
+    mu = 0 if mutation_rate is None else mutation_rate
     if num_replicates is None:
         sim.run()
         tree_sequence = sim.get_tree_sequence()
-        tree_sequence.generate_mutations(scaled_mutation_rate, rng)
+        tree_sequence.generate_mutations(mu, rng)
         return tree_sequence
     else:
-        return _replicate_generator(
-            sim, rng, scaled_mutation_rate, num_replicates)
+        return _replicate_generator(sim, rng, mu, num_replicates)
 
 
 def load(path):
@@ -774,7 +770,9 @@ class TreeSimulator(object):
         return self._ll_sim.get_used_memory()
 
     def get_time(self):
-        return self._ll_sim.get_time()
+        # The low-level simulation returns time in coalescent units.
+        return (
+            self.get_effective_population_size() * 4 * self._ll_sim.get_time())
 
     def get_avl_node_block_size(self):
         return self._avl_node_block_size
@@ -938,7 +936,8 @@ class TreeSimulator(object):
         """
         ll_tree_sequence = _msprime.TreeSequence()
         ll_recomb_map = self._recombination_map.get_ll_recombination_map()
-        ll_tree_sequence.create(self._ll_sim, ll_recomb_map)
+        Ne = self.get_effective_population_size()
+        ll_tree_sequence.create(self._ll_sim, ll_recomb_map, Ne)
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
@@ -950,15 +949,14 @@ class TreeSimulator(object):
 
     def get_ms_command_line(
             self, executable="ms", num_replicates=1, output_trees=True,
-            scaled_mutation_rate=None):
+            mutation_rate=None):
         """
         Returns an command line for ms that is equivalent to the parameters
         for this simulator.
 
         :param str executable: The path to the ms-compatible binary.
         :param int num_relicates: The number of replicates to simulate.
-        :param float scaled_mutation_rate: The rate of mutation
-            per :math:`4N_0` generations.
+        :param float mutation_rate: The rate of mutation per generation.
         :return: A list of command line arguments that can be used to invoke
             ms with equivalent parameters to this simulator.
         :rtype: list
@@ -975,9 +973,10 @@ class TreeSimulator(object):
             args += ["-T"]
         if rho > 0 or L > 1:
             args += ["-r", str(rho), str(L)]
-        if scaled_mutation_rate is not None:
-            mu = scaled_mutation_rate * L
-            args += ["-t", str(mu)]
+        if mutation_rate is not None:
+            scaled_mutation_rate = (
+                mutation_rate * 4 * self.get_effective_population_size() * L)
+            args += ["-t", str(scaled_mutation_rate)]
         for conf in self._population_configurations:
             if conf.growth_rate > 0:
                 args.extend(["-G", str(conf.growth_rate)])
@@ -1237,13 +1236,12 @@ class TreeSequence(object):
     def variants(self):
         return _msprime.VariantGenerator(self._ll_tree_sequence)
 
-    def generate_mutations(
-            self, scaled_mutation_rate, random_generator):
+    def generate_mutations(self, mutation_rate, random_generator):
         # TODO document this function when it's ready to be brought back
         # into the public interface. We would need to document the
         # RandomGenerator as well.
         self._ll_tree_sequence.generate_mutations(
-            scaled_mutation_rate, random_generator)
+            mutation_rate, random_generator)
 
     def set_mutations(self, mutations):
         """

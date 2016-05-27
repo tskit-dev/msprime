@@ -1931,14 +1931,15 @@ TreeSequence_create(TreeSequence *self, PyObject *args)
     PyObject *ret = NULL;
     Simulator *sim = NULL;
     RecombinationMap *recomb_map = NULL;
+    double Ne = 0.25; /* default to 1/4 for coalescent time units. */
 
     if (self->tree_sequence != NULL) {
         PyErr_SetString(PyExc_ValueError, "tree_sequence already created");
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "O!O!",
+    if (!PyArg_ParseTuple(args, "O!O!|d",
                 &SimulatorType, &sim,
-                &RecombinationMapType, &recomb_map)) {
+                &RecombinationMapType, &recomb_map, &Ne)) {
         goto out;
     }
     if (Simulator_check_sim(sim) != 0) {
@@ -1958,7 +1959,7 @@ TreeSequence_create(TreeSequence *self, PyObject *args)
     }
     memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
     err = tree_sequence_create(self->tree_sequence, sim->sim,
-            recomb_map->recomb_map);
+            recomb_map->recomb_map, Ne);
     if (err != 0) {
         PyMem_Free(self->tree_sequence);
         self->tree_sequence = NULL;

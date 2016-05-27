@@ -140,12 +140,12 @@ class TestMsCommandLine(tests.MsprimeTestCase):
     def test_mutation(self):
         for L in [1, 10, 100, 1000]:
             for u in [0.125, 1.0, 10]:
-                mu = u * L
+                mu = u * L * 4
                 recomb_map = msprime.RecombinationMap.uniform_map(
                     length=L, rate=0, num_loci=L)
                 sim = msprime.simulator_factory(
                     10, recombination_map=recomb_map)
-                args = sim.get_ms_command_line(scaled_mutation_rate=u)
+                args = sim.get_ms_command_line(mutation_rate=u)
                 self.assertEqual(args[-2], "-t")
                 self.assertEqual(float(args[-1]), mu)
 
@@ -159,11 +159,11 @@ class TestMsCommandLine(tests.MsprimeTestCase):
         self.assertIn("-T", sim.get_ms_command_line())
         self.assertIn("-T", sim.get_ms_command_line(output_trees=True))
         self.assertNotIn("-T", sim.get_ms_command_line(output_trees=False))
-        self.assertIn("-T", sim.get_ms_command_line(scaled_mutation_rate=1.0))
+        self.assertIn("-T", sim.get_ms_command_line(mutation_rate=1.0))
         self.assertIn("-T", sim.get_ms_command_line(
-            scaled_mutation_rate=1.0, output_trees=True))
+            mutation_rate=1.0, output_trees=True))
         self.assertNotIn("-T", sim.get_ms_command_line(
-            scaled_mutation_rate=1.0, output_trees=False))
+            mutation_rate=1.0, output_trees=False))
 
     def test_num_replicates(self):
         L = 1
@@ -652,7 +652,7 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(st.get_num_mutations(), 0)
             # choose a mutation rate that hopefully guarantees mutations,
             # but not too many.
-            mu = 100 / ts.get_sequence_length()
+            mu = 10 / ts.get_sequence_length()
             ts.generate_mutations(mu, rng)
             if ts.get_num_mutations() > 0:
                 all_zero = False

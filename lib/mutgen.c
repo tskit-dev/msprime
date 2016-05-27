@@ -57,7 +57,7 @@ mutgen_encode_parameters(mutgen_t *self)
 {
     int ret = -1;
     const char *pattern = "{"
-        "\"scaled_mutation_rate\":" MSP_LOSSLESS_DBL "}";
+        "\"mutation_rate\":" MSP_LOSSLESS_DBL "}";
     int written;
     size_t size = 1 + (size_t) snprintf(NULL, 0, pattern,
             self->mutation_rate);

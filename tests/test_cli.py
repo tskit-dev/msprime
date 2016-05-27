@@ -517,10 +517,25 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     command line arguments.
     """
 
-    def create_simulator(self, command_line):
+    def create_runner(self, command_line):
         parser = cli.get_mspms_parser()
-        runner = cli.create_simulation_runner(parser, command_line.split())
-        return runner.get_simulator()
+        return cli.create_simulation_runner(parser, command_line.split())
+
+    def create_simulator(self, command_line):
+        return self.create_runner(command_line).get_simulator()
+
+    def test_mutation_rates(self):
+        # Mutation rates over a sequence length 1
+        runner = self.create_runner("2 1 -t 1")
+        self.assertEqual(runner.get_mutation_rate(), 1 / 4)
+        runner = self.create_runner("2 1 -t 2")
+        self.assertEqual(runner.get_mutation_rate(), 2 / 4)
+
+        # Mutation rates over a sequence length > 1
+        runner = self.create_runner("2 1 -t 2 -r 0 10")
+        self.assertEqual(runner.get_mutation_rate(), (2 / 4) / 10)
+        runner = self.create_runner("2 1 -t 0.2 -r 1 2")
+        self.assertEqual(runner.get_mutation_rate(), (0.2 / 4) / 2)
 
     def test_structure_args(self):
         sim = self.create_simulator("2 1 -T")

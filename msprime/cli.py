@@ -126,10 +126,10 @@ class SimulationRunner(object):
         # don't need to rescale, but we still need to divide by 4 to
         # cancel the factor introduced when calculated the scaled rates.
         self._recombination_rate = scaled_recombination_rate / 4
+        self._mutation_rate = scaled_mutation_rate / 4
         # Confusingly, we need the scaled mutation rate for generating
         # mutations because we can't used msprime's high-level API
         # directly.
-        self._scaled_mutation_rate = scaled_mutation_rate
         # For strict ms-compability we want to have m non-recombining loci
         recomb_map = msprime.RecombinationMap.uniform_map(
             num_loci, self._recombination_rate, num_loci)
@@ -162,6 +162,13 @@ class SimulationRunner(object):
         """
         return self._simulator
 
+    def get_mutation_rate(self):
+        """
+        Returns the per-base, per generation mutation rate used by
+        msprime.
+        """
+        return self._mutation_rate
+
     def run(self, output):
         """
         Runs the simulations and writes the output to the specified
@@ -188,9 +195,9 @@ class SimulationRunner(object):
                         # another string.
                         print("[{0}]".format(int(l)), end="", file=output)
                         print(ns, file=output)
-            if self._scaled_mutation_rate > 0:
+            if self._mutation_rate > 0:
                 tree_sequence.generate_mutations(
-                    self._scaled_mutation_rate, self._random_generator)
+                    self._mutation_rate, self._random_generator)
                 hg = msprime.HaplotypeGenerator(tree_sequence)
                 s = tree_sequence.get_num_mutations()
                 print("segsites:", s, file=output)

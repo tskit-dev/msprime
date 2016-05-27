@@ -283,7 +283,7 @@ out:
 
 int
 tree_sequence_create(tree_sequence_t *self, msp_t *sim,
-        recomb_map_t *recomb_map)
+        recomb_map_t *recomb_map, double Ne)
 {
     int ret = -1;
     uint32_t j;
@@ -319,7 +319,8 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
         self->trees.population[j] = records[j].population_id;
         self->trees.children[2 * j] = records[j].children[0];
         self->trees.children[2 * j + 1] = records[j].children[1];
-        self->trees.time[j] = records[j].time;
+        /* Rescale time into generations. */
+        self->trees.time[j] = records[j].time * 4 * Ne;
     }
     ret = msp_get_samples(sim, samples);
     if (ret != 0) {
