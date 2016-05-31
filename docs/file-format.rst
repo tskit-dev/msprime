@@ -24,8 +24,8 @@ contextual information.
 
 The root group contains a number of attributes, describing the basic
 properties of data set. The ``format_version`` attribute is a
-pair ``(major, minor)`` describing the file format version. This is
-document describes version 1.1.
+pair ``(major, minor)`` describing the file format version. This
+document describes version 2.0.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description

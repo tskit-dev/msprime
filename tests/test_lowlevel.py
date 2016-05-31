@@ -1876,8 +1876,8 @@ class TestHdf5Format(LowLevelTestCase):
             self.assertIn("mutations", keys)
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 1)
-        self.assertEqual(format_version[1], 1)
+        self.assertEqual(format_version[0], 2)
+        self.assertEqual(format_version[1], 0)
         self.assertEqual(root.attrs["sample_size"], ts.get_sample_size())
         self.assertEqual(
             root.attrs["sequence_length"], ts.get_sequence_length())
