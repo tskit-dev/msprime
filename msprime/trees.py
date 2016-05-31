@@ -1134,15 +1134,26 @@ class TreeSequence(object):
         """
         Returns an iterator over the coalescence records in this tree
         sequence in time-sorted order. Each record is a tuple
-        :math:`(l, r, u, c, t)` defining the assignment of a tree node
-        across an interval. The range of this record is as the half-open
+        :math:`(l, r, u, c, t, d)` defining the assignment of a tree node
+        across an interval. The range of this record is the half-open
         genomic interval :math:`[l, r)`, such that it applies to all
         positions :math:`l \leq x < r`. Each record represents the
         assignment of a pair of children :math:`c` to a parent
-        :math:`u`. This assignment happens at time :math:`t` in
-        coalescent units.
+        parent :math:`u`. This assignment happens at :math:`t` generations
+        in the past within the population with ID :math:`d`. If population
+        information was not stored for this tree sequence then the
+        population ID will be :data:`msprime.NULL_POPULATION`.
 
-        :return: An iterator of all :math:`(l, r, u, c, t)` tuples defining
+        Each record returned is an instance of :func:`collections.namedtuple`,
+        and may be accessed via the attributes ``left``, ``right``, ``node``,
+        ``children``, ``time`` and ``population``, as well as the usual
+        positional approach. For example, if we wished to print out the genomic
+        length of each record, we could write::
+
+        >>> for record in tree_sequence.records():
+        >>>     print(record.right - record.left)
+
+        :return: An iterator of all :math:`(l, r, u, c, t, d)` tuples defining
             the coalescence records in this tree sequence.
         :rtype: iter
         """
@@ -1179,7 +1190,7 @@ class TreeSequence(object):
         """
         Returns an iterator over the mutations in this tree sequence. Each
         mutation is represented as a tuple (position, node), and mutations
-        returned in increasing order of position.
+        are returned in increasing order of position.
 
         :return: The mutations in this tree sequence.
         :rtype: iter
@@ -1530,7 +1541,7 @@ class MigrationRateChange(DemographicEvent):
     Changes the rate of migration to a new value at a specific time.
 
     :param float time: The time at which this event occurs in generations.
-    :param float rate: The new migration rate.
+    :param float rate: The new per-generation migration rate.
     :param tuple matrix_index: A tuple of two population IDs descibing
         the matrix index of interest. If ``matrix_index`` is None, all
         non-diagonal entries of the migration matrix are changed
@@ -1582,9 +1593,9 @@ class MassMigration(DemographicEvent):
     """
     A mass migration event in which some fraction of the population in
     one deme simultaneously move to another deme, viewed backwards in
-    time. For each lineages currently present in the source population,
+    time. For each lineage currently present in the source population,
     they move to the destination population with probability equal to
-    `proportion`.
+    ``proportion``.
 
     This event class generalises the population split (``-ej``) and
     admixture (``-es``) events from ``ms``. Note that MassMigrations

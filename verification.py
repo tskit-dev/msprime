@@ -545,7 +545,8 @@ def main():
 
     # Add some random instances.
     verifier.add_random_instance("random1")
-    verifier.add_random_instance("random2", num_demographic_events=10)
+    verifier.add_random_instance(
+        "random2", num_replicates=10**4, num_demographic_events=10)
     # verifier.add_random_instance("random2", num_populations=3)
 
     # Add analytical checks

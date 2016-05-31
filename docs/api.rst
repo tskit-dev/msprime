@@ -12,28 +12,27 @@ introduction to using this API to run simulations and analyse the results.
 Simulation model
 ****************
 
-The simulation model in ``msprime`` closely follows tby he classical ``ms``
+The simulation model in ``msprime`` closely follows the classical ``ms``
 program. Unlike ``ms``, however, time is measured in generations rather than
-"coalescent units". Internally, the same algorithm is used, but ``msprime``
-provides a convenient translation layer that allows the user to input times and
-rates in generations. Similarly, the times associated with tree nodes produced
+"coalescent units". Internally the same simulation algorithm is used, but
+``msprime`` provides a translation layer to allow the user input times and
+rates in generations. Similarly, the times associated with the trees produced
 by ``msprime`` are in measured generations. To enable this translation from
-coalescent units into generations, a reference effective population size must
-be provided, which is given by the ``Ne`` parameter in the :func:`simulate`
-function. Population sizes for individual demes and for past demographic events
-are also defined as absolute values. All migration rates and growth rates are
-also per generation.
+generations into coalescent units and vice-versa, a reference effective
+population size must be provided, which is given by the ``Ne`` parameter in the
+:func:`simulate` function. Population sizes for individual demes and for past
+demographic events are also defined as absolute values. All migration rates and
+growth rates are also per generation.
 
-When running
-simulations we define the length in bases :math:`L` of the sequence in question
-using the ``length`` parameter. This defines the coordinate space within
-which trees and mutations are defined. :math:`L` is a continuous value, and
-coordinates can take any value from :math:`0` to :math:`L`.
-Mutations occur in an infinite sites process along this sequence, and
-mutation rates are specified per generation, per unit of sequence length.
+When running simulations we define the length in bases :math:`L` of the
+sequence in question using the ``length`` parameter. This defines the
+coordinate space within which trees and mutations are defined. :math:`L` is a
+continuous value, and coordinates can take any value from :math:`0` to
+:math:`L`. Mutations occur in an infinite sites process along this sequence,
+and mutation rates are specified per generation, per unit of sequence length.
 Thus, given the per-generation mutation rate :math:`\mu`, the rate of mutation
-over the entire sequence in coalescent time units is :math:`\theta = 4 N_e \mu L`.
-It is important to remember these scaling factors when comparing with
+over the entire sequence in coalescent time units is :math:`\theta = 4 N_e \mu
+L`. It is important to remember these scaling factors when comparing with
 analytical results!
 
 Similarly, recombination rates are per base, per generation in ``msprime``.
@@ -166,4 +165,3 @@ tree in this sequence.
 
 .. autoclass:: msprime.SparseTree()
     :members:
-
