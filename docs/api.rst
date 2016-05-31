@@ -20,9 +20,9 @@ rates in generations. Similarly, the times associated with the trees produced
 by ``msprime`` are in measured generations. To enable this translation from
 generations into coalescent units and vice-versa, a reference effective
 population size must be provided, which is given by the ``Ne`` parameter in the
-:func:`simulate` function. Population sizes for individual demes and for past
-demographic events are also defined as absolute values. All migration rates and
-growth rates are also per generation.
+:func:`.simulate` function. Population sizes for individual demes and for past
+demographic events are defined as absolute values, **not** scaled
+by ``Ne``. All migration rates and growth rates are also per generation.
 
 When running simulations we define the length in bases :math:`L` of the
 sequence in question using the ``length`` parameter. This defines the
@@ -61,9 +61,9 @@ configuration at a particular time in the past.
     rates over the entire region and in coalescent time units. The
     motivation for this is to allow the user change the size of the simulated
     region without having to rescale the recombination and mutation rates,
-    and to allow users to easily state per-generation recombination rates.
-    However, the ``mspms`` command line application is fully :program:`ms`
-    compatible.
+    and to also allow users directly state times and rates in units of
+    generations. However, the ``mspms`` command line application is
+    fully :program:`ms` compatible.
 
 *******************
 Running simulations

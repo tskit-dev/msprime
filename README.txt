@@ -3,8 +3,8 @@ msprime
 =======
 
 Msprime is a reimplementation of Hudson's classical ms program for modern
-datasets. The Python API and storage format are currently under development
-and are not fully documented, but the command line interface ``mspms`` is
+datasets. The Python API and storage format are currently alpha quality
+and not fully documented, but the command line interface ``mspms`` is
 reliable and ready for use. This program provides a fully ``ms`` compatible
 interface, and can be used as a drop-in replacement in existing workflows.
 
