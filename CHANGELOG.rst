@@ -1,4 +1,78 @@
 ********************
+[0.3.0] - 2016-05-31
+********************
+
+Bugfix release affecting all users of the Python API. Version 0.2.0 contained a
+confusing and inconsistent mix of times and rates being expressed in both
+coalescent units and generations. This release changes _all_ times and rates
+used when describing demographic models to generations, and also changes
+all population sizes to be absolute. In the interest of consistency, the
+units of the trees output by msprime are also changed to generations. This
+is a major breaking change, and will require updates to all scripts using the
+API.
+
+This release also include some performance improvements and additional
+functionality.
+
+Mspms users are not affected, other than benefiting from performance
+improvements.
+
+Breaking changes:
+
+- Time values are now rescaled into generations when a TreeSequence is
+  created, and so all times associated with tree nodes are measured in
+  generations. The time values in any existing HDF5 file will now be
+  interpreted as being in generations, so stored simulations must be
+  rerun. To minimise the chance of this happening silently, we have
+  incremented the file format major version number, so that attempts
+  to read older versions will fail.
+
+- Growth rate values for the PopulationConfiguration class are now
+  per generation, and population sizes are absolute. These were in
+  coalescent units and relative to Ne previously.
+
+- GrowthRateChangeEvents and SizeChangeEvents have been replaced with
+  a single class, PopulationParametersChange. This new class takes
+  an initial_size as the absolute population size, and growth_rate
+  per generation. Since the change in units was a breaking one,
+  potentially leading to subtle and confusing bugs, we decided that
+  the name refactoring would at least ensure that users would need
+  to be aware that the change had been made. This API should now
+  be stable, and will not be changed again without an excellent
+  reason.
+
+- MigrationRateChangeEvent has been renamed to MigrationRateChange
+  and the migration rates are now per-generation.
+
+- MassMigrationEvent has been renamed to MassMigration, and the
+  values of source and destination swapped, fixing the bug in
+  issue #14.
+
+- The TreeSequence.records() method now returns an extra value,
+  potentially breaking client code.
+
+Improvements:
+
+- Added tutorial for demographic events.
+
+- Added DemographyDebugger class to help view the changes in populations
+  over time.
+
+- Added population tracking for coalescent events. We can now determine
+  the population associated with every tree node. The relevant information
+  has been added to the HDF5 file format.
+
+- Improved performance for replication by reusing the same low-level
+  simulator instance. This leads to significant improvements for large
+  numbers of replicates of small simulations. Issue #8.
+
+- Changed the TreeSequence.records() method to return named tuples.
+
+- Added get_total_branch_length method. Issue #12.
+
+- Fixed bug in reading Hapmap files. Issue #13.
+
+********************
 [0.2.0] - 2016-05-05
 ********************
 
