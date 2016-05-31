@@ -2,6 +2,8 @@ coverage
 flake8
 mock
 nose
+# We need setuptools_scm for building on RTD.
+setuptools_scm
 sphinx
 sphinx-argparse
 sphinx_rtd_theme
