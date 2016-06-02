@@ -1740,6 +1740,9 @@ msp_common_ancestor_event(msp_t *self, uint32_t population_id)
     y = (segment_t *) node->item;
     avl_unlink_node(ancestors, node);
     msp_free_avl_node(self, node);
+    /* Keep GCC happy */
+    l_min = 0;
+    r_max = 0;
 
     /* update num_links and get ready for loop */
     z = NULL;

@@ -5,6 +5,10 @@ SRC=_msprimemodule.c
 ext2: ${SRC}
 	python setup.py build_ext --inplace
 
+ext2-coverage: ${SRC}
+	rm -fR build
+	CFLAGS="-coverage" python setup.py build_ext --inplace
+
 ext3: ${SRC}
 	python3 setup.py build_ext --inplace
 
