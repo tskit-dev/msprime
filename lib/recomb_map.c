@@ -235,7 +235,7 @@ recomb_map_genetic_to_phys_bulk(recomb_map_t *self, double *values, size_t n)
     } else {
         /* Skip over any leading zeros */
         j = 0;
-        while (values[j] == 0.0) {
+        while (j < n && values[j] == 0.0) {
             j++;
         }
         s = 0;
