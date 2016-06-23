@@ -1286,20 +1286,34 @@ class TreeSequence(object):
         """
         self._ll_tree_sequence.set_mutations(mutations)
 
-    def get_pairwise_diversity(self):
+    def get_pairwise_diversity(self, samples=None):
         """
         Returns the value of pi, the pairwise nucleotide site diversity.
+        If `samples` is specified, calculate the diversity within this set.
 
+        Note that we do not check for duplicates within the list of samples,
+        and if samples are provided multiple times incorrect results will
+        be returned.
+
+        :param iterable samples: The set of samples within which we calculate
+            the diversity. If None, calculate diversity within the entire
+            sample.
         :return: The pairwise nucleotide site diversity.
-        :rtype: iter
+        :rtype: float
         """
+        if samples is None:
+            tracked_leaves = list(range(self.get_sample_size()))
+        else:
+            tracked_leaves = list(samples)
+        if len(tracked_leaves) < 2:
+            raise ValueError("len(samples) must be >= 2")
         pi = 0
-        n = self.get_sample_size()
-        denom = n * (n - 1) / 2
-        for t in self.trees():
+        k = len(tracked_leaves)
+        denom = k * (k - 1) / 2
+        for t in self.trees(tracked_leaves=tracked_leaves):
             for _, node in t.mutations():
-                k = t.get_num_leaves(node)
-                pi += k * (n - k) / denom
+                j = t.get_num_tracked_leaves(node)
+                pi += j * (k - j) / denom
         return pi
 
 

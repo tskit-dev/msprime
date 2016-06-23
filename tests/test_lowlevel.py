@@ -2328,11 +2328,11 @@ class TestSparseTree(LowLevelTestCase):
                 TypeError, _msprime.SparseTree, ts, [1, bad_type])
         for bad_leaf in [ts.get_sample_size(), 10**6, -1e6]:
             self.assertRaises(
-                _msprime.LibraryError, _msprime.SparseTree, ts, [bad_leaf])
+                ValueError, _msprime.SparseTree, ts, [bad_leaf])
             self.assertRaises(
-                _msprime.LibraryError, _msprime.SparseTree, ts, [1, bad_leaf])
+                ValueError, _msprime.SparseTree, ts, [1, bad_leaf])
             self.assertRaises(
-                _msprime.LibraryError, _msprime.SparseTree, ts,
+                ValueError, _msprime.SparseTree, ts,
                 [1, bad_leaf, 1])
 
     def test_count_all_leaves(self):
