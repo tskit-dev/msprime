@@ -2293,6 +2293,34 @@ out:
     return ret;
 }
 
+static PyObject *
+TreeSequence_get_population(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int node;
+    uint32_t population_id;
+    int population, err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    err = tree_sequence_get_population(self->tree_sequence, node,
+            &population_id);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    population = population_id;
+    if (population_id == MSP_NULL_POPULATION_ID) {
+        population = -1;
+    }
+    ret = Py_BuildValue("i", population);
+out:
+    return ret;
+}
 
 static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
@@ -2373,6 +2401,8 @@ static PyMethodDef TreeSequence_methods[] = {
             "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
+    {"get_population", (PyCFunction) TreeSequence_get_population, METH_VARARGS,
+            "Returns the population associated with the specified node." },
     {"get_simulation_parameters",
             (PyCFunction) TreeSequence_get_simulation_parameters, METH_NOARGS,
             "Returns the simulation parameters encoded as JSON." },

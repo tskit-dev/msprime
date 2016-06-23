@@ -339,6 +339,8 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(tree.get_population(0), 0)
         self.assertEqual(tree.get_population(1), 1)
         self.assertEqual(tree.get_population(2), 2)
+        self.assertEqual(ts.get_population(0), 0)
+        self.assertEqual(ts.get_population(1), 1)
 
     def test_two_pops_multiple_samples(self):
         # Made absolutely sure that all samples have coalesced within
@@ -365,6 +367,8 @@ class TestCoalescenceLocations(unittest.TestCase):
         for j in range(n // 2):
             self.assertEqual(tree.get_population(j), 0)
             self.assertEqual(tree.get_population(n // 2 + j), 1)
+            self.assertEqual(ts.get_population(j), 0)
+            self.assertEqual(ts.get_population(n // 2 + j), 1)
         self.assertEqual(tree.get_population(tree.get_root()), 2)
 
     def test_three_pops_migration(self):
@@ -392,6 +396,9 @@ class TestCoalescenceLocations(unittest.TestCase):
             self.assertEqual(tree.get_population(j), 0)
             self.assertEqual(tree.get_population(n // 3 + j), 1)
             self.assertEqual(tree.get_population(2 * (n // 3) + j), 2)
+            self.assertEqual(ts.get_population(j), 0)
+            self.assertEqual(ts.get_population(n // 3 + j), 1)
+            self.assertEqual(ts.get_population(2 * (n // 3) + j), 2)
         # The MRCAs of 0, 1 and 3 must have occured in deme 0
         self.assertEqual(tree.get_population(tree.get_mrca(0, n // 3)), 0)
         self.assertEqual(
@@ -428,6 +435,7 @@ class TestCoalescenceLocations(unittest.TestCase):
         # Check the leaves have the correct population.
         for j in range(4):
             self.assertEqual(tree.get_population(j), j)
+            self.assertEqual(ts.get_population(j), j)
         # The MRCA of 0 and 1 should happen in 1 at time > t1, and < t2
         u = tree.get_mrca(0, 1)
         self.assertEqual(u, 4)
@@ -469,6 +477,8 @@ class TestCoalescenceLocations(unittest.TestCase):
         # Check the leaves have the correct population.
         self.assertEqual(tree.get_population(0), 0)
         self.assertEqual(tree.get_population(1), 3)
+        self.assertEqual(ts.get_population(0), 0)
+        self.assertEqual(ts.get_population(1), 3)
         # The MRCA of 0, 1 in 3 at time > t3
         u = tree.get_mrca(0, 1)
         self.assertEqual(u, 2)

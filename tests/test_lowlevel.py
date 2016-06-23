@@ -1603,6 +1603,21 @@ class TestTreeSequence(LowLevelTestCase):
                     max_node = node
             self.assertEqual(max_node + 1, ts.get_num_nodes())
 
+    def test_get_population(self):
+        for ts in self.get_example_tree_sequences():
+            for bad_type in ["1", None, []]:
+                self.assertRaises(TypeError, ts.get_population, bad_type)
+            self.assertRaises(_msprime.LibraryError, ts.get_population, -1)
+            self.assertRaises(
+                _msprime.LibraryError, ts.get_population, ts.get_sample_size())
+            self.assertRaises(
+                _msprime.LibraryError, ts.get_population,
+                ts.get_sample_size() + 1)
+            for j in range(ts.get_sample_size()):
+                # We only check for a single population here. Multi population
+                # tests are done in test_demography.
+                self.assertEqual(ts.get_population(j), 0)
+
     def verify_dump_equality(self, ts, outfile):
         """
         Verifies that we can dump a copy of the specified tree sequence

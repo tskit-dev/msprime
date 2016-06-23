@@ -1316,6 +1316,20 @@ class TreeSequence(object):
                 pi += j * (k - j) / denom
         return pi
 
+    def get_population(self, sample):
+        """
+        Returns the population ID for the specified sample ID.
+
+        :param int sample: The sample ID of interest.
+        :return: The population ID where the specified sample was drawn.
+            Returns NULL_POPULATION if no population information is
+            available.
+        :rtype: int
+        """
+        if sample < 0 or sample >= self.get_sample_size():
+            raise ValueError("Sample ID out of bounds")
+        return self._ll_tree_sequence.get_population(sample)
+
 
 class HaplotypeGenerator(object):
 

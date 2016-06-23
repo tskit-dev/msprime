@@ -722,6 +722,15 @@ class TestTreeSequence(HighLevelTestCase):
                 ts.get_pairwise_diversity([0, 1]),
                 ts.get_pairwise_diversity([1, 0]))
 
+    def test_get_population(self):
+        for ts in self.get_example_tree_sequences():
+            n = ts.get_sample_size()
+            self.assertRaises(ValueError, ts.get_population, -1)
+            self.assertRaises(ValueError, ts.get_population, n)
+            self.assertRaises(ValueError, ts.get_population, n + 1)
+            self.assertEqual(ts.get_population(0), 0)
+            self.assertEqual(ts.get_population(n - 1), 0)
+
 
 class TestSparseTree(HighLevelTestCase):
     """
