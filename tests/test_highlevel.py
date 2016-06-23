@@ -731,6 +731,15 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_population(0), 0)
             self.assertEqual(ts.get_population(n - 1), 0)
 
+    def test_get_samples(self):
+        for ts in self.get_example_tree_sequences():
+            n = ts.get_sample_size()
+            samples = list(range(n))
+            self.assertEqual(ts.get_samples(), samples)
+            self.assertEqual(ts.get_samples(0), samples)
+            self.assertEqual(ts.get_samples(msprime.NULL_POPULATION), [])
+            self.assertEqual(ts.get_samples(1), [])
+
 
 class TestSparseTree(HighLevelTestCase):
     """

@@ -1330,6 +1330,22 @@ class TreeSequence(object):
             raise ValueError("Sample ID out of bounds")
         return self._ll_tree_sequence.get_population(sample)
 
+    def get_samples(self, population_id=None):
+        """
+        Returns the samples matching the specified population ID.
+
+        :param int population_id: The population of interest. If None,
+            return all samples.
+        :return: The ID of the population we wish to find samples from.
+            If None, return samples from all populations.
+        :rtype: list
+        """
+        samples = list(range(self.get_sample_size()))
+        if population_id is not None:
+            samples = [
+                u for u in samples if self.get_population(u) == population_id]
+        return samples
+
 
 class HaplotypeGenerator(object):
 
