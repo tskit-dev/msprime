@@ -1143,6 +1143,21 @@ tree_sequence_get_num_nodes(tree_sequence_t *self)
     return self->num_nodes;
 }
 
+int
+tree_sequence_get_population(tree_sequence_t *self, uint32_t u,
+        uint32_t *population_id)
+{
+    int ret = 0;
+
+    if (u >= self->sample_size) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    *population_id = self->samples.population[u];
+out:
+    return ret;
+}
+
 size_t
 tree_sequence_get_num_coalescence_records(tree_sequence_t *self)
 {

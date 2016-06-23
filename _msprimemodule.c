@@ -2293,6 +2293,34 @@ out:
     return ret;
 }
 
+static PyObject *
+TreeSequence_get_population(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int node;
+    uint32_t population_id;
+    int population, err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    err = tree_sequence_get_population(self->tree_sequence, node,
+            &population_id);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    population = population_id;
+    if (population_id == MSP_NULL_POPULATION_ID) {
+        population = -1;
+    }
+    ret = Py_BuildValue("i", population);
+out:
+    return ret;
+}
 
 static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
@@ -2373,6 +2401,8 @@ static PyMethodDef TreeSequence_methods[] = {
             "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
+    {"get_population", (PyCFunction) TreeSequence_get_population, METH_VARARGS,
+            "Returns the population associated with the specified node." },
     {"get_simulation_parameters",
             (PyCFunction) TreeSequence_get_simulation_parameters, METH_NOARGS,
             "Returns the simulation parameters encoded as JSON." },
@@ -2469,7 +2499,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     TreeSequence *tree_sequence = NULL;
     uint32_t *tracked_leaves = NULL;
     int flags = MSP_COUNT_LEAVES;
-    uint32_t j, num_tracked_leaves;
+    uint32_t j, n, num_tracked_leaves;
     PyObject *item;
 
     self->sparse_tree = NULL;
@@ -2481,6 +2511,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
         goto out;
     }
+    n = tree_sequence_get_sample_size(tree_sequence->tree_sequence);
     num_tracked_leaves = 0;
     if (py_tracked_leaves != NULL) {
         num_tracked_leaves = PyList_Size(py_tracked_leaves);
@@ -2497,6 +2528,10 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         tracked_leaves[j] = (uint32_t) PyLong_AsLong(item);
+        if (tracked_leaves[j] >= n) {
+            PyErr_SetString(PyExc_ValueError, "leaves must be < sample_size");
+            goto out;
+        }
     }
     self->sparse_tree = PyMem_Malloc(sizeof(sparse_tree_t));
     if (self->sparse_tree == NULL) {

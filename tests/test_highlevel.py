@@ -294,8 +294,16 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         Verifies the statistics calculated for the haplotypes
         in the specified tree sequence.
         """
+        haplotypes = list(ts.haplotypes())
         pi1 = ts.get_pairwise_diversity()
-        pi2 = get_pairwise_diversity(list(ts.haplotypes()))
+        pi2 = get_pairwise_diversity(haplotypes)
+        self.assertAlmostEqual(pi1, pi2)
+        self.assertGreaterEqual(pi1, 0.0)
+        self.assertFalse(math.isnan(pi1))
+        # Check for a subsample.
+        samples = range(ts.get_sample_size() // 2 + 1)
+        pi1 = ts.get_pairwise_diversity(samples)
+        pi2 = get_pairwise_diversity([haplotypes[j] for j in samples])
         self.assertAlmostEqual(pi1, pi2)
         self.assertGreaterEqual(pi1, 0.0)
         self.assertFalse(math.isnan(pi1))
@@ -700,6 +708,37 @@ class TestTreeSequence(HighLevelTestCase):
     def test_tracked_leaves(self):
         for ts in self.get_example_tree_sequences():
             self.verify_tracked_leaves(ts)
+
+    def test_get_pairwise_diversity(self):
+        for ts in self.get_example_tree_sequences():
+            n = ts.get_sample_size()
+            self.assertRaises(ValueError, ts.get_pairwise_diversity, [])
+            self.assertRaises(ValueError, ts.get_pairwise_diversity, [1])
+            self.assertRaises(ValueError, ts.get_pairwise_diversity, [1, n])
+            self.assertEqual(
+                ts.get_pairwise_diversity(),
+                ts.get_pairwise_diversity(range(n)))
+            self.assertEqual(
+                ts.get_pairwise_diversity([0, 1]),
+                ts.get_pairwise_diversity([1, 0]))
+
+    def test_get_population(self):
+        for ts in self.get_example_tree_sequences():
+            n = ts.get_sample_size()
+            self.assertRaises(ValueError, ts.get_population, -1)
+            self.assertRaises(ValueError, ts.get_population, n)
+            self.assertRaises(ValueError, ts.get_population, n + 1)
+            self.assertEqual(ts.get_population(0), 0)
+            self.assertEqual(ts.get_population(n - 1), 0)
+
+    def test_get_samples(self):
+        for ts in self.get_example_tree_sequences():
+            n = ts.get_sample_size()
+            samples = list(range(n))
+            self.assertEqual(ts.get_samples(), samples)
+            self.assertEqual(ts.get_samples(0), samples)
+            self.assertEqual(ts.get_samples(msprime.NULL_POPULATION), [])
+            self.assertEqual(ts.get_samples(1), [])
 
 
 class TestSparseTree(HighLevelTestCase):
