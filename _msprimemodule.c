@@ -176,7 +176,6 @@ out:
     return ret;
 }
 
-
 static PyObject *
 convert_integer_list(size_t *list, size_t size)
 {
@@ -2323,6 +2322,67 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args,
+        PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    PyObject *py_samples = NULL;
+    PyObject *item;
+    static char *kwlist[] = {"samples", NULL};
+    uint32_t *samples = NULL;
+    size_t num_samples = 0;
+    uint32_t j, n;
+    double pi;
+    int err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &PyList_Type, &py_samples)) {
+        goto out;
+    }
+    n = tree_sequence_get_sample_size(self->tree_sequence);
+    num_samples = PyList_Size(py_samples);
+    if (num_samples < 2) {
+        PyErr_SetString(PyExc_ValueError, "Must provide at least 2 samples");
+        goto out;
+    }
+    samples = PyMem_Malloc(num_samples * sizeof(uint32_t));
+    if (samples == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < num_samples; j++) {
+        item = PyList_GetItem(py_samples, j);
+        if (!PyNumber_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "sample id must be a number");
+            goto out;
+        }
+        samples[j] = (uint32_t) PyLong_AsLong(item);
+        if (samples[j] >= n) {
+            PyErr_SetString(PyExc_ValueError,
+                    "sample ids must be < sample_size");
+            goto out;
+        }
+    }
+    err = tree_sequence_get_pairwise_diversity(
+        self->tree_sequence, samples, (uint32_t) num_samples, &pi);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("d", pi);
+out:
+    if (samples != NULL) {
+        PyMem_Free(samples);
+    }
+
+    return ret;
+}
+
+
+static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
 {
     PyObject *ret = NULL;
@@ -2396,19 +2456,21 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
-            "Returns the number of loci" },
+        "Returns the number of loci" },
     {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
-            "Returns the number of unique nodes in the tree sequence." },
+        "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
-            "Returns the sample size" },
+        "Returns the sample size" },
     {"get_population", (PyCFunction) TreeSequence_get_population, METH_VARARGS,
-            "Returns the population associated with the specified node." },
+        "Returns the population associated with the specified node." },
+    {"get_pairwise_diversity", (PyCFunction) TreeSequence_get_pairwise_diversity,
+        METH_VARARGS, "Returns the average pairwise diversity." },
     {"get_simulation_parameters",
-            (PyCFunction) TreeSequence_get_simulation_parameters, METH_NOARGS,
-            "Returns the simulation parameters encoded as JSON." },
+        (PyCFunction) TreeSequence_get_simulation_parameters, METH_NOARGS,
+        "Returns the simulation parameters encoded as JSON." },
     {"get_mutation_parameters",
-            (PyCFunction) TreeSequence_get_mutation_parameters, METH_NOARGS,
-            "Returns the mutation parameters encoded as JSON." },
+        (PyCFunction) TreeSequence_get_mutation_parameters, METH_NOARGS,
+        "Returns the mutation parameters encoded as JSON." },
     {NULL}  /* Sentinel */
 };
 

@@ -1825,6 +1825,22 @@ class TestTreeSequence(LowLevelTestCase):
                 generation = tree_sequence.get_record(j)[-2]
                 self.assertEqual(generation, sim_times[j] * 4 * Ne)
 
+    def test_pairwise_diversity(self):
+        for ts in self.get_example_tree_sequences():
+            for bad_type in ["", None, {}]:
+                self.assertRaises(
+                    TypeError, ts.get_pairwise_diversity, bad_type)
+            self.assertRaises(
+                ValueError, ts.get_pairwise_diversity, [])
+            self.assertRaises(
+                ValueError, ts.get_pairwise_diversity, [0])
+            self.assertRaises(
+                ValueError, ts.get_pairwise_diversity,
+                [0, ts.get_sample_size()])
+            samples = list(range(ts.get_sample_size()))
+            pi1 = ts.get_pairwise_diversity(samples)
+            self.assertGreaterEqual(pi1, 0)
+
 
 class TestHdf5Format(LowLevelTestCase):
     """
