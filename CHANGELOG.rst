@@ -1,4 +1,20 @@
 ********************
+[0.3.1] - 2016-24-06
+********************
+
+Feature release adding population related methods to the API.
+
+- New ``TreeSequence.get_population(sample_id)`` method.
+
+- New ``TreeSequence.get_samples(population_id)`` method.
+
+- Added the optional ``samples`` argument to the
+  ``TreeSequence.get_pairwise_diversity`` method.
+
+- Fixed a potential low-level buffer overrun problem.
+
+
+********************
 [0.3.0] - 2016-05-31
 ********************
 
