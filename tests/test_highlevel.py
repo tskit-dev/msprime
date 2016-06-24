@@ -41,7 +41,7 @@ import msprime
 import tests
 
 
-def get_pairwise_diversity(haplotypes):
+def simple_get_pairwise_diversity(haplotypes):
     """
     Returns the value of pi for the specified haplotypes.
     """
@@ -53,6 +53,27 @@ def get_pairwise_diversity(haplotypes):
             for u, v in zip(haplotypes[j], haplotypes[k]):
                 pi += u != v
     return 2 * pi / (n * (n - 1))
+
+
+def get_pairwise_diversity(tree_sequence, samples=None):
+    """
+    This is the exact algorithm used by the low-level C code
+    and should return identical results.
+    """
+    if samples is None:
+        tracked_leaves = list(range(tree_sequence.get_sample_size()))
+    else:
+        tracked_leaves = list(samples)
+    if len(tracked_leaves) < 2:
+        raise ValueError("len(samples) must be >= 2")
+    pi = 0
+    k = len(tracked_leaves)
+    denom = k * (k - 1) / 2
+    for t in tree_sequence.trees(tracked_leaves=tracked_leaves):
+        for _, node in t.mutations():
+            j = t.get_num_tracked_leaves(node)
+            pi += j * (k - j) / denom
+    return pi
 
 
 def sparse_tree_to_newick(st, precision, Ne):
@@ -296,15 +317,19 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         """
         haplotypes = list(ts.haplotypes())
         pi1 = ts.get_pairwise_diversity()
-        pi2 = get_pairwise_diversity(haplotypes)
+        pi2 = simple_get_pairwise_diversity(haplotypes)
+        pi3 = get_pairwise_diversity(ts)
         self.assertAlmostEqual(pi1, pi2)
+        self.assertEqual(pi1, pi3)
         self.assertGreaterEqual(pi1, 0.0)
         self.assertFalse(math.isnan(pi1))
         # Check for a subsample.
         samples = range(ts.get_sample_size() // 2 + 1)
         pi1 = ts.get_pairwise_diversity(samples)
-        pi2 = get_pairwise_diversity([haplotypes[j] for j in samples])
+        pi2 = simple_get_pairwise_diversity([haplotypes[j] for j in samples])
+        pi3 = get_pairwise_diversity(ts, samples)
         self.assertAlmostEqual(pi1, pi2)
+        self.assertEqual(pi1, pi3)
         self.assertGreaterEqual(pi1, 0.0)
         self.assertFalse(math.isnan(pi1))
 

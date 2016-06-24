@@ -435,6 +435,8 @@ int tree_sequence_get_breakpoints(tree_sequence_t *self,
 int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations);
 int tree_sequence_get_population(tree_sequence_t *self, uint32_t u,
     uint32_t *population_id);
+int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
+    uint32_t *samples, uint32_t num_samples, double *pi);
 char * tree_sequence_get_simulation_parameters(tree_sequence_t *self);
 char * tree_sequence_get_mutation_parameters(tree_sequence_t *self);
 int tree_sequence_alloc_sparse_tree(tree_sequence_t *self, 

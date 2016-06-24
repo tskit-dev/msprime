@@ -1302,19 +1302,10 @@ class TreeSequence(object):
         :rtype: float
         """
         if samples is None:
-            tracked_leaves = list(range(self.get_sample_size()))
+            leaves = list(range(self.get_sample_size()))
         else:
-            tracked_leaves = list(samples)
-        if len(tracked_leaves) < 2:
-            raise ValueError("len(samples) must be >= 2")
-        pi = 0
-        k = len(tracked_leaves)
-        denom = k * (k - 1) / 2
-        for t in self.trees(tracked_leaves=tracked_leaves):
-            for _, node in t.mutations():
-                j = t.get_num_tracked_leaves(node)
-                pi += j * (k - j) / denom
-        return pi
+            leaves = list(samples)
+        return self._ll_tree_sequence.get_pairwise_diversity(leaves)
 
     def get_population(self, sample):
         """

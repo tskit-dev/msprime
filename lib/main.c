@@ -506,6 +506,39 @@ out:
     }
 }
 
+static void
+print_stats(tree_sequence_t *ts)
+{
+    int ret = 0;
+    uint32_t j;
+    uint32_t sample_size = tree_sequence_get_sample_size(ts) / 2;
+    uint32_t *sample = malloc(sample_size * sizeof(uint32_t));
+    double pi;
+
+    if (sample == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    for (j = 0; j < sample_size; j++) {
+        sample[j] = j;
+    }
+    ret = tree_sequence_get_pairwise_diversity(ts, sample,
+        sample_size, &pi);
+    if (ret != 0) {
+        goto out;
+    }
+    printf("pi = %f\n", pi);
+out:
+    if (sample != NULL) {
+        free(sample);
+    }
+    if (ret != 0) {
+        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
+    }
+}
+
+
 
 static void
 print_newick_trees(tree_sequence_t *ts)
@@ -733,7 +766,9 @@ run_simulate(char *conf_file)
         goto out;
     }
     tree_sequence_print_state(tree_seq);
+    print_stats(tree_seq);
 
+    if (0) {
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);
             if (ret != 0) {
@@ -749,8 +784,6 @@ run_simulate(char *conf_file)
         tree_sequence_print_state(tree_seq);
 
         print_newick_trees(tree_seq);
-
-    if (0) {
 
         print_haplotypes(tree_seq);
         print_variants(tree_seq);

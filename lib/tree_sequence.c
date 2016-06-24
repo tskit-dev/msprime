@@ -1158,6 +1158,61 @@ out:
     return ret;
 }
 
+int
+tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
+    uint32_t *samples, uint32_t num_samples, double *pi)
+{
+    int ret = 0;
+    uint32_t j, node;
+    sparse_tree_t *tree = NULL;
+    sparse_tree_iterator_t *tree_iter = NULL;
+    double result, denom, count;
+
+    tree = malloc(sizeof(sparse_tree_t));
+    if (tree == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = tree_sequence_alloc_sparse_tree(self, tree,
+        samples, num_samples, MSP_COUNT_LEAVES);
+    if (ret != 0) {
+        goto out;
+    }
+    tree_iter = malloc(sizeof(sparse_tree_iterator_t));
+    if (tree_iter == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = sparse_tree_iterator_alloc(tree_iter, self, tree);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Allocation done; move onto main algorithm. */
+    denom = (num_samples * ((double) num_samples - 1)) / 2.0;
+    result = 0.0;
+    while ((ret = sparse_tree_iterator_next(tree_iter)) == 1) {
+        for (j = 0; j < tree->num_mutations; j++) {
+            node = tree->mutations[j].node;
+            count = (double) tree->num_tracked_leaves[node];
+            result += count * (num_samples - count) / denom;
+        }
+    }
+    if (ret != 0) {
+        goto out;
+    }
+    *pi = result;
+out:
+    if (tree != NULL) {
+        sparse_tree_free(tree);
+        free(tree);
+    }
+    if (tree_iter != NULL) {
+        sparse_tree_iterator_free(tree_iter);
+        free(tree_iter);
+    }
+    return ret;
+}
+
 size_t
 tree_sequence_get_num_coalescence_records(tree_sequence_t *self)
 {

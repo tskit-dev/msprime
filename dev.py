@@ -425,20 +425,43 @@ def variable_recomb_example():
 
 
 def pop_example():
-    ts = msprime.simulate(
-        population_configurations=[
-            msprime.PopulationConfiguration(sample_size=4),
-            msprime.PopulationConfiguration(sample_size=4)],
-        demographic_events=[
-            msprime.MassMigration(time=5, source=1, destination=0)],
-        random_seed=1)
-    for t in ts.trees():
-        print("leaves:")
-        for u in t.leaves(t.get_root()):
-            print(u, "\t", t.get_population(u))
-        print("nodes:")
-        for u in t.nodes():
-            print(u, "\t", t.get_population(u))
+    if False:
+        t = 100
+        ts = msprime.simulate(
+            Ne=10**4,
+            population_configurations=[
+                msprime.PopulationConfiguration(sample_size=1000),
+                msprime.PopulationConfiguration(sample_size=1000),
+                msprime.PopulationConfiguration(sample_size=1000),
+                msprime.PopulationConfiguration(sample_size=1000),
+                msprime.PopulationConfiguration(sample_size=1000)],
+            demographic_events=[
+                msprime.MassMigration(time=t, source=1, destination=0),
+                msprime.MassMigration(time=t, source=2, destination=0),
+                msprime.MassMigration(time=t, source=3, destination=0),
+                msprime.MassMigration(time=t, source=4, destination=0)],
+            length=100 * 1e6,
+            recombination_rate=2e-8,
+            mutation_rate=2e-8,
+            random_seed=1)
+        ts.dump("populations.hdf5")
+        print(
+            ts.get_sample_size(), ts.get_num_trees(),
+            ts.get_num_mutations())
+    else:
+        ts = msprime.load("populations.hdf5")
+        before = time.clock()
+        R = 1
+        for i in range(R):
+            for j in range(5):
+                samples = ts.get_samples(population_id=j)
+                pi = ts.get_pairwise_diversity(samples)
+                # pi2 = ts.get_pairwise_diversity2(samples)
+                # print(j, pi, pi2, pi == pi2)
+                # print(j, pi2)
+        duration = time.clock() - before
+        print("duration = ", duration, " per call = ", duration / (5 * R))
+
 
 
 if __name__ == "__main__":
