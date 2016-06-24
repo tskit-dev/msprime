@@ -264,6 +264,55 @@ class SimulationVerifier(object):
             pyplot.tight_layout()
             pyplot.savefig(filename)
 
+    def run_pi_analytical_check(self):
+        """
+        Runs the check for pi against analytical predictions.
+        """
+        R = 100000
+        theta = 4.5
+        basedir = "tmp__NOBACKUP__/analytical_pi"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        sample_size = np.arange(2, 15)
+        mean = np.zeros_like(sample_size, dtype=float)
+        var = np.zeros_like(sample_size, dtype=float)
+        predicted_mean = np.zeros_like(sample_size, dtype=float)
+        predicted_var = np.zeros_like(sample_size, dtype=float)
+
+        for k, n in enumerate(sample_size):
+            pi = np.zeros(R)
+            replicates = msprime.simulate(
+                sample_size=n,
+                mutation_rate=theta/4,
+                num_replicates=R)
+            for j, ts in enumerate(replicates):
+                pi[j] = ts.get_pairwise_diversity()
+            # Predicted mean is is theta.
+            predicted_mean[k] = theta
+            # From Wakely, eqn (4.14), pg. 101
+            predicted_var[k] = (
+                (n + 1) * theta / (3 * (n - 1)) +
+                2 * (n**2 + n + 3) * theta**2 / (9 * n * (n - 1)))
+            mean[k] = np.mean(pi)
+            var[k] = np.var(pi)
+            print(
+                n, theta, np.mean(pi), predicted_var[k], np.var(pi),
+                sep="\t")
+
+        filename = os.path.join(basedir, "mean.png")
+        pyplot.plot(sample_size, predicted_mean, "-")
+        pyplot.plot(sample_size, mean, "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+        filename = os.path.join(basedir, "var.png")
+        pyplot.plot(sample_size, predicted_var, "-")
+        pyplot.plot(sample_size, var, "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+
     def get_tbl_distribution(self, n, R, executable):
         """
         Returns an array of the R total branch length values from
@@ -337,6 +386,14 @@ class SimulationVerifier(object):
         of S, the number of segregating sites.
         """
         self._instances["analytical_s"] = self.run_s_analytical_check
+
+
+    def add_pi_analytical_check(self):
+        """
+        Adds a check for the analytical predictions about the pi,
+        the pairwise site diversity.
+        """
+        self._instances["analytical_pi"] = self.run_pi_analytical_check
 
     def add_total_branch_length_analytical_check(self):
         """
@@ -551,6 +608,7 @@ def main():
 
     # Add analytical checks
     verifier.add_s_analytical_check()
+    verifier.add_pi_analytical_check()
     verifier.add_total_branch_length_analytical_check()
     verifier.add_pairwise_island_model_analytical_check()
 
