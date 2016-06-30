@@ -109,6 +109,8 @@ msp_strerror(int err)
         ret = "Source and destination populations equal.";
     } else if (err == MSP_ERR_BAD_RECOMBINATION_MAP) {
         ret = "Bad recombination map provided.";
+    } else if (err == MSP_ERR_BAD_COALESCENCE_RECORDS) {
+        ret = "Bad coalescence records in file.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);

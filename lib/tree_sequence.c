@@ -196,9 +196,41 @@ static int
 tree_sequence_make_indexes(tree_sequence_t *self)
 {
     int ret = 0;
-    uint32_t j;
+    uint32_t j, c1, c2;
     index_sort_t *sort_buff = NULL;
 
+    /* First, check for iffy looking input */
+    for (j = 0; j < self->num_records; j++) {
+        if (j > 0) {
+            /* Input data must be time sorted. */
+            if (self->trees.time[j] < self->trees.time[j - 1]) {
+                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                goto out;
+            }
+            /* Nodes must be monotonically non-decreasing */
+            if (self->trees.node[j] < self->trees.node[j - 1] ||
+                    self->trees.node[j] > self->trees.node[j - 1] + 1) {
+                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                goto out;
+            }
+        }
+        c1 = self->trees.children[2 * j];
+        c2 = self->trees.children[2 * j + 1];
+        if (c1 >= c2) {
+            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            goto out;
+        }
+        if (c2 >= self->trees.node[j]) {
+            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            goto out;
+        }
+        if (self->trees.left[j] >= self->trees.right[j]) {
+            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            goto out;
+        }
+    }
+
+    /* Now sort create the various indexes we need. */
     sort_buff = malloc(self->num_records * sizeof(index_sort_t));
     if (sort_buff == NULL) {
         ret = MSP_ERR_NO_MEMORY;

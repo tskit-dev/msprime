@@ -55,5 +55,6 @@
 #define MSP_ERR_ASSERTION_FAILED                                    -24
 #define MSP_ERR_SOURCE_DEST_EQUAL                                   -25
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
+#define MSP_ERR_BAD_COALESCENCE_RECORDS                             -27
 
 #endif /*__ERR_H__*/
