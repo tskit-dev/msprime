@@ -49,6 +49,11 @@ CoalescenceRecord = collections.namedtuple(
     ["left", "right", "node", "children", "time", "population"])
 
 
+Variant = collections.namedtuple(
+    "Variant",
+    ["position", "genotypes"])
+
+
 class TreeDrawer(object):
     """
     A class to draw sparse trees in SVG format.
@@ -1260,7 +1265,8 @@ class TreeSequence(object):
         return HaplotypeGenerator(self).haplotypes()
 
     def variants(self):
-        return _msprime.VariantGenerator(self._ll_tree_sequence)
+        for variant in _msprime.VariantGenerator(self._ll_tree_sequence):
+            yield Variant(*variant)
 
     def generate_mutations(self, mutation_rate, random_generator):
         # TODO document this function when it's ready to be brought back
@@ -1336,6 +1342,62 @@ class TreeSequence(object):
             samples = [
                 u for u in samples if self.get_population(u) == population_id]
         return samples
+
+    def __discretise_positions(self, positions):
+        """
+        Returns a map of the specified positions to their discretised
+        counterparts. These must be sorted in increasing order.
+        """
+        ret = {}
+        prev_discretised = -1
+        prev_pos = -1
+        for pos in positions:
+            if pos <= prev_pos:
+                raise ValueError("positions must be unique and sorted")
+            discretised = int(round(pos))
+            if discretised == prev_discretised:
+                discretised += 1
+            ret[pos] = discretised
+            prev_discretised = discretised
+            prev_pos = pos
+        return ret
+
+    def write_vcf(self, output_file=None, ploidy=1):
+        output = output_file
+        if output_file is None:
+            output = sys.stdout
+        if self.get_sample_size() % ploidy != 0:
+            raise ValueError("Sample size must a multiple of ploidy")
+        n = self.get_sample_size() // ploidy
+        sample_names = ["msp_{}".format(j) for j in range(n)]
+        position_map = self.__discretise_positions(
+            pos for pos, _ in self.mutations())
+        length = max(
+            int(self.get_sequence_length()), max(position_map.values()) + 2)
+        print("##fileformat=VCFv4.2", file=output)
+        print(
+            '##FILTER=<ID=PASS,Description="All filters passed">',
+            file=output)
+        print("##contig=<ID=1,length={}>".format(length), file=output)
+        print(
+            '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+            file=output)
+        print(
+            "#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO",
+            "FORMAT", sep="\t", end="", file=output)
+        for sample_name in sample_names:
+            print("\t", sample_name, sep="", end="", file=output)
+        print(file=output)
+        for variant in self.variants():
+            pos = position_map[variant.position] + 1  # VCF is 1 indexed.
+            print(
+                "1", pos, ".", "A", "G", ".", "PASS", ".", "GT",
+                sep="\t", end="", file=output)
+            for j in range(n):
+                genotype = "|".join(
+                    variant.genotypes[j * ploidy: j * ploidy + ploidy])
+                print("\t", genotype, end="", sep="", file=output)
+            print(file=output)
 
 
 class HaplotypeGenerator(object):
