@@ -1420,6 +1420,122 @@ out:
     return ret;
 }
 
+int
+tree_sequence_write_vcf(tree_sequence_t *self, unsigned int ploidy,
+    const char *filename)
+{
+    int ret = MSP_ERR_GENERIC;
+    int err, pos, last_pos;
+    double x;
+    uint32_t j, k, n;
+    FILE *out = NULL;
+    char *variant;
+    char *genotypes = NULL;
+    size_t len;
+    const char *header =
+        "##fileformat=VCFv4.2\n"
+        "##FILTER=<ID=PASS,Description=\"All filters passed\">\n"
+        "##contig=<ID=1>\n"
+        "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
+    vargen_t *vg = NULL;
+
+    if (ploidy < 1 || self->sample_size % ploidy != 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    vg = malloc(sizeof(vargen_t));
+    if (vg == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = vargen_alloc(vg, self);
+    if (ret != 0) {
+        goto out;
+    }
+    n = self->sample_size / ploidy;
+    len = 2 * ploidy * n;
+    genotypes = malloc(len + 1);
+    if (genotypes == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* Set up the genotypes string. We don't want to have to put
+     * in tabs and |s for every row so we insert them at the start.
+     */
+    for (j = 0; j < n; j++) {
+        for (k = 0; k < ploidy; k++) {
+            genotypes[2 * ploidy * j + 2 * k] = '0';
+            genotypes[2 * ploidy * j + 2 * k + 1] = '|';
+        }
+        genotypes[2 * ploidy * (j + 1) - 1] = '\t';
+    }
+    genotypes[len - 1] = '\n';
+    genotypes[len] = '\0';
+
+    ret = MSP_ERR_IO;
+    out = fopen(filename, "w");
+    if (out == NULL) {
+        goto out;
+    }
+    /* write the header */
+    err = fputs(header, out);
+    if (err == EOF) {
+        goto out;
+    }
+    /* Write the sample headers */
+    for (j = 0; j < n; j++) {
+        err = fprintf(out, "\tmsp_%d", j);
+        if (err < 0) {
+            goto out;
+        }
+    }
+    err = fputs("\n", out);
+    if (err == EOF) {
+        goto out;
+    }
+    last_pos = -1;
+    while ((ret = vargen_next(vg, &x, &variant)) == 1) {
+        pos = (int) round(x);
+        while (pos <= last_pos) {
+            pos++;
+        }
+        err = fprintf(out, "1\t%d\t.\tA\tG\t.\tPASS\t.\tGT\t", pos);
+        if (err < 0) {
+            goto out;
+        }
+        for (j = 0; j < n; j++) {
+            for (k = 0; k < ploidy; k++) {
+                genotypes[2 * ploidy * j + 2 * k] = variant[j * ploidy + k];
+            }
+        }
+        err = fputs(genotypes, out);
+        if (err == EOF) {
+            goto out;
+        }
+        last_pos = pos;
+    }
+    if (ret != 0) {
+        goto out;
+    }
+    ret = 0;
+out:
+    if (out != NULL) {
+        err = fclose(out);
+        if (err != 0 && ret == 0) {
+            ret = MSP_ERR_IO;
+        }
+    }
+    if (vg != NULL) {
+        vargen_free(vg);
+        free(vg);
+    }
+    if (genotypes != NULL) {
+        free(genotypes);
+    }
+    return ret;
+}
+
 
 /* ======================================================== *
  * Tree diff iterator.

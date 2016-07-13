@@ -1537,6 +1537,16 @@ class TestTreeSequence(LowLevelTestCase):
             t1.generate_mutations(1, rng1)
             t2.generate_mutations(1, rng2)
             self.assertEqual(t1.get_mutations(), t2.get_mutations())
+            with tempfile.NamedTemporaryFile() as f1, \
+                    tempfile.NamedTemporaryFile() as f2:
+                t1.write_vcf(f1.name)
+                t2.write_vcf(f2.name)
+                with open(f1.name) as f:
+                    vcf1 = f.read()
+                with open(f2.name) as f:
+                    vcf2 = f.read()
+                self.assertGreater(len(vcf1), 0)
+                self.assertEqual(vcf1, vcf2)
 
     def test_create_empty_tree_sequence(self):
         sim = _msprime.Simulator(
@@ -1840,6 +1850,9 @@ class TestTreeSequence(LowLevelTestCase):
             samples = list(range(ts.get_sample_size()))
             pi1 = ts.get_pairwise_diversity(samples)
             self.assertGreaterEqual(pi1, 0)
+
+    def test_vcf(self):
+        self.assertTrue(False, "ADD VCF tests")
 
 
 class TestHdf5Format(LowLevelTestCase):

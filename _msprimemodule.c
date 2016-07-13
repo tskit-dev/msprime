@@ -2170,6 +2170,34 @@ out:
     return ret;
 }
 
+static PyObject *
+TreeSequence_write_vcf(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    static char *kwlist[] = {"filename", "ploidy", NULL};
+    char *filename = NULL;
+    unsigned int ploidy = 1;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|I", kwlist,
+            &filename, &ploidy)) {
+        goto out;
+    }
+    Py_BEGIN_ALLOW_THREADS
+    err = tree_sequence_write_vcf(self->tree_sequence, ploidy, filename);
+    Py_END_ALLOW_THREADS
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
 
 static PyObject *
 TreeSequence_get_record(TreeSequence *self, PyObject *args)
@@ -2447,6 +2475,9 @@ static PyMethodDef TreeSequence_methods[] = {
     {"set_mutations", (PyCFunction) TreeSequence_set_mutations,
         METH_VARARGS|METH_KEYWORDS,
         "Sets the mutations to the specified list of tuples."},
+    {"write_vcf", (PyCFunction) TreeSequence_write_vcf,
+        METH_VARARGS|METH_KEYWORDS,
+        "Outputs a VCF to the specified file name."},
     {"get_mutations", (PyCFunction) TreeSequence_get_mutations,
         METH_NOARGS, "Returns the list of mutations"},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,

@@ -489,7 +489,11 @@ def vcf_example():
     #     ts.write_vcf(f, ploidy=2)
 
     ts = msprime.load("tmp__NOBACKUP__/populations.hdf5")
-    ts.write_vcf(ploidy=1)
+    before = time.clock()
+    ts.write_vcf("tmp__NOBACKUP__/tmp_1.vcf", ploidy=1)
+    duration = time.clock() - before
+    print("wrote vcf in ", duration, "seconds")
+    ts.write_vcf("tmp__NOBACKUP__/tmp_2.vcf", ploidy=2)
 
 
 if __name__ == "__main__":

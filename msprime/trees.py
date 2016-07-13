@@ -1362,46 +1362,48 @@ class TreeSequence(object):
             prev_pos = pos
         return ret
 
-    def write_vcf(self, output_file=None, ploidy=1):
-        assert ploidy == 1
-        output = output_file
-        if output_file is None:
-            output = sys.stdout
-        if self.get_sample_size() % ploidy != 0:
-            raise ValueError("Sample size must a multiple of ploidy")
-        n = self.get_sample_size() // ploidy
-        sample_names = ["msp_{}".format(j) for j in range(n)]
-        position_map = self.__discretise_positions(
-            pos for pos, _ in self.mutations())
-        length = max(
-            int(self.get_sequence_length()), max(position_map.values()) + 2)
-        print("##fileformat=VCFv4.2", file=output)
-        print(
-            '##FILTER=<ID=PASS,Description="All filters passed">',
-            file=output)
-        print("##contig=<ID=1,length={}>".format(length), file=output)
-        print(
-            '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
-            file=output)
-        print(
-            "#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO",
-            "FORMAT", sep="\t", end="", file=output)
-        for sample_name in sample_names:
-            print("\t", sample_name, sep="", end="", file=output)
-        print(file=output)
-        for variant in self.variants():
-            pos = position_map[variant.position] + 1  # VCF is 1 indexed.
-            print(
-                "1", pos, ".", "A", "G", ".", "PASS", ".", "GT",
-                sep="\t", end="", file=output)
-            for j in range(n):
-                output.write("\t" + variant.genotypes[j])
-                # for k in range(ploidy):
-                #     output.write(
-                # genotype = "|".join(
-                #     variant.genotypes[j * ploidy: j * ploidy + ploidy])
-                # print("\t", genotype, end="", sep="", file=output)
-            print(file=output)
+    def write_vcf(self, output_file, ploidy=1):
+        self._ll_tree_sequence.write_vcf(output_file, ploidy)
+
+        # assert ploidy == 1
+        # output = output_file
+        # if output_file is None:
+        #     output = sys.stdout
+        # if self.get_sample_size() % ploidy != 0:
+        #     raise ValueError("Sample size must a multiple of ploidy")
+        # n = self.get_sample_size() // ploidy
+        # sample_names = ["msp_{}".format(j) for j in range(n)]
+        # position_map = self.__discretise_positions(
+        #     pos for pos, _ in self.mutations())
+        # length = max(
+        #     int(self.get_sequence_length()), max(position_map.values()) + 2)
+        # print("##fileformat=VCFv4.2", file=output)
+        # print(
+        #     '##FILTER=<ID=PASS,Description="All filters passed">',
+        #     file=output)
+        # print("##contig=<ID=1,length={}>".format(length), file=output)
+        # print(
+        #     '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+        #     file=output)
+        # print(
+        #     "#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO",
+        #     "FORMAT", sep="\t", end="", file=output)
+        # for sample_name in sample_names:
+        #     print("\t", sample_name, sep="", end="", file=output)
+        # print(file=output)
+        # for variant in self.variants():
+        #     pos = position_map[variant.position] + 1  # VCF is 1 indexed.
+        #     print(
+        #         "1", pos, ".", "A", "G", ".", "PASS", ".", "GT",
+        #         sep="\t", end="", file=output)
+        #     for j in range(n):
+        #         output.write("\t" + variant.genotypes[j])
+        #         # for k in range(ploidy):
+        #         #     output.write(
+        #         # genotype = "|".join(
+        #         #     variant.genotypes[j * ploidy: j * ploidy + ploidy])
+        #         # print("\t", genotype, end="", sep="", file=output)
+        #     print(file=output)
 
 
 class HaplotypeGenerator(object):

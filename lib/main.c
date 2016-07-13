@@ -767,7 +767,10 @@ run_simulate(char *conf_file)
     }
     tree_sequence_print_state(tree_seq);
     print_stats(tree_seq);
-
+    ret = tree_sequence_write_vcf(tree_seq, 1, "tmp__NOBACKUP__/tmp.vcf");
+    if (ret != 0) {
+        goto out;
+    }
     if (0) {
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);
