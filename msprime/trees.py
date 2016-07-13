@@ -41,6 +41,7 @@ import _msprime
 from _msprime import RandomGenerator
 
 NULL_NODE = -1
+
 NULL_POPULATION = -1
 
 
@@ -143,10 +144,9 @@ class SparseTree(object):
     - 1` inclusive and internal nodes are integers :math:`\geq n`. The value of
     these nodes is strictly increasing as we ascend the tree and the root of
     the tree is the node with the largest value that is reachable from  the
-    leaves. Each node in the tree has a parent, which is non-zero for all
-    non-root nodes reachable from the leaves. This value is obtained using the
+    leaves. Each node in the tree has a parent which is obtained using the
     :meth:`.get_parent` method. The parent of the root node is the
-    :const:`.NULL_NODE` node, :math:`-1`. Similarly, each internal node has a
+    :const:`.NULL_NODE`, :math:`-1`. Similarly, each internal node has a
     pair of children, which are obtained using the :meth:`.get_children`
     method. Each node in the tree has a time associated with it in generations.
     This value is obtained using the :meth:`.get_time` method.
@@ -171,7 +171,7 @@ class SparseTree(object):
 
         :param int u: The node of interest.
         :return: The branch length from u to its parent.
-        :rtype: int
+        :rtype: float
         """
         return self.get_time(self.get_parent(u)) - self.get_time(u)
 
@@ -217,8 +217,9 @@ class SparseTree(object):
 
     def get_parent(self, u):
         """
-        Returns the parent of the specified node. Returns 0 if u is the
-        root or is not a node in the current tree.
+        Returns the parent of the specified node. Returns
+        the :const:`.NULL_NODE` -1 if u is the root or is not a node in
+        the current tree.
 
         :param int u: The node of interest.
         :return: The parent of u.
@@ -228,8 +229,10 @@ class SparseTree(object):
 
     def get_children(self, u):
         """
-        Returns the children of the specified node as a tuple (v, w). Returns
-        the tuple (0, 0) if u is a leaf or is not a node in the current tree.
+        Returns the children of the specified node as a tuple :math:`(v, w)`.
+        For internal nodes, this tuple is always in sorted order such that
+        :math:`v < w`. If u is a leaf or is not a node in the current tree,
+        return the tuple (:const:`.NULL_NODE`, :const:`.NULL_NODE`).
 
         :param int u: The node of interest.
         :return: The children of u as a pair of integers
@@ -255,7 +258,7 @@ class SparseTree(object):
         is the population where the corresponding coalescence occured. If the
         specified node is not a member of this tree or population level
         information was not stored in the tree sequence,
-        :data:`msprime.NULL_POPULATION` is returned.
+        :const:`.NULL_POPULATION` is returned.
 
         :param int u: The node of interest.
         :return: The ID of the population associated with node u.
@@ -276,7 +279,7 @@ class SparseTree(object):
     def is_leaf(self, u):
         """
         Returns True if the specified node is a leaf. A node :math:`u` is a
-        leaf if :math:`1 \leq u \leq n` for a sample size :math:`n`.
+        leaf if :math:`0 \leq u < n` for a sample size :math:`n`.
 
         :param int u: The node of interest.
         :return: True if u is a leaf node.
@@ -1121,7 +1124,7 @@ class TreeSequence(object):
 
     def get_num_nodes(self):
         """
-        Returns the number of nodes in this tree sequence. This is the
+        Returns the number of nodes in this tree sequence. This 1 + the
         largest value :math:`u` such that `u` is a node in any of the
         constituent trees.
 
@@ -1142,7 +1145,7 @@ class TreeSequence(object):
         parent :math:`u`. This assignment happens at :math:`t` generations
         in the past within the population with ID :math:`d`. If population
         information was not stored for this tree sequence then the
-        population ID will be :data:`msprime.NULL_POPULATION`.
+        population ID will be :const:`.NULL_POPULATION`.
 
         Each record returned is an instance of :func:`collections.namedtuple`,
         and may be accessed via the attributes ``left``, ``right``, ``node``,
@@ -1251,7 +1254,7 @@ class TreeSequence(object):
         returned by :meth:`msprime.TreeSequence.get_sample_size` and
         :math:`s` is the number of mutations returned by
         :meth:`msprime.TreeSequence.get_num_mutations`). The first
-        string returned is the haplotype for sample `1`, and so on.
+        string returned is the haplotype for sample `0`, and so on.
 
         :return: An iterator over the haplotype strings for the samples in
             this tree sequence.
@@ -1278,7 +1281,7 @@ class TreeSequence(object):
         node. A genomic position :math:`x` must satisfy :math:`0 \leq x < L`
         where :math:`L` is the sequence length (see
         :meth:`.get_sequence_length`). A node :math:`u` must satisfy
-        :math:`0 < u \leq N` where :math:`N` is the largest valued node in
+        :math:`0 < u < N` where :math:`N` is the number of nodes in
         the tree sequence (see :meth:`.get_num_nodes`).
 
         :param list mutations: The list of mutations to be assigned to this
@@ -1313,8 +1316,8 @@ class TreeSequence(object):
 
         :param int sample: The sample ID of interest.
         :return: The population ID where the specified sample was drawn.
-            Returns NULL_POPULATION if no population information is
-            available.
+            Returns :const:`.NULL_POPULATION` if no population information
+            is available.
         :rtype: int
         """
         if sample < 0 or sample >= self.get_sample_size():
