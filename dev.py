@@ -489,7 +489,7 @@ def vcf_example():
     #     ts.write_vcf(f, ploidy=2)
 
     ts = msprime.load("tmp__NOBACKUP__/populations.hdf5")
-    ts.write_vcf(ploidy=2)
+    ts.write_vcf(ploidy=1)
 
 
 if __name__ == "__main__":

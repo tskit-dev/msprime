@@ -1363,6 +1363,7 @@ class TreeSequence(object):
         return ret
 
     def write_vcf(self, output_file=None, ploidy=1):
+        assert ploidy == 1
         output = output_file
         if output_file is None:
             output = sys.stdout
@@ -1394,9 +1395,12 @@ class TreeSequence(object):
                 "1", pos, ".", "A", "G", ".", "PASS", ".", "GT",
                 sep="\t", end="", file=output)
             for j in range(n):
-                genotype = "|".join(
-                    variant.genotypes[j * ploidy: j * ploidy + ploidy])
-                print("\t", genotype, end="", sep="", file=output)
+                output.write("\t" + variant.genotypes[j])
+                # for k in range(ploidy):
+                #     output.write(
+                # genotype = "|".join(
+                #     variant.genotypes[j * ploidy: j * ploidy + ploidy])
+                # print("\t", genotype, end="", sep="", file=output)
             print(file=output)
 
 
