@@ -342,6 +342,19 @@ typedef struct {
 } vargen_t;
 
 typedef struct {
+    uint32_t sample_size;
+    uint32_t num_vcf_samples;
+    unsigned int ploidy;
+    char *header;
+    char *record;
+    char *genotypes;
+    size_t record_size;
+    size_t genotypes_size;
+    unsigned long last_position;
+    vargen_t *vargen;
+} vcf_converter_t;
+
+typedef struct {
     gsl_rng *rng;
     double mutation_rate;
     double sequence_length;
@@ -445,8 +458,6 @@ int tree_sequence_alloc_sparse_tree(tree_sequence_t *self,
 int tree_sequence_set_mutations(tree_sequence_t *self, 
         size_t num_mutations, mutation_t *mutations, 
         const char *parameters, const char *environment);
-int tree_sequence_write_vcf(tree_sequence_t *self, unsigned int ploidy,
-    const char *filename);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
         tree_sequence_t *tree_sequence);
@@ -482,6 +493,13 @@ int newick_converter_next(newick_converter_t *self, double *length,
         char **tree);
 int newick_converter_free(newick_converter_t *self);
 void newick_converter_print_state(newick_converter_t *self);
+
+int vcf_converter_alloc(vcf_converter_t *self, 
+        tree_sequence_t *tree_sequence, unsigned ploidy);
+int vcf_converter_get_header(vcf_converter_t *self, char **header);
+int vcf_converter_next(vcf_converter_t *self, char **record);
+int vcf_converter_free(vcf_converter_t *self);
+void vcf_converter_print_state(vcf_converter_t *self);
 
 int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);

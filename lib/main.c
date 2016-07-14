@@ -538,7 +538,42 @@ out:
     }
 }
 
+static int
+print_vcf(tree_sequence_t *ts, unsigned int ploidy)
+{
+    int ret = 0;
+    char *record = NULL;
+    char *header = NULL;
+    vcf_converter_t *vc = malloc(sizeof(vcf_converter_t));
 
+    if (vc == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = vcf_converter_alloc(vc, ts, ploidy);
+    if (ret != 0) {
+        goto out;
+    }
+    vcf_converter_print_state(vc);
+    printf("START VCF\n");
+    ret = vcf_converter_get_header(vc, &header);
+    if (ret != 0) {
+        goto out;
+    }
+    printf("%s", header);
+    while ((ret = vcf_converter_next(vc, &record)) == 1) {
+        printf("%s", record);
+    }
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    if (vc != NULL) {
+        vcf_converter_free(vc);
+        free(vc);
+    }
+    return ret;
+}
 
 static void
 print_newick_trees(tree_sequence_t *ts)
@@ -767,10 +802,12 @@ run_simulate(char *conf_file)
     }
     tree_sequence_print_state(tree_seq);
     print_stats(tree_seq);
-    ret = tree_sequence_write_vcf(tree_seq, 1, "tmp__NOBACKUP__/tmp.vcf");
+
+    ret = print_vcf(tree_seq, 1);
     if (ret != 0) {
         goto out;
     }
+
     if (0) {
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);

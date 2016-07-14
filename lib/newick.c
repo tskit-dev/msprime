@@ -454,6 +454,7 @@ newick_converter_alloc(newick_converter_t *self,
     uint32_t j;
     avl_node_t *avl_node;
 
+    memset(self, 0, sizeof(newick_converter_t));
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->precision = precision;
