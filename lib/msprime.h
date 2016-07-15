@@ -337,6 +337,7 @@ typedef struct {
     tree_sequence_t *tree_sequence;
     char *variant;
     size_t tree_mutation_index;
+    int finished;
     sparse_tree_t tree;
     sparse_tree_iterator_t tree_iterator;
 } vargen_t;

@@ -765,6 +765,14 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_samples(msprime.NULL_POPULATION), [])
             self.assertEqual(ts.get_samples(1), [])
 
+    def test_write_vcf_interface(self):
+        with tempfile.TemporaryFile("w") as f:
+            for ts in self.get_example_tree_sequences():
+                n = ts.get_sample_size()
+                for bad_ploidy in [-1, 0, n + 1]:
+                    self.assertRaises(
+                        ValueError, ts.write_vcf, f, bad_ploidy)
+
 
 class TestSparseTree(HighLevelTestCase):
     """

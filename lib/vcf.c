@@ -43,6 +43,7 @@ vcf_converter_make_header(vcf_converter_t *self)
     int ret = MSP_ERR_GENERIC;
     const char *header_prefix =
         "##fileformat=VCFv4.2\n"
+        "##source=msprime " MSP_LIBRARY_VERSION_STR "\n"
         "##FILTER=<ID=PASS,Description=\"All filters passed\">\n"
         "##contig=<ID=1>\n"
         "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
@@ -132,7 +133,7 @@ vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
     unsigned int p = self->ploidy;
 
     written = snprintf(self->record, self->record_size,
-            "1\t%lu\t.\tA\tG\t.\tPASS\t.\tGT\t", pos);
+            "1\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t", pos);
     if (written < 0) {
         ret = MSP_ERR_IO;
         goto out;

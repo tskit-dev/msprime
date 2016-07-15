@@ -490,10 +490,27 @@ def vcf_example():
 
     ts = msprime.load("tmp__NOBACKUP__/populations.hdf5")
     before = time.clock()
-    ts.write_vcf("tmp__NOBACKUP__/tmp_1.vcf", ploidy=1)
+    num_genotypes = 0
+    for variant in ts.variants():
+        num_genotypes += len(variant.genotypes)
+    print(num_genotypes, ts.get_sample_size() * ts.get_num_mutations())
     duration = time.clock() - before
-    print("wrote vcf in ", duration, "seconds")
-    ts.write_vcf("tmp__NOBACKUP__/tmp_2.vcf", ploidy=2)
+    print("Done in ", duration, " gives ",
+            num_genotypes * 1e-6 / duration, " MGenotypes decoded per second")
+    print(num_genotypes)
+
+
+    before = time.clock()
+    with open("tmp__NOBACKUP__/tmp_1.vcf", "w") as f:
+        ts.write_vcf(f, ploidy=1)
+        size = f.tell()
+    duration = time.clock() - before
+    print("wrote vcf in ", duration, "seconds", (size / 2**20) / duration, "MB/s")
+    before = time.clock()
+    with open("tmp__NOBACKUP__/tmp_2.vcf", "w") as f:
+        ts.write_vcf(f, ploidy=2)
+    duration = time.clock() - before
+    print("wrote vcf in ", duration, "seconds", (size / 2**20) / duration, "MB/s")
 
 
 if __name__ == "__main__":
