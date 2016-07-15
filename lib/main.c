@@ -433,6 +433,15 @@ print_variants(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
+    if (j != ts->num_mutations) {
+        printf("ERROR!! missing variants %d %d\n", j, (int) ts->num_mutations);
+    }
+
+    while ((ret = vargen_next(vg, &x, &variant)) == 1) {
+        /* this should never happen as the iterators should always
+         * fail after they finish. */
+        assert(0);
+    }
 out:
     if (vg != NULL) {
         vargen_free(vg);
@@ -538,7 +547,42 @@ out:
     }
 }
 
+static int
+print_vcf(tree_sequence_t *ts, unsigned int ploidy)
+{
+    int ret = 0;
+    char *record = NULL;
+    char *header = NULL;
+    vcf_converter_t *vc = malloc(sizeof(vcf_converter_t));
 
+    if (vc == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = vcf_converter_alloc(vc, ts, ploidy);
+    if (ret != 0) {
+        goto out;
+    }
+    vcf_converter_print_state(vc);
+    printf("START VCF\n");
+    ret = vcf_converter_get_header(vc, &header);
+    if (ret != 0) {
+        goto out;
+    }
+    printf("%s", header);
+    while ((ret = vcf_converter_next(vc, &record)) == 1) {
+        printf("%s", record);
+    }
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    if (vc != NULL) {
+        vcf_converter_free(vc);
+        free(vc);
+    }
+    return ret;
+}
 
 static void
 print_newick_trees(tree_sequence_t *ts)
@@ -768,6 +812,13 @@ run_simulate(char *conf_file)
     tree_sequence_print_state(tree_seq);
     print_stats(tree_seq);
 
+    print_variants(tree_seq);
+
+    ret = print_vcf(tree_seq, 1);
+    if (ret != 0) {
+        goto out;
+    }
+
     if (0) {
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);
@@ -786,7 +837,6 @@ run_simulate(char *conf_file)
         print_newick_trees(tree_seq);
 
         print_haplotypes(tree_seq);
-        print_variants(tree_seq);
         print_tree_sequence(tree_seq);
 
         tree_sequence_print_state(tree_seq);

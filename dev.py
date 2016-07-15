@@ -463,6 +463,55 @@ def pop_example():
         print("duration = ", duration, " per call = ", duration / (5 * R))
 
 
+def vcf_example():
+
+    # n = 6 # 3 diploid samples from each pop
+    # t = 100
+    # ts = msprime.simulate(
+    #     Ne=10**4,
+    #     population_configurations=[
+    #         msprime.PopulationConfiguration(sample_size=n),
+    #         msprime.PopulationConfiguration(sample_size=n),
+    #         msprime.PopulationConfiguration(sample_size=n),
+    #         msprime.PopulationConfiguration(sample_size=n),
+    #         msprime.PopulationConfiguration(sample_size=n)],
+    #     demographic_events=[
+    #         msprime.MassMigration(time=t, source=1, destination=0),
+    #         msprime.MassMigration(time=t, source=2, destination=0),
+    #         msprime.MassMigration(time=t, source=3, destination=0),
+    #         msprime.MassMigration(time=t, source=4, destination=0)],
+    #     length=1 * 1e6,
+    #     recombination_rate=2e-8,
+    #     mutation_rate=2e-8,
+    #     random_seed=1)
+    # with open("test.vcf", "w") as f:
+
+    #     ts.write_vcf(f, ploidy=2)
+
+    ts = msprime.load("tmp__NOBACKUP__/populations.hdf5")
+    before = time.clock()
+    num_genotypes = 0
+    for variant in ts.variants():
+        num_genotypes += len(variant.genotypes)
+    print(num_genotypes, ts.get_sample_size() * ts.get_num_mutations())
+    duration = time.clock() - before
+    print("Done in ", duration, " gives ",
+            num_genotypes * 1e-6 / duration, " MGenotypes decoded per second")
+    print(num_genotypes)
+
+
+    before = time.clock()
+    with open("tmp__NOBACKUP__/tmp_1.vcf", "w") as f:
+        ts.write_vcf(f, ploidy=1)
+        size = f.tell()
+    duration = time.clock() - before
+    print("wrote vcf in ", duration, "seconds", (size / 2**20) / duration, "MB/s")
+    before = time.clock()
+    with open("tmp__NOBACKUP__/tmp_2.vcf", "w") as f:
+        ts.write_vcf(f, ploidy=2)
+    duration = time.clock() - before
+    print("wrote vcf in ", duration, "seconds", (size / 2**20) / duration, "MB/s")
+
 
 if __name__ == "__main__":
     # mutations()
@@ -482,4 +531,5 @@ if __name__ == "__main__":
     # migration_example()
     # segregating_sites_example(2, 5, 10000)
     # variable_recomb_example()
-    pop_example()
+    # pop_example()
+    vcf_example()

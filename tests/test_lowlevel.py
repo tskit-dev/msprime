@@ -2122,6 +2122,81 @@ class TestNewickConverter(LowLevelTestCase):
                         self.assertEqual(precision, len(t) - point - 1)
 
 
+class TestVcfConverter(LowLevelTestCase):
+    """
+    Tests for the low-level vcf converter.
+    """
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.VcfConverter)
+        self.assertRaises(TypeError, _msprime.VcfConverter, None)
+        ts = _msprime.TreeSequence()
+        # This hasn't been initialised, so should fail.
+        self.assertRaises(ValueError, _msprime.VcfConverter, ts)
+        rng = _msprime.RandomGenerator(1)
+        sim = _msprime.Simulator(10, rng)
+        sim.run()
+        ts.create(sim, uniform_recombination_map(sim))
+        for bad_type in [None, "", [], {}]:
+            self.assertRaises(
+                TypeError, _msprime.VcfConverter, ts, ploidy=bad_type)
+        ts.generate_mutations(10, rng)
+        converter = _msprime.VcfConverter(ts)
+        before = converter.get_header() + "".join(converter)
+        self.assertGreater(len(before), 0)
+        converter = _msprime.VcfConverter(ts)
+        del ts
+        # We should keep a reference to the tree sequence.
+        after = converter.get_header() + "".join(converter)
+        self.assertEqual(before, after)
+
+    def test_ploidy(self):
+        ts = self.get_tree_sequence(sample_size=10)
+        for bad_ploidy in [-1, 3, 4, 11, 20, 10**6]:
+            self.assertRaises(
+                _msprime.LibraryError, _msprime.VcfConverter, ts,
+                bad_ploidy)
+
+    def test_positions(self):
+        # Make sure we successfully discretise the positions when
+        # we have lots of mutations
+        ts = self.get_tree_sequence(sample_size=10, mutation_rate=10)
+        converter = _msprime.VcfConverter(ts)
+        positions = []
+        for row in converter:
+            pos = float(row.split()[1])
+            self.assertEqual(pos, int(pos))
+            positions.append(pos)
+        self.assertEqual(sorted(positions), positions)
+        self.assertEqual(len(set(positions)), len(positions))
+
+    def test_rows(self):
+        ts = self.get_tree_sequence()
+        num_mutations = ts.get_num_mutations()
+        converter = _msprime.VcfConverter(ts)
+        self.assertGreater(num_mutations, 0)
+        num_rows = 0
+        for row in converter:
+            num_rows += 1
+        self.assertEqual(num_rows, num_mutations)
+
+    def test_header(self):
+        ts = self.get_tree_sequence()
+        converter = _msprime.VcfConverter(ts)
+        header = converter.get_header()
+        # We do more indepth testing elsewhere, just make sure
+        # it roughly makes sense.
+        self.assertGreater(len(header), 0)
+        self.assertTrue(header.startswith("##fileformat"))
+
+    def test_iterator(self):
+        ts = self.get_tree_sequence()
+        iters = [
+            _msprime.VcfConverter(ts), _msprime.VcfConverter(ts, 1),
+            _msprime.VcfConverter(ts, 2)]
+        for iterator in iters:
+            self.verify_iterator(iterator)
+
+
 class TestTreeDiffIterator(LowLevelTestCase):
     """
     Tests for the low-level tree diff iterator.
@@ -2280,6 +2355,11 @@ class TestVariantGenerator(LowLevelTestCase):
         self.assertEqual(
             positions,
             [pos for pos, _ in ts.get_mutations()])
+
+    def test_iterator(self):
+        ts = self.get_tree_sequence()
+        variants = _msprime.VariantGenerator(ts)
+        self.verify_iterator(variants)
 
 
 class TestSparseTree(LowLevelTestCase):

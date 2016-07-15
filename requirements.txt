@@ -12,3 +12,7 @@ svgwrite
 # Seems to be a problem with Python 3. svgwrite imports
 # pyparsing.
 pyparsing < 2.1
+
+# We need pysam and PyVCF for testing VCF output.
+pysam
+PyVCF

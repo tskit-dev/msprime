@@ -40,7 +40,9 @@ vargen_next_tree(vargen_t *self)
     int ret = 0;
 
     ret = sparse_tree_iterator_next(&self->tree_iterator);
-    if (ret < 0) {
+    if (ret == 0) {
+        self->finished = 1;
+    } else if (ret < 0) {
         goto out;
     }
     self->tree_mutation_index = 0;
@@ -74,6 +76,7 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence)
     if (ret != 0) {
         goto out;
     }
+    self->finished = 0;
     ret = vargen_next_tree(self);
     /* We must have at least one tree in the iterator */
     assert(ret == 1);
@@ -131,24 +134,26 @@ vargen_next(vargen_t *self, double *position, char **variant)
     int not_done = 1;
     mutation_t *mutation;
 
-    while (not_done && self->tree_mutation_index == self->tree.num_mutations) {
-        ret = vargen_next_tree(self);
-        if (ret < 0) {
-            goto out;
+    if (!self->finished) {
+        while (not_done && self->tree_mutation_index == self->tree.num_mutations) {
+            ret = vargen_next_tree(self);
+            if (ret < 0) {
+                goto out;
+            }
+            not_done = ret == 1;
         }
-        not_done = ret == 1;
-    }
-    if (not_done) {
-        memset(self->variant, '0', self->sample_size);
-        mutation = &self->tree.mutations[self->tree_mutation_index];
-        ret = vargen_apply_tree_mutation(self, mutation);
-        if (ret != 0) {
-            goto out;
+        if (not_done) {
+            memset(self->variant, '0', self->sample_size);
+            mutation = &self->tree.mutations[self->tree_mutation_index];
+            ret = vargen_apply_tree_mutation(self, mutation);
+            if (ret != 0) {
+                goto out;
+            }
+            self->tree_mutation_index++;
+            *variant = self->variant;
+            *position = mutation->position;
+            ret = 1;
         }
-        self->tree_mutation_index++;
-        *variant = self->variant;
-        *position = mutation->position;
-        ret = 1;
     }
 out:
     return ret;
