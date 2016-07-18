@@ -214,6 +214,10 @@ tree_sequence_make_indexes(tree_sequence_t *self)
                 goto out;
             }
         }
+        if (self->trees.node[j] == MSP_NULL_NODE) {
+            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            goto out;
+        }
         c1 = self->trees.children[2 * j];
         c2 = self->trees.children[2 * j + 1];
         if (c1 >= c2) {
@@ -225,6 +229,10 @@ tree_sequence_make_indexes(tree_sequence_t *self)
             goto out;
         }
         if (self->trees.left[j] >= self->trees.right[j]) {
+            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            goto out;
+        }
+        if (self->trees.right[j] > self->sequence_length) {
             ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
             goto out;
         }
@@ -314,10 +322,45 @@ out:
 }
 
 int
+tree_sequence_load_records(tree_sequence_t *self,
+      uint32_t sample_size, double sequence_length,
+      size_t num_records, coalescence_record_t *records)
+{
+    int ret = MSP_ERR_GENERIC;
+    size_t j;
+
+    memset(self, 0, sizeof(tree_sequence_t));
+    self->num_records = num_records;
+    self->sample_size = sample_size;
+    self->sequence_length = sequence_length;
+    self->num_mutations = 0;
+    ret = tree_sequence_alloc(self);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_records; j++) {
+        self->trees.left[j] = records[j].left;
+        self->trees.right[j] = records[j].right;
+        self->trees.node[j] = records[j].node;
+        self->trees.population[j] = records[j].population_id;
+        self->trees.children[2 * j] = records[j].children[0];
+        self->trees.children[2 * j + 1] = records[j].children[1];
+        self->trees.time[j] = records[j].time;
+    }
+    ret = tree_sequence_make_indexes(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+int
 tree_sequence_create(tree_sequence_t *self, msp_t *sim,
         recomb_map_t *recomb_map, double Ne)
 {
-    int ret = -1;
+    int ret = MSP_ERR_GENERIC;
     uint32_t j;
     coalescence_record_t *records = NULL;
     sample_t *samples = NULL;

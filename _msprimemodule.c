@@ -124,7 +124,7 @@ handle_input_error(int err)
 }
 
 static PyObject *
-convert_coalescence_record(coalescence_record_t *cr)
+make_coalescence_record(coalescence_record_t *cr)
 {
     int population_id =
         cr->population_id == MSP_NULL_POPULATION_ID ? -1: cr->population_id;
@@ -132,6 +132,109 @@ convert_coalescence_record(coalescence_record_t *cr)
             cr->left, cr->right, (unsigned int) cr->node,
             (unsigned int) cr->children[0], (unsigned int) cr->children[1],
             cr->time, population_id);
+}
+
+static int
+parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
+{
+    int ret = -1;
+    size_t size, j;
+    long v;
+    PyObject *item;
+    PyObject *children;
+    const char *err = "Coalescence records must be tuples of the form "
+        "(left, right, node, (children), time, population_id)";
+
+    if (PySequence_Check(tuple) != 1) {
+        PyErr_SetString(
+            PyExc_TypeError, "Coalescence records must be a sequence.");
+        goto out;
+    }
+    size = PySequence_Length(tuple);
+    if (size != 6) {
+        PyErr_SetString(PyExc_ValueError, err);
+        goto out;
+    }
+    /* left */
+    item = PySequence_GetItem(tuple, 0);
+    if (!PyNumber_Check(item)) {
+        PyErr_Format(PyExc_TypeError, "'left' is not number");
+        goto out;
+    }
+    cr->left = PyFloat_AsDouble(item);
+    if (PyErr_Occurred() != NULL) {
+        goto out;
+    }
+    /* right */
+    item = PySequence_GetItem(tuple, 1);
+    if (!PyNumber_Check(item)) {
+        PyErr_Format(PyExc_TypeError, "'right' is not number");
+        goto out;
+    }
+    cr->right = PyFloat_AsDouble(item);
+    if (PyErr_Occurred() != NULL) {
+        goto out;
+    }
+    /* node */
+    item = PySequence_GetItem(tuple, 2);
+    if (!PyNumber_Check(item)) {
+        PyErr_Format(PyExc_TypeError, "'node' is not number");
+        goto out;
+    }
+    cr->node = (uint32_t) PyLong_AsLong(item);
+    if (PyErr_Occurred() != NULL) {
+        goto out;
+    }
+    /* children */
+    children = PySequence_GetItem(tuple, 3);
+    if (PySequence_Check(children) != 1) {
+        PyErr_SetString(PyExc_TypeError, "children must be a sequence.");
+        goto out;
+    }
+    if (PySequence_Length(children) != 2) {
+        PyErr_SetString(PyExc_ValueError, "Binary records only supported");
+        goto out;
+    }
+    for (j = 0; j < 2; j++) {
+        item = PySequence_GetItem(children, j);
+        if (!PyNumber_Check(item)) {
+            PyErr_Format(PyExc_TypeError, "children[%d]' is not number",
+                (int)j);
+            goto out;
+        }
+        cr->children[j] = (uint32_t) PyLong_AsLong(item);
+        if (PyErr_Occurred() != NULL) {
+            goto out;
+        }
+    }
+    /* time */
+    item = PySequence_GetItem(tuple, 4);
+    if (!PyNumber_Check(item)) {
+        PyErr_Format(PyExc_TypeError, "'time' is not number");
+        goto out;
+    }
+    cr->time = PyFloat_AsDouble(item);
+    if (PyErr_Occurred() != NULL) {
+        goto out;
+    }
+    /* population */
+    item = PySequence_GetItem(tuple, 5);
+    if (!PyNumber_Check(item)) {
+        PyErr_Format(PyExc_TypeError, "'population_id' is not number");
+        goto out;
+    }
+    v = PyLong_AsLong(item);
+    if (PyErr_Occurred() != NULL) {
+        goto out;
+    }
+    if (v == -1) {
+        cr->population_id = MSP_NULL_POPULATION_ID;
+    } else {
+        cr->population_id = (uint8_t) v;
+    }
+    ret = 0;
+out:
+    return ret;
 }
 
 /*
@@ -1283,7 +1386,7 @@ Simulator_get_coalescence_records(Simulator *self)
     }
     for (j = 0; j < num_coalescence_records; j++) {
         cr = &coalescence_records[j];
-        py_cr = convert_coalescence_record(cr);
+        py_cr = make_coalescence_record(cr);
         if (py_cr == NULL) {
             Py_DECREF(l);
             goto out;
@@ -2017,6 +2120,62 @@ out:
 }
 
 static PyObject *
+TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    PyObject *py_records = NULL;
+    PyObject *item;
+    coalescence_record_t *records = NULL;
+    unsigned int sample_size;
+    double sequence_length;
+    size_t num_records, j;
+    static char *kwlist[] = {
+        "sample_size", "sequence_length", "records", NULL};
+
+    if (self->tree_sequence != NULL) {
+        PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "IdO!", kwlist,
+                &sample_size, &sequence_length,
+                &PyList_Type, &py_records)) {
+        goto out;
+    }
+    self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
+    if (self->tree_sequence == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
+    num_records = PyList_Size(py_records);
+    records = PyMem_Malloc(num_records * sizeof(coalescence_record_t));
+    if (records == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < num_records; j++) {
+        item = PyList_GetItem(py_records, j);
+        if (parse_coalescence_record(item, &records[j]) != 0) {
+            goto out;
+        }
+    }
+    err = tree_sequence_load_records(self->tree_sequence,
+            (uint32_t) sample_size, sequence_length, num_records, records);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    if (records != NULL) {
+        free(records);
+    }
+    return ret;
+
+}
+
+static PyObject *
 TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
@@ -2203,7 +2362,7 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    ret = convert_coalescence_record(&cr);
+    ret = make_coalescence_record(&cr);
 out:
     return ret;
 }
@@ -2446,6 +2605,9 @@ static PyMethodDef TreeSequence_methods[] = {
     {"load", (PyCFunction) TreeSequence_load,
         METH_VARARGS|METH_KEYWORDS,
         "Loads a tree sequence from the specified path."},
+    {"load_records", (PyCFunction) TreeSequence_load_records,
+        METH_VARARGS|METH_KEYWORDS,
+        "Loads a tree sequence from the specified set of records"},
     {"generate_mutations", (PyCFunction) TreeSequence_generate_mutations,
         METH_VARARGS|METH_KEYWORDS,
         "Generates mutations under the infinite sites model"},

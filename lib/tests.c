@@ -193,6 +193,45 @@ test_single_locus_simulation(void)
     free(msp);
 }
 
+static void
+test_simplest_records(void)
+{
+    int ret = 0;
+    coalescence_record_t records[] = {
+        {0, 0, 1, 2, 1.0, {0, 1}},
+    };
+    size_t num_records = sizeof(records) / sizeof(coalescence_record_t);
+    tree_sequence_t ts;
+
+    ret = tree_sequence_load_records(&ts, 2, 1, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
+    tree_sequence_free(&ts);
+}
+
+static void
+test_single_tree_good_records(void)
+{
+    int ret = 0;
+    coalescence_record_t records[] = {
+        {0, 0, 1, 4, 1.0, {0, 1}},
+        {0, 0, 1, 5, 2.0, {2, 3}},
+        {0, 0, 1, 6, 3.0, {4, 5}}
+    };
+    size_t num_records = sizeof(records) / sizeof(coalescence_record_t);
+    tree_sequence_t ts;
+
+    ret = tree_sequence_load_records(&ts, 4, 1, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 7);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
+    tree_sequence_free(&ts);
+}
 
 int
 main(void)
@@ -213,7 +252,11 @@ main(void)
     /* add the tests to the suite */
     if (
         (NULL == CU_add_test(pSuite, "Fenwick tree", test_fenwick)) ||
-        (NULL == CU_add_test(pSuite, "Test VCF", test_vcf)) ||
+        (NULL == CU_add_test(pSuite, "VCF", test_vcf)) ||
+        (NULL == CU_add_test(
+             pSuite, "Simplest records", test_simplest_records)) ||
+        (NULL == CU_add_test(
+             pSuite, "Single tree good records", test_single_tree_good_records)) ||
         (NULL == CU_add_test(
              pSuite, "Single locus simulation", test_single_locus_simulation))) {
         CU_cleanup_registry();

@@ -1841,6 +1841,80 @@ class TestTreeSequence(LowLevelTestCase):
             pi1 = ts.get_pairwise_diversity(samples)
             self.assertGreaterEqual(pi1, 0)
 
+    def test_load_records_equality(self):
+        for ts1 in self.get_example_tree_sequences():
+            records = [ts1.get_record(j) for j in range(ts1.get_num_records())]
+            ts2 = _msprime.TreeSequence()
+            ts2.load_records(
+                ts1.get_sample_size(), ts1.get_sequence_length(), records)
+            new_records = [
+                ts2.get_record(j) for j in range(ts2.get_num_records())]
+            self.assertEqual(new_records, records)
+            self.assertEqual(
+                ts1.get_sample_size(), ts2.get_sample_size())
+            self.assertEqual(
+                ts1.get_sequence_length(), ts2.get_sequence_length())
+
+    def test_load_records_interface(self):
+        ts = next(self.get_example_tree_sequences())
+        self.assertRaises(ValueError, ts.load_records, 2, 1, [])
+        for bad_type in [None, {}, 1234]:
+            ts = _msprime.TreeSequence()
+            self.assertRaises(
+                TypeError, ts.load_records, 2, 1, [bad_type])
+        record = (0, 1, 2, (0, 1), 1, 0)
+        for j in range(len(record)):
+            ts = _msprime.TreeSequence()
+            sub_record = record[:j]
+            self.assertRaises(
+                ValueError, ts.load_records, 2, 1, [sub_record])
+        for bad_type in [None, {}, ts]:
+            for j in range(len(record)):
+                r = list(record)
+                r[j] = bad_type
+                ts = _msprime.TreeSequence()
+                self.assertRaises(
+                    TypeError, ts.load_records, 2, 1, [r])
+        for bad_type in ["sdf", {}, ts, None]:
+            for j in range(2):
+                r = list(record)
+                r[3] = list(r[3])
+                r[3][j] = bad_type
+                ts = _msprime.TreeSequence()
+                self.assertRaises(
+                    TypeError, ts.load_records, 2, 1, [r])
+        # Check to make sure we can use different sequence types.
+        r1 = list(record)
+        r2 = list(record)
+        r2[3] = list(record[3])
+        for r in [r1, r2]:
+            ts = _msprime.TreeSequence()
+            ts.load_records(2, 1, [r])
+            self.assertEqual(ts.get_record(0), record)
+            self.assertRaises(ValueError, ts.load_records, 2, 1, [record])
+
+    def test_load_bad_records(self):
+        def f(sample_size, sequence_length, records):
+            ts = _msprime.TreeSequence()
+            ts.load_records(sample_size, sequence_length, records)
+        record = (0, 1, 2, (0, 1), 1, 0)
+        # right must be < L
+        self.assertRaises(_msprime.LibraryError, f, 2, 0.5, [record])
+        # left must be <= right
+        r = list(record)
+        r[0] = 1
+        r[1] = 0
+        self.assertRaises(_msprime.LibraryError, f, 2, 1, [r])
+        # Children and node must not be null.
+        r = (0, 1, -1, (0, 1), 1, 0)
+        self.assertRaises(_msprime.LibraryError, f, 2, 1, [r])
+        r = (0, 1, 2, (-1, 1), 1, 0)
+        self.assertRaises(_msprime.LibraryError, f, 2, 1, [r])
+        r = (0, 1, 2, (0, -1), 1, 0)
+        self.assertRaises(_msprime.LibraryError, f, 2, 1, [r])
+        r = (0, 1, 2, (-1, -1), 1, 0)
+        self.assertRaises(_msprime.LibraryError, f, 2, 1, [r])
+
 
 class TestHdf5Format(LowLevelTestCase):
     """
