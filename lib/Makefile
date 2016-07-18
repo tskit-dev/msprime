@@ -24,7 +24,7 @@ main: main.c ${SRC} avl.o
 	${CC} ${CFLAGS} -o main main.c ${COMPILED} ${LDFLAGS} -lconfig avl.o
 
 tests: tests.c ${SRC} avl.o
-	${CC} -coverage ${CFLAGS} -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit avl.o
+	${CC} ${CFLAGS} -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit avl.o
 
 tags:
 	etags *.c *.h 
@@ -32,8 +32,8 @@ tags:
 clean:
 	rm -f main test_fenwick *.o *.gcda *.gcno
 
-travis-tests: CC=gcc 
-travis-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS -coverage
+travis-tests: CC=gcc
+travis-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage 
 travis-tests: avl.o tests 
 
 coverity-tests: CC=gcc 
