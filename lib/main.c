@@ -334,9 +334,6 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
     /* Set the mutation rate */
     if (config_lookup_float(config,
             "mutation_rate", &mutation_params->mutation_rate)
@@ -563,7 +560,7 @@ print_vcf(tree_sequence_t *ts, unsigned int ploidy)
     if (ret != 0) {
         goto out;
     }
-    vcf_converter_print_state(vc);
+    vcf_converter_print_state(vc, stdout);
     printf("START VCF\n");
     ret = vcf_converter_get_header(vc, &header);
     if (ret != 0) {

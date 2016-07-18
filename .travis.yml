@@ -12,6 +12,7 @@ addons:
     packages:
       - libgsl0-dev
       - libhdf5-serial-dev
+      - libcunit1-dev
       - python-h5py
 
 language: python
@@ -30,7 +31,7 @@ install:
   - pip install Cython
   - pip install h5py 
   - pip install -r requirements.txt
-  - CFLAGS=-coverage python setup.py build_ext --inplace
+  - CFLAGS=--coverage python setup.py build_ext --inplace
 
 script: 
   - flake8 setup.py msprime tests
@@ -41,9 +42,15 @@ script:
   # Make sure we can install successfully.
   - python setup.py sdist 
   - pip install dist/msprime*.tar.gz --no-cache-dir
+  # Now run the low-level tests.
+  # First, we move the coverate statistics files to the lib directory 
+  # so they can be updated.
+  - mv ./build/temp.linux-*/lib/*.gc* lib
+  - make -C lib travis-tests && ./lib/tests
 
 after_success:
   # Run gcov manually, as the one used in codecov doesn't work here.
   - gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
-  - find ./build/temp.linux-*/lib -type f -name '*.gcno' -exec gcov -pb -o ./build/temp.linux-*/lib {} +
+  # - find ./build/temp.linux-*/lib -type f -name '*.gcno' -exec gcov -pb -o ./build/temp.linux-*/lib {} +
+  - find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
   - codecov -X gcov 
