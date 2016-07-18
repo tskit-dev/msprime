@@ -48,5 +48,5 @@ script:
 after_success:
   # Run gcov manually, as the one used in codecov doesn't work here.
   - gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
-  - find ./lib ./build/temp.linux-*/lib -type f -name '*.gcno' -exec gcov -pb -o ./build/temp.linux-*/lib {} +
+  - find ./build/temp.linux-*/lib -type f -name '*.gcno' -exec gcov -pb -o ./build/temp.linux-*/lib {} +
   - codecov -X gcov 
