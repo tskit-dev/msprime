@@ -848,9 +848,6 @@ msp_alloc_node_mapping(msp_t *self)
         }
     }
     ret = (node_mapping_t *) object_heap_alloc_object(&self->node_mapping_heap);
-    if (ret == NULL) {
-        goto out;
-    }
 out:
     return ret;
 }
