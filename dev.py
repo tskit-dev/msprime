@@ -9,12 +9,14 @@ import time
 import math
 import glob
 import subprocess
+import sys
 import itertools
 
 import numpy as np
 import numpy.ma as ma
 import matplotlib
 import scipy.stats
+import pandas as pd
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
 import matplotlib.pyplot as pyplot
@@ -385,8 +387,8 @@ def segregating_sites_example(n, theta, num_replicates):
         theta**2 * np.sum(1 / np.arange(1, n)**2))
     print("              mean              variance")
     print("Observed      {}\t\t{}".format(np.mean(S), np.var(S)))
-    print("Analytical    {:.5f}\t\t{:.5f}".format(S_mean_a, S_var_a))
-
+    print("Analytical    {:.5f}\t\t:.5f}".format(S_mean_a, S_var_a))
+        # columns=["left", "right", "node", "children", "time", "population"])
 
 
 def variable_recomb_example():
@@ -512,6 +514,30 @@ def vcf_example():
     duration = time.clock() - before
     print("wrote vcf in ", duration, "seconds", (size / 2**20) / duration, "MB/s")
 
+def records_example():
+    filename = "records.txt"
+
+    table = pd.read_table(filename)
+
+    ts = msprime.load("out.hdf5")
+    with open(filename, "w") as f:
+        ts.write_records(f)
+    t = pd.read_table(filename)
+    print(t)
+    print(t.children.dtype)
+    # with open(filename, "w") as f:
+    #     ts.write_records(f, header=False)
+    # npt = np.loadtxt(filename,
+    #         converters={3: (lambda s: map(int, s.split(","))), 4: float},
+    #     dtype=[
+    #         ("left", float), ("right", float), ("node", int),
+    #         ("children", "2int"), ("time", "float"), ("population", int)],
+    #     unpack=False)
+
+    # print(npt)
+
+
+
 
 if __name__ == "__main__":
     # mutations()
@@ -532,4 +558,5 @@ if __name__ == "__main__":
     # segregating_sites_example(2, 5, 10000)
     # variable_recomb_example()
     # pop_example()
-    vcf_example()
+    # vcf_example()
+    records_example()

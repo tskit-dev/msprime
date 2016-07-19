@@ -1346,6 +1346,50 @@ class TreeSequence(object):
                 u for u in samples if self.get_population(u) == population_id]
         return samples
 
+    def write_records(self, output, header=True, precision=6):
+        """
+        Writes the records for this tree sequence to the specified file in a
+        tab-separated format. If ``header`` is True, the first line of this
+        file contains the names of the columns, i.e., ``left``, ``right``,
+        ``node``, ``children``, ``time`` and ``population``. After the optional
+        header, the records are written to the file in tab-separated form in
+        order of non-decreasing time. The ``left``, ``right`` and ``time``
+        fields are base 10 floating point values printed to the specified
+        ``precision``. The ``node`` and ``population`` fields are base 10
+        integers. The ``children`` column is a comma-separated list of base 10
+        integers, which must contain at least two values.
+
+        Example usage:
+
+        >>> with open("records.txt", "w") as records_file:
+        >>>     tree_sequence.write_records(records_file)
+
+        :param File output: The file-like object to write the tab separated
+            output.
+        :param bool header: If True, write a header describing the column
+            names in the output.
+        :param int precision: The number of decimal places to print out for
+            floating point columns.
+        """
+        if header:
+            print(
+                "left", "right", "node", "children",
+                "time", "population", sep="\t", file=output)
+        for record in self.records():
+            children = ",".join(str(c) for c in record.children)
+            row = (
+                "{left:.{precision}f}\t"
+                "{right:.{precision}f}\t"
+                "{node}\t"
+                "{children}\t"
+                "{time:.{precision}f}\t"
+                "{population}\t").format(
+                    precision=precision,
+                    left=record.left, right=record.right,
+                    node=record.node, children=children,
+                    time=record.time, population=record.population)
+            print(row, file=output)
+
     def write_vcf(self, output, ploidy=1):
         """
         Writes a VCF formatted file to the specified file-like object. If a

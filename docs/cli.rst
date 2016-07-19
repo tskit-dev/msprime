@@ -57,7 +57,7 @@ msp records
 ++++++++++++
 
 :command:`msp records` is a command line interface to the
-:meth:`msprime.TreeSequence.records` method. It prints out the coalescence
+:meth:`msprime.TreeSequence.write_records` method. It prints out the coalescence
 records in a history file in a tab-delimited text format.
 
 .. argparse::

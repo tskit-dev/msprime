@@ -24,7 +24,6 @@ from __future__ import division
 
 import io
 import itertools
-import json
 import os
 import random
 import sys
@@ -1056,24 +1055,27 @@ class TestMspArgumentParser(unittest.TestCase):
         args = parser.parse_args([cmd, history_file])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.header, False)
+        self.assertEqual(args.precision, 3)
 
     def test_records_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "records"
         history_file = "test.hdf5"
         args = parser.parse_args([
-            cmd, history_file, "-H"])
+            cmd, history_file, "-H", "-p", "8"])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.header, True)
+        self.assertEqual(args.precision, 8)
 
     def test_records_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "records"
         history_file = "test.hdf5"
         args = parser.parse_args([
-            cmd, history_file, "--header"])
+            cmd, history_file, "--header", "--precision", "5"])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.header, True)
+        self.assertEqual(args.precision, 5)
 
     def test_mutations_default_values(self):
         parser = cli.get_msp_parser()
@@ -1202,34 +1204,40 @@ class TestMspConversionOutput(unittest.TestCase):
     def tearDownClass(cls):
         os.unlink(cls._history_file)
 
-    def verify_records(self, output_records):
+    def verify_records(self, output_records, precision):
         records = list(self._tree_sequence.records())
         self.assertEqual(len(records), len(output_records))
+
+        def f(v):
+            return "{:.{}f}".format(v, precision)
         for record, line in zip(records, output_records):
             splits = line.split("\t")
-            self.assertEqual(str(record.left), splits[0])
-            self.assertEqual(str(record.right), splits[1])
+            self.assertEqual(f(record.left), splits[0])
+            self.assertEqual(f(record.right), splits[1])
             self.assertEqual(record.node, int(splits[2]))
-            self.assertEqual(list(record.children), json.loads(splits[3]))
-            self.assertAlmostEqual(record.time, float(splits[4]))
+            children = list(map(int, splits[3].split(",")))
+            self.assertEqual(list(record.children), children)
+            self.assertEqual(f(record.time), splits[4])
             self.assertEqual(record.population, int(splits[5]))
 
     def test_records(self):
         cmd = "records"
+        precision = 3
         stdout, stderr = capture_output(cli.msp_main, [
             cmd, self._history_file])
         self.assertEqual(len(stderr), 0)
         output_records = stdout.splitlines()
-        self.verify_records(output_records)
+        self.verify_records(output_records, precision)
         # check the header.
+        precision = 8
         stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._history_file, "-H"])
+            cmd, self._history_file, "-H", "-p", str(precision)])
         self.assertEqual(len(stderr), 0)
         output_records = stdout.splitlines()
         self.assertEqual(
             list(output_records[0].split()),
             ["left", "right", "node", "children", "time", "population"])
-        self.verify_records(output_records[1:])
+        self.verify_records(output_records[1:], precision)
 
     def verify_mutations(self, output_mutations):
         mutations = list(self._tree_sequence.mutations())

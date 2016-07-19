@@ -720,15 +720,7 @@ def run_dump_variants(args):
 
 def run_dump_records(args):
     tree_sequence = msprime.load(args.history_file)
-    if args.header:
-        print(
-            "left", "right", "node", "children",
-            "time", "population", sep="\t")
-    for record in tree_sequence.records():
-        print(
-            record.left, record.right, record.node,
-            list(record.children),
-            record.time, record.population, sep="\t")
+    tree_sequence.write_records(sys.stdout, args.header, args.precision)
 
 
 def run_dump_mutations(args):
@@ -808,6 +800,9 @@ def get_msp_parser():
         help="Dump records in tabular format.")
     add_history_file_argument(records_parser)
     add_header_argument(records_parser)
+    records_parser.add_argument(
+        "--precision", "-p", type=int, default=3,
+        help="The number of decimal places to print in records")
     records_parser.set_defaults(runner=run_dump_records)
 
     mutations_parser = subparsers.add_parser(
