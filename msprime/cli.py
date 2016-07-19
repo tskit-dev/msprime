@@ -723,6 +723,11 @@ def run_dump_records(args):
     tree_sequence.write_records(sys.stdout, args.header, args.precision)
 
 
+def run_dump_vcf(args):
+    tree_sequence = msprime.load(args.history_file)
+    tree_sequence.write_vcf(sys.stdout, args.ploidy)
+
+
 def run_dump_mutations(args):
     tree_sequence = msprime.load(args.history_file)
     if args.header:
@@ -794,6 +799,15 @@ def get_msp_parser():
         "--compress", "-z", action="store_true",
         help="Enable HDF5's transparent zlib compression")
     simulate_parser.set_defaults(runner=run_simulate)
+
+    vcf_parser = subparsers.add_parser(
+        "vcf",
+        help="Write the tree sequence out in VCF format.")
+    add_history_file_argument(vcf_parser)
+    vcf_parser.add_argument(
+        "--ploidy", "-P", type=int, default=1,
+        help="The ploidy level of samples")
+    vcf_parser.set_defaults(runner=run_dump_vcf)
 
     records_parser = subparsers.add_parser(
         "records",

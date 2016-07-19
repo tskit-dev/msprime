@@ -773,6 +773,38 @@ class TestTreeSequence(HighLevelTestCase):
                     self.assertRaises(
                         ValueError, ts.write_vcf, f, bad_ploidy)
 
+    def verify_write_records(self, ts, header, precision):
+
+        def convert(v):
+            return "{:.{}f}".format(v, precision)
+        with tempfile.TemporaryFile() as f:
+            ts.write_records(f, header=header, precision=precision)
+            f.seek(0)
+            output_records = f.read().splitlines()
+            records = list(ts.records())
+            self.assertEqual(
+                len(output_records) - int(header), len(records))
+            if header:
+                self.assertEqual(
+                    list(output_records[0].split()), [
+                        "left", "right", "node", "children",
+                        "time", "population"])
+            for record, line in zip(records, output_records[int(header):]):
+                splits = line.split("\t")
+                self.assertEqual(convert(record.left), splits[0])
+                self.assertEqual(convert(record.right), splits[1])
+                self.assertEqual(record.node, int(splits[2]))
+                children = list(map(int, splits[3].split(",")))
+                self.assertEqual(list(record.children), children)
+                self.assertEqual(convert(record.time), splits[4])
+                self.assertEqual(record.population, int(splits[5]))
+
+    def test_write_records(self):
+        for ts in self.get_example_tree_sequences():
+            for precision in [2, 7]:
+                self.verify_write_records(ts, True, precision)
+                self.verify_write_records(ts, False, precision)
+
 
 class TestSparseTree(HighLevelTestCase):
     """

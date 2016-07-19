@@ -1077,6 +1077,32 @@ class TestMspArgumentParser(unittest.TestCase):
         self.assertEqual(args.header, True)
         self.assertEqual(args.precision, 5)
 
+    def test_vcf_default_values(self):
+        parser = cli.get_msp_parser()
+        cmd = "vcf"
+        history_file = "test.hdf5"
+        args = parser.parse_args([cmd, history_file])
+        self.assertEqual(args.history_file, history_file)
+        self.assertEqual(args.ploidy, 1)
+
+    def test_vcf_short_args(self):
+        parser = cli.get_msp_parser()
+        cmd = "vcf"
+        history_file = "test.hdf5"
+        args = parser.parse_args([
+            cmd, history_file, "-P", "2"])
+        self.assertEqual(args.history_file, history_file)
+        self.assertEqual(args.ploidy, 2)
+
+    def test_vcf_long_args(self):
+        parser = cli.get_msp_parser()
+        cmd = "vcf"
+        history_file = "test.hdf5"
+        args = parser.parse_args([
+            cmd, history_file, "--ploidy", "5"])
+        self.assertEqual(args.history_file, history_file)
+        self.assertEqual(args.ploidy, 5)
+
     def test_mutations_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "mutations"
@@ -1204,21 +1230,12 @@ class TestMspConversionOutput(unittest.TestCase):
     def tearDownClass(cls):
         os.unlink(cls._history_file)
 
-    def verify_records(self, output_records, precision):
-        records = list(self._tree_sequence.records())
-        self.assertEqual(len(records), len(output_records))
-
-        def f(v):
-            return "{:.{}f}".format(v, precision)
-        for record, line in zip(records, output_records):
-            splits = line.split("\t")
-            self.assertEqual(f(record.left), splits[0])
-            self.assertEqual(f(record.right), splits[1])
-            self.assertEqual(record.node, int(splits[2]))
-            children = list(map(int, splits[3].split(",")))
-            self.assertEqual(list(record.children), children)
-            self.assertEqual(f(record.time), splits[4])
-            self.assertEqual(record.population, int(splits[5]))
+    def verify_records(self, output_records, header, precision):
+        with tempfile.TemporaryFile() as f:
+            self._tree_sequence.write_records(f, header, precision)
+            f.seek(0)
+            output = f.read().splitlines()
+        self.assertEqual(output, output_records)
 
     def test_records(self):
         cmd = "records"
@@ -1227,7 +1244,7 @@ class TestMspConversionOutput(unittest.TestCase):
             cmd, self._history_file])
         self.assertEqual(len(stderr), 0)
         output_records = stdout.splitlines()
-        self.verify_records(output_records, precision)
+        self.verify_records(output_records, False, precision)
         # check the header.
         precision = 8
         stdout, stderr = capture_output(cli.msp_main, [
@@ -1237,7 +1254,7 @@ class TestMspConversionOutput(unittest.TestCase):
         self.assertEqual(
             list(output_records[0].split()),
             ["left", "right", "node", "children", "time", "population"])
-        self.verify_records(output_records[1:], precision)
+        self.verify_records(output_records, True, precision)
 
     def verify_mutations(self, output_mutations):
         mutations = list(self._tree_sequence.mutations())
@@ -1246,6 +1263,20 @@ class TestMspConversionOutput(unittest.TestCase):
             splits = line.split()
             self.assertAlmostEqual(x, float(splits[0]))
             self.assertEqual(u, int(splits[1]))
+
+    def verify_vcf(self, output_vcf):
+        with tempfile.TemporaryFile() as f:
+            self._tree_sequence.write_vcf(f)
+            f.seek(0)
+            vcf = f.read()
+        self.assertEqual(output_vcf, vcf)
+
+    def test_vcf(self):
+        cmd = "vcf"
+        stdout, stderr = capture_output(cli.msp_main, [
+            cmd, self._history_file])
+        self.assertEqual(len(stderr), 0)
+        self.verify_vcf(stdout)
 
     def test_mutations(self):
         cmd = "mutations"

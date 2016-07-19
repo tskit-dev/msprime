@@ -57,14 +57,29 @@ msp records
 ++++++++++++
 
 :command:`msp records` is a command line interface to the
-:meth:`msprime.TreeSequence.write_records` method. It prints out the coalescence
-records in a history file in a tab-delimited text format.
+:meth:`msprime.TreeSequence.write_records` method. It prints out the
+variants stored in the history file in VCF format.
 
 .. argparse::
     :module: msprime.cli
     :func: get_msp_parser
     :prog: msp
     :path: records
+    :nodefault:
+
+++++++++++++
+msp vcf
+++++++++++++
+
+:command:`msp vcf` is a command line interface to the
+:meth:`msprime.TreeSequence.write_vcf` method. It prints out the coalescence
+vcf in a history file in a tab-delimited text format.
+
+.. argparse::
+    :module: msprime.cli
+    :func: get_msp_parser
+    :prog: msp
+    :path: vcf
     :nodefault:
 
 +++++++++++++
