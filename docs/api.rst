@@ -48,13 +48,15 @@ recombination model and number of loci.
 
 Population structure is modelled by specifying a fixed number of demes
 :math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation
-migration rates. Each deme has an initial absolute population size :math:`s`
+migration rates. Each element of the matrix :math:`M_{j,k}` defines
+the fraction of population :math:`j` that consists of migrants from
+population :math:`k` in each generation.
+Each deme has an initial absolute population size :math:`s`
 and a per generation exponential growth rate :math:`\alpha`. The size of a
 given population at time :math:`t` in the past (measured in generations) is
 therefore given by :math:`s e^{-\alpha t}`. Demographic events that occur in
 the history of the simulated population alter some aspect of this population
 configuration at a particular time in the past.
-
 
 .. warning:: This parameterisation of recombination, mutation and
     migration rates is different to :program:`ms`, which states these
@@ -96,7 +98,7 @@ then individuals 0 and 1 will be initially located in population 0, and
 individuals 2, 3 and 4 will be drawn from population 2.
 
 Given :math:`N` populations, migration matrices are specified using an :math:`N
-x N` matrix of deme-to-deme migration rates. See the documentation for
+\times N` matrix of deme-to-deme migration rates. See the documentation for
 :func:`.simulate` and the `Simulation model`_ section for more details on the
 migration rates.
 

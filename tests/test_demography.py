@@ -500,6 +500,33 @@ class TestCoalescenceLocations(unittest.TestCase):
         g = tree.get_time(u) * 4
         self.assertGreater(g, t3)
 
+    def test_migration_rate_directionality(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(0),
+        ]
+        t = 5
+        demographic_events = [
+            msprime.MigrationRateChange(time=t, rate=1, matrix_index=(0, 2)),
+            msprime.MigrationRateChange(time=t, rate=1, matrix_index=(1, 2)),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1)
+        tree = next(ts.trees())
+        self.assertEqual(tree.get_root(), 2)
+        self.assertGreater(tree.get_time(2), t / 4)
+        self.assertEqual(tree.get_population(0), 0)
+        self.assertEqual(tree.get_population(1), 1)
+        self.assertEqual(tree.get_population(2), 2)
+        self.assertEqual(ts.get_population(0), 0)
+        self.assertEqual(ts.get_population(1), 1)
+        self.assertEqual(ts.get_samples(), [0, 1])
+        self.assertEqual(ts.get_samples(0), [0])
+        self.assertEqual(ts.get_samples(1), [1])
+
 
 class TestTimeUnits(unittest.TestCase):
     """
