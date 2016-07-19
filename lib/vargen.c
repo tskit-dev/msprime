@@ -78,7 +78,9 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence)
     }
     self->finished = 0;
     ret = vargen_next_tree(self);
-    /* We must have at least one tree in the iterator */
+    if (ret < 0) {
+        goto out;
+    }
     assert(ret == 1);
     ret = 0;
 out:

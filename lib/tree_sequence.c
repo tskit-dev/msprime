@@ -195,45 +195,42 @@ tree_sequence_free(tree_sequence_t *self)
 static int
 tree_sequence_make_indexes(tree_sequence_t *self)
 {
-    int ret = 0;
+    int ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
     uint32_t j, c1, c2;
     index_sort_t *sort_buff = NULL;
 
+    /* We must have at least n - 1 records for a n samples. */
+    if (self->num_records < self->sample_size - 1) {
+        goto out;
+    }
     /* First, check for iffy looking input */
     for (j = 0; j < self->num_records; j++) {
         if (j > 0) {
             /* Input data must be time sorted. */
             if (self->trees.time[j] < self->trees.time[j - 1]) {
-                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
                 goto out;
             }
             /* Nodes must be monotonically non-decreasing */
             if (self->trees.node[j] < self->trees.node[j - 1] ||
                     self->trees.node[j] > self->trees.node[j - 1] + 1) {
-                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
                 goto out;
             }
         }
         if (self->trees.node[j] == MSP_NULL_NODE) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
             goto out;
         }
         c1 = self->trees.children[2 * j];
         c2 = self->trees.children[2 * j + 1];
         if (c1 >= c2) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
             goto out;
         }
         if (c2 >= self->trees.node[j]) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
             goto out;
         }
         if (self->trees.left[j] >= self->trees.right[j]) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
             goto out;
         }
         if (self->trees.right[j] > self->sequence_length) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
             goto out;
         }
     }
@@ -268,6 +265,7 @@ tree_sequence_make_indexes(tree_sequence_t *self)
     }
     /* set the num_nodes value */
     self->num_nodes = self->trees.node[self->num_records - 1] + 1;
+    ret = 0;
 out:
     if (sort_buff != NULL) {
         free(sort_buff);
@@ -323,17 +321,20 @@ out:
 
 int
 tree_sequence_load_records(tree_sequence_t *self,
-      uint32_t sample_size, double sequence_length,
       size_t num_records, coalescence_record_t *records)
 {
     int ret = MSP_ERR_GENERIC;
     size_t j;
 
     memset(self, 0, sizeof(tree_sequence_t));
+    if (num_records == 0) {
+        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        goto out;
+    }
     self->num_records = num_records;
-    self->sample_size = sample_size;
-    self->sequence_length = sequence_length;
     self->num_mutations = 0;
+    self->sequence_length = 0.0;
+    self->sample_size = records[0].node;
     ret = tree_sequence_alloc(self);
     if (ret != 0) {
         goto out;
@@ -346,6 +347,17 @@ tree_sequence_load_records(tree_sequence_t *self,
         self->trees.children[2 * j] = records[j].children[0];
         self->trees.children[2 * j + 1] = records[j].children[1];
         self->trees.time[j] = records[j].time;
+        if (records[j].right > self->sequence_length) {
+            self->sequence_length = records[j].right;
+        }
+    }
+    if (self->sample_size < 2 || self->sample_size == UINT32_MAX) {
+        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        goto out;
+    }
+    if (self->sequence_length <= 0) {
+        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        goto out;
     }
     ret = tree_sequence_make_indexes(self);
     if (ret != 0) {
@@ -370,7 +382,6 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     self->num_records = msp_get_num_coalescence_records(sim);
     assert(self->num_records > 0);
     self->sample_size = sim->sample_size;
-    self->sequence_length = recomb_map_get_sequence_length(recomb_map);
     self->num_mutations = 0;
     ret = tree_sequence_alloc(self);
     if (ret != 0) {
@@ -404,10 +415,14 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     for (j = 0; j < self->sample_size; j++) {
         self->samples.population[j] = samples[j].population_id;
     }
+    /* Set the sequence_length to the genetic length so we can
+     * pass the checks on the records during make_indexes */
+    self->sequence_length = (double) msp_get_num_loci(sim);
     ret = tree_sequence_make_indexes(self);
     if (ret != 0) {
         goto out;
     }
+    self->sequence_length = recomb_map_get_sequence_length(recomb_map);
     ret = tree_sequence_remap_coordinates(self, recomb_map);
     if (ret != 0) {
         goto out;
@@ -2031,12 +2046,16 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
     uint32_t j, k, u, v, c[2], all_leaves_diff, tracked_leaves_diff;
     tree_sequence_t *s = self->tree_sequence;
     sparse_tree_t *t = self->tree;
+    int first_tree = self->insertion_index == 0;
+    uint32_t num_records_in = 0;
+    uint32_t num_records_out = 0;
 
     assert(t != NULL && s != NULL);
     if (self->insertion_index < self->num_records) {
         /* First we remove the stale records */
         while (s->trees.right[s->trees.removal_order[self->removal_index]]
                 == t->right) {
+            num_records_out++;
             k = s->trees.removal_order[self->removal_index];
             u = s->trees.node[k];
             c[0] = s->trees.children[2 * k];
@@ -2072,6 +2091,19 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
         while (self->insertion_index < self->num_records &&
                 s->trees.left[s->trees.insertion_order[self->insertion_index]]
                 == t->left) {
+            num_records_in++;
+            /* Check for errors. */
+            if (first_tree) {
+                if (num_records_in >= self->sample_size) {
+                    ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                    goto out;
+                }
+            } else {
+                if (num_records_in > num_records_out) {
+                    ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                    goto out;
+                }
+            }
             k = s->trees.insertion_order[self->insertion_index];
             u = s->trees.node[k];
             c[0] = s->trees.children[2 * k];
@@ -2114,6 +2146,19 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
                 }
             }
         }
+        /* Check for errors. */
+        if (first_tree) {
+            if (num_records_out != 0 ||
+                    num_records_in != self->sample_size - 1) {
+                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                goto out;
+            }
+        } else {
+            if (num_records_in != num_records_out) {
+                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                goto out;
+            }
+        }
         /* In very rare situations, we have to traverse upwards to find the
          * new root.
          */
@@ -2136,5 +2181,6 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
         t->index++;
         ret = 1;
     }
+out:
     return ret;
 }

@@ -139,7 +139,7 @@ test_vcf(void)
 
     for (ploidy = 1; ploidy < 3; ploidy++) {
         ret = vcf_converter_alloc(vc, ts, ploidy);
-        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_FATAL(ret ==  0);
         vcf_converter_print_state(vc, devnull);
         ret = vcf_converter_get_header(vc, &str);
         CU_ASSERT_EQUAL(ret, 0);
@@ -203,7 +203,7 @@ test_simplest_records(void)
     size_t num_records = sizeof(records) / sizeof(coalescence_record_t);
     tree_sequence_t ts;
 
-    ret = tree_sequence_load_records(&ts, 2, 1, num_records, records);
+    ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
@@ -211,6 +211,66 @@ test_simplest_records(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
     tree_sequence_free(&ts);
 }
+
+static void
+test_simplest_bad_records(void)
+{
+    int ret = 0;
+    coalescence_record_t records[] = {
+        {0, 0, 1, 2, 1.0, {0, 1}},
+    };
+    size_t num_records = sizeof(records) / sizeof(coalescence_record_t);
+    tree_sequence_t ts;
+
+    /* An empty sequence should be an error */
+    ret = tree_sequence_load_records(&ts, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+
+    /* Bad sequence length */
+    records[0].right = 0.0;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[0].right = 1.0;
+
+    /* Equal nodes in the children */
+    records[0].children[0] = 1;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[0].children[0] = 0;
+
+    /* children node >= parent */
+    records[0].children[0] = 2;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[0].children[0] = 0;
+
+    /* Unsorted nodes in the children */
+    records[0].children[0] = 1;
+    records[0].children[1] = 0;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[0].children[0] = 0;
+    records[0].children[1] = 1;
+
+    /* A gap in the input nodes */
+    records[0].node = 3;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[0].node = 2;
+
+    /* Make sure we've preserved a good tree sequence */
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    tree_sequence_free(&ts);
+    records[0].node = 2;
+}
+
 
 static void
 test_single_tree_good_records(void)
@@ -224,13 +284,375 @@ test_single_tree_good_records(void)
     size_t num_records = sizeof(records) / sizeof(coalescence_record_t);
     tree_sequence_t ts;
 
-    ret = tree_sequence_load_records(&ts, 4, 1, num_records, records);
+    ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 7);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
     tree_sequence_free(&ts);
+}
+
+static void
+test_single_tree_bad_records(void)
+{
+    int ret = 0;
+    coalescence_record_t records[] = {
+        {0, 0, 1, 4, 1.0, {0, 1}},
+        {0, 0, 1, 5, 2.0, {2, 3}},
+        {0, 0, 1, 6, 3.0, {4, 5}}
+    };
+    size_t num_records = sizeof(records) / sizeof(coalescence_record_t);
+    tree_sequence_t ts;
+
+    /* Not sorted in time order */
+    records[2].time = 0.5;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[2].time = 3;
+
+    /* Missing node 6 */
+    records[2].node = 7;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[2].node = 6;
+
+    /* Left value greater than sequence length */
+    records[2].left = 2.0;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[2].left = 0.0;
+
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    tree_sequence_free(&ts);
+}
+
+static void
+test_single_tree_iter(void)
+{
+    int ret = 0;
+    coalescence_record_t records[] = {
+        {0, 0, 1, 4, 1.0, {0, 1}},
+        {0, 0, 1, 5, 2.0, {2, 3}},
+        {0, 0, 1, 6, 3.0, {4, 5}}
+    };
+    uint32_t parents[] = {4, 4, 5, 5, 6, 6, MSP_NULL_NODE};
+    size_t num_records = 3;
+    uint32_t num_nodes = 7;
+    uint32_t u, v;
+    tree_sequence_t ts;
+    sparse_tree_t tree;
+    sparse_tree_iterator_t iter;
+
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tree_sequence_alloc_sparse_tree(&ts, &tree, NULL, 0, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_iterator_alloc(&iter, &ts, &tree);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = sparse_tree_iterator_next(&iter);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), num_nodes);
+
+    for (u = 0; u < num_nodes; u++) {
+        ret = sparse_tree_get_parent(&tree, u, &v);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(v, parents[u]);
+    }
+
+    ret = sparse_tree_iterator_next(&iter);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    sparse_tree_iterator_free(&iter);
+    sparse_tree_free(&tree);
+    tree_sequence_free(&ts);
+    records[0].left = 0.0;
+}
+
+static void
+verify_trees(size_t num_records, coalescence_record_t *records,
+        size_t num_trees, size_t num_nodes, uint32_t* parents)
+{
+    int ret;
+    uint32_t u, v, j;
+    tree_sequence_t ts;
+    sparse_tree_t tree;
+    sparse_tree_iterator_t iter;
+
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tree_sequence_alloc_sparse_tree(&ts, &tree, NULL, 0, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_iterator_alloc(&iter, &ts, &tree);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), num_nodes);
+
+    for (j = 0; j < num_trees; j++) {
+        ret = sparse_tree_iterator_next(&iter);
+        CU_ASSERT_EQUAL(ret, 1);
+        for (u = 0; u < num_nodes; u++) {
+            ret = sparse_tree_get_parent(&tree, u, &v);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL(v, parents[j * num_nodes + u]);
+        }
+    }
+
+    ret = sparse_tree_iterator_next(&iter);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    sparse_tree_iterator_free(&iter);
+    sparse_tree_free(&tree);
+    tree_sequence_free(&ts);
+}
+
+static void
+verify_tree_iter_fails(size_t num_records, coalescence_record_t *records,
+        uint32_t tree_index, int error_code)
+{
+    int ret;
+    uint32_t index = 0;
+    tree_sequence_t ts;
+    sparse_tree_t tree;
+    sparse_tree_iterator_t iter;
+
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tree_sequence_alloc_sparse_tree(&ts, &tree, NULL, 0, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_iterator_alloc(&iter, &ts, &tree);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    while ((ret = sparse_tree_iterator_next(&iter)) == 1) {
+        index++;
+    }
+    CU_ASSERT_EQUAL(index, tree_index);
+    CU_ASSERT_EQUAL(ret, error_code);
+
+    sparse_tree_iterator_free(&iter);
+    sparse_tree_free(&tree);
+    tree_sequence_free(&ts);
+}
+
+static void
+test_tree_sequence_iter(void)
+{
+    coalescence_record_t records[] = {
+        {0, 2, 10, 4, 0.071, {2, 3}},
+        {0, 0, 2,  5, 0.090, {1, 3}},
+        {0, 2, 10, 5, 0.090, {1, 4}},
+        {0, 0, 7,  6, 0.170, {0, 5}},
+        {0, 7, 10, 7, 0.202, {0, 5}},
+        {0, 0, 2,  8, 0.253, {2, 6}},
+    };
+    uint32_t parents[] = {
+        6, 5, 8, 5, MSP_NULL_NODE, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
+        6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+        7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+    };
+    size_t num_records = 6;
+    uint32_t num_nodes = 9;
+    uint32_t num_trees = 3;
+
+    verify_trees(num_records, records, num_trees, num_nodes, parents);
+}
+
+static void
+test_tree_sequence_bad_records(void)
+{
+    int ret = 0;
+    coalescence_record_t records[] = {
+        {0, 2, 10, 4, 0.071, {2, 3}},
+        {0, 0, 2,  5, 0.090, {1, 3}},
+        {0, 2, 10, 5, 0.090, {1, 4}},
+        {0, 0, 7,  6, 0.170, {0, 5}},
+        {0, 7, 10, 7, 0.202, {0, 5}},
+        {0, 0, 2,  8, 0.253, {2, 6}},
+    };
+    size_t num_records = sizeof(records) / sizeof(coalescence_record_t);
+    tree_sequence_t ts;
+
+    /* Not sorted in time order */
+    records[2].time = 0.5;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[2].time = 0.090;
+
+    /* Missing node 6 */
+    records[3].node = 9;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[3].node = 6;
+
+    /* Left value greater than right */
+    records[0].left = 10.0;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[0].left = 2.0;
+
+    /* Child value greater than parent*/
+    records[3].children[1] = 7;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    tree_sequence_free(&ts);
+    records[3].children[1] = 5;
+
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    tree_sequence_free(&ts);
+}
+
+static void
+test_single_tree_iter_failure(void)
+{
+    int ret = 0;
+    coalescence_record_t records[] = {
+        {0, 0, 1, 4, 1.0, {0, 1}},
+        {0, 0, 1, 5, 2.0, {2, 3}},
+        {0, 0, 1, 6, 3.0, {4, 5}}
+    };
+    size_t num_records = sizeof(records) / sizeof(coalescence_record_t);
+    tree_sequence_t ts;
+    sparse_tree_t tree;
+    sparse_tree_iterator_t iter;
+
+    /* change the left coordinate of one record so we can't build the tree */
+    records[0].left = 0.5;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tree_sequence_alloc_sparse_tree(&ts, &tree, NULL, 0, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_iterator_alloc(&iter, &ts, &tree);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = sparse_tree_iterator_next(&iter);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+
+    sparse_tree_iterator_free(&iter);
+    sparse_tree_free(&tree);
+    tree_sequence_free(&ts);
+    records[0].left = 0.0;
+}
+
+static void
+test_tree_sequence_iter_failure(void)
+{
+    coalescence_record_t records[] = {
+        {0, 2, 10, 4, 0.071, {2, 3}},
+        {0, 0, 2,  5, 0.090, {1, 3}},
+        {0, 2, 10, 5, 0.090, {1, 4}},
+        {0, 0, 7,  6, 0.170, {0, 5}},
+        {0, 7, 10, 7, 0.202, {0, 5}},
+        {0, 0, 2,  8, 0.253, {2, 6}},
+    };
+    uint32_t parents[] = {
+        6, 5, 8, 5, MSP_NULL_NODE, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
+        6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+        7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+    };
+    size_t num_records = 6;
+    uint32_t num_nodes = 9;
+    uint32_t num_trees = 3;
+
+    /* The first tree is missing a record */
+    records[5].left = 1;
+    verify_tree_iter_fails(num_records, records, 0,
+            MSP_ERR_BAD_COALESCENCE_RECORDS);
+    records[5].left = 0;
+    verify_trees(num_records, records, num_trees, num_nodes, parents);
+
+    /* Make a gap between adjacent records */
+    records[1].right = 1;
+    verify_tree_iter_fails(num_records, records, 1,
+            MSP_ERR_BAD_COALESCENCE_RECORDS);
+    records[1].right = 2;
+    verify_trees(num_records, records, num_trees, num_nodes, parents);
+
+    /* Make a gap in the middle of the sequence */
+    records[0].left = 7;
+    records[2].left = 7;
+    records[3].right = 2;
+    verify_tree_iter_fails(num_records, records, 1,
+            MSP_ERR_BAD_COALESCENCE_RECORDS);
+    records[0].left = 2;
+    records[2].left = 2;
+    records[3].right = 7;
+    verify_trees(num_records, records, num_trees, num_nodes, parents);
+
+    /* Make a gap before the last tree */
+    records[4].left = 8;
+    verify_tree_iter_fails(num_records, records, 2,
+            MSP_ERR_BAD_COALESCENCE_RECORDS);
+    records[4].left = 7;
+    verify_trees(num_records, records, num_trees, num_nodes, parents);
+
+    /* Add an extra record to the first tree */
+    records[0].left = 0;
+    verify_tree_iter_fails(num_records, records, 0,
+            MSP_ERR_BAD_COALESCENCE_RECORDS);
+    records[0].left = 2;
+    verify_trees(num_records, records, num_trees, num_nodes, parents);
+
+    /* Remove the last record */
+    verify_tree_iter_fails(num_records - 1, records, 0,
+            MSP_ERR_BAD_COALESCENCE_RECORDS);
+    verify_trees(num_records, records, num_trees, num_nodes, parents);
+
+}
+
+static void
+test_records_equivalent(void)
+{
+    int ret;
+    tree_sequence_t *ts1 = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    tree_sequence_t ts2;
+    coalescence_record_t *records, r1, r2;
+    size_t j, num_records;
+
+    CU_ASSERT_FATAL(ts1 != NULL);
+    num_records = tree_sequence_get_num_coalescence_records(ts1);
+    records = malloc(num_records * sizeof(coalescence_record_t));
+    CU_ASSERT_FATAL(records != NULL);
+    for (j = 0; j < num_records; j++) {
+        ret = tree_sequence_get_record(ts1, j, &records[j], MSP_ORDER_TIME);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+    ret = tree_sequence_load_records(&ts2, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_sample_size(ts1),
+        tree_sequence_get_sample_size(&ts2));
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_sequence_length(ts1),
+        tree_sequence_get_sequence_length(&ts2));
+    for (j = 0; j < num_records; j++) {
+        ret = tree_sequence_get_record(ts1, j, &records[j], MSP_ORDER_TIME);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+    for (j = 0; j < num_records; j++) {
+        ret = tree_sequence_get_record(ts1, j, &r1, MSP_ORDER_TIME);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = tree_sequence_get_record(&ts2, j, &r2, MSP_ORDER_TIME);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(r1.left, r1.left);
+        CU_ASSERT_EQUAL(r1.right, r1.right);
+        CU_ASSERT_EQUAL(r1.node, r1.node);
+        CU_ASSERT_EQUAL(r1.children[0], r1.children[0]);
+        CU_ASSERT_EQUAL(r1.children[1], r1.children[1]);
+        CU_ASSERT_EQUAL(r1.time, r1.time);
+        CU_ASSERT_EQUAL(r1.population_id, r1.population_id);
+    }
+    tree_sequence_free(&ts2);
+    tree_sequence_free(ts1);
+    free(ts1);
+    free(records);
 }
 
 int
@@ -256,9 +678,34 @@ main(void)
         (NULL == CU_add_test(
              pSuite, "Simplest records", test_simplest_records)) ||
         (NULL == CU_add_test(
-             pSuite, "Single tree good records", test_single_tree_good_records)) ||
+             pSuite, "Simplest bad records", test_simplest_bad_records)) ||
         (NULL == CU_add_test(
-             pSuite, "Single locus simulation", test_single_locus_simulation))) {
+             pSuite, "Single tree good records",
+             test_single_tree_good_records)) ||
+        (NULL == CU_add_test(
+             pSuite, "Single tree bad records",
+             test_single_tree_bad_records)) ||
+        (NULL == CU_add_test(
+             pSuite, "Single tree iterator",
+             test_single_tree_iter)) ||
+        (NULL == CU_add_test(
+             pSuite, "Tree sequence iterator",
+             test_tree_sequence_iter)) ||
+        (NULL == CU_add_test(
+             pSuite, "Tree sequence bad records",
+             test_tree_sequence_bad_records)) ||
+        (NULL == CU_add_test(
+             pSuite, "Single tree iterator failure",
+             test_single_tree_iter_failure)) ||
+        (NULL == CU_add_test(
+             pSuite, "Tree sequence iterator failure",
+             test_tree_sequence_iter_failure)) ||
+        (NULL == CU_add_test(
+             pSuite, "Test records equivalent after import",
+             test_records_equivalent)) ||
+        (NULL == CU_add_test(
+             pSuite, "Single locus simulation",
+             test_single_locus_simulation))) {
         CU_cleanup_registry();
         return CU_get_error();
     }

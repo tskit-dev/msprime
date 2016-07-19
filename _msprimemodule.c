@@ -2127,18 +2127,14 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
     PyObject *py_records = NULL;
     PyObject *item;
     coalescence_record_t *records = NULL;
-    unsigned int sample_size;
-    double sequence_length;
     size_t num_records, j;
-    static char *kwlist[] = {
-        "sample_size", "sequence_length", "records", NULL};
+    static char *kwlist[] = {"records", NULL};
 
     if (self->tree_sequence != NULL) {
         PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "IdO!", kwlist,
-                &sample_size, &sequence_length,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
                 &PyList_Type, &py_records)) {
         goto out;
     }
@@ -2160,8 +2156,8 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = tree_sequence_load_records(self->tree_sequence,
-            (uint32_t) sample_size, sequence_length, num_records, records);
+    err = tree_sequence_load_records(
+            self->tree_sequence, num_records, records);
     if (err != 0) {
         handle_library_error(err);
         goto out;
