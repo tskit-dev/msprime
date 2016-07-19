@@ -9,22 +9,21 @@ CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -DH5_NO_DEPRECATED_SYMBOLS
 LDFLAGS=-lgsl -lgslcblas -lhdf5 -lm
 
-SRC=msprime.c fenwick.c fenwick.h msprime.h err.h tree_sequence.c \
-    object_heap.c object_heap.h newick.c hapgen.c recomb_map.c mutgen.c \
-    environment.c vargen.c vcf.c
-COMPILED=msprime.c fenwick.c tree_sequence.c object_heap.c newick.c \
-    hapgen.c recomb_map.c mutgen.c environment.c vargen.c vcf.c
+HEADERS=msprime.h err.h
+COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
+    hapgen.o recomb_map.o mutgen.o environment.o vargen.o vcf.o avl.o
 
 all: main tests
 
+# We need a seperate rule for avl.c as it won't pass the strict checks.
 avl.o: avl.c
-	${CC} -Wall -g -O3 -c avl.c
+	${CC} -Wall -g -O2 -c avl.c
 
-main: main.c ${SRC} avl.o
-	${CC} ${CFLAGS} -o main main.c ${COMPILED} ${LDFLAGS} -lconfig avl.o
+main: main.c ${COMPILED} ${HEADERS}
+	${CC} ${CFLAGS} -o main main.c ${COMPILED} ${LDFLAGS} -lconfig 
 
-tests: tests.c ${SRC} avl.o
-	${CC} ${CFLAGS} -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit avl.o
+tests: tests.c ${COMPILED}
+	${CC} ${CFLAGS} -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit 
 
 tags:
 	etags *.c *.h 
@@ -34,12 +33,12 @@ clean:
 
 travis-tests: CC=gcc
 travis-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage 
-travis-tests: avl.o tests 
+travis-tests: tests 
 
 coverity-tests: CC=gcc 
 coverity-tests: CFLAGS+=-I/usr/include/hdf5/serial
 coverity-tests: LDFLAGS+=-L/usr/lib/x86_64-linux-gnu/hdf5/serial
-coverity-tests: avl.o tests main
+coverity-tests: tests main
 
 coverity: 
 	# We must use CC=gcc for this target or coverity won't 
