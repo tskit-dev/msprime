@@ -217,6 +217,7 @@ tree_sequence_make_indexes(tree_sequence_t *self)
             }
         }
         if (self->trees.node[j] == MSP_NULL_NODE) {
+            printf("Detected null node\n");
             goto out;
         }
         c1 = self->trees.children[2 * j];
@@ -335,6 +336,10 @@ tree_sequence_load_records(tree_sequence_t *self,
     self->num_mutations = 0;
     self->sequence_length = 0.0;
     self->sample_size = records[0].node;
+    if (self->sample_size < 2 || self->sample_size == MSP_NULL_NODE) {
+        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        goto out;
+    }
     ret = tree_sequence_alloc(self);
     if (ret != 0) {
         goto out;
@@ -350,10 +355,6 @@ tree_sequence_load_records(tree_sequence_t *self,
         if (records[j].right > self->sequence_length) {
             self->sequence_length = records[j].right;
         }
-    }
-    if (self->sample_size < 2 || self->sample_size == UINT32_MAX) {
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
-        goto out;
     }
     if (self->sequence_length <= 0) {
         ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
