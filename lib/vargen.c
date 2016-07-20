@@ -31,7 +31,7 @@ vargen_print_state(vargen_t *self)
     printf("vargen state\n");
     printf("tree_mutation_index = %d\n", (int) self->tree_mutation_index);
     printf("variant = '%s'\n", self->variant);
-    sparse_tree_iterator_print_state(&self->tree_iterator);
+    sparse_tree_iterator_print_state(&self->tree_iterator, stdout);
 }
 
 static int

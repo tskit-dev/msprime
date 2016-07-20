@@ -357,10 +357,13 @@ test_single_tree_iter(void)
     uint32_t parents[] = {4, 4, 5, 5, 6, 6, MSP_NULL_NODE};
     size_t num_records = 3;
     uint32_t num_nodes = 7;
-    uint32_t u, v;
+    uint32_t u, v, num_leaves, w;
     tree_sequence_t ts;
     sparse_tree_t tree;
     sparse_tree_iterator_t iter;
+    FILE *devnull = fopen("/dev/null", "w");
+
+    CU_ASSERT_FATAL(devnull != NULL);
 
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
@@ -372,12 +375,28 @@ test_single_tree_iter(void)
     ret = sparse_tree_iterator_next(&iter);
     CU_ASSERT_EQUAL(ret, 1);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), num_nodes);
+    sparse_tree_iterator_print_state(&iter, devnull);
 
     for (u = 0; u < num_nodes; u++) {
         ret = sparse_tree_get_parent(&tree, u, &v);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(v, parents[u]);
     }
+    ret = sparse_tree_get_num_leaves(&tree, 0, &num_leaves);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_leaves, 1);
+    ret = sparse_tree_get_num_leaves(&tree, 4, &num_leaves);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_leaves, 2);
+    ret = sparse_tree_get_num_leaves(&tree, 6, &num_leaves);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_leaves, 4);
+    ret = sparse_tree_get_mrca(&tree, 0, 1, &w);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(w, 4);
+    ret = sparse_tree_get_mrca(&tree, 0, 2, &w);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(w, 6);
 
     ret = sparse_tree_iterator_next(&iter);
     CU_ASSERT_EQUAL(ret, 0);
@@ -385,7 +404,7 @@ test_single_tree_iter(void)
     sparse_tree_iterator_free(&iter);
     sparse_tree_free(&tree);
     tree_sequence_free(&ts);
-    records[0].left = 0.0;
+    fclose(devnull);
 }
 
 static void
@@ -397,6 +416,9 @@ verify_trees(size_t num_records, coalescence_record_t *records,
     tree_sequence_t ts;
     sparse_tree_t tree;
     sparse_tree_iterator_t iter;
+    FILE *devnull = fopen("/dev/null", "w");
+
+    CU_ASSERT_FATAL(devnull != NULL);
 
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
@@ -408,6 +430,7 @@ verify_trees(size_t num_records, coalescence_record_t *records,
 
     for (j = 0; j < num_trees; j++) {
         ret = sparse_tree_iterator_next(&iter);
+        sparse_tree_iterator_print_state(&iter, devnull);
         CU_ASSERT_EQUAL(ret, 1);
         for (u = 0; u < num_nodes; u++) {
             ret = sparse_tree_get_parent(&tree, u, &v);
@@ -422,6 +445,7 @@ verify_trees(size_t num_records, coalescence_record_t *records,
     sparse_tree_iterator_free(&iter);
     sparse_tree_free(&tree);
     tree_sequence_free(&ts);
+    fclose(devnull);
 }
 
 static void
@@ -608,6 +632,13 @@ test_tree_sequence_iter_failure(void)
     verify_trees(num_records, records, num_trees, num_nodes, parents);
 
     /* Add an extra record to the first tree */
+    records[4].left = 2;
+    verify_tree_iter_fails(num_records, records, 1,
+            MSP_ERR_BAD_COALESCENCE_RECORDS);
+    records[4].left = 7;
+    verify_trees(num_records, records, num_trees, num_nodes, parents);
+
+    /* Add an extra record to the second tree */
     records[0].left = 0;
     verify_tree_iter_fails(num_records, records, 0,
             MSP_ERR_BAD_COALESCENCE_RECORDS);

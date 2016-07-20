@@ -690,7 +690,7 @@ print_tree_sequence(tree_sequence_t *ts)
     while ((ret = sparse_tree_iterator_next(sparse_iter)) == 1) {
         printf("New tree: %f (%d)\n", tree.right - tree.left,
                 (int) tree.num_nodes);
-        sparse_tree_iterator_print_state(sparse_iter);
+        sparse_tree_iterator_print_state(sparse_iter, stdout);
         /* print some mrcas */
         printf("MRCAS:\n");
         for (j = 0; j < tree.num_nodes; j++) {

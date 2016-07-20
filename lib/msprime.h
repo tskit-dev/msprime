@@ -488,7 +488,7 @@ int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
         tree_sequence_t *tree_sequence, sparse_tree_t *tree);
 int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
 int sparse_tree_iterator_next(sparse_tree_iterator_t *self);
-void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self);
+void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self, FILE *out);
 
 int newick_converter_alloc(newick_converter_t *self, 
         tree_sequence_t *tree_sequence, size_t precision, double Ne);

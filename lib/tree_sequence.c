@@ -1977,7 +1977,6 @@ sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
         assert(self->tree->children[2 * j] == MSP_NULL_NODE);
         assert(self->tree->children[2 * j + 1] == MSP_NULL_NODE);
         while (self->tree->parent[u] != MSP_NULL_NODE) {
-            assert(self->tree->population[u] != MSP_NULL_POPULATION_ID);
             v = self->tree->parent[u];
             assert(self->tree->children[2 * v] == u
                     || self->tree->children[2 * v + 1] == u);
@@ -1997,44 +1996,44 @@ sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
 }
 
 void
-sparse_tree_iterator_print_state(sparse_tree_iterator_t *self)
+sparse_tree_iterator_print_state(sparse_tree_iterator_t *self, FILE *out)
 {
     size_t j;
     uint32_t u;
 
-    printf("sparse_tree_iterator state\n");
-    printf("insertion_index = %d\n", (int) self->insertion_index);
-    printf("removal_index = %d\n", (int) self->removal_index);
-    printf("mutation_index = %d\n", (int) self->mutation_index);
-    printf("num_records = %d\n", (int) self->num_records);
-    printf("tree.flags = %d\n", self->tree->flags);
-    printf("tree.left = %f\n", self->tree->left);
-    printf("tree.right = %f\n", self->tree->right);
-    printf("tree.root = %d\n", self->tree->root);
-    printf("tree.index = %d\n", self->tree->index);
+    fprintf(out, "sparse_tree_iterator state\n");
+    fprintf(out, "insertion_index = %d\n", (int) self->insertion_index);
+    fprintf(out, "removal_index = %d\n", (int) self->removal_index);
+    fprintf(out, "mutation_index = %d\n", (int) self->mutation_index);
+    fprintf(out, "num_records = %d\n", (int) self->num_records);
+    fprintf(out, "tree.flags = %d\n", self->tree->flags);
+    fprintf(out, "tree.left = %f\n", self->tree->left);
+    fprintf(out, "tree.right = %f\n", self->tree->right);
+    fprintf(out, "tree.root = %d\n", self->tree->root);
+    fprintf(out, "tree.index = %d\n", self->tree->index);
     for (j = 0; j < self->tree->num_nodes; j++) {
-        printf("\t%d\t%d\t%d\t%d\t%f\t%d", (int) j, self->tree->parent[j],
+        fprintf(out, "\t%d\t%d\t%d\t%d\t%f\t%d", (int) j, self->tree->parent[j],
                 self->tree->children[2 * j], self->tree->children[2 * j + 1],
                 self->tree->time[j], self->tree->population[j]);
         if (self->tree->flags & MSP_COUNT_LEAVES) {
-            printf("\t%d\t%d", self->tree->num_leaves[j],
+            fprintf(out, "\t%d\t%d", self->tree->num_leaves[j],
                     self->tree->num_tracked_leaves[j]);
             u = 0;
             if (self->tree->leaf_list_head[j] != NULL) {
                 u = self->tree->leaf_list_head[j]->node;
             }
-            printf("\t%d", u);
+            fprintf(out, "\t%d", u);
             u = 0;
             if (self->tree->leaf_list_tail[j] != NULL) {
                 u = self->tree->leaf_list_tail[j]->node;
             }
-            printf("\t%d", u);
+            fprintf(out, "\t%d", u);
         }
-        printf("\n");
+        fprintf(out, "\n");
     }
-    printf("mutations = \n");
+    fprintf(out, "mutations = \n");
     for (j = 0; j < self->tree->num_mutations; j++) {
-        printf("\t%d @ %f\n", self->tree->mutations[j].node,
+        fprintf(out, "\t%d @ %f\n", self->tree->mutations[j].node,
                 self->tree->mutations[j].position);
     }
     sparse_tree_iterator_check_state(self);
