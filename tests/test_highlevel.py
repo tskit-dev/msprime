@@ -774,6 +774,9 @@ class TestTreeSequence(HighLevelTestCase):
                         ValueError, ts.write_vcf, f, bad_ploidy)
 
     def verify_write_records(self, ts, header, precision):
+        """
+        Verifies that the records we output have the correct form.
+        """
 
         def convert(v):
             return "{:.{}f}".format(v, precision)
@@ -804,6 +807,43 @@ class TestTreeSequence(HighLevelTestCase):
             for precision in [2, 7]:
                 self.verify_write_records(ts, True, precision)
                 self.verify_write_records(ts, False, precision)
+
+    def compare_exported_records(self, ts1, ts2):
+        """
+        Compares the specified tree sequences to ensure that they
+        are equal up to the margin of error implied by writing floats
+        as text.
+        """
+        self.assertEqual(ts1.get_num_records(), ts2.get_num_records())
+        self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
+        self.assertAlmostEqual(
+            ts1.get_sequence_length(), ts2.get_sequence_length())
+        checked = 0
+        # Check the raw records
+        for r1, r2 in zip(ts1.records(), ts2.records()):
+            checked += 1
+            self.assertAlmostEqual(r1.left, r2.left)
+            self.assertAlmostEqual(r1.right, r2.right)
+            self.assertAlmostEqual(r1.time, r2.time)
+            self.assertEqual(r1.node, r2.node)
+            self.assertEqual(r1.children, r2.children)
+            self.assertEqual(r1.population, r2.population)
+        self.assertEqual(ts1.get_num_records(), checked)
+        # Check the trees
+        check = 0
+        for t1, t2 in zip(ts1.trees(), ts2.trees()):
+            self.assertEqual(list(t1.nodes()), list(t2.nodes()))
+            check += 1
+        self.assertEqual(check, ts1.get_num_trees())
+
+    def test_text_record_round_trip(self):
+        for ts1 in self.get_example_tree_sequences():
+            for header in [True, False]:
+                with tempfile.TemporaryFile("w+") as f:
+                    ts1.write_records(f, header=header, precision=9)
+                    f.seek(0)
+                    ts2 = msprime.TreeSequence.load_records(f)
+                    self.compare_exported_records(ts1, ts2)
 
 
 class TestSparseTree(HighLevelTestCase):

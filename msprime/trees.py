@@ -1029,6 +1029,34 @@ class TreeSequence(object):
         ts.load(path)
         return TreeSequence(ts)
 
+    @classmethod
+    def parse_record(cls, line):
+        """
+        Parses a single coalescence record for the specified line
+        in white space delimited format.
+        """
+        tokens = line.split()
+        left = float(tokens[0])
+        right = float(tokens[1])
+        node = int(tokens[2])
+        children = tuple(map(int, tokens[3].split(",")))
+        time = float(tokens[4])
+        population = int(tokens[5])
+        return CoalescenceRecord(
+            left, right, node, children, time, population)
+
+    @classmethod
+    def load_records(cls, input_file):
+        records = []
+        line = next(input_file)
+        if not line.startswith("left"):
+            records.append(cls.parse_record(line))
+        for line in input_file:
+            records.append(cls.parse_record(line))
+        ts = _msprime.TreeSequence()
+        ts.load_records(records)
+        return TreeSequence(ts)
+
     def get_parameters(self):
         return json.loads(self._ll_tree_sequence.get_simulation_parameters())
 

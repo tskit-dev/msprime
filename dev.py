@@ -517,26 +517,14 @@ def vcf_example():
 def records_example():
     filename = "records.txt"
 
-    table = pd.read_table(filename)
-
     ts = msprime.load("out.hdf5")
     with open(filename, "w") as f:
         ts.write_records(f)
-    t = pd.read_table(filename)
-    print(t)
-    print(t.children.dtype)
-    # with open(filename, "w") as f:
-    #     ts.write_records(f, header=False)
-    # npt = np.loadtxt(filename,
-    #         converters={3: (lambda s: map(int, s.split(","))), 4: float},
-    #     dtype=[
-    #         ("left", float), ("right", float), ("node", int),
-    #         ("children", "2int"), ("time", "float"), ("population", int)],
-    #     unpack=False)
 
-    # print(npt)
-
-
+    with open(filename, "r") as f:
+        ts2 = msprime.TreeSequence.load_records(f)
+    for r1, r2 in zip(ts.records(), ts2.records()):
+        print(r1.left, r2.left)
 
 
 if __name__ == "__main__":
