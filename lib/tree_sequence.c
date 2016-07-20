@@ -1911,6 +1911,15 @@ out:
     return ret;
 }
 
+int
+sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
+        mutation_t **mutations)
+{
+    *mutations = self->mutations;
+    *num_mutations = self->num_mutations;
+    return 0;
+}
+
 /* ======================================================== *
  * sparse tree iterator
  * ======================================================== */
@@ -2170,10 +2179,17 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
         while (self->mutation_index < s->num_mutations
                 && s->mutations.position[self->mutation_index] < t->right) {
             assert(t->num_mutations < t->max_mutations);
+            /* Throw an error if the mutation is for a node not in the
+             * tree or a root.
+             * */
+            v = s->mutations.node[self->mutation_index];
+            if (t->parent[v] == MSP_NULL_NODE) {
+                ret = MSP_ERR_BAD_MUTATION;
+                goto out;
+            }
+            t->mutations[t->num_mutations].node = v;
             t->mutations[t->num_mutations].position =
                 s->mutations.position[self->mutation_index];
-            t->mutations[t->num_mutations].node =
-                s->mutations.node[self->mutation_index];
             self->mutation_index++;
             t->num_mutations++;
         }

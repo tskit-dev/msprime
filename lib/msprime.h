@@ -483,6 +483,8 @@ int sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, uint32_t u,
         uint32_t *num_tracked_leaves);
 int sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
         leaf_list_node_t **head, leaf_list_node_t **tail);
+int sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
+        mutation_t **mutations);
 
 int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
         tree_sequence_t *tree_sequence, sparse_tree_t *tree);

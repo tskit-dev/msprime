@@ -2620,9 +2620,21 @@ class TestSparseTree(LowLevelTestCase):
                     self.assertRaises(
                         _msprime.LibraryError, _msprime.HaplotypeGenerator,
                         other_ts)
-                    self.assertRaises(
-                        _msprime.LibraryError, list,
-                        _msprime.VariantGenerator(other_ts))
+                    other_st = _msprime.SparseTree(other_ts)
+                    other_iter = _msprime.SparseTreeIterator(
+                        other_ts, other_st)
+                    self.assertRaises(_msprime.LibraryError, list, other_iter)
+                    if st.get_index() == 0:
+                        # If this is the first tree we should throw an error
+                        # immediately
+                        self.assertRaises(
+                            _msprime.LibraryError, _msprime.VariantGenerator,
+                            other_ts)
+                    else:
+                        # Otherwise, we need to wait until we traverse the
+                        # trees.
+                        vg = _msprime.VariantGenerator(other_ts)
+                        self.assertRaises(_msprime.LibraryError, list, vg)
 
 
 class TestLeafListIterator(LowLevelTestCase):
