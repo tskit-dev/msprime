@@ -432,7 +432,7 @@ class TestTreeSimulator(HighLevelTestCase):
         Dump the tree sequence and verify we can load again from the same
         file.
         """
-        with tempfile.NamedTemporaryFile() as f:
+        with tempfile.NamedTemporaryFile("w+") as f:
             tree_sequence.dump(f.name)
             other = msprime.load(f.name)
         records = list(tree_sequence.records())
@@ -777,7 +777,7 @@ class TestTreeSequence(HighLevelTestCase):
 
         def convert(v):
             return "{:.{}f}".format(v, precision)
-        with tempfile.TemporaryFile() as f:
+        with tempfile.TemporaryFile("w+") as f:
             ts.write_records(f, header=header, precision=precision)
             f.seek(0)
             output_records = f.read().splitlines()

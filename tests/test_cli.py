@@ -1231,7 +1231,7 @@ class TestMspConversionOutput(unittest.TestCase):
         os.unlink(cls._history_file)
 
     def verify_records(self, output_records, header, precision):
-        with tempfile.TemporaryFile() as f:
+        with tempfile.TemporaryFile("w+") as f:
             self._tree_sequence.write_records(f, header, precision)
             f.seek(0)
             output = f.read().splitlines()
@@ -1265,7 +1265,7 @@ class TestMspConversionOutput(unittest.TestCase):
             self.assertEqual(u, int(splits[1]))
 
     def verify_vcf(self, output_vcf):
-        with tempfile.TemporaryFile() as f:
+        with tempfile.TemporaryFile("w+") as f:
             self._tree_sequence.write_vcf(f)
             f.seek(0)
             vcf = f.read()
