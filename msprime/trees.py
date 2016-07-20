@@ -691,14 +691,101 @@ def load(path):
     """
     Loads a tree sequence from the specified file path. This
     file must be in the HDF5 file format produced by the
-    :meth:`msprime.TreeSequence.dump` method.
+    :meth:`.TreeSequence.dump` method.
 
-    :param str path: The file path to write the TreeSequence to.
+    :param str path: The file path of the HDF5 file containing the
+        tree sequence we wish to load.
     :return: The tree sequence object containing the information
         stored in the specified file path.
     :rtype: :class:`msprime.TreeSequence`
     """
     return TreeSequence.load(path)
+
+
+def load_txt(records_file, mutations_file=None):
+    """
+    Loads a tree sequence from the specified file paths. The files input here
+    are in a simple whitespace delimited tabular format such as output by the
+    :meth:`.TreeSequence.write_records` and
+    :meth:`.TreeSequence.write_mutations` methods. This method is intended as a
+    convenient interface for importing external data into msprime; the HDF5
+    based file format using by :meth:`.load` will be many times more efficient
+    that using the text based formats.
+
+    The ``records_file`` must be a text file with six whitespace delimited
+    columns. Each line in the file must contain at least this many columns, and
+    each line will be stored as a single coalescence record. The columns
+    correspond to the ``left``, ``right``, ``node``, ``children``, ``time`` and
+    ``population`` fields as described in the :meth:`.TreeSequence.records`
+    method. The ``left``, ``right`` and ``time`` fields are parsed as base 10
+    floating point values, and the ``node`` and ``population`` fields are
+    parsed as base 10 integers. The ``children`` field is a comma-separated
+    list of base 10 integer values, and must contain exactly two elements. The
+    file may optionally begin with a header line; if the first line begins with
+    the text "left" it will be ignored.
+
+    Records must be listed in the file in non-decreasing order of the time
+    field. As nodes are also allocated in time-increasing order, the records
+    must also be listed in order of non-decreasing node value. Within a record,
+    children must be listed in increasing order of node value. The left and
+    right coordinates must be non-negative values. Overall, the set of records
+    described must have the property that for any point in the chromosome
+    coordinate space, exactly :math:`n - 1` records intersect with it.
+
+    An example of a simple tree sequence for four samples with
+    three distinct trees is::
+
+        left    right   node    children    time    population
+        2       10      4       2,3         0.071    0
+        0       2       5       1,3         0.090    0
+        2       10      5       1,4         0.090    0
+        0       7       6       0,5         0.170    0
+        7       10      7       0,5         0.202    0
+        0       2       8       2,6         0.253    0
+
+    This example is equivalent to the tree sequence illustrated in Figure 4 of
+    the `PLoS Computational Biology paper
+    <http://dx.doi.org/10.1371/journal.pcbi.1004842>`_. Note here that the
+    ``node`` value in the first  record is 4. Since leaf nodes are indexed from
+    zero and nodes are allocated sequentially in time order, the value of the
+    ``node`` field in the first record is equal to the sample size. We assume
+    also that there are no "gaps" in the node space.
+
+    The optional ``mutations_file`` has a similiar format, but contains only
+    two columns. These correspond to the ``position`` and ``node`` fields as
+    described in the :meth:`.TreeSequence.mutations` method. The ``position``
+    field is parsed as a base 10 floating point value, and the ``node`` field
+    is parsed as a base 10 integer. The file may optionally begin with a header
+    line; if the first line begins with the text "position" it will be ignored.
+
+    Mutations must be listed in non-decreasing order of position, and the nodes
+    must refer to a node defined by the records. Mutations defined over the
+    root or a node not present in a local tree will lead to an error being
+    produced during tree traversal (e.g. in the :meth:`.TreeSequence.trees`
+    method, but also in many other methods).
+
+    An example of a mutations file for the tree sequence defined in the
+    previous example is::
+
+        position    node
+        0.1         0
+        8.5         4
+
+    :param str records_file: The path of the text file containing
+        the coalescence records for the desired tree sequence.
+    :param str mutations_file: The path of the text file containing
+        the mutation records for the desired tree sequence. This
+        argument is optional and defaults to None.
+    :return: The tree sequence object containing the information
+        stored in the specified file paths.
+    :rtype: :class:`msprime.TreeSequence`
+    """
+    with open(records_file, "r") as f:
+        ts = TreeSequence.load_records(f)
+    if mutations_file is not None:
+        with open(mutations_file, "r") as f:
+            ts.load_mutations(f)
+    return ts
 
 
 class TreeSimulator(object):
@@ -1058,14 +1145,33 @@ class TreeSequence(object):
     @classmethod
     def load_records(cls, input_file):
         records = []
-        line = next(input_file)
-        if not line.startswith("left"):
-            records.append(cls.parse_record(line))
-        for line in input_file:
-            records.append(cls.parse_record(line))
+        line = next(input_file, None)
+        if line is not None:
+            if not line.startswith("left"):
+                records.append(cls.parse_record(line))
+            for line in input_file:
+                records.append(cls.parse_record(line))
+        if len(records) == 0:
+            raise ValueError("No records in file.")
         ts = _msprime.TreeSequence()
         ts.load_records(records)
         return TreeSequence(ts)
+
+    def parse_mutation(self, line):
+        tokens = line.split()
+        position = float(tokens[0])
+        node = int(tokens[1])
+        return Mutation(position=position, node=node)
+
+    def load_mutations(self, input_file):
+        mutations = []
+        line = next(input_file, None)
+        if line is not None:
+            if not line.startswith("position"):
+                mutations.append(self.parse_mutation(line))
+            for line in input_file:
+                mutations.append(self.parse_mutation(line))
+        self.set_mutations(mutations)
 
     def get_parameters(self):
         return json.loads(self._ll_tree_sequence.get_simulation_parameters())

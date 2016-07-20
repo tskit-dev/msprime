@@ -879,6 +879,72 @@ class TestTreeSequence(HighLevelTestCase):
                     ts2 = msprime.TreeSequence.load_records(f)
                     self.compare_exported_records(ts1, ts2)
 
+    def test_text_records_empty_file(self):
+        with tempfile.TemporaryFile("w+") as f:
+            self.assertRaises(ValueError, msprime.TreeSequence.load_records, f)
+            # Write a fake header.
+            f.write("left\tright\n")
+            f.seek(0)
+            self.assertRaises(ValueError, msprime.TreeSequence.load_records, f)
+
+    def compare_exported_mutations(self, mutations1, mutations2):
+        """
+        Compares the specified list of mutations for equality
+        after a round trip.
+        """
+        self.assertEqual(len(mutations1), len(mutations2))
+        for m1, m2 in zip(mutations1, mutations2):
+            self.assertAlmostEqual(m1.position, m2.position)
+            self.assertEqual(m1.node, m2.node)
+
+    def test_text_mutation_round_trip(self):
+        some_mutations = False
+        for ts in self.get_example_tree_sequences():
+            before = list(ts.mutations())
+            if len(before) > 0:
+                some_mutations = True
+                for header in [True, False]:
+                    with tempfile.TemporaryFile("w+") as f:
+                        ts.write_mutations(f, header=header, precision=9)
+                        f.seek(0)
+                        ts.set_mutations([])
+                        self.assertEqual(ts.get_num_mutations(), 0)
+                        ts.load_mutations(f)
+                        after = list(ts.mutations())
+                        self.compare_exported_mutations(before, after)
+        self.assertTrue(some_mutations)
+
+    def test_text_mutation_empty_file(self):
+        ts = next(self.get_example_tree_sequences())
+        ts.set_mutations([])
+        for header in [True, False]:
+            with tempfile.TemporaryFile("w+") as f:
+                ts.write_mutations(f, header=header, precision=9)
+                f.seek(0)
+                ts.load_mutations(f)
+                self.assertEqual(ts.get_num_mutations(), 0)
+
+    def verify_dump_load_txt(self, tree_sequence):
+        """
+        Verify that we can dump and load the specified tree sequence in
+        text format.
+        """
+        with tempfile.NamedTemporaryFile("w+") as r_f, \
+                tempfile.NamedTemporaryFile("w+") as m_f:
+            tree_sequence.write_records(r_f, precision=9)
+            tree_sequence.write_mutations(m_f, precision=9)
+            r_f.flush()
+            m_f.flush()
+            other = msprime.load_txt(r_f.name, m_f.name)
+        self.compare_exported_records(tree_sequence, other)
+        mutations = list(tree_sequence.mutations())
+        other_mutations = list(other.mutations())
+        self.compare_exported_mutations(mutations, other_mutations)
+
+    def test_dump_load_txt(self):
+        for ts in self.get_example_tree_sequences():
+            self.verify_dump_load_txt(ts)
+
 
 class TestSparseTree(HighLevelTestCase):
     """

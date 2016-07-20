@@ -162,6 +162,8 @@ tree in this sequence.
 
 .. autofunction:: msprime.load
 
+.. autofunction:: msprime.load_txt
+
 .. autoclass:: msprime.TreeSequence()
     :members:
 

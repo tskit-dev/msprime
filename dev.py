@@ -515,16 +515,20 @@ def vcf_example():
     print("wrote vcf in ", duration, "seconds", (size / 2**20) / duration, "MB/s")
 
 def records_example():
-    filename = "records.txt"
+    # filename = "records.txt"
 
-    ts = msprime.load("out.hdf5")
-    with open(filename, "w") as f:
-        ts.write_records(f)
+    # ts = msprime.load("out.hdf5")
+    # with open(filename, "w") as f:
+    #     ts.write_records(f)
 
-    with open(filename, "r") as f:
-        ts2 = msprime.TreeSequence.load_records(f)
-    for r1, r2 in zip(ts.records(), ts2.records()):
-        print(r1.left, r2.left)
+    # with open(filename, "r") as f:
+    #     ts2 = msprime.TreeSequence.load_records(f)
+    # for r1, r2 in zip(ts.records(), ts2.records()):
+    #     print(r1.left, r2.left)
+
+    ts = msprime.load_txt("example.txt")
+    for t in ts.trees():
+        print(t)
 
 
 if __name__ == "__main__":
