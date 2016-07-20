@@ -50,6 +50,11 @@ CoalescenceRecord = collections.namedtuple(
     ["left", "right", "node", "children", "time", "population"])
 
 
+Mutation = collections.namedtuple(
+    "Mutation",
+    ["position", "node"])
+
+
 Variant = collections.namedtuple(
     "Variant",
     ["position", "genotypes"])
@@ -380,14 +385,23 @@ class SparseTree(object):
 
     def mutations(self):
         """
-        Returns an iterator over the mutations on this tree. Each mutation
-        is represented as a tuple (position, node), and mutations
-        returned in increasing order of position.
+        Returns an iterator over the mutations in this tree. Each
+        mutation is represented as a tuple :math:`(x, u)` where :math:`x`
+        is the position of the mutation in the sequence in chromosome
+        coordinates and :math:`u` is the node over which the mutation
+        occurred. Mutations are returned in non-decreasing order of
+        position.
 
-        :return: The mutations in this tree.
-        :rtype: iterator
+        Each mutation returned is an instance of
+        :func:`collections.namedtuple`, and may be accessed via the attributes
+        ``position`` and ``node`` as well as the usual positional approach.
+
+        :return: An iterator of all :math:`(x, u)` tuples defining
+            the mutations in this tree.
+        :rtype: iter
         """
-        return iter(self._ll_sparse_tree.get_mutations())
+        for position, node in self._ll_sparse_tree.get_mutations():
+            yield Mutation(position, node)
 
     def leaves(self, u):
         """
@@ -1031,10 +1045,6 @@ class TreeSequence(object):
 
     @classmethod
     def parse_record(cls, line):
-        """
-        Parses a single coalescence record for the specified line
-        in white space delimited format.
-        """
         tokens = line.split()
         left = float(tokens[0])
         right = float(tokens[1])
@@ -1225,13 +1235,22 @@ class TreeSequence(object):
     def mutations(self):
         """
         Returns an iterator over the mutations in this tree sequence. Each
-        mutation is represented as a tuple (position, node), and mutations
-        are returned in increasing order of position.
+        mutation is represented as a tuple :math:`(x, u)` where :math:`x`
+        is the position of the mutation in the sequence in chromosome
+        coordinates and :math:`u` is the node over which the mutation
+        occurred. Mutations are returned in non-decreasing order of
+        position.
 
-        :return: The mutations in this tree sequence.
+        Each mutation returned is an instance of
+        :func:`collections.namedtuple`, and may be accessed via the attributes
+        ``position`` and ``node`` as well as the usual positional approach.
+
+        :return: An iterator of all :math:`(x, u)` tuples defining
+            the mutations in this tree sequence.
         :rtype: iter
         """
-        return iter(self._ll_tree_sequence.get_mutations())
+        for position, node in self._ll_tree_sequence.get_mutations():
+            yield Mutation(position, node)
 
     def breakpoints(self):
         """
@@ -1416,6 +1435,42 @@ class TreeSequence(object):
                     left=record.left, right=record.right,
                     node=record.node, children=children,
                     time=record.time, population=record.population)
+            print(row, file=output)
+
+    def write_mutations(self, output, header=True, precision=6):
+        """
+        Writes the mutations for this tree sequence to the specified file in a
+        tab-separated format. If ``header`` is True, the first line of this
+        file contains the names of the columns, i.e., ``position`` and
+        ``node``. The ``position`` field describes the location of the mutation
+        along the sequence in chromosome coordinates, and the ``node`` field
+        defines the node over which the mutation occurs. After the optional
+        header, the records are written to the file in tab-separated form in
+        order of non-decreasing position. The ``position`` field is a base 10
+        floating point value printed to the specified ``precision``. The
+        ``node`` field is a base 10 integer.
+
+        Example usage:
+
+        >>> with open("mutations.txt", "w") as mutations_file:
+        >>>     tree_sequence.write_mutations(mutations_file)
+
+        :param File output: The file-like object to write the tab separated
+            output.
+        :param bool header: If True, write a header describing the column
+            names in the output.
+        :param int precision: The number of decimal places to print out for
+            floating point columns.
+        """
+        if header:
+            print("position", "node", sep="\t", file=output)
+        for mutation in self.mutations():
+            row = (
+                "{position:.{precision}f}\t"
+                "{node:}\t").format(
+                    precision=precision,
+                    position=mutation.position,
+                    node=mutation.node)
             print(row, file=output)
 
     def write_vcf(self, output, ploidy=1):

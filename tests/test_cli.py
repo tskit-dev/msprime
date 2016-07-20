@@ -1055,7 +1055,7 @@ class TestMspArgumentParser(unittest.TestCase):
         args = parser.parse_args([cmd, history_file])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.header, False)
-        self.assertEqual(args.precision, 3)
+        self.assertEqual(args.precision, 6)
 
     def test_records_short_args(self):
         parser = cli.get_msp_parser()
@@ -1110,24 +1110,27 @@ class TestMspArgumentParser(unittest.TestCase):
         args = parser.parse_args([cmd, history_file])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.header, False)
+        self.assertEqual(args.precision, 6)
 
     def test_mutations_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "mutations"
         history_file = "test.hdf5"
         args = parser.parse_args([
-            cmd, history_file, "-H"])
+            cmd, history_file, "-H", "-p", "4"])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.header, True)
+        self.assertEqual(args.precision, 4)
 
     def test_mutations_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "mutations"
         history_file = "test.hdf5"
         args = parser.parse_args([
-            cmd, history_file, "--header"])
+            cmd, history_file, "--header", "--precision", "9"])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.header, True)
+        self.assertEqual(args.precision, 9)
 
     def test_haplotypes_default_values(self):
         parser = cli.get_msp_parser()
@@ -1239,7 +1242,7 @@ class TestMspConversionOutput(unittest.TestCase):
 
     def test_records(self):
         cmd = "records"
-        precision = 3
+        precision = 6
         stdout, stderr = capture_output(cli.msp_main, [
             cmd, self._history_file])
         self.assertEqual(len(stderr), 0)
@@ -1256,14 +1259,6 @@ class TestMspConversionOutput(unittest.TestCase):
             ["left", "right", "node", "children", "time", "population"])
         self.verify_records(output_records, True, precision)
 
-    def verify_mutations(self, output_mutations):
-        mutations = list(self._tree_sequence.mutations())
-        self.assertEqual(len(mutations), len(output_mutations))
-        for (x, u), line in zip(mutations, output_mutations):
-            splits = line.split()
-            self.assertAlmostEqual(x, float(splits[0]))
-            self.assertEqual(u, int(splits[1]))
-
     def verify_vcf(self, output_vcf):
         with tempfile.TemporaryFile("w+") as f:
             self._tree_sequence.write_vcf(f)
@@ -1278,21 +1273,29 @@ class TestMspConversionOutput(unittest.TestCase):
         self.assertEqual(len(stderr), 0)
         self.verify_vcf(stdout)
 
+    def verify_mutations(self, output_mutations, header, precision):
+        with tempfile.TemporaryFile("w+") as f:
+            self._tree_sequence.write_mutations(f, header, precision)
+            f.seek(0)
+            output = f.read().splitlines()
+        self.assertEqual(output, output_mutations)
+
     def test_mutations(self):
         cmd = "mutations"
         stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._history_file])
+            cmd, self._history_file, "-p", "8"])
         self.assertEqual(len(stderr), 0)
         output_mutations = stdout.splitlines()
-        self.verify_mutations(output_mutations)
+        self.verify_mutations(output_mutations, False, 8)
         # check the header.
         stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._history_file, "-H"])
+            cmd, self._history_file, "-H", "-p", "8"])
         self.assertEqual(len(stderr), 0)
         output_mutations = stdout.splitlines()
         self.assertEqual(
-            list(output_mutations[0].split()), ["x", "u"])
-        self.verify_mutations(output_mutations[1:])
+            list(output_mutations[0].split()),
+            ["position", "node"])
+        self.verify_mutations(output_mutations, True, 8)
 
     def verify_haplotypes(self, output_haplotypes):
         haplotypes = list(self._tree_sequence.haplotypes())

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -82,6 +82,12 @@ def add_header_argument(parser):
     parser.add_argument(
         "--header", "-H", action="store_true", default=False,
         help="Print a header line in the output.")
+
+
+def add_precision_argument(parser):
+    parser.add_argument(
+        "--precision", "-p", type=int, default=6,
+        help="The number of decimal places to print in records")
 
 
 def generate_seeds():
@@ -730,10 +736,7 @@ def run_dump_vcf(args):
 
 def run_dump_mutations(args):
     tree_sequence = msprime.load(args.history_file)
-    if args.header:
-        print("x", "u", sep="\t")
-    for position, node in tree_sequence.mutations():
-        print(position, node, sep="\t")
+    tree_sequence.write_mutations(sys.stdout, args.header, args.precision)
 
 
 def run_dump_macs(args):
@@ -814,9 +817,7 @@ def get_msp_parser():
         help="Dump records in tabular format.")
     add_history_file_argument(records_parser)
     add_header_argument(records_parser)
-    records_parser.add_argument(
-        "--precision", "-p", type=int, default=3,
-        help="The number of decimal places to print in records")
+    add_precision_argument(records_parser)
     records_parser.set_defaults(runner=run_dump_records)
 
     mutations_parser = subparsers.add_parser(
@@ -824,6 +825,7 @@ def get_msp_parser():
         help="Dump mutations in tabular format.")
     add_history_file_argument(mutations_parser)
     add_header_argument(mutations_parser)
+    add_precision_argument(mutations_parser)
     mutations_parser.set_defaults(runner=run_dump_mutations)
 
     haplotypes_parser = subparsers.add_parser(

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -671,7 +671,7 @@ class TestTreeSequence(HighLevelTestCase):
                     recomb_map = msprime.RecombinationMap.uniform_map(
                         m, rho, num_loci=m)
                     ts = msprime.simulate(
-                        n, recombination_map=recomb_map)
+                        n, recombination_map=recomb_map, mutation_rate=0.1)
                     yield ts
 
     def test_sparse_trees(self):
@@ -807,6 +807,40 @@ class TestTreeSequence(HighLevelTestCase):
             for precision in [2, 7]:
                 self.verify_write_records(ts, True, precision)
                 self.verify_write_records(ts, False, precision)
+
+    def verify_write_mutations(self, ts, header, precision):
+        """
+        Verifies that the mutations we output have the correct form.
+        """
+
+        def convert(v):
+            return "{:.{}f}".format(v, precision)
+        with tempfile.TemporaryFile("w+") as f:
+            ts.write_mutations(f, header=header, precision=precision)
+            f.seek(0)
+            output_mutations = f.read().splitlines()
+            mutations = list(ts.mutations())
+            self.assertEqual(
+                len(output_mutations) - int(header), len(mutations))
+            if header:
+                self.assertEqual(
+                    list(output_mutations[0].split()),
+                    ["position", "node"])
+            for mutation, line in zip(
+                    mutations, output_mutations[int(header):]):
+                splits = line.split("\t")
+                self.assertEqual(convert(mutation.position), splits[0])
+                self.assertEqual(mutation.node, int(splits[1]))
+
+    def test_write_mutations(self):
+        some_mutations = False
+        for ts in self.get_example_tree_sequences():
+            if ts.get_num_mutations() > 0:
+                some_mutations = True
+            for precision in [2, 7]:
+                self.verify_write_mutations(ts, True, precision)
+                self.verify_write_mutations(ts, False, precision)
+        self.assertTrue(some_mutations)
 
     def compare_exported_records(self, ts1, ts2):
         """
