@@ -358,8 +358,8 @@ the values used.
         T_AF = 220e3 / generation_time
         T_B = 140e3 / generation_time
         T_EU_AS = 21.2e3 / generation_time
-        # We need to work out the starting population sizes based on the growth
-        # rates provided for these two populations
+        # We need to work out the starting (diploid) population sizes based on
+        # the growth rates provided for these two populations
         r_EU = 0.004
         r_AS = 0.0055
         N_EU = N_EU0 / math.exp(-r_EU * T_EU_AS)
@@ -369,7 +369,7 @@ the values used.
         m_AF_EU = 3e-5
         m_AF_AS = 1.9e-5
         m_EU_AS = 9.6e-5
-        # Population IDs correspond to their indexes in the popupulation
+        # Population IDs correspond to their indexes in the population
         # configuration array. Therefore, we have 0=YRI, 1=CEU and 2=CHB
         # initially.
         population_configurations = [

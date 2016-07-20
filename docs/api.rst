@@ -20,9 +20,10 @@ rates in generations. Similarly, the times associated with the trees produced
 by ``msprime`` are in measured generations. To enable this translation from
 generations into coalescent units and vice-versa, a reference effective
 population size must be provided, which is given by the ``Ne`` parameter in the
-:func:`.simulate` function. Population sizes for individual demes and for past
-demographic events are defined as absolute values, **not** scaled
-by ``Ne``. All migration rates and growth rates are also per generation.
+:func:`.simulate` function. (Note that we assume diploid population sizes
+thoughout, since we scale by :math:`4 N_e`.) Population sizes for individual
+demes and for past demographic events are defined as absolute values, **not**
+scaled by ``Ne``. All migration rates and growth rates are also per generation.
 
 When running simulations we define the length in bases :math:`L` of the
 sequence in question using the ``length`` parameter. This defines the

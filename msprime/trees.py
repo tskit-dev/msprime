@@ -607,10 +607,10 @@ def simulate(
         If not specified or None, this defaults to the sum of the
         subpopulation sample sizes. Either ``sample_size`` or
         ``population_configurations`` must be specified.
-    :param float Ne: The effective population size for the reference
-        population. This determines the factor by which the
-        per-generation recombination and mutation rates are scaled
-        in the simulation. This defaults to 1 if not specified.
+    :param float Ne: The effective (diploid) population size for the reference
+        population. This determines the factor by which the per-generation
+        recombination and mutation rates are scaled in the simulation.
+        This defaults to 1 if not specified.
     :param float length: The length of the simulated region in bases.
         This parameter cannot be used along with ``recombination_map``.
         Defaults to 1 if not specified.
