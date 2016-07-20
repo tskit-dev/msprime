@@ -941,6 +941,13 @@ class TestTreeSequence(HighLevelTestCase):
         other_mutations = list(other.mutations())
         self.compare_exported_mutations(mutations, other_mutations)
 
+        # Do the same, but just with records.
+        with tempfile.NamedTemporaryFile("w+") as r_f:
+            tree_sequence.write_records(r_f, precision=9)
+            r_f.flush()
+            other = msprime.load_txt(r_f.name)
+        self.compare_exported_records(tree_sequence, other)
+
     def test_dump_load_txt(self):
         for ts in self.get_example_tree_sequences():
             self.verify_dump_load_txt(ts)

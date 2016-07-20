@@ -709,8 +709,8 @@ def load_txt(records_file, mutations_file=None):
     :meth:`.TreeSequence.write_records` and
     :meth:`.TreeSequence.write_mutations` methods. This method is intended as a
     convenient interface for importing external data into msprime; the HDF5
-    based file format using by :meth:`.load` will be many times more efficient
-    that using the text based formats.
+    based file format using by :meth:`msprime.load` will be many times more
+    efficient that using the text based formats.
 
     The ``records_file`` must be a text file with six whitespace delimited
     columns. Each line in the file must contain at least this many columns, and
@@ -729,8 +729,9 @@ def load_txt(records_file, mutations_file=None):
     must also be listed in order of non-decreasing node value. Within a record,
     children must be listed in increasing order of node value. The left and
     right coordinates must be non-negative values. Overall, the set of records
-    described must have the property that for any point in the chromosome
-    coordinate space, exactly :math:`n - 1` records intersect with it.
+    described must have the property that for a sample of size :math:`n`,
+    any point in the chromosome coordinate space intersects with exactly
+    :math:`n - 1` records.
 
     An example of a simple tree sequence for four samples with
     three distinct trees is::
