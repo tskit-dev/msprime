@@ -1,5 +1,24 @@
 ********************
-[0.3.1] - 2016-24-06
+[0.3.2] - 2016-07-21
+********************
+
+Feature release adding new import and export features to the API
+and CLI.
+
+- New ``TreeSequence.write_records`` and ``TreeSequence.write_mutations``
+  methods to serialise a tree sequence in a human readable text format.
+
+- New ``msprime.load_txt()`` method that parses the above formats, and
+  allows msprime to read in data from external sources.
+
+- New ``TreeSequence.write_vcf`` method to write mutation information
+  in VCF format.
+
+- Miscellaneous documentation fixes.
+
+
+********************
+[0.3.1] - 2016-06-24
 ********************
 
 Feature release adding population related methods to the API.
