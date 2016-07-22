@@ -107,6 +107,12 @@ typedef struct {
 } population_t;
 
 typedef struct {
+    double time;
+    uint32_t sample;
+    uint8_t population_id;
+} sampling_event_t;
+
+typedef struct {
     gsl_rng *rng;
     /* input parameters */
     uint32_t sample_size;
@@ -127,7 +133,11 @@ typedef struct {
     size_t *num_migration_events;
     size_t num_trapped_re_events;
     size_t num_multiple_re_events;
-    /* demographic events */
+    /* sampling events */
+    sampling_event_t *sampling_events;
+    size_t num_sampling_events;
+    size_t next_sampling_event;
+    /* Demographic events */
     struct demographic_event_t_t *demographic_events_head;
     struct demographic_event_t_t *demographic_events_tail;
     struct demographic_event_t_t *next_demographic_event;

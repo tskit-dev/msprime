@@ -83,7 +83,7 @@ read_samples(config_t *config, size_t *sample_size, sample_t **samples)
             fatal_error("population not specified");
         }
         ret_samples[j].population_id = (uint8_t) config_setting_get_int(t);
-        t = config_setting_get_member(s, "population");
+        t = config_setting_get_member(s, "time");
         if (t == NULL) {
             fatal_error("population not specified");
         }

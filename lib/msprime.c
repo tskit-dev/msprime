@@ -146,6 +146,12 @@ cmp_node_mapping(const void *a, const void *b) {
     return (ia->left > ib->left) - (ia->left < ib->left);
 }
 
+static int
+cmp_sampling_event(const void *a, const void *b) {
+    const sampling_event_t *ia = (const sampling_event_t *) a;
+    const sampling_event_t *ib = (const sampling_event_t *) b;
+    return (ia->time > ib->time) - (ia->time < ib->time);
+}
 
 static void
 segment_init(void **obj, size_t id)
@@ -664,7 +670,7 @@ int
 msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng)
 {
     int ret = -1;
-    size_t j;
+    size_t j, k, initial_samples;
 
     memset(self, 0, sizeof(msp_t));
     if (sample_size < 2 || samples == NULL || rng == NULL) {
@@ -680,10 +686,47 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    initial_samples = 0;
     for (j = 0; j < sample_size; j++) {
         self->samples[j].population_id = samples[j].population_id;
         self->samples[j].time = samples[j].time;
+        if (self->samples[j].time < 0) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+        if (self->samples[j].time == 0) {
+            initial_samples++;
+        }
     }
+    if (initial_samples == 0) {
+        ret = MSP_ERR_BAD_SAMPLES;
+        goto out;
+    }
+    /* Set up the historical sampling events */
+    self->num_sampling_events = self->sample_size - initial_samples;
+    self->sampling_events = NULL;
+    if (self->num_sampling_events > 0) {
+        self->sampling_events = malloc(self->num_sampling_events *
+                sizeof(sampling_event_t));
+        if (self->sampling_events == NULL) {
+            goto out;
+        }
+        k = 0;
+        for (j = 0; j < self->sample_size; j++) {
+            if (self->samples[j].time > 0) {
+                self->sampling_events[k].sample = (uint32_t) j;
+                self->sampling_events[k].time = self->samples[j].time;
+                self->sampling_events[k].population_id =
+                    self->samples[j].population_id;
+                k++;
+            }
+        }
+        assert(k == self->num_sampling_events);
+        /* Now we must sort the sampling events by time. */
+        qsort(self->sampling_events, self->num_sampling_events,
+                sizeof(sampling_event_t), cmp_sampling_event);
+    }
+    /* We have one population by default */
     ret = msp_set_num_populations(self, 1);
     if (ret != 0) {
         goto out;
@@ -795,6 +838,9 @@ msp_free(msp_t *self)
     }
     if (self->samples != NULL) {
         free(self->samples);
+    }
+    if (self->sampling_events != NULL) {
+        free(self->sampling_events);
     }
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
@@ -1014,6 +1060,7 @@ msp_print_state(msp_t *self)
     segment_t *u;
     coalescence_record_t *cr;
     demographic_event_t *de;
+    sampling_event_t *se;
     int64_t v;
     uint32_t j, k;
     double gig = 1024.0 * 1024;
@@ -1037,6 +1084,15 @@ msp_print_state(msp_t *self)
     for (j = 0; j < self->sample_size; j++) {
         printf("\t%d\tpopulation=%d\ttime=%f\n", j, self->samples[j].population_id,
                 self->samples[j].time);
+    }
+    printf("Sampling events:\n");
+    for (j = 0; j < self->num_sampling_events; j++) {
+        if (j == self->next_sampling_event) {
+            printf("  ***");
+        }
+        se = &self->sampling_events[j];
+        printf("\t");
+        printf("%d @ %f in deme %d\n", se->sample, se->time, se->population_id);
     }
     printf("Demographic events:\n");
     for (de = self->demographic_events_head; de != NULL; de = de->next) {
@@ -1967,11 +2023,31 @@ msp_reset_memory_state(msp_t *self)
     return ret;
 }
 
+static int WARN_UNUSED
+msp_insert_sample(msp_t *self, uint32_t sample, uint8_t population)
+{
+    int ret = MSP_ERR_GENERIC;
+    segment_t *u;
+
+    u = msp_alloc_segment(self, 0, self->num_loci, sample, population,
+            NULL, NULL);
+    if (u == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = msp_insert_individual(self, u);
+    if (ret != 0) {
+        goto out;
+    }
+    fenwick_set_value(&self->links, u->id, self->num_loci - 1);
+out:
+    return ret;
+}
+
 int
 msp_reset(msp_t *self)
 {
     int ret = 0;
-    segment_t *u;
     uint32_t j, population_id;
     population_t *pop, *initial_pop;
     size_t N = self->num_populations;
@@ -1993,17 +2069,10 @@ msp_reset(msp_t *self)
     /* Set up the sample */
     for (j = 0; j < self->sample_size; j++) {
         if (self->samples[j].time == 0.0) {
-            u = msp_alloc_segment(self, 0, self->num_loci, j,
-                    self->samples[j].population_id, NULL, NULL);
-            if (u == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            ret = msp_insert_individual(self, u);
+            ret = msp_insert_sample(self, j, self->samples[j].population_id);
             if (ret != 0) {
                 goto out;
             }
-            fenwick_set_value(&self->links, u->id, self->num_loci - 1);
         }
     }
     self->next_node = self->sample_size;
@@ -2020,6 +2089,7 @@ msp_reset(msp_t *self)
         goto out;
     }
     self->time = 0.0;
+    self->next_sampling_event = 0;
     self->num_coalescence_records = 0;
     self->num_re_events = 0;
     self->num_ca_events = 0;
@@ -2039,7 +2109,7 @@ msp_initialise(msp_t *self)
 {
     int ret = -1;
     double t;
-    uint32_t j, initial_samples;
+    uint32_t j;
     demographic_event_t *de;
 
     /* These should really be proper checks with a return value */
@@ -2051,24 +2121,12 @@ msp_initialise(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    initial_samples = 0;
     /* First check that the sample configuration makes sense */
     for (j = 0; j < self->sample_size; j++) {
         if (self->samples[j].population_id >= self->num_populations) {
             ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
-        if (self->samples[j].time < 0) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        if (self->samples[j].time == 0) {
-            initial_samples++;
-        }
-    }
-    if (initial_samples == 0) {
-        ret = MSP_ERR_BAD_SAMPLES;
-        goto out;
     }
     /* Are the demographic events time sorted? */
     t = 0;
@@ -2182,11 +2240,13 @@ int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait;
+    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait,
+           sampling_event_time, demographic_event_time;
     int64_t num_links;
     uint32_t j, k, n;
     uint32_t ca_pop_id, mig_source_pop, mig_dest_pop;
     unsigned long events = 0;
+    sampling_event_t *se;
 
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_SIMULATING;
@@ -2196,6 +2256,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
     while (msp_get_num_ancestors(self) > 0
+            /* && self->next_sampling_event < self->num_sampling_events */
             && self->time < max_time && events < max_events) {
         events++;
         num_links = fenwick_get_total(&self->links);
@@ -2244,12 +2305,32 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             }
         }
         t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
-        if (self->next_demographic_event == NULL && t_wait == DBL_MAX) {
+        if (self->next_demographic_event == NULL
+                && self->next_sampling_event == self->num_sampling_events
+                && t_wait == DBL_MAX) {
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
         }
-        if (self->next_demographic_event != NULL
-                && self->next_demographic_event->time < self->time + t_wait) {
+        t_temp = self->time + t_wait;
+        sampling_event_time = DBL_MAX;
+        if (self->next_sampling_event < self->num_sampling_events) {
+            sampling_event_time = self->sampling_events[
+                self->next_sampling_event].time;
+        }
+        demographic_event_time = DBL_MAX;
+        if (self->next_demographic_event != NULL) {
+            demographic_event_time = self->next_demographic_event->time;
+        }
+        if (sampling_event_time < t_temp
+                && sampling_event_time < demographic_event_time) {
+            se = &self->sampling_events[self->next_sampling_event];
+            ret = msp_insert_sample(self, se->sample, se->population_id);
+            if (ret != 0) {
+                goto out;
+            }
+            self->next_sampling_event++;
+            self->time = se->time;
+        } else if (demographic_event_time < t_temp) {
             ret = msp_apply_demographic_events(self);
             if (ret != 0) {
                 goto out;
