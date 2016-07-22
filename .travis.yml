@@ -43,9 +43,6 @@ script:
   - python setup.py sdist 
   - pip install dist/msprime*.tar.gz --no-cache-dir
   # Now run the low-level tests.
-  # First, we move the coverate statistics files to the lib directory 
-  # so they can be updated.
-  - mv ./build/temp.linux-*/lib/*.gc* lib
   - make -C lib travis-tests && ./lib/tests
 
 after_success:

@@ -61,22 +61,22 @@ cmp_index_sort(const void *a, const void *b) {
 }
 
 void
-tree_sequence_print_state(tree_sequence_t *self)
+tree_sequence_print_state(tree_sequence_t *self, FILE *out)
 {
     size_t j;
 
-    printf("tree_sequence state\n");
-    printf("sample_size = %d\n", self->sample_size);
-    printf("sequence_length = %f\n", self->sequence_length);
-    printf("samples\n");
+    fprintf(out, "tree_sequence state\n");
+    fprintf(out, "sample_size = %d\n", self->sample_size);
+    fprintf(out, "sequence_length = %f\n", self->sequence_length);
+    fprintf(out, "samples\n");
     for (j = 0; j < self->sample_size; j++) {
-        printf("\t%d\t%d\n", (int) j, (int) self->samples.population[j]);
+        fprintf(out, "\t%d\t%d\n", (int) j, (int) self->samples.population[j]);
     }
-    printf("trees = (%d records)\n", (int) self->num_records);
-    printf("\tparameters = '%s'\n", self->trees.parameters);
-    printf("\tenvironment = '%s'\n", self->trees.environment);
+    fprintf(out, "trees = (%d records)\n", (int) self->num_records);
+    fprintf(out, "\tparameters = '%s'\n", self->trees.parameters);
+    fprintf(out, "\tenvironment = '%s'\n", self->trees.environment);
     for (j = 0; j < self->num_records; j++) {
-        printf("\t%d\t%f\t%f\t%d\t%d\t%d\t%f\t%d\t|\t%d\t%d\n",
+        fprintf(out, "\t%d\t%f\t%f\t%d\t%d\t%d\t%f\t%d\t|\t%d\t%d\n",
                 (int) j,
                 self->trees.left[j],
                 self->trees.right[j],
@@ -88,11 +88,11 @@ tree_sequence_print_state(tree_sequence_t *self)
                 (int) self->trees.insertion_order[j],
                 (int) self->trees.removal_order[j]);
     }
-    printf("mutations = (%d records)\n", (int) self->num_mutations);
-    printf("\tparameters = '%s'\n", self->mutations.parameters);
-    printf("\tenvironment = '%s'\n", self->mutations.environment);
+    fprintf(out, "mutations = (%d records)\n", (int) self->num_mutations);
+    fprintf(out, "\tparameters = '%s'\n", self->mutations.parameters);
+    fprintf(out, "\tenvironment = '%s'\n", self->mutations.environment);
     for (j = 0; j < self->num_mutations; j++) {
-        printf("\t%d\t%f\n", (int) self->mutations.node[j],
+        fprintf(out, "\t%d\t%f\n", (int) self->mutations.node[j],
                 self->mutations.position[j]);
     }
 
@@ -216,10 +216,6 @@ tree_sequence_make_indexes(tree_sequence_t *self)
                 goto out;
             }
         }
-        if (self->trees.node[j] == MSP_NULL_NODE) {
-            printf("Detected null node\n");
-            goto out;
-        }
         c1 = self->trees.children[2 * j];
         c2 = self->trees.children[2 * j + 1];
         if (c1 >= c2) {
@@ -326,6 +322,7 @@ tree_sequence_load_records(tree_sequence_t *self,
 {
     int ret = MSP_ERR_GENERIC;
     size_t j;
+    const char provenance[] = "{}";
 
     memset(self, 0, sizeof(tree_sequence_t));
     if (num_records == 0) {
@@ -364,6 +361,16 @@ tree_sequence_load_records(tree_sequence_t *self,
     if (ret != 0) {
         goto out;
     }
+    /* Set the provenance strings to the empty string.
+     * TODO what is the correct thing to do here?? */
+    self->trees.parameters = malloc(sizeof(provenance) + 1);
+    self->trees.environment = malloc(sizeof(provenance) + 1);
+    if (self->trees.parameters == NULL || self->trees.environment == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    strcpy(self->trees.parameters, provenance);
+    strcpy(self->trees.environment, provenance);
     ret = 0;
 out:
     return ret;

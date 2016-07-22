@@ -25,9 +25,15 @@
 
 #include <float.h>
 #include <limits.h>
+#include <stdio.h>
+#include <unistd.h>
 
 #include <CUnit/Basic.h>
 
+/* Global variables used for test in state in the test suite */
+
+char * _tmp_file_name;
+FILE * _devnull;
 
 /* Simple unit tests for the Fenwick tree API. */
 static void
@@ -124,11 +130,9 @@ test_vcf(void)
     unsigned int ploidy, num_variants;
     vcf_converter_t *vc = malloc(sizeof(vcf_converter_t));
     tree_sequence_t *ts = get_example_tree_sequence(10, 100, 1.0, 1.0);
-    FILE *devnull = fopen("/dev/null", "w");
 
     CU_ASSERT_FATAL(ts != NULL);
     CU_ASSERT_FATAL(vc != NULL);
-    CU_ASSERT_FATAL(devnull != NULL);
 
     ret = vcf_converter_alloc(vc, ts, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
@@ -140,7 +144,7 @@ test_vcf(void)
     for (ploidy = 1; ploidy < 3; ploidy++) {
         ret = vcf_converter_alloc(vc, ts, ploidy);
         CU_ASSERT_FATAL(ret ==  0);
-        vcf_converter_print_state(vc, devnull);
+        vcf_converter_print_state(vc, _devnull);
         ret = vcf_converter_get_header(vc, &str);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_NSTRING_EQUAL("##", str, 2);
@@ -154,7 +158,6 @@ test_vcf(void)
         vcf_converter_free(vc);
     }
 
-    fclose(devnull);
     free(vc);
     tree_sequence_free(ts);
     free(ts);
@@ -464,9 +467,6 @@ test_single_tree_iter(void)
     tree_sequence_t ts;
     sparse_tree_t tree;
     sparse_tree_iterator_t iter;
-    FILE *devnull = fopen("/dev/null", "w");
-
-    CU_ASSERT_FATAL(devnull != NULL);
 
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
@@ -478,7 +478,7 @@ test_single_tree_iter(void)
     ret = sparse_tree_iterator_next(&iter);
     CU_ASSERT_EQUAL(ret, 1);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), num_nodes);
-    sparse_tree_iterator_print_state(&iter, devnull);
+    sparse_tree_iterator_print_state(&iter, _devnull);
 
     for (u = 0; u < num_nodes; u++) {
         ret = sparse_tree_get_parent(&tree, u, &v);
@@ -507,7 +507,6 @@ test_single_tree_iter(void)
     sparse_tree_iterator_free(&iter);
     sparse_tree_free(&tree);
     tree_sequence_free(&ts);
-    fclose(devnull);
 }
 
 static void
@@ -522,9 +521,6 @@ verify_trees(size_t num_records, coalescence_record_t *records,
     sparse_tree_iterator_t iter;
     mutation_t *tree_mutations;
     size_t num_tree_mutations;
-    FILE *devnull = fopen("/dev/null", "w");
-
-    CU_ASSERT_FATAL(devnull != NULL);
 
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
@@ -541,7 +537,7 @@ verify_trees(size_t num_records, coalescence_record_t *records,
     for (j = 0; j < num_trees; j++) {
         ret = sparse_tree_iterator_next(&iter);
         CU_ASSERT_EQUAL(ret, 1);
-        sparse_tree_iterator_print_state(&iter, devnull);
+        sparse_tree_iterator_print_state(&iter, _devnull);
         for (u = 0; u < num_nodes; u++) {
             ret = sparse_tree_get_parent(&tree, u, &v);
             CU_ASSERT_EQUAL(ret, 0);
@@ -566,7 +562,6 @@ verify_trees(size_t num_records, coalescence_record_t *records,
     sparse_tree_iterator_free(&iter);
     sparse_tree_free(&tree);
     tree_sequence_free(&ts);
-    fclose(devnull);
 }
 
 static void
@@ -856,6 +851,144 @@ test_tree_sequence_mutations_iter_failure(void)
 }
 
 static void
+verify_coalescence_records_equal(coalescence_record_t *r1,
+        coalescence_record_t *r2)
+{
+    CU_ASSERT_EQUAL(r1->left, r2->left);
+    CU_ASSERT_EQUAL(r1->right, r2->right);
+    CU_ASSERT_EQUAL(r1->node, r2->node);
+    CU_ASSERT_EQUAL(r1->children[0], r2->children[0]);
+    CU_ASSERT_EQUAL(r1->children[1], r2->children[1]);
+    CU_ASSERT_EQUAL(r1->time, r2->time);
+    CU_ASSERT_EQUAL(r1->population_id, r2->population_id);
+}
+
+static void
+verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
+        int check_provenance_strings)
+{
+    int ret;
+    size_t j;
+    uint32_t population_id_1, population_id_2;
+    coalescence_record_t r1, r2;
+    size_t num_mutations = tree_sequence_get_num_mutations(ts1);
+    mutation_t *mutations_1 = malloc(num_mutations * sizeof(mutation_t));
+    mutation_t *mutations_2 = malloc(num_mutations * sizeof(mutation_t));
+
+    CU_ASSERT_FATAL(mutations_1 != NULL);
+    CU_ASSERT_FATAL(mutations_2 != NULL);
+
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_sample_size(ts1),
+        tree_sequence_get_sample_size(ts2))
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_sequence_length(ts1),
+        tree_sequence_get_sequence_length(ts2))
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_num_coalescence_records(ts1),
+        tree_sequence_get_num_coalescence_records(ts2));
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_num_mutations(ts1),
+        tree_sequence_get_num_mutations(ts2));
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_num_nodes(ts1),
+        tree_sequence_get_num_nodes(ts2));
+
+    for (j = 0; j < tree_sequence_get_num_coalescence_records(ts1); j++) {
+        ret = tree_sequence_get_record(ts1, j, &r1, MSP_ORDER_TIME);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = tree_sequence_get_record(ts2, j, &r2, MSP_ORDER_TIME);
+        CU_ASSERT_EQUAL(ret, 0);
+        verify_coalescence_records_equal(&r1, &r2);
+    }
+
+    ret = tree_sequence_get_mutations(ts1, mutations_1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tree_sequence_get_mutations(ts2, mutations_2);
+    CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < num_mutations; j++) {
+        CU_ASSERT_EQUAL(mutations_1[j].position, mutations_2[j].position);
+        CU_ASSERT_EQUAL(mutations_1[j].node, mutations_2[j].node);
+    }
+
+    for (j = 0; j < tree_sequence_get_sample_size(ts1); j++) {
+        ret = tree_sequence_get_population(ts1, (uint32_t) j, &population_id_1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = tree_sequence_get_population(ts2, (uint32_t) j, &population_id_2);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+    if (check_provenance_strings) {
+        CU_ASSERT_STRING_EQUAL(
+            tree_sequence_get_simulation_parameters(ts1),
+            tree_sequence_get_simulation_parameters(ts2));
+        CU_ASSERT_STRING_EQUAL(
+            tree_sequence_get_mutation_parameters(ts1),
+            tree_sequence_get_mutation_parameters(ts2));
+    }
+
+    free(mutations_1);
+    free(mutations_2);
+}
+
+static void
+test_save_hdf5(void)
+{
+    int ret;
+    size_t j;
+    tree_sequence_t ts2;
+    tree_sequence_t *ts1 = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    int dump_flags[] = {0, MSP_ZLIB_COMPRESSION};
+
+    CU_ASSERT_FATAL(ts1 != NULL);
+
+    for (j = 0; j < sizeof(dump_flags) / sizeof(int); j++) {
+        ret = tree_sequence_dump(ts1, _tmp_file_name, dump_flags[j]);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = tree_sequence_load(&ts2, _tmp_file_name, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        verify_tree_sequences_equal(ts1, &ts2, 1);
+        tree_sequence_print_state(&ts2, _devnull);
+        tree_sequence_free(&ts2);
+    }
+    tree_sequence_free(ts1);
+    free(ts1);
+}
+
+
+static void
+test_save_records_hdf5(void)
+{
+    int ret;
+    size_t j, num_records;
+    coalescence_record_t *records;
+    tree_sequence_t ts2, ts3;
+    tree_sequence_t *ts1 = get_example_tree_sequence(10, 100, 1.0, 0.0);
+
+    CU_ASSERT_FATAL(ts1 != NULL);
+    num_records = tree_sequence_get_num_coalescence_records(ts1);
+    records = malloc(num_records * sizeof(coalescence_record_t));
+    CU_ASSERT_FATAL(records != NULL);
+    for (j = 0; j < num_records; j++) {
+        ret = tree_sequence_get_record(ts1, j, &records[j], MSP_ORDER_TIME);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+    ret = tree_sequence_load_records(&ts2, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tree_sequence_dump(&ts2, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load(&ts3, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    verify_tree_sequences_equal(ts1, &ts3, 0);
+    tree_sequence_print_state(&ts2, _devnull);
+
+    tree_sequence_free(&ts2);
+    tree_sequence_free(&ts3);
+    tree_sequence_free(ts1);
+    free(ts1);
+}
+
+
+static void
 test_records_equivalent(void)
 {
     int ret;
@@ -889,13 +1022,7 @@ test_records_equivalent(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = tree_sequence_get_record(&ts2, j, &r2, MSP_ORDER_TIME);
         CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(r1.left, r1.left);
-        CU_ASSERT_EQUAL(r1.right, r1.right);
-        CU_ASSERT_EQUAL(r1.node, r1.node);
-        CU_ASSERT_EQUAL(r1.children[0], r1.children[0]);
-        CU_ASSERT_EQUAL(r1.children[1], r1.children[1]);
-        CU_ASSERT_EQUAL(r1.time, r1.time);
-        CU_ASSERT_EQUAL(r1.population_id, r1.population_id);
+        verify_coalescence_records_equal(&r1, &r2);
     }
     tree_sequence_free(&ts2);
     tree_sequence_free(ts1);
@@ -903,9 +1030,49 @@ test_records_equivalent(void)
     free(records);
 }
 
+static int
+msprime_suite_init(void)
+{
+    int fd;
+    static char template[] = "/tmp/msp_c_test_XXXXXX";
+
+    _tmp_file_name = NULL;
+    _devnull = NULL;
+
+    _tmp_file_name = malloc(sizeof(template));
+    if (_tmp_file_name == NULL) {
+        return CUE_NOMEMORY;
+    }
+    strcpy(_tmp_file_name, template);
+    fd = mkstemp(_tmp_file_name);
+    if (fd == -1) {
+        return CUE_SINIT_FAILED;
+    }
+    close(fd);
+    _devnull = fopen("/dev/null", "w");
+    if (_devnull == NULL) {
+        return CUE_SINIT_FAILED;
+    }
+    return CUE_SUCCESS;
+}
+
+static int
+msprime_suite_cleanup(void)
+{
+    if (_tmp_file_name != NULL) {
+        unlink(_tmp_file_name);
+        free(_tmp_file_name);
+    }
+    if (_devnull != NULL) {
+        fclose(_devnull);
+    }
+    return CUE_SUCCESS;
+}
+
 int
 main(void)
 {
+
     CU_pSuite pSuite = NULL;
 
     /* initialize the CUnit test registry */
@@ -913,7 +1080,7 @@ main(void)
         return CU_get_error();
 
     /* add a suite to the registry */
-    pSuite = CU_add_suite("msprime", NULL, NULL);
+    pSuite = CU_add_suite("msprime", msprime_suite_init, msprime_suite_cleanup);
     if (NULL == pSuite) {
         CU_cleanup_registry();
         return CU_get_error();
@@ -960,6 +1127,12 @@ main(void)
         (NULL == CU_add_test(
              pSuite, "Test records equivalent after import",
              test_records_equivalent)) ||
+        (NULL == CU_add_test(
+             pSuite, "Test saving to HDF5",
+             test_save_hdf5)) ||
+        (NULL == CU_add_test(
+             pSuite, "Test saving records to HDF5",
+             test_save_records_hdf5)) ||
         (NULL == CU_add_test(
              pSuite, "Single locus simulation",
              test_single_locus_simulation))) {

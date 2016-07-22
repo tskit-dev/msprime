@@ -806,7 +806,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    tree_sequence_print_state(tree_seq);
+    tree_sequence_print_state(tree_seq, stdout);
     print_stats(tree_seq);
 
     print_variants(tree_seq);
@@ -829,18 +829,16 @@ run_simulate(char *conf_file)
                 goto out;
             }
         }
-        tree_sequence_print_state(tree_seq);
+        tree_sequence_print_state(tree_seq, stdout);
 
         print_newick_trees(tree_seq);
 
         print_haplotypes(tree_seq);
         print_tree_sequence(tree_seq);
 
-        tree_sequence_print_state(tree_seq);
+        tree_sequence_print_state(tree_seq, stdout);
         print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);
-        tree_sequence_print_state(tree_seq);
-        tree_sequence_print_state(tree_seq);
     }
 out:
     if (msp != NULL) {
