@@ -29,7 +29,7 @@ tags:
 	etags *.c *.h 
 
 clean:
-	rm -f main test_fenwick *.o *.gcda *.gcno
+	rm -f main tests *.o *.gcda *.gcno
 
 travis-tests: CC=gcc
 travis-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage 

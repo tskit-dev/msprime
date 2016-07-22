@@ -50,12 +50,59 @@ fatal_error(const char *msg, ...)
 }
 
 static int
+read_samples(config_t *config, size_t *sample_size, sample_t **samples)
+{
+    int ret = 0;
+    size_t j, n;
+    sample_t *ret_samples = NULL;
+    config_setting_t *s, *t;
+    config_setting_t *setting = config_lookup(config, "samples");
+
+    if (setting == NULL) {
+        fatal_error("samples is a required parameter");
+    }
+    if (config_setting_is_list(setting) == CONFIG_FALSE) {
+        fatal_error("samples must be a list");
+    }
+    n = (size_t) config_setting_length(setting);
+    ret_samples = malloc(n * sizeof(sample_t));
+    if (ret_samples == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < n; j++) {
+        s = config_setting_get_elem(setting, (unsigned int) j);
+        if (s == NULL) {
+            fatal_error("error reading samples[%d]", j);
+        }
+        if (config_setting_is_group(s) == CONFIG_FALSE) {
+            fatal_error("samples[%d] not a group", j);
+        }
+        t = config_setting_get_member(s, "population");
+        if (t == NULL) {
+            fatal_error("population not specified");
+        }
+        ret_samples[j].population_id = (uint8_t) config_setting_get_int(t);
+        t = config_setting_get_member(s, "population");
+        if (t == NULL) {
+            fatal_error("population not specified");
+        }
+        ret_samples[j].time = config_setting_get_float(t);
+    }
+    *samples = ret_samples;
+    *sample_size = n;
+out:
+    return ret;
+}
+
+
+
+static int
 read_population_configuration(msp_t *msp, config_t *config)
 {
     int ret = 0;
     int j;
     double growth_rate, initial_size;
-    int sample_size;
     int num_populations;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "population_configuration");
@@ -79,11 +126,6 @@ read_population_configuration(msp_t *msp, config_t *config)
         if (config_setting_is_group(s) == CONFIG_FALSE) {
             fatal_error("population_configurations[%d] not a group", j);
         }
-        t = config_setting_get_member(s, "sample_size");
-        if (t == NULL) {
-            fatal_error("sample_size not specified");
-        }
-        sample_size = config_setting_get_int(t);
         t = config_setting_get_member(s, "growth_rate");
         if (t == NULL) {
             fatal_error("growth_rate not specified");
@@ -94,8 +136,8 @@ read_population_configuration(msp_t *msp, config_t *config)
             fatal_error("initial_size not specified");
         }
         initial_size = config_setting_get_float(t);
-        ret = msp_set_population_configuration(msp, j, (size_t) sample_size,
-                initial_size, growth_rate);
+        ret = msp_set_population_configuration(msp, j, initial_size,
+                growth_rate);
         if (ret != 0) {
             goto out;
         }
@@ -307,6 +349,8 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     char *str;
     const char *str_tmp;
     double rho;
+    size_t sample_size;
+    sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
 
     if (config == NULL) {
@@ -323,10 +367,12 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("random_seed is a required parameter");
     }
     gsl_rng_set(rng,  (unsigned long) int_tmp);
-    if (config_lookup_int(config, "sample_size", &int_tmp) == CONFIG_FALSE) {
-        fatal_error("sample_size is a required parameter");
+
+    ret = read_samples(config, &sample_size, &samples);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
     }
-    ret = msp_alloc(msp, (size_t) int_tmp, rng);
+    ret = msp_alloc(msp, sample_size, samples, rng);
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
@@ -401,6 +447,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     *output_file = str;
     config_destroy(config);
     free(config);
+    free(samples);
     return ret;
 }
 

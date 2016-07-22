@@ -107,7 +107,8 @@ tree_sequence_alloc(tree_sequence_t *self)
     int ret = MSP_ERR_NO_MEMORY;
 
     self->samples.population = malloc(self->sample_size * sizeof(uint8_t));
-    if (self->samples.population == NULL) {
+    self->samples.time = malloc(self->sample_size * sizeof(double));
+    if (self->samples.population == NULL || self->samples.time == NULL) {
         goto out;
     }
     self->trees.left = malloc(self->num_records * sizeof(double));
@@ -126,8 +127,11 @@ tree_sequence_alloc(tree_sequence_t *self)
         goto out;
     }
     /* Set the optional fields to their unset values. */
-    memset(self->samples.population, MSP_NULL_POPULATION_ID, self->sample_size);
-    memset(self->trees.population, MSP_NULL_POPULATION_ID, self->num_records);
+    memset(self->samples.population, MSP_NULL_POPULATION_ID,
+            self->sample_size * sizeof(uint8_t));
+    memset(self->samples.time, 0, self->sample_size * sizeof(double));
+    memset(self->trees.population, MSP_NULL_POPULATION_ID,
+            self->num_records * sizeof(uint8_t));
     if (self->num_mutations > 0) {
         self->mutations.node = malloc(self->num_mutations * sizeof(uint32_t));
         self->mutations.position = malloc(
@@ -146,6 +150,9 @@ tree_sequence_free(tree_sequence_t *self)
 {
     if (self->samples.population != NULL) {
         free(self->samples.population);
+    }
+    if (self->samples.time != NULL) {
+        free(self->samples.time);
     }
     if (self->trees.left != NULL) {
         free(self->trees.left);
@@ -420,8 +427,9 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < self->sample_size; j++) {
-        self->samples.population[j] = samples[j].population_id;
+    ret = tree_sequence_set_samples(self, self->sample_size, samples);
+    if (ret != 0) {
+        goto out;
     }
     /* Set the sequence_length to the genetic length so we can
      * pass the checks on the records during make_indexes */
@@ -562,6 +570,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/mutations/node", 1, 0, 1},
         {"/mutations/position", 1, 0, 1},
         {"/samples/population", 1, 0, 0},
+        {"/samples/time", 1, 0, 0},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
@@ -573,7 +582,9 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         fields[j].size = self->num_mutations;
         fields[j].required = self->num_mutations > 0;
     }
-    fields[8].size = self->sample_size;
+    for (j = 8; j < 10; j++) {
+        fields[j].size = self->sample_size;
+    }
     for (j = 0; j < num_fields; j++) {
         if (fields[j].required) {
             dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
@@ -709,6 +720,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/mutations/node", H5T_NATIVE_UINT32, 0, 1, NULL},
         {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1, NULL},
         {"/samples/population", H5T_NATIVE_UINT8, 0, 0, NULL},
+        {"/samples/time", H5T_NATIVE_DOUBLE, 0, 0, NULL},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
     size_t j;
@@ -722,6 +734,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     fields[6].dest = self->mutations.node;
     fields[7].dest = self->mutations.position;
     fields[8].dest = self->samples.population;
+    fields[9].dest = self->samples.time;
     /* TODO We're sort of doing the same thing twice here as
      * the mutations _group_ is optional. However, we can't just
      * mark mutations/node and mutations/position as optional as we
@@ -926,6 +939,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/mutations/node", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/mutations/position", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
         {"/samples/population", H5T_STD_U8LE, H5T_NATIVE_UINT8, 1, 0, NULL},
+        {"/samples/time", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
     struct _hdf5_group_write {
@@ -949,13 +963,16 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     fields[6].source = self->mutations.node;
     fields[7].source = self->mutations.position;
     fields[8].source = self->samples.population;
+    fields[9].source = self->samples.time;
     for (j = 0; j < 6; j++) {
         fields[j].size = self->num_records;
     }
     for (j = 6; j < 8; j++) {
         fields[j].size = self->num_mutations;
     }
-    fields[8].size = self->sample_size;
+    for (j = 8; j < 10; j++) {
+        fields[j].size = self->sample_size;
+    }
     if (self->num_mutations == 0) {
         groups[1].included = 0;
     }
@@ -1242,8 +1259,7 @@ tree_sequence_get_num_nodes(tree_sequence_t *self)
 }
 
 int
-tree_sequence_get_population(tree_sequence_t *self, uint32_t u,
-        uint32_t *population_id)
+tree_sequence_get_sample(tree_sequence_t *self, uint32_t u, sample_t *sample)
 {
     int ret = 0;
 
@@ -1251,7 +1267,8 @@ tree_sequence_get_population(tree_sequence_t *self, uint32_t u,
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    *population_id = self->samples.population[u];
+    sample->population_id = self->samples.population[u];
+    sample->time = self->samples.time[u];
 out:
     return ret;
 }
@@ -1402,6 +1419,28 @@ tree_sequence_alloc_sparse_tree(tree_sequence_t *self, sparse_tree_t *tree,
 {
     return sparse_tree_alloc(tree, self->sample_size, self->num_nodes,
             self->num_mutations, tracked_leaves, num_tracked_leaves, flags);
+}
+
+int
+tree_sequence_set_samples(tree_sequence_t *self, size_t sample_size,
+        sample_t *samples)
+{
+    int ret = MSP_ERR_BAD_SAMPLES;
+    uint32_t j;
+
+    if (sample_size != self->sample_size) {
+        goto out;
+    }
+    for (j = 0; j < self->sample_size; j++) {
+        self->samples.population[j] = samples[j].population_id;
+        if (samples[j].time < 0) {
+            goto out;
+        }
+        self->samples.time[j] = samples[j].time;
+    }
+    ret = 0;
+out:
+    return ret;
 }
 
 int
@@ -1919,6 +1958,20 @@ out:
 }
 
 int
+sparse_tree_get_time(sparse_tree_t *self, uint32_t u, double *t)
+{
+    int ret = 0;
+
+    ret = sparse_tree_check_node(self, u);
+    if (ret != 0) {
+        goto out;
+    }
+    *t = self->time[u];
+out:
+    return ret;
+}
+
+int
 sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
         mutation_t **mutations)
 {
@@ -1968,6 +2021,7 @@ sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
     /* Set the sample attributes */
     for (j = 0; j < self->sample_size; j++) {
         self->tree->population[j] = self->tree_sequence->samples.population[j];
+        self->tree->time[j] = self->tree_sequence->samples.time[j];
     }
 out:
     return ret;
@@ -1989,7 +2043,7 @@ sparse_tree_iterator_check_state(sparse_tree_iterator_t *self)
     assert(self->tree->num_nodes == self->num_nodes);
     for (j = 0; j < self->sample_size; j++) {
         u = j;
-        assert(self->tree->time[u] == 0.0);
+        assert(self->tree->time[u] >= 0.0);
         assert(self->tree->children[2 * j] == MSP_NULL_NODE);
         assert(self->tree->children[2 * j + 1] == MSP_NULL_NODE);
         while (self->tree->parent[u] != MSP_NULL_NODE) {
