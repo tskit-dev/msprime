@@ -497,7 +497,6 @@ Simulator_parse_population_configuration(Simulator *self,
     int ret = -1;
     Py_ssize_t j, num_populations;
     double initial_size, growth_rate;
-    long sample_size;
     int err;
     PyObject *item, *value;
 
@@ -520,11 +519,6 @@ Simulator_parse_population_configuration(Simulator *self,
             PyErr_SetString(PyExc_TypeError, "not a dictionary");
             goto out;
         }
-        value = get_dict_number(item, "sample_size");
-        if (value == NULL) {
-            goto out;
-        }
-        sample_size = PyLong_AsLong(value);
         value = get_dict_number(item, "initial_size");
         if (value == NULL) {
             goto out;
@@ -535,13 +529,8 @@ Simulator_parse_population_configuration(Simulator *self,
             goto out;
         }
         growth_rate = PyFloat_AsDouble(value);
-        if (sample_size < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                "Negative sample sizes not permitted");
-            goto out;
-        }
         err = msp_set_population_configuration(self->sim, j,
-                (size_t) sample_size, initial_size, growth_rate);
+                initial_size, growth_rate);
         if (err != 0) {
             handle_input_error(err);
             goto out;
@@ -758,6 +747,55 @@ out:
     return ret;
 }
 
+static int
+Simulator_parse_samples(Simulator *self, PyObject *py_samples,
+        Py_ssize_t *sample_size, sample_t **samples)
+{
+    int ret = -1;
+    long tmp_long;
+    Py_ssize_t j, n;
+    PyObject *item, *value;
+    sample_t *ret_samples = NULL;
+
+    n = PyList_Size(py_samples);
+    ret_samples = PyMem_Malloc(n * sizeof(sample_t));
+    if (ret_samples == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < n; j++) {
+        item = PyList_GetItem(py_samples, j);
+        if (!PyDict_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "not a dictionary");
+            goto out;
+        }
+        value = get_dict_number(item, "time");
+        if (value == NULL) {
+            goto out;
+        }
+        ret_samples[j].time = PyFloat_AsDouble(value);
+        if (ret_samples[j].time < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative times not valid");
+            goto out;
+        }
+        value = get_dict_number(item, "population");
+        if (value == NULL) {
+            goto out;
+        }
+        tmp_long = PyLong_AsLong(value);
+        if (tmp_long < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
+            goto out;
+        }
+        ret_samples[j].population_id = (uint8_t) tmp_long;
+    }
+    *samples = ret_samples;
+    *sample_size = n;
+    ret = 0;
+out:
+    return ret;
+}
+
 static void
 Simulator_dealloc(Simulator* self)
 {
@@ -775,15 +813,17 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int sim_ret;
-    static char *kwlist[] = {"sample_size", "random_generator",
+    static char *kwlist[] = {"samples", "random_generator",
         "num_loci", "scaled_recombination_rate",
         "population_configuration", "migration_matrix", "demographic_events",
         "max_memory", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "coalescence_record_block_size", NULL};
+    PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
     RandomGenerator *random_generator = NULL;
+    sample_t *samples = NULL;
     /* parameter defaults */
     Py_ssize_t sample_size = 2;
     Py_ssize_t num_loci = 1;
@@ -796,8 +836,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "nO!|ndO!O!O!nnnnn", kwlist,
-            &sample_size,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!nnnnn", kwlist,
+            &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
             &num_loci, &scaled_recombination_rate,
             &PyList_Type, &population_configuration,
@@ -817,7 +857,10 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    sim_ret = msp_alloc(self->sim, (size_t) sample_size,
+    if (Simulator_parse_samples(self, py_samples, &sample_size, &samples) != 0) {
+        goto out;
+    }
+    sim_ret = msp_alloc(self->sim, (size_t) sample_size, samples,
             self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
@@ -897,6 +940,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     ret = 0;
 out:
+    if (samples != NULL) {
+        PyMem_Free(samples);
+    }
     return ret;
 }
 
@@ -1411,7 +1457,6 @@ Simulator_get_population_configuration(Simulator *self)
     size_t num_populations;
     int sim_ret = 0;
     double initial_size, growth_rate;
-    size_t sample_size;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -1423,13 +1468,12 @@ Simulator_get_population_configuration(Simulator *self)
     }
     for (j = 0; j < num_populations; j++) {
         sim_ret = msp_get_population_configuration(self->sim, j,
-            &sample_size, &initial_size, &growth_rate);
+            &initial_size, &growth_rate);
         if (sim_ret != 0) {
             handle_library_error(sim_ret);
             goto out;
         }
-        d = Py_BuildValue("{s:n,s:d,s:d}",
-               "sample_size", (Py_ssize_t) sample_size,
+        d = Py_BuildValue("{s:d,s:d}",
                "initial_size", initial_size,
                "growth_rate", growth_rate);
         if (d == NULL) {
@@ -2457,23 +2501,23 @@ TreeSequence_get_population(TreeSequence *self, PyObject *args)
 {
     PyObject *ret = NULL;
     unsigned int node;
-    uint32_t population_id;
+    sample_t sample;
     int population, err;
 
+    /* TODO deprecate this in favour of get_sample returning a dict */
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
     if (!PyArg_ParseTuple(args, "I", &node)) {
         goto out;
     }
-    err = tree_sequence_get_population(self->tree_sequence, node,
-            &population_id);
+    err = tree_sequence_get_sample(self->tree_sequence, node, &sample);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    population = population_id;
-    if (population_id == MSP_NULL_POPULATION_ID) {
+    population = sample.population_id;
+    if (sample.population_id == MSP_NULL_POPULATION_ID) {
         population = -1;
     }
     ret = Py_BuildValue("i", population);

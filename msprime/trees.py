@@ -540,24 +540,24 @@ def simulator_factory(
         recombination_rate=None,
         recombination_map=None,
         population_configurations=None,
+        samples=None,
         migration_matrix=None,
         demographic_events=[]):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
     """
-    if sample_size is None and population_configurations is None:
+    if sample_size is None and samples is None:
         raise ValueError(
-            "Either sample_size or population_configurations must "
-            "be specified")
-    n = sample_size
+            "Either sample_size or samples must be specified")
+    if samples is None:
+        samples = [Sample() for j in range(sample_size)]
+    n = len(samples)
     if population_configurations is not None:
+        # TODO reinstate the checks for sample sizes and stuff here. We
+        # can use the the existing method as a complement to the
+        # new samples interface.
         _check_population_configurations(population_configurations)
-        n = sum(conf.sample_size for conf in population_configurations)
-        if sample_size is not None and n != sample_size:
-            raise ValueError(
-                "Overall sample_size and the sum of population sample sizes "
-                "must be equal")
     if recombination_map is None:
         the_length = 1 if length is None else length
         the_rate = 0 if recombination_rate is None else recombination_rate
@@ -572,7 +572,7 @@ def simulator_factory(
                 "Cannot specify length/recombination_rate along with "
                 "a recombination map")
         recomb_map = recombination_map
-    sim = TreeSimulator(n, recomb_map)
+    sim = TreeSimulator(samples, recomb_map)
     sim.set_effective_population_size(Ne)
     rng = random_generator
     if rng is None:
@@ -597,6 +597,7 @@ def simulate(
         population_configurations=None,
         migration_matrix=None,
         demographic_events=[],
+        samples=None,
         random_seed=None,
         num_replicates=None):
     """
@@ -676,7 +677,8 @@ def simulate(
         recombination_map=recombination_map,
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
-        demographic_events=demographic_events)
+        demographic_events=demographic_events,
+        samples=samples)
     mu = 0 if mutation_rate is None else mutation_rate
     if num_replicates is None:
         sim.run()
@@ -794,13 +796,13 @@ class TreeSimulator(object):
     Class to simulate trees under the standard neutral coalescent with
     recombination.
     """
-    def __init__(self, sample_size, recombination_map):
-        if not isinstance(sample_size, int):
-            raise TypeError("Sample size must be an integer")
+    def __init__(self, samples, recombination_map):
+        sample_size = len(samples)
         if sample_size < 2:
             raise ValueError("Sample size must be >= 2")
         if sample_size >= 2**32:
             raise ValueError("sample_size must be < 2**32")
+        self._samples = samples
         self._sample_size = sample_size
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
@@ -808,7 +810,7 @@ class TreeSimulator(object):
         self._random_generator = None
         self._effective_population_size = 1
         self._population_configurations = [
-            PopulationConfiguration(sample_size)]
+            PopulationConfiguration()]
         self._migration_matrix = [[0]]
         self._demographic_events = []
         # Set default block sizes to 64K objects.
@@ -1029,8 +1031,10 @@ class TreeSimulator(object):
             event.get_ll_representation(d, Ne)
             for event in self._demographic_events]
         ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
+        ll_samples = [
+            sample.get_ll_representation() for sample in self._samples]
         ll_sim = _msprime.Simulator(
-            sample_size=self._sample_size,
+            samples=ll_samples,
             random_generator=self._random_generator,
             num_loci=self._recombination_map.get_num_loci(),
             migration_matrix=ll_migration_matrix,
@@ -1745,20 +1749,37 @@ class RecombinationMap(object):
         return self._ll_recombination_map.get_rates()
 
 
+
+class Sample(object):
+
+    def __init__(self, time=0.0, population=0):
+        self.time = time
+        self.population = population
+
+    def get_ll_representation(self):
+        """
+        Returns the low-level representation of this Sample.
+        """
+        return {
+            "time": self.time,
+            "population": self.population,
+        }
+
+
 class PopulationConfiguration(object):
     """
     The initial configuration of a population (or deme) in a simulation.
 
-    :param int sample_size: The number of initial samples that are drawn
-        from this population. Defaults to 0.
     :param float initial_size: The absolute size of the population at time
         zero. Defaults to the reference population size :math:`N_e`.
     :param float growth_rate: The exponential growth rate of the population
         per generation. Growth rates can be negative. This is zero for a
         constant population size. Defaults to 0.
     """
-    def __init__(self, sample_size=0, initial_size=None, growth_rate=0.0):
-        self.sample_size = sample_size
+    # TODO reinstate the population config to allow for sample size.
+    # We can use it to create a samples object and avoid breaking too
+    # much existing code.
+    def __init__(self, initial_size=None, growth_rate=0.0):
         self.initial_size = initial_size
         self.growth_rate = growth_rate
 
@@ -1768,7 +1789,6 @@ class PopulationConfiguration(object):
         """
         initial_size = Ne if self.initial_size is None else self.initial_size
         return {
-            "sample_size": self.sample_size,
             "initial_size": initial_size / Ne,
             "growth_rate": self.growth_rate * 4 * Ne
         }
