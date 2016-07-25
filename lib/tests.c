@@ -169,6 +169,90 @@ test_vcf(void)
 }
 
 static void
+test_single_locus_two_populations(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    sample_t samples[] = {{0, 0.0}, {0, 0.0}, {1, 40.0}};
+    coalescence_record_t records[2];
+    size_t num_records;
+    uint32_t n = 3;
+
+    CU_ASSERT_FATAL(rng != NULL);
+
+    ret = msp_alloc(&msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_populations(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_mass_migration(&msp, 30.0, 0, 1, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_mass_migration(&msp, 30.5, 1, 0, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_mass_migration(&msp, 40.5, 1, 0, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    msp_print_state(&msp, _devnull);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp);
+    msp_print_state(&msp, _devnull);
+    num_records = msp_get_num_coalescence_records(&msp);
+    CU_ASSERT_EQUAL_FATAL(num_records, 2);
+    ret = msp_get_coalescence_records(&msp, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(records[0].node, 3);
+    CU_ASSERT_TRUE(records[0].time < 40.0);
+    CU_ASSERT_EQUAL(records[0].population_id, 0);
+    CU_ASSERT_EQUAL(records[1].node, 4);
+    CU_ASSERT_TRUE(records[1].time > 40.5);
+    CU_ASSERT_EQUAL(records[1].population_id, 0);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+}
+
+static void
+test_single_locus_historical_sample(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    sample_t samples[] = {{0, 0.0}, {0, 10.0}};
+    coalescence_record_t record;
+    size_t num_records;
+    uint32_t n = 2;
+
+    CU_ASSERT_FATAL(rng != NULL);
+
+    ret = msp_alloc(&msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    msp_print_state(&msp, _devnull);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp);
+    msp_print_state(&msp, _devnull);
+    num_records = msp_get_num_coalescence_records(&msp);
+    CU_ASSERT_EQUAL_FATAL(num_records, 1);
+    ret = msp_get_coalescence_records(&msp, &record);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(record.left, 0);
+    CU_ASSERT_EQUAL(record.right, 1);
+    CU_ASSERT_EQUAL(record.node, 2);
+    CU_ASSERT_TRUE(record.time > 10.0);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+}
+
+static void
 test_single_locus_simulation(void)
 {
     int ret;
@@ -1216,6 +1300,12 @@ main(void)
         (NULL == CU_add_test(
              pSuite, "Test saving records to HDF5",
              test_save_records_hdf5)) ||
+        (NULL == CU_add_test(
+             pSuite, "Simple historical samples",
+             test_single_locus_two_populations)) ||
+        (NULL == CU_add_test(
+             pSuite, "Simple historical samples",
+             test_single_locus_historical_sample)) ||
         (NULL == CU_add_test(
              pSuite, "Single locus simulation",
              test_single_locus_simulation))) {

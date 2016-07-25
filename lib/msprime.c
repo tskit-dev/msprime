@@ -982,16 +982,16 @@ out:
 }
 
 static void
-msp_print_segment_chain(msp_t *self, segment_t *head)
+msp_print_segment_chain(msp_t *self, segment_t *head, FILE *out)
 {
     segment_t *s = head;
 
-    printf("[%d]", s->population_id);
+    fprintf(out, "[%d]", s->population_id);
     while (s != NULL) {
-        printf("[(%d-%d) %d] ", s->left, s->right, s->value);
+        fprintf(out, "[(%d-%d) %d] ", s->left, s->right, s->value);
         s = s->next;
     }
-    printf("\n");
+    fprintf(out, "\n");
 }
 
 void
@@ -1052,7 +1052,7 @@ msp_verify(msp_t *self)
 }
 
 int
-msp_print_state(msp_t *self)
+msp_print_state(msp_t *self, FILE *out)
 {
     int ret = 0;
     avl_node_t *node;
@@ -1075,89 +1075,89 @@ msp_print_state(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    printf("used_memory = %f MiB\n", (double) self->used_memory / gig);
-    printf("max_memory  = %f MiB\n", (double) self->max_memory / gig);
-    printf("n = %d\n", self->sample_size);
-    printf("m = %d\n", self->num_loci);
-    printf("configuration = %s\n", self->configuration_json);
-    printf("Samples = \n");
+    fprintf(out, "used_memory = %f MiB\n", (double) self->used_memory / gig);
+    fprintf(out, "max_memory  = %f MiB\n", (double) self->max_memory / gig);
+    fprintf(out, "n = %d\n", self->sample_size);
+    fprintf(out, "m = %d\n", self->num_loci);
+    fprintf(out, "configuration = %s\n", self->configuration_json);
+    fprintf(out, "Samples = \n");
     for (j = 0; j < self->sample_size; j++) {
-        printf("\t%d\tpopulation=%d\ttime=%f\n", j, self->samples[j].population_id,
+        fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j, self->samples[j].population_id,
                 self->samples[j].time);
     }
-    printf("Sampling events:\n");
+    fprintf(out, "Sampling events:\n");
     for (j = 0; j < self->num_sampling_events; j++) {
         if (j == self->next_sampling_event) {
-            printf("  ***");
+            fprintf(out, "  ***");
         }
         se = &self->sampling_events[j];
-        printf("\t");
-        printf("%d @ %f in deme %d\n", se->sample, se->time, se->population_id);
+        fprintf(out, "\t");
+        fprintf(out, "%d @ %f in deme %d\n", se->sample, se->time, se->population_id);
     }
-    printf("Demographic events:\n");
+    fprintf(out, "Demographic events:\n");
     for (de = self->demographic_events_head; de != NULL; de = de->next) {
         if (de == self->next_demographic_event) {
-            printf("  ***");
+            fprintf(out, "  ***");
         }
-        printf("\t");
-        de->print_state(self, de);
+        fprintf(out, "\t");
+        de->print_state(self, de, out);
     }
-    printf("Migration matrix\n");
+    fprintf(out, "Migration matrix\n");
     for (j = 0; j < self->num_populations; j++) {
-        printf("\t");
+        fprintf(out, "\t");
         for (k = 0; k < self->num_populations; k++) {
-            printf("%0.3f ",
+            fprintf(out, "%0.3f ",
                 self->migration_matrix[j * self->num_populations + k]);
         }
-        printf("\n");
+        fprintf(out, "\n");
     }
 
-    printf("num_links = %ld\n", (long) fenwick_get_total(&self->links));
+    fprintf(out, "num_links = %ld\n", (long) fenwick_get_total(&self->links));
     for (j = 0; j < self->num_populations; j++) {
-        printf("population[%d] = %d\n", j,
+        fprintf(out, "population[%d] = %d\n", j,
             avl_count(&self->populations[j].ancestors));
-        printf("\tstart_time = %f\n", self->populations[j].start_time);
-        printf("\tinitial_size = %f\n", self->populations[j].initial_size);
-        printf("\tgrowth_rate = %f\n", self->populations[j].growth_rate);
+        fprintf(out, "\tstart_time = %f\n", self->populations[j].start_time);
+        fprintf(out, "\tinitial_size = %f\n", self->populations[j].initial_size);
+        fprintf(out, "\tgrowth_rate = %f\n", self->populations[j].growth_rate);
     }
-    printf("Time = %f\n", self->time);
+    fprintf(out, "Time = %f\n", self->time);
     for (j = 0; j < msp_get_num_ancestors(self); j++) {
-        printf("\t");
-        msp_print_segment_chain(self, ancestors[j]);
+        fprintf(out, "\t");
+        msp_print_segment_chain(self, ancestors[j], out);
     }
-    printf("Fenwick tree\n");
+    fprintf(out, "Fenwick tree\n");
     for (j = 1; j <= (uint32_t) fenwick_get_size(&self->links); j++) {
         u = msp_get_segment(self, j);
         v = fenwick_get_value(&self->links, j);
         if (v != 0) {
-            printf("\t%ld\ti=%d l=%d r=%d v=%d prev=%p next=%p\n", (long) v,
+            fprintf(out, "\t%ld\ti=%d l=%d r=%d v=%d prev=%p next=%p\n", (long) v,
                     (int) u->id, u->left,
                     u->right, (int) u->value, (void *) u->prev, (void *) u->next);
         }
     }
-    printf("Breakpoints = %d\n", avl_count(&self->breakpoints));
+    fprintf(out, "Breakpoints = %d\n", avl_count(&self->breakpoints));
     for (node = self->breakpoints.head; node != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
-        printf("\t%d -> %d\n", nm->left, nm->value);
+        fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
-    printf("Overlap count = %d\n", avl_count(&self->overlap_counts));
+    fprintf(out, "Overlap count = %d\n", avl_count(&self->overlap_counts));
     for (node = self->overlap_counts.head; node != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
-        printf("\t%d -> %d\n", nm->left, nm->value);
+        fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
-    printf("Coalescence records = %ld\n", (long) self->num_coalescence_records);
+    fprintf(out, "Coalescence records = %ld\n", (long) self->num_coalescence_records);
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
-        printf("\t%f\t%f\t%d\t%d\t%d\t%f\t%d\n", cr->left, cr->right, cr->children[0],
+        fprintf(out, "\t%f\t%f\t%d\t%d\t%d\t%f\t%d\n", cr->left, cr->right, cr->children[0],
                 cr->children[1], cr->node, cr->time, cr->population_id);
     }
-    printf("Memory heaps\n");
-    printf("avl_node_heap:");
-    object_heap_print_state(&self->avl_node_heap);
-    printf("segment_heap:");
-    object_heap_print_state(&self->segment_heap);
-    printf("node_mapping_heap:");
-    object_heap_print_state(&self->node_mapping_heap);
+    fprintf(out, "Memory heaps\n");
+    fprintf(out, "avl_node_heap:");
+    object_heap_print_state(&self->avl_node_heap, out);
+    fprintf(out, "segment_heap:");
+    object_heap_print_state(&self->segment_heap, out);
+    fprintf(out, "node_mapping_heap:");
+    object_heap_print_state(&self->node_mapping_heap, out);
     msp_verify(self);
 out:
     if (ancestors != NULL) {
@@ -1273,9 +1273,11 @@ out:
 }
 
 static void
-msp_print_population_parameters_change(msp_t *self, demographic_event_t *event)
+msp_print_population_parameters_change(msp_t *self,
+        demographic_event_t *event, FILE *out)
 {
-    printf("%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
+    fprintf(out,
+            "%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
             event->time,
             event->params.population_parameters_change.population_id,
             event->params.population_parameters_change.initial_size,
@@ -1411,9 +1413,10 @@ out:
 }
 
 static void
-msp_print_migration_rate_change(msp_t *self, demographic_event_t *event)
+msp_print_migration_rate_change(msp_t *self,
+        demographic_event_t *event, FILE *out)
 {
-    printf("%f\tmigration_rate_change: %d -> %f\n",
+    fprintf(out, "%f\tmigration_rate_change: %d -> %f\n",
             event->time,
             event->params.migration_rate_change.matrix_index,
             event->params.migration_rate_change.migration_rate);
@@ -1506,9 +1509,9 @@ out:
 }
 
 static void
-msp_print_mass_migration(msp_t *self, demographic_event_t *event)
+msp_print_mass_migration(msp_t *self, demographic_event_t *event, FILE *out)
 {
-    printf("%f\tmass_migration: %d -> %d p = %f\n",
+    fprintf(out, "%f\tmass_migration: %d -> %d p = %f\n",
             event->time,
             event->params.mass_migration.source,
             event->params.mass_migration.destination,
@@ -2256,7 +2259,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
     while (msp_get_num_ancestors(self) > 0
-            /* && self->next_sampling_event < self->num_sampling_events */
             && self->time < max_time && events < max_events) {
         events++;
         num_links = fenwick_get_total(&self->links);

@@ -186,7 +186,7 @@ typedef struct {
 typedef struct demographic_event_t_t {
     double time;
     int (*change_state)(msp_t *, struct demographic_event_t_t *);
-    void (*print_state)(msp_t *, struct demographic_event_t_t *);
+    void (*print_state)(msp_t *, struct demographic_event_t_t *, FILE *out);
     int (*json_snprintf)(struct demographic_event_t_t *, char *, size_t);
     union {
         mass_migration_t mass_migration;
@@ -408,7 +408,7 @@ int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
 int msp_reset(msp_t *self);
-int msp_print_state(msp_t *self);
+int msp_print_state(msp_t *self, FILE *out);
 int msp_free(msp_t *self);
 void msp_verify(msp_t *self);
 

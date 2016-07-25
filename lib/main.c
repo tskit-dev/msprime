@@ -796,7 +796,7 @@ run_simulate(char *conf_file)
 
         ret = msp_debug_demography(msp, &end_time);
         printf("interval %f - %f\n", start_time, end_time);
-        msp_print_state(msp);
+        msp_print_state(msp, stdout);
         start_time = end_time;
     } while (! gsl_isinf(end_time));
     if (ret != 0) {
@@ -822,7 +822,7 @@ run_simulate(char *conf_file)
             msp_verify(msp);
             /* ret = msp_print_state(msp); */
         }
-        ret = msp_print_state(msp);
+        ret = msp_print_state(msp, stdout);
         if (ret != 0) {
             goto out;
         }

@@ -23,7 +23,7 @@
 #include "msprime.h"
 
 size_t object_heap_get_num_allocated(object_heap_t *self); 
-void object_heap_print_state(object_heap_t *self); 
+void object_heap_print_state(object_heap_t *self, FILE *out); 
 int object_heap_expand(object_heap_t *self); 
 void * object_heap_get_object(object_heap_t *self, size_t index); 
 int object_heap_empty(object_heap_t *self); 

@@ -32,14 +32,14 @@ object_heap_get_num_allocated(object_heap_t *self)
 }
 
 void
-object_heap_print_state(object_heap_t *self)
+object_heap_print_state(object_heap_t *self, FILE *out)
 {
-    printf("object heap %p::\n", (void *) self);
-    printf("\tsize = %d\n", (int) self->size);
-    printf("\ttop = %d\n", (int) self->top);
-    printf("\tblock_size = %d\n", (int) self->block_size);
-    printf("\tnum_blocks = %d\n", (int) self->num_blocks);
-    printf("\ttotal allocated = %d\n",
+    fprintf(out, "object heap %p::\n", (void *) self);
+    fprintf(out, "\tsize = %d\n", (int) self->size);
+    fprintf(out, "\ttop = %d\n", (int) self->top);
+    fprintf(out, "\tblock_size = %d\n", (int) self->block_size);
+    fprintf(out, "\tnum_blocks = %d\n", (int) self->num_blocks);
+    fprintf(out, "\ttotal allocated = %d\n",
             (int) object_heap_get_num_allocated(self));
 }
 
