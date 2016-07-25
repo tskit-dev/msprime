@@ -498,15 +498,13 @@ class TestTreeSimulator(HighLevelTestCase):
 
     def test_bad_inputs(self):
         recomb_map = msprime.RecombinationMap.uniform_map(1, 0)
-        for bad_type in ["xd", None, [], 4.4]:
+        for bad_type in ["xd", None, 4.4]:
             self.assertRaises(
-                TypeError, msprime.TreeSimulator, bad_type, recomb_map)
-            self.assertRaises(
-                TypeError, msprime.TreeSimulator, 2, bad_type)
-        for bad_value in [-1, 0, 2**32]:
-            self.assertRaises(
-                ValueError, msprime.TreeSimulator, bad_value, recomb_map)
-        self.assertRaises(ValueError, msprime.TreeSimulator, 1, recomb_map)
+                TypeError, msprime.TreeSimulator, [(0, 0), (0, 0)], bad_type)
+        self.assertRaises(
+            ValueError, msprime.TreeSimulator, [], recomb_map)
+        self.assertRaises(
+            ValueError, msprime.TreeSimulator, [(0, 0)], recomb_map)
 
 
 class TestHaplotypeGenerator(HighLevelTestCase):

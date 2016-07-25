@@ -592,26 +592,23 @@ class TestLowLevelConversions(unittest.TestCase):
     do the rescalings from generations.
     """
     def test_population_configuration_defaults(self):
-        for sample_size in [0, 1, 10]:
-            conf = msprime.PopulationConfiguration(sample_size)
-            for Ne in [1, 10, 1e6]:
-                d = conf.get_ll_representation(Ne)
-                dp = {
-                    "sample_size": sample_size,
-                    "initial_size": 1.0,
-                    "growth_rate": 0
-                }
-                self.assertEqual(d, dp)
+        conf = msprime.PopulationConfiguration()
+        self.assertIsNone(conf.sample_size)
+        for Ne in [1, 10, 1e6]:
+            d = conf.get_ll_representation(Ne)
+            dp = {
+                "initial_size": 1.0,
+                "growth_rate": 0
+            }
+            self.assertEqual(d, dp)
 
     def test_population_configuration_initial_size(self):
-        sample_size = 1203
         for initial_size in [1, 10, 1000]:
-            conf = msprime.PopulationConfiguration(
-                sample_size, initial_size=initial_size)
+            conf = msprime.PopulationConfiguration(initial_size=initial_size)
+            self.assertIsNone(conf.sample_size)
             for Ne in [1, 10, 1e6]:
                 d = conf.get_ll_representation(Ne)
                 dp = {
-                    "sample_size": sample_size,
                     "initial_size": initial_size / Ne,
                     "growth_rate": 0
                 }
@@ -622,10 +619,10 @@ class TestLowLevelConversions(unittest.TestCase):
         for growth_rate in [1, 10, -10]:
             conf = msprime.PopulationConfiguration(
                 sample_size, growth_rate=growth_rate)
+            self.assertEqual(conf.sample_size, sample_size)
             for Ne in [1, 10, 1e6]:
                 d = conf.get_ll_representation(Ne)
                 dp = {
-                    "sample_size": sample_size,
                     "initial_size": 1,
                     "growth_rate": growth_rate * 4 * Ne
                 }

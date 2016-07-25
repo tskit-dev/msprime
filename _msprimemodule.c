@@ -754,7 +754,7 @@ Simulator_parse_samples(Simulator *self, PyObject *py_samples,
     int ret = -1;
     long tmp_long;
     Py_ssize_t j, n;
-    PyObject *item, *value;
+    PyObject *sample, *value;
     sample_t *ret_samples = NULL;
 
     n = PyList_Size(py_samples);
@@ -764,22 +764,19 @@ Simulator_parse_samples(Simulator *self, PyObject *py_samples,
         goto out;
     }
     for (j = 0; j < n; j++) {
-        item = PyList_GetItem(py_samples, j);
-        if (!PyDict_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "not a dictionary");
+        sample = PyList_GetItem(py_samples, j);
+        if (!PySequence_Check(sample)) {
+            PyErr_SetString(PyExc_TypeError, "not a sequence");
             goto out;
         }
-        value = get_dict_number(item, "time");
-        if (value == NULL) {
+        if (PySequence_Length(sample) != 2) {
+            PyErr_SetString(PyExc_ValueError,
+                    "sample must be (population,time) tuple");
             goto out;
         }
-        ret_samples[j].time = PyFloat_AsDouble(value);
-        if (ret_samples[j].time < 0) {
-            PyErr_SetString(PyExc_ValueError, "negative times not valid");
-            goto out;
-        }
-        value = get_dict_number(item, "population");
-        if (value == NULL) {
+        value = PySequence_GetItem(sample, 0);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'population' is not number");
             goto out;
         }
         tmp_long = PyLong_AsLong(value);
@@ -788,6 +785,16 @@ Simulator_parse_samples(Simulator *self, PyObject *py_samples,
             goto out;
         }
         ret_samples[j].population_id = (uint8_t) tmp_long;
+        value = PySequence_GetItem(sample, 1);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'time' is not number");
+            goto out;
+        }
+        ret_samples[j].time = PyFloat_AsDouble(value);
+        if (ret_samples[j].time < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative times not valid");
+            goto out;
+        }
     }
     *samples = ret_samples;
     *sample_size = n;
@@ -852,12 +859,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (RandomGenerator_check_state(self->random_generator) != 0) {
         goto out;
     }
+    if (Simulator_parse_samples(self, py_samples, &sample_size, &samples) != 0) {
+        goto out;
+    }
     self->sim = PyMem_Malloc(sizeof(msp_t));
     if (self->sim == NULL) {
         PyErr_NoMemory();
-        goto out;
-    }
-    if (Simulator_parse_samples(self, py_samples, &sample_size, &samples) != 0) {
         goto out;
     }
     sim_ret = msp_alloc(self->sim, (size_t) sample_size, samples,
@@ -1489,6 +1496,57 @@ out:
 }
 
 static PyObject *
+Simulator_get_samples(Simulator *self)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *t = NULL;
+    sample_t *samples = NULL;
+    size_t j = 0;
+    size_t sample_size;
+    int population;
+    int sim_ret = 0;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    sample_size = msp_get_sample_size(self->sim);
+    samples = PyMem_Malloc(sample_size * sizeof(sample_t));
+    if (samples == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    sim_ret = msp_get_samples(self->sim, samples);
+    if (sim_ret != 0) {
+        handle_library_error(sim_ret);
+        goto out;
+    }
+    l = PyList_New(sample_size);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < sample_size; j++) {
+        population = samples[j].population_id == MSP_NULL_POPULATION_ID? -1:
+            samples[j].population_id;
+        t = Py_BuildValue("id", population, samples[j].time);
+        if (t == NULL) {
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, t);
+    }
+    ret = l;
+    l = NULL;
+out:
+    Py_XDECREF(l);
+    if (samples != NULL) {
+        PyMem_Free(samples);
+    }
+    return ret;
+}
+
+
+
+static PyObject *
 Simulator_run(Simulator *self, PyObject *args)
 {
     PyObject *ret = NULL;
@@ -1660,6 +1718,9 @@ static PyMethodDef Simulator_methods[] = {
     {"get_population_configuration",
             (PyCFunction) Simulator_get_population_configuration, METH_NOARGS,
             "Returns the population configurations"},
+    {"get_samples",
+            (PyCFunction) Simulator_get_samples, METH_NOARGS,
+            "Returns the samples"},
     {"run", (PyCFunction) Simulator_run, METH_VARARGS,
             "Simulates until at most the specified time. Returns True\
             if sample has coalesced and False otherwise." },
