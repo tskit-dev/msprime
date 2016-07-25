@@ -25,7 +25,7 @@ contextual information.
 The root group contains a number of attributes, describing the basic
 properties of data set. The ``format_version`` attribute is a
 pair ``(major, minor)`` describing the file format version. This
-document describes version 2.0.
+document describes version 2.1.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
@@ -131,12 +131,13 @@ Samples group
 
 The ``samples`` group is optional, and records information about the
 samples (i.e. leaf nodes). Currently the ``samples`` group contains
-a single vector ``population`` which records the population ID
-of each sample. The size of this vector must be equal to the
+two vectors ``population`` and ``time``, which record the population ID
+and sampling time of each sample. The size of these vector must be equal to the
 ``sample_size`` specified in the root attribute.
 
 ===================     ==============      =====
 Path                    Type                Dim
 ===================     ==============      =====
 /samples/population     H5T_STD_U8LE        n
+/samples/time           H5T_IEEE_F64LE      n
 ===================     ==============      =====
