@@ -560,21 +560,35 @@ def simulator_factory(
         raise ValueError(
             "Either sample_size, population_configurations or samples "
             "be specified")
-    if sample_size is not None and samples is not None:
-        raise ValueError(
-            "Cannot specify sample size and samples simultaneously.")
-    if population_configurations is not None and samples is None:
-        _check_population_configurations(population_configurations)
-        the_samples = []
-        for j, conf in enumerate(population_configurations):
-            if conf.sample_size is not None:
-                the_samples += [(j, 0) for _ in range(conf.sample_size)]
-        if sample_size is not None and len(the_samples) != sample_size:
-            raise ValueError(
-                "Overall sample_size and the sum of population sample sizes "
-                "must be equal")
     if sample_size is not None:
-        the_samples = [(0, 0) for _ in range(sample_size)]
+        if samples is not None:
+            raise ValueError(
+                "Cannot specify sample size and samples simultaneously.")
+        if population_configurations is not None:
+            raise ValueError(
+                "Cannot specify sample size and population_configurations "
+                "simultaneously.")
+        s = Sample(population=0, time=0.0)
+        the_samples = [s for _ in range(sample_size)]
+    # If we have population configurations we may have embedded sample_size
+    # values telling us how many samples to take from each population.
+    if population_configurations is not None:
+        _check_population_configurations(population_configurations)
+        if samples is None:
+            the_samples = []
+            for j, conf in enumerate(population_configurations):
+                if conf.sample_size is not None:
+                    the_samples += [(j, 0) for _ in range(conf.sample_size)]
+        else:
+            for conf in population_configurations:
+                if conf.sample_size is not None:
+                    raise ValueError(
+                         "Cannot specify population configuration sample size"
+                         "and samples simultaneously")
+            the_samples = samples
+    elif samples is not None:
+        the_samples = samples
+
     if recombination_map is None:
         the_length = 1 if length is None else length
         the_rate = 0 if recombination_rate is None else recombination_rate
@@ -855,6 +869,9 @@ class TreeSimulator(object):
 
     def get_sample_size(self):
         return self._sample_size
+
+    def get_samples(self):
+        return self._samples
 
     def get_recombinatation_map(self):
         return self._recombination_map
