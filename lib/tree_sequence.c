@@ -431,6 +431,10 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     if (ret != 0) {
         goto out;
     }
+    /* Rescale sampling times into generations */
+    for (j = 0; j < self->sample_size; j++) {
+        self->samples.time[j] *= 4 * Ne;
+    }
     /* Set the sequence_length to the genetic length so we can
      * pass the checks on the records during make_indexes */
     self->sequence_length = (double) msp_get_num_loci(sim);

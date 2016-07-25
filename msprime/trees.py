@@ -1064,8 +1064,9 @@ class TreeSimulator(object):
             event.get_ll_representation(d, Ne)
             for event in self._demographic_events]
         ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
+        ll_samples = [(pop, time / (4 * Ne)) for pop, time in self._samples]
         ll_sim = _msprime.Simulator(
-            samples=self._samples,
+            samples=ll_samples,
             random_generator=self._random_generator,
             num_loci=self._recombination_map.get_num_loci(),
             migration_matrix=ll_migration_matrix,

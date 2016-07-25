@@ -1405,8 +1405,9 @@ class TestSimulatorFactory(unittest.TestCase):
             msprime.Sample(population=0, time=0),
             msprime.Sample(population=1, time=1),
             msprime.Sample(population=2, time=2)]
+        # Ne = 1/4 to keep in coalescence units.
         sim = msprime.simulator_factory(
-            samples=samples, population_configurations=pop_configs)
+            Ne=1/4, samples=samples, population_configurations=pop_configs)
         self.assertEqual(sim.get_samples(), samples)
         ll_sim = sim.create_ll_instance()
         self.assertEqual(ll_sim.get_samples(), samples)

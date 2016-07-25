@@ -335,7 +335,7 @@ class TestCoalescenceLocations(unittest.TestCase):
             random_seed=1)
         tree = next(ts.trees())
         self.assertEqual(tree.get_root(), 2)
-        self.assertGreater(tree.get_time(2), t / 4)
+        self.assertGreater(tree.get_time(2), t)
         self.assertEqual(tree.get_population(0), 0)
         self.assertEqual(tree.get_population(1), 1)
         self.assertEqual(tree.get_population(2), 2)
@@ -363,10 +363,9 @@ class TestCoalescenceLocations(unittest.TestCase):
             population_configurations=population_configurations,
             demographic_events=demographic_events,
             random_seed=1)
-        scaled_t = t / 4
         tree = next(ts.trees())
         self.assertEqual(tree.get_root(), 2 * n - 2)
-        self.assertGreater(tree.get_time(tree.get_root()), scaled_t)
+        self.assertGreater(tree.get_time(tree.get_root()), t)
         for j in range(n // 2):
             self.assertEqual(tree.get_population(j), 0)
             self.assertEqual(tree.get_population(n // 2 + j), 1)
@@ -394,10 +393,9 @@ class TestCoalescenceLocations(unittest.TestCase):
             population_configurations=population_configurations,
             demographic_events=demographic_events,
             random_seed=1)
-        scaled_t = t / 4
         tree = next(ts.trees())
         self.assertEqual(tree.get_root(), 2 * n - 2)
-        self.assertGreater(tree.get_time(tree.get_root()), scaled_t)
+        self.assertGreater(tree.get_time(tree.get_root()), t)
         for j in range(n // 3):
             self.assertEqual(tree.get_population(j), 0)
             self.assertEqual(tree.get_population(n // 3 + j), 1)
@@ -783,3 +781,115 @@ class TestLowLevelConversions(unittest.TestCase):
             scaled_mp = [
                 [v * 4 * Ne for v in row] for row in m]
             self.assertEqual(scaled_m, scaled_mp)
+
+
+class TestHistoricalSampling(unittest.TestCase):
+    """
+    Tests to make sure historical sampling works correctly.
+    """
+    def test_two_samples(self):
+        sampling_time = 1.01
+        for recombination_rate in [0, 1]:
+            ts = msprime.simulate(
+                recombination_rate=recombination_rate,
+                samples=[
+                    msprime.Sample(0, 0), msprime.Sample(0, sampling_time)])
+            for t in ts.trees():
+                self.assertEqual(t.get_time(0), 0)
+                self.assertEqual(t.get_time(1), sampling_time)
+                self.assertEqual(t.get_parent(0), t.get_parent(1))
+                self.assertEqual(t.get_parent(1), t.get_parent(0))
+                self.assertGreater(t.get_time(t.get_parent(0)), sampling_time)
+
+    def test_different_times(self):
+        st1 = 1.01
+        st2 = 2.01
+        st3 = 3.01
+        ts = msprime.simulate(
+            samples=[
+                msprime.Sample(0, 0),
+                msprime.Sample(0, st1),
+                msprime.Sample(0, st2),
+                msprime.Sample(0, st3)])
+        t = next(ts.trees())
+        self.assertEqual(t.get_time(0), 0)
+        self.assertEqual(t.get_time(1), st1)
+        self.assertEqual(t.get_time(2), st2)
+        self.assertEqual(t.get_time(3), st3)
+        self.assertGreater(t.get_time(t.get_parent(1)), st1)
+        self.assertGreater(t.get_time(t.get_parent(2)), st2)
+        self.assertGreater(t.get_time(t.get_parent(3)), st3)
+        self.assertGreater(t.get_time(t.get_root()), st3)
+
+    def test_old_sampling_time(self):
+        # This is an enormously long time in coalescent time, so we should
+        # coalesce quickly after the samples are introduced.
+        sampling_time = 1000.01
+        n = 5
+        samples = [
+            msprime.Sample(0, sampling_time) for j in range(n - 1)] + [
+            msprime.Sample(0, 0)]
+        ts = msprime.simulate(Ne=1/4, samples=samples)
+        t = next(ts.trees())
+        for j in range(n - 1):
+            self.assertEqual(t.get_time(j), sampling_time)
+        self.assertEqual(t.get_time(n - 1), 0)
+        # Allow it to be within 10 coalescent time units.
+        self.assertLess(t.get_time(t.get_root()), sampling_time + 10)
+
+    def test_two_samples_mass_migration(self):
+        sampling_time = 2.01
+        migration_time = 4.33
+        ts = msprime.simulate(
+            samples=[
+                msprime.Sample(0, 0),
+                msprime.Sample(1, sampling_time)],
+            population_configurations=[
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration()],
+            demographic_events=[
+                msprime.MassMigration(
+                    time=migration_time, source=1, destination=0)])
+        t = next(ts.trees())
+        self.assertEqual(t.get_time(0), 0)
+        self.assertEqual(t.get_time(1), sampling_time)
+        self.assertGreater(t.get_time(2), migration_time)
+        self.assertEqual(t.get_population(0), 0)
+        self.assertEqual(t.get_population(1), 1)
+        self.assertEqual(t.get_population(2), 0)
+
+    def test_interleaved_migrations(self):
+        t1 = 1.5
+        t2 = 10.5
+        t3 = 50.5
+        ts = msprime.simulate(
+            Ne=1/4,
+            samples=[
+                msprime.Sample(0, 0),
+                msprime.Sample(1, t1),
+                msprime.Sample(2, t2),
+                msprime.Sample(3, t3)],
+            population_configurations=[
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration()],
+            demographic_events=[
+                msprime.MassMigration(time=t1, source=0, destination=1),
+                msprime.MassMigration(time=t2, source=1, destination=2),
+                msprime.MassMigration(time=t3, source=2, destination=3)])
+        t = next(ts.trees())
+        self.assertEqual(t.get_time(0), 0)
+        self.assertEqual(t.get_time(1), t1)
+        self.assertEqual(t.get_time(2), t2)
+        self.assertEqual(t.get_time(3), t3)
+        self.assertEqual(t.get_population(0), 0)
+        self.assertEqual(t.get_population(1), 1)
+        self.assertEqual(t.get_population(2), 2)
+        self.assertEqual(t.get_population(3), 3)
+        self.assertEqual(t.get_population(4), 1)
+        self.assertEqual(t.get_population(5), 2)
+        self.assertEqual(t.get_population(6), 3)
+        self.assertTrue(t1 < t.get_time(4) < t2)
+        self.assertTrue(t2 < t.get_time(5) < t3)
+        self.assertGreater(t.get_time(6), t3)
