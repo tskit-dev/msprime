@@ -1,12 +1,12 @@
 CC=h5cc 
-CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
+EXTRA_CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wno-unused-parameter\
   -Wmissing-prototypes -Wstrict-prototypes \
   -Wconversion -Wshadow -Wpointer-arith \
-  -Wcast-qual -Wcast-align \
+  -Wcast-align -Wcast-qual \
   -Wwrite-strings -Wnested-externs \
-  -fshort-enums -fno-common -Dinline= -g -O2\
-  -DH5_NO_DEPRECATED_SYMBOLS
+  -fshort-enums -fno-common -Dinline= 
+CFLAGS=-g -O2 -DH5_NO_DEPRECATED_SYMBOLS
 LDFLAGS=-lgsl -lgslcblas -lhdf5 -lm
 
 HEADERS=msprime.h err.h
@@ -19,11 +19,12 @@ all: main tests
 avl.o: avl.c
 	${CC} -Wall -g -O2 -c avl.c
 
+main: CFLAGS+=${EXTRA_CFLAGS}
 main: main.c ${COMPILED} ${HEADERS}
-	${CC} ${CFLAGS} -o main main.c ${COMPILED} ${LDFLAGS} -lconfig 
+	${CC} ${CFLAGS} ${EXTRA_CFLAGS} -o main main.c ${COMPILED} ${LDFLAGS} -lconfig 
 
 tests: tests.c ${COMPILED}
-	${CC} ${CFLAGS} -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit 
+	${CC} ${CFLAGS} -Wall -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit 
 
 tags:
 	etags *.c *.h 

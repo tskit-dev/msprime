@@ -1233,88 +1233,58 @@ msprime_suite_cleanup(void)
     return CUE_SUCCESS;
 }
 
+static void
+handle_cunit_error()
+{
+    fprintf(stderr, "CUnit error occured: %d: %s\n",
+            CU_get_error(), CU_get_error_msg());
+    exit(EXIT_FAILURE);
+}
+
 int
 main(void)
 {
-
-    CU_pSuite pSuite = NULL;
+    CU_TestInfo tests[] = {
+        {"Fenwick tree", test_fenwick},
+        {"VCF", test_vcf},
+        {"Simplest records", test_simplest_records},
+        {"Simplest bad records", test_simplest_bad_records},
+        {"Single tree good records", test_single_tree_good_records},
+        {"Single tree bad records", test_single_tree_bad_records},
+        {"Single tree good mutations", test_single_tree_good_mutations},
+        {"Single tree bad mutations", test_single_tree_bad_mutations},
+        {"Single tree iterator", test_single_tree_iter},
+        {"Single tree iterator times", test_single_tree_iter_times},
+        {"Tree sequence iterator", test_tree_sequence_iter},
+        {"Tree sequence bad records", test_tree_sequence_bad_records},
+        {"Single tree iterator failure", test_single_tree_iter_failure},
+        {"Tree sequence iterator failure", test_tree_sequence_iter_failure},
+        {"Tree sequence mutation iterator failure",
+            test_tree_sequence_mutations_iter_failure},
+        {"Test records equivalent after import", test_records_equivalent},
+        {"Test saving to HDF5", test_save_hdf5},
+        {"Test saving records to HDF5", test_save_records_hdf5},
+        {"Historical samples two populatios",
+            test_single_locus_two_populations},
+        {"Historical samples", test_single_locus_historical_sample},
+        {"Single locus simulation", test_single_locus_simulation},
+        CU_TEST_INFO_NULL,
+    };
+    CU_SuiteInfo suites[] = {
+        { "msprime", msprime_suite_init, msprime_suite_cleanup, tests},
+        CU_SUITE_INFO_NULL,
+    };
 
     /* initialize the CUnit test registry */
-    if (CUE_SUCCESS != CU_initialize_registry())
-        return CU_get_error();
-
-    /* add a suite to the registry */
-    pSuite = CU_add_suite("msprime", msprime_suite_init, msprime_suite_cleanup);
-    if (NULL == pSuite) {
-        CU_cleanup_registry();
-        return CU_get_error();
+    if (CUE_SUCCESS != CU_initialize_registry()) {
+        handle_cunit_error();
     }
-
-    /* add the tests to the suite */
-    if (
-        (NULL == CU_add_test(pSuite, "Fenwick tree", test_fenwick)) ||
-        (NULL == CU_add_test(pSuite, "VCF", test_vcf)) ||
-        (NULL == CU_add_test(
-             pSuite, "Simplest records", test_simplest_records)) ||
-        (NULL == CU_add_test(
-             pSuite, "Simplest bad records", test_simplest_bad_records)) ||
-        (NULL == CU_add_test(
-             pSuite, "Single tree good records",
-             test_single_tree_good_records)) ||
-        (NULL == CU_add_test(
-             pSuite, "Single tree bad records",
-             test_single_tree_bad_records)) ||
-        (NULL == CU_add_test(
-             pSuite, "Single tree good mutations",
-             test_single_tree_good_mutations)) ||
-        (NULL == CU_add_test(
-             pSuite, "Single tree bad mutations",
-             test_single_tree_bad_mutations)) ||
-        (NULL == CU_add_test(
-             pSuite, "Single tree iterator",
-             test_single_tree_iter)) ||
-        (NULL == CU_add_test(
-             pSuite, "Single tree iterator times",
-             test_single_tree_iter_times)) ||
-        (NULL == CU_add_test(
-             pSuite, "Tree sequence iterator",
-             test_tree_sequence_iter)) ||
-        (NULL == CU_add_test(
-             pSuite, "Tree sequence bad records",
-             test_tree_sequence_bad_records)) ||
-        (NULL == CU_add_test(
-             pSuite, "Single tree iterator failure",
-             test_single_tree_iter_failure)) ||
-        (NULL == CU_add_test(
-             pSuite, "Tree sequence iterator failure",
-             test_tree_sequence_iter_failure)) ||
-        (NULL == CU_add_test(
-             pSuite, "Tree sequence mutation iterator failure",
-             test_tree_sequence_mutations_iter_failure)) ||
-        (NULL == CU_add_test(
-             pSuite, "Test records equivalent after import",
-             test_records_equivalent)) ||
-        (NULL == CU_add_test(
-             pSuite, "Test saving to HDF5",
-             test_save_hdf5)) ||
-        (NULL == CU_add_test(
-             pSuite, "Test saving records to HDF5",
-             test_save_records_hdf5)) ||
-        (NULL == CU_add_test(
-             pSuite, "Simple historical samples",
-             test_single_locus_two_populations)) ||
-        (NULL == CU_add_test(
-             pSuite, "Simple historical samples",
-             test_single_locus_historical_sample)) ||
-        (NULL == CU_add_test(
-             pSuite, "Single locus simulation",
-             test_single_locus_simulation))) {
-        CU_cleanup_registry();
-        return CU_get_error();
+    if (CUE_SUCCESS != CU_register_suites(suites)) {
+        handle_cunit_error();
     }
     /* Run all tests using the CUnit Basic interface */
     CU_basic_set_mode(CU_BRM_VERBOSE);
     CU_basic_run_tests();
     CU_cleanup_registry();
-    return CU_get_error();
+    return EXIT_SUCCESS;
 }
