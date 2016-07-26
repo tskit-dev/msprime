@@ -54,6 +54,10 @@
 /* The root node indicator */
 #define MSP_NULL_NODE UINT32_MAX
 /* Indicates the that the population ID has not been set. */
+/* TODO uint8_t for population in the structs is pointless because 
+ * we don't make any savings due to padding. We should change population
+ * ID to uint32_t like the rest for simplicity.
+ */
 #define MSP_NULL_POPULATION_ID UINT8_MAX
 
 typedef struct segment_t_t {
@@ -69,13 +73,14 @@ typedef struct segment_t_t {
 
 typedef struct {
     uint8_t population_id;
+    uint32_t num_children;
     /* After simulation, all coordinates are converted to physical coordinates 
      * using a genetic map */
+    uint32_t node;
     double left;
     double right;
-    uint32_t node;
     double time;
-    uint32_t children[2];
+    uint32_t *children;
 } coalescence_record_t;
 
 typedef struct {
@@ -155,7 +160,7 @@ typedef struct {
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
     object_heap_t node_mapping_heap;
-    /* coalescence records are stored in an array */
+    /* coalescence records are stored in a flat array */
     coalescence_record_t *coalescence_records;
     size_t num_coalescence_records;
     size_t max_coalescence_records;
@@ -236,6 +241,7 @@ typedef struct {
     uint32_t num_nodes;
     size_t num_records;
     size_t num_mutations;
+    coalescence_record_t returned_record;
 } tree_sequence_t;
 
 typedef struct node_record {
@@ -416,8 +422,8 @@ int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
-int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
-int msp_get_samples(msp_t *self, sample_t *samples);
+int msp_get_coalescence_records(msp_t *self, coalescence_record_t **records);
+int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         double *initial_size, double *growth_rate);
 int msp_get_population(msp_t *self, size_t population_id, 
@@ -455,7 +461,7 @@ uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 
 int tree_sequence_get_record(tree_sequence_t *self, size_t index, 
-        coalescence_record_t *record, int order);
+        coalescence_record_t **record, int order);
 int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations);
 int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u, 
         sample_t *sample);

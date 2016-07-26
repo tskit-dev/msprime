@@ -19,11 +19,14 @@ all: main tests
 avl.o: avl.c
 	${CC} -Wall -g -O2 -c avl.c
 
+%.o : %.c ${HEADERS}
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+
 main: CFLAGS+=${EXTRA_CFLAGS}
 main: main.c ${COMPILED} ${HEADERS}
 	${CC} ${CFLAGS} ${EXTRA_CFLAGS} -o main main.c ${COMPILED} ${LDFLAGS} -lconfig 
 
-tests: tests.c ${COMPILED}
+tests: tests.c ${COMPILED} ${HEADERS}
 	${CC} ${CFLAGS} -Wall -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit 
 
 tags:

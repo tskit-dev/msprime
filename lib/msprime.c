@@ -815,7 +815,15 @@ msp_free(msp_t *self)
     int ret = -1;
     demographic_event_t *de = self->demographic_events_head;
     demographic_event_t *tmp;
+    coalescence_record_t *cr;
+    size_t j;
 
+    for (j = 0; j < self->num_coalescence_records; j++) {
+        cr = &self->coalescence_records[j];
+        if (cr->children != NULL) {
+            free(cr->children);
+        }
+    }
     while (de != NULL) {
         tmp = de->next;
         free(de);
@@ -1145,11 +1153,19 @@ msp_print_state(msp_t *self, FILE *out)
         nm = (node_mapping_t *) node->item;
         fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
-    fprintf(out, "Coalescence records = %ld\n", (long) self->num_coalescence_records);
+    fprintf(out, "Coalescence records = %ld\n",
+            (long) self->num_coalescence_records);
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
-        fprintf(out, "\t%f\t%f\t%d\t%d\t%d\t%f\t%d\n", cr->left, cr->right, cr->children[0],
-                cr->children[1], cr->node, cr->time, cr->population_id);
+        fprintf(out, "\t%f\t%f\t%d\t(", cr->left, cr->right,
+                cr->node);
+        for (k = 0; k < cr->num_children; k++) {
+            fprintf(out, "%d", cr->children[k]);
+            if (k < cr->num_children - 1) {
+                fprintf(out, ", ");
+            }
+        }
+        fprintf(out, ")\t%f\t%d\n", cr->time, cr->population_id);
     }
     fprintf(out, "Memory heaps\n");
     fprintf(out, "avl_node_heap:");
@@ -1678,6 +1694,17 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         }
     }
     if (cr != NULL) {
+        cr->num_children = 2;
+        /* I _really_ don't like doing this, but doing large allocs for this
+         * case is really difficult. Let's leave it like this for now and
+         * see what the actual usage turns out to be and get rid of this
+         * nastiness then.
+         */
+        cr->children = malloc(2 * sizeof(uint32_t));
+        if (cr->children == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
         cr->left = (double) left;
         cr->right = (double) right;
         cr->children[0] = c1;
@@ -1996,6 +2023,7 @@ msp_reset_memory_state(msp_t *self)
     node_mapping_t *nm;
     population_t *pop;
     segment_t *u, *v;
+    coalescence_record_t *cr;
     size_t j;
 
     for (j = 0; j < self->num_populations; j++) {
@@ -2022,6 +2050,13 @@ msp_reset_memory_state(msp_t *self)
         avl_unlink_node(&self->overlap_counts, node);
         msp_free_avl_node(self, node);
         msp_free_node_mapping(self, nm);
+    }
+    for (j = 0; j < self->num_coalescence_records; j++) {
+        cr = &self->coalescence_records[j];
+        if (cr->children != NULL) {
+            free(cr->children);
+        }
+        cr->children = NULL;
     }
     return ret;
 }
@@ -2478,7 +2513,6 @@ msp_get_migration_matrix(msp_t *self, double *migration_matrix)
     return 0;
 }
 
-
 int WARN_UNUSED
 msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
 {
@@ -2489,20 +2523,17 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
     return 0;
 }
 
-
 int WARN_UNUSED
-msp_get_coalescence_records(msp_t *self, coalescence_record_t *coalescence_records)
+msp_get_coalescence_records(msp_t *self, coalescence_record_t **coalescence_records)
 {
-    memcpy(coalescence_records, self->coalescence_records,
-            self->num_coalescence_records * sizeof(coalescence_record_t));
+    *coalescence_records = self->coalescence_records;
     return 0;
 }
 
 int WARN_UNUSED
-msp_get_samples(msp_t *self, sample_t *samples)
+msp_get_samples(msp_t *self, sample_t **samples)
 {
-    assert(self->samples != NULL);
-    memcpy(samples, self->samples, self->sample_size * sizeof(sample_t));
+    *samples = self->samples;
     return 0;
 }
 

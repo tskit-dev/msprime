@@ -195,6 +195,12 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
         PyErr_SetString(PyExc_ValueError, "Binary records only supported");
         goto out;
     }
+    cr->num_children = 2;
+    cr->children = PyMem_Malloc(2 * sizeof(uint32_t));
+    if (cr->children == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
     for (j = 0; j < 2; j++) {
         item = PyTuple_GetItem(children, j);
         if (!PyNumber_Check(item)) {
@@ -1426,13 +1432,7 @@ Simulator_get_coalescence_records(Simulator *self)
         goto out;
     }
     num_coalescence_records = msp_get_num_coalescence_records(self->sim);
-    coalescence_records = PyMem_Malloc(
-            num_coalescence_records * sizeof(coalescence_record_t));
-    if (coalescence_records == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = msp_get_coalescence_records(self->sim, coalescence_records);
+    err = msp_get_coalescence_records(self->sim, &coalescence_records);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1452,9 +1452,6 @@ Simulator_get_coalescence_records(Simulator *self)
     }
     ret = l;
 out:
-    if (coalescence_records != NULL) {
-        PyMem_Free(coalescence_records);
-    }
     return ret;
 }
 
@@ -1515,12 +1512,7 @@ Simulator_get_samples(Simulator *self)
         goto out;
     }
     sample_size = msp_get_sample_size(self->sim);
-    samples = PyMem_Malloc(sample_size * sizeof(sample_t));
-    if (samples == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    sim_ret = msp_get_samples(self->sim, samples);
+    sim_ret = msp_get_samples(self->sim, &samples);
     if (sim_ret != 0) {
         handle_library_error(sim_ret);
         goto out;
@@ -1542,9 +1534,6 @@ Simulator_get_samples(Simulator *self)
     l = NULL;
 out:
     Py_XDECREF(l);
-    if (samples != NULL) {
-        PyMem_Free(samples);
-    }
     return ret;
 }
 
@@ -2259,6 +2248,7 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
+    memset(records, 0, num_records * sizeof(coalescence_record_t));
     for (j = 0; j < num_records; j++) {
         item = PyList_GetItem(py_records, j);
         if (parse_coalescence_record(item, &records[j]) != 0) {
@@ -2274,10 +2264,14 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
     ret = Py_BuildValue("");
 out:
     if (records != NULL) {
+        for (j = 0; j < num_records; j++) {
+            if (records[j].children != NULL) {
+                free(records[j].children);
+            }
+        }
         free(records);
     }
     return ret;
-
 }
 
 static PyObject *
@@ -2447,7 +2441,7 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
     PyObject *ret = NULL;
     int order = MSP_ORDER_TIME;
     Py_ssize_t record_index, num_records;
-    coalescence_record_t cr;
+    coalescence_record_t *cr;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
@@ -2467,7 +2461,7 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    ret = make_coalescence_record(&cr);
+    ret = make_coalescence_record(cr);
 out:
     return ret;
 }

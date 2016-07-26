@@ -180,7 +180,7 @@ mutgen_generate_record_mutations(mutgen_t *self, coalescence_record_t *cr)
     uint32_t child;
 
     self->times[cr->node] = cr->time;
-    for (k = 0; k < 2; k++) {
+    for (k = 0; k < cr->num_children; k++) {
         child = cr->children[k];
         branch_length = cr->time - self->times[child];
         mu = branch_length * distance * self->mutation_rate;
@@ -204,7 +204,7 @@ mutgen_generate(mutgen_t *self)
 {
     int ret = -1;
     tree_sequence_t *ts = self->tree_sequence;
-    coalescence_record_t cr;
+    coalescence_record_t *cr = NULL;
     size_t j;
 
     for (j = 0; j < tree_sequence_get_num_coalescence_records(ts); j++) {
@@ -212,7 +212,7 @@ mutgen_generate(mutgen_t *self)
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_generate_record_mutations(self, &cr);
+        ret = mutgen_generate_record_mutations(self, cr);
         if (ret != 0) {
             goto out;
         }

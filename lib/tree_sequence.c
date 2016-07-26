@@ -140,6 +140,12 @@ tree_sequence_alloc(tree_sequence_t *self)
             goto out;
         }
     }
+    self->returned_record.children = malloc(2 * sizeof(uint32_t));
+    if (self->returned_record.children == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    self->returned_record.num_children = 2;
     ret = 0;
 out:
     return ret;
@@ -195,6 +201,9 @@ tree_sequence_free(tree_sequence_t *self)
     }
     if (self->mutations.environment != NULL) {
         free(self->mutations.environment);
+    }
+    if (self->returned_record.children != NULL) {
+        free(self->returned_record.children);
     }
     return 0;
 }
@@ -402,12 +411,7 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     if (ret != 0) {
         goto out;
     }
-    records = malloc(self->num_records * sizeof(coalescence_record_t));
-    samples = malloc(self->sample_size * sizeof(sample_t));
-    if (records == NULL || samples == NULL) {
-        goto out;
-    }
-    ret = msp_get_coalescence_records(sim, records);
+    ret = msp_get_coalescence_records(sim, &records);
     if (ret != 0) {
         goto out;
     }
@@ -418,12 +422,13 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
         assert(self->trees.right[j] <= sim->num_loci);
         self->trees.node[j] = records[j].node;
         self->trees.population[j] = records[j].population_id;
+        assert(records[j].num_children == 2);
         self->trees.children[2 * j] = records[j].children[0];
         self->trees.children[2 * j + 1] = records[j].children[1];
         /* Rescale time into generations. */
         self->trees.time[j] = records[j].time * 4 * Ne;
     }
-    ret = msp_get_samples(sim, samples);
+    ret = msp_get_samples(sim, &samples);
     if (ret != 0) {
         goto out;
     }
@@ -457,12 +462,6 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     strcpy(self->trees.parameters, parameters);
     ret = msp_encode_environment(&self->trees.environment);
 out:
-    if (records != NULL) {
-        free(records);
-    }
-    if (samples != NULL) {
-        free(samples);
-    }
     return ret;
 }
 
@@ -1365,7 +1364,7 @@ tree_sequence_get_mutation_parameters(tree_sequence_t *self)
 
 int
 tree_sequence_get_record(tree_sequence_t *self, size_t index,
-        coalescence_record_t *record, int order)
+        coalescence_record_t **record, int order)
 {
     int ret = 0;
     size_t j;
@@ -1388,13 +1387,15 @@ tree_sequence_get_record(tree_sequence_t *self, size_t index,
             ret = MSP_ERR_BAD_ORDERING;
             goto out;
     }
-    record->left = self->trees.left[j];
-    record->right = self->trees.right[j];
-    record->node = self->trees.node[j];
-    record->children[0] = self->trees.children[2 * j];
-    record->children[1] = self->trees.children[2 * j + 1];
-    record->time = self->trees.time[j];
-    record->population_id = self->trees.population[j];
+    assert(self->returned_record.num_children == 2);
+    self->returned_record.left = self->trees.left[j];
+    self->returned_record.right = self->trees.right[j];
+    self->returned_record.node = self->trees.node[j];
+    self->returned_record.children[0] = self->trees.children[2 * j];
+    self->returned_record.children[1] = self->trees.children[2 * j + 1];
+    self->returned_record.time = self->trees.time[j];
+    self->returned_record.population_id = self->trees.population[j];
+    *record = &self->returned_record;
 out:
     return ret;
 }

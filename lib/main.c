@@ -673,7 +673,7 @@ print_tree_sequence(tree_sequence_t *ts)
     double length;
     sparse_tree_t tree;
     node_record_t *records_in, *records_out, *record;
-    coalescence_record_t cr;
+    coalescence_record_t *cr;
     tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
     sparse_tree_iterator_t *sparse_iter = calloc(1, sizeof(sparse_tree_iterator_t));
     uint32_t tracked_leaves[] = {1, 2};
@@ -687,8 +687,8 @@ print_tree_sequence(tree_sequence_t *ts)
         if (tree_sequence_get_record(ts, j, &cr, MSP_ORDER_TIME) != 0) {
             fatal_error("tree sequence out of bounds\n");
         }
-        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
-                cr.children[1], cr.node, cr.time);
+        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
+                cr->children[1], cr->node, cr->time);
     }
     ret = tree_diff_iterator_alloc(iter, ts);
     if (ret != 0) {
@@ -858,12 +858,12 @@ run_simulate(char *conf_file)
 
     print_variants(tree_seq);
 
-    ret = print_vcf(tree_seq, 1);
-    if (ret != 0) {
-        goto out;
-    }
-
     if (0) {
+        ret = print_vcf(tree_seq, 1);
+        if (ret != 0) {
+            goto out;
+        }
+
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);
             if (ret != 0) {
