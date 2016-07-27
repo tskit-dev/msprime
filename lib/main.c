@@ -695,10 +695,10 @@ print_tree_sequence(tree_sequence_t *ts)
         goto out;
     }
     printf("Tree diffs:\n");
-    tree_diff_iterator_print_state(iter);
+    tree_diff_iterator_print_state(iter, stdout);
     while ((ret = tree_diff_iterator_next(
                     iter, &length, &records_out, &records_in)) == 1) {
-        tree_diff_iterator_print_state(iter);
+        tree_diff_iterator_print_state(iter, stdout);
         printf("New tree: %f\n", length);
         printf("Nodes In:\n");
         record = records_in;
@@ -836,8 +836,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-
-    print_tree_sequence(tree_seq);
+    tree_sequence_print_state(tree_seq, stdout);
 
     ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
     if (ret != 0) {
@@ -848,17 +847,17 @@ run_simulate(char *conf_file)
         goto out;
     }
     mutgen_print_state(mutgen);
+
+
     ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
             mutgen->mutations, mutgen->parameters, mutgen->environment);
     if (ret != 0) {
         goto out;
     }
-    tree_sequence_print_state(tree_seq, stdout);
     print_stats(tree_seq);
 
     print_variants(tree_seq);
 
-    if (0) {
         ret = print_vcf(tree_seq, 1);
         if (ret != 0) {
             goto out;
@@ -876,6 +875,7 @@ run_simulate(char *conf_file)
                 goto out;
             }
         }
+    if (0) {
         tree_sequence_print_state(tree_seq, stdout);
 
         print_newick_trees(tree_seq);

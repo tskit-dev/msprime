@@ -226,11 +226,13 @@ typedef struct {
         double *time;
         uint8_t *population;
         uint32_t *node;
-        uint32_t *children;
+        uint32_t *num_children;
+        uint32_t **children;
         uint32_t *insertion_order;
         uint32_t *removal_order;
         char *parameters;
         char *environment;
+        uint32_t *children_mem;
     } trees;
     struct {
         uint32_t *node;
@@ -239,6 +241,7 @@ typedef struct {
         char *environment;
     } mutations;
     uint32_t num_nodes;
+    size_t num_child_nodes;
     size_t num_records;
     size_t num_mutations;
     coalescence_record_t returned_record;
@@ -483,7 +486,7 @@ int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
 int tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
         node_record_t **nodes_out, node_record_t **nodes_in);
-void tree_diff_iterator_print_state(tree_diff_iterator_t *self);
+void tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out);
 
 int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, 
         uint32_t num_nodes, size_t max_mutations, uint32_t *tracked_leaves, 
