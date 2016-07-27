@@ -33,20 +33,20 @@ mutgen_check_state(mutgen_t *self)
 }
 
 void
-mutgen_print_state(mutgen_t *self)
+mutgen_print_state(mutgen_t *self, FILE *out)
 {
     size_t j;
 
-    printf("Mutgen state\n");
-    printf("\tparameters = %s\n", self->parameters);
-    printf("\tenvironment = %s\n", self->environment);
-    printf("\tmutation_rate = %f\n", (double) self->mutation_rate);
-    printf("\tsequence_length = %f\n", (double) self->sequence_length);
-    printf("\tmutation_block_size = %d\n", (int) self->mutation_block_size);
-    printf("\tmax_num_mutations  = %d\n", (int) self->max_num_mutations);
-    printf("\tMUTATIONS\t%d\n", (int) self->num_mutations);
+    fprintf(out, "Mutgen state\n");
+    fprintf(out, "\tparameters = %s\n", self->parameters);
+    fprintf(out, "\tenvironment = %s\n", self->environment);
+    fprintf(out, "\tmutation_rate = %f\n", (double) self->mutation_rate);
+    fprintf(out, "\tsequence_length = %f\n", (double) self->sequence_length);
+    fprintf(out, "\tmutation_block_size = %d\n", (int) self->mutation_block_size);
+    fprintf(out, "\tmax_num_mutations  = %d\n", (int) self->max_num_mutations);
+    fprintf(out, "\tMUTATIONS\t%d\n", (int) self->num_mutations);
     for (j = 0; j < self->num_mutations; j++) {
-        printf("\t\t%d\t%f\n", self->mutations[j].node,
+        fprintf(out, "\t\t%d\t%f\n", self->mutations[j].node,
             self->mutations[j].position);
     }
     mutgen_check_state(self);
@@ -80,7 +80,7 @@ out:
     return ret;
 }
 
-int
+int WARN_UNUSED
 mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         double mutation_rate, gsl_rng *rng)
 {
@@ -97,9 +97,14 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
     self->rng = rng;
     self->num_mutations = 0;
     self->mutation_block_size = 1024 * 1024;
-    self->max_num_mutations = self->mutation_block_size;
-    self->mutations = malloc(self->max_num_mutations * sizeof(mutation_t));
+    /* Avoid potential portability issues with realloc(NULL, newsize)
+     * by mallocing enough space for 1 mutation initiall. This gives the user
+     * control over the overall malloc behavior.
+     */
+    self->max_num_mutations = 1;
+    self->mutations = malloc(sizeof(mutation_t));
     if (self->mutations == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     ret = mutgen_encode_parameters(self);
@@ -143,6 +148,19 @@ mutgen_free(mutgen_t *self)
         free(self->times);
     }
     return 0;
+}
+
+int WARN_UNUSED
+mutgen_set_mutation_block_size(mutgen_t *self, size_t mutation_block_size)
+{
+    int ret = 0;
+    if (mutation_block_size == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->mutation_block_size = mutation_block_size;
+out:
+    return ret;
 }
 
 static int WARN_UNUSED
@@ -221,3 +239,17 @@ mutgen_generate(mutgen_t *self)
 out:
     return ret;
 }
+
+size_t
+mutgen_get_num_mutations(mutgen_t *self)
+{
+    return self->num_mutations;
+}
+
+int  WARN_UNUSED
+mutgen_get_mutations(mutgen_t *self, mutation_t **mutations)
+{
+    *mutations = self->mutations;
+    return 0;
+}
+

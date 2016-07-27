@@ -237,6 +237,12 @@ tree_sequence_make_indexes(tree_sequence_t *self)
     /* First, check for iffy looking input */
     left = DBL_MAX;
     for (j = 0; j < self->num_records; j++) {
+        if (j > 0) {
+            /* Input data must be time sorted. */
+            if (self->trees.time[j] < self->trees.time[j - 1]) {
+                goto out;
+            }
+        }
         if (self->trees.num_children[j] < 2) {
             goto out;
         }
@@ -1636,10 +1642,14 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
     node_record_t *in_head = NULL;
     node_record_t *in_tail = NULL;
     node_record_t *w = NULL;
+    int first_tree = self->insertion_index == 0;
+    size_t num_in = 0;
+    size_t num_out = 0;
 
     assert(s != NULL);
     if (self->insertion_index < self->num_records) {
         /* First we remove the stale records */
+        num_out = 0;
         while (s->trees.right[s->trees.removal_order[self->removal_index]]
                 == self->tree_left) {
             k = s->trees.removal_order[self->removal_index];
@@ -1659,8 +1669,10 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
                 out_tail = w;
             }
             self->removal_index++;
+            num_out++;
         }
         /* Now insert the new records */
+        num_in = 0;
         while (self->insertion_index < self->num_records &&
                 s->trees.left[s->trees.insertion_order[self->insertion_index]]
                 == self->tree_left) {
@@ -1681,15 +1693,28 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
                 in_tail = w;
             }
             self->insertion_index++;
+            num_in++;
         }
         /* Update the left coordinate */
         self->tree_left = s->trees.right[s->trees.removal_order[
             self->removal_index]];
         ret = 1;
     }
+    if (first_tree) {
+        if (num_in != self->sample_size - 1 || num_out != 0) {
+            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            goto out;
+        }
+    } else {
+        if (num_in != num_out) {
+            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            goto out;
+        }
+    }
     *nodes_out = out_head;
     *nodes_in = in_head;
     *length = self->tree_left - last_left;
+out:
     return ret;
 }
 

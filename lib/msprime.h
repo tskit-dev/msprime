@@ -530,7 +530,7 @@ int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);
 size_t hapgen_get_num_segregating_sites(hapgen_t *self);
 int hapgen_free(hapgen_t *self);
-void hapgen_print_state(hapgen_t *self);
+void hapgen_print_state(hapgen_t *self, FILE *out);
 
 int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence);
 int vargen_next(vargen_t *self, double *position, char **variant);
@@ -559,7 +559,10 @@ int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         double mutation_rate, gsl_rng *rng);
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self);
-void mutgen_print_state(mutgen_t *self);
+int mutgen_set_mutation_block_size(mutgen_t *self, size_t mutation_block_size);
+size_t mutgen_get_num_mutations(mutgen_t *self);
+int mutgen_get_mutations(mutgen_t *self, mutation_t **mutations);
+void mutgen_print_state(mutgen_t *self, FILE *out);
 
 int msp_encode_environment(char **destination);
 const char * msp_strerror(int err);
