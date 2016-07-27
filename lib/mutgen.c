@@ -85,6 +85,8 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         double mutation_rate, gsl_rng *rng)
 {
     int ret = MSP_ERR_NO_MEMORY;
+    uint32_t j;
+    sample_t sample;
 
     assert(tree_sequence != NULL);
     assert(rng != NULL);
@@ -112,6 +114,14 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         tree_sequence_get_num_nodes(tree_sequence) + 1, sizeof(double));
     if (self->times == NULL) {
         goto out;
+    }
+    /* Set the initial times for samples */
+    for (j = 0; j < tree_sequence_get_sample_size(tree_sequence); j++) {
+        ret = tree_sequence_get_sample(tree_sequence, j, &sample);
+        if (ret != 0) {
+            goto out;
+        }
+        self->times[j] = sample.time;
     }
 out:
     return ret;
