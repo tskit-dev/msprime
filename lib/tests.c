@@ -454,12 +454,38 @@ test_simplest_records(void)
 }
 
 static void
+test_simplest_nonbinary_records(void)
+{
+    int ret;
+    uint32_t children[] = {0, 1, 2, 3};
+    coalescence_record_t record;
+    tree_sequence_t ts;
+
+    record.left = 0.0;
+    record.right = 1.0;
+    record.node = 4;
+    record.num_children = 4;
+    record.children = children;
+    record.population_id = 0;
+    record.time = 1.0;
+
+    ret = tree_sequence_load_records(&ts, 1, &record);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
+    tree_sequence_free(&ts);
+}
+
+static void
 test_simplest_bad_records(void)
 {
     int ret = 0;
     uint32_t children[] = {0, 1};
     coalescence_record_t records[1];
     size_t num_records = 1;
+    uint32_t j;
     tree_sequence_t ts;
 
     records[0].left = 0.0;
@@ -524,6 +550,15 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     records[0].children[0] = 0;
 
+    /* 0 or 1 children */
+    for (j = 0; j < 2; j++) {
+        records[0].num_children = j;
+        ret = tree_sequence_load_records(&ts, num_records, records);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+        tree_sequence_free(&ts);
+    }
+    records[0].num_children = 2;
+
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
@@ -549,6 +584,30 @@ test_single_tree_good_records(void)
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 7);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
+    tree_sequence_free(&ts);
+    free_local_records(num_records, records);
+}
+
+static void
+test_single_nonbinary_tree_good_records(void)
+{
+    int ret = 0;
+    const char * text_records[] = {
+        "0 1 7 0,1,2,3 1.0 0",
+        "0 1 8 4,5     1.0 0",
+        "0 1 9 6,7,8   1.0 0",
+    };
+    coalescence_record_t *records = NULL;
+    size_t num_records = 3;
+    tree_sequence_t ts;
+
+    parse_text_records(num_records, text_records, &records);
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 7);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 10);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
     tree_sequence_free(&ts);
     free_local_records(num_records, records);
@@ -764,6 +823,109 @@ test_single_tree_iter(void)
     tree_sequence_free(&ts);
     free_local_records(num_records, records);
 }
+
+static void
+test_single_nonbinary_tree_iter(void)
+{
+    int ret = 0;
+    const char * text_records[] = {
+        "0 1 7 0,1,2,3 1.0 0",
+        "0 1 8 4,5     1.0 0",
+        "0 1 9 6,7,8   1.0 0",
+    };
+    coalescence_record_t *records = NULL;
+    uint32_t parents[] = {7, 7, 7, 7, 8, 8, 9, 9, 9, MSP_NULL_NODE};
+    size_t num_records = 3;
+    uint32_t num_nodes = 10;
+    uint32_t sample_size = 7;
+    uint32_t u, v, num_leaves, num_children, w, *children;
+    tree_sequence_t ts;
+    sparse_tree_t tree;
+    sparse_tree_iterator_t iter;
+
+    parse_text_records(num_records, text_records, &records);
+
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tree_sequence_alloc_sparse_tree(&ts, &tree, NULL, 0, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_iterator_alloc(&iter, &ts, &tree);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = sparse_tree_iterator_next(&iter);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), num_nodes);
+    sparse_tree_iterator_print_state(&iter, _devnull);
+
+    for (u = 0; u < num_nodes; u++) {
+        ret = sparse_tree_get_parent(&tree, u, &v);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(v, parents[u]);
+    }
+    for (u = 0; u < sample_size; u++) {
+        ret = sparse_tree_get_num_leaves(&tree, u, &num_leaves);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(num_leaves, 1);
+        ret = sparse_tree_get_children(&tree, u, &num_children, &children);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(children, NULL);
+        CU_ASSERT_EQUAL(num_children, 0);
+    }
+
+    u = 7;
+    ret = sparse_tree_get_num_leaves(&tree, u, &num_leaves);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_leaves, 4);
+    ret = sparse_tree_get_children(&tree, u, &num_children, &children);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_children, 4);
+    CU_ASSERT_EQUAL(children[0], 0);
+    CU_ASSERT_EQUAL(children[1], 1);
+    CU_ASSERT_EQUAL(children[2], 2);
+    CU_ASSERT_EQUAL(children[3], 3);
+
+    u = 8;
+    ret = sparse_tree_get_num_leaves(&tree, u, &num_leaves);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_leaves, 2);
+    ret = sparse_tree_get_children(&tree, u, &num_children, &children);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_children, 2);
+    CU_ASSERT_EQUAL(children[0], 4);
+    CU_ASSERT_EQUAL(children[1], 5);
+
+    u = 9;
+    ret = sparse_tree_get_num_leaves(&tree, u, &num_leaves);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_leaves, 7);
+    ret = sparse_tree_get_children(&tree, u, &num_children, &children);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_children, 3);
+    CU_ASSERT_EQUAL(children[0], 6);
+    CU_ASSERT_EQUAL(children[1], 7);
+    CU_ASSERT_EQUAL(children[2], 8);
+
+    ret = sparse_tree_get_root(&tree, &w);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(w, 9);
+
+    ret = sparse_tree_get_mrca(&tree, 0, 1, &w);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(w, 7);
+    ret = sparse_tree_get_mrca(&tree, 0, 4, &w);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(w, 9);
+
+    ret = sparse_tree_iterator_next(&iter);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    sparse_tree_iterator_free(&iter);
+    sparse_tree_free(&tree);
+    tree_sequence_free(&ts);
+    free_local_records(num_records, records);
+}
+
+
 
 static void
 test_single_tree_iter_times(void)
@@ -1799,12 +1961,16 @@ main(void)
         {"Fenwick tree", test_fenwick},
         {"VCF", test_vcf},
         {"Simplest records", test_simplest_records},
+        {"Simplest nonbinary records", test_simplest_nonbinary_records},
         {"Simplest bad records", test_simplest_bad_records},
         {"Single tree good records", test_single_tree_good_records},
+        {"Single nonbinary tree good records",
+            test_single_nonbinary_tree_good_records},
         {"Single tree bad records", test_single_tree_bad_records},
         {"Single tree good mutations", test_single_tree_good_mutations},
         {"Single tree bad mutations", test_single_tree_bad_mutations},
         {"Single tree iterator", test_single_tree_iter},
+        {"Single nonbinary tree iterator", test_single_nonbinary_tree_iter},
         {"Single tree iterator times", test_single_tree_iter_times},
         {"Single tree hapgen", test_single_tree_hapgen},
         {"Single tree mutgen", test_single_tree_mutgen},

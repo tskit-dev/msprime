@@ -3050,8 +3050,9 @@ static PyObject *
 SparseTree_get_children(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    uint32_t children[2];
+    uint32_t *children, num_children;
     unsigned int node;
+    int err;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
@@ -3062,9 +3063,18 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
     if (SparseTree_check_bounds(self, node)) {
         goto out;
     }
-    children[0] = self->sparse_tree->children[2 * node];
-    children[1] = self->sparse_tree->children[2 * node + 1];
-    ret = Py_BuildValue("ii", (int) children[0], (int) children[1]);
+    err = sparse_tree_get_children(self->sparse_tree,
+            (uint32_t) node, &num_children, &children);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (num_children == 0) {
+        ret = Py_BuildValue("()");
+    } else {
+        assert(num_children == 2);
+        ret = Py_BuildValue("ii", (int) children[0], (int) children[1]);
+    }
 out:
     return ret;
 }

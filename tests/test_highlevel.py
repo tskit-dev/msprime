@@ -95,8 +95,10 @@ def sparse_tree_to_newick(st, precision, Ne):
 
 
 def _build_newick(node, root, tree, branch_lengths):
-    c1, c2 = tree.get_children(node)
-    if c1 != msprime.NULL_NODE:
+    if tree.is_leaf(node):
+        s = "{0}:{1}".format(node + 1, branch_lengths[node])
+    else:
+        c1, c2 = tree.get_children(node)
         s1 = _build_newick(c1, root, tree, branch_lengths)
         s2 = _build_newick(c2, root, tree, branch_lengths)
         if node == root:
@@ -105,9 +107,6 @@ def _build_newick(node, root, tree, branch_lengths):
         else:
             s = "({0},{1}):{2}".format(
                 s1, s2, branch_lengths[node])
-    else:
-        # Leaf node
-        s = "{0}:{1}".format(node + 1, branch_lengths[node])
     return s
 
 
@@ -258,8 +257,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertNotEqual(u, msprime.NULL_NODE)
             if st.is_leaf(u):
                 leaves.append(u)
-                self.assertEqual(st.get_children(u)[0], msprime.NULL_NODE)
-                self.assertEqual(st.get_children(u)[1], msprime.NULL_NODE)
+                self.assertEqual(len(st.get_children(u)), 0)
             else:
                 for c in reversed(st.get_children(u)):
                     stack.append(c)

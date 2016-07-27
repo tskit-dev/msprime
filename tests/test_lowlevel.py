@@ -2535,7 +2535,7 @@ class TestSparseTree(LowLevelTestCase):
             for j in range(n):
                 self.assertEqual(st.get_parent(j), NULL_NODE)
                 self.assertEqual(st.get_population(j), NULL_POPULATION)
-                self.assertEqual(st.get_children(j), (NULL_NODE, NULL_NODE))
+                self.assertEqual(st.get_children(j), tuple())
                 self.assertEqual(st.get_time(j), 0)
 
     def test_bad_tracked_leaves(self):
