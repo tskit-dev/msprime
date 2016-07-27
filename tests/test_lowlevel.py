@@ -2524,7 +2524,7 @@ class TestSparseTree(LowLevelTestCase):
         for bad_type in ["", {}, True, 1, None]:
             self.assertRaises(TypeError, _msprime.SparseTree, ts, bad_type)
         for n in range(1, 10):
-            ts = self.get_tree_sequence(num_loci=n)
+            ts = self.get_tree_sequence(sample_size=10, num_loci=n)
             st = _msprime.SparseTree(ts)
             self.assertEqual(st.get_num_nodes(), ts.get_num_nodes())
             self.assertEqual(st.get_sample_size(), ts.get_sample_size())
@@ -2537,6 +2537,27 @@ class TestSparseTree(LowLevelTestCase):
                 self.assertEqual(st.get_population(j), NULL_POPULATION)
                 self.assertEqual(st.get_children(j), tuple())
                 self.assertEqual(st.get_time(j), 0)
+
+    def test_memory_error(self):
+        # This provokes a bug where we weren't reference counting
+        # the tree sequence properly, and the underlying memory for a
+        # sparse tree was getting corrupted.
+        for n in range(1, 10):
+            ts = self.get_tree_sequence(sample_size=100, num_loci=n)
+            num_nodes = ts.get_num_nodes()
+            st = _msprime.SparseTree(ts)
+            # deleting the tree sequence should still give a well formed
+            # sparse tree.
+            st_iter = _msprime.SparseTreeIterator(ts, st)
+            next(st_iter)
+            del ts
+            del st_iter
+            # Do a quick traversal just to exercise the tree
+            stack = [st.get_root()]
+            while len(stack) > 0:
+                u = stack.pop()
+                self.assertLess(u, num_nodes)
+                stack.extend(st.get_children(u))
 
     def test_bad_tracked_leaves(self):
         ts = self.get_tree_sequence()

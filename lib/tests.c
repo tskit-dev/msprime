@@ -171,6 +171,7 @@ get_example_tree_sequence(uint32_t sample_size, uint32_t num_loci,
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
     CU_ASSERT_FATAL(recomb_map != NULL);
+    gsl_rng_set(rng, 1);
 
     /* initialise the samples to zero for the default configuration */
     memset(samples, 0, sample_size * sizeof(sample_t));
@@ -1192,6 +1193,53 @@ verify_trees(size_t num_records, coalescence_record_t *records,
 }
 
 static void
+verify_trees_consistent(tree_sequence_t *ts)
+{
+    int ret, found;
+    size_t sample_size;
+    uint32_t u, v, j, root, k, num_children, *children;
+    sparse_tree_t tree;
+    sparse_tree_iterator_t iter;
+
+    sample_size = tree_sequence_get_sample_size(ts);
+    ret = tree_sequence_alloc_sparse_tree(ts, &tree, NULL, 0, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_iterator_alloc(&iter, ts, &tree);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    while ((ret = sparse_tree_iterator_next(&iter)) == 1) {
+        ret = sparse_tree_get_root(&tree, &root);
+        CU_ASSERT_EQUAL(ret, 0);
+        for (j = 0; j < sample_size; j++) {
+            v = j;
+            while (v != MSP_NULL_NODE) {
+                u = v;
+                ret = sparse_tree_get_parent(&tree, u, &v);
+                CU_ASSERT_EQUAL(ret, 0);
+                if (v != MSP_NULL_NODE) {
+                    ret = sparse_tree_get_children(&tree, v,
+                            &num_children, &children);
+                    CU_ASSERT_EQUAL(ret, 0);
+                    CU_ASSERT(num_children >= 2);
+                    found = 0;
+                    for (k = 0; k < num_children; k++) {
+                        if (children[k] == u) {
+                            found = 1;
+                        }
+                    }
+                    CU_ASSERT(found);
+                }
+            }
+            CU_ASSERT_EQUAL(u, root);
+        }
+    }
+    CU_ASSERT_EQUAL(ret, 0);
+
+    sparse_tree_iterator_free(&iter);
+    sparse_tree_free(&tree);
+}
+
+static void
 verify_tree_iter_fails(size_t num_records, coalescence_record_t *records,
         size_t num_mutations, mutation_t *mutations,
         uint32_t tree_index, int error_code)
@@ -1684,6 +1732,30 @@ test_diff_iter_from_examples(void)
 }
 
 static void
+test_tree_iter_from_examples(void)
+{
+    tree_sequence_t *ts = get_example_tree_sequence(10, 1, 0.0, 1.0);
+    verify_trees_consistent(ts);
+    tree_sequence_free(ts);
+    free(ts);
+
+    ts = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    verify_trees_consistent(ts);
+    tree_sequence_free(ts);
+    free(ts);
+
+    ts = get_example_tree_sequence(2, 1, 1.0, 1.0);
+    verify_trees_consistent(ts);
+    tree_sequence_free(ts);
+    free(ts);
+
+    ts = get_example_tree_sequence(3, 3, 10.0, 0.0);
+    verify_trees_consistent(ts);
+    tree_sequence_free(ts);
+    free(ts);
+}
+
+static void
 verify_hapgen(tree_sequence_t *ts)
 {
     int ret;
@@ -1983,6 +2055,7 @@ main(void)
             test_tree_sequence_mutations_iter_failure},
         {"Tree sequence diff iter", test_tree_sequence_diff_iter},
         {"Test diff iter from examples", test_diff_iter_from_examples},
+        {"Test tree iter from examples", test_tree_iter_from_examples},
         {"Test hapgen from examples", test_hapgen_from_examples},
         {"Test records equivalent after import", test_records_equivalent},
         {"Test saving to HDF5", test_save_hdf5},

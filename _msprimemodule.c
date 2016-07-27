@@ -63,6 +63,7 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    TreeSequence *tree_sequence;
     sparse_tree_t *sparse_tree;
 } SparseTree;
 
@@ -2815,6 +2816,7 @@ SparseTree_dealloc(SparseTree* self)
         PyMem_Free(self->sparse_tree);
         self->sparse_tree = NULL;
     }
+    Py_XDECREF(self->tree_sequence);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -2837,6 +2839,8 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
             &py_tracked_leaves)) {
         goto out;
     }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
     if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
         goto out;
     }
