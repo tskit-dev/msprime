@@ -145,18 +145,18 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
     const char *err = "Coalescence records must be tuples of the form "
         "(left, right, node, (children), time, population_id)";
 
-    if (PySequence_Check(tuple) != 1) {
+    if (!PyTuple_Check(tuple)) {
         PyErr_SetString(
-            PyExc_TypeError, "Coalescence records must be a sequence.");
+            PyExc_TypeError, "Coalescence records must be a tuple.");
         goto out;
     }
-    size = PySequence_Length(tuple);
+    size = PyTuple_Size(tuple);
     if (size != 6) {
         PyErr_SetString(PyExc_ValueError, err);
         goto out;
     }
     /* left */
-    item = PySequence_GetItem(tuple, 0);
+    item = PyTuple_GetItem(tuple, 0);
     if (!PyNumber_Check(item)) {
         PyErr_Format(PyExc_TypeError, "'left' is not number");
         goto out;
@@ -166,7 +166,7 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
         goto out;
     }
     /* right */
-    item = PySequence_GetItem(tuple, 1);
+    item = PyTuple_GetItem(tuple, 1);
     if (!PyNumber_Check(item)) {
         PyErr_Format(PyExc_TypeError, "'right' is not number");
         goto out;
@@ -176,7 +176,7 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
         goto out;
     }
     /* node */
-    item = PySequence_GetItem(tuple, 2);
+    item = PyTuple_GetItem(tuple, 2);
     if (!PyNumber_Check(item)) {
         PyErr_Format(PyExc_TypeError, "'node' is not number");
         goto out;
@@ -186,17 +186,17 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
         goto out;
     }
     /* children */
-    children = PySequence_GetItem(tuple, 3);
-    if (PySequence_Check(children) != 1) {
-        PyErr_SetString(PyExc_TypeError, "children must be a sequence.");
+    children = PyTuple_GetItem(tuple, 3);
+    if (!PyTuple_Check(children)) {
+        PyErr_SetString(PyExc_TypeError, "children must be a tuple.");
         goto out;
     }
-    if (PySequence_Length(children) != 2) {
+    if (PyTuple_Size(children) != 2) {
         PyErr_SetString(PyExc_ValueError, "Binary records only supported");
         goto out;
     }
     for (j = 0; j < 2; j++) {
-        item = PySequence_GetItem(children, j);
+        item = PyTuple_GetItem(children, j);
         if (!PyNumber_Check(item)) {
             PyErr_Format(PyExc_TypeError, "children[%d]' is not number",
                 (int)j);
@@ -208,7 +208,7 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
         }
     }
     /* time */
-    item = PySequence_GetItem(tuple, 4);
+    item = PyTuple_GetItem(tuple, 4);
     if (!PyNumber_Check(item)) {
         PyErr_Format(PyExc_TypeError, "'time' is not number");
         goto out;
@@ -218,7 +218,7 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
         goto out;
     }
     /* population */
-    item = PySequence_GetItem(tuple, 5);
+    item = PyTuple_GetItem(tuple, 5);
     if (!PyNumber_Check(item)) {
         PyErr_Format(PyExc_TypeError, "'population_id' is not number");
         goto out;
@@ -765,16 +765,16 @@ Simulator_parse_samples(Simulator *self, PyObject *py_samples,
     }
     for (j = 0; j < n; j++) {
         sample = PyList_GetItem(py_samples, j);
-        if (!PySequence_Check(sample)) {
-            PyErr_SetString(PyExc_TypeError, "not a sequence");
+        if (!PyTuple_Check(sample)) {
+            PyErr_SetString(PyExc_TypeError, "not a tuple");
             goto out;
         }
-        if (PySequence_Length(sample) != 2) {
+        if (PyTuple_Size(sample) != 2) {
             PyErr_SetString(PyExc_ValueError,
                     "sample must be (population,time) tuple");
             goto out;
         }
-        value = PySequence_GetItem(sample, 0);
+        value = PyTuple_GetItem(sample, 0);
         if (!PyNumber_Check(value)) {
             PyErr_Format(PyExc_TypeError, "'population' is not number");
             goto out;
@@ -785,7 +785,7 @@ Simulator_parse_samples(Simulator *self, PyObject *py_samples,
             goto out;
         }
         ret_samples[j].population_id = (uint8_t) tmp_long;
-        value = PySequence_GetItem(sample, 1);
+        value = PyTuple_GetItem(sample, 1);
         if (!PyNumber_Check(value)) {
             PyErr_Format(PyExc_TypeError, "'time' is not number");
             goto out;
@@ -799,7 +799,11 @@ Simulator_parse_samples(Simulator *self, PyObject *py_samples,
     *samples = ret_samples;
     *sample_size = n;
     ret = 0;
+    ret_samples = NULL;
 out:
+    if (ret_samples != NULL) {
+        PyMem_Free(ret_samples);
+    }
     return ret;
 }
 

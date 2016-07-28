@@ -1035,11 +1035,8 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(ValueError, f, [(0, 0), (0, 0, 0)])
         self.assertRaises(ValueError, f, [(0, 0), (-1, 0)])
         self.assertRaises(ValueError, f, [(0, 0), (0, -1)])
-        # Any sequence of values should be fine
-        sim = f([(0, 0), (0, 0)])
-        self.assertEqual(sim.get_sample_size(), 2)
-        sim = f([[0, 0], [0, 0]])
-        self.assertEqual(sim.get_sample_size(), 2)
+        # Only tuples are supported.
+        self.assertRaises(TypeError, f, [(0, 0), [0, 0]])
 
     def test_get_samples(self):
         N = 4
@@ -1933,25 +1930,13 @@ class TestTreeSequence(LowLevelTestCase):
                 ts = _msprime.TreeSequence()
                 self.assertRaises(
                     TypeError, ts.load_records, [r])
-        # Check to make sure we can use different sequence types.
-        r1 = list(record)
-        r2 = list(record)
-        r2[3] = list(record[3])
-        for r in [r1, r2]:
-            ts = _msprime.TreeSequence()
-            ts.load_records([r])
-            self.assertEqual(ts.get_record(0), record)
-            self.assertRaises(ValueError, ts.load_records, [record])
 
     def test_load_bad_records(self):
         def f(records):
             ts = _msprime.TreeSequence()
             ts.load_records(records)
-        record = (0, 1, 2, (0, 1), 1, 0)
         # left must be <= right
-        r = list(record)
-        r[0] = 1
-        r[1] = 0
+        r = (1, 0, -1, (0, 1), 1, 0)
         self.assertRaises(_msprime.LibraryError, f, [r])
         # Children and node must not be null.
         r = (0, 1, -1, (0, 1), 1, 0)
