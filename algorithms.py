@@ -7,6 +7,7 @@ from __future__ import division
 import sys
 import random
 import argparse
+import heapq
 import math
 
 import bintrees
@@ -229,7 +230,7 @@ class Simulator(object):
             self, sample_size, num_loci, recombination_rate, migration_matrix,
             sample_configuration, population_growth_rates, population_sizes,
             population_growth_rate_changes, population_size_changes,
-            migration_matrix_element_changes, max_segments=100):
+            migration_matrix_element_changes, bottlenecks, max_segments=100):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -255,7 +256,7 @@ class Simulator(object):
         self.C = []
         self.L = FenwickTree(self.max_segments)
         self.S = bintrees.AVLTree()
-        j = 1
+        j = 0
         for pop_index in range(N):
             sample_size = sample_configuration[pop_index]
             self.P[pop_index].set_start_size(population_sizes[pop_index])
@@ -269,7 +270,7 @@ class Simulator(object):
         self.S[0] = self.n
         self.S[self.m] = -1
         self.t = 0
-        self.w = self.n + 1
+        self.w = self.n
         self.num_ca_events = 0
         self.num_re_events = 0
         self.modifier_events = [(sys.float_info.max, None, None)]
@@ -284,6 +285,9 @@ class Simulator(object):
             self.modifier_events.append(
                 (time, self.change_migration_matrix_element,
                     (int(pop_i), int(pop_j), new_rate)))
+        for time, pop_id, intensity in bottlenecks:
+            self.modifier_events.append(
+                (time, self.bottleneck_event, (int(pop_id), intensity)))
         self.modifier_events.sort()
 
     def change_population_size(self, pop_id, size):
@@ -326,8 +330,8 @@ class Simulator(object):
         """
         infinity = sys.float_info.max
         while sum(pop.get_num_ancestors() for pop in self.P) != 0:
-            self.print_state()
-            # self.verify()
+            # self.print_state()
+            self.verify()
             rate = self.r * self.L.get_total()
             t_re = infinity
             if rate != 0:
@@ -355,8 +359,8 @@ class Simulator(object):
             assert min_time != infinity
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
-                func(*args)
                 self.t = t
+                func(*args)
             else:
                 self.t += min_time
                 if min_time == t_re:
@@ -385,7 +389,6 @@ class Simulator(object):
             u = u.next
         # print("AFTER Population sizes:", [len(pop) for pop in self.P])
 
-
     def recombination_event(self):
         """
         Implements a recombination event.
@@ -413,6 +416,116 @@ class Simulator(object):
         self.L.set_value(z.index, z.right - z.left - 1)
         self.P[z.population].add(z)
 
+    def print_heaps(self, L):
+        copy = list(L)
+        ordered = [heapq.heappop(copy) for _ in L]
+        print("L = ")
+        for l, x in ordered:
+            print("\t", l, ":", end="")
+            u = x
+            s = ""
+            while u is not None:
+                s += "({0}-{1}->{2}({3}))".format(
+                    u.left, u.right, u.node, u.index)
+                u = u.next
+            print(s)
+
+    def bottleneck_event(self, pop_id, intensity):
+        self.print_state()
+        print("running bottleneck at", self.t, pop_id)
+        # Merge some of the ancestors.
+        pop = self.P[pop_id]
+        L = []
+        for _ in range(pop.get_num_ancestors() - 1):
+            if random.random() < intensity:
+                x = pop.remove(0)
+                heapq.heappush(L, (x.left, x))
+        defrag_required = False
+        coalescence = False
+        alpha = None
+        z = None
+        while len(L) > 0:
+            print("LOOP HEAD")
+            self.print_heaps(L)
+            l = L[0][0]
+            r = min(x.right for _, x in L)
+            X = []
+            while len(L) > 0 and L[0][0] == l:
+                X.append(heapq.heappop(L)[1])
+            if len(L) > 0:
+                r = min(r, L[0][0])
+            if len(X) == 1:
+                x = X[0]
+                alpha = x
+                if x.next is not None:
+                    y = x.next
+                    heapq.heappush(L, (y.left, y))
+            else:
+                if not coalescence:
+                    coalescence = True
+                    self.w += 1
+                u = self.w - 1
+                children = []
+                for x in X:
+                    children.append(x.node)
+                    if x.right == r:
+                        self.free_segment(x)
+                        if x.next is not None:
+                            y = x.next
+                            heapq.heappush(L, (y.left, y))
+                    elif x.right > r:
+                        x.left = r
+                        heapq.heappush(L, (x.left, x))
+                print("Make record", l, r, children)
+                self.C.append((l, r, u, children, self.t))
+                alpha = self.alloc_segment(l, r, u, pop_id)
+
+            # loop tail; update alpha and integrate it into the state.
+            if alpha is not None:
+                if z is None:
+                    pop.add(alpha)
+                    self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
+                else:
+                    defrag_required |= (
+                        z.right == alpha.left and z.node == alpha.node)
+                    z.next = alpha
+                    self.L.set_value(alpha.index, alpha.right - z.right)
+                alpha.prev = z
+                z = alpha
+            print("loop tail:", alpha)
+        print("FINSHED")
+        # self.print_state()
+
+        # CHEATING!!!
+        A = bintrees.AVLTree()
+        A[0] = 0
+        A[self.m] = -1
+        for pop in self.P:
+            for u in pop:
+                while u is not None:
+                    if u.left not in A:
+                        k = A.floor_key(u.left)
+                        A[u.left] = A[k]
+                    if u.right not in A:
+                        k = A.floor_key(u.right)
+                        A[u.right] = A[k]
+                    k = u.left
+                    while k < u.right:
+                        A[k] += 1
+                        k = A.succ_key(k)
+                    u = u.next
+        # Now, defrag A
+        j = 0
+        k = 0
+        while k < self.m:
+            k = A.succ_key(j)
+            if A[j] == A[k]:
+                del A[k]
+            else:
+                j = k
+        self.S = A
+
+
     def common_ancestor_event(self, population_index):
         """
         Implements a coancestry event.
@@ -424,10 +537,10 @@ class Simulator(object):
         x = pop.remove(j)
         j = random.randint(0, pop.get_num_ancestors() - 1)
         y = pop.remove(j)
+        pop = self.P[population_index]
         z = None
         coalescence = False
         defrag_required = False
-
         while x is not None or y is not None:
             alpha = None
             if x is None or y is None:
@@ -475,7 +588,7 @@ class Simulator(object):
                             self.S[r] -= 1
                             r = self.S.succ_key(r)
                         alpha = self.alloc_segment(l, r, u, population_index)
-                    self.C.append((l, r, x.node, y.node, u, self.t))
+                    self.C.append((l, r, u, (x.node, y.node), self.t))
                     # Now trim the ends of x and y to the right sizes.
                     if x.right == r:
                         self.free_segment(x)
@@ -620,6 +733,15 @@ class Simulator(object):
                     c += 1
             assert c == self.n - 1
 
+    def write_records(self):
+        """
+        Writes the records out as text.
+        """
+        for left, right, u, children, time in self.C:
+            print(
+                left, right, u, ",".join(str(c) for c in sorted(children)),
+                time, 0, sep="\t")
+
 
 def generate_trees(l, r, u, c, t):
     """
@@ -630,21 +752,22 @@ def generate_trees(l, r, u, c, t):
     M = len(l)
     I = sorted(range(M), key=lambda j: (l[j], t[j]))
     O = sorted(range(M), key=lambda j: (r[j], -t[j]))
-    pi = [0 for j in range(max(u) + 1)]
+    pi = [-1 for j in range(max(u) + 1)]
     j = 0
     k = 0
     while j < M:
         x = l[I[j]]
         while r[O[k]] == x:
             h = O[k]
-            pi[c[h][0]] = pi[c[h][1]] = 0
+            for q in c[h]:
+                pi[q] = -1
             k = k + 1
         while j < M and l[I[j]] == x:
             h = I[j]
-            pi[c[h][0]] = pi[c[h][1]] = u[h]
+            for q in c[h]:
+                pi[q] = u[h]
             j += 1
         yield pi
-
 
 def count_leaves(l, r, u, c, t, S):
     """
@@ -685,39 +808,35 @@ def count_leaves(l, r, u, c, t, S):
         yield pi, beta
 
 def run_trees(args):
-    tree_sequence = msprime.load(args.history_file)
-    N = tree_sequence.get_num_nodes()
-    records = list(tree_sequence.records())
-    l = [record[0] for record in records]
-    r = [record[1] for record in records]
-    u = [record[2] for record in records]
-    c = [record[3] for record in records]
-    t = [record[4] for record in records]
-    local_trees = []
+    # Read in the records
+    l = []
+    r = []
+    u = []
+    c = []
+    t = []
+    with open(args.history_file) as f:
+        for line in f:
+            toks = line.split()
+            l.append(float(toks[0]))
+            r.append(float(toks[1]))
+            u.append(int(toks[2]))
+            children = list(map(int, toks[3].split(",")))
+            c.append(children)
+            t.append(float(toks[4]))
+    N = len(l)
     print("Trees:")
     for pi in generate_trees(l, r, u, c, t):
-        local_trees.append(list(pi))
         print("\t", pi)
-    local_counts = []
-    S = set(range(1, tree_sequence.get_sample_size() + 1))
-    print("Counts:")
-    for pi, beta in count_leaves(l, r, u, c, t, S):
-        local_counts.append(list(beta))
-        print("\t", beta)
-    msp_trees = []
-    msp_counts = []
-    for t in tree_sequence.trees():
-        pi = [t.get_parent(j) for j in range(N + 1)]
-        beta = [t.get_num_leaves(j) for j in range(N + 1)]
-        msp_trees.append(pi)
-        msp_counts.append(beta)
-    assert msp_trees == local_trees
-    assert msp_counts == local_counts
+    # local_counts = []
+    # S = set(range(1, tree_sequence.get_sample_size() + 1))
+    # print("Counts:")
+    # for pi, beta in count_leaves(l, r, u, c, t, S):
+    #     local_counts.append(list(beta))
+    #     print("\t", beta)
 
-
-def run_verify(args):
+def run_simulate(args):
     """
-    Checks that the distibution of events we get is the same as msprime.
+    Runs the simulation and outputs the results in text.
     """
     n = args.sample_size
     m = args.num_loci
@@ -736,29 +855,48 @@ def run_verify(args):
         population_growth_rates = args.population_growth_rates
     if args.population_sizes is not None:
         population_sizes = args.population_sizes
-    msp_events = np.zeros(args.num_replicates)
-    local_events = np.zeros(args.num_replicates)
-    for j in range(args.num_replicates):
-        random.seed(j)
-        s = Simulator(
-            n, m, rho, migration_matrix,
-            sample_configuration, population_growth_rates,
-            population_sizes, args.population_growth_rate_change,
-            args.population_size_change,
-            args.migration_matrix_element_change,
-            10000)
-        s.simulate()
-        s.print_state()
-        # local_events[j] = s.num_re_events
-        # s = msprime.TreeSimulator(n)
-        # s.set_num_loci(m)
-        # s.set_scaled_recombination_rate(rho)
-        # s.set_random_seed(j)
-        # s.run()
-        # msp_events[j] = s.get_num_recombination_events()
-    # sm.graphics.qqplot(local_events)
-    # sm.qqplot_2samples(local_events, msp_events, line="45")
-    # pyplot.savefig(args.outfile, dpi=72)
+    random.seed(args.random_seed)
+    s = Simulator(
+        n, m, rho, migration_matrix,
+        sample_configuration, population_growth_rates,
+        population_sizes, args.population_growth_rate_change,
+        args.population_size_change,
+        args.migration_matrix_element_change,
+        args.bottleneck, 10000)
+    s.simulate()
+    s.write_records()
+
+def add_simulator_arguments(parser):
+    parser.add_argument("sample_size", type=int)
+    parser.add_argument(
+        "--random-seed", "-s", type=int, default=1)
+    parser.add_argument(
+        "--num-loci", "-m", type=int, default=100)
+    parser.add_argument(
+        "--num-replicates", "-R", type=int, default=1000)
+    parser.add_argument(
+        "--recombination-rate", "-r", type=float, default=0.1)
+    parser.add_argument(
+        "--num-populations", "-p", type=int, default=1)
+    parser.add_argument(
+        "--migration-rate", "-g", type=float, default=1)
+    parser.add_argument(
+        "--sample-configuration", type=int, nargs="+", default=None)
+    parser.add_argument(
+        "--population-growth-rates", type=float, nargs="+", default=None)
+    parser.add_argument(
+        "--population-sizes", type=float, nargs="+", default=None)
+    parser.add_argument(
+        "--population-size-change", type=float, nargs=3, action="append",
+        default=[])
+    parser.add_argument(
+        "--population-growth-rate-change", type=float, nargs=3,
+        action="append", default=[])
+    parser.add_argument(
+        "--migration-matrix-element-change", type=float, nargs=4,
+        action="append", default=[])
+    parser.add_argument(
+        "--bottleneck", type=float, nargs=3, action="append", default=[])
 
 
 def main():
@@ -767,42 +905,15 @@ def main():
     subparsers = parser.add_subparsers(dest="subcommand")
     subparsers.required = True
 
-    verify_parser = subparsers.add_parser(
-        "verify",
-        help="Verify the local algorithm against msprime")
-    verify_parser.add_argument("outfile")
-    verify_parser.add_argument(
-        "--sample-size", "-n", type=int, default=10)
-    verify_parser.add_argument(
-        "--num-loci", "-m", type=int, default=100)
-    verify_parser.add_argument(
-        "--num-replicates", "-R", type=int, default=1000)
-    verify_parser.add_argument(
-        "--recombination-rate", "-r", type=float, default=0.1)
-    verify_parser.add_argument(
-        "--num-populations", "-p", type=int, default=1)
-    verify_parser.add_argument(
-        "--migration-rate", "-g", type=float, default=1)
-    verify_parser.add_argument(
-        "--sample-configuration", type=int, nargs="+", default=None)
-    verify_parser.add_argument(
-        "--population-growth-rates", type=float, nargs="+", default=None)
-    verify_parser.add_argument(
-        "--population-sizes", type=float, nargs="+", default=None)
-    verify_parser.add_argument(
-        "--population-size-change", type=float, nargs=3, action="append",
-        default=[])
-    verify_parser.add_argument(
-        "--population-growth-rate-change", type=float, nargs=3,
-        action="append", default=[])
-    verify_parser.add_argument(
-        "--migration-matrix-element-change", type=float, nargs=4,
-        action="append", default=[])
-    verify_parser.set_defaults(runner=run_verify)
+    simulate_parser = subparsers.add_parser(
+        "simulate",
+        help="Simulate the process and output the results in text")
+    add_simulator_arguments(simulate_parser)
+    simulate_parser.set_defaults(runner=run_simulate)
 
     trees_parser = subparsers.add_parser(
         "trees",
-        help="Shows the trees from an msprime history file")
+        help="Shows the trees from an text records file")
     trees_parser.add_argument("history_file")
 
     trees_parser.set_defaults(runner=run_trees)
