@@ -1328,6 +1328,40 @@ test_tree_sequence_iter(void)
 }
 
 static void
+test_nonbinary_tree_sequence_iter(void)
+{
+    const char * text_records[] = {
+        "0	100	8	0,1,2,3	0.01	0",
+        "0	100	9	6,8	    0.068   0",
+        "0	17	10	4,5,7	0.2	    0",
+        "17	100	10	4,7	    0.2	    0",
+        "17	100	11	5,9	    0.279   0",
+        "0	17	12	9,10	0.405   0",
+        "17	100	12	10,11	0.405   0",
+    };
+    /* /1* We make one mutation for each tree *1/ */
+    /* mutation_t mutations[] = {{1, 2}, {4.5, 0}, {8.5, 5}}; */
+    uint32_t parents[] = {
+        8, 8, 8, 8, 10, 10, 9, 10, 9, 12, 12, MSP_NULL_NODE, MSP_NULL_NODE,
+        8, 8, 8, 8, 10, 11, 9, 10, 9, 11, 12, 12, MSP_NULL_NODE,
+    };
+    /* size_t num_records = 6; */
+    uint32_t num_nodes = 13;
+    uint32_t num_trees = 2;
+    /* uint32_t num_mutations = 3; */
+    size_t num_records = sizeof(text_records) / sizeof(char *);
+    coalescence_record_t *records;
+
+    parse_text_records(num_records, text_records, &records);
+
+    verify_trees(num_records, records, num_trees, num_nodes, parents,
+            0, NULL);
+
+    free_local_records(num_records, records);
+}
+
+
+static void
 test_tree_sequence_bad_records(void)
 {
     int ret = 0;
@@ -1609,7 +1643,7 @@ verify_tree_diffs(tree_sequence_t *ts)
     sparse_tree_iterator_t tree_iter;
     node_record_t *record, *records_out, *records_in;
     size_t num_nodes = tree_sequence_get_num_nodes(ts);
-    size_t j, num_in, num_out;
+    size_t j, k, num_in, num_out;
     double length, t, x;
     uint32_t u;
     uint32_t *pi = malloc(num_nodes * sizeof(uint32_t));
@@ -1635,20 +1669,22 @@ verify_tree_diffs(tree_sequence_t *ts)
         record = records_out;
         num_out = 0;
         while (record != NULL) {
-            pi[record->children[0]] = MSP_NULL_NODE;
-            pi[record->children[1]] = MSP_NULL_NODE;
+            for (k = 0; k < record->num_children; k++) {
+                pi[record->children[k]] = MSP_NULL_NODE;
+            }
             tau[record->node] = 0;
+            num_out += record->num_children - 1;
             record = record->next;
-            num_out++;
         }
         record = records_in;
         num_in = 0;
         while (record != NULL) {
-            pi[record->children[0]] = record->node;
-            pi[record->children[1]] = record->node;
+            for (k = 0; k < record->num_children; k++) {
+                pi[record->children[k]] = record->node;
+            }
             tau[record->node] = record->time;
+            num_in += record->num_children - 1;
             record = record->next;
-            num_in++;
         }
         if (first_tree) {
             CU_ASSERT_EQUAL(num_in, tree_sequence_get_sample_size(ts) - 1);
@@ -1703,7 +1739,35 @@ test_tree_sequence_diff_iter(void)
 
     parse_text_records(num_records, text_records, &records);
     ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    verify_tree_diffs(&ts);
+
+    ret = tree_sequence_free(&ts);
     CU_ASSERT_EQUAL(ret, 0);
+    free_local_records(num_records, records);
+}
+
+static void
+test_nonbinary_tree_sequence_diff_iter(void)
+{
+    int ret;
+    const char * text_records[] = {
+        "0	100	8	0,1,2,3	0.01	0",
+        "0	100	9	6,8	    0.068   0",
+        "0	17	10	4,5,7	0.2	    0",
+        "17	100	10	4,7	    0.2	    0",
+        "17	100	11	5,9	    0.279   0",
+        "0	17	12	9,10	0.405   0",
+        "17	100	12	10,11	0.405   0",
+    };
+    size_t num_records = sizeof(text_records) / sizeof(char *);
+    coalescence_record_t *records;
+    tree_sequence_t ts;
+
+    parse_text_records(num_records, text_records, &records);
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     verify_tree_diffs(&ts);
 
@@ -2047,13 +2111,15 @@ main(void)
         {"Single tree hapgen", test_single_tree_hapgen},
         {"Single tree mutgen", test_single_tree_mutgen},
         {"Tree sequence iterator", test_tree_sequence_iter},
-        {"Tree sequence iterator", test_tree_sequence_iter},
+        {"Tree nonbinary sequence iterator", test_nonbinary_tree_sequence_iter},
         {"Tree sequence bad records", test_tree_sequence_bad_records},
         {"Single tree iterator failure", test_single_tree_iter_failure},
         {"Tree sequence iterator failure", test_tree_sequence_iter_failure},
         {"Tree sequence mutation iterator failure",
             test_tree_sequence_mutations_iter_failure},
         {"Tree sequence diff iter", test_tree_sequence_diff_iter},
+        {"Nonbinary Tree sequence diff iter",
+            test_nonbinary_tree_sequence_diff_iter},
         {"Test diff iter from examples", test_diff_iter_from_examples},
         {"Test tree iter from examples", test_tree_iter_from_examples},
         {"Test hapgen from examples", test_hapgen_from_examples},

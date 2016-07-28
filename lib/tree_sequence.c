@@ -1639,13 +1639,13 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
     node_record_t *in_tail = NULL;
     node_record_t *w = NULL;
     int first_tree = self->insertion_index == 0;
-    size_t num_in = 0;
-    size_t num_out = 0;
+    size_t in_count = 0;
+    size_t out_count = 0;
 
     assert(s != NULL);
     if (self->insertion_index < self->num_records) {
         /* First we remove the stale records */
-        num_out = 0;
+        out_count = 0;
         while (s->trees.right[s->trees.removal_order[self->removal_index]]
                 == self->tree_left) {
             k = s->trees.removal_order[self->removal_index];
@@ -1654,8 +1654,8 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
             next_node_record++;
             w->time = s->trees.time[k];
             w->node = s->trees.node[k];
-            w->children[0] = s->trees.children[k][0];
-            w->children[1] = s->trees.children[k][1];
+            w->num_children = s->trees.num_children[k];
+            w->children = s->trees.children[k];
             w->next = NULL;
             if (out_head == NULL) {
                 out_head = w;
@@ -1665,10 +1665,10 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
                 out_tail = w;
             }
             self->removal_index++;
-            num_out++;
+            out_count += w->num_children - 1;
         }
         /* Now insert the new records */
-        num_in = 0;
+        in_count = 0;
         while (self->insertion_index < self->num_records &&
                 s->trees.left[s->trees.insertion_order[self->insertion_index]]
                 == self->tree_left) {
@@ -1678,8 +1678,8 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
             next_node_record++;
             w->time = s->trees.time[k];
             w->node = s->trees.node[k];
-            w->children[0] = s->trees.children[k][0];
-            w->children[1] = s->trees.children[k][1];
+            w->num_children = s->trees.num_children[k];
+            w->children = s->trees.children[k];
             w->next = NULL;
             if (in_head == NULL) {
                 in_head = w;
@@ -1689,7 +1689,7 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
                 in_tail = w;
             }
             self->insertion_index++;
-            num_in++;
+            in_count += w->num_children - 1;
         }
         /* Update the left coordinate */
         self->tree_left = s->trees.right[s->trees.removal_order[
@@ -1697,12 +1697,12 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
         ret = 1;
     }
     if (first_tree) {
-        if (num_in != self->sample_size - 1 || num_out != 0) {
+        if (in_count != self->sample_size - 1 || out_count != 0) {
             ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
             goto out;
         }
     } else {
-        if (num_in != num_out) {
+        if (in_count != out_count) {
             ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
             goto out;
         }
@@ -1937,11 +1937,10 @@ sparse_tree_get_num_leaves_by_traversal(sparse_tree_t *self, uint32_t u,
         stack_top--;
         if (v < self->sample_size) {
             count++;
-        } else if (v >= self->sample_size) {
-            for (c = 0; c < self->num_children[v]; c++) {
-                stack_top++;
-                stack[stack_top] = self->children[v][c];
-            }
+        }
+        for (c = 0; c < self->num_children[v]; c++) {
+            stack_top++;
+            stack[stack_top] = self->children[v][c];
         }
     }
     *num_leaves = count;
@@ -2223,21 +2222,23 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
     tree_sequence_t *s = self->tree_sequence;
     sparse_tree_t *t = self->tree;
     int first_tree = self->insertion_index == 0;
-    uint32_t num_records_in = 0;
-    uint32_t num_records_out = 0;
+    /* To detect errors we look for situations when the trees are not
+     * completed. The propery is that we should have
+     * n - 1 = sum(k - 1) where k is the arity of the node over the
+     * whole tree.
+     */
+    size_t in_count = 0;
+    size_t out_count = 0;
 
     assert(t != NULL && s != NULL);
     if (self->insertion_index < self->num_records) {
         /* First we remove the stale records */
         while (s->trees.right[s->trees.removal_order[self->removal_index]]
                 == t->right) {
-            num_records_out++;
             k = s->trees.removal_order[self->removal_index];
             u = s->trees.node[k];
+            out_count += t->num_children[u] - 1;
             for (j = 0; j < t->num_children[u]; j++) {
-            /* c[0] = s->trees.children[k][0]; */
-            /* c[1] = s->trees.children[k][1]; */
-            /* for (j = 0; j < 2; j++) { */
                 t->parent[t->children[u][j]] = MSP_NULL_NODE;
             }
             t->num_children[u] = 0;
@@ -2272,17 +2273,17 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
                 == t->left) {
             /* Check for errors. */
             /* TODO this needs to be rethought for non-binary trees. */
-            if (first_tree) {
-                if (num_records_in >= self->sample_size) {
-                    ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
-                    goto out;
-                }
-            } else {
-                if (num_records_in > num_records_out) {
-                    ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
-                    goto out;
-                }
-            }
+            /* if (first_tree) { */
+            /*     if (num_records_in >= self->sample_size) { */
+            /*         ret = MSP_ERR_BAD_COALESCENCE_RECORDS; */
+            /*         goto out; */
+            /*     } */
+            /* } else { */
+            /*     if (num_records_in > num_records_out) { */
+            /*         ret = MSP_ERR_BAD_COALESCENCE_RECORDS; */
+            /*         goto out; */
+            /*     } */
+            /* } */
             k = s->trees.insertion_order[self->insertion_index];
             u = s->trees.node[k];
             for (j = 0; j < s->trees.num_children[k]; j++) {
@@ -2290,18 +2291,7 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
             }
             t->num_children[u] = s->trees.num_children[k];
             t->children[u] = s->trees.children[k];
-
-            /* TODO rename this to something more appropriate. We have to keep
-             * track to the total number of branches in the tree and this
-             * is more complicated with non-binary trees.*/
-            num_records_in += t->num_children[u] - 1;
-
-            /* c[0] = s->trees.children[k][0]; */
-            /* c[1] = s->trees.children[k][1]; */
-            /* for (j = 0; j < 2; j++) { */
-            /*     t->parent[c[j]] = u; */
-            /*     t->children[2 * u + j] = c[j]; */
-            /* } */
+            in_count += t->num_children[u] - 1;
             t->time[u] = s->trees.time[k];
             t->population[u] = s->trees.population[k];
             if (u >t->root) {
@@ -2346,13 +2336,12 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
         }
         /* Check for errors. */
         if (first_tree) {
-            if (num_records_out != 0 ||
-                    num_records_in != self->sample_size - 1) {
+            if (out_count != 0 || in_count != self->sample_size - 1) {
                 ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
                 goto out;
             }
         } else {
-            if (num_records_in != num_records_out) {
+            if (in_count != out_count) {
                 ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
                 goto out;
             }

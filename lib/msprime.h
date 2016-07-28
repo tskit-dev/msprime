@@ -249,7 +249,8 @@ typedef struct {
 
 typedef struct node_record {
     uint32_t node;
-    uint32_t children[2];
+    uint32_t num_children;
+    uint32_t *children;
     double time;
     struct node_record *next;
 } node_record_t;
