@@ -62,7 +62,7 @@ msp_strerror(int err)
     const char *ret = "Unknown error";
 
     if (err == MSP_ERR_NO_MEMORY) {
-        ret = "Out of memory. Try increasing the max_memory parameter";
+        ret = "Out of memory.";
     } else if (err == MSP_ERR_GENERIC) {
         ret = "Generic error; please file a bug report";
     } else if (err == MSP_ERR_FILE_FORMAT) {
