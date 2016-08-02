@@ -35,6 +35,12 @@
 char * _tmp_file_name;
 FILE * _devnull;
 
+typedef struct {
+    double time;
+    uint32_t population_id;
+    double intensity;
+} bottleneck_desc_t;
+
 /* Simple utility to parse records so we can write declaritive
  * tests. This is not intended as a robust general input mechanism.
  */
@@ -139,7 +145,10 @@ verify_coalescence_records_equal(coalescence_record_t *r1,
     CU_ASSERT_EQUAL(r1->left, r2->left);
     CU_ASSERT_EQUAL(r1->right, r2->right);
     CU_ASSERT_EQUAL(r1->node, r2->node);
-    CU_ASSERT_EQUAL(r1->num_children, r2->num_children);
+    if (r1->num_children != r2->num_children) {
+        printf("ERROR: %d %d\n",  r1->num_children, r2->num_children);
+    }
+    CU_ASSERT_EQUAL_FATAL(r1->num_children, r2->num_children);
     for (j = 0; j < r1->num_children; j++) {
         CU_ASSERT_EQUAL(r1->children[j], r2->children[j]);
     }
@@ -152,7 +161,8 @@ verify_coalescence_records_equal(coalescence_record_t *r1,
  */
 static tree_sequence_t *
 get_example_tree_sequence(uint32_t sample_size, uint32_t num_loci,
-        double scaled_recombination_rate, double mutation_rate)
+        double scaled_recombination_rate, double mutation_rate,
+        uint32_t num_bottlenecks, bottleneck_desc_t *bottlenecks)
 {
     int ret;
     msp_t *msp = malloc(sizeof(msp_t));
@@ -181,6 +191,11 @@ get_example_tree_sequence(uint32_t sample_size, uint32_t num_loci,
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_scaled_recombination_rate(msp, scaled_recombination_rate);
     CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < num_bottlenecks; j++) {
+        ret = msp_add_bottleneck(msp, bottlenecks[j].time,
+                bottlenecks[j].population_id, bottlenecks[j].intensity);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
@@ -202,7 +217,7 @@ get_example_tree_sequence(uint32_t sample_size, uint32_t num_loci,
             tree_sequence_get_sample_size(tree_seq),
             msp_get_sample_size(msp));
     CU_ASSERT_FATAL(
-            tree_sequence_get_num_nodes(tree_seq) >= 2 * sample_size - 1);
+            tree_sequence_get_num_nodes(tree_seq) >= sample_size);
     ret = msp_get_coalescence_records(msp, &sim_records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     num_records = msp_get_num_coalescence_records(msp);
@@ -274,7 +289,7 @@ test_vcf(void)
     char *str = NULL;
     unsigned int ploidy, num_variants;
     vcf_converter_t *vc = malloc(sizeof(vcf_converter_t));
-    tree_sequence_t *ts = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    tree_sequence_t *ts = get_example_tree_sequence(10, 100, 1.0, 1.0, 0, NULL);
 
     CU_ASSERT_FATAL(ts != NULL);
     CU_ASSERT_FATAL(vc != NULL);
@@ -1512,6 +1527,8 @@ verify_leaf_sets(tree_sequence_t *ts)
     }
     CU_ASSERT_EQUAL_FATAL(iter_ret, 0);
 
+    free(stack);
+    free(leaves);
     sparse_tree_iterator_free(&iter);
     sparse_tree_free(&tree);
 }
@@ -1997,17 +2014,25 @@ test_nonbinary_tree_sequence_diff_iter(void)
 static void
 test_diff_iter_from_examples(void)
 {
-    tree_sequence_t *ts = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    bottleneck_desc_t bottlenecks[] = {
+        {0.1, 0, 0.75},
+    };
+    tree_sequence_t *ts = get_example_tree_sequence(10, 100, 1.0, 1.0, 0, NULL);
     verify_tree_diffs(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(2, 1, 1.0, 1.0);
+    ts = get_example_tree_sequence(2, 1, 1.0, 1.0, 0, NULL);
     verify_tree_diffs(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(3, 3, 10.0, 0.0);
+    ts = get_example_tree_sequence(3, 3, 10.0, 0.0, 0, NULL);
+    verify_tree_diffs(ts);
+    tree_sequence_free(ts);
+    free(ts);
+
+    ts = get_example_tree_sequence(100, 100, 10.0, 0.0, 1, bottlenecks);
     verify_tree_diffs(ts);
     tree_sequence_free(ts);
     free(ts);
@@ -2016,22 +2041,31 @@ test_diff_iter_from_examples(void)
 static void
 test_tree_iter_from_examples(void)
 {
-    tree_sequence_t *ts = get_example_tree_sequence(10, 1, 0.0, 1.0);
+
+    bottleneck_desc_t bottlenecks[] = {
+        {0.1, 0, 0.75},
+    };
+    tree_sequence_t *ts = get_example_tree_sequence(10, 1, 0.0, 1.0, 0, NULL);
     verify_trees_consistent(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    ts = get_example_tree_sequence(10, 100, 1.0, 1.0, 0, NULL);
     verify_trees_consistent(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(2, 1, 1.0, 1.0);
+    ts = get_example_tree_sequence(2, 1, 1.0, 1.0, 0, NULL);
     verify_trees_consistent(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(3, 3, 10.0, 0.0);
+    ts = get_example_tree_sequence(3, 3, 10.0, 0.0, 0, NULL);
+    verify_trees_consistent(ts);
+    tree_sequence_free(ts);
+    free(ts);
+
+    ts = get_example_tree_sequence(100, 100, 10.0, 0.0, 1, bottlenecks);
     verify_trees_consistent(ts);
     tree_sequence_free(ts);
     free(ts);
@@ -2040,22 +2074,22 @@ test_tree_iter_from_examples(void)
 static void
 test_leaf_sets_from_examples(void)
 {
-    tree_sequence_t *ts = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    tree_sequence_t *ts = get_example_tree_sequence(10, 100, 1.0, 1.0, 0, NULL);
     verify_leaf_sets(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(2, 1, 1.0, 1.0);
+    ts = get_example_tree_sequence(2, 1, 1.0, 1.0, 0, NULL);
     verify_leaf_sets(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(3, 3, 10.0, 0.0);
+    ts = get_example_tree_sequence(3, 3, 10.0, 0.0, 0, NULL);
     verify_leaf_sets(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(100, 100, 1.0, 0.0);
+    ts = get_example_tree_sequence(100, 100, 1.0, 0.0, 0, NULL);
     verify_leaf_sets(ts);
     tree_sequence_free(ts);
     free(ts);
@@ -2091,22 +2125,22 @@ verify_hapgen(tree_sequence_t *ts)
 static void
 test_hapgen_from_examples(void)
 {
-    tree_sequence_t *ts = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    tree_sequence_t *ts = get_example_tree_sequence(10, 100, 1.0, 1.0, 0, NULL);
     verify_hapgen(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(2, 1, 1.0, 1.0);
+    ts = get_example_tree_sequence(2, 1, 1.0, 1.0, 0, NULL);
     verify_hapgen(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(3, 3, 10.0, 0.0);
+    ts = get_example_tree_sequence(3, 3, 10.0, 0.0, 0, NULL);
     verify_hapgen(ts);
     tree_sequence_free(ts);
     free(ts);
 
-    ts = get_example_tree_sequence(100, 100, 1.0, 0.0);
+    ts = get_example_tree_sequence(100, 100, 1.0, 0.0, 0, NULL);
     verify_hapgen(ts);
     tree_sequence_free(ts);
     free(ts);
@@ -2188,7 +2222,7 @@ test_save_hdf5(void)
     int ret;
     size_t j;
     tree_sequence_t ts2;
-    tree_sequence_t *ts1 = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    tree_sequence_t *ts1 = get_example_tree_sequence(10, 100, 1.0, 1.0, 0, NULL);
     int dump_flags[] = {0, MSP_ZLIB_COMPRESSION};
 
     CU_ASSERT_FATAL(ts1 != NULL);
@@ -2215,7 +2249,7 @@ test_save_records_hdf5(void)
     coalescence_record_t *r, *records;
     sample_t *samples;
     tree_sequence_t ts2, ts3;
-    tree_sequence_t *ts1 = get_example_tree_sequence(sample_size, 100, 1.0, 0.0);
+    tree_sequence_t *ts1 = get_example_tree_sequence(sample_size, 100, 1.0, 0.0, 0, NULL);
 
     CU_ASSERT_FATAL(ts1 != NULL);
     num_records = tree_sequence_get_num_coalescence_records(ts1);
@@ -2255,7 +2289,7 @@ static void
 test_records_equivalent(void)
 {
     int ret;
-    tree_sequence_t *ts1 = get_example_tree_sequence(10, 100, 1.0, 1.0);
+    tree_sequence_t *ts1 = get_example_tree_sequence(10, 100, 1.0, 1.0, 0, NULL);
     tree_sequence_t ts2;
     coalescence_record_t *records, *r1, *r2;
     size_t j, num_records;

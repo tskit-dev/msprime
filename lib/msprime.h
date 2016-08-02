@@ -160,6 +160,7 @@ typedef struct {
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
     object_heap_t node_mapping_heap;
+    object_heap_t binary_children_heap;
     /* coalescence records are stored in a flat array */
     coalescence_record_t *coalescence_records;
     size_t num_coalescence_records;
@@ -188,12 +189,18 @@ typedef struct {
     double proportion;
 } mass_migration_t;
 
+typedef struct {
+    int population_id;
+    double intensity;
+} bottleneck_t;
+
 typedef struct demographic_event_t_t {
     double time;
     int (*change_state)(msp_t *, struct demographic_event_t_t *);
     void (*print_state)(msp_t *, struct demographic_event_t_t *, FILE *out);
     int (*json_snprintf)(struct demographic_event_t_t *, char *, size_t);
     union {
+        bottleneck_t bottleneck;
         mass_migration_t mass_migration;
         migration_rate_change_t migration_rate_change;
         population_parameters_change_t population_parameters_change;
@@ -414,6 +421,8 @@ int msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate);
 int msp_add_mass_migration(msp_t *self, double time, int source, int dest,
         double proportion);
+int msp_add_bottleneck(msp_t *self, double time, int population_id, 
+        double intensity);
 
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);

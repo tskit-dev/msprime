@@ -152,7 +152,8 @@ read_demographic_events(msp_t *msp, config_t *config)
     int ret = 0;
     int j;
     const char *type;
-    double time, growth_rate, initial_size, migration_rate, proportion;
+    double time, growth_rate, initial_size, migration_rate, proportion,
+           intensity;
     int num_demographic_events, population_id, matrix_index, source, dest;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "demographic_events");
@@ -224,15 +225,27 @@ read_demographic_events(msp_t *msp, config_t *config)
             proportion = config_setting_get_float(t);
             t = config_setting_get_member(s, "source");
             if (t == NULL) {
-                fatal_error("matrix_index not specified");
+                fatal_error("source not specified");
             }
             source = config_setting_get_int(t);
             t = config_setting_get_member(s, "dest");
             if (t == NULL) {
-                fatal_error("matrix_index not specified");
+                fatal_error("dest not specified");
             }
             dest = config_setting_get_int(t);
             ret = msp_add_mass_migration(msp, time, source, dest, proportion);
+        } else if (strcmp(type, "bottleneck") == 0) {
+            t = config_setting_get_member(s, "intensity");
+            if (t == NULL) {
+                fatal_error("intensity not specified");
+            }
+            intensity = config_setting_get_float(t);
+            t = config_setting_get_member(s, "population_id");
+            if (t == NULL) {
+                fatal_error("population_id not specified");
+            }
+            population_id = config_setting_get_int(t);
+            ret = msp_add_bottleneck(msp, time, population_id, intensity);
         } else {
             fatal_error("unknown demographic event type '%s'", type);
         }
@@ -791,16 +804,19 @@ run_simulate(char *conf_file)
         goto out;
     }
     /* print out the demographic event debug state */
-    start_time = 0;
-    do {
+    /* TODO fix demography debug support for bottlenecks */
+    if (0) {
+        start_time = 0;
+        do {
 
-        ret = msp_debug_demography(msp, &end_time);
-        printf("interval %f - %f\n", start_time, end_time);
-        msp_print_state(msp, stdout);
-        start_time = end_time;
-    } while (! gsl_isinf(end_time));
-    if (ret != 0) {
-        goto out;
+            ret = msp_debug_demography(msp, &end_time);
+            printf("interval %f - %f\n", start_time, end_time);
+            msp_print_state(msp, stdout);
+            start_time = end_time;
+        } while (! gsl_isinf(end_time));
+        if (ret != 0) {
+            goto out;
+        }
     }
     ret = msp_reset(msp);
     if (ret != 0) {
