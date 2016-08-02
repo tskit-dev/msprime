@@ -431,40 +431,71 @@ class Simulator(object):
             print(s)
 
     def bottleneck_event(self, pop_id, intensity):
-        self.print_state()
-        print("running bottleneck at", self.t, pop_id)
+        # self.print_state()
         # Merge some of the ancestors.
         pop = self.P[pop_id]
-        L = []
-        for _ in range(pop.get_num_ancestors() - 1):
+        H = []
+        for _ in range(pop.get_num_ancestors()):
             if random.random() < intensity:
                 x = pop.remove(0)
-                heapq.heappush(L, (x.left, x))
+                heapq.heappush(H, (x.left, x))
+        self.merge_ancestors(H, pop_id)
+
+    def merge_ancestors(self, H, pop_id):
+        pop = self.P[pop_id]
         defrag_required = False
         coalescence = False
         alpha = None
         z = None
-        while len(L) > 0:
-            print("LOOP HEAD")
-            self.print_heaps(L)
-            l = L[0][0]
-            r = min(x.right for _, x in L)
+        while len(H) > 0:
+            # print("LOOP HEAD")
+            # self.print_heaps(H)
+            alpha = None
+            l = H[0][0]
             X = []
-            while len(L) > 0 and L[0][0] == l:
-                X.append(heapq.heappop(L)[1])
-            if len(L) > 0:
-                r = min(r, L[0][0])
+            r_max = self.m + 1
+            while len(H) > 0 and H[0][0] == l:
+                x = heapq.heappop(H)[1]
+                X.append(x)
+                r_max = min(r_max, x.right)
+            if len(H) > 0:
+                r_max = min(r_max, H[0][0])
             if len(X) == 1:
                 x = X[0]
-                alpha = x
-                if x.next is not None:
-                    y = x.next
-                    heapq.heappush(L, (y.left, y))
+                if len(H) > 0 and H[0][0] < x.right:
+                    alpha = self.alloc_segment(
+                        x.left, H[0][0], x.node, x.population)
+                    x.left = H[0][0]
+                    heapq.heappush(H, (x.left, x))
+                else:
+                    alpha = x
+                    if x.next is not None:
+                        y = x.next
+                        heapq.heappush(H, (y.left, y))
             else:
                 if not coalescence:
                     coalescence = True
                     self.w += 1
                 u = self.w - 1
+                # We must also break if the next left value is less than
+                # any of the right values in the current overlap set.
+                if l not in self.S:
+                    j = self.S.floor_key(l)
+                    self.S[l] = self.S[j]
+                if r_max not in self.S:
+                    j = self.S.floor_key(r_max)
+                    self.S[r_max] = self.S[j]
+                # Update the number of extant segments.
+                if self.S[l] == len(X):
+                    self.S[l] = 0
+                    r = self.S.succ_key(l)
+                else:
+                    r = l
+                    while r < r_max and self.S[r] != len(X):
+                        self.S[r] -= len(X) - 1
+                        r = self.S.succ_key(r)
+                    alpha = self.alloc_segment(l, r, u, pop_id)
+                # Update the heaps and make the record.
                 children = []
                 for x in X:
                     children.append(x.node)
@@ -472,13 +503,11 @@ class Simulator(object):
                         self.free_segment(x)
                         if x.next is not None:
                             y = x.next
-                            heapq.heappush(L, (y.left, y))
+                            heapq.heappush(H, (y.left, y))
                     elif x.right > r:
                         x.left = r
-                        heapq.heappush(L, (x.left, x))
-                print("Make record", l, r, children)
+                        heapq.heappush(H, (x.left, x))
                 self.C.append((l, r, u, children, self.t))
-                alpha = self.alloc_segment(l, r, u, pop_id)
 
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
@@ -492,39 +521,34 @@ class Simulator(object):
                     self.L.set_value(alpha.index, alpha.right - z.right)
                 alpha.prev = z
                 z = alpha
-            print("loop tail:", alpha)
-        print("FINSHED")
-        # self.print_state()
+        if defrag_required:
+            self.defrag_segment_chain(z)
+        if coalescence:
+            self.defrag_breakpoints()
 
-        # CHEATING!!!
-        A = bintrees.AVLTree()
-        A[0] = 0
-        A[self.m] = -1
-        for pop in self.P:
-            for u in pop:
-                while u is not None:
-                    if u.left not in A:
-                        k = A.floor_key(u.left)
-                        A[u.left] = A[k]
-                    if u.right not in A:
-                        k = A.floor_key(u.right)
-                        A[u.right] = A[k]
-                    k = u.left
-                    while k < u.right:
-                        A[k] += 1
-                        k = A.succ_key(k)
-                    u = u.next
-        # Now, defrag A
+    def defrag_segment_chain(self, z):
+        y = z
+        while y.prev is not None:
+            x = y.prev
+            if x.right == y.left and x.node == y.node:
+                x.right = y.right
+                x.next = y.next
+                if y.next is not None:
+                    y.next.prev = x
+                self.L.increment(x.index, y.right - y.left)
+                self.free_segment(y)
+            y = x
+
+    def defrag_breakpoints(self):
+        # Defrag the breakpoints set
         j = 0
         k = 0
         while k < self.m:
-            k = A.succ_key(j)
-            if A[j] == A[k]:
-                del A[k]
+            k = self.S.succ_key(j)
+            if self.S[j] == self.S[k]:
+                del self.S[k]
             else:
                 j = k
-        self.S = A
-
 
     def common_ancestor_event(self, population_index):
         """
@@ -615,27 +639,9 @@ class Simulator(object):
                 z = alpha
 
         if defrag_required:
-            y = z
-            while y.prev is not None:
-                x = y.prev
-                if x.right == y.left and x.node == y.node:
-                    x.right = y.right
-                    x.next = y.next
-                    if y.next is not None:
-                        y.next.prev = x
-                    self.L.increment(x.index, y.right - y.left)
-                    self.free_segment(y)
-                y = x
+            self.defrag_segment_chain(z)
         if coalescence:
-            # Defrag the breakpoints set
-            j = 0
-            k = 0
-            while k < self.m:
-                k = self.S.succ_key(j)
-                if self.S[j] == self.S[k]:
-                    del self.S[k]
-                else:
-                    j = k
+            self.defrag_breakpoints()
 
     def print_state(self):
         print("State @ time ", self.t)
@@ -685,6 +691,9 @@ class Simulator(object):
                     v = u.next
                     if v is not None:
                         assert v.prev == u
+                        if u.right > v.left:
+                            print("ERROR", u, v)
+                        assert u.right <= v.left
                     u = v
                 q += right - left - 1
         assert q == self.L.get_total()
