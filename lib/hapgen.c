@@ -148,6 +148,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
             sizeof(uint64_t));
     self->haplotype = malloc(self->words_per_row * HG_WORD_SIZE + 1);
     if (self->haplotype_matrix == NULL || self->haplotype == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     ret = hapgen_generate_all_haplotypes(self);
