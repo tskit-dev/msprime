@@ -70,7 +70,8 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     fprintf(out, "sequence_length = %f\n", self->sequence_length);
     fprintf(out, "samples\n");
     for (j = 0; j < self->sample_size; j++) {
-        fprintf(out, "\t%d\t%d\n", (int) j, (int) self->samples.population[j]);
+        fprintf(out, "\t%d\t%d\t%f\n", (int) j,
+                (int) self->samples.population[j], self->samples.time[j]);
     }
     fprintf(out, "trees = (%d records)\n", (int) self->num_records);
     fprintf(out, "\tparameters = '%s'\n", self->trees.parameters);
@@ -590,7 +591,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     hsize_t dims[2];
     struct _dimension_check {
         const char *name;
-        int dimensions;
+        int check_size;
         size_t size;
         int required;
     };
@@ -599,8 +600,9 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/trees/right", 1, 0, 1},
         {"/trees/node", 1, 0, 1},
         {"/trees/population", 1, 0, 0},
-        {"/trees/children", 2, 0, 1},
+        {"/trees/num_children", 1, 0, 1},
         {"/trees/time", 1, 0, 1},
+        {"/trees/children", 0, 0, 1},
         {"/mutations/node", 1, 0, 1},
         {"/mutations/position", 1, 0, 1},
         {"/samples/population", 1, 0, 0},
@@ -612,11 +614,11 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     for (j = 0; j < 6; j++) {
         fields[j].size = self->num_records;
     }
-    for (j = 6; j < 8; j++) {
+    for (j = 7; j < 9; j++) {
         fields[j].size = self->num_mutations;
         fields[j].required = self->num_mutations > 0;
     }
-    for (j = 8; j < 10; j++) {
+    for (j = 9; j < 11; j++) {
         fields[j].size = self->sample_size;
     }
     for (j = 0; j < num_fields; j++) {
@@ -630,7 +632,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
                 goto out;
             }
             rank = H5Sget_simple_extent_ndims(dataspace_id);
-            if (rank != fields[j].dimensions) {
+            if (rank != 1) {
                 ret = MSP_ERR_FILE_FORMAT;
                 goto out;
             }
@@ -638,7 +640,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
             if (status < 0) {
                 goto out;
             }
-            if (dims[0] != fields[j].size) {
+            if (fields[j].check_size && dims[0] != fields[j].size) {
                 ret = MSP_ERR_FILE_FORMAT;
                 goto out;
             }
@@ -676,13 +678,15 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     };
     struct _dimension_read fields[] = {
         {"/trees/left", NULL, 1},
+        {"/trees/children", NULL, 1},
         {"/mutations/node", NULL, 0},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_read);
     size_t j;
 
     fields[0].dest = &self->num_records;
-    fields[1].dest = &self->num_mutations;
+    fields[1].dest = &self->num_child_nodes;
+    fields[2].dest = &self->num_mutations;
     /* check if the mutations group exists */
     exists = H5Lexists(file_id, "/mutations", H5P_DEFAULT);
     if (exists < 0) {
@@ -690,7 +694,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     }
     self->num_mutations = 0;
     if (exists) {
-        fields[1].included = 1;
+        fields[2].included = 1;
     }
     for (j = 0; j < num_fields; j++) {
         if (fields[j].included) {
@@ -722,7 +726,6 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
             }
         }
     }
-    self->num_child_nodes = 2 * self->num_records;
     ret = tree_sequence_check_hdf5_dimensions(self, file_id);
     if (ret != 0) {
         goto out;
@@ -750,26 +753,28 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/trees/right", H5T_NATIVE_DOUBLE, 0, 1, NULL},
         {"/trees/node", H5T_NATIVE_UINT32, 0, 1, NULL},
         {"/trees/population", H5T_NATIVE_UINT8, 0, 0, NULL},
-        {"/trees/children", H5T_NATIVE_UINT32, 0, 1, NULL},
+        {"/trees/num_children", H5T_NATIVE_UINT32, 0, 1, NULL},
         {"/trees/time", H5T_NATIVE_DOUBLE, 0, 1, NULL},
+        {"/trees/children", H5T_NATIVE_UINT32, 0, 1, NULL},
         {"/mutations/node", H5T_NATIVE_UINT32, 0, 1, NULL},
         {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1, NULL},
         {"/samples/population", H5T_NATIVE_UINT8, 0, 0, NULL},
         {"/samples/time", H5T_NATIVE_DOUBLE, 0, 0, NULL},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
-    size_t j;
+    size_t j, offset;
 
     fields[0].dest = self->trees.left;
     fields[1].dest = self->trees.right;
     fields[2].dest = self->trees.node;
     fields[3].dest = self->trees.population;
-    fields[4].dest = self->trees.children_mem;
+    fields[4].dest = self->trees.num_children;
     fields[5].dest = self->trees.time;
-    fields[6].dest = self->mutations.node;
-    fields[7].dest = self->mutations.position;
-    fields[8].dest = self->samples.population;
-    fields[9].dest = self->samples.time;
+    fields[6].dest = self->trees.children_mem;
+    fields[7].dest = self->mutations.node;
+    fields[8].dest = self->mutations.position;
+    fields[9].dest = self->samples.population;
+    fields[10].dest = self->samples.time;
     /* TODO We're sort of doing the same thing twice here as
      * the mutations _group_ is optional. However, we can't just
      * mark mutations/node and mutations/position as optional as we
@@ -777,8 +782,8 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
      * However, we should improve this logic as it's a bit messy.
      */
     if (self->num_mutations == 0) {
-        fields[6].empty = 1;
         fields[7].empty = 1;
+        fields[8].empty = 1;
     }
     for (j = 0; j < num_fields; j++) {
         /* Skip any non-required fields that are missing. */
@@ -805,13 +810,16 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
             goto out;
         }
     }
-    /* Now update the children vectors get num_nodes */
+    /* Now update the children vectors and num_nodes */
+    offset = 0;
     self->num_nodes = 0;
     for (j = 0; j < self->num_records; j++) {
-        self->trees.num_children[j] = 2;
-        self->trees.children[j] = self->trees.children_mem + 2 * j;
+        assert(offset < self->num_child_nodes);
+        self->trees.children[j] = &self->trees.children_mem[offset];
+        offset += self->trees.num_children[j];
         self->num_nodes = GSL_MAX(self->num_nodes, self->trees.node[j]);
     }
+    assert(offset == self->num_child_nodes);
     self->num_nodes++;
     ret = 0;
 out:
@@ -977,8 +985,9 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/trees/right", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
         {"/trees/node", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/population", H5T_STD_U8LE, H5T_NATIVE_UINT8, 1, 0, NULL},
-        {"/trees/children", H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, 0, NULL},
+        {"/trees/num_children", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/trees/time", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
+        {"/trees/children", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/mutations/node", H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, 0, NULL},
         {"/mutations/position", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1, 0, NULL},
         {"/samples/population", H5T_STD_U8LE, H5T_NATIVE_UINT8, 1, 0, NULL},
@@ -1001,19 +1010,21 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     fields[1].source = self->trees.right;
     fields[2].source = self->trees.node;
     fields[3].source = self->trees.population;
-    fields[4].source = self->trees.children_mem;
+    fields[4].source = self->trees.num_children;
     fields[5].source = self->trees.time;
-    fields[6].source = self->mutations.node;
-    fields[7].source = self->mutations.position;
-    fields[8].source = self->samples.population;
-    fields[9].source = self->samples.time;
+    fields[6].source = self->trees.children_mem;
+    fields[7].source = self->mutations.node;
+    fields[8].source = self->mutations.position;
+    fields[9].source = self->samples.population;
+    fields[10].source = self->samples.time;
     for (j = 0; j < 6; j++) {
         fields[j].size = self->num_records;
     }
-    for (j = 6; j < 8; j++) {
+    fields[j].size = self->num_child_nodes;
+    for (j = 7; j < 9; j++) {
         fields[j].size = self->num_mutations;
     }
-    for (j = 8; j < 10; j++) {
+    for (j = 9; j < 11; j++) {
         fields[j].size = self->sample_size;
     }
     if (self->num_mutations == 0) {
@@ -1179,7 +1190,6 @@ tree_sequence_write_hdf5_provenance(tree_sequence_t *self, hid_t file_id)
 out:
     return ret;
 }
-
 
 static int
 tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)

@@ -2014,8 +2014,8 @@ class TestHdf5Format(LowLevelTestCase):
             self.assertIn("mutations", keys)
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 2)
-        self.assertEqual(format_version[1], 1)
+        self.assertEqual(format_version[0], 3)
+        self.assertEqual(format_version[1], 0)
         self.assertEqual(root.attrs["sample_size"], ts.get_sample_size())
         self.assertEqual(
             root.attrs["sequence_length"], ts.get_sequence_length())
@@ -2035,14 +2035,14 @@ class TestHdf5Format(LowLevelTestCase):
         self.verify_environment_json(g.attrs["environment"])
         fields = [
             ("left", float64, 1), ("right", float64, 1),
-            ("node", uint32, 1), ("children", uint32, 2),
-            ("population", uint8, 1), ("time", float64, 1)]
+            ("node", uint32, 1), ("num_children", uint32, 1),
+            ("population", uint8, 1), ("time", float64, 1),
+            ("children", uint32, 0)]
         self.assertEqual(set(g.keys()), set([name for name, _, _ in fields]))
-        for name, dtype, dims in fields:
-            self.assertEqual(len(g[name].shape), dims)
-            self.assertEqual(g[name].shape[0], ts.get_num_records())
-            if dims == 2:
-                self.assertEqual(g[name].shape[1], 2)
+        for name, dtype, equal_size in fields:
+            self.assertEqual(len(g[name].shape), 1)
+            if equal_size:
+                self.assertEqual(g[name].shape[0], ts.get_num_records())
             self.assertEqual(g[name].dtype, dtype)
         g = root["samples"]
         fields = [("population", uint8), ("time", float)]

@@ -875,25 +875,24 @@ run_simulate(char *conf_file)
 
     print_variants(tree_seq);
 
-        ret = print_vcf(tree_seq, 1);
+    ret = print_vcf(tree_seq, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < 1; j++) {
+        ret = tree_sequence_dump(tree_seq, output_file, 0);
         if (ret != 0) {
             goto out;
         }
-
-        for (j = 0; j < 1; j++) {
-            ret = tree_sequence_dump(tree_seq, output_file, 0);
-            if (ret != 0) {
-                goto out;
-            }
-            tree_sequence_free(tree_seq);
-            memset(tree_seq, 0, sizeof(tree_sequence_t));
-            ret = tree_sequence_load(tree_seq, output_file, 0);
-            if (ret != 0) {
-                goto out;
-            }
+        tree_sequence_free(tree_seq);
+        memset(tree_seq, 0, sizeof(tree_sequence_t));
+        ret = tree_sequence_load(tree_seq, output_file, 0);
+        if (ret != 0) {
+            goto out;
         }
-    if (0) {
         tree_sequence_print_state(tree_seq, stdout);
+    }
+    if (0) {
 
         print_newick_trees(tree_seq);
 
