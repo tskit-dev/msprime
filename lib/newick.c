@@ -82,7 +82,7 @@ newick_converter_print_state(newick_converter_t *self)
         }
     }
     printf("avl_node_heap\n");
-    object_heap_print_state(&self->avl_node_heap);
+    object_heap_print_state(&self->avl_node_heap, stdout);
     newick_converter_check_state(self);
 }
 

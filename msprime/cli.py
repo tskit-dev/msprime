@@ -139,6 +139,11 @@ class SimulationRunner(object):
         # For strict ms-compability we want to have m non-recombining loci
         recomb_map = msprime.RecombinationMap.uniform_map(
             num_loci, self._recombination_rate, num_loci)
+        # If we have specified any population_configurations we don't want
+        # to give the overall sample size.
+        sample_size = self._sample_size
+        if population_configurations is not None:
+            sample_size = None
         self._simulator = msprime.simulator_factory(
             sample_size=sample_size,
             recombination_map=recomb_map,

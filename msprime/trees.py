@@ -60,6 +60,11 @@ Variant = collections.namedtuple(
     ["position", "genotypes"])
 
 
+Sample = collections.namedtuple(
+    "Sample",
+    ["population", "time"])
+
+
 class TreeDrawer(object):
     """
     A class to draw sparse trees in SVG format.
@@ -541,23 +546,49 @@ def simulator_factory(
         recombination_map=None,
         population_configurations=None,
         migration_matrix=None,
+        samples=None,
         demographic_events=[]):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
     """
-    if sample_size is None and population_configurations is None:
+    condition = (
+        sample_size is None and
+        population_configurations is None and
+        samples is None)
+    if condition:
         raise ValueError(
-            "Either sample_size or population_configurations must "
+            "Either sample_size, population_configurations or samples "
             "be specified")
-    n = sample_size
+    if sample_size is not None:
+        if samples is not None:
+            raise ValueError(
+                "Cannot specify sample size and samples simultaneously.")
+        if population_configurations is not None:
+            raise ValueError(
+                "Cannot specify sample size and population_configurations "
+                "simultaneously.")
+        s = Sample(population=0, time=0.0)
+        the_samples = [s for _ in range(sample_size)]
+    # If we have population configurations we may have embedded sample_size
+    # values telling us how many samples to take from each population.
     if population_configurations is not None:
         _check_population_configurations(population_configurations)
-        n = sum(conf.sample_size for conf in population_configurations)
-        if sample_size is not None and n != sample_size:
-            raise ValueError(
-                "Overall sample_size and the sum of population sample sizes "
-                "must be equal")
+        if samples is None:
+            the_samples = []
+            for j, conf in enumerate(population_configurations):
+                if conf.sample_size is not None:
+                    the_samples += [(j, 0) for _ in range(conf.sample_size)]
+        else:
+            for conf in population_configurations:
+                if conf.sample_size is not None:
+                    raise ValueError(
+                         "Cannot specify population configuration sample size"
+                         "and samples simultaneously")
+            the_samples = samples
+    elif samples is not None:
+        the_samples = samples
+
     if recombination_map is None:
         the_length = 1 if length is None else length
         the_rate = 0 if recombination_rate is None else recombination_rate
@@ -572,7 +603,8 @@ def simulator_factory(
                 "Cannot specify length/recombination_rate along with "
                 "a recombination map")
         recomb_map = recombination_map
-    sim = TreeSimulator(n, recomb_map)
+
+    sim = TreeSimulator(the_samples, recomb_map)
     sim.set_effective_population_size(Ne)
     rng = random_generator
     if rng is None:
@@ -597,6 +629,7 @@ def simulate(
         population_configurations=None,
         migration_matrix=None,
         demographic_events=[],
+        samples=None,
         random_seed=None,
         num_replicates=None):
     """
@@ -676,7 +709,8 @@ def simulate(
         recombination_map=recombination_map,
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
-        demographic_events=demographic_events)
+        demographic_events=demographic_events,
+        samples=samples)
     mu = 0 if mutation_rate is None else mutation_rate
     if num_replicates is None:
         sim.run()
@@ -794,21 +828,19 @@ class TreeSimulator(object):
     Class to simulate trees under the standard neutral coalescent with
     recombination.
     """
-    def __init__(self, sample_size, recombination_map):
-        if not isinstance(sample_size, int):
-            raise TypeError("Sample size must be an integer")
-        if sample_size < 2:
+    def __init__(self, samples, recombination_map):
+        if len(samples) < 2:
             raise ValueError("Sample size must be >= 2")
-        if sample_size >= 2**32:
+        if len(samples) >= 2**32:
             raise ValueError("sample_size must be < 2**32")
-        self._sample_size = sample_size
+        self._sample_size = len(samples)
+        self._samples = samples
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
         self._recombination_map = recombination_map
         self._random_generator = None
         self._effective_population_size = 1
-        self._population_configurations = [
-            PopulationConfiguration(sample_size)]
+        self._population_configurations = [PopulationConfiguration()]
         self._migration_matrix = [[0]]
         self._demographic_events = []
         # Set default block sizes to 64K objects.
@@ -816,7 +848,7 @@ class TreeSimulator(object):
         block_size = 64 * 1024
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
-        self._segment_block_size = max(block_size, sample_size)
+        self._segment_block_size = max(block_size, self._sample_size)
         self._avl_node_block_size = block_size
         self._node_mapping_block_size = block_size
         self._coalescence_record_block_size = block_size
@@ -837,6 +869,9 @@ class TreeSimulator(object):
 
     def get_sample_size(self):
         return self._sample_size
+
+    def get_samples(self):
+        return self._samples
 
     def get_recombinatation_map(self):
         return self._recombination_map
@@ -1029,8 +1064,9 @@ class TreeSimulator(object):
             event.get_ll_representation(d, Ne)
             for event in self._demographic_events]
         ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
+        ll_samples = [(pop, time / (4 * Ne)) for pop, time in self._samples]
         ll_sim = _msprime.Simulator(
-            sample_size=self._sample_size,
+            samples=ll_samples,
             random_generator=self._random_generator,
             num_loci=self._recombination_map.get_num_loci(),
             migration_matrix=ll_migration_matrix,
@@ -1750,14 +1786,14 @@ class PopulationConfiguration(object):
     The initial configuration of a population (or deme) in a simulation.
 
     :param int sample_size: The number of initial samples that are drawn
-        from this population. Defaults to 0.
+        from this population.
     :param float initial_size: The absolute size of the population at time
         zero. Defaults to the reference population size :math:`N_e`.
     :param float growth_rate: The exponential growth rate of the population
         per generation. Growth rates can be negative. This is zero for a
         constant population size. Defaults to 0.
     """
-    def __init__(self, sample_size=0, initial_size=None, growth_rate=0.0):
+    def __init__(self, sample_size=None, initial_size=None, growth_rate=0.0):
         self.sample_size = sample_size
         self.initial_size = initial_size
         self.growth_rate = growth_rate
@@ -1768,7 +1804,6 @@ class PopulationConfiguration(object):
         """
         initial_size = Ne if self.initial_size is None else self.initial_size
         return {
-            "sample_size": self.sample_size,
             "initial_size": initial_size / Ne,
             "growth_rate": self.growth_rate * 4 * Ne
         }

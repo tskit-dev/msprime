@@ -378,9 +378,9 @@ class TestSingleLocusSimulation(HighLevelTestCase):
             m1 = msprime.PopulationConfiguration(n, growth_rate=0)
             m2 = msprime.PopulationConfiguration(n, initial_size=1.0)
             st1 = next(msprime.simulate(
-                n, random_seed=1, population_configurations=[m1]).trees())
+                random_seed=1, population_configurations=[m1]).trees())
             st2 = next(msprime.simulate(
-                n, random_seed=1, population_configurations=[m2]).trees())
+                random_seed=1, population_configurations=[m2]).trees())
             self.assertEqual(st1, st2)
         # TODO add more tests!
 
@@ -498,15 +498,13 @@ class TestTreeSimulator(HighLevelTestCase):
 
     def test_bad_inputs(self):
         recomb_map = msprime.RecombinationMap.uniform_map(1, 0)
-        for bad_type in ["xd", None, [], 4.4]:
+        for bad_type in ["xd", None, 4.4]:
             self.assertRaises(
-                TypeError, msprime.TreeSimulator, bad_type, recomb_map)
-            self.assertRaises(
-                TypeError, msprime.TreeSimulator, 2, bad_type)
-        for bad_value in [-1, 0, 2**32]:
-            self.assertRaises(
-                ValueError, msprime.TreeSimulator, bad_value, recomb_map)
-        self.assertRaises(ValueError, msprime.TreeSimulator, 1, recomb_map)
+                TypeError, msprime.TreeSimulator, [(0, 0), (0, 0)], bad_type)
+        self.assertRaises(
+            ValueError, msprime.TreeSimulator, [], recomb_map)
+        self.assertRaises(
+            ValueError, msprime.TreeSimulator, [(0, 0)], recomb_map)
 
 
 class TestHaplotypeGenerator(HighLevelTestCase):
@@ -1189,6 +1187,11 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertEqual(sim.get_sample_size(), n)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(ll_sim.get_sample_size(), n)
+            samples = ll_sim.get_samples()
+            self.assertEqual(len(samples), n)
+            for sample in samples:
+                self.assertEqual(sample[0], 0)
+                self.assertEqual(sample[1], 0)
 
     def test_effective_population_size(self):
         def f(Ne):
@@ -1233,12 +1236,16 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertRaises(
                 ValueError, msprime.simulator_factory,
                 population_configurations=configs)
-            # Disagreements between sample sizes raises and error
-            configs = [msprime.PopulationConfiguration(1) for _ in range(d)]
-            self.assertRaises(
-                ValueError,  msprime.simulator_factory,
-                sample_size=d - 1,
-                population_configurations=configs)
+            configs = [msprime.PopulationConfiguration(2) for _ in range(d)]
+            sim = msprime.simulator_factory(population_configurations=configs)
+            self.assertEqual(sim.get_sample_size(), 2 * d)
+            samples = []
+            for j in range(d):
+                samples += [
+                    msprime.Sample(population=j, time=0) for _ in range(2)]
+            self.assertEqual(sim.get_samples(), samples)
+            ll_sim = sim.create_ll_instance()
+            self.assertEqual(ll_sim.get_samples(), samples)
 
     def test_migration_matrix(self):
         # Cannot specify a migration matrix without population
@@ -1250,7 +1257,7 @@ class TestSimulatorFactory(unittest.TestCase):
             pop_configs = [
                 msprime.PopulationConfiguration(5) for _ in range(N)]
             sim = msprime.simulator_factory(
-                N * 5, population_configurations=pop_configs)
+                population_configurations=pop_configs)
             ll_sim = sim.create_ll_instance()
             # If we don't specify a matrix, it's 0 everywhere.
             matrix = [0 for j in range(N * N)]
@@ -1258,7 +1265,7 @@ class TestSimulatorFactory(unittest.TestCase):
 
             def f(hl_matrix):
                 return msprime.simulator_factory(
-                    N * 5, population_configurations=pop_configs,
+                    population_configurations=pop_configs,
                     migration_matrix=hl_matrix)
             hl_matrix = [
                 [(j + k) * int(j != k) for j in range(N)] for k in range(N)]
@@ -1359,6 +1366,51 @@ class TestSimulatorFactory(unittest.TestCase):
             ValueError, msprime.simulator_factory, 10,
             recombination_map=recomb_map, length=1,
             recombination_rate=1)
+
+    def test_sample_combination_errors(self):
+        # Make sure that the various ways we can specify the samples
+        # operate correctly.
+        s = msprime.Sample(time=0.0, population=0)
+        self.assertRaises(ValueError, msprime.simulator_factory)
+        # Cannot provide sample_size with either population configurations
+        # or samples
+        self.assertRaises(
+            ValueError, msprime.simulator_factory,
+            sample_size=2, samples=[s, s])
+        pop_configs = [
+            msprime.PopulationConfiguration(sample_size=2)]
+        self.assertRaises(
+            ValueError, msprime.simulator_factory,
+            sample_size=2, population_configurations=pop_configs)
+        # If we provide samples and population_configurations we cannot
+        # have a sample size for the config.
+        pop_configs = [
+            msprime.PopulationConfiguration(sample_size=2)]
+        self.assertRaises(
+            ValueError, msprime.simulator_factory,
+            samples=[s, s], population_configurations=pop_configs)
+        pop_configs = [
+            msprime.PopulationConfiguration(sample_size=None),
+            msprime.PopulationConfiguration(sample_size=2)]
+        self.assertRaises(
+            ValueError, msprime.simulator_factory,
+            samples=[s, s], population_configurations=pop_configs)
+
+    def test_samples(self):
+        pop_configs = [
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration()]
+        samples = [
+            msprime.Sample(population=0, time=0),
+            msprime.Sample(population=1, time=1),
+            msprime.Sample(population=2, time=2)]
+        # Ne = 1/4 to keep in coalescence units.
+        sim = msprime.simulator_factory(
+            Ne=1/4, samples=samples, population_configurations=pop_configs)
+        self.assertEqual(sim.get_samples(), samples)
+        ll_sim = sim.create_ll_instance()
+        self.assertEqual(ll_sim.get_samples(), samples)
 
 
 class TestSimulateInterface(unittest.TestCase):

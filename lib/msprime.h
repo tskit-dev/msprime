@@ -37,7 +37,7 @@
 #define MSP_SKIP_H5CLOSE 2
 
 #define MSP_FILE_FORMAT_VERSION_MAJOR 2
-#define MSP_FILE_FORMAT_VERSION_MINOR 0
+#define MSP_FILE_FORMAT_VERSION_MINOR 1
 
 #define MSP_ORDER_TIME 0
 #define MSP_ORDER_LEFT 1
@@ -96,15 +96,21 @@ typedef struct {
 
 typedef struct {
     uint8_t population_id;
+    double time;
 } sample_t;
 
 typedef struct {
-    uint32_t sample_size;
     double initial_size;
     double growth_rate;
     double start_time;
     avl_tree_t ancestors;
 } population_t;
+
+typedef struct {
+    double time;
+    uint32_t sample;
+    uint8_t population_id;
+} sampling_event_t;
 
 typedef struct {
     gsl_rng *rng;
@@ -127,7 +133,11 @@ typedef struct {
     size_t *num_migration_events;
     size_t num_trapped_re_events;
     size_t num_multiple_re_events;
-    /* demographic events */
+    /* sampling events */
+    sampling_event_t *sampling_events;
+    size_t num_sampling_events;
+    size_t next_sampling_event;
+    /* Demographic events */
     struct demographic_event_t_t *demographic_events_head;
     struct demographic_event_t_t *demographic_events_tail;
     struct demographic_event_t_t *next_demographic_event;
@@ -176,7 +186,7 @@ typedef struct {
 typedef struct demographic_event_t_t {
     double time;
     int (*change_state)(msp_t *, struct demographic_event_t_t *);
-    void (*print_state)(msp_t *, struct demographic_event_t_t *);
+    void (*print_state)(msp_t *, struct demographic_event_t_t *, FILE *out);
     int (*json_snprintf)(struct demographic_event_t_t *, char *, size_t);
     union {
         mass_migration_t mass_migration;
@@ -203,6 +213,7 @@ typedef struct {
     double sequence_length;
     struct {
         uint8_t *population;
+        double *time;
     } samples;
     struct {
         double *left;
@@ -369,7 +380,7 @@ typedef struct {
     char *environment;
 } mutgen_t;
 
-int msp_alloc(msp_t *self, size_t sample_size, gsl_rng *rng);
+int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_scaled_recombination_rate(msp_t *self, 
@@ -384,7 +395,7 @@ int msp_set_sample_configuration(msp_t *self, size_t num_populations,
 int msp_set_migration_matrix(msp_t *self, size_t size,
         double *migration_matrix);
 int msp_set_population_configuration(msp_t *self, int population_id, 
-        size_t sample_size, double initial_size, double growth_rate);
+        double initial_size, double growth_rate);
 
 int msp_add_population_parameters_change(msp_t *self, double time, 
         int population_id, double size, double growth_rate);
@@ -397,7 +408,7 @@ int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
 int msp_reset(msp_t *self);
-int msp_print_state(msp_t *self);
+int msp_print_state(msp_t *self, FILE *out);
 int msp_free(msp_t *self);
 void msp_verify(msp_t *self);
 
@@ -408,7 +419,7 @@ int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t *records);
 int msp_get_samples(msp_t *self, sample_t *samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
-        size_t *sample_size, double *initial_size, double *growth_rate);
+        double *initial_size, double *growth_rate);
 int msp_get_population(msp_t *self, size_t population_id, 
         population_t **population);
 int msp_is_completed(msp_t *self);
@@ -446,8 +457,8 @@ double tree_sequence_get_sequence_length(tree_sequence_t *self);
 int tree_sequence_get_record(tree_sequence_t *self, size_t index, 
         coalescence_record_t *record, int order);
 int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations);
-int tree_sequence_get_population(tree_sequence_t *self, uint32_t u,
-    uint32_t *population_id);
+int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u, 
+        sample_t *sample);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     uint32_t *samples, uint32_t num_samples, double *pi);
 char * tree_sequence_get_simulation_parameters(tree_sequence_t *self);
@@ -455,6 +466,8 @@ char * tree_sequence_get_mutation_parameters(tree_sequence_t *self);
 int tree_sequence_alloc_sparse_tree(tree_sequence_t *self, 
         sparse_tree_t *tree, uint32_t *tracked_leaves, 
         uint32_t num_tracked_leaves, int flags);
+int tree_sequence_set_samples(tree_sequence_t *self, size_t sample_size,
+        sample_t *samples);
 int tree_sequence_set_mutations(tree_sequence_t *self, 
         size_t num_mutations, mutation_t *mutations, 
         const char *parameters, const char *environment);
@@ -472,6 +485,7 @@ int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size,
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_clear(sparse_tree_t *self);
 int sparse_tree_get_parent(sparse_tree_t *self, uint32_t u, uint32_t *parent);
+int sparse_tree_get_time(sparse_tree_t *self, uint32_t u, double *t);
 int sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
         uint32_t *mrca);
 int sparse_tree_get_num_leaves(sparse_tree_t *self, uint32_t u,

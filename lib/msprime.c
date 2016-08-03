@@ -111,6 +111,8 @@ msp_strerror(int err)
         ret = "Bad recombination map provided.";
     } else if (err == MSP_ERR_BAD_COALESCENCE_RECORDS) {
         ret = "Bad coalescence records in file.";
+    } else if (err == MSP_ERR_BAD_SAMPLES) {
+        ret = "Bad sample configuration provided.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -144,6 +146,12 @@ cmp_node_mapping(const void *a, const void *b) {
     return (ia->left > ib->left) - (ia->left < ib->left);
 }
 
+static int
+cmp_sampling_event(const void *a, const void *b) {
+    const sampling_event_t *ia = (const sampling_event_t *) a;
+    const sampling_event_t *ib = (const sampling_event_t *) b;
+    return (ia->time > ib->time) - (ia->time < ib->time);
+}
 
 static void
 segment_init(void **obj, size_t id)
@@ -277,7 +285,6 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
     for (j = 0; j < num_populations; j++) {
         avl_init_tree(&self->populations[j].ancestors, cmp_individual, NULL);
         /* Set the default sizes and growth rates. */
-        self->initial_populations[j].sample_size = 0;
         self->initial_populations[j].growth_rate = 0.0;
         self->initial_populations[j].initial_size = 1.0;
         self->initial_populations[j].start_time = 0.0;
@@ -303,7 +310,7 @@ out:
 
 int
 msp_set_population_configuration(msp_t *self, int population_id,
-        size_t sample_size, double initial_size, double growth_rate)
+        double initial_size, double growth_rate)
 {
     int ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
 
@@ -311,7 +318,6 @@ msp_set_population_configuration(msp_t *self, int population_id,
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
-    self->initial_populations[population_id].sample_size = (uint32_t) sample_size;
     self->initial_populations[population_id].initial_size = initial_size;
     self->initial_populations[population_id].growth_rate = growth_rate;
     ret = 0;
@@ -486,15 +492,15 @@ msp_generate_population_configuration_json(msp_t *self, char **output)
     int written;
     const char *pattern = "{"
         "\"initial_size\":" MSP_LOSSLESS_DBL ", "
-        "\"growth_rate\":" MSP_LOSSLESS_DBL ", "
-        "\"sample_size\":%d}, ";
+        "\"growth_rate\":" MSP_LOSSLESS_DBL
+        "}, ";
     population_t *pop;
 
     assert(self->num_populations > 0);
     for (j = 0; j < self->num_populations; j++) {
         pop = &self->initial_populations[j];
         written = snprintf(NULL, 0, pattern, pop->initial_size,
-                pop->growth_rate, pop->sample_size);
+                pop->growth_rate);
         if (written < 0) {
             ret = MSP_ERR_IO;
             goto out;
@@ -513,7 +519,7 @@ msp_generate_population_configuration_json(msp_t *self, char **output)
     for (j = 0; j < self->num_populations; j++) {
         pop = &self->initial_populations[j];
         written = snprintf(buffer + offset, buffer_size - offset, pattern,
-                pop->initial_size, pop->growth_rate, pop->sample_size);
+                pop->initial_size, pop->growth_rate);
         if (written < 0) {
             ret = MSP_ERR_IO;
             goto out;
@@ -661,12 +667,13 @@ out:
 /* Top level allocators and initialisation */
 
 int
-msp_alloc(msp_t *self, size_t sample_size, gsl_rng *rng)
+msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng)
 {
     int ret = -1;
+    size_t j, k, initial_samples;
 
     memset(self, 0, sizeof(msp_t));
-    if (sample_size < 2) {
+    if (sample_size < 2 || samples == NULL || rng == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -679,13 +686,53 @@ msp_alloc(msp_t *self, size_t sample_size, gsl_rng *rng)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    initial_samples = 0;
+    for (j = 0; j < sample_size; j++) {
+        self->samples[j].population_id = samples[j].population_id;
+        self->samples[j].time = samples[j].time;
+        if (self->samples[j].time < 0) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+        if (self->samples[j].time == 0) {
+            initial_samples++;
+        }
+    }
+    if (initial_samples == 0) {
+        ret = MSP_ERR_BAD_SAMPLES;
+        goto out;
+    }
+    /* Set up the historical sampling events */
+    self->num_sampling_events = self->sample_size - initial_samples;
+    self->sampling_events = NULL;
+    if (self->num_sampling_events > 0) {
+        self->sampling_events = malloc(self->num_sampling_events *
+                sizeof(sampling_event_t));
+        if (self->sampling_events == NULL) {
+            goto out;
+        }
+        k = 0;
+        for (j = 0; j < self->sample_size; j++) {
+            if (self->samples[j].time > 0) {
+                self->sampling_events[k].sample = (uint32_t) j;
+                self->sampling_events[k].time = self->samples[j].time;
+                self->sampling_events[k].population_id =
+                    self->samples[j].population_id;
+                k++;
+            }
+        }
+        assert(k == self->num_sampling_events);
+        /* Now we must sort the sampling events by time. */
+        qsort(self->sampling_events, self->num_sampling_events,
+                sizeof(sampling_event_t), cmp_sampling_event);
+    }
+    /* We have one population by default */
     ret = msp_set_num_populations(self, 1);
     if (ret != 0) {
         goto out;
     }
     /* Set sensible defaults for the sample_config and migration matrix */
     self->initial_migration_matrix[0] = 0.0;
-    self->initial_populations[0].sample_size = (uint32_t) sample_size;
     /* Set the memory defaults */
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
@@ -791,6 +838,9 @@ msp_free(msp_t *self)
     }
     if (self->samples != NULL) {
         free(self->samples);
+    }
+    if (self->sampling_events != NULL) {
+        free(self->sampling_events);
     }
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
@@ -932,16 +982,16 @@ out:
 }
 
 static void
-msp_print_segment_chain(msp_t *self, segment_t *head)
+msp_print_segment_chain(msp_t *self, segment_t *head, FILE *out)
 {
     segment_t *s = head;
 
-    printf("[%d]", s->population_id);
+    fprintf(out, "[%d]", s->population_id);
     while (s != NULL) {
-        printf("[(%d-%d) %d] ", s->left, s->right, s->value);
+        fprintf(out, "[(%d-%d) %d] ", s->left, s->right, s->value);
         s = s->next;
     }
-    printf("\n");
+    fprintf(out, "\n");
 }
 
 void
@@ -1002,7 +1052,7 @@ msp_verify(msp_t *self)
 }
 
 int
-msp_print_state(msp_t *self)
+msp_print_state(msp_t *self, FILE *out)
 {
     int ret = 0;
     avl_node_t *node;
@@ -1010,6 +1060,7 @@ msp_print_state(msp_t *self)
     segment_t *u;
     coalescence_record_t *cr;
     demographic_event_t *de;
+    sampling_event_t *se;
     int64_t v;
     uint32_t j, k;
     double gig = 1024.0 * 1024;
@@ -1024,76 +1075,89 @@ msp_print_state(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    printf("used_memory = %f MiB\n", (double) self->used_memory / gig);
-    printf("max_memory  = %f MiB\n", (double) self->max_memory / gig);
-    printf("n = %d\n", self->sample_size);
-    printf("m = %d\n", self->num_loci);
-    printf("configuration = %s\n", self->configuration_json);
-
-    printf("Demographic events:\n");
+    fprintf(out, "used_memory = %f MiB\n", (double) self->used_memory / gig);
+    fprintf(out, "max_memory  = %f MiB\n", (double) self->max_memory / gig);
+    fprintf(out, "n = %d\n", self->sample_size);
+    fprintf(out, "m = %d\n", self->num_loci);
+    fprintf(out, "configuration = %s\n", self->configuration_json);
+    fprintf(out, "Samples = \n");
+    for (j = 0; j < self->sample_size; j++) {
+        fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j, self->samples[j].population_id,
+                self->samples[j].time);
+    }
+    fprintf(out, "Sampling events:\n");
+    for (j = 0; j < self->num_sampling_events; j++) {
+        if (j == self->next_sampling_event) {
+            fprintf(out, "  ***");
+        }
+        se = &self->sampling_events[j];
+        fprintf(out, "\t");
+        fprintf(out, "%d @ %f in deme %d\n", se->sample, se->time, se->population_id);
+    }
+    fprintf(out, "Demographic events:\n");
     for (de = self->demographic_events_head; de != NULL; de = de->next) {
         if (de == self->next_demographic_event) {
-            printf("  ***");
+            fprintf(out, "  ***");
         }
-        printf("\t");
-        de->print_state(self, de);
+        fprintf(out, "\t");
+        de->print_state(self, de, out);
     }
-    printf("Migration matrix\n");
+    fprintf(out, "Migration matrix\n");
     for (j = 0; j < self->num_populations; j++) {
-        printf("\t");
+        fprintf(out, "\t");
         for (k = 0; k < self->num_populations; k++) {
-            printf("%0.3f ",
+            fprintf(out, "%0.3f ",
                 self->migration_matrix[j * self->num_populations + k]);
         }
-        printf("\n");
+        fprintf(out, "\n");
     }
 
-    printf("num_links = %ld\n", (long) fenwick_get_total(&self->links));
+    fprintf(out, "num_links = %ld\n", (long) fenwick_get_total(&self->links));
     for (j = 0; j < self->num_populations; j++) {
-        printf("population[%d] = %d\n", j,
+        fprintf(out, "population[%d] = %d\n", j,
             avl_count(&self->populations[j].ancestors));
-        printf("\tstart_time = %f\n", self->populations[j].start_time);
-        printf("\tinitial_size = %f\n", self->populations[j].initial_size);
-        printf("\tgrowth_rate = %f\n", self->populations[j].growth_rate);
+        fprintf(out, "\tstart_time = %f\n", self->populations[j].start_time);
+        fprintf(out, "\tinitial_size = %f\n", self->populations[j].initial_size);
+        fprintf(out, "\tgrowth_rate = %f\n", self->populations[j].growth_rate);
     }
-    printf("Time = %f\n", self->time);
+    fprintf(out, "Time = %f\n", self->time);
     for (j = 0; j < msp_get_num_ancestors(self); j++) {
-        printf("\t");
-        msp_print_segment_chain(self, ancestors[j]);
+        fprintf(out, "\t");
+        msp_print_segment_chain(self, ancestors[j], out);
     }
-    printf("Fenwick tree\n");
+    fprintf(out, "Fenwick tree\n");
     for (j = 1; j <= (uint32_t) fenwick_get_size(&self->links); j++) {
         u = msp_get_segment(self, j);
         v = fenwick_get_value(&self->links, j);
         if (v != 0) {
-            printf("\t%ld\ti=%d l=%d r=%d v=%d prev=%p next=%p\n", (long) v,
+            fprintf(out, "\t%ld\ti=%d l=%d r=%d v=%d prev=%p next=%p\n", (long) v,
                     (int) u->id, u->left,
                     u->right, (int) u->value, (void *) u->prev, (void *) u->next);
         }
     }
-    printf("Breakpoints = %d\n", avl_count(&self->breakpoints));
+    fprintf(out, "Breakpoints = %d\n", avl_count(&self->breakpoints));
     for (node = self->breakpoints.head; node != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
-        printf("\t%d -> %d\n", nm->left, nm->value);
+        fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
-    printf("Overlap count = %d\n", avl_count(&self->overlap_counts));
+    fprintf(out, "Overlap count = %d\n", avl_count(&self->overlap_counts));
     for (node = self->overlap_counts.head; node != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
-        printf("\t%d -> %d\n", nm->left, nm->value);
+        fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
-    printf("Coalescence records = %ld\n", (long) self->num_coalescence_records);
+    fprintf(out, "Coalescence records = %ld\n", (long) self->num_coalescence_records);
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
-        printf("\t%f\t%f\t%d\t%d\t%d\t%f\t%d\n", cr->left, cr->right, cr->children[0],
+        fprintf(out, "\t%f\t%f\t%d\t%d\t%d\t%f\t%d\n", cr->left, cr->right, cr->children[0],
                 cr->children[1], cr->node, cr->time, cr->population_id);
     }
-    printf("Memory heaps\n");
-    printf("avl_node_heap:");
-    object_heap_print_state(&self->avl_node_heap);
-    printf("segment_heap:");
-    object_heap_print_state(&self->segment_heap);
-    printf("node_mapping_heap:");
-    object_heap_print_state(&self->node_mapping_heap);
+    fprintf(out, "Memory heaps\n");
+    fprintf(out, "avl_node_heap:");
+    object_heap_print_state(&self->avl_node_heap, out);
+    fprintf(out, "segment_heap:");
+    object_heap_print_state(&self->segment_heap, out);
+    fprintf(out, "node_mapping_heap:");
+    object_heap_print_state(&self->node_mapping_heap, out);
     msp_verify(self);
 out:
     if (ancestors != NULL) {
@@ -1209,9 +1273,11 @@ out:
 }
 
 static void
-msp_print_population_parameters_change(msp_t *self, demographic_event_t *event)
+msp_print_population_parameters_change(msp_t *self,
+        demographic_event_t *event, FILE *out)
 {
-    printf("%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
+    fprintf(out,
+            "%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
             event->time,
             event->params.population_parameters_change.population_id,
             event->params.population_parameters_change.initial_size,
@@ -1347,9 +1413,10 @@ out:
 }
 
 static void
-msp_print_migration_rate_change(msp_t *self, demographic_event_t *event)
+msp_print_migration_rate_change(msp_t *self,
+        demographic_event_t *event, FILE *out)
 {
-    printf("%f\tmigration_rate_change: %d -> %f\n",
+    fprintf(out, "%f\tmigration_rate_change: %d -> %f\n",
             event->time,
             event->params.migration_rate_change.matrix_index,
             event->params.migration_rate_change.migration_rate);
@@ -1442,9 +1509,9 @@ out:
 }
 
 static void
-msp_print_mass_migration(msp_t *self, demographic_event_t *event)
+msp_print_mass_migration(msp_t *self, demographic_event_t *event, FILE *out)
 {
-    printf("%f\tmass_migration: %d -> %d p = %f\n",
+    fprintf(out, "%f\tmass_migration: %d -> %d p = %f\n",
             event->time,
             event->params.mass_migration.source,
             event->params.mass_migration.destination,
@@ -1959,12 +2026,32 @@ msp_reset_memory_state(msp_t *self)
     return ret;
 }
 
+static int WARN_UNUSED
+msp_insert_sample(msp_t *self, uint32_t sample, uint8_t population)
+{
+    int ret = MSP_ERR_GENERIC;
+    segment_t *u;
+
+    u = msp_alloc_segment(self, 0, self->num_loci, sample, population,
+            NULL, NULL);
+    if (u == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = msp_insert_individual(self, u);
+    if (ret != 0) {
+        goto out;
+    }
+    fenwick_set_value(&self->links, u->id, self->num_loci - 1);
+out:
+    return ret;
+}
+
 int
 msp_reset(msp_t *self)
 {
     int ret = 0;
-    segment_t *u;
-    uint32_t j, sample_id, population_id;
+    uint32_t j, population_id;
     population_t *pop, *initial_pop;
     size_t N = self->num_populations;
 
@@ -1973,37 +2060,24 @@ msp_reset(msp_t *self)
         goto out;
     }
     /* Set up the initial segments and algorithm state */
-    sample_id = 0;
     for (population_id = 0; population_id < N; population_id++) {
         pop = &self->populations[population_id];
         assert(avl_count(&pop->ancestors) == 0);
         /* Set the initial population parameters */
         initial_pop = &self->initial_populations[population_id];
-        pop->sample_size = initial_pop->sample_size;
         pop->growth_rate = initial_pop->growth_rate;
         pop->initial_size = initial_pop->initial_size;
         pop->start_time = 0.0;
-        /* Set up the sample */
-        for (j = 0; j < self->populations[population_id].sample_size; j++) {
-            u = msp_alloc_segment(self, 0, self->num_loci, sample_id,
-                    population_id, NULL, NULL);
-            if (u == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            ret = msp_insert_individual(self, u);
+    }
+    /* Set up the sample */
+    for (j = 0; j < self->sample_size; j++) {
+        if (self->samples[j].time == 0.0) {
+            ret = msp_insert_sample(self, j, self->samples[j].population_id);
             if (ret != 0) {
                 goto out;
             }
-            fenwick_set_value(&self->links, u->id, self->num_loci - 1);
-            /* TODO This should be an input parameter rather than
-             * something that gets filled out each time.
-             */
-            self->samples[sample_id].population_id = (uint8_t) population_id;
-            sample_id++;
         }
     }
-    assert(sample_id == self->sample_size);
     self->next_node = self->sample_size;
     self->next_demographic_event = self->demographic_events_head;
     memcpy(self->migration_matrix, self->initial_migration_matrix,
@@ -2018,6 +2092,7 @@ msp_reset(msp_t *self)
         goto out;
     }
     self->time = 0.0;
+    self->next_sampling_event = 0;
     self->num_coalescence_records = 0;
     self->num_re_events = 0;
     self->num_ca_events = 0;
@@ -2037,8 +2112,8 @@ msp_initialise(msp_t *self)
 {
     int ret = -1;
     double t;
+    uint32_t j;
     demographic_event_t *de;
-    uint32_t total, population_id;
 
     /* These should really be proper checks with a return value */
     assert(self->sample_size > 1);
@@ -2050,14 +2125,11 @@ msp_initialise(msp_t *self)
         goto out;
     }
     /* First check that the sample configuration makes sense */
-    total = 0;
-    for (population_id = 0; population_id < self->num_populations;
-            population_id++) {
-        total += self->initial_populations[population_id].sample_size;
-    }
-    if (total != self->sample_size) {
-        ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
-        goto out;
+    for (j = 0; j < self->sample_size; j++) {
+        if (self->samples[j].population_id >= self->num_populations) {
+            ret = MSP_ERR_BAD_SAMPLES;
+            goto out;
+        }
     }
     /* Are the demographic events time sorted? */
     t = 0;
@@ -2171,11 +2243,13 @@ int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait;
+    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait,
+           sampling_event_time, demographic_event_time;
     int64_t num_links;
     uint32_t j, k, n;
     uint32_t ca_pop_id, mig_source_pop, mig_dest_pop;
     unsigned long events = 0;
+    sampling_event_t *se;
 
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_SIMULATING;
@@ -2233,12 +2307,32 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             }
         }
         t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
-        if (self->next_demographic_event == NULL && t_wait == DBL_MAX) {
+        if (self->next_demographic_event == NULL
+                && self->next_sampling_event == self->num_sampling_events
+                && t_wait == DBL_MAX) {
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
         }
-        if (self->next_demographic_event != NULL
-                && self->next_demographic_event->time < self->time + t_wait) {
+        t_temp = self->time + t_wait;
+        sampling_event_time = DBL_MAX;
+        if (self->next_sampling_event < self->num_sampling_events) {
+            sampling_event_time = self->sampling_events[
+                self->next_sampling_event].time;
+        }
+        demographic_event_time = DBL_MAX;
+        if (self->next_demographic_event != NULL) {
+            demographic_event_time = self->next_demographic_event->time;
+        }
+        if (sampling_event_time < t_temp
+                && sampling_event_time < demographic_event_time) {
+            se = &self->sampling_events[self->next_sampling_event];
+            ret = msp_insert_sample(self, se->sample, se->population_id);
+            if (ret != 0) {
+                goto out;
+            }
+            self->next_sampling_event++;
+            self->time = se->time;
+        } else if (demographic_event_time < t_temp) {
             ret = msp_apply_demographic_events(self);
             if (ret != 0) {
                 goto out;
@@ -2407,13 +2501,14 @@ msp_get_coalescence_records(msp_t *self, coalescence_record_t *coalescence_recor
 int WARN_UNUSED
 msp_get_samples(msp_t *self, sample_t *samples)
 {
+    assert(self->samples != NULL);
     memcpy(samples, self->samples, self->sample_size * sizeof(sample_t));
     return 0;
 }
 
 int WARN_UNUSED
 msp_get_population_configuration(msp_t *self, size_t population_id,
-        size_t *sample_size, double *initial_size, double *growth_rate)
+        double *initial_size, double *growth_rate)
 {
     int ret = 0;
     population_t *pop;
@@ -2423,7 +2518,6 @@ msp_get_population_configuration(msp_t *self, size_t population_id,
         goto out;
     }
     pop = &self->populations[population_id];
-    *sample_size = pop->sample_size;
     *initial_size = pop->initial_size;
     *growth_rate = pop->growth_rate;
 out:

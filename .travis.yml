@@ -43,7 +43,8 @@ script:
   - python setup.py sdist 
   - pip install dist/msprime*.tar.gz --no-cache-dir
   # Now run the low-level tests.
-  - make -C lib travis-tests && ./lib/tests
+  - make -C lib travis-tests 
+  - ./lib/tests
 
 after_success:
   # Run gcov manually, as the one used in codecov doesn't work here.
