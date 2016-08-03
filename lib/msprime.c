@@ -1076,8 +1076,8 @@ msp_print_segment_chain(msp_t *self, segment_t *head, FILE *out)
     fprintf(out, "\n");
 }
 
-void
-msp_verify(msp_t *self)
+static void
+msp_verify_segments(msp_t *self)
 {
     int64_t s, ss, total_links, left, right, alt_total_links;
     size_t j;
@@ -1131,6 +1131,62 @@ msp_verify(msp_t *self)
          * asserts are turned off.
          */
     }
+}
+
+static void
+msp_verify_overlaps(msp_t *self)
+{
+    avl_node_t *node;
+    node_mapping_t *nm;
+    segment_t *u;
+    uint32_t j, k, left, right, count;
+    /* We check for every locus, so obviously this rules out large numbers
+     * of loci. This code should never be called except during testing,
+     * so we don't need to recover from malloc failure.
+     */
+    uint32_t *overlaps = calloc(self->num_loci, sizeof(uint32_t));
+
+    assert(overlaps != NULL);
+    /* Add in the counts for any historical samples that haven't been
+     * included yet.
+     */
+    for (j = 0; j < self->sample_size; j++) {
+        if (self->samples[j].time > self->time) {
+            for (k = 0; k < self->num_loci; k++) {
+                overlaps[k]++;
+            }
+        }
+    }
+    for (j = 0; j < self->num_populations; j++) {
+        for (node = (&self->populations[j].ancestors)->head; node != NULL;
+                node = node->next) {
+            u = (segment_t *) node->item;
+            while (u != NULL) {
+                for (k = u->left; k < u->right; k++) {
+                    overlaps[k]++;
+                }
+                u = u->next;
+            }
+        }
+    }
+    for (node = self->overlap_counts.head; node->next != NULL;
+            node = node->next) {
+        nm = (node_mapping_t *) node->item;
+        left = nm->left;
+        right = ((node_mapping_t *) node->next->item)->left;
+        count = nm->value;
+        for (k = left; k < right; k++) {
+            assert(overlaps[k] == count);
+        }
+    }
+    free(overlaps);
+}
+
+void
+msp_verify(msp_t *self)
+{
+    msp_verify_segments(self);
+    msp_verify_overlaps(self);
 }
 
 int
@@ -1248,6 +1304,8 @@ msp_print_state(msp_t *self, FILE *out)
     object_heap_print_state(&self->segment_heap, out);
     fprintf(out, "node_mapping_heap:");
     object_heap_print_state(&self->node_mapping_heap, out);
+    fprintf(out, "binary_children_heap:");
+    object_heap_print_state(&self->binary_children_heap, out);
     msp_verify(self);
 out:
     if (ancestors != NULL) {
@@ -1861,11 +1919,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
             next_l = ((segment_t *) node->item)->left;
             r_max = GSL_MIN(r_max, next_l);
         }
-
-        /* printf("LOOP HEAD: %d, l = %d, rmax = %d\n", h, l, r_max); */
-        /* for (j = 0; j < h; j++) { */
-        /*     msp_print_segment_chain(self, H[j], stdout); */
-        /* } */
         alpha = NULL;
         if (h == 1) {
             x = H[0];
@@ -1989,7 +2042,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
             z = alpha;
         }
     }
-
     if (defrag_required) {
         ret = msp_defrag_segment_chain(self, z);
         if (ret != 0) {
@@ -2003,6 +2055,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
         }
 
     }
+    ret = 0;
 out:
     if (H != NULL) {
         free(H);
@@ -2262,21 +2315,19 @@ static int WARN_UNUSED
 msp_apply_demographic_events(msp_t *self)
 {
     int ret = 0;
-    double t_event;
     demographic_event_t *event;
 
     assert(self->next_demographic_event != NULL);
     /* Process all events with equal time in one block. */
-    t_event = self->next_demographic_event->time;
+    self->time = self->next_demographic_event->time;
     while (self->next_demographic_event != NULL
-            && self->next_demographic_event->time == t_event) {
+            && self->next_demographic_event->time == self->time) {
         /* We skip ahead to the start time for the next demographic
          * event, and use its change_state method to update the
          * state of the simulation.
          */
         event = self->next_demographic_event;
         assert(event->change_state != NULL);
-        self->time = event->time;
         ret = event->change_state(self, event);
         if (ret != 0) {
             goto out;
@@ -2374,12 +2425,12 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         if (sampling_event_time < t_temp
                 && sampling_event_time < demographic_event_time) {
             se = &self->sampling_events[self->next_sampling_event];
+            self->time = se->time;
             ret = msp_insert_sample(self, se->sample, se->population_id);
             if (ret != 0) {
                 goto out;
             }
             self->next_sampling_event++;
-            self->time = se->time;
         } else if (demographic_event_time < t_temp) {
             ret = msp_apply_demographic_events(self);
             if (ret != 0) {

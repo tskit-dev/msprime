@@ -836,7 +836,7 @@ run_simulate(char *conf_file)
                 goto out;
             }
             msp_verify(msp);
-            /* ret = msp_print_state(msp); */
+            ret = msp_print_state(msp, stdout);
         }
         ret = msp_print_state(msp, stdout);
         if (ret != 0) {
