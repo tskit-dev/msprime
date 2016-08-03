@@ -22,6 +22,7 @@ import pandas as pd
 matplotlib.use('Agg')
 import matplotlib.pyplot as pyplot
 
+import _msprime
 import msprime
 
 def mutations():
@@ -531,6 +532,7 @@ def records_example():
     for t in ts.trees():
         print(t)
 
+<<<<<<< HEAD
 def stuff():
     before = time.clock()
     # Run the actual simulations
@@ -572,6 +574,22 @@ def examine():
     for k, v in num_nodes.items():
         print(k, "->", v)
 
+def convert_dev():
+    filename = "v2.hdf5"
+    with msprime.Hdf5FileReader(filename) as reader:
+        records = list(reader.records())
+        mutations = list(reader.mutations())
+        # OK, it get's a bit trickier here....
+        samples = list(reader.samples())
+    print(samples)
+
+    ll_ts = _msprime.TreeSequence()
+    ll_ts.load_records(records)
+    ts = msprime.TreeSequence(ll_ts)
+    ts.set_mutations(mutations)
+    print(ts.get_sample_size())
+    ts.dump("v3.hdf5")
+
 
 if __name__ == "__main__":
     # mutations()
@@ -596,15 +614,4 @@ if __name__ == "__main__":
     # records_example()
     # stuff()
     # examine()
-
-    tree_sequence = msprime.simulate(
-        10, length=10, recombination_rate=10,
-        mutation_rate=10, random_seed=1)
-    tree_sequence.dump("tmp.hdf5")
-    for h in tree_sequence.haplotypes():
-        pass
-    tree_sequence = msprime.load("tmp.hdf5")
-    print("NRE")
-    for h in tree_sequence.haplotypes():
-        print(h)
-
+    convert_dev()
