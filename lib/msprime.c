@@ -1775,89 +1775,6 @@ out:
     return ret;
 }
 
-
-/*
-        pop = self.P[pop_id]
-        defrag_required = False
-        coalescence = False
-        alpha = None
-        z = None
-        while len(H) > 0:
-            # print("LOOP HEAD")
-            # self.print_heaps(H)
-            alpha = None
-            l = H[0][0]
-            X = []
-            r_max = self.m + 1
-            while len(H) > 0 and H[0][0] == l:
-                x = heapq.heappop(H)[1]
-                X.append(x)
-                r_max = min(r_max, x.right)
-            if len(H) > 0:
-                r_max = min(r_max, H[0][0])
-            if len(X) == 1:
-                x = X[0]
-                if len(H) > 0 and H[0][0] < x.right:
-                    alpha = self.alloc_segment(
-                        x.left, H[0][0], x.node, x.population)
-                    x.left = H[0][0]
-                    heapq.heappush(H, (x.left, x))
-                else:
-                    alpha = x
-                    if x.next is not None:
-                        y = x.next
-                        heapq.heappush(H, (y.left, y))
-            else:
-                if not coalescence:
-                    coalescence = True
-                    self.w += 1
-                u = self.w - 1
-                # We must also break if the next left value is less than
-                # any of the right values in the current overlap set.
-                if l not in self.S:
-                    j = self.S.floor_key(l)
-                    self.S[l] = self.S[j]
-                if r_max not in self.S:
-                    j = self.S.floor_key(r_max)
-                    self.S[r_max] = self.S[j]
-                # Update the number of extant segments.
-                if self.S[l] == len(X):
-                    self.S[l] = 0
-                    r = self.S.succ_key(l)
-                else:
-                    r = l
-                    while r < r_max and self.S[r] != len(X):
-                        self.S[r] -= len(X) - 1
-                        r = self.S.succ_key(r)
-                    alpha = self.alloc_segment(l, r, u, pop_id)
-                # Update the heaps and make the record.
-                children = []
-                for x in X:
-                    children.append(x.node)
-                    if x.right == r:
-                        self.free_segment(x)
-                        if x.next is not None:
-                            y = x.next
-                            heapq.heappush(H, (y.left, y))
-                    elif x.right > r:
-                        x.left = r
-                        heapq.heappush(H, (x.left, x))
-                self.C.append((l, r, u, children, self.t))
-
-            # loop tail; update alpha and integrate it into the state.
-            if alpha is not None:
-                if z is None:
-                    pop.add(alpha)
-                    self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
-                else:
-                    defrag_required |= (
-                        z.right == alpha.left and z.node == alpha.node)
-                    z.next = alpha
-                    self.L.set_value(alpha.index, alpha.right - z.right)
-                alpha.prev = z
-                z = alpha
-*/
-
 static int WARN_UNUSED
 msp_priority_queue_insert(msp_t *self, avl_tree_t *Q, segment_t *u)
 {
@@ -3042,8 +2959,6 @@ msp_bottleneck(msp_t *self, demographic_event_t *event)
         ret = MSP_ERR_ASSERTION_FAILED;
         goto out;
     }
-    /* printf("BOTTLENECK!!\n"); */
-    /* msp_print_state(self, stdout); */
     avl_init_tree(&Q, cmp_segment_queue, NULL);
     /*
      * Find the individuals that descend from the common ancestor
@@ -3055,8 +2970,6 @@ msp_bottleneck(msp_t *self, demographic_event_t *event)
         next = node->next;
         if (gsl_rng_uniform(self->rng) < p) {
             u = (segment_t *) node->item;
-            /* printf("Insert (%d,%d)\t", u->left, (int) u->id); */
-            /* msp_print_segment_chain(self, u, stdout); */
             avl_unlink_node(pop, node);
             msp_free_avl_node(self, node);
             q_node = msp_alloc_avl_node(self);
@@ -3071,8 +2984,6 @@ msp_bottleneck(msp_t *self, demographic_event_t *event)
         node = next;
     }
     ret = msp_merge_ancestors(self, &Q, (uint32_t) population_id);
-    /* printf("DONE\n"); */
-    /* msp_print_state(self, stdout); */
 out:
     return ret;
 }

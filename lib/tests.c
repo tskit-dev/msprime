@@ -281,8 +281,7 @@ get_example_tree_sequences(void)
     ret[2] = get_example_tree_sequence(3, 0, 3, 10.0, 0.0, 0, NULL);
     ret[3] = get_example_tree_sequence(100, 0, 100, 10.0, 0.0, 1, bottlenecks);
     ret[4] = get_example_tree_sequence(10, 9, 100, 1.0, 0.0, 1, bottlenecks);
-    /* ret[4] = get_example_tree_sequence(1000, 10, 1.0, 0.0, 2, bottlenecks); */
-    /* TODO 4 triggers low-level assert at the moment. Fix. */
+    /* ret[5] = get_example_tree_sequence(1000, 10, 10, 1.0, 0.0, 2, bottlenecks); */
     ret[5] = NULL;
     return ret;
 }
@@ -505,7 +504,7 @@ test_multi_locus_simulation(void)
      * expansions. */
     ret = msp_set_avl_node_block_size(msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_avl_node_block_size(msp, 1);
+    ret = msp_set_node_mapping_block_size(msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_segment_block_size(msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
@@ -575,7 +574,7 @@ test_bottleneck_simulation(void)
      * expansions. */
     ret = msp_set_avl_node_block_size(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_avl_node_block_size(msp, 2);
+    ret = msp_set_node_mapping_block_size(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_segment_block_size(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
@@ -597,7 +596,7 @@ test_bottleneck_simulation(void)
     ret = msp_run(msp, t1, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 2);
     CU_ASSERT_FALSE(msp_is_completed(msp));
-    msp_verify(msp);
+    msp_print_state(msp, _devnull);
 
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
@@ -615,6 +614,80 @@ test_bottleneck_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_TRUE(t1_found);
     CU_ASSERT_EQUAL(msp->time, t2);
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+}
+
+static void
+test_large_bottleneck_simulation(void)
+{
+    int ret;
+    uint32_t j;
+    uint32_t n = 10000;
+    uint32_t m = 100;
+    long seed = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    uint32_t num_bottlenecks = 10;
+    bottleneck_desc_t bottlenecks[num_bottlenecks];
+    double t;
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    t = 0.1;
+    for (j = 0; j < num_bottlenecks; j++) {
+        bottlenecks[j].time = t;
+        bottlenecks[j].intensity = 0.1;
+        t += 0.01;
+    }
+    /* Set the last bottleneck to be full intensity */
+    bottlenecks[num_bottlenecks - 1].intensity = 1.0;
+
+    gsl_rng_set(rng, seed);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_scaled_recombination_rate(msp, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_loci(msp, m);
+    CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < num_bottlenecks; j++) {
+        msp_add_bottleneck(msp, bottlenecks[j].time, 0,
+                bottlenecks[j].intensity);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    for (j = 0; j < num_bottlenecks - 1; j++) {
+        ret = msp_run(msp, bottlenecks[j].time, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 2);
+        CU_ASSERT_FALSE(msp_is_completed(msp));
+        CU_ASSERT_EQUAL(msp->time, bottlenecks[j].time);
+        msp_verify(msp);
+    }
+    ret = msp_run(msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_TRUE(msp_is_completed(msp));
+    CU_ASSERT_EQUAL(msp->time, bottlenecks[num_bottlenecks - 1].time);
+    msp_verify(msp);
+
+    /* Test out resets on partially completed simulations. */
+    ret = msp_reset(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < num_bottlenecks - 1; j++) {
+        ret = msp_run(msp, bottlenecks[j].time, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 2);
+    }
+    ret = msp_reset(msp);
+    msp_verify(msp);
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2577,6 +2650,7 @@ main(void)
         {"Single locus simulation", test_single_locus_simulation},
         {"Multi locus simulation", test_multi_locus_simulation},
         {"Bottleneck simulation", test_bottleneck_simulation},
+        {"Large bottleneck simulation", test_large_bottleneck_simulation},
         CU_TEST_INFO_NULL,
     };
     CU_SuiteInfo suites[] = {
