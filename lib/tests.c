@@ -444,6 +444,130 @@ test_single_locus_historical_sample(void)
 }
 
 static void
+test_simulator_getters_setters(void)
+{
+    int ret;
+    uint32_t j;
+    uint32_t n = 10;
+    uint32_t m = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    double migration_matrix[] = {0, 0, 0, 0};
+    double matrix[4];
+    size_t migration_events[4];
+    size_t breakpoints[m];
+    msp_t msp;
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    for (j = 0; j < n; j++) {
+        samples[j].time = j;
+        samples[j].population_id = j % 2;
+    }
+    CU_ASSERT_EQUAL(msp_alloc(&msp, 0, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
+    msp_free(&msp);
+    samples[0].time = 1.0;
+    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), MSP_ERR_BAD_SAMPLES);
+    msp_free(&msp);
+    samples[0].time = -1.0;
+    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), MSP_ERR_BAD_PARAM_VALUE);
+    msp_free(&msp);
+    samples[0].time = 0.0;
+
+    ret = msp_alloc(&msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(msp_set_max_memory(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_node_mapping_block_size(&msp, 0),
+            MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_segment_block_size(&msp, 0),
+            MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_avl_node_block_size(&msp, 0),
+            MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_coalescence_record_block_size(&msp, 0),
+            MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_num_loci(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_num_populations(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(
+            msp_set_scaled_recombination_rate(&msp, -1),
+            MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(
+            msp_set_population_configuration(&msp, -1, 0, 0),
+            MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(
+            msp_set_population_configuration(&msp, 3, 0, 0),
+            MSP_ERR_BAD_POPULATION_ID);
+
+    ret = msp_set_num_populations(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 1, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    CU_ASSERT_EQUAL(
+            msp_set_migration_matrix(&msp, 0, NULL),
+            MSP_ERR_BAD_MIGRATION_MATRIX);
+    CU_ASSERT_EQUAL(
+            msp_set_migration_matrix(&msp, 3, migration_matrix),
+            MSP_ERR_BAD_MIGRATION_MATRIX);
+    migration_matrix[0] = 1;
+    CU_ASSERT_EQUAL(
+            msp_set_migration_matrix(&msp, 4, migration_matrix),
+            MSP_ERR_BAD_MIGRATION_MATRIX);
+    migration_matrix[0] = 0;
+    migration_matrix[1] = -1;
+    CU_ASSERT_EQUAL(
+            msp_set_migration_matrix(&msp, 4, migration_matrix),
+            MSP_ERR_BAD_MIGRATION_MATRIX);
+
+    migration_matrix[1] = 1;
+    migration_matrix[2] = 1;
+    ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_loci(&msp, m);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_scaled_recombination_rate(&msp, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
+    CU_ASSERT_EQUAL(msp_get_num_node_mapping_blocks(&msp), 1);
+    CU_ASSERT_EQUAL(msp_get_num_segment_blocks(&msp), 1);
+    CU_ASSERT_EQUAL(msp_get_num_coalescence_record_blocks(&msp), 1);
+    CU_ASSERT(msp_get_used_memory(&msp) > 0);
+    CU_ASSERT_EQUAL(msp_get_num_populations(&msp), 2);
+
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(msp_get_num_breakpoints(&msp), m - 1);
+    ret = msp_get_breakpoints(&msp, breakpoints);
+    CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < m - 1; j++) {
+        CU_ASSERT_EQUAL(breakpoints[j], j + 1);
+    }
+    ret = msp_get_num_migration_events(&msp, migration_events);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(migration_events[0], 0);
+    CU_ASSERT(migration_events[1] > 0);
+    CU_ASSERT(migration_events[2] > 0);
+    CU_ASSERT_EQUAL(migration_events[3], 0);
+    ret = msp_get_migration_matrix(&msp, matrix);
+    CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < 4; j++) {
+        CU_ASSERT_EQUAL(matrix[j], migration_matrix[j]);
+    }
+    CU_ASSERT(msp_get_num_common_ancestor_events(&msp) > 0);
+    CU_ASSERT(msp_get_num_recombination_events(&msp) > 0);
+
+    free(samples);
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+}
+
+
+static void
 test_single_locus_simulation(void)
 {
     int ret;
@@ -2558,6 +2682,25 @@ test_records_equivalent(void)
     free_local_records(num_records, records);
 }
 
+static void
+test_strerror(void)
+{
+    int j;
+    const char *msg;
+    int max_error_code = 1024; /* totally arbitrary */
+
+    for (j = 0; j < max_error_code; j++) {
+        msg = msp_strerror(-j);
+        CU_ASSERT_FATAL(msg != NULL);
+        if (-j == MSP_ERR_HDF5) {
+            /* There is no HDF5 error, so... */
+            CU_ASSERT_EQUAL(strlen(msg), 0);
+        } else {
+            CU_ASSERT(strlen(msg) > 0);
+        }
+    }
+}
+
 static int
 msprime_suite_init(void)
 {
@@ -2647,10 +2790,12 @@ main(void)
         {"Historical samples two populations",
             test_single_locus_two_populations},
         {"Historical samples", test_single_locus_historical_sample},
+        {"Simulator getters/setters", test_simulator_getters_setters},
         {"Single locus simulation", test_single_locus_simulation},
         {"Multi locus simulation", test_multi_locus_simulation},
         {"Bottleneck simulation", test_bottleneck_simulation},
         {"Large bottleneck simulation", test_large_bottleneck_simulation},
+        {"Test error messages", test_strerror},
         CU_TEST_INFO_NULL,
     };
     CU_SuiteInfo suites[] = {
