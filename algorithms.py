@@ -830,8 +830,23 @@ class LeafListNode(object):
         return "{}->{}".format(self.value, next)
 
 def propagate_leaf_loss(u, pi, xi, head, tail):
+    # Invalidate the head and tail pointers above u that depend
+    # on this node.
     head[u] = None
     tail[u] = None
+    # v = u
+    # x = head[v]
+    # while v != -1 and head[v] == x:
+    #     print("\t propagating loss: head[", v, "] = ", x)
+    #     head[v] = None
+    #     v = pi[v]
+    # v = u
+    # x = tail[v]
+    # while v != -1 and tail[v] == x:
+    #     print("\t propagating loss: tail[", v, "] = ", x)
+    #     tail[v] = None
+    #     v = pi[v]
+
 
 def propagate_leaf_gain(u, pi, xi, head, tail):
     print("leaf gain", u, xi[u])
@@ -841,57 +856,132 @@ def propagate_leaf_gain(u, pi, xi, head, tail):
         print("\tset next(", tail[xi[u][j - 1]].value, ") to ",
                 head[xi[u][j]].value)
     head[u] = head[xi[u][0]]
-    print("set head[{}] to {}".format(u, head[u]))
     tail[u] = tail[xi[u][-1]]
-    print("set tail[{}] to {}".format(u, tail[u]))
-    print("parent? = ", u, pi[u])
-    v = pi[u]
-    if v != -1:
-        j = xi[v].index(u)
+
+    v = u
+    w = pi[v]
+    print("propagate head")
+    while w != -1:
+        j = xi[w].index(v)
+        print("v = ", v, "w = ", w, "j = ", j)
+        if j != 0:
+            break
+        head[w] = head[u]
+        print("set head[{}] = {}".format(w, head[u].value))
+        v = w
+        w = pi[w]
+    v = u
+    w = pi[v]
+    print("propagate tail")
+    while w != -1:
+        j = xi[w].index(v)
+        print("v = ", v, "w = ", w, "j = ", j)
+        if j !=len(xi[w]) - 1:
+            break
+        tail[w] = tail[u]
+        print("set tail[{}] = {}".format(w, tail[u].value))
+        v = w
+        w = pi[w]
+
+def post_propagate_leaf_gain(u, pi, xi, head, tail):
+
+    # # First propagate the head and tail values upwards.
+    # v = u
+    # w = pi[v]
+    # print("propagate head")
+    # while w != -1:
+    #     j = xi[w].index(v)
+    #     print("v = ", v, "w = ", w, "j = ", j)
+    #     if j != 0:
+    #         break
+    #     head[w] = head[u]
+    #     print("set head[{}] = {}".format(w, head[u].value))
+    #     v = w
+    #     w = pi[w]
+    # v = u
+    # w = pi[v]
+    # print("propagate tail")
+    # while w != -1:
+    #     j = xi[w].index(v)
+    #     print("v = ", v, "w = ", w, "j = ", j)
+    #     if j !=len(xi[w]) - 1:
+    #         break
+    #     tail[w] = tail[u]
+    #     print("set tail[{}] = {}".format(w, tail[u].value))
+    #     v = w
+    #     w = pi[w]
+
+    v = u
+    w = pi[v]
+    print("Fix links", w, xi[w])
+    while w != -1:
+        print("v = ", v, "w = ", w)
+        j = xi[w].index(v)
         print("INDEX of child = ", j)
         if j == 0:
-            print("\tj = 0")
-            tail[u].next = head[xi[v][1]]
-            if tail[u].next is not None:
-                print("\t linked", tail[u].value, "to", tail[u].next.value)
-            x = head[v]
-            while v != -1 and head[v] == x:
-                print("\t propagating: head[", v, "] = ", head[u])
-                head[v] = head[u]
-                u = v
-                v = pi[v]
-            if v != -1:
-                k = xi[v].index(u)
-                print("\tEND of 0 case, u = {} v = {}, k = {} ".format(u, v, k))
-                assert k > 0
-                if tail[xi[v][k - 1]] is not None:
-                    tail[xi[v][k - 1]].next = head[u]
-                    print("\t HEAD linked", tail[xi[v][k - 1]].value, "to", head[u].value)
-        elif j == len(xi[v]) - 1:
-            print("\tj = -1")
-            tail[xi[v][-2]].next = head[u]
-            print("\t linked", tail[xi[v][-2]].value, "to", head[u].value)
-            x = tail[v]
-            while v != -1 and tail[v] == x:
-                print("\t propagating: tail[", v, "] = ", tail[u])
-                tail[v] = tail[u]
-                u = v
-                v = pi[v]
-            if v != -1:
-                k = xi[v].index(u)
-                print("\tEND of -1 case, u = {} v = {}, k = {} ".format(u, v, k))
-                assert k < len(xi[v]) - 1
-                tail[u].next = head[xi[v][k + 1]]
-                if tail[u].next is not None:
-                    print("\t TAIL linked", tail[u].value, "to", tail[u].next.value)
+            tail[v].next = head[xi[w][1]]
+            print("\t linked", tail[v].value, "to", tail[v].next.value)
+        elif j == len(xi[w]) - 1:
+            tail[xi[w][-2]].next = head[v]
+            print("\t linked", tail[xi[w][-2]].value, "to", head[v].value)
         else:
-            print("\tj = middle")
-            tail[xi[v][j - 1]].next = head[u]
-            # print("\t linked", tail[xi[v][j - 1]].value, "to", head[u].value)
-            tail[u].next = head[xi[v][j + 1]]
-            # print("\t linked", tail[u].value, "to", tail[u].next.value)
+            tail[xi[w][j - 1]].next = head[v]
+            print("\t linked", tail[xi[w][j - 1]].value, "to", head[v].value)
+            tail[v].next = head[xi[w][j + 1]]
+            print("\t linked", tail[v].value, "to", head[v].next.value)
+        v = w
+        w = pi[w]
 
-    print()
+
+
+    # v = pi[u]
+    # if v != -1:
+    #     j = xi[v].index(u)
+    #     print("INDEX of child = ", j)
+    #     if j == 0:
+    #         print("\tj = 0")
+    #         x = head[v]
+    #         while v != -1 and head[v] == x:
+    #             tail[u].next = head[xi[v][1]]
+    #             print("\t linked", tail[u].value, "to", tail[u].next.value)
+    #             print("\t propagating: head[", v, "] = ", head[u])
+    #             head[v] = head[u]
+    #             u = v
+    #             v = pi[v]
+    #         # if v != -1:
+    #         #     k = xi[v].index(u)
+    #         #     print("\tEND of 0 case, u = {} v = {}, k = {} ".format(u, v, k))
+    #         #     assert k > 0
+    #         #     if tail[xi[v][k - 1]] is not None:
+    #         #         tail[xi[v][k - 1]].next = head[u]
+    #         #         print("\t HEAD linked", tail[xi[v][k - 1]].value, "to", head[u].value)
+    #     elif j == len(xi[v]) - 1:
+    #         print("\tj = -1")
+    #         x = tail[v]
+    #         while v != -1 and tail[v] == x:
+    #             tail[xi[v][-2]].next = head[u]
+    #             print("\t linked", tail[xi[v][-2]].value, "to", head[u].value)
+    #             print("\t propagating: tail[", v, "] = ", tail[u])
+    #             tail[v] = tail[u]
+    #             u = v
+    #             v = pi[v]
+    #         # print("end of -1 case, v = ", v)
+    #         # if v != -1:
+    #         #     k = xi[v].index(u)
+    #         #     print("\tEND of -1 case, u = {} v = {}, k = {} ".format(u, v, k))
+    #         #     print("k = ", k)
+    #         #     assert k < len(xi[v]) - 1
+    #         #     tail[u].next = head[xi[v][k + 1]]
+    #         #     if tail[u].next is not None:
+    #         #         print("\t TAIL linked", tail[u].value, "to", tail[u].next.value)
+    #     else:
+    #         print("\tj = middle")
+    #         tail[xi[v][j - 1]].next = head[u]
+    #         print("\t linked", tail[xi[v][j - 1]].value, "to", head[u].value)
+    #         # tail[u].next = head[xi[v][j + 1]]
+    #         # print("\t linked", tail[u].value, "to", tail[u].next.value)
+
+    # print()
 
 
 
@@ -925,6 +1015,7 @@ def leaf_sets(l, r, u, c, t, S):
                 pi[q] = -1
             xi[u[h]] = []
             k += 1
+        before = j
         while j < M and l[I[j]] == x:
             h = I[j]
             print("adding", u[h], c[h])
@@ -932,7 +1023,12 @@ def leaf_sets(l, r, u, c, t, S):
                 pi[q] = u[h]
             xi[u[h]] = c[h]
             propagate_leaf_gain(u[h], pi, xi, head, tail)
-            j = j + 1
+            j += 1
+        j = before
+        while j < M and l[I[j]] == x:
+            h = I[j]
+            post_propagate_leaf_gain(u[h], pi, xi, head, tail)
+            j += 1
         yield pi, xi, head, tail
 
 
@@ -949,9 +1045,9 @@ def check_consistency(n, pi, xi, head, tail):
     for u in nodes(root, xi):
         node_leaves = list(leaves(u, xi))
         if node_leaves[0] != head[u].value:
-            print("ERROR: head incorrect:", head[u].value)
+            print("HERROR: head incorrect:", head[u].value)
         if node_leaves[-1] != tail[u].value:
-            print("ERROR: tail incorrect:", tail[u].value)
+            print("TERROR: tail incorrect:", tail[u].value)
         list_leaves = []
         x = head[u]
         while True:
@@ -964,9 +1060,10 @@ def check_consistency(n, pi, xi, head, tail):
                 break
             x = x.next
         if list_leaves != node_leaves:
+            print("ERROR")
             print(list_leaves)
             print(node_leaves)
-        assert list_leaves == node_leaves
+        # assert list_leaves == node_leaves
         # print(list_leaves)
         # print(list_leaves == node_leaves)
 
