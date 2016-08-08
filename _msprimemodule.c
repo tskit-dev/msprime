@@ -399,13 +399,13 @@ RandomGenerator_init(RandomGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     static char *kwlist[] = {"seed", NULL};
-    unsigned long seed = 0;
+    unsigned long long seed = 0;
 
     self->rng  = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "k", kwlist, &seed)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "K", kwlist, &seed)) {
         goto out;
     }
-    if (seed == 0 || seed >= (1UL<<32)) {
+    if (seed == 0 || seed >= (1ULL<<32)) {
         PyErr_Format(PyExc_ValueError,
             "seeds must be greater than 0 and less than 2^32");
         goto out;

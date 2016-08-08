@@ -51,7 +51,8 @@ hdf5_error_walker(unsigned n, const H5E_error2_t *err_desc, void *client_data)
     if (_hdf5_error[0] == '\0') {
         snprintf(_hdf5_error, MSP_HDF5_ERR_MSG_SIZE,
                 "HDF5 Error: %d: %d:'%s'",
-                err_desc->maj_num, err_desc->min_num, err_desc->desc);
+                (int) err_desc->maj_num, (int) err_desc->min_num,
+                err_desc->desc);
     }
     return 0;
 }
