@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -2130,9 +2130,7 @@ int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
     int ret = -1;
-    double t;
     uint32_t j;
-    demographic_event_t *de;
 
     /* These should really be proper checks with a return value */
     assert(self->sample_size > 1);
@@ -2149,19 +2147,6 @@ msp_initialise(msp_t *self)
             ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
-    }
-    /* Are the demographic events time sorted? */
-    t = 0;
-    for (de = self->demographic_events_head; de != NULL; de = de->next) {
-        if (de->time < 0) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        if (de->time < t) {
-            ret = MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS;
-            goto out;
-        }
-        t = de->time;
     }
     /* TODO generate these lazily on demand? */
     ret = msp_generate_provenance_strings(self);
@@ -2559,24 +2544,34 @@ msp_get_configuration_json(msp_t *self)
 }
 
 /* Demographic events */
-static demographic_event_t * WARN_UNUSED
-msp_add_demographic_event(msp_t *self, double time)
+static int WARN_UNUSED
+msp_add_demographic_event(msp_t *self, double time, demographic_event_t **event)
 {
-    demographic_event_t *ret = NULL;
+    int ret = MSP_ERR_GENERIC;
+    demographic_event_t *ret_event = NULL;
 
-    ret = calloc(1, sizeof(demographic_event_t));
-    if (ret == NULL) {
+    if (self->demographic_events_tail != NULL) {
+        if (time < self->demographic_events_tail->time) {
+            ret = MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS;
+            goto out;
+        }
+    }
+    ret_event = calloc(1, sizeof(demographic_event_t));
+    if (ret_event == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret->time = time;
+    ret_event->time = time;
     /* now insert this event at the end of the chain. */
     if (self->demographic_events_head == NULL) {
-        self->demographic_events_head = ret;
-        self->demographic_events_tail = ret;
+        self->demographic_events_head = ret_event;
+        self->demographic_events_tail = ret_event;
     } else {
-        self->demographic_events_tail->next = ret;
-        self->demographic_events_tail = ret;
+        self->demographic_events_tail->next = ret_event;
+        self->demographic_events_tail = ret_event;
     }
+    *event = ret_event;
+    ret = 0;
 out:
     return ret;
 }
@@ -2705,13 +2700,9 @@ msp_add_population_parameters_change(msp_t *self, double time, int population_id
         double initial_size, double growth_rate)
 {
     int ret = -1;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
+    demographic_event_t *de;
     int N = (int) self->num_populations;
 
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     if (population_id < -1 || population_id >= N) {
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
@@ -2722,6 +2713,10 @@ msp_add_population_parameters_change(msp_t *self, double time, int population_id
     }
     if (gsl_isnan(initial_size) && gsl_isnan(growth_rate)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
         goto out;
     }
     de->params.population_parameters_change.population_id = population_id;
@@ -2814,13 +2809,9 @@ msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate)
 {
     int ret = -1;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
+    demographic_event_t *de;
     int N = (int) self->num_populations;
 
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     if (matrix_index < -1 || matrix_index >= N * N) {
         ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
         goto out;
@@ -2831,6 +2822,10 @@ msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
     }
     if (matrix_index % (N + 1) == 0) {
         ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
         goto out;
     }
     de->params.migration_rate_change.migration_rate = migration_rate;
@@ -2912,13 +2907,9 @@ msp_add_mass_migration(msp_t *self, double time, int source, int destination,
         double proportion)
 {
     int ret = 0;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
+    demographic_event_t *de;
     int N = (int) self->num_populations;
 
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     if (source < 0 || source >= N || destination < 0 || destination >= N) {
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
@@ -2929,6 +2920,10 @@ msp_add_mass_migration(msp_t *self, double time, int source, int destination,
     }
     if (proportion < 0.0 || proportion > 1.0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
         goto out;
     }
     de->params.mass_migration.source = source;
@@ -3018,19 +3013,19 @@ msp_add_bottleneck(msp_t *self, double time, int population_id,
         double intensity)
 {
     int ret = 0;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
+    demographic_event_t *de;
     int N = (int) self->num_populations;
 
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     if (population_id < 0 || population_id >= N) {
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
     if (intensity < 0.0 || intensity > 1.0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
         goto out;
     }
     de->params.bottleneck.population_id = population_id;

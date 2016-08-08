@@ -804,19 +804,16 @@ run_simulate(char *conf_file)
         goto out;
     }
     /* print out the demographic event debug state */
-    /* TODO fix demography debug support for bottlenecks */
-    if (0) {
-        start_time = 0;
-        do {
+    start_time = 0;
+    do {
 
-            ret = msp_debug_demography(msp, &end_time);
-            printf("interval %f - %f\n", start_time, end_time);
-            msp_print_state(msp, stdout);
-            start_time = end_time;
-        } while (! gsl_isinf(end_time));
-        if (ret != 0) {
-            goto out;
-        }
+        ret = msp_debug_demography(msp, &end_time);
+        printf("interval %f - %f\n", start_time, end_time);
+        msp_print_state(msp, stdout);
+        start_time = end_time;
+    } while (! gsl_isinf(end_time));
+    if (ret != 0) {
+        goto out;
     }
     ret = msp_reset(msp);
     if (ret != 0) {

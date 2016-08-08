@@ -28,6 +28,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <hdf5.h>
+#include <gsl/gsl_math.h>
 #include <CUnit/Basic.h>
 
 /* Global variables used for test in state in the test suite */
@@ -453,9 +455,10 @@ test_simulator_getters_setters(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     double migration_matrix[] = {0, 0, 0, 0};
-    double matrix[4];
+    double matrix[4], growth_rate, initial_size;
     size_t migration_events[4];
     size_t breakpoints[m];
+    population_t *population;
     msp_t msp;
 
     CU_ASSERT_FATAL(samples != NULL);
@@ -500,7 +503,10 @@ test_simulator_getters_setters(void)
 
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, 1, 1);
+    CU_ASSERT_EQUAL(
+            msp_get_population_configuration(&msp, 3, NULL, NULL),
+            MSP_ERR_BAD_POPULATION_ID);
+    ret = msp_set_population_configuration(&msp, 0, 2, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
 
     CU_ASSERT_EQUAL(
@@ -530,6 +536,20 @@ test_simulator_getters_setters(void)
 
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_get_population_configuration(&msp, 0,
+            &initial_size, &growth_rate);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(initial_size, 2);
+    CU_ASSERT_EQUAL(growth_rate, 0.5);
+    CU_ASSERT_EQUAL(
+            msp_get_population(&msp, 3, NULL),
+            MSP_ERR_BAD_POPULATION_ID);
+    ret = msp_get_population(&msp, 0, &population);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(population->initial_size, 2);
+    CU_ASSERT_EQUAL(population->growth_rate, 0.5);
+    CU_ASSERT_EQUAL(population->start_time, 0.0);
 
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_node_mapping_blocks(&msp), 1);
@@ -566,6 +586,145 @@ test_simulator_getters_setters(void)
     gsl_rng_free(rng);
 }
 
+static void
+test_simulator_demographic_events(void)
+{
+    int ret;
+    uint32_t j;
+    uint32_t n = 10;
+    uint32_t m = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    double migration_matrix[] = {0, 1, 1, 0};
+    double time;
+    msp_t msp;
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    for (j = 0; j < n; j++) {
+        samples[j].time = j;
+        samples[j].population_id = j % 2;
+    }
+    ret = msp_alloc(&msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_populations(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 1, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 1, 2, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_loci(&msp, m);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_scaled_recombination_rate(&msp, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    CU_ASSERT_EQUAL(
+        msp_add_mass_migration(&msp, 10, -1, 0, 1),
+        MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(
+        msp_add_mass_migration(&msp, 10, 2, 0, 1),
+        MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(
+        msp_add_mass_migration(&msp, 10, 0, 0, 1),
+        MSP_ERR_SOURCE_DEST_EQUAL);
+    CU_ASSERT_EQUAL(
+        msp_add_mass_migration(&msp, 10, 0, 1, -5),
+        MSP_ERR_BAD_PARAM_VALUE);
+
+    CU_ASSERT_EQUAL(
+        msp_add_migration_rate_change(&msp, 10, -2, 2.0),
+        MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
+    CU_ASSERT_EQUAL(
+        msp_add_migration_rate_change(&msp, 10, -1, -2.0),
+        MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(
+        msp_add_migration_rate_change(&msp, 10, 3, 2.0),
+        MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX);
+
+    CU_ASSERT_EQUAL(
+        msp_add_population_parameters_change(&msp, 10, -2, 0, 0),
+        MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(
+        msp_add_population_parameters_change(&msp, 10, -1, -1, 0),
+        MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(
+        msp_add_population_parameters_change(&msp, 10, -1, GSL_NAN, GSL_NAN),
+        MSP_ERR_BAD_PARAM_VALUE);
+
+    CU_ASSERT_EQUAL(
+        msp_add_bottleneck(&msp, 10, -1, 0),
+        MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(
+        msp_add_bottleneck(&msp, 10, 0, -1),
+        MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(
+        msp_add_bottleneck(&msp, 10, 0, 1.1),
+        MSP_ERR_BAD_PARAM_VALUE);
+
+    ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_migration_rate_change(&msp, 0.2, 1, 2.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_migration_rate_change(&msp, 0.3, -1, 3.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_parameters_change(&msp, 0.5, -1, 0.5, 2.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 2.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_bottleneck(&msp, 0.8, 0, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    CU_ASSERT_EQUAL(
+            msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+    CU_ASSERT_EQUAL(
+            msp_add_migration_rate_change(&msp, 0.2, 1, 2.0),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+    CU_ASSERT_EQUAL(
+            msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+    CU_ASSERT_EQUAL(
+            msp_add_bottleneck(&msp, 0.7, 0, 1.0),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+
+    CU_ASSERT_EQUAL(
+        msp_debug_demography(&msp, &time),
+        MSP_ERR_BAD_STATE);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    j = 0;
+    do {
+        ret = msp_debug_demography(&msp, &time);
+        CU_ASSERT_EQUAL(ret, 0);
+        msp_print_state(&msp, _devnull);
+        j++;
+    } while (! gsl_isinf(time));
+    CU_ASSERT_EQUAL(j, 9);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(
+        msp_run(&msp, DBL_MAX, ULONG_MAX),
+        MSP_ERR_BAD_STATE);
+    ret = msp_reset(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    msp_print_state(&msp, _devnull);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    free(samples);
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+}
 
 static void
 test_single_locus_simulation(void)
@@ -596,6 +755,41 @@ test_single_locus_simulation(void)
     ret = msp_run(msp, DBL_MAX, 1);
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(msp);
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+}
+
+static void
+test_simulation_memory_limit(void)
+{
+    int ret;
+    uint32_t n = 1000;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_max_memory(msp, 1024 * 1024);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_loci(msp, 10000);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_scaled_recombination_rate(msp, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NO_MEMORY);
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2685,9 +2879,12 @@ test_records_equivalent(void)
 static void
 test_strerror(void)
 {
+    int ret;
     int j;
     const char *msg;
     int max_error_code = 1024; /* totally arbitrary */
+    FILE *f;
+    tree_sequence_t ts;
 
     for (j = 0; j < max_error_code; j++) {
         msg = msp_strerror(-j);
@@ -2699,6 +2896,18 @@ test_strerror(void)
             CU_ASSERT(strlen(msg) > 0);
         }
     }
+    /* Provoke an HDF5 error */
+    ret = tree_sequence_load(&ts, "/file/does/not/exist", 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_HDF5);
+    msg = msp_strerror(ret);
+    CU_ASSERT_FATAL(msg != NULL);
+    CU_ASSERT(strlen(msg) > 0);
+    /* Provoke an IO error */
+    f = fopen("/file/does/not/exist", "r");
+    CU_ASSERT_EQUAL(f, NULL);
+    msg = msp_strerror(MSP_ERR_IO);
+    CU_ASSERT_FATAL(msg != NULL);
+    CU_ASSERT_STRING_EQUAL(msg, strerror(errno));
 }
 
 static int
@@ -2722,6 +2931,10 @@ msprime_suite_init(void)
     close(fd);
     _devnull = fopen("/dev/null", "w");
     if (_devnull == NULL) {
+        return CUE_SINIT_FAILED;
+    }
+    /* Silence HDF5 errors */
+    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
         return CUE_SINIT_FAILED;
     }
     return CUE_SUCCESS;
@@ -2791,7 +3004,9 @@ main(void)
             test_single_locus_two_populations},
         {"Historical samples", test_single_locus_historical_sample},
         {"Simulator getters/setters", test_simulator_getters_setters},
+        {"Demographic events", test_simulator_demographic_events},
         {"Single locus simulation", test_single_locus_simulation},
+        {"Simulation memory limit", test_simulation_memory_limit},
         {"Multi locus simulation", test_multi_locus_simulation},
         {"Bottleneck simulation", test_bottleneck_simulation},
         {"Large bottleneck simulation", test_large_bottleneck_simulation},
