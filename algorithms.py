@@ -330,7 +330,6 @@ class Simulator(object):
         """
         infinity = sys.float_info.max
         while sum(pop.get_num_ancestors() for pop in self.P) != 0:
-            # self.print_state()
             self.verify()
             rate = self.r * self.L.get_total()
             t_re = infinity
@@ -468,10 +467,11 @@ class Simulator(object):
                     x.left = H[0][0]
                     heapq.heappush(H, (x.left, x))
                 else:
-                    alpha = x
                     if x.next is not None:
                         y = x.next
                         heapq.heappush(H, (y.left, y))
+                    alpha = x
+                    alpha.next = None
             else:
                 if not coalescence:
                     coalescence = True

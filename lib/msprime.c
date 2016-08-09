@@ -1851,6 +1851,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
             } else {
                 alpha = x;
                 x = x->next;
+                alpha->next = NULL;
             }
             if (x != NULL) {
                 ret = msp_priority_queue_insert(self, Q, x);
