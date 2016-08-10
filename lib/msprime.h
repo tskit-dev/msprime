@@ -224,14 +224,12 @@ typedef struct {
     uint32_t sample_size;
     double sequence_length;
     struct {
-        uint8_t *population;
         double *time;
-    } samples;
+        uint8_t *population;
+    } nodes;
     struct {
         double *left;
         double *right;
-        double *time;
-        uint8_t *population;
         uint32_t *node;
         uint32_t *num_children;
         uint32_t **children;
@@ -247,7 +245,7 @@ typedef struct {
         char *parameters;
         char *environment;
     } mutations;
-    uint32_t num_nodes;
+    size_t num_nodes;
     size_t num_child_nodes;
     size_t num_records;
     size_t num_mutations;

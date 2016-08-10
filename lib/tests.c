@@ -2826,9 +2826,9 @@ test_save_hdf5(void)
         ts1 = examples[j];
         for (k = 0; k < sizeof(dump_flags) / sizeof(int); k++) {
             ret = tree_sequence_dump(ts1, _tmp_file_name, dump_flags[k]);
-            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = tree_sequence_load(&ts2, _tmp_file_name, 0);
-            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
             /* We don't check the provenance strings because they are
              * null when the number of mutations is 0 */
             verify_tree_sequences_equal(ts1, &ts2, 0);
