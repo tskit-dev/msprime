@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2014 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2014-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -124,17 +124,6 @@ handle_input_error(int err)
     PyErr_SetString(MsprimeInputError, msp_strerror(err));
 }
 
-static PyObject *
-make_coalescence_record(coalescence_record_t *cr)
-{
-    int population_id =
-        cr->population_id == MSP_NULL_POPULATION_ID ? -1: cr->population_id;
-    return Py_BuildValue("ddI(II)di",
-            cr->left, cr->right, (unsigned int) cr->node,
-            (unsigned int) cr->children[0], (unsigned int) cr->children[1],
-            cr->time, population_id);
-}
-
 static int
 parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
 {
@@ -192,17 +181,17 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
         PyErr_SetString(PyExc_TypeError, "children must be a tuple.");
         goto out;
     }
-    if (PyTuple_Size(children) != 2) {
-        PyErr_SetString(PyExc_ValueError, "Binary records only supported");
+    if (PyTuple_Size(children) < 2) {
+        PyErr_SetString(PyExc_ValueError, "Must be >= 2 children");
         goto out;
     }
-    cr->num_children = 2;
-    cr->children = PyMem_Malloc(2 * sizeof(uint32_t));
+    cr->num_children = PyTuple_Size(children);
+    cr->children = PyMem_Malloc(cr->num_children * sizeof(uint32_t));
     if (cr->children == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    for (j = 0; j < 2; j++) {
+    for (j = 0; j < cr->num_children; j++) {
         item = PyTuple_GetItem(children, j);
         if (!PyNumber_Check(item)) {
             PyErr_Format(PyExc_TypeError, "children[%d]' is not number",
@@ -318,6 +307,31 @@ out:
 }
 
 static PyObject *
+convert_children(uint32_t *children, uint32_t num_children)
+{
+    PyObject *ret = NULL;
+    PyObject *t;
+    PyObject *py_int;
+    uint32_t j;
+
+    t = PyTuple_New(num_children);
+    if (t == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_children; j++) {
+        py_int = Py_BuildValue("I", (unsigned int) children[j]);
+        if (py_int == NULL) {
+            Py_DECREF(children);
+            goto out;
+        }
+        PyTuple_SET_ITEM(t, j, py_int);
+    }
+    ret = t;
+out:
+    return ret;
+}
+
+static PyObject *
 convert_float_list(double *list, size_t size)
 {
     PyObject *ret = NULL;
@@ -367,6 +381,28 @@ convert_mutations(mutation_t *mutations, size_t num_mutations)
 out:
     return ret;
 }
+
+static PyObject *
+make_coalescence_record(coalescence_record_t *cr)
+{
+    int population_id =
+        cr->population_id == MSP_NULL_POPULATION_ID ? -1: cr->population_id;
+    PyObject *children = NULL;
+    PyObject *ret = NULL;
+
+    children = convert_children(cr->children, cr->num_children);
+    if (children == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("ddIOdi",
+            cr->left, cr->right, (unsigned int) cr->node, children,
+            cr->time, population_id);
+out:
+    Py_XDECREF(children);
+    return ret;
+}
+
+
 
 /*===================================================================
  * RandomGenerator
@@ -607,11 +643,12 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     double time, initial_size, growth_rate, migration_rate, proportion;
     int err, population_id, matrix_index, source, destination;
     int is_population_parameter_change, is_migration_rate_change,
-        is_mass_migration;
+        is_mass_migration, is_bottleneck;
     PyObject *item, *value, *type;
     PyObject *population_parameter_change_s = NULL;
     PyObject *migration_rate_change_s = NULL;
     PyObject *mass_migration_s = NULL;
+    PyObject *bottleneck_s = NULL;
     PyObject *initial_size_s = NULL;
     PyObject *growth_rate_s = NULL;
 
@@ -631,6 +668,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     }
     mass_migration_s = Py_BuildValue("s", "mass_migration");
     if (mass_migration_s == NULL) {
+        goto out;
+    }
+    bottleneck_s = Py_BuildValue("s", "bottleneck");
+    if (bottleneck_s == NULL) {
         goto out;
     }
     initial_size_s = Py_BuildValue("s", "initial_size");
@@ -678,6 +719,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
         is_mass_migration = PyObject_RichCompareBool(type, mass_migration_s,
                 Py_EQ);
         if (is_mass_migration == -1) {
+            goto out;
+        }
+        is_bottleneck = PyObject_RichCompareBool(type, bottleneck_s, Py_EQ);
+        if (is_bottleneck == -1) {
             goto out;
         }
         if (is_population_parameter_change) {
@@ -735,6 +780,19 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             destination = (int) PyLong_AsLong(value);
             err = msp_add_mass_migration(self->sim, time, source, destination,
                     proportion);
+        } else if (is_bottleneck) {
+            value = get_dict_number(item, "proportion");
+            if (value == NULL) {
+                goto out;
+            }
+            proportion = PyFloat_AsDouble(value);
+            value = get_dict_number(item, "population_id");
+            if (value == NULL) {
+                goto out;
+            }
+            population_id = (int) PyLong_AsLong(value);
+            err = msp_add_bottleneck(self->sim, time, population_id,
+                    proportion);
         } else {
             PyErr_Format(PyExc_ValueError, "Unknown demographic event type");
             goto out;
@@ -749,6 +807,7 @@ out:
     Py_DECREF(population_parameter_change_s);
     Py_DECREF(migration_rate_change_s);
     Py_DECREF(mass_migration_s);
+    Py_DECREF(bottleneck_s);
     Py_DECREF(initial_size_s);
     Py_DECREF(growth_rate_s);
     return ret;
@@ -3076,8 +3135,7 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
     if (num_children == 0) {
         ret = Py_BuildValue("()");
     } else {
-        assert(num_children == 2);
-        ret = Py_BuildValue("ii", (int) children[0], (int) children[1]);
+        ret = convert_children(children, num_children);
     }
 out:
     return ret;
@@ -3351,6 +3409,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
     PyObject *out_list = NULL;
     PyObject *in_list = NULL;
     PyObject *value = NULL;
+    PyObject *children = NULL;
     int err;
     double length;
     size_t list_size, j;
@@ -3380,9 +3439,13 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         record = records_out;
         j = 0;
         while (record != NULL) {
-            value = Py_BuildValue("I(II)d", (unsigned int) record->node,
-                    (unsigned int) record->children[0],
-                    (unsigned int) record->children[1], record->time);
+            children = convert_children(record->children, record->num_children);
+            if (children == NULL) {
+                goto out;
+            }
+            value = Py_BuildValue("IOd", (unsigned int) record->node,
+                    children, record->time);
+            Py_DECREF(children);
             if (value == NULL) {
                 goto out;
             }
@@ -3404,9 +3467,13 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         record = records_in;
         j = 0;
         while (record != NULL) {
-            value = Py_BuildValue("I(II)d", (unsigned int) record->node,
-                    (unsigned int) record->children[0],
-                    (unsigned int) record->children[1], record->time);
+            children = convert_children(record->children, record->num_children);
+            if (children == NULL) {
+                goto out;
+            }
+            value = Py_BuildValue("IOd", (unsigned int) record->node,
+                    children, record->time);
+            Py_DECREF(children);
             if (value == NULL) {
                 goto out;
             }

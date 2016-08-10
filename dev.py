@@ -530,6 +530,27 @@ def records_example():
     for t in ts.trees():
         print(t)
 
+def stuff():
+    before = time.clock()
+    # Run the actual simulations
+    tree_sequence = msprime.simulate(
+        sample_size=10**5,
+        length=100 * 10**6,
+        Ne=1e4,
+        demographic_events=[
+            msprime.Bottleneck(time=100, proportion=0.1),
+            msprime.Bottleneck(time=200, proportion=0.1),
+            msprime.Bottleneck(time=300, proportion=0.1),
+            msprime.Bottleneck(time=500, proportion=0.1)],
+        recombination_rate=1e-8,
+        mutation_rate=1e-8,
+        random_seed=1  # Arbitrary - make this reproducible.
+    )
+    duration = time.clock() - before
+    print("Simulated 100k genomes in {0:.3f} seconds.".format(duration))
+
+    tree_sequence.dump("tmp__NOBACKUP__/bottleneck-example.hdf5")
+
 
 if __name__ == "__main__":
     # mutations()
@@ -551,4 +572,5 @@ if __name__ == "__main__":
     # variable_recomb_example()
     # pop_example()
     # vcf_example()
-    records_example()
+    # records_example()
+    stuff()

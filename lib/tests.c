@@ -283,8 +283,8 @@ get_example_tree_sequences(void)
     ret[2] = get_example_tree_sequence(3, 0, 3, 10.0, 0.0, 0, NULL);
     ret[3] = get_example_tree_sequence(100, 0, 100, 10.0, 0.0, 1, bottlenecks);
     ret[4] = get_example_tree_sequence(10, 9, 100, 1.0, 0.0, 1, bottlenecks);
-    /* ret[5] = get_example_tree_sequence(1000, 10, 10, 1.0, 0.0, 2, bottlenecks); */
-    ret[5] = NULL;
+    ret[5] = get_example_tree_sequence(1000, 10, 10, 1.0, 0.0, 2, bottlenecks);
+    ret[6] = NULL;
     return ret;
 }
 

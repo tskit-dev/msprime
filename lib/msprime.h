@@ -191,7 +191,7 @@ typedef struct {
 
 typedef struct {
     int population_id;
-    double intensity;
+    double proportion;
 } bottleneck_t;
 
 typedef struct demographic_event_t_t {

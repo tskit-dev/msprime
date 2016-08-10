@@ -201,7 +201,6 @@ class PythonTreeSequence(object):
             st.root = root
             st.index += 1
             st.right += length
-            assert len(st.parent) == 2 * st.sample_size - 1
             # Add in all the mutations
             st.mutation_list = [
                 (p, u) for (p, u) in self._mutations

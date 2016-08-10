@@ -2232,21 +2232,36 @@ sparse_tree_iterator_propagate_leaf_loss(sparse_tree_iterator_t *self, uint32_t 
     uint32_t all_leaves_diff = t->num_leaves[u];
     uint32_t tracked_leaves_diff = t->num_tracked_leaves[u];
     uint32_t v = u;
+
+    t->leaf_list_head[v] = NULL;
+    t->leaf_list_tail[v] = NULL;
+
     /* propogate this loss up as far as we can */
     while (v != MSP_NULL_NODE) {
         t->num_leaves[v] -= all_leaves_diff;
         t->num_tracked_leaves[v] -= tracked_leaves_diff;
-        t->leaf_list_head[v] = NULL;
-        t->leaf_list_tail[v] = NULL;
         v = t->parent[v];
     }
+}
+
+/* Returns the index of child u in the parent v */
+static inline uint32_t
+sparse_tree_iterator_get_child_index(sparse_tree_iterator_t *self, uint32_t v,
+        uint32_t u)
+{
+    uint32_t j;
+    sparse_tree_t *t = self->tree;
+
+    for (j = 0; j < t->num_children[v] && t->children[v][j] != u; j++);
+    assert(j != t->num_children[v]);
+    return j;
 }
 
 static inline void
 sparse_tree_iterator_propagate_leaf_gain(sparse_tree_iterator_t *self, uint32_t u)
 {
     sparse_tree_t *t = self->tree;
-    uint32_t j, k, v,*c;
+    uint32_t j, k, v, w, *c;
     uint32_t all_leaves_diff = 0;
     uint32_t tracked_leaves_diff = 0;
 
@@ -2261,37 +2276,60 @@ sparse_tree_iterator_propagate_leaf_gain(sparse_tree_iterator_t *self, uint32_t 
     while (v != MSP_NULL_NODE) {
         t->num_leaves[v] += all_leaves_diff;
         t->num_tracked_leaves[v] += tracked_leaves_diff;
-        c = t->children[v];
-        k = t->num_children[v];
-        /* TODO these special cases work in the binary case, but will
-         * probably blow up when we have more complex non-binary
-         * cases. This must fixed.
-         */
-        if (t->leaf_list_head[c[0]] == NULL) {
-            t->leaf_list_head[v] = t->leaf_list_head[c[1]];
-            t->leaf_list_tail[v] = t->leaf_list_tail[c[1]];
-        } else if (t->leaf_list_head[c[1]] == NULL) {
-            t->leaf_list_head[v] = t->leaf_list_head[c[0]];
-            t->leaf_list_tail[v] = t->leaf_list_tail[c[0]];
-        } else {
-            t->leaf_list_head[v] = t->leaf_list_head[c[0]];
-            t->leaf_list_tail[v] = t->leaf_list_tail[c[k - 1]];
-            /* TODO is this loop always necessary? This could be expensive if
-             * we have a large arity node deep in the tree. It seems wasteful
-             * to always stitch these lists together.
-             */
-            for (j = 0; j < k; j++) {
-                if (j < k - 1) {
-                    /* if (t->leaf_list_tail[c[j]] == NULL) { */
-                    /*     printf("propatint for %d, v = %d\n", u, v); */
-                    /*     sparse_tree_iterator_print_state(self, stdout); */
-                    /* } */
-                    assert(t->leaf_list_tail[c[j]] != NULL);
-                    t->leaf_list_tail[c[j]]->next = t->leaf_list_head[c[j + 1]];
-                }
-            }
-        }
         v = t->parent[v];
+    }
+
+    /* LEAF_LISTS */
+    for (j = 1; j < k; j++) {
+        assert(t->leaf_list_tail[c[j]] != NULL);
+        t->leaf_list_tail[c[j - 1]]->next = t->leaf_list_head[c[j]];
+    }
+    t->leaf_list_head[u] = t->leaf_list_head[c[0]];
+    t->leaf_list_tail[u] = t->leaf_list_tail[c[k - 1]];
+
+    v = u;
+    w = t->parent[v];
+    while (w != MSP_NULL_NODE) {
+        j = sparse_tree_iterator_get_child_index(self, w, v);
+        if (j != 0) {
+            break;
+        }
+        t->leaf_list_head[w] = t->leaf_list_head[u];
+        v = w;
+        w = t->parent[w];
+    }
+
+    v = u;
+    w = t->parent[v];
+    while (w != MSP_NULL_NODE) {
+        j = sparse_tree_iterator_get_child_index(self, w, v);
+        if (j != t->num_children[w] - 1) {
+            break;
+        }
+        t->leaf_list_tail[w] = t->leaf_list_tail[u];
+        v = w;
+        w = t->parent[w];
+    }
+}
+
+static inline void
+sparse_tree_iterator_post_propagate_leaf_gain(sparse_tree_iterator_t *self, uint32_t u)
+{
+    uint32_t v, w, j;
+    sparse_tree_t *t = self->tree;
+
+    v = u;
+    w = t->parent[v];
+    while (w != MSP_NULL_NODE) {
+        j = sparse_tree_iterator_get_child_index(self, w, v);
+        if (j > 0) {
+            t->leaf_list_tail[t->children[w][j - 1]]->next = t->leaf_list_head[v];
+        }
+        if (j < t->num_children[w] - 1) {
+            t->leaf_list_tail[v]->next = t->leaf_list_head[t->children[w][j + 1]];
+        }
+        v = w;
+        w = t->parent[w];
     }
 }
 
@@ -2300,6 +2338,7 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
 {
     int ret = 0;
     uint32_t j, k, u, v, oldest_child;
+    size_t h;
     double oldest_child_time;
     tree_sequence_t *s = self->tree_sequence;
     sparse_tree_t *t = self->tree;
@@ -2346,6 +2385,7 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
         t->right = s->trees.right[s->trees.removal_order[self->removal_index]];
 
         /* Now insert the new records */
+        h = self->insertion_index;
         while (self->insertion_index < self->num_records &&
                 s->trees.left[s->trees.insertion_order[self->insertion_index]]
                 == t->left) {
@@ -2367,7 +2407,16 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
                 sparse_tree_iterator_propagate_leaf_gain(self, u);
             }
         }
-
+        if (t->flags & MSP_COUNT_LEAVES) {
+            /* TODO this should only be done on LEAF_LISTS */
+            while (h < self->num_records &&
+                    s->trees.left[s->trees.insertion_order[h]] == t->left) {
+                k = s->trees.insertion_order[h];
+                u = s->trees.node[k];
+                sparse_tree_iterator_post_propagate_leaf_gain(self, u);
+                h++;
+            }
+        }
         /* Check for errors. */
         if (first_tree) {
             if (out_count != 0 || in_count != self->sample_size - 1) {

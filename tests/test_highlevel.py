@@ -202,6 +202,21 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests on the high level interface.
     """
+    def get_bottleneck_examples(self):
+        """
+        Returns an iterator of example tree sequences with nonbinary
+        trees.
+        """
+        bottlenecks = [
+            msprime.Bottleneck(0.01, proportion=0.05),
+            msprime.Bottleneck(0.02, proportion=0.25),
+            msprime.Bottleneck(0.03, proportion=1)]
+        for n in [3, 10, 100]:
+            ts = msprime.simulate(
+                n, length=100, recombination_rate=1,
+                demographic_events=bottlenecks,
+                random_seed=n)
+            yield ts
 
     def verify_sparse_tree_mrcas(self, st):
         # Check the mrcas
@@ -241,7 +256,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertEqual(u, st.get_root())
             self.assertEqual(times, sorted(times))
         used_nodes.add(st.get_root())
-        self.assertEqual(len(used_nodes), 2 * st.get_sample_size() - 1)
+        self.assertLessEqual(len(used_nodes), 2 * st.get_sample_size() - 1)
         # for every entry other than used_nodes we should have an empty row
         for j in range(st.get_root()):
             if j not in used_nodes:
@@ -268,7 +283,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertEqual(sorted(leaves), list(range(st.get_sample_size())))
         # Check the parent dict
         pi = st.get_parent_dict()
-        self.assertEqual(len(pi), 2 * st.get_sample_size() - 1)
+        self.assertLessEqual(len(pi), 2 * st.get_sample_size() - 1)
         self.assertEqual(pi[st.get_root()], msprime.NULL_NODE)
         for k, v in pi.items():
             self.assertEqual(st.get_parent(k), v)
@@ -399,6 +414,10 @@ class TestMultiLocusSimulation(HighLevelTestCase):
         m = 100
         for r in [0.001, 0.01]:
             self.verify_sparse_trees(msprime.simulate(n, m, r))
+
+    def test_nonbinary_cases(self):
+        for ts in self.get_bottleneck_examples():
+            self.verify_sparse_trees(ts)
 
     def test_error_cases(self):
         def f(n, m, r):
@@ -535,13 +554,8 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             self.assertEqual(zeros + ones, n)
             self.assertEqual(col, variants[k])
 
-    def verify_simulation(self, n, m, r, theta):
-        """
-        Verifies a simulation for the specified parameters.
-        """
-        recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-        tree_sequence = msprime.simulate(
-            n, recombination_map=recomb_map, mutation_rate=theta)
+    def verify_tree_sequence(self, tree_sequence):
+        n = tree_sequence.get_sample_size()
         haplotypes = list(tree_sequence.haplotypes())
         for h in haplotypes:
             self.assertEqual(len(h), tree_sequence.get_num_mutations())
@@ -553,6 +567,15 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             [pos for pos, _ in tree_sequence.variants()],
             [pos for pos, _ in tree_sequence.mutations()])
 
+    def verify_simulation(self, n, m, r, theta):
+        """
+        Verifies a simulation for the specified parameters.
+        """
+        recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
+        tree_sequence = msprime.simulate(
+            n, recombination_map=recomb_map, mutation_rate=theta)
+        self.verify_tree_sequence(tree_sequence)
+
     def test_random_parameters(self):
         num_random_sims = 10
         for j in range(num_random_sims):
@@ -561,6 +584,10 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             r = random.random()
             theta = random.uniform(0, 2)
             self.verify_simulation(n, m, r, theta)
+
+    def test_nonbinary_trees(self):
+        for ts in self.get_bottleneck_examples():
+            self.verify_tree_sequence(ts)
 
 
 class TestNewickConversion(HighLevelTestCase):
@@ -669,6 +696,8 @@ class TestTreeSequence(HighLevelTestCase):
                     ts = msprime.simulate(
                         n, recombination_map=recomb_map, mutation_rate=0.1)
                     yield ts
+        for ts in self.get_bottleneck_examples():
+            yield ts
 
     def test_sparse_trees(self):
         for ts in self.get_example_tree_sequences():

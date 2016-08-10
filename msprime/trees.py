@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -1974,6 +1974,33 @@ class MassMigration(DemographicEvent):
             "Mass migration: lineages move from {} to {} with "
             "probability {}".format(
                 self.source, self.destination, self.proportion))
+
+    def apply(self, populations, migration_matrix):
+        pass
+
+
+class Bottleneck(DemographicEvent):
+    # This is an unsupported/undocumented demographic event.
+    def __init__(self, time, population_id=0, proportion=1.0):
+        super(Bottleneck, self).__init__("bottleneck", time)
+        self.population_id = population_id
+        self.proportion = proportion
+
+    def get_ll_representation(self, num_populations, Ne):
+        return {
+            "type": self.type,
+            "time": self._get_scaled_time(Ne),
+            "population_id": self.population_id,
+            "proportion": self.proportion
+        }
+
+    def get_ms_arguments(self):
+        raise NotImplemented()
+
+    def __str__(self):
+        return (
+            "Bottleneck: lineages in population {} coalesce "
+            "probability {}".format(self.population_id, self.proportion))
 
     def apply(self, populations, migration_matrix):
         pass

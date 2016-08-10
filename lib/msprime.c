@@ -1823,7 +1823,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
         h = 0;
         node = Q->head;
         l = ((segment_t *) node->item)->left;
-        r_max = self->num_loci + 1;
+        r_max = self->num_loci;
         while (node != NULL && ((segment_t *) node->item)->left == l) {
             H[h] = (segment_t *) node->item;
             r_max = GSL_MIN(r_max, H[h]->right);
@@ -2945,7 +2945,7 @@ msp_bottleneck(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
     int population_id = event->params.bottleneck.population_id;
-    double p = event->params.bottleneck.intensity;
+    double p = event->params.bottleneck.proportion;
     int N = (int) self->num_populations;
     avl_node_t *node, *next, *q_node;
     avl_tree_t *pop, Q;
@@ -2991,7 +2991,7 @@ msp_print_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
     fprintf(out, "%f\tbottleneck: %d I = %f\n",
             event->time,
             event->params.bottleneck.population_id,
-            event->params.bottleneck.intensity);
+            event->params.bottleneck.proportion);
 }
 
 static int
@@ -3002,16 +3002,16 @@ json_snprintf_bottleneck(demographic_event_t *event, char *buffer,
         "\"type\": \"bottleneck\", "
         "\"time\": " MSP_LOSSLESS_DBL ", "
         "\"population_id\": %d, "
-        "\"intensity\": " MSP_LOSSLESS_DBL
+        "\"proportion\": " MSP_LOSSLESS_DBL
         "}, ";
     return snprintf(buffer, size, pattern, event->time,
             event->params.bottleneck.population_id,
-            event->params.bottleneck.intensity);
+            event->params.bottleneck.proportion);
 }
 
 int WARN_UNUSED
 msp_add_bottleneck(msp_t *self, double time, int population_id,
-        double intensity)
+        double proportion)
 {
     int ret = 0;
     demographic_event_t *de;
@@ -3021,7 +3021,7 @@ msp_add_bottleneck(msp_t *self, double time, int population_id,
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
-    if (intensity < 0.0 || intensity > 1.0) {
+    if (proportion < 0.0 || proportion > 1.0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -3030,7 +3030,7 @@ msp_add_bottleneck(msp_t *self, double time, int population_id,
         goto out;
     }
     de->params.bottleneck.population_id = population_id;
-    de->params.bottleneck.intensity = intensity;
+    de->params.bottleneck.proportion = proportion;
     de->change_state = msp_bottleneck;
     de->print_state = msp_print_bottleneck;
     de->json_snprintf = json_snprintf_bottleneck;
