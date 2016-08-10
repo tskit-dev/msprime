@@ -57,5 +57,6 @@
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
 #define MSP_ERR_BAD_COALESCENCE_RECORDS                             -27
 #define MSP_ERR_BAD_SAMPLES                                         -28
+#define MSP_ERR_NONBINARY_NEWICK                                    -29
 
 #endif /*__ERR_H__*/

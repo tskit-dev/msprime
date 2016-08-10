@@ -267,7 +267,7 @@ get_example_tree_sequence(uint32_t sample_size,
 }
 
 tree_sequence_t **
-get_example_tree_sequences(void)
+get_example_nonbinary_tree_sequences(void)
 {
     size_t max_examples = 1024;
     tree_sequence_t **ret = malloc(max_examples * sizeof(tree_sequence_t *));
@@ -277,14 +277,34 @@ get_example_tree_sequences(void)
     };
 
     CU_ASSERT_FATAL(ret != NULL);
+    ret[0] = get_example_tree_sequence(100, 0, 100, 10.0, 0.0, 1, bottlenecks);
+    ret[1] = get_example_tree_sequence(10, 2, 100, 1.0, 0.0, 1, bottlenecks);
+    ret[2] = get_example_tree_sequence(1000, 10, 10, 1.0, 0.0, 2, bottlenecks);
+    ret[3] = NULL;
+    return ret;
+}
+
+tree_sequence_t **
+get_example_tree_sequences(int include_nonbinary)
+{
+    size_t max_examples = 1024;
+    tree_sequence_t **ret = malloc(max_examples * sizeof(tree_sequence_t *));
+    bottleneck_desc_t bottlenecks[] = {
+        {0.1, 0, 0.5},
+        {0.4, 0, 1.0},
+    };
+    CU_ASSERT_FATAL(ret != NULL);
 
     ret[0] = get_example_tree_sequence(10, 0, 100, 1.0, 1.0, 0, NULL);
     ret[1] = get_example_tree_sequence(2, 0, 1, 1.0, 1.0, 0, NULL);
     ret[2] = get_example_tree_sequence(3, 0, 3, 10.0, 0.0, 0, NULL);
-    ret[3] = get_example_tree_sequence(100, 0, 100, 10.0, 0.0, 1, bottlenecks);
-    ret[4] = get_example_tree_sequence(10, 9, 100, 1.0, 0.0, 1, bottlenecks);
-    ret[5] = get_example_tree_sequence(1000, 10, 10, 1.0, 0.0, 2, bottlenecks);
-    ret[6] = NULL;
+    ret[3] = NULL;
+    if (include_nonbinary) {
+        ret[3] = get_example_tree_sequence(100, 0, 100, 10.0, 0.0, 1, bottlenecks);
+        ret[4] = get_example_tree_sequence(10, 9, 100, 1.0, 0.0, 1, bottlenecks);
+        ret[5] = get_example_tree_sequence(1000, 10, 10, 1.0, 0.0, 2, bottlenecks);
+        ret[6] = NULL;
+    }
     return ret;
 }
 
@@ -2080,11 +2100,9 @@ verify_leaf_sets(tree_sequence_t *ts)
                 CU_ASSERT_EQUAL(ret, 0);
                 z = head;
                 j = 0;
-                /* printf("leaves for %d\n", u); */
                 while (1) {
                     CU_ASSERT_TRUE_FATAL(j < num_leaves);
                     CU_ASSERT_EQUAL(z->node, leaves[j]);
-                    /* printf("\t%d %d\n", z->node, leaves[j]); */
                     j++;
                     if (z == tail) {
                         break;
@@ -2590,7 +2608,7 @@ test_nonbinary_tree_sequence_diff_iter(void)
 static void
 test_diff_iter_from_examples(void)
 {
-    tree_sequence_t **examples = get_example_tree_sequences();
+    tree_sequence_t **examples = get_example_tree_sequences(1);
     uint32_t j;
 
     CU_ASSERT_FATAL(examples != NULL);
@@ -2606,7 +2624,7 @@ static void
 test_tree_iter_from_examples(void)
 {
 
-    tree_sequence_t **examples = get_example_tree_sequences();
+    tree_sequence_t **examples = get_example_tree_sequences(1);
     uint32_t j;
 
     CU_ASSERT_FATAL(examples != NULL);
@@ -2621,7 +2639,7 @@ test_tree_iter_from_examples(void)
 static void
 test_leaf_sets_from_examples(void)
 {
-    tree_sequence_t **examples = get_example_tree_sequences();
+    tree_sequence_t **examples = get_example_tree_sequences(1);
     uint32_t j;
 
     CU_ASSERT_FATAL(examples != NULL);
@@ -2663,7 +2681,7 @@ verify_hapgen(tree_sequence_t *ts)
 static void
 test_hapgen_from_examples(void)
 {
-    tree_sequence_t **examples = get_example_tree_sequences();
+    tree_sequence_t **examples = get_example_tree_sequences(1);
     uint32_t j;
 
     CU_ASSERT_FATAL(examples != NULL);
@@ -2671,6 +2689,52 @@ test_hapgen_from_examples(void)
         verify_hapgen(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
+    }
+    free(examples);
+}
+
+static void
+verify_newick(tree_sequence_t *ts, int should_fail)
+{
+    newick_converter_t nc;
+    double length;
+    char *tree;
+    int ret;
+
+    ret = newick_converter_alloc(&nc, ts, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    while ((ret = newick_converter_next(&nc, &length, &tree)) == 1) {
+        CU_ASSERT(length > 0);
+        newick_converter_print_state(&nc, _devnull);
+        CU_ASSERT_FATAL(tree != NULL);
+        CU_ASSERT(strlen(tree) > 0);
+    }
+    if (should_fail) {
+        CU_ASSERT_EQUAL(ret, MSP_ERR_NONBINARY_NEWICK);
+    } else {
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+    newick_converter_free(&nc);
+}
+
+static void
+test_newick_from_examples(void)
+{
+    tree_sequence_t **examples = get_example_tree_sequences(0);
+    uint32_t j;
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        verify_newick(examples[j], 0);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+
+    examples = get_example_nonbinary_tree_sequences();
+    for (j = 0; examples[j] != NULL; j++) {
+        verify_newick(examples[j], 1);
     }
     free(examples);
 }
@@ -2751,7 +2815,7 @@ test_save_hdf5(void)
 {
     int ret;
     size_t j, k;
-    tree_sequence_t **examples = get_example_tree_sequences();
+    tree_sequence_t **examples = get_example_tree_sequences(1);
     tree_sequence_t ts2;
     tree_sequence_t *ts1;
     int dump_flags[] = {0, MSP_ZLIB_COMPRESSION};
@@ -2788,7 +2852,7 @@ test_save_records_hdf5(void)
     mutation_t *mutations;
     tree_sequence_t *ts1, ts2, ts3, **examples;
 
-    examples = get_example_tree_sequences();
+    examples = get_example_tree_sequences(1);
     for (k = 0; examples[k] != NULL; k++) {
         ts1 = examples[k];
         CU_ASSERT_FATAL(ts1 != NULL);
@@ -2997,6 +3061,7 @@ main(void)
         {"Test tree iter from examples", test_tree_iter_from_examples},
         {"Test leaf sets from examples", test_leaf_sets_from_examples},
         {"Test hapgen from examples", test_hapgen_from_examples},
+        {"Test newick from examples", test_newick_from_examples},
         {"Test records equivalent after import", test_records_equivalent},
         {"Test saving to HDF5", test_save_hdf5},
         {"Test saving records to HDF5", test_save_records_hdf5},

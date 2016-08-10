@@ -56,33 +56,33 @@ newick_converter_check_state(newick_converter_t *self)
 }
 
 void
-newick_converter_print_state(newick_converter_t *self)
+newick_converter_print_state(newick_converter_t *self, FILE *out)
 {
     avl_node_t *avl_node;
     newick_tree_node_t *node;
     size_t j;
 
-    printf("Newick converter state\n");
-    printf("num_nodes = %d\n", avl_count(&self->tree));
-    printf("root = %d\n", self->root == NULL? 0: self->root->id);
+    fprintf(out, "Newick converter state\n");
+    fprintf(out, "num_nodes = %d\n", avl_count(&self->tree));
+    fprintf(out, "root = %d\n", self->root == NULL? 0: self->root->id);
     for (avl_node = self->tree.head; avl_node != NULL; avl_node = avl_node->next) {
         node = (newick_tree_node_t *) avl_node->item;
-        printf("%d\t", node->id);
+        fprintf(out, "%d\t", node->id);
         for (j = 0; j < 2; j++) {
-            printf("%d\t", node->children[j] == NULL? 0 :
+            fprintf(out, "%d\t", node->children[j] == NULL? 0 :
                     node->children[j]->id);
         }
-        printf("%d\t%f\t%s\t",
+        fprintf(out, "%d\t%f\t%s\t",
                 node->parent == NULL ? 0: node->parent->id, node->time,
                 node->branch_length);
         if (node->subtree == NULL) {
-            printf("NULL\n");
+            fprintf(out, "NULL\n");
         } else {
-            printf("%s\n", node->subtree);
+            fprintf(out, "%s\n", node->subtree);
         }
     }
-    printf("avl_node_heap\n");
-    object_heap_print_state(&self->avl_node_heap, stdout);
+    fprintf(out, "avl_node_heap\n");
+    object_heap_print_state(&self->avl_node_heap, out);
     newick_converter_check_state(self);
 }
 
@@ -382,6 +382,10 @@ newick_converter_process_tree(newick_converter_t *self, node_record_t *nodes_out
     /* mark these nodes as removed. */
     tree_node = nodes_out;
     while (tree_node != NULL) {
+        if (tree_node->num_children > 2) {
+            ret = MSP_ERR_NONBINARY_NEWICK;
+            goto out;
+        }
         ret = newick_converter_update_out_node(self, tree_node->node);
         if (ret != 0) {
             goto out;
@@ -391,6 +395,10 @@ newick_converter_process_tree(newick_converter_t *self, node_record_t *nodes_out
     /* insert the new records */
     tree_node = nodes_in;
     while (tree_node != NULL) {
+        if (tree_node->num_children > 2) {
+            ret = MSP_ERR_NONBINARY_NEWICK;
+            goto out;
+        }
         ret = newick_converter_insert_node(self, tree_node->node,
                 tree_node->children, tree_node->time);
         if (ret != 0) {

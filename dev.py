@@ -6,6 +6,7 @@ from __future__ import print_function
 from __future__ import division
 
 import time
+import collections
 import math
 import glob
 import subprocess
@@ -551,6 +552,26 @@ def stuff():
 
     tree_sequence.dump("tmp__NOBACKUP__/bottleneck-example.hdf5")
 
+def examine():
+    ts = msprime.load("tmp__NOBACKUP__/bottleneck-example.hdf5")
+    print("num_records = ", ts.get_num_records())
+    non_binary_records = 0
+    max_record_length = 0
+    for r in ts.records():
+        if len(r.children) > 2:
+            non_binary_records +=1
+            max_record_length = max(max_record_length, len(r.children))
+    print("non_binary_records = ", non_binary_records)
+    print("max_record_length = ", max_record_length)
+    num_nodes = collections.Counter()
+    num_trees = 0
+    for t in ts.trees():
+        num_nodes[len(list(t.nodes(t.get_root())))] += 1
+        num_trees += 1
+    print("num_trees = ", num_trees)
+    for k, v in num_nodes.items():
+        print(k, "->", v)
+
 
 if __name__ == "__main__":
     # mutations()
@@ -573,4 +594,5 @@ if __name__ == "__main__":
     # pop_example()
     # vcf_example()
     # records_example()
-    stuff()
+    # stuff()
+    examine()

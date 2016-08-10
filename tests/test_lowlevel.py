@@ -2315,7 +2315,10 @@ class TestNewickConverter(LowLevelTestCase):
 
     def test_nonbinary_trees(self):
         ts = self.get_nonbinary_tree_sequence()
-        self.assertRaises(_msprime.LibraryError, _msprime.NewickConverter, ts)
+
+        def f():
+            return list(_msprime.NewickConverter(ts))
+        self.assertRaises(_msprime.LibraryError, f)
 
 
 class TestVcfConverter(LowLevelTestCase):

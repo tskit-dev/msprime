@@ -531,7 +531,7 @@ int newick_converter_alloc(newick_converter_t *self,
 int newick_converter_next(newick_converter_t *self, double *length, 
         char **tree);
 int newick_converter_free(newick_converter_t *self);
-void newick_converter_print_state(newick_converter_t *self);
+void newick_converter_print_state(newick_converter_t *self, FILE *out);
 
 int vcf_converter_alloc(vcf_converter_t *self, 
         tree_sequence_t *tree_sequence, unsigned ploidy);
