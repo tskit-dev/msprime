@@ -1994,19 +1994,26 @@ class TestTreeSequence(LowLevelTestCase):
             ts = _msprime.TreeSequence()
             self.assertRaises(
                 TypeError, ts.load_records, [bad_type])
+        ts = _msprime.TreeSequence()
         record = (0, 1, 2, (0, 1), 1, 0)
         for j in range(len(record)):
             ts = _msprime.TreeSequence()
             sub_record = record[:j]
             self.assertRaises(
-                ValueError, ts.load_records, [sub_record])
+                ValueError, ts.load_records, [tuple(sub_record)])
         for bad_type in [None, {}, ts]:
             for j in range(len(record)):
                 r = list(record)
                 r[j] = bad_type
                 ts = _msprime.TreeSequence()
                 self.assertRaises(
-                    TypeError, ts.load_records, [r])
+                    TypeError, ts.load_records, [tuple(r)])
+        ts = _msprime.TreeSequence()
+        # < 2 children is an error
+        r = list(record)
+        r[3] = 1,
+        self.assertRaises(
+            ValueError, ts.load_records, [tuple(r)])
         for bad_type in ["sdf", {}, ts, None]:
             for j in range(2):
                 r = list(record)
@@ -2014,7 +2021,7 @@ class TestTreeSequence(LowLevelTestCase):
                 r[3][j] = bad_type
                 ts = _msprime.TreeSequence()
                 self.assertRaises(
-                    TypeError, ts.load_records, [r])
+                    TypeError, ts.load_records, [tuple(r)])
 
     def test_load_bad_records(self):
         def f(records):
@@ -2031,6 +2038,9 @@ class TestTreeSequence(LowLevelTestCase):
         r = (0, 1, 2, (0, -1), 1, 0)
         self.assertRaises(_msprime.LibraryError, f, [r])
         r = (0, 1, 2, (-1, -1), 1, 0)
+        self.assertRaises(_msprime.LibraryError, f, [r])
+        # children must be sorted
+        r = (1, 0, 3, (0, 2, 1), 1, 0)
         self.assertRaises(_msprime.LibraryError, f, [r])
 
 
