@@ -550,7 +550,7 @@ def stuff():
     duration = time.clock() - before
     print("Simulated 100k genomes in {0:.3f} seconds.".format(duration))
 
-    tree_sequence.dump("tmp__NOBACKUP__/bottleneck-example.hdf5")
+    tree_sequence.dump("tmp__NOBACKUP__/bottleneck-example-new.hdf5")
 
 def examine():
     ts = msprime.load("tmp__NOBACKUP__/bottleneck-example.hdf5")
@@ -594,5 +594,5 @@ if __name__ == "__main__":
     # pop_example()
     # vcf_example()
     # records_example()
-    # stuff()
-    examine()
+    stuff()
+    # examine()

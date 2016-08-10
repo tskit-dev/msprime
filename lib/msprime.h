@@ -224,20 +224,24 @@ typedef struct {
     uint32_t sample_size;
     double sequence_length;
     struct {
-        double *time;
-        uint8_t *population;
-    } nodes;
-    struct {
-        double *left;
-        double *right;
-        uint32_t *node;
-        uint32_t *num_children;
-        uint32_t **children;
-        uint32_t *insertion_order;
-        uint32_t *removal_order;
+        struct {
+            double *time;
+            uint8_t *population;
+        } nodes;
+        struct {
+            double *left;
+            double *right;
+            uint32_t *node;
+            uint32_t *num_children;
+            uint32_t **children;
+            uint32_t *children_mem;
+        } records;
+        struct {
+            uint32_t *insertion_order;
+            uint32_t *removal_order;
+        } indexes;
         char *parameters;
         char *environment;
-        uint32_t *children_mem;
     } trees;
     struct {
         uint32_t *node;
