@@ -167,8 +167,6 @@ typedef struct {
     size_t max_coalescence_records;
     size_t coalescence_record_block_size;
     size_t num_coalescence_record_blocks;
-    /* JSON provenance string*/
-    char *configuration_json;
 } msp_t;
 
 /* Demographic events */
@@ -198,7 +196,6 @@ typedef struct demographic_event_t_t {
     double time;
     int (*change_state)(msp_t *, struct demographic_event_t_t *);
     void (*print_state)(msp_t *, struct demographic_event_t_t *, FILE *out);
-    int (*json_snprintf)(struct demographic_event_t_t *, char *, size_t);
     union {
         bottleneck_t bottleneck;
         mass_migration_t mass_migration;
@@ -240,14 +237,10 @@ typedef struct {
             uint32_t *insertion_order;
             uint32_t *removal_order;
         } indexes;
-        char *parameters;
-        char *environment;
     } trees;
     struct {
         uint32_t *node;
         double *position;
-        char *parameters;
-        char *environment;
     } mutations;
     char **provenance_strings;
     size_t num_provenance_strings;
@@ -398,8 +391,6 @@ typedef struct {
     size_t max_num_mutations;
     size_t mutation_block_size;
     mutation_t *mutations;
-    char *parameters;
-    char *environment;
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
@@ -462,8 +453,6 @@ size_t msp_get_used_memory(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 
-char *msp_get_configuration_json(msp_t *self);
-
 void tree_sequence_print_state(tree_sequence_t *self, FILE *out);
 int tree_sequence_create(tree_sequence_t *self, msp_t *sim, 
         recomb_map_t *recomb_map, double Ne);
@@ -485,16 +474,13 @@ int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u,
         sample_t *sample);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     uint32_t *samples, uint32_t num_samples, double *pi);
-char * tree_sequence_get_simulation_parameters(tree_sequence_t *self);
-char * tree_sequence_get_mutation_parameters(tree_sequence_t *self);
 int tree_sequence_alloc_sparse_tree(tree_sequence_t *self, 
         sparse_tree_t *tree, uint32_t *tracked_leaves, 
         uint32_t num_tracked_leaves, int flags);
 int tree_sequence_set_samples(tree_sequence_t *self, size_t sample_size,
         sample_t *samples);
 int tree_sequence_set_mutations(tree_sequence_t *self, 
-        size_t num_mutations, mutation_t *mutations, 
-        const char *parameters, const char *environment);
+        size_t num_mutations, mutation_t *mutations);
 int tree_sequence_add_provenance_string(tree_sequence_t *self,
         const char *provenance_string);
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
@@ -586,7 +572,6 @@ size_t mutgen_get_num_mutations(mutgen_t *self);
 int mutgen_get_mutations(mutgen_t *self, mutation_t **mutations);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
-int msp_encode_environment(char **destination);
 const char * msp_strerror(int err);
 
 #endif /*__MSPRIME_H__*/

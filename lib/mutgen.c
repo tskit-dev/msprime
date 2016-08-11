@@ -38,8 +38,6 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     size_t j;
 
     fprintf(out, "Mutgen state\n");
-    fprintf(out, "\tparameters = %s\n", self->parameters);
-    fprintf(out, "\tenvironment = %s\n", self->environment);
     fprintf(out, "\tmutation_rate = %f\n", (double) self->mutation_rate);
     fprintf(out, "\tsequence_length = %f\n", (double) self->sequence_length);
     fprintf(out, "\tmutation_block_size = %d\n", (int) self->mutation_block_size);
@@ -52,33 +50,6 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     mutgen_check_state(self);
 }
 
-static int
-mutgen_encode_parameters(mutgen_t *self)
-{
-    int ret = -1;
-    const char *pattern = "{"
-        "\"mutation_rate\":" MSP_LOSSLESS_DBL "}";
-    int written;
-    size_t size = 1 + (size_t) snprintf(NULL, 0, pattern,
-            self->mutation_rate);
-    char *str = malloc(size);
-
-    if (str == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    written = snprintf(str, size, pattern,
-            self->mutation_rate);
-    if (written < 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    assert(written == (int) size - 1);
-    self->parameters = str;
-    ret = 0;
-out:
-    return ret;
-}
 
 int WARN_UNUSED
 mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
@@ -107,14 +78,6 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = mutgen_encode_parameters(self);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_encode_environment(&self->environment);
-    if (ret != 0) {
-        goto out;
-    }
     self->times = calloc(
         tree_sequence_get_num_nodes(tree_sequence) + 1, sizeof(double));
     if (self->times == NULL) {
@@ -137,12 +100,6 @@ mutgen_free(mutgen_t *self)
 {
     if (self->mutations != NULL) {
         free(self->mutations);
-    }
-    if (self->parameters != NULL) {
-        free(self->parameters);
-    }
-    if (self->environment != NULL) {
-        free(self->environment);
     }
     if (self->times != NULL) {
         free(self->times);

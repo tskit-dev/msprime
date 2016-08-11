@@ -1485,22 +1485,6 @@ out:
 }
 
 static PyObject *
-Simulator_get_configuration_json(Simulator *self)
-{
-    PyObject *ret = NULL;
-    char *json;
-
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    json = msp_get_configuration_json(self->sim);
-    assert(json != NULL);
-    ret = Py_BuildValue("s", json);
-out:
-    return ret;
-}
-
-static PyObject *
 Simulator_get_coalescence_records(Simulator *self)
 {
     PyObject *ret = NULL;
@@ -1787,8 +1771,6 @@ static PyMethodDef Simulator_methods[] = {
             METH_NOARGS, "Returns the list of breakpoints." },
     {"get_migration_matrix", (PyCFunction) Simulator_get_migration_matrix,
             METH_NOARGS, "Returns the migration matrix." },
-    {"get_configuration_json", (PyCFunction) Simulator_get_configuration_json,
-            METH_NOARGS, "Returns the initial configuration as JSON." },
     {"get_coalescence_records", (PyCFunction) Simulator_get_coalescence_records,
             METH_NOARGS, "Returns the coalescence records." },
     {"get_population_configuration",
@@ -2439,7 +2421,7 @@ TreeSequence_generate_mutations(TreeSequence *self,
         goto out;
     }
     err = tree_sequence_set_mutations(self->tree_sequence, mutgen->num_mutations,
-            mutgen->mutations, mutgen->parameters, mutgen->environment);
+            mutgen->mutations);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2464,9 +2446,6 @@ TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"mutations", NULL};
     size_t num_mutations = 0;
     mutation_t *mutations = NULL;
-    /* TODO fix the provenance information for arbitrary mutations. */
-    char *parameters = "{}";
-    char *environment = "{}";
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
@@ -2501,10 +2480,8 @@ TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
         mutations[j].position = PyFloat_AsDouble(pos);
         mutations[j].node = (uint32_t) PyLong_AsLong(node);
     }
-    /* TODO this interface for setting the provenance information is very
-     * brittle and needs to be fixed. */
     err = tree_sequence_set_mutations(self->tree_sequence, num_mutations,
-            mutations, parameters, environment);
+            mutations);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2777,7 +2754,6 @@ out:
     return ret;
 }
 
-
 static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
 {
@@ -2792,37 +2768,6 @@ TreeSequence_get_num_mutations(TreeSequence  *self)
 out:
     return ret;
 }
-
-static PyObject *
-TreeSequence_get_simulation_parameters(TreeSequence  *self)
-{
-    PyObject *ret = NULL;
-    char *str = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    str = tree_sequence_get_simulation_parameters(self->tree_sequence);
-    ret = Py_BuildValue("s", str);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_mutation_parameters(TreeSequence  *self)
-{
-    PyObject *ret = NULL;
-    char *str = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    str = tree_sequence_get_mutation_parameters(self->tree_sequence);
-    ret = Py_BuildValue("s", str);
-out:
-    return ret;
-}
-
 
 static PyMemberDef TreeSequence_members[] = {
     {NULL}  /* Sentinel */
@@ -2869,12 +2814,6 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
-    {"get_simulation_parameters",
-        (PyCFunction) TreeSequence_get_simulation_parameters, METH_NOARGS,
-        "Returns the simulation parameters encoded as JSON." },
-    {"get_mutation_parameters",
-        (PyCFunction) TreeSequence_get_mutation_parameters, METH_NOARGS,
-        "Returns the mutation parameters encoded as JSON." },
     {NULL}  /* Sentinel */
 };
 

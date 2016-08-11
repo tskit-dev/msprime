@@ -540,8 +540,7 @@ print_haplotypes(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_set_mutations(ts, num_mutations, mutations,
-            "{}", "{}");
+    ret = tree_sequence_set_mutations(ts, num_mutations, mutations);
     if (ret != 0) {
         goto out;
     }
@@ -866,7 +865,7 @@ run_simulate(char *conf_file)
     mutgen_print_state(mutgen, stdout);
 
     ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
-            mutgen->mutations, mutgen->parameters, mutgen->environment);
+            mutgen->mutations);
     if (ret != 0) {
         goto out;
     }

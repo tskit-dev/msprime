@@ -252,7 +252,7 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = mutgen_generate(mutgen);
     CU_ASSERT_EQUAL(ret, 0);
     ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
-            mutgen->mutations, mutgen->parameters, mutgen->environment);
+            mutgen->mutations);
     CU_ASSERT_EQUAL(ret, 0);
 
     gsl_rng_free(rng);
@@ -1294,7 +1294,7 @@ test_single_tree_good_mutations(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 7);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
 
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations, "", "");
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), num_mutations);
     other_mutations = malloc(num_mutations * sizeof(mutation_t));
@@ -1332,7 +1332,7 @@ test_single_tree_bad_mutations(void)
     mutations[0].position = -1.0;
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations, "", "");
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
     mutations[0].position = 0.0;
@@ -1341,7 +1341,7 @@ test_single_tree_bad_mutations(void)
     mutations[0].position = 1.1;
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations, "", "");
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
     mutations[0].position = 0.0;
@@ -1350,7 +1350,7 @@ test_single_tree_bad_mutations(void)
     mutations[0].node = MSP_NULL_NODE;
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations, "", "");
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
     mutations[0].node = 0;
@@ -1359,7 +1359,7 @@ test_single_tree_bad_mutations(void)
     mutations[0].node = 7;
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations, "", "");
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
     mutations[0].node = 0;
@@ -1367,7 +1367,7 @@ test_single_tree_bad_mutations(void)
     /* Check to make sure we've maintained legal mutations */
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations, "", "");
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), num_mutations);
     tree_sequence_free(&ts);
@@ -1634,8 +1634,7 @@ test_single_tree_hapgen(void)
     ret = hapgen_free(&hapgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations,
-            "", "");
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = hapgen_alloc(&hapgen, &ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1765,7 +1764,7 @@ verify_trees(size_t num_records, coalescence_record_t *records,
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), num_nodes);
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations, "", "");
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), num_mutations);
     ret = tree_sequence_alloc_sparse_tree(&ts, &tree, NULL, 0, 0);
@@ -1864,7 +1863,7 @@ verify_tree_iter_fails(size_t num_records, coalescence_record_t *records,
 
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations, "", "");
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, 0);
     ret = tree_sequence_alloc_sparse_tree(&ts, &tree, NULL, 0, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2889,8 +2888,7 @@ test_save_records_hdf5(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = tree_sequence_set_samples(&ts2, sample_size, samples);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = tree_sequence_set_mutations(&ts2, num_mutations, mutations,
-                "{}", "{}");
+        ret = tree_sequence_set_mutations(&ts2, num_mutations, mutations);
         CU_ASSERT_EQUAL(ret, 0);
         ret = tree_sequence_dump(&ts2, _tmp_file_name, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);

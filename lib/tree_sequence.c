@@ -79,8 +79,6 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
                 self->trees.nodes.time[j]);
     }
     fprintf(out, "trees.records = (%d records)\n", (int) self->num_records);
-    fprintf(out, "\tparameters = '%s'\n", self->trees.parameters);
-    fprintf(out, "\tenvironment = '%s'\n", self->trees.environment);
     for (j = 0; j < self->num_records; j++) {
         fprintf(out, "\t%d\t%f\t%f\t%d\t(",
                 (int) j,
@@ -98,8 +96,6 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
                 (int) self->trees.indexes.removal_order[j]);
     }
     fprintf(out, "mutations = (%d records)\n", (int) self->num_mutations);
-    fprintf(out, "\tparameters = '%s'\n", self->mutations.parameters);
-    fprintf(out, "\tenvironment = '%s'\n", self->mutations.environment);
     for (j = 0; j < self->num_mutations; j++) {
         fprintf(out, "\t%d\t%f\n", (int) self->mutations.node[j],
                 self->mutations.position[j]);
@@ -202,23 +198,11 @@ tree_sequence_free(tree_sequence_t *self)
     if (self->trees.indexes.removal_order != NULL) {
         free(self->trees.indexes.removal_order);
     }
-    if (self->trees.parameters != NULL) {
-        free(self->trees.parameters);
-    }
-    if (self->trees.environment != NULL) {
-        free(self->trees.environment);
-    }
     if (self->mutations.node != NULL) {
         free(self->mutations.node);
     }
     if (self->mutations.position != NULL) {
         free(self->mutations.position);
-    }
-    if (self->mutations.parameters != NULL) {
-        free(self->mutations.parameters);
-    }
-    if (self->mutations.environment != NULL) {
-        free(self->mutations.environment);
     }
     return 0;
 }
@@ -485,22 +469,11 @@ tree_sequence_load_records(tree_sequence_t *self,
       size_t num_records, coalescence_record_t *records)
 {
     int ret = MSP_ERR_GENERIC;
-    const char provenance[] = "{}";
 
     ret = tree_sequence_init_from_records(self, num_records, records);
     if (ret != 0) {
         goto out;
     }
-    /* Set the provenance strings to the empty string.
-     * TODO what is the correct thing to do here?? */
-    self->trees.parameters = malloc(sizeof(provenance) + 1);
-    self->trees.environment = malloc(sizeof(provenance) + 1);
-    if (self->trees.parameters == NULL || self->trees.environment == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    strcpy(self->trees.parameters, provenance);
-    strcpy(self->trees.environment, provenance);
     ret = 0;
 out:
     return ret;
@@ -514,7 +487,6 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     size_t j, num_records;
     coalescence_record_t *records = NULL;
     sample_t *samples = NULL;
-    char *parameters;
 
     ret = msp_get_coalescence_records(sim, &records);
     if (ret != 0) {
@@ -554,18 +526,6 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     }
     self->sequence_length = recomb_map_get_sequence_length(recomb_map);
     ret = tree_sequence_remap_coordinates(self, recomb_map);
-    if (ret != 0) {
-        goto out;
-    }
-    parameters = msp_get_configuration_json(sim);
-    assert(parameters != NULL);
-    self->trees.parameters = malloc(strlen(parameters) + 1);
-    if (self->trees.parameters == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    strcpy(self->trees.parameters, parameters);
-    ret = msp_encode_environment(&self->trees.environment);
 out:
     return ret;
 }
@@ -923,92 +883,6 @@ out:
     return ret;
 }
 
-static int
-tree_sequence_read_hdf5_provenance(tree_sequence_t *self, hid_t file_id)
-{
-    int ret = MSP_ERR_HDF5;
-    hid_t attr_id, atype, type_class, atype_mem;
-    herr_t status;
-    size_t size;
-    struct _hdf5_string_read {
-        const char *prefix;
-        const char *name;
-        char **dest;
-        int included;
-    };
-    struct _hdf5_string_read fields[] = {
-        {"/trees/records", "environment", NULL, 1},
-        {"/trees/records", "parameters", NULL, 1},
-        {"mutations", "environment", NULL, 0},
-        {"mutations", "parameters", NULL, 0},
-    };
-    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_string_read);
-    size_t j;
-    char *str;
-
-    fields[0].dest = &self->trees.environment;
-    fields[1].dest = &self->trees.parameters;
-    if (self->num_mutations > 0) {
-        fields[2].included = 1;
-        fields[3].included = 1;
-        fields[2].dest = &self->mutations.environment;
-        fields[3].dest = &self->mutations.parameters;
-    }
-
-    for (j = 0; j < num_fields; j++) {
-        if (fields[j].included) {
-            attr_id = H5Aopen_by_name(file_id, fields[j].prefix, fields[j].name,
-                    H5P_DEFAULT, H5P_DEFAULT);
-            if (attr_id < 0) {
-                goto out;
-            }
-            atype = H5Aget_type(attr_id);
-            if (atype < 0) {
-                goto out;
-            }
-            type_class = H5Tget_class(atype);
-            if (type_class < 0) {
-                goto out;
-            }
-            if (type_class != H5T_STRING) {
-                ret = MSP_ERR_FILE_FORMAT;
-                goto out;
-            }
-            atype_mem = H5Tget_native_type(atype, H5T_DIR_ASCEND);
-            if (atype_mem < 0) {
-                goto out;
-            }
-            size = H5Tget_size(atype_mem);
-            str = malloc(size + 1);
-            if (str == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            status = H5Aread(attr_id, atype_mem, str);
-            if (status < 0) {
-                goto out;
-            }
-            str[size] = '\0';
-            *fields[j].dest = str;
-            status = H5Tclose(atype);
-            if (status < 0) {
-                goto out;
-            }
-            status = H5Tclose(atype_mem);
-            if (status < 0) {
-                goto out;
-            }
-            status = H5Aclose(attr_id);
-            if (status < 0) {
-                goto out;
-            }
-        }
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
 int WARN_UNUSED
 tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
 {
@@ -1036,10 +910,6 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     }
     ret = tree_sequence_read_hdf5_data(self, file_id);
     if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_read_hdf5_provenance(self, file_id);
-    if (ret < 0) {
         goto out;
     }
     status = H5Fclose(file_id);
@@ -1232,86 +1102,6 @@ out:
 }
 
 static int
-tree_sequence_write_hdf5_provenance(tree_sequence_t *self, hid_t file_id)
-{
-    herr_t ret = -1;
-    herr_t status;
-    hid_t group_id, dataspace_id, attr_id, type_id;
-    struct _hdf5_string_write {
-        const char *group;
-        const char *name;
-        const char *value;
-        int included;
-    };
-    struct _hdf5_string_write fields[] = {
-        {"/trees/records", "environment", NULL, 1},
-        {"/trees/records", "parameters", NULL, 1},
-        {"mutations", "environment", NULL, 0},
-        {"mutations", "parameters", NULL, 0},
-    };
-    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_string_write);
-    size_t j;
-
-    fields[0].value = self->trees.environment;
-    fields[1].value = self->trees.parameters;
-    if (self->num_mutations > 0) {
-        fields[2].included = 1;
-        fields[2].value = self->mutations.environment;
-        fields[3].included = 1;
-        fields[3].value = self->mutations.parameters;
-    }
-    for (j = 0; j < num_fields; j++) {
-        if (fields[j].included) {
-            assert(fields[j].value != NULL);
-            group_id = H5Gopen(file_id, fields[j].group, H5P_DEFAULT);
-            if (group_id < 0) {
-                goto out;
-            }
-            dataspace_id = H5Screate(H5S_SCALAR);
-            if (dataspace_id < 0) {
-                goto out;
-            }
-            type_id = H5Tcopy(H5T_C_S1);
-            if (type_id < 0) {
-                goto out;
-            }
-            status = H5Tset_size(type_id, strlen(fields[j].value));
-            if (status < 0) {
-                goto out;
-            }
-            attr_id = H5Acreate(group_id, fields[j].name, type_id,
-                    dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
-            if (attr_id < 0) {
-                goto out;
-            }
-            status = H5Awrite(attr_id, type_id, fields[j].value);
-            if (status < 0) {
-                goto out;
-            }
-            status = H5Aclose(attr_id);
-            if (status < 0) {
-                goto out;
-            }
-            status = H5Tclose(type_id);
-            if (status < 0) {
-                goto out;
-            }
-            status = H5Sclose(dataspace_id);
-            if (status < 0) {
-                goto out;
-            }
-            status = H5Gclose(group_id);
-            if (status < 0) {
-                goto out;
-            }
-        }
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static int
 tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
 {
     herr_t status = -1;
@@ -1391,10 +1181,6 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
         goto out;
     }
     status = tree_sequence_write_hdf5_data(self, file_id, flags);
-    if (status < 0) {
-        goto out;
-    }
-    status = tree_sequence_write_hdf5_provenance(self, file_id);
     if (status < 0) {
         goto out;
     }
@@ -1513,25 +1299,6 @@ tree_sequence_get_num_mutations(tree_sequence_t *self)
     return self->num_mutations;
 }
 
-/* Returns the parameters for the trees encoded as JSON. This string
- * should NOT be freed by client code.
- */
-char *
-tree_sequence_get_simulation_parameters(tree_sequence_t *self)
-{
-    return self->trees.parameters;
-}
-
-/* Returns the parameters for the mutations encoded as JSON. This string
- * should NOT be freed by client code. This is NULL if mutations have
- * not been generated.
- */
-char *
-tree_sequence_get_mutation_parameters(tree_sequence_t *self)
-{
-    return self->mutations.parameters;
-}
-
 int WARN_UNUSED
 tree_sequence_get_record(tree_sequence_t *self, size_t index,
         coalescence_record_t **record, int order)
@@ -1621,10 +1388,10 @@ out:
 
 int WARN_UNUSED
 tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
-        mutation_t *mutations, const char *parameters, const char* environment)
+        mutation_t *mutations)
 {
     int ret = -1;
-    size_t j, len;
+    size_t j;
     mutation_t **mutation_ptrs = NULL;
 
     if (self->num_mutations > 0) {
@@ -1635,18 +1402,10 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
         if (self->mutations.position != NULL) {
             free(self->mutations.position);
         }
-        if (self->mutations.parameters != NULL) {
-            free(self->mutations.parameters);
-        }
-        if (self->mutations.environment != NULL) {
-            free(self->mutations.environment);
-        }
     }
     self->num_mutations = 0;
     self->mutations.position = NULL;
     self->mutations.node = NULL;
-    self->mutations.parameters = NULL;
-    self->mutations.environment = NULL;
     if (num_mutations > 0) {
         /* Allocate the storage we need to keep the mutations. */
         mutation_ptrs = malloc(num_mutations * sizeof(mutation_t *));
@@ -1675,23 +1434,6 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
             self->mutations.node[j] = mutation_ptrs[j]->node;
             self->mutations.position[j] = mutation_ptrs[j]->position;
         }
-        /* Make copies of the environment and parameters strings. */
-        assert(parameters != NULL);
-        len = strlen(parameters) + 1;
-        self->mutations.parameters = malloc(len);
-        if (self->mutations.parameters == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        strncpy(self->mutations.parameters, parameters, len);
-        assert(environment != NULL);
-        len = strlen(environment) + 1;
-        self->mutations.environment = malloc(len);
-        if (self->mutations.environment == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        strncpy(self->mutations.environment, environment, len);
     }
     ret = 0;
 out:

@@ -11,7 +11,7 @@ LDFLAGS=-lgsl -lgslcblas -lhdf5 -lm
 
 HEADERS=msprime.h err.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
-    hapgen.o recomb_map.o mutgen.o environment.o vargen.o vcf.o avl.o
+    hapgen.o recomb_map.o mutgen.o vargen.o vcf.o avl.o
 
 all: main tests
 

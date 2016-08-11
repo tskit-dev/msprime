@@ -30,7 +30,6 @@ except ImportError:
     pass
 
 import math
-import json
 import os
 import random
 import tempfile
@@ -433,16 +432,6 @@ class TestTreeSimulator(HighLevelTestCase):
     """
     Runs tests on the underlying TreeSimulator object.
     """
-    def verify_parameters(self, sim, tree_sequence):
-        parameters = tree_sequence.get_parameters()
-        self.assertIsInstance(parameters, dict)
-        self.assertEqual(parameters["sample_size"], sim.get_sample_size())
-        self.assertEqual(parameters["num_loci"], sim.get_num_loci())
-        self.assertEqual(
-            parameters["scaled_recombination_rate"],
-            sim.get_per_locus_scaled_recombination_rate())
-        config = sim.get_configuration()
-        self.assertEqual(config, parameters)
 
     def verify_dump_load(self, tree_sequence):
         """
@@ -485,7 +474,6 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertGreaterEqual(sim.get_total_num_migration_events(), 0)
         self.assertGreaterEqual(sim.get_num_multiple_recombination_events(), 0)
         self.verify_sparse_trees(tree_sequence)
-        self.verify_parameters(sim, tree_sequence)
         self.verify_dump_load(tree_sequence)
 
     def test_random_parameters(self):
@@ -1176,15 +1164,6 @@ class TestRecombinationMap(unittest.TestCase):
             self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
 
 
-def get_ll_demographic_events(ll_sim):
-    """
-    Utility function to get the low-level demographic events from the
-    specified low-level simulator.
-    """
-    d = json.loads(ll_sim.get_configuration_json())
-    return d["demographic_events"]
-
-
 class TestSimulatorFactory(unittest.TestCase):
     """
     Tests that the simulator factory high-level function correctly
@@ -1324,11 +1303,6 @@ class TestSimulatorFactory(unittest.TestCase):
                 TypeError, msprime.simulator_factory, 2,
                 demographic_events=bad_type)
         # TODO test for bad values.
-
-    def test_default_demographic_events(self):
-        sim = msprime.simulator_factory(10)
-        ll_sim = sim.create_ll_instance()
-        self.assertEqual(get_ll_demographic_events(ll_sim), [])
 
     def test_recombination_rate(self):
         def f(recomb_rate):

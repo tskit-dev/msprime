@@ -1233,9 +1233,6 @@ class TreeSequence(object):
                 mutations.append(self.parse_mutation(line))
         self.set_mutations(mutations)
 
-    def get_parameters(self):
-        return json.loads(self._ll_tree_sequence.get_simulation_parameters())
-
     def get_provenance(self):
         return [
             json.loads(s) for s in
