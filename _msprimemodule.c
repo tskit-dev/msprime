@@ -307,6 +307,31 @@ out:
 }
 
 static PyObject *
+convert_string_list(char **list, size_t size)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_str = NULL;
+    size_t j;
+
+    l = PyList_New(size);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        py_str = Py_BuildValue("s", list[j]);
+        if (py_str == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_str);
+    }
+    ret = l;
+out:
+    return ret;
+}
+
+static PyObject *
 convert_children(uint32_t *children, uint32_t num_children)
 {
     PyObject *ret = NULL;
@@ -401,8 +426,6 @@ out:
     Py_XDECREF(children);
     return ret;
 }
-
-
 
 /*===================================================================
  * RandomGenerator
@@ -2495,6 +2518,56 @@ out:
 }
 
 static PyObject *
+TreeSequence_add_provenance_string(TreeSequence *self, PyObject *args)
+{
+    int err;
+    char *s;
+    PyObject *ret = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "s", &s)) {
+        goto out;
+    }
+    if (strlen(s) == 0) {
+        PyErr_SetString(PyExc_ValueError,
+                "Empty string is not permitted for provenance.");
+        goto out;
+    }
+    err = tree_sequence_add_provenance_string(self->tree_sequence, s);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_provenance_strings(TreeSequence *self)
+{
+    int err;
+    PyObject *ret = NULL;
+    size_t num_provenance_strings;
+    char **provenance_strings;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    err = tree_sequence_get_provenance_strings(self->tree_sequence,
+            &num_provenance_strings, &provenance_strings);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_string_list(provenance_strings, num_provenance_strings);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_record(TreeSequence *self, PyObject *args)
 {
     int err;
@@ -2773,6 +2846,10 @@ static PyMethodDef TreeSequence_methods[] = {
     {"set_mutations", (PyCFunction) TreeSequence_set_mutations,
         METH_VARARGS|METH_KEYWORDS,
         "Sets the mutations to the specified list of tuples."},
+    {"add_provenance_string", (PyCFunction) TreeSequence_add_provenance_string,
+        METH_VARARGS, "Appends a provenance string to the list."},
+    {"get_provenance_strings", (PyCFunction) TreeSequence_get_provenance_strings,
+        METH_NOARGS, "Returns the list of provenance strings."},
     {"get_mutations", (PyCFunction) TreeSequence_get_mutations,
         METH_NOARGS, "Returns the list of mutations"},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,

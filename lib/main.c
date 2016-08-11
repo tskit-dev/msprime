@@ -819,7 +819,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < 4; j++) {
+    for (j = 0; j < 1; j++) {
         ret = msp_reset(msp);
         if (ret != 0) {
             goto out;
@@ -849,8 +849,11 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+    ret = tree_sequence_add_provenance_string(tree_seq, "Tree Provenance!!!");
+    if (ret != 0) {
+        goto out;
+    }
     tree_sequence_print_state(tree_seq, stdout);
-    print_tree_sequence(tree_seq);
 
     ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
     if (ret != 0) {
@@ -864,6 +867,11 @@ run_simulate(char *conf_file)
 
     ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
             mutgen->mutations, mutgen->parameters, mutgen->environment);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_add_provenance_string(tree_seq,
+            "Mutation Provenance!!!");
     if (ret != 0) {
         goto out;
     }

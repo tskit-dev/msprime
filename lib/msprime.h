@@ -249,6 +249,8 @@ typedef struct {
         char *parameters;
         char *environment;
     } mutations;
+    char **provenance_strings;
+    size_t num_provenance_strings;
     size_t num_nodes;
     size_t num_child_nodes;
     size_t num_records;
@@ -493,6 +495,10 @@ int tree_sequence_set_samples(tree_sequence_t *self, size_t sample_size,
 int tree_sequence_set_mutations(tree_sequence_t *self, 
         size_t num_mutations, mutation_t *mutations, 
         const char *parameters, const char *environment);
+int tree_sequence_add_provenance_string(tree_sequence_t *self,
+        const char *provenance_string);
+int tree_sequence_get_provenance_strings(tree_sequence_t *self,
+        size_t *num_provenance_strings, char ***provenance_strings);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
         tree_sequence_t *tree_sequence);

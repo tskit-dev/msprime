@@ -288,6 +288,7 @@ tree_sequence_t **
 get_example_tree_sequences(int include_nonbinary)
 {
     size_t max_examples = 1024;
+    int err, j, k;
     tree_sequence_t **ret = malloc(max_examples * sizeof(tree_sequence_t *));
     bottleneck_desc_t bottlenecks[] = {
         {0.1, 0, 0.5},
@@ -304,6 +305,12 @@ get_example_tree_sequences(int include_nonbinary)
         ret[4] = get_example_tree_sequence(10, 9, 100, 1.0, 0.0, 1, bottlenecks);
         ret[5] = get_example_tree_sequence(1000, 10, 10, 1.0, 0.0, 2, bottlenecks);
         ret[6] = NULL;
+    }
+    for (j = 0; ret[j] != NULL; j++) {
+        for (k = 0; k < j; k++) {
+            err = tree_sequence_add_provenance_string(ret[j], "test provenance");
+            CU_ASSERT_EQUAL_FATAL(err, 0);
+        }
     }
     return ret;
 }
@@ -2735,6 +2742,8 @@ test_newick_from_examples(void)
     examples = get_example_nonbinary_tree_sequences();
     for (j = 0; examples[j] != NULL; j++) {
         verify_newick(examples[j], 1);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
     }
     free(examples);
 }
@@ -2744,9 +2753,10 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
         int check_provenance_strings)
 {
     int ret;
-    size_t j;
+    size_t j, nps1, nps2;
     sample_t sample1, sample2;
     coalescence_record_t *r1, *r2;
+    char **ps1, **ps2;
     size_t num_mutations = tree_sequence_get_num_mutations(ts1);
     mutation_t *mutations_1 = malloc(num_mutations * sizeof(mutation_t));
     mutation_t *mutations_2 = malloc(num_mutations * sizeof(mutation_t));
@@ -2795,17 +2805,19 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
         CU_ASSERT_EQUAL(sample1.population_id, sample2.population_id);
         CU_ASSERT_EQUAL(sample1.time, sample2.time);
     }
-    if (check_provenance_strings) {
-        /* TODO this breaks when these are NULL; should be state be allowed?
-         */
-        CU_ASSERT_STRING_EQUAL(
-            tree_sequence_get_simulation_parameters(ts1),
-            tree_sequence_get_simulation_parameters(ts2));
-        CU_ASSERT_STRING_EQUAL(
-            tree_sequence_get_mutation_parameters(ts1),
-            tree_sequence_get_mutation_parameters(ts2));
-    }
 
+    if (check_provenance_strings) {
+        ret = tree_sequence_get_provenance_strings(ts1, &nps1, &ps1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = tree_sequence_get_provenance_strings(ts2, &nps2, &ps2);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(nps1, nps2);
+        for (j = 0; j < nps1; j++) {
+            CU_ASSERT_FATAL(ps1[j] != NULL);
+            CU_ASSERT_FATAL(ps2[j] != NULL);
+            CU_ASSERT_STRING_EQUAL(ps1[j], ps2[j]);
+        }
+    }
     free(mutations_1);
     free(mutations_2);
 }
@@ -2829,9 +2841,7 @@ test_save_hdf5(void)
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = tree_sequence_load(&ts2, _tmp_file_name, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            /* We don't check the provenance strings because they are
-             * null when the number of mutations is 0 */
-            verify_tree_sequences_equal(ts1, &ts2, 0);
+            verify_tree_sequences_equal(ts1, &ts2, 1);
             tree_sequence_print_state(&ts2, _devnull);
             tree_sequence_free(&ts2);
         }

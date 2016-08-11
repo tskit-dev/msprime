@@ -414,7 +414,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
 
     def get_tree_sequence(
             self, sample_size=10, num_loci=100, mutation_rate=10,
-            random_seed=1, demographic_events=[]):
+            random_seed=1, demographic_events=[], num_provenance_strings=5):
         rho = 1.0
         rng = _msprime.RandomGenerator(random_seed)
         sim = _msprime.Simulator(
@@ -426,6 +426,8 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         recomb_map = uniform_recombination_map(sim)
         ts.create(sim, recomb_map)
         ts.generate_mutations(mutation_rate, rng)
+        for j in range(num_provenance_strings):
+            ts.add_provenance_string("xxxxxxx" * (j + 1))
         return ts
 
     def get_nonbinary_tree_sequence(self):
@@ -2042,6 +2044,28 @@ class TestTreeSequence(LowLevelTestCase):
         # children must be sorted
         r = (1, 0, 3, (0, 2, 1), 1, 0)
         self.assertRaises(_msprime.LibraryError, f, [r])
+
+    def test_provenance_strings(self):
+        ts = self.get_tree_sequence(num_provenance_strings=0)
+        for bad_type in [{}, ts, None, 5]:
+            self.assertRaises(TypeError, ts.add_provenance_string, bad_type)
+        # The emtpy string raised a ValueError
+        self.assertRaises(ValueError, ts.add_provenance_string, "")
+        self.assertEqual(ts.get_provenance_strings(), [])
+
+        for j in range(10):
+            ts = self.get_tree_sequence(num_provenance_strings=0)
+            strings = []
+            for k in range(j):
+                # Use some fairly big strings to stress things out
+                strings.append("x" * (k + 1) * 8192)
+                ts.add_provenance_string(strings[-1])
+            self.assertEqual(ts.get_provenance_strings(), strings)
+            with tempfile.NamedTemporaryFile(prefix="msp_ll_test_ps") as f:
+                ts.dump(f.name)
+                ts2 = _msprime.TreeSequence()
+                ts2.load(f.name)
+                self.assertEqual(ts2.get_provenance_strings(), strings)
 
 
 class TestHdf5Format(LowLevelTestCase):
