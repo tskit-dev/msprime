@@ -23,14 +23,5 @@ modern datasets.
 from __future__ import print_function
 from __future__ import division
 
-from _msprime import get_gsl_version  # NOQA
-from _msprime import get_hdf5_version  # NOQA
-
+from msprime.environment import __version__  # NOQA
 from msprime.trees import *  # NOQA
-
-__version__ = "undefined"
-try:
-    from . import _version
-    __version__ = _version.version
-except ImportError:
-    pass

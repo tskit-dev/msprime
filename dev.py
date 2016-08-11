@@ -594,5 +594,10 @@ if __name__ == "__main__":
     # pop_example()
     # vcf_example()
     # records_example()
-    stuff()
+    # stuff()
     # examine()
+
+    import json
+    ts = msprime.simulate(10, mutation_rate=10)
+    print(json.dumps(ts.get_provenance()))
+

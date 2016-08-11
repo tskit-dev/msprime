@@ -36,6 +36,7 @@ except ImportError:
     _svgwrite_imported = False
 
 import _msprime
+import msprime.environment
 
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
@@ -63,6 +64,22 @@ Variant = collections.namedtuple(
 Sample = collections.namedtuple(
     "Sample",
     ["population", "time"])
+
+
+def get_provenance_json(command, parameters):
+    """
+    Returns a JSON document encoding an execution of msprime.
+
+    Note: this format is incomplete and provisional.
+    """
+    document = {
+        "software": "msprime",
+        "version": msprime.environment.__version__,
+        "command": command,
+        "parameters": parameters,
+        "environment": msprime.environment.get_environment()
+    }
+    return json.dumps(document)
 
 
 class TreeDrawer(object):
@@ -987,6 +1004,10 @@ class TreeSimulator(object):
     def get_configuration(self):
         return json.loads(self._ll_sim.get_configuration_json())
 
+    def _get_provenance_json(self):
+        # TODO set the parameters for the simulation!!
+        return get_provenance_json("generate_trees", parameters={})
+
     def set_effective_population_size(self, effective_population_size):
         if effective_population_size <= 0:
             raise ValueError("Cannot set Ne to a non-positive value.")
@@ -1098,6 +1119,8 @@ class TreeSimulator(object):
         ll_recomb_map = self._recombination_map.get_ll_recombination_map()
         Ne = self.get_effective_population_size()
         ll_tree_sequence.create(self._ll_sim, ll_recomb_map, Ne)
+        ll_tree_sequence.add_provenance_string(
+                self._get_provenance_json())
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
@@ -1212,6 +1235,11 @@ class TreeSequence(object):
 
     def get_parameters(self):
         return json.loads(self._ll_tree_sequence.get_simulation_parameters())
+
+    def get_provenance(self):
+        return [
+            json.loads(s) for s in
+            self._ll_tree_sequence.get_provenance_strings()]
 
     def get_mutations(self):
         # TODO should we provide this???
@@ -1467,6 +1495,10 @@ class TreeSequence(object):
         # RandomGenerator as well.
         self._ll_tree_sequence.generate_mutations(
             mutation_rate, random_generator)
+        provenance = get_provenance_json(
+            "generate_mutations",
+            parameters={"mutation_rate": mutation_rate})
+        self._ll_tree_sequence.add_provenance_string(provenance)
 
     def set_mutations(self, mutations):
         """
