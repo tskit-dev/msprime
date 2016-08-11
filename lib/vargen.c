@@ -26,12 +26,12 @@
 #include "msprime.h"
 
 void
-vargen_print_state(vargen_t *self)
+vargen_print_state(vargen_t *self, FILE *out)
 {
-    printf("vargen state\n");
-    printf("tree_mutation_index = %d\n", (int) self->tree_mutation_index);
-    printf("variant = '%s'\n", self->variant);
-    sparse_tree_iterator_print_state(&self->tree_iterator, stdout);
+    fprintf(out, "vargen state\n");
+    fprintf(out, "tree_mutation_index = %d\n", (int) self->tree_mutation_index);
+    fprintf(out, "variant = '%s'\n", self->variant);
+    sparse_tree_iterator_print_state(&self->tree_iterator, out);
 }
 
 static int

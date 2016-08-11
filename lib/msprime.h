@@ -221,13 +221,15 @@ typedef struct {
     uint32_t sample_size;
     double sequence_length;
     struct {
+        double *breakpoints;
+        size_t num_breakpoints;
         struct {
             double *time;
             uint8_t *population;
         } nodes;
         struct {
-            double *left;
-            double *right;
+            uint32_t *left;
+            uint32_t *right;
             uint32_t *node;
             uint32_t *num_children;
             uint32_t **children;
@@ -274,7 +276,7 @@ typedef struct {
     double sequence_length;
     size_t num_nodes;
     size_t num_records;
-    double tree_left;
+    uint32_t tree_left;
     tree_sequence_t *tree_sequence;
     size_t insertion_index;
     size_t removal_index;
@@ -543,7 +545,7 @@ void hapgen_print_state(hapgen_t *self, FILE *out);
 int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence);
 int vargen_next(vargen_t *self, double *position, char **variant);
 int vargen_free(vargen_t *self);
-void vargen_print_state(vargen_t *self);
+void vargen_print_state(vargen_t *self, FILE *out);
 
 int recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, 
         double sequence_length, double *positions, double *rates, 

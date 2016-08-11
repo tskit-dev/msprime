@@ -114,6 +114,8 @@ msp_strerror(int err)
         ret = "Bad coalescence records in file.";
     } else if (err == MSP_ERR_BAD_SAMPLES) {
         ret = "Bad sample configuration provided.";
+    } else if (err == MSP_ERR_NONBINARY_NEWICK) {
+        ret = "Newick export not supported for non binary trees.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);

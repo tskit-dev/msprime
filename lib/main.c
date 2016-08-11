@@ -854,34 +854,6 @@ run_simulate(char *conf_file)
     }
     tree_sequence_print_state(tree_seq, stdout);
 
-    ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutgen_generate(mutgen);
-    if (ret != 0) {
-        goto out;
-    }
-    mutgen_print_state(mutgen, stdout);
-
-    ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
-            mutgen->mutations);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_add_provenance_string(tree_seq,
-            "Mutation Provenance!!!");
-    if (ret != 0) {
-        goto out;
-    }
-    print_stats(tree_seq);
-
-    print_variants(tree_seq);
-
-    ret = print_vcf(tree_seq, 1);
-    if (ret != 0) {
-        goto out;
-    }
     for (j = 0; j < 1; j++) {
         ret = tree_sequence_dump(tree_seq, output_file, 0);
         if (ret != 0) {
@@ -889,20 +861,63 @@ run_simulate(char *conf_file)
         }
         tree_sequence_free(tree_seq);
         memset(tree_seq, 0, sizeof(tree_sequence_t));
+        printf("READING \n");
         ret = tree_sequence_load(tree_seq, output_file, 0);
         if (ret != 0) {
             goto out;
         }
         tree_sequence_print_state(tree_seq, stdout);
     }
+
+
     if (0) {
+        ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = mutgen_generate(mutgen);
+        if (ret != 0) {
+            goto out;
+        }
+        mutgen_print_state(mutgen, stdout);
+
+        ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
+                mutgen->mutations);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = tree_sequence_add_provenance_string(tree_seq,
+                "Mutation Provenance!!!");
+        if (ret != 0) {
+            goto out;
+        }
+        print_stats(tree_seq);
+
+        print_variants(tree_seq);
+
+        ret = print_vcf(tree_seq, 1);
+        if (ret != 0) {
+            goto out;
+        }
+        for (j = 0; j < 1; j++) {
+            ret = tree_sequence_dump(tree_seq, output_file, 0);
+            if (ret != 0) {
+                goto out;
+            }
+            tree_sequence_free(tree_seq);
+            memset(tree_seq, 0, sizeof(tree_sequence_t));
+            ret = tree_sequence_load(tree_seq, output_file, 0);
+            if (ret != 0) {
+                goto out;
+            }
+            tree_sequence_print_state(tree_seq, stdout);
+        }
 
         print_newick_trees(tree_seq);
-
+        print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);
 
         tree_sequence_print_state(tree_seq, stdout);
-        print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);
     }
 out:

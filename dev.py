@@ -550,7 +550,7 @@ def stuff():
     duration = time.clock() - before
     print("Simulated 100k genomes in {0:.3f} seconds.".format(duration))
 
-    tree_sequence.dump("tmp__NOBACKUP__/bottleneck-example-new.hdf5")
+    tree_sequence.dump("tmp__NOBACKUP__/bottleneck-example-new3.hdf5")
 
 def examine():
     ts = msprime.load("tmp__NOBACKUP__/bottleneck-example.hdf5")
@@ -597,7 +597,14 @@ if __name__ == "__main__":
     # stuff()
     # examine()
 
-    import json
-    ts = msprime.simulate(10, mutation_rate=10)
-    print(json.dumps(ts.get_provenance()))
+    tree_sequence = msprime.simulate(
+        10, length=10, recombination_rate=10,
+        mutation_rate=10, random_seed=1)
+    tree_sequence.dump("tmp.hdf5")
+    for h in tree_sequence.haplotypes():
+        pass
+    tree_sequence = msprime.load("tmp.hdf5")
+    print("NRE")
+    for h in tree_sequence.haplotypes():
+        print(h)
 

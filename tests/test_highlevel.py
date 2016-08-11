@@ -444,6 +444,9 @@ class TestTreeSimulator(HighLevelTestCase):
         records = list(tree_sequence.records())
         other_records = list(other.records())
         self.assertEqual(records, other_records)
+        haplotypes = list(tree_sequence.haplotypes())
+        other_haplotypes = list(other.haplotypes())
+        self.assertEqual(haplotypes, other_haplotypes)
 
     def verify_simulation(self, n, m, r):
         """
