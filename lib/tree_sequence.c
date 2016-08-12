@@ -552,7 +552,7 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     herr_t status;
     int rank;
     hsize_t dims;
-    int32_t version[2];
+    uint32_t version[2];
     struct _hdf5_metadata_read {
         const char *prefix;
         const char *name;
@@ -561,16 +561,11 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         void *dest;
     };
     struct _hdf5_metadata_read fields[] = {
-        {"/", "format_version", H5T_NATIVE_UINT32, 2, NULL},
-        {"/", "sample_size", H5T_NATIVE_UINT32, 0, NULL},
-        {"/", "sequence_length", H5T_NATIVE_DOUBLE, 0, NULL},
+        {"/", "format_version", H5T_NATIVE_UINT32, 2, version},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_read);
     size_t j;
 
-    fields[0].dest = version;
-    fields[1].dest = &self->sample_size;
-    fields[2].dest = &self->sequence_length;
     for (j = 0; j < num_fields; j++) {
         attr_id = H5Aopen_by_name(file_id, fields[j].prefix, fields[j].name,
                 H5P_DEFAULT, H5P_DEFAULT);
@@ -582,25 +577,17 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
             goto out;
         }
         rank = H5Sget_simple_extent_ndims(dataspace_id);
-        if (fields[j].size == 0) {
-            /* SCALAR's have rank 0 */
-            if (rank != 0) {
-                ret = MSP_ERR_FILE_FORMAT;
-                goto out;
-            }
-        } else {
-            if (rank != 1) {
-                ret = MSP_ERR_FILE_FORMAT;
-                goto out;
-            }
-            status = H5Sget_simple_extent_dims(dataspace_id, &dims, NULL);
-            if (status < 0) {
-                goto out;
-            }
-            if (dims != fields[j].size) {
-                ret = MSP_ERR_FILE_FORMAT;
-                goto out;
-            }
+        if (rank != 1) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        status = H5Sget_simple_extent_dims(dataspace_id, &dims, NULL);
+        if (status < 0) {
+            goto out;
+        }
+        if (dims != fields[j].size) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
         }
         status = H5Aread(attr_id, fields[j].memory_type, fields[j].dest);
         if (status < 0) {
@@ -873,14 +860,21 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
             goto out;
         }
     }
-    /* Now update the children vectors */
+    /* Now update the children vectors and find sample size */
+    self->sample_size = UINT32_MAX;
     offset = 0;
     for (j = 0; j < self->num_records; j++) {
         assert(offset < self->num_child_nodes);
-        self->trees.records.children[j] = &self->trees.records.children_mem[offset];
+        self->trees.records.children[j] =
+            &self->trees.records.children_mem[offset];
         offset += self->trees.records.num_children[j];
+        self->sample_size = GSL_MIN(self->sample_size,
+                self->trees.records.node[j]);
     }
     assert(offset == self->num_child_nodes);
+    self->sequence_length = self->trees.breakpoints[
+        self->trees.num_breakpoints - 1];
+
     status = H5Tclose(vlen_str);
     if (status < 0) {
         goto out;
@@ -1132,25 +1126,14 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         void *source;
     };
     struct _hdf5_metadata_write fields[] = {
-        {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, NULL},
-        {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 0, NULL},
-        {"sequence_length", 0, H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 0, NULL},
+        {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, version},
     };
-    /* TODO random_seed, population_models, etc. */
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_write);
     size_t j;
 
-    fields[0].source = version;
-    fields[1].source = &self->sample_size;
-    fields[2].source = &self->sequence_length;
-
     for (j = 0; j < num_fields; j++) {
-        if (fields[j].size == 0) {
-            dataspace_id = H5Screate(H5S_SCALAR);
-        } else {
-            dims = fields[j].size;
-            dataspace_id = H5Screate_simple(1, &dims, NULL);
-        }
+        dims = fields[j].size;
+        dataspace_id = H5Screate_simple(1, &dims, NULL);
         if (dataspace_id < 0) {
             status = dataspace_id;
             goto out;
