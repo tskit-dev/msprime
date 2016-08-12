@@ -581,6 +581,7 @@ out:
     return ret;
 }
 
+
 int WARN_UNUSED
 tree_sequence_load_records(tree_sequence_t *self,
       size_t num_records, coalescence_record_t *records)
@@ -601,16 +602,17 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
         recomb_map_t *recomb_map, double Ne)
 {
     int ret = MSP_ERR_GENERIC;
-    size_t j, num_records;
-    coalescence_record_t *records = NULL;
+    size_t j, num_coalesence_records;
+    coalescence_record_t *coalescence_records = NULL;
     sample_t *samples = NULL;
 
-    ret = msp_get_coalescence_records(sim, &records);
+    ret = msp_get_coalescence_records(sim, &coalescence_records);
     if (ret != 0) {
         goto out;
     }
-    num_records = msp_get_num_coalescence_records(sim);
-    ret = tree_sequence_init_from_records(self, num_records, records);
+    num_coalesence_records = msp_get_num_coalescence_records(sim);
+    ret = tree_sequence_init_from_records(self, num_coalesence_records,
+            coalescence_records);
     if (ret != 0) {
         goto out;
     }

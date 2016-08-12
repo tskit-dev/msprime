@@ -742,13 +742,12 @@ run_simulate(char *conf_file, char *output_file)
     if (ret != 0) {
         goto out;
     }
-    /* recomb_map_print_state(recomb_map); */
     ret = msp_initialise(msp);
     if (ret != 0) {
         goto out;
     }
     if (0) {
-        /* print out the demographic event debug state */
+        /* recomb_map_print_state(recomb_map); */
         start_time = 0;
         do {
 

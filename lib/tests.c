@@ -837,6 +837,8 @@ test_simulator_getters_setters(void)
             MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_coalescence_record_block_size(&msp, 0),
             MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_migration_record_block_size(&msp, 0),
+            MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_num_loci(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_num_populations(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(
@@ -906,6 +908,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_get_num_node_mapping_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_segment_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_coalescence_record_blocks(&msp), 1);
+    CU_ASSERT_EQUAL(msp_get_num_migration_record_blocks(&msp), 1);
     CU_ASSERT(msp_get_used_memory(&msp) > 0);
     CU_ASSERT_EQUAL(msp_get_num_populations(&msp), 2);
 
@@ -1239,7 +1242,6 @@ test_multi_locus_simulation(void)
         CU_ASSERT_FATAL(msp != NULL);
         CU_ASSERT_FATAL(samples != NULL);
         CU_ASSERT_FATAL(rng != NULL);
-
         gsl_rng_set(rng, seed);
         memset(samples, 0, n * sizeof(sample_t));
         ret = msp_alloc(msp, n, samples, rng);

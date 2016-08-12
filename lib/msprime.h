@@ -88,6 +88,15 @@ typedef struct {
 } coalescence_record_t;
 
 typedef struct {
+    uint8_t source_pop;
+    uint8_t dest_pop;
+    uint32_t node;
+    double left;
+    double right;
+    double time;
+} migration_record_t;
+
+typedef struct {
     uint32_t left; /* TODO CHANGE THIS - not a good name! */
     uint32_t value;
 } node_mapping_t;
@@ -173,6 +182,12 @@ typedef struct {
     size_t max_coalescence_records;
     size_t coalescence_record_block_size;
     size_t num_coalescence_record_blocks;
+    /* migration records are stored in a flat array */
+    migration_record_t *migration_records;
+    size_t num_migration_records;
+    size_t max_migration_records;
+    size_t migration_record_block_size;
+    size_t num_migration_record_blocks;
 } msp_t;
 
 /* Demographic events */
@@ -438,6 +453,7 @@ int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
 int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size);
+int msp_set_migration_record_block_size(msp_t *self, size_t block_size);
 int msp_set_sample_configuration(msp_t *self, size_t num_populations,
         size_t *sample_configuration);
 int msp_set_migration_matrix(msp_t *self, size_t size,
@@ -469,6 +485,7 @@ int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t **records);
+int msp_get_migration_records(msp_t *self, migration_record_t **records);
 int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         double *initial_size, double *growth_rate);
@@ -484,10 +501,12 @@ size_t msp_get_num_populations(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
 size_t msp_get_num_coalescence_records(msp_t *self);
+size_t msp_get_num_migration_records(msp_t *self);
 size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_coalescence_record_blocks(msp_t *self);
+size_t msp_get_num_migration_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
