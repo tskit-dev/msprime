@@ -23,6 +23,6 @@ modern datasets.
 from __future__ import print_function
 from __future__ import division
 
-from msprime.formats import Hdf5FileReader  # NOQA
 from msprime.environment import __version__  # NOQA
+from msprime.formats import *  # NOQA
 from msprime.trees import *  # NOQA

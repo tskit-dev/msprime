@@ -710,6 +710,12 @@ def mspms_main(arg_list=None):
 # msp: the command line interface for msprime
 #######################################################
 
+
+def run_upgrade(args):
+    tree_sequence = msprime.load_legacy(args.source)
+    tree_sequence.dump(args.destination)
+
+
 def run_dump_newick(args):
     tree_sequence = msprime.load(args.history_file)
     for l, ns in tree_sequence.newick_trees(args.precision):
@@ -859,6 +865,16 @@ def get_msp_parser():
         "--precision", "-p", type=int, default=3,
         help="The number of decimal places in branch lengths")
     newick_parser.set_defaults(runner=run_dump_newick)
+
+    upgrade_parser = subparsers.add_parser(
+        "upgrade",
+        help="Upgrade legacy HDF5 files to the latest version.")
+    upgrade_parser.add_argument(
+        "source", help="The source msprime history file in legacy HDF5 format")
+    upgrade_parser.add_argument(
+        "destination", help="The filename of the upgraded copy.")
+    upgrade_parser.set_defaults(runner=run_upgrade)
+
     return parser
 
 

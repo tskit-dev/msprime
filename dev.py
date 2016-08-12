@@ -532,7 +532,6 @@ def records_example():
     for t in ts.trees():
         print(t)
 
-<<<<<<< HEAD
 def stuff():
     before = time.clock()
     # Run the actual simulations
@@ -576,18 +575,16 @@ def examine():
 
 def convert_dev():
     filename = "v2.hdf5"
-    with msprime.Hdf5FileReader(filename) as reader:
-        records = list(reader.records())
-        mutations = list(reader.mutations())
-        # OK, it get's a bit trickier here....
-        samples = list(reader.samples())
-    print(samples)
-
-    ll_ts = _msprime.TreeSequence()
-    ll_ts.load_records(records)
-    ts = msprime.TreeSequence(ll_ts)
-    ts.set_mutations(mutations)
-    print(ts.get_sample_size())
+    ts = msprime.read_legacy_hdf5(filename)
+    msprime.write_legacy_hdf5(ts, "v2p.hdf5")
+    # with msprime.Hdf5FileReader(filename) as reader:
+    #     ts = reader.get_tree_sequence()
+    # print("ts = ")
+    # ll_ts = _msprime.TreeSequence()
+    # ll_ts.load_records(records)
+    # ts = msprime.TreeSequence(ll_ts)
+    # ts.set_mutations(mutations)
+    # print(ts.get_sample_size())
     ts.dump("v3.hdf5")
 
 

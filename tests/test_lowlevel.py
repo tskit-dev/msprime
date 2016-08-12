@@ -1694,20 +1694,19 @@ class TestTreeSequence(LowLevelTestCase):
                     max_node = node
             self.assertEqual(max_node + 1, ts.get_num_nodes())
 
-    def test_get_population(self):
+    def test_get_sample(self):
         for ts in self.get_example_tree_sequences():
             for bad_type in ["1", None, []]:
-                self.assertRaises(TypeError, ts.get_population, bad_type)
-            self.assertRaises(_msprime.LibraryError, ts.get_population, -1)
+                self.assertRaises(TypeError, ts.get_sample, bad_type)
+            self.assertRaises(_msprime.LibraryError, ts.get_sample, -1)
             self.assertRaises(
-                _msprime.LibraryError, ts.get_population, ts.get_sample_size())
+                _msprime.LibraryError, ts.get_sample, ts.get_sample_size())
             self.assertRaises(
-                _msprime.LibraryError, ts.get_population,
-                ts.get_sample_size() + 1)
+                _msprime.LibraryError, ts.get_sample, ts.get_sample_size() + 1)
             for j in range(ts.get_sample_size()):
-                # We only check for a single population here. Multi population
+                # We only check for a single sample here. Multi sample
                 # tests are done in test_demography.
-                self.assertEqual(ts.get_population(j), 0)
+                self.assertEqual(ts.get_sample(j), (0.0, 0))
 
     def verify_dump_equality(self, ts, outfile):
         """
@@ -1936,8 +1935,11 @@ class TestTreeSequence(LowLevelTestCase):
     def test_load_records_interface(self):
         ts = next(self.get_example_tree_sequences())
         self.assertRaises(ValueError, ts.load_records, [])
+        ts = _msprime.TreeSequence()
         for bad_type in [None, {}, 1234]:
             ts = _msprime.TreeSequence()
+            self.assertRaises(
+                TypeError, ts.load_records, bad_type)
             self.assertRaises(
                 TypeError, ts.load_records, [bad_type])
         ts = _msprime.TreeSequence()
@@ -1968,6 +1970,72 @@ class TestTreeSequence(LowLevelTestCase):
                 ts = _msprime.TreeSequence()
                 self.assertRaises(
                     TypeError, ts.load_records, [tuple(r)])
+
+    def test_load_records_bad_samples(self):
+        ts = next(self.get_example_tree_sequences())
+        sample_size = ts.get_sample_size()
+        records = [
+            ts.get_record(j) for j in range(ts.get_num_records())]
+        self.assertRaises(ValueError, ts.load_records, [])
+        ts = _msprime.TreeSequence()
+        for bad_type in [None, {}, 1234]:
+            ts = _msprime.TreeSequence()
+            self.assertRaises(ValueError, ts.get_sample_size)
+            self.assertRaises(
+                TypeError, ts.load_records, records, bad_type)
+            self.assertRaises(ValueError, ts.get_sample_size)
+            self.assertRaises(
+                TypeError, ts.load_records, records, [bad_type])
+            self.assertRaises(
+                TypeError, ts.load_records, records, samples=[bad_type])
+        self.assertRaises(_msprime.LibraryError, ts.load_records, records, [])
+        self.assertRaises(
+            _msprime.LibraryError, ts.load_records, records, [(0, 0)])
+        samples = [(0, 0) for _ in range(sample_size)]
+        for j in range(sample_size - 1):
+            self.assertRaises(
+                _msprime.LibraryError, ts.load_records, records, samples[:j])
+            for bad_type in [None, {}, "wsdr"]:
+                copy = list(samples)
+                copy[j] = bad_type
+                self.assertRaises(TypeError, ts.load_records, records, copy)
+                copy = list(samples)
+                copy[j] = (0, bad_type)
+                self.assertRaises(TypeError, ts.load_records, records, copy)
+                copy = list(samples)
+                copy[j] = (bad_type, 0)
+                self.assertRaises(TypeError, ts.load_records, records, copy)
+                copy = list(samples)
+                copy[j] = (-2, 0)
+                self.assertRaises(ValueError, ts.load_records, records, copy)
+                copy[j] = (0, -1)
+                self.assertRaises(ValueError, ts.load_records, records, copy)
+
+    def test_load_records_samples(self):
+        ts = next(self.get_example_tree_sequences())
+        n = ts.get_sample_size()
+        records = [
+            ts.get_record(j) for j in range(ts.get_num_records())]
+        ts = _msprime.TreeSequence()
+        samples = [(0, 0) for _ in range(n)]
+        ts.load_records(records=records, samples=samples)
+        self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
+
+        samples = [(j, 0) for _ in range(n)]
+        ts = _msprime.TreeSequence()
+        ts.load_records(records=records, samples=samples)
+        self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
+
+        samples = [(0, j) for _ in range(n)]
+        ts = _msprime.TreeSequence()
+        ts.load_records(records=records, samples=samples)
+        self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
+
+        # If we don't set the samples, population should be = -1
+        samples = [(-1, 0) for _ in range(n)]
+        ts = _msprime.TreeSequence()
+        ts.load_records(records=records)
+        self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
 
     def test_load_bad_records(self):
         def f(records):

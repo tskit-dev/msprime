@@ -233,6 +233,69 @@ out:
     return ret;
 }
 
+static int
+parse_samples(PyObject *py_samples, Py_ssize_t *sample_size,
+        sample_t **samples)
+{
+    int ret = -1;
+    long tmp_long;
+    Py_ssize_t j, n;
+    PyObject *sample, *value;
+    sample_t *ret_samples = NULL;
+
+    n = PyList_Size(py_samples);
+    ret_samples = PyMem_Malloc(n * sizeof(sample_t));
+    if (ret_samples == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < n; j++) {
+        sample = PyList_GetItem(py_samples, j);
+        if (!PyTuple_Check(sample)) {
+            PyErr_SetString(PyExc_TypeError, "not a tuple");
+            goto out;
+        }
+        if (PyTuple_Size(sample) != 2) {
+            PyErr_SetString(PyExc_ValueError,
+                    "sample must be (population,time) tuple");
+            goto out;
+        }
+        value = PyTuple_GetItem(sample, 0);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'population' is not number");
+            goto out;
+        }
+        tmp_long = PyLong_AsLong(value);
+        if (tmp_long < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
+            goto out;
+        }
+        ret_samples[j].population_id = (uint8_t) tmp_long;
+        value = PyTuple_GetItem(sample, 1);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'time' is not number");
+            goto out;
+        }
+        ret_samples[j].time = PyFloat_AsDouble(value);
+        if (ret_samples[j].time < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative times not valid");
+            goto out;
+        }
+    }
+    *samples = ret_samples;
+    *sample_size = n;
+    ret = 0;
+    ret_samples = NULL;
+out:
+    if (ret_samples != NULL) {
+        PyMem_Free(ret_samples);
+    }
+    return ret;
+}
+
+
+
+
 /*
  * Retrieves the PyObject* corresponding the specified key in the
  * specified dictionary.
@@ -836,66 +899,6 @@ out:
     return ret;
 }
 
-static int
-Simulator_parse_samples(Simulator *self, PyObject *py_samples,
-        Py_ssize_t *sample_size, sample_t **samples)
-{
-    int ret = -1;
-    long tmp_long;
-    Py_ssize_t j, n;
-    PyObject *sample, *value;
-    sample_t *ret_samples = NULL;
-
-    n = PyList_Size(py_samples);
-    ret_samples = PyMem_Malloc(n * sizeof(sample_t));
-    if (ret_samples == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    for (j = 0; j < n; j++) {
-        sample = PyList_GetItem(py_samples, j);
-        if (!PyTuple_Check(sample)) {
-            PyErr_SetString(PyExc_TypeError, "not a tuple");
-            goto out;
-        }
-        if (PyTuple_Size(sample) != 2) {
-            PyErr_SetString(PyExc_ValueError,
-                    "sample must be (population,time) tuple");
-            goto out;
-        }
-        value = PyTuple_GetItem(sample, 0);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError, "'population' is not number");
-            goto out;
-        }
-        tmp_long = PyLong_AsLong(value);
-        if (tmp_long < 0) {
-            PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
-            goto out;
-        }
-        ret_samples[j].population_id = (uint8_t) tmp_long;
-        value = PyTuple_GetItem(sample, 1);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError, "'time' is not number");
-            goto out;
-        }
-        ret_samples[j].time = PyFloat_AsDouble(value);
-        if (ret_samples[j].time < 0) {
-            PyErr_SetString(PyExc_ValueError, "negative times not valid");
-            goto out;
-        }
-    }
-    *samples = ret_samples;
-    *sample_size = n;
-    ret = 0;
-    ret_samples = NULL;
-out:
-    if (ret_samples != NULL) {
-        PyMem_Free(ret_samples);
-    }
-    return ret;
-}
-
 static void
 Simulator_dealloc(Simulator* self)
 {
@@ -952,7 +955,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (RandomGenerator_check_state(self->random_generator) != 0) {
         goto out;
     }
-    if (Simulator_parse_samples(self, py_samples, &sample_size, &samples) != 0) {
+    if (parse_samples(py_samples, &sample_size, &samples) != 0) {
         goto out;
     }
     self->sim = PyMem_Malloc(sizeof(msp_t));
@@ -2288,17 +2291,20 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
     int err;
     PyObject *ret = NULL;
     PyObject *py_records = NULL;
+    PyObject *py_samples = NULL;
     PyObject *item;
     coalescence_record_t *records = NULL;
+    sample_t *samples = NULL;
+    Py_ssize_t sample_size;
     size_t num_records, j;
-    static char *kwlist[] = {"records", NULL};
+    static char *kwlist[] = {"records", "samples", NULL};
 
     if (self->tree_sequence != NULL) {
         PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-                &PyList_Type, &py_records)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
+                &PyList_Type, &py_records, &PyList_Type, &py_samples)) {
         goto out;
     }
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
@@ -2326,15 +2332,35 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
+    if (py_samples != NULL) {
+        if (parse_samples(py_samples, &sample_size, &samples) != 0) {
+            goto out;
+        }
+        err = tree_sequence_set_samples(
+                self->tree_sequence, sample_size, samples);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
     ret = Py_BuildValue("");
 out:
     if (records != NULL) {
         for (j = 0; j < num_records; j++) {
             if (records[j].children != NULL) {
-                free(records[j].children);
+                PyMem_Free(records[j].children);
             }
         }
-        free(records);
+        PyMem_Free(records);
+    }
+    if (samples != NULL) {
+        PyMem_Free(samples);
+    }
+    if (ret == NULL && self->tree_sequence != NULL) {
+        /* Ensure that the state of the tree sequence is consistent */
+        tree_sequence_free(self->tree_sequence);
+        PyMem_Free(self->tree_sequence);
+        self->tree_sequence = NULL;
     }
     return ret;
 }
@@ -2666,14 +2692,13 @@ out:
 }
 
 static PyObject *
-TreeSequence_get_population(TreeSequence *self, PyObject *args)
+TreeSequence_get_sample(TreeSequence *self, PyObject *args)
 {
     PyObject *ret = NULL;
     unsigned int node;
     sample_t sample;
     int population, err;
 
-    /* TODO deprecate this in favour of get_sample returning a dict */
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
@@ -2689,7 +2714,7 @@ TreeSequence_get_population(TreeSequence *self, PyObject *args)
     if (sample.population_id == MSP_NULL_POPULATION_ID) {
         population = -1;
     }
-    ret = Py_BuildValue("i", population);
+    ret = Py_BuildValue("id", population, sample.time);
 out:
     return ret;
 }
@@ -2809,8 +2834,8 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
         "Returns the sample size" },
-    {"get_population", (PyCFunction) TreeSequence_get_population, METH_VARARGS,
-        "Returns the population associated with the specified node." },
+    {"get_sample", (PyCFunction) TreeSequence_get_sample, METH_VARARGS,
+        "Returns a dictionary describing the specified sample." },
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },

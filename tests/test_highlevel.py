@@ -772,6 +772,15 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_population(0), 0)
             self.assertEqual(ts.get_population(n - 1), 0)
 
+    def test_get_time(self):
+        for ts in self.get_example_tree_sequences():
+            n = ts.get_sample_size()
+            self.assertRaises(ValueError, ts.get_time, -1)
+            self.assertRaises(ValueError, ts.get_time, n)
+            self.assertRaises(ValueError, ts.get_time, n + 1)
+            self.assertEqual(ts.get_time(0), 0)
+            self.assertEqual(ts.get_time(n - 1), 0)
+
     def test_get_samples(self):
         for ts in self.get_example_tree_sequences():
             n = ts.get_sample_size()

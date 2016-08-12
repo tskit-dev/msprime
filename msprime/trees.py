@@ -66,9 +66,9 @@ Sample = collections.namedtuple(
     ["population", "time"])
 
 
-def get_provenance_json(command, parameters):
+def get_provenance_dict(command, parameters):
     """
-    Returns a JSON document encoding an execution of msprime.
+    Returns a dictionary encoding an execution of msprime.
 
     Note: this format is incomplete and provisional.
     """
@@ -79,7 +79,7 @@ def get_provenance_json(command, parameters):
         "parameters": parameters,
         "environment": msprime.environment.get_environment()
     }
-    return json.dumps(document)
+    return document
 
 
 class TreeDrawer(object):
@@ -1006,7 +1006,8 @@ class TreeSimulator(object):
 
     def _get_provenance_json(self):
         # TODO set the parameters for the simulation!!
-        return get_provenance_json("generate_trees", parameters={})
+        return json.dumps(
+            get_provenance_dict("generate_trees", parameters={}))
 
     def set_effective_population_size(self, effective_population_size):
         if effective_population_size <= 0:
@@ -1234,9 +1235,7 @@ class TreeSequence(object):
         self.set_mutations(mutations)
 
     def get_provenance(self):
-        return [
-            json.loads(s) for s in
-            self._ll_tree_sequence.get_provenance_strings()]
+        return self._ll_tree_sequence.get_provenance_strings()
 
     def get_mutations(self):
         # TODO should we provide this???
@@ -1492,9 +1491,9 @@ class TreeSequence(object):
         # RandomGenerator as well.
         self._ll_tree_sequence.generate_mutations(
             mutation_rate, random_generator)
-        provenance = get_provenance_json(
+        provenance = json.dumps(get_provenance_dict(
             "generate_mutations",
-            parameters={"mutation_rate": mutation_rate})
+            parameters={"mutation_rate": mutation_rate}))
         self._ll_tree_sequence.add_provenance_string(provenance)
 
     def set_mutations(self, mutations):
@@ -1535,6 +1534,19 @@ class TreeSequence(object):
             leaves = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(leaves)
 
+    def get_time(self, sample):
+        """
+        Returns the time that the specified sample ID was sampled at.
+
+        :param int sample: The sample ID of interest.
+        :return: The time at which the specified sample was drawn.
+        :rtype: int
+        """
+        if sample < 0 or sample >= self.get_sample_size():
+            raise ValueError("Sample ID out of bounds")
+        _, time = self._ll_tree_sequence.get_sample(sample)
+        return time
+
     def get_population(self, sample):
         """
         Returns the population ID for the specified sample ID.
@@ -1547,7 +1559,8 @@ class TreeSequence(object):
         """
         if sample < 0 or sample >= self.get_sample_size():
             raise ValueError("Sample ID out of bounds")
-        return self._ll_tree_sequence.get_population(sample)
+        population, _ = self._ll_tree_sequence.get_sample(sample)
+        return population
 
     def get_samples(self, population_id=None):
         """
