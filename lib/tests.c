@@ -1778,7 +1778,7 @@ verify_trees(size_t num_records, coalescence_record_t *records,
     size_t num_tree_mutations;
 
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), num_nodes);
     ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1986,6 +1986,35 @@ test_nonbinary_tree_sequence_iter(void)
     free_local_records(num_records, records);
 }
 
+static void
+test_left_to_right_tree_sequence_iter(void)
+{
+    const char * text_records[] = {
+        "2 10 7 2,3 0.071 0",
+        "0 2  4 1,3 0.090 0",
+        "2 10 4 1,7 0.090 0",
+        "0 7  5 0,4 0.170 0",
+        "7 10 8 0,4 0.202 0",
+        "0 2  6 2,5 0.253 0"
+    };
+    /* We make one mutation for each tree */
+    mutation_t mutations[] = {{1, 2}, {4.5, 0}, {8.5, 4}};
+    uint32_t parents[] = {
+        5, 4, 6, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+        5, 4, 7, 7, 5, MSP_NULL_NODE, MSP_NULL_NODE, 4, MSP_NULL_NODE,
+        8, 4, 7, 7, 8, MSP_NULL_NODE, MSP_NULL_NODE, 4, MSP_NULL_NODE,
+    };
+    size_t num_records = 6;
+    uint32_t num_nodes = 9;
+    uint32_t num_trees = 3;
+    uint32_t num_mutations = 3;
+    coalescence_record_t *records;
+
+    parse_text_records(num_records, text_records, &records);
+    verify_trees(num_records, records, num_trees, num_nodes, parents,
+            num_mutations, mutations);
+    free_local_records(num_records, records);
+}
 
 typedef struct {
     uint32_t tree_index;
@@ -3150,6 +3179,8 @@ main(void)
         {"Leaf sets", test_leaf_sets},
         {"Nonbinary leaf sets", test_nonbinary_leaf_sets},
         {"Tree nonbinary sequence iterator", test_nonbinary_tree_sequence_iter},
+        {"Left-to-right tree sequence iterator",
+            test_left_to_right_tree_sequence_iter},
         {"Tree sequence bad records", test_tree_sequence_bad_records},
         {"Single tree iterator failure", test_single_tree_iter_failure},
         {"Tree sequence iterator failure", test_tree_sequence_iter_failure},

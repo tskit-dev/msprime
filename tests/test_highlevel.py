@@ -37,6 +37,7 @@ import unittest
 import xml.etree
 
 import msprime
+import _msprime
 import tests
 
 
@@ -1464,3 +1465,113 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_sample_size(), n)
         self.assertGreater(ts.get_num_trees(), 1)
         self.assertEqual(ts.get_num_mutations(), 0)
+
+
+class TestNodeOrdering(unittest.TestCase):
+    """
+    Verify that we can use any node ordering for internal nodes
+    and get the same topologies.
+    """
+    num_random_permutations = 10
+
+    def verify_tree_sequences_equal(self, ts1, ts2, approx=False):
+        self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())
+        self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
+        self.assertEqual(ts1.get_num_nodes(), ts2.get_num_nodes())
+        j = 0
+        for r1, r2 in zip(ts1.records(), ts2.records()):
+            self.assertEqual(r1.node, r2.node)
+            self.assertEqual(r1.children, r2.children)
+            self.assertEqual(r1.population, r2.population)
+            if approx:
+                self.assertAlmostEqual(r1.left, r2.left)
+                self.assertAlmostEqual(r1.right, r2.right)
+                self.assertAlmostEqual(r1.time, r2.time)
+            else:
+                self.assertEqual(r1.left, r2.left)
+                self.assertEqual(r1.right, r2.right)
+                self.assertEqual(r1.time, r2.time)
+            j += 1
+        self.assertEqual(ts1.get_num_records(), j)
+
+    def verify_random_permutation(self, ts):
+        n = ts.get_sample_size()
+        node_map = {}
+        for j in range(ts.get_sample_size()):
+            node_map[j] = j
+        internal_nodes = list(range(n, ts.get_num_nodes()))
+        random.shuffle(internal_nodes)
+        for j, node in enumerate(internal_nodes):
+            node_map[n + j] = node
+        new_records = []
+        for record in ts.records():
+            new_record = msprime.CoalescenceRecord(
+                left=record.left,
+                right=record.right,
+                time=record.time,
+                population=record.population,
+                node=node_map[record.node],
+                children=tuple(
+                    sorted([node_map[c] for c in record.children])))
+            new_records.append(new_record)
+        ll_ts = _msprime.TreeSequence()
+        ll_ts.load_records(new_records)
+        other_ts = msprime.TreeSequence(ll_ts)
+        self.assertEqual(ts.get_num_trees(), other_ts.get_num_trees())
+        self.assertEqual(ts.get_sample_size(), other_ts.get_sample_size())
+        self.assertEqual(ts.get_num_nodes(), other_ts.get_num_nodes())
+        j = 0
+        for t1, t2 in zip(ts.trees(), other_ts.trees()):
+            # Verify the topologies are identical. We do this by traversing
+            # upwards to the root for every leaf and checking if we map to
+            # the correct node and time.
+            for u in range(n):
+                v_orig = u
+                v_map = u
+                while v_orig != msprime.NULL_NODE:
+                    self.assertEqual(node_map[v_orig], v_map)
+                    self.assertEqual(
+                        t1.get_time(v_orig),
+                        t2.get_time(v_map))
+                    v_orig = t1.get_parent(v_orig)
+                    v_map = t2.get_parent(v_map)
+                self.assertEqual(v_orig, msprime.NULL_NODE)
+                self.assertEqual(v_map, msprime.NULL_NODE)
+            j += 1
+        self.assertEqual(j, ts.get_num_trees())
+        # Verify we can dump this new tree sequence OK.
+        with tempfile.NamedTemporaryFile("w+") as f:
+            other_ts.dump(f.name)
+            ts3 = msprime.load(f.name)
+            self.verify_tree_sequences_equal(other_ts, ts3)
+        # Also verify we can read the text version.
+        with tempfile.NamedTemporaryFile("w+") as f:
+            other_ts.write_records(f, precision=14)
+            f.seek(0)
+            f.flush()
+            ts3 = msprime.load_txt(f.name)
+            self.verify_tree_sequences_equal(other_ts, ts3, True)
+
+    def test_single_locus(self):
+        ts = msprime.simulate(7)
+        for _ in range(self.num_random_permutations):
+            self.verify_random_permutation(ts)
+
+    def test_multi_locus(self):
+        ts = msprime.simulate(20, recombination_rate=10)
+        for _ in range(self.num_random_permutations):
+            self.verify_random_permutation(ts)
+
+    def test_nonbinary(self):
+        ts = msprime.simulate(
+            sample_size=20, recombination_rate=10,
+            demographic_events=[
+                msprime.Bottleneck(time=0.5, proportion=1)])
+        # Make sure this really has some non-binary nodes
+        found = False
+        for r in ts.records():
+            if len(r.children) > 2:
+                found = True
+        self.assertTrue(found)
+        for _ in range(self.num_random_permutations):
+            self.verify_random_permutation(ts)

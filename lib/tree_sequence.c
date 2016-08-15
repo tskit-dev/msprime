@@ -67,6 +67,16 @@ cmp_index_sort(const void *a, const void *b) {
     return ret;
 }
 
+static void
+tree_sequence_check_state(tree_sequence_t *self)
+{
+    size_t j;
+
+    for (j = 0; j < self->num_records; j++) {
+        assert(self->trees.records.num_children[j] >= 2);
+    }
+}
+
 void
 tree_sequence_print_state(tree_sequence_t *self, FILE *out)
 {
@@ -113,6 +123,7 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
         fprintf(out, "\t%d\t%f\t%d\n", (int) j, self->mutations.position[j],
                (int) self->mutations.node[j]);
     }
+    tree_sequence_check_state(self);
 }
 
 /* Allocates the memory required for arrays of values. Assumes that
