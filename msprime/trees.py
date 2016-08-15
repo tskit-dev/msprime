@@ -181,7 +181,7 @@ class SparseTree(object):
     :const:`.NULL_NODE`, :math:`-1`. Similarly, each internal node has a
     pair of children, which are obtained using the :meth:`.get_children`
     method. Each node in the tree has a time associated with it in generations.
-    This value is obtained using the :meth:`.get_time` method.
+    This value is obtained using the :meth:`.SparseTree.get_time` method.
 
     Sparse trees are not intended to be instantiated directly, and are
     obtained as part of a :class:`.TreeSequence` using the

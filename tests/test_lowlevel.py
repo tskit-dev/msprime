@@ -2015,12 +2015,12 @@ class TestTreeSequence(LowLevelTestCase):
         ts.load_records(records=records, samples=samples)
         self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
 
-        samples = [(j, 0) for _ in range(n)]
+        samples = [(j, 0) for j in range(n)]
         ts = _msprime.TreeSequence()
         ts.load_records(records=records, samples=samples)
         self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
 
-        samples = [(0, j) for _ in range(n)]
+        samples = [(0, j) for j in range(n)]
         ts = _msprime.TreeSequence()
         ts.load_records(records=records, samples=samples)
         self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
