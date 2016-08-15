@@ -2252,23 +2252,18 @@ TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
     char *path;
     PyObject *ret = NULL;
     int zlib_compression = 0;
-    int skip_h5close = 0;
     int flags = 0;
-    static char *kwlist[] = {"path", "zlib_compression", "skip_h5close",
-        NULL};
+    static char *kwlist[] = {"path", "zlib_compression", NULL};
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ii", kwlist,
-                &path, &zlib_compression, &skip_h5close)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
+                &path, &zlib_compression)) {
         goto out;
     }
     if (zlib_compression) {
         flags = MSP_ZLIB_COMPRESSION;
-    }
-    if (skip_h5close) {
-        flags |= MSP_SKIP_H5CLOSE;
     }
     /* Silence the low-level error reporting HDF5 */
     if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
@@ -2371,16 +2366,15 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     int err;
     char *path;
     int flags = 0;
-    int skip_h5close = 0;
     PyObject *ret = NULL;
-    static char *kwlist[] = {"path", "skip_h5close", NULL};
+    static char *kwlist[] = {"path", NULL};
 
     if (self->tree_sequence != NULL) {
         PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
-                &path, &skip_h5close)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
+                &path)) {
         goto out;
     }
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
@@ -2389,9 +2383,6 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
-    if (skip_h5close) {
-        flags |= MSP_SKIP_H5CLOSE;
-    }
     /* Silence the low-level error reporting HDF5 */
     if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
         PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");

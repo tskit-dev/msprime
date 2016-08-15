@@ -629,9 +629,9 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     struct _dimension_check fields[] = {
         {"/mutations/node", 1, self->num_mutations, 1},
         {"/mutations/position", 1, self->num_mutations, 1},
-        {"/trees/nodes/population", 1, self->num_nodes, 0},
-        {"/trees/nodes/time", 1, self->num_nodes, 0},
-        {"/trees/breakpoints", 1, self->trees.num_breakpoints, 0},
+        {"/trees/nodes/population", 1, self->num_nodes, 1},
+        {"/trees/nodes/time", 1, self->num_nodes, 1},
+        {"/trees/breakpoints", 1, self->trees.num_breakpoints, 1},
         {"/trees/records/left", 1, self->num_records, 1},
         {"/trees/records/right", 1, self->num_records, 1},
         {"/trees/records/node", 1, self->num_records, 1},
@@ -790,7 +790,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
             self->mutations.node},
         {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1,
             self->mutations.position},
-        {"/trees/nodes/population", H5T_NATIVE_UINT8, 0, 0,
+        {"/trees/nodes/population", H5T_NATIVE_UINT8, 0, 1,
             self->trees.nodes.population},
         {"/trees/nodes/time", H5T_NATIVE_DOUBLE, 0, 1,
             self->trees.nodes.time},
@@ -917,12 +917,6 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     if (status < 0) {
         ret = MSP_ERR_HDF5;
         goto out;
-    }
-    if (!(flags & MSP_SKIP_H5CLOSE)) {
-        status = H5close();
-        if (status < 0) {
-            goto out;
-        }
     }
     ret = tree_sequence_check(self);
 out:
@@ -1183,12 +1177,6 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
     status = H5Fclose(file_id);
     if (status < 0) {
         goto out;
-    }
-    if (!(flags & MSP_SKIP_H5CLOSE)) {
-        status = H5close();
-        if (status < 0) {
-            goto out;
-        }
     }
     ret = 0;
 out:

@@ -34,7 +34,6 @@
 
 /* Flags for tree sequence dump/load */
 #define MSP_ZLIB_COMPRESSION 1
-#define MSP_SKIP_H5CLOSE 2
 
 #define MSP_FILE_FORMAT_VERSION_MAJOR 3
 #define MSP_FILE_FORMAT_VERSION_MINOR 0

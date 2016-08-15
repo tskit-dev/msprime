@@ -8,8 +8,14 @@ from __future__ import division
 import unittest
 import random
 
-import tests.test_lowlevel as test_lowlevel
+import tests.test_demography as test_demography
+import tests.test_hdf5 as test_hdf5
 import tests.test_highlevel as test_highlevel
+import tests.test_lowlevel as test_lowlevel
+import tests.test_vcf as test_vcf
+
+# Currently skipping some CLI tests so won't work here.
+# import tests.test_cli as test_cli
 
 import msprime
 
@@ -20,11 +26,13 @@ def main():
         # used from test-to-test.
         random.seed(1)
         testloader = unittest.TestLoader()
-        test_lowlevel.enable_h5py_tests = False
         suite = testloader.loadTestsFromModule(test_lowlevel)
-        l = testloader.loadTestsFromModule(test_highlevel)
-        suite.addTests(l)
-        unittest.TextTestRunner(verbosity=0).run(suite)
+        modules = [
+            test_highlevel, test_hdf5, test_demography, test_vcf]
+        for mod in modules:
+            l = testloader.loadTestsFromModule(mod)
+            suite.addTests(l)
+        unittest.TextTestRunner(verbosity=1).run(suite)
 
         # Run a large number of replicate simulations to make sure we're
         # not leaking memory here.
