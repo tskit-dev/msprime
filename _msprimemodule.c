@@ -4441,6 +4441,23 @@ out:
     return ret;
 }
 
+
+static PyObject *
+msprime_h5close(PyObject *self)
+{
+    herr_t status;
+    PyObject *ret = NULL;
+
+    status = H5close();
+    if (status != 0) {
+        PyErr_SetString(PyExc_SystemError, "Error calling H5close");
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
 static PyObject *
 msprime_get_library_version_str(PyObject *self)
 {
@@ -4453,6 +4470,8 @@ static PyMethodDef msprime_methods[] = {
             "Returns the version of GSL we are linking against." },
     {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,
             "Returns the version of HDF5 we are linking against." },
+    {"h5close", (PyCFunction) msprime_h5close, METH_NOARGS,
+            "Calls H5close()" },
     {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,
             METH_NOARGS, "Returns the version of the msp C library." },
     {NULL}        /* Sentinel */
