@@ -28,8 +28,11 @@ import json
 try:
     import h5py
     _h5py_imported = True
+    # Numpy is required by h5py, so we can safely use it.
+    import numpy as np
 except ImportError:
     _h5py_imported = False
+
 
 import msprime
 import _msprime
@@ -57,12 +60,12 @@ def _load_legacy_hdf5(root):
 
     # Get the coalescence records
     trees_group = root["trees"]
-    left = trees_group["left"]
-    right = trees_group["right"]
-    node = trees_group["node"]
-    children = trees_group["children"]
-    population = trees_group["population"]
-    time = trees_group["time"]
+    left = np.array(trees_group["left"])
+    right = np.array(trees_group["right"])
+    node = np.array(trees_group["node"])
+    children = np.array(trees_group["children"])
+    population = np.array(trees_group["population"])
+    time = np.array(trees_group["time"])
     num_records = len(left)
     records = num_records * [None]
     for j in range(num_records):
@@ -75,10 +78,10 @@ def _load_legacy_hdf5(root):
     samples = None
     if "samples" in root:
         samples_group = root["samples"]
-        population = samples_group["population"]
+        population = np.array(samples_group["population"])
         time = None
         if "time" in samples_group:
-            time = samples_group["time"]
+            time = np.array(samples_group["time"])
         sample_size = len(population)
         samples = sample_size * [None]
         for j in range(sample_size):
@@ -91,8 +94,8 @@ def _load_legacy_hdf5(root):
     mutations = None
     if "mutations" in root:
         mutations_group = root["mutations"]
-        position = mutations_group["position"]
-        node = mutations_group["node"]
+        position = np.array(mutations_group["position"])
+        node = np.array(mutations_group["node"])
         num_mutations = len(node)
         mutations = num_mutations * [None]
         for j in range(num_mutations):

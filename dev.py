@@ -611,4 +611,5 @@ if __name__ == "__main__":
     # records_example()
     # stuff()
     # examine()
-    convert_dev()
+    # convert_dev()
+    ts = msprime.load(sys.argv[1])
