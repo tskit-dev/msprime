@@ -889,7 +889,7 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
 {
     int ret = MSP_ERR_GENERIC;
     herr_t status;
-    hid_t file_id;
+    hid_t file_id = -1;
 
     memset(self, 0, sizeof(tree_sequence_t));
     file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -913,13 +913,14 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
-    status = H5Fclose(file_id);
-    if (status < 0) {
-        ret = MSP_ERR_HDF5;
-        goto out;
-    }
     ret = tree_sequence_check(self);
 out:
+    if (file_id >= 0) {
+        status = H5Fclose(file_id);
+        if (status < 0) {
+            ret = MSP_ERR_HDF5;
+        }
+    }
     return ret;
 }
 
@@ -1160,7 +1161,7 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
 {
     int ret = MSP_ERR_HDF5;
     herr_t status;
-    hid_t file_id;
+    hid_t file_id = -1;
 
     file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
     if (file_id < 0) {
@@ -1174,12 +1175,14 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
     if (status < 0) {
         goto out;
     }
-    status = H5Fclose(file_id);
-    if (status < 0) {
-        goto out;
-    }
     ret = 0;
 out:
+    if (file_id > 0) {
+        status = H5Fclose(file_id);
+        if (status < 0) {
+            ret = MSP_ERR_HDF5;
+        }
+    }
     return ret;
 }
 

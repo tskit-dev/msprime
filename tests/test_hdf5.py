@@ -339,6 +339,7 @@ class TestHdf5FormatErrors(unittest.TestCase):
             ts.dump(f.name)
             hfile = h5py.File(f.name, "r")
             hfile.visit(visit)
+            hfile.close()
         for name in names:
             with tempfile.NamedTemporaryFile() as f:
                 ts.dump(f.name)
@@ -355,7 +356,7 @@ class TestHdf5FormatErrors(unittest.TestCase):
         self.verify_fields(single_locus_with_mutation_example())
 
     def test_load_malformed_hdf5(self):
-        with tempfile.NamedTemporaryFile() as f:
+        with tempfile.NamedTemporaryFile(prefix="malformed_") as f:
             hfile = h5py.File(f.name, "w")
             # First try the empty hdf5 file.
             hfile.close()

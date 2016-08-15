@@ -27,12 +27,13 @@ def main():
         random.seed(1)
         testloader = unittest.TestLoader()
         suite = testloader.loadTestsFromModule(test_lowlevel)
+        # suite = testloader.loadTestsFromModule(test_hdf5)
         modules = [
-            test_highlevel, test_hdf5, test_demography, test_vcf]
+            test_highlevel, test_demography, test_vcf, test_hdf5]
         for mod in modules:
             l = testloader.loadTestsFromModule(mod)
             suite.addTests(l)
-        unittest.TextTestRunner(verbosity=1).run(suite)
+        unittest.TextTestRunner(verbosity=0).run(suite)
 
         # Run a large number of replicate simulations to make sure we're
         # not leaking memory here.
