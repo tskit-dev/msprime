@@ -14,6 +14,8 @@ addons:
       - libhdf5-serial-dev
       - libcunit1-dev
       - python-h5py
+      - graphviz
+      - doxygen
 
 language: python
 
@@ -26,28 +28,29 @@ install:
   # Install newer version of pip to take advantage of bdist_wheel cache.
   - pip install pip --upgrade
   # We install these requirements here rather than through the requirements.txt
-  # file because of issues on readthedocs. First we install Cython so that it 
+  # file because of issues on readthedocs. First we install Cython so that it
   # creates a bdist_wheel and then h5py. This allows Travis to cache the builds.
   - pip install Cython
-  - pip install h5py 
+  - pip install h5py
   - pip install -r requirements.txt
   - CFLAGS=--coverage python setup.py build_ext --inplace
 
-script: 
+script:
   - flake8 setup.py msprime tests
   - nosetests -v --with-coverage --cover-package msprime
       --cover-branches --cover-erase --cover-xml
       --cover-inclusive --cover-min-percentage 90 tests
-  - make -C docs 
+  - make -C docs
   # Make sure we can install successfully.
-  - python setup.py sdist 
+  - python setup.py sdist
   - pip install dist/msprime*.tar.gz --no-cache-dir
   # Now run the low-level tests.
-  - make -C lib travis-tests 
+  - make -C lib travis-tests
   - ./lib/tests
+  - cd docs/; doxygen Doxyfile
 
 after_success:
   # Run gcov manually, as the one used in codecov doesn't work here.
   - gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
   - find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
-  - codecov -X gcov 
+  - codecov -X gcov
