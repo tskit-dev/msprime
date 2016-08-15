@@ -47,7 +47,7 @@ script:
   # Now run the low-level tests.
   - make -C lib travis-tests
   - ./lib/tests
-  - cd docs/; doxygen Doxyfile
+  - cd docs/ && doxygen > /dev/null && cd ..
 
 after_success:
   # Run gcov manually, as the one used in codecov doesn't work here.

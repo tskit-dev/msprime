@@ -774,7 +774,6 @@ WARN_LOGFILE           =
 INPUT                  = ../lib/avl.c \
                          ../lib/avl.h \
                          ../lib/dev.cfg \
-                         ../lib/environment.c \
                          ../lib/err.h \
                          ../lib/fenwick.c \
                          ../lib/fenwick.h \
