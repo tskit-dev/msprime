@@ -3211,11 +3211,18 @@ main(void)
         {"Test error messages", test_strerror},
         CU_TEST_INFO_NULL,
     };
+
+    /* We use initialisers here as the struct definitions change between
+     * versions of CUnit */
     CU_SuiteInfo suites[] = {
-        { "msprime", msprime_suite_init, msprime_suite_cleanup, tests},
+        {
+            .pName = "msprime",
+            .pInitFunc = msprime_suite_init,
+            .pCleanupFunc = msprime_suite_cleanup,
+            .pTests = tests
+        },
         CU_SUITE_INFO_NULL,
     };
-
     /* initialize the CUnit test registry */
     if (CUE_SUCCESS != CU_initialize_registry()) {
         handle_cunit_error();
