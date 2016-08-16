@@ -31,7 +31,7 @@
 typedef struct {
     double value;
     uint32_t index;
-    double time;
+    int64_t time;
 } index_sort_t;
 
 static int
@@ -60,7 +60,6 @@ cmp_index_sort(const void *a, const void *b) {
     const index_sort_t *ca = (const index_sort_t *) a;
     const index_sort_t *cb = (const index_sort_t *) b;
     int ret = (ca->value > cb->value) - (ca->value < cb->value);
-    /* When comparing equal values, we sort by time */
     if (ret == 0) {
         ret = (ca->time > cb->time) - (ca->time < cb->time);
     }
@@ -450,7 +449,15 @@ tree_sequence_init_from_records(tree_sequence_t *self,
     for (j = 0; j < self->num_records; j++) {
         sort_buff[j].index = (uint32_t ) j;
         sort_buff[j].value = records[j].left;
-        sort_buff[j].time = records[j].time;
+        /* When comparing equal left values, we sort by time. Since we require
+         * that records are provided in sorted order, the index can be
+         * taken as a proxy for time. This avoids issues unstable sort
+         * algorithms when multiple events occur at the same time. We are
+         * actually making the stronger requirement that records must be
+         * provided *in the order they happened*, not just in increasing
+         * time. See also the removal order index below.
+         */
+        sort_buff[j].time = (int64_t ) j;
     }
     qsort(sort_buff, self->num_records, sizeof(index_sort_t), cmp_index_sort);
     k = 0;
@@ -467,7 +474,7 @@ tree_sequence_init_from_records(tree_sequence_t *self,
     for (j = 0; j < self->num_records; j++) {
         sort_buff[j].index = (uint32_t ) j;
         sort_buff[j].value = records[j].right;
-        sort_buff[j].time = -records[j].time;
+        sort_buff[j].time = -1 * (int64_t ) j;
     }
     qsort(sort_buff, self->num_records, sizeof(index_sort_t), cmp_index_sort);
     k = 0;
