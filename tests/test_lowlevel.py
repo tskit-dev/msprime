@@ -2498,12 +2498,7 @@ class TestSparseTree(LowLevelTestCase):
                 [1, bad_leaf, 1])
 
     def test_count_all_leaves(self):
-        examples = [
-            self.get_tree_sequence(num_loci=10),
-            self.get_tree_sequence(
-                demographic_events=[
-                    get_bottleneck_event(0.2, proportion=1.0)])]
-        for ts in examples:
+        for ts in self.get_example_tree_sequences():
             self.verify_iterator(_msprime.TreeDiffIterator(ts))
             st = _msprime.SparseTree(ts)
             # Without initialisation we should be 0 leaves for every node
@@ -2529,8 +2524,17 @@ class TestSparseTree(LowLevelTestCase):
         examples = [
             self.get_tree_sequence(sample_size=5, num_loci=10),
             self.get_tree_sequence(
+                sample_size=12,
                 demographic_events=[
                     get_bottleneck_event(0.2, proportion=1.0)])]
+        # Ensure that the second example does have some non-binary records
+        ts = examples[1]
+        found = False
+        for j in range(ts.get_num_records()):
+            r = ts.get_record(j)
+            if len(r[3]) > 2:
+                found = True
+        self.assertTrue(found)
         for ts in examples:
             leaves = [j for j in range(ts.get_sample_size())]
             powerset = itertools.chain.from_iterable(

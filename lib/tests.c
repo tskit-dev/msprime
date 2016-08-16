@@ -283,6 +283,10 @@ get_example_nonbinary_tree_sequences(void)
         {0.1, 0, 0.5},
         {0.4, 0, 1.0},
     };
+    bottleneck_desc_t other_bottlenecks[] = {
+        {0.1, 0, 0.1},
+        {0.1, 0, 0.9},
+    };
 
     CU_ASSERT_FATAL(ret != NULL);
     ret[0] = get_example_tree_sequence(100, 0, 100, 100.0, 10.0, 1.0,
@@ -291,7 +295,9 @@ get_example_nonbinary_tree_sequences(void)
             1, bottlenecks);
     ret[2] = get_example_tree_sequence(500, 10, 10, 1000.0, 0.5, 3.0,
             2, bottlenecks);
-    ret[3] = NULL;
+    ret[3] = get_example_tree_sequence(100, 0, 100, 1.0, 1.0, 0.0,
+            2, other_bottlenecks);
+    ret[4] = NULL;
     return ret;
 }
 
@@ -301,10 +307,7 @@ get_example_tree_sequences(int include_nonbinary)
     size_t max_examples = 1024;
     int err, j, k;
     tree_sequence_t **ret = malloc(max_examples * sizeof(tree_sequence_t *));
-    bottleneck_desc_t bottlenecks[] = {
-        {0.1, 0, 0.5},
-        {0.4, 0, 1.0},
-    };
+    tree_sequence_t **nonbinary = NULL;
     CU_ASSERT_FATAL(ret != NULL);
 
     ret[0] = get_example_tree_sequence(10, 0, 100, 100.0, 1.0, 1.0, 0, NULL);
@@ -312,16 +315,16 @@ get_example_tree_sequences(int include_nonbinary)
     ret[2] = get_example_tree_sequence(3, 0, 3, 10.0, 10.0, 0.0, 0, NULL);
     ret[3] = get_example_tree_sequence(10, 0, 4294967295, 10.0,
             9.31322575049e-08, 10.0, 0, NULL);
-    ret[4] = NULL;
+    k = 4;
     if (include_nonbinary) {
-        ret[4] = get_example_tree_sequence(100, 0, 100, 100.0, 10.0, 1.0,
-                1, bottlenecks);
-        ret[5] = get_example_tree_sequence(10, 2, 100, 10.0, 1.0, 2.0,
-                1, bottlenecks);
-        ret[6] = get_example_tree_sequence(500, 10, 10, 1000.0, 0.5, 3.0,
-                2, bottlenecks);
-        ret[7] = NULL;
+        nonbinary = get_example_nonbinary_tree_sequences();
+        for (j = 0; nonbinary[j] != NULL; j++) {
+            ret[k] = nonbinary[j];
+            k++;
+        }
+        free(nonbinary);
     }
+    ret[k] = NULL;
     for (j = 0; ret[j] != NULL; j++) {
         for (k = 0; k < j; k++) {
             err = tree_sequence_add_provenance_string(ret[j], "test provenance");
