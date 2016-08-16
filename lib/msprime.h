@@ -53,7 +53,7 @@
 /* The root node indicator */
 #define MSP_NULL_NODE UINT32_MAX
 /* Indicates the that the population ID has not been set. */
-/* TODO uint8_t for population in the structs is pointless because 
+/* TODO uint8_t for population in the structs is pointless because
  * we don't make any savings due to padding. We should change population
  * ID to uint32_t like the rest for simplicity.
  */
@@ -73,7 +73,7 @@ typedef struct segment_t_t {
 typedef struct {
     uint8_t population_id;
     uint32_t num_children;
-    /* After simulation, all coordinates are converted to physical coordinates 
+    /* After simulation, all coordinates are converted to physical coordinates
      * using a genetic map */
     uint32_t node;
     double left;
@@ -296,7 +296,7 @@ typedef struct {
     double *time;
     uint32_t index;
     /* These are involved in the optional leaf tracking; num_leaves counts
-     * all leaves below a give node, and num_tracked_leaves counts those 
+     * all leaves below a give node, and num_tracked_leaves counts those
      * from a specific subset. */
     uint32_t *num_leaves;
     uint32_t *num_tracked_leaves;
@@ -397,7 +397,7 @@ typedef struct {
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
-int msp_set_scaled_recombination_rate(msp_t *self, 
+int msp_set_scaled_recombination_rate(msp_t *self,
         double scaled_recombination_rate);
 int msp_set_max_memory(msp_t *self, size_t max_memory);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
@@ -408,16 +408,16 @@ int msp_set_sample_configuration(msp_t *self, size_t num_populations,
         size_t *sample_configuration);
 int msp_set_migration_matrix(msp_t *self, size_t size,
         double *migration_matrix);
-int msp_set_population_configuration(msp_t *self, int population_id, 
+int msp_set_population_configuration(msp_t *self, int population_id,
         double initial_size, double growth_rate);
 
-int msp_add_population_parameters_change(msp_t *self, double time, 
+int msp_add_population_parameters_change(msp_t *self, double time,
         int population_id, double size, double growth_rate);
 int msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate);
 int msp_add_mass_migration(msp_t *self, double time, int source, int dest,
         double proportion);
-int msp_add_bottleneck(msp_t *self, double time, int population_id, 
+int msp_add_bottleneck(msp_t *self, double time, int population_id,
         double intensity);
 
 int msp_initialise(msp_t *self);
@@ -436,7 +436,7 @@ int msp_get_coalescence_records(msp_t *self, coalescence_record_t **records);
 int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         double *initial_size, double *growth_rate);
-int msp_get_population(msp_t *self, size_t population_id, 
+int msp_get_population(msp_t *self, size_t population_id,
         population_t **population);
 int msp_is_completed(msp_t *self);
 
@@ -455,9 +455,9 @@ size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self, FILE *out);
-int tree_sequence_create(tree_sequence_t *self, msp_t *sim, 
+int tree_sequence_create(tree_sequence_t *self, msp_t *sim,
         recomb_map_t *recomb_map, double Ne);
-int tree_sequence_load_records(tree_sequence_t *self, 
+int tree_sequence_load_records(tree_sequence_t *self,
         size_t num_records, coalescence_record_t *records);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
@@ -468,40 +468,40 @@ uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 
-int tree_sequence_get_record(tree_sequence_t *self, size_t index, 
+int tree_sequence_get_record(tree_sequence_t *self, size_t index,
         coalescence_record_t **record, int order);
 int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations);
-int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u, 
+int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u,
         sample_t *sample);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     uint32_t *samples, uint32_t num_samples, double *pi);
-int tree_sequence_alloc_sparse_tree(tree_sequence_t *self, 
-        sparse_tree_t *tree, uint32_t *tracked_leaves, 
+int tree_sequence_alloc_sparse_tree(tree_sequence_t *self,
+        sparse_tree_t *tree, uint32_t *tracked_leaves,
         uint32_t num_tracked_leaves, int flags);
 int tree_sequence_set_samples(tree_sequence_t *self, size_t sample_size,
         sample_t *samples);
-int tree_sequence_set_mutations(tree_sequence_t *self, 
+int tree_sequence_set_mutations(tree_sequence_t *self,
         size_t num_mutations, mutation_t *mutations);
 int tree_sequence_add_provenance_string(tree_sequence_t *self,
         const char *provenance_string);
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);
 
-int tree_diff_iterator_alloc(tree_diff_iterator_t *self, 
+int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence);
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
 int tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
         node_record_t **nodes_out, node_record_t **nodes_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out);
 
-int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size, 
-        uint32_t num_nodes, size_t max_mutations, uint32_t *tracked_leaves, 
+int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size,
+        uint32_t num_nodes, size_t max_mutations, uint32_t *tracked_leaves,
         uint32_t num_tracked_leaves, int flags);
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_clear(sparse_tree_t *self);
 int sparse_tree_get_root(sparse_tree_t *self, uint32_t *root);
 int sparse_tree_get_parent(sparse_tree_t *self, uint32_t u, uint32_t *parent);
-int sparse_tree_get_children(sparse_tree_t *self, uint32_t u, 
+int sparse_tree_get_children(sparse_tree_t *self, uint32_t u,
         uint32_t *num_children, uint32_t **children);
 int sparse_tree_get_time(sparse_tree_t *self, uint32_t u, double *t);
 int sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
@@ -515,20 +515,20 @@ int sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
 int sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
         mutation_t **mutations);
 
-int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
+int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
         tree_sequence_t *tree_sequence, sparse_tree_t *tree);
 int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
 int sparse_tree_iterator_next(sparse_tree_iterator_t *self);
 void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self, FILE *out);
 
-int newick_converter_alloc(newick_converter_t *self, 
+int newick_converter_alloc(newick_converter_t *self,
         tree_sequence_t *tree_sequence, size_t precision, double Ne);
-int newick_converter_next(newick_converter_t *self, double *length, 
+int newick_converter_next(newick_converter_t *self, double *length,
         char **tree);
 int newick_converter_free(newick_converter_t *self);
 void newick_converter_print_state(newick_converter_t *self, FILE *out);
 
-int vcf_converter_alloc(vcf_converter_t *self, 
+int vcf_converter_alloc(vcf_converter_t *self,
         tree_sequence_t *tree_sequence, unsigned ploidy);
 int vcf_converter_get_header(vcf_converter_t *self, char **header);
 int vcf_converter_next(vcf_converter_t *self, char **record);
@@ -546,8 +546,8 @@ int vargen_next(vargen_t *self, double *position, char **variant);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self, FILE *out);
 
-int recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, 
-        double sequence_length, double *positions, double *rates, 
+int recomb_map_alloc(recomb_map_t *self, uint32_t num_loci,
+        double sequence_length, double *positions, double *rates,
         size_t size);
 int recomb_map_free(recomb_map_t *self);
 uint32_t recomb_map_get_num_loci(recomb_map_t *self);
@@ -556,7 +556,7 @@ double recomb_map_get_per_locus_recombination_rate(recomb_map_t *self);
 double recomb_map_get_total_recombination_rate(recomb_map_t *self);
 double recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x);
 double recomb_map_phys_to_genetic(recomb_map_t *self, double phys_x);
-int recomb_map_genetic_to_phys_bulk(recomb_map_t *self, double *genetic_x, 
+int recomb_map_genetic_to_phys_bulk(recomb_map_t *self, double *genetic_x,
         size_t n);
 size_t recomb_map_get_size(recomb_map_t *self);
 int recomb_map_get_positions(recomb_map_t *self, double *positions);
@@ -564,7 +564,7 @@ int recomb_map_get_rates(recomb_map_t *self, double *rates);
 
 void recomb_map_print_state(recomb_map_t *self);
 
-int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence, 
+int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         double mutation_rate, gsl_rng *rng);
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self);

@@ -68,8 +68,6 @@ msp_strerror(int err)
         ret = "Generic error; please file a bug report";
     } else if (err == MSP_ERR_FILE_FORMAT) {
         ret = "File format error";
-    } else if (err == MSP_ERR_FILE_VERSION) {
-        ret = "Unsupported file format version";
     } else if (err == MSP_ERR_BAD_STATE) {
         ret = "Bad simulator state. initialise or reset must be called.";
     } else if (err == MSP_ERR_NEWICK_OVERFLOW) {
@@ -82,8 +80,6 @@ msp_strerror(int err)
         ret = "Links Overflow occured.";
     } else if (err == MSP_ERR_OUT_OF_BOUNDS) {
         ret = "Array index out of bounds";
-    } else if (err == MSP_ERR_UNSUPPORTED_FILE_VERSION) {
-        ret = "Unsupported file format version.";
     } else if (err == MSP_ERR_BAD_ORDERING) {
         ret = "Bad record ordering requested";
     } else if (err == MSP_ERR_BAD_MUTATION) {
@@ -114,6 +110,14 @@ msp_strerror(int err)
         ret = "Bad coalescence records in file.";
     } else if (err == MSP_ERR_BAD_SAMPLES) {
         ret = "Bad sample configuration provided.";
+    } else if (err == MSP_ERR_NONBINARY_NEWICK) {
+        ret = "Newick export not supported for non binary trees.";
+    } else if (err == MSP_ERR_FILE_VERSION_TOO_OLD) {
+        ret = "HDF5 file version too old. Please upgrade using the "
+            "'msp upgrade' command";
+    } else if (err == MSP_ERR_FILE_VERSION_TOO_NEW) {
+        ret = "HDF5 file version is too new for this version of msprime. "
+            "Please upgrade msprime to the latest version.";
     } else if (err == MSP_ERR_NONBINARY_NEWICK) {
         ret = "Newick export not supported for non binary trees.";
     } else if (err == MSP_ERR_IO) {

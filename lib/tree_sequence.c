@@ -614,8 +614,12 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         }
     }
     /* Sanity check */
-    if (version[0] != MSP_FILE_FORMAT_VERSION_MAJOR) {
-        ret = MSP_ERR_UNSUPPORTED_FILE_VERSION;
+    if (version[0] < MSP_FILE_FORMAT_VERSION_MAJOR) {
+        ret = MSP_ERR_FILE_VERSION_TOO_OLD;
+        goto out;
+    }
+    if (version[0] > MSP_FILE_FORMAT_VERSION_MAJOR) {
+        ret = MSP_ERR_FILE_VERSION_TOO_NEW;
         goto out;
     }
     ret = 0;

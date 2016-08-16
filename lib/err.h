@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -19,7 +19,7 @@
 #ifndef __ERR_H__
 #define __ERR_H__
 
-/* 
+/*
  * raise a compiler warning if a potentially error raising function's return
  * value is not used.
  */
@@ -33,7 +33,7 @@
 #define MSP_ERR_NO_MEMORY                                           -2
 #define MSP_ERR_IO                                                  -3
 #define MSP_ERR_FILE_FORMAT                                         -4
-#define MSP_ERR_FILE_VERSION                                        -5
+
 #define MSP_ERR_BAD_STATE                                           -6
 #define MSP_ERR_BAD_PARAM_VALUE                                     -7
 #define MSP_ERR_OUT_OF_BOUNDS                                       -8
@@ -43,7 +43,7 @@
 #define MSP_ERR_LINKS_OVERFLOW                                      -12
 #define MSP_ERR_HDF5                                                -13
 #define MSP_ERR_BAD_POPULATION_ID                                   -14
-#define MSP_ERR_UNSUPPORTED_FILE_VERSION                            -15
+
 #define MSP_ERR_BAD_ORDERING                                        -16
 #define MSP_ERR_BAD_MUTATION                                        -17
 #define MSP_ERR_UNSUPPORTED_OPERATION                               -18
@@ -58,5 +58,9 @@
 #define MSP_ERR_BAD_COALESCENCE_RECORDS                             -27
 #define MSP_ERR_BAD_SAMPLES                                         -28
 #define MSP_ERR_NONBINARY_NEWICK                                    -29
+#define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
+#define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
 
+#define MSP_ERR_use_for_next_err_code1                              -5
+#define MSP_ERR_use_for_next_err_code2                              -15
 #endif /*__ERR_H__*/
