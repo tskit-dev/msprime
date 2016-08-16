@@ -8,10 +8,16 @@ from __future__ import division
 import unittest
 import random
 
-import tests.test_lowlevel as test_lowlevel
+import tests.test_demography as test_demography
 import tests.test_highlevel as test_highlevel
+import tests.test_lowlevel as test_lowlevel
+import tests.test_vcf as test_vcf
+
+# Currently skipping some CLI tests so won't work here.
+# import tests.test_cli as test_cli
 
 import msprime
+import _msprime
 
 
 def main():
@@ -20,11 +26,20 @@ def main():
         # used from test-to-test.
         random.seed(1)
         testloader = unittest.TestLoader()
-        test_lowlevel.enable_h5py_tests = False
         suite = testloader.loadTestsFromModule(test_lowlevel)
-        l = testloader.loadTestsFromModule(test_highlevel)
-        suite.addTests(l)
+        modules = [
+            test_highlevel, test_demography, test_vcf]
+        for mod in modules:
+            l = testloader.loadTestsFromModule(mod)
+            suite.addTests(l)
         unittest.TextTestRunner(verbosity=0).run(suite)
+
+        # When we have lots of error conditions we get a small memory
+        # leak in HDF5. To counter this we call H5close after every set of
+        # tests. This means that we cannot call the hdf5 tests in this loop
+        # though, because h5py does not like h5close being called while it
+        # is still in use.
+        _msprime.h5close()
 
         # Run a large number of replicate simulations to make sure we're
         # not leaking memory here.

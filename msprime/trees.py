@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -36,6 +36,7 @@ except ImportError:
     _svgwrite_imported = False
 
 import _msprime
+import msprime.environment
 
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
@@ -63,6 +64,22 @@ Variant = collections.namedtuple(
 Sample = collections.namedtuple(
     "Sample",
     ["population", "time"])
+
+
+def get_provenance_dict(command, parameters):
+    """
+    Returns a dictionary encoding an execution of msprime.
+
+    Note: this format is incomplete and provisional.
+    """
+    document = {
+        "software": "msprime",
+        "version": msprime.environment.__version__,
+        "command": command,
+        "parameters": parameters,
+        "environment": msprime.environment.get_environment()
+    }
+    return document
 
 
 class TreeDrawer(object):
@@ -164,7 +181,7 @@ class SparseTree(object):
     :const:`.NULL_NODE`, :math:`-1`. Similarly, each internal node has a
     pair of children, which are obtained using the :meth:`.get_children`
     method. Each node in the tree has a time associated with it in generations.
-    This value is obtained using the :meth:`.get_time` method.
+    This value is obtained using the :meth:`.SparseTree.get_time` method.
 
     Sparse trees are not intended to be instantiated directly, and are
     obtained as part of a :class:`.TreeSequence` using the
@@ -521,11 +538,17 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
-def _replicate_generator(sim, rng, mutation_rate, num_replicates):
+def _replicate_generator(
+        sim, rng, mutation_rate, num_replicates, provenance_dict):
     """
     Generator function for the many-replicates case of the simulate
     function.
     """
+    # TODO like in the single replicate case, we need to encode the
+    # simulation parameters so that particular simulations can be
+    # replicated. This will also involve encoding the state of the
+    # random generator.
+    provenance = json.dumps(provenance_dict)
     # Should use range here, but Python 2 makes this awkward...
     j = 0
     while j < num_replicates:
@@ -533,6 +556,7 @@ def _replicate_generator(sim, rng, mutation_rate, num_replicates):
         sim.run()
         tree_sequence = sim.get_tree_sequence()
         tree_sequence.generate_mutations(mutation_rate, rng)
+        tree_sequence.add_provenance(provenance)
         yield tree_sequence
         sim.reset()
 
@@ -711,14 +735,19 @@ def simulate(
         migration_matrix=migration_matrix,
         demographic_events=demographic_events,
         samples=samples)
+    # The provenance API is very tentative, and only included now as a
+    # pre-alpha feature.
+    parameters = {"TODO": "encode simulation parameters"}
+    provenance = get_provenance_dict("simulate", parameters)
     mu = 0 if mutation_rate is None else mutation_rate
     if num_replicates is None:
         sim.run()
         tree_sequence = sim.get_tree_sequence()
         tree_sequence.generate_mutations(mu, rng)
+        tree_sequence.add_provenance(json.dumps(provenance))
         return tree_sequence
     else:
-        return _replicate_generator(sim, rng, mu, num_replicates)
+        return _replicate_generator(sim, rng, mu, num_replicates, provenance)
 
 
 def load(path):
@@ -1210,8 +1239,11 @@ class TreeSequence(object):
                 mutations.append(self.parse_mutation(line))
         self.set_mutations(mutations)
 
-    def get_parameters(self):
-        return json.loads(self._ll_tree_sequence.get_simulation_parameters())
+    def get_provenance(self):
+        return self._ll_tree_sequence.get_provenance_strings()
+
+    def add_provenance(self, provenance):
+        self._ll_tree_sequence.add_provenance_string(provenance)
 
     def get_mutations(self):
         # TODO should we provide this???
@@ -1506,6 +1538,19 @@ class TreeSequence(object):
             leaves = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(leaves)
 
+    def get_time(self, sample):
+        """
+        Returns the time that the specified sample ID was sampled at.
+
+        :param int sample: The sample ID of interest.
+        :return: The time at which the specified sample was drawn.
+        :rtype: int
+        """
+        if sample < 0 or sample >= self.get_sample_size():
+            raise ValueError("Sample ID out of bounds")
+        _, time = self._ll_tree_sequence.get_sample(sample)
+        return time
+
     def get_population(self, sample):
         """
         Returns the population ID for the specified sample ID.
@@ -1518,7 +1563,8 @@ class TreeSequence(object):
         """
         if sample < 0 or sample >= self.get_sample_size():
             raise ValueError("Sample ID out of bounds")
-        return self._ll_tree_sequence.get_population(sample)
+        population, _ = self._ll_tree_sequence.get_sample(sample)
+        return population
 
     def get_samples(self, population_id=None):
         """
@@ -1974,6 +2020,33 @@ class MassMigration(DemographicEvent):
             "Mass migration: lineages move from {} to {} with "
             "probability {}".format(
                 self.source, self.destination, self.proportion))
+
+    def apply(self, populations, migration_matrix):
+        pass
+
+
+class Bottleneck(DemographicEvent):
+    # This is an unsupported/undocumented demographic event.
+    def __init__(self, time, population_id=0, proportion=1.0):
+        super(Bottleneck, self).__init__("bottleneck", time)
+        self.population_id = population_id
+        self.proportion = proportion
+
+    def get_ll_representation(self, num_populations, Ne):
+        return {
+            "type": self.type,
+            "time": self._get_scaled_time(Ne),
+            "population_id": self.population_id,
+            "proportion": self.proportion
+        }
+
+    def get_ms_arguments(self):
+        raise NotImplemented()
+
+    def __str__(self):
+        return (
+            "Bottleneck: lineages in population {} coalesce "
+            "probability {}".format(self.population_id, self.proportion))
 
     def apply(self, populations, migration_matrix):
         pass

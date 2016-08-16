@@ -152,7 +152,8 @@ read_demographic_events(msp_t *msp, config_t *config)
     int ret = 0;
     int j;
     const char *type;
-    double time, growth_rate, initial_size, migration_rate, proportion;
+    double time, growth_rate, initial_size, migration_rate, proportion,
+           intensity;
     int num_demographic_events, population_id, matrix_index, source, dest;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "demographic_events");
@@ -224,15 +225,27 @@ read_demographic_events(msp_t *msp, config_t *config)
             proportion = config_setting_get_float(t);
             t = config_setting_get_member(s, "source");
             if (t == NULL) {
-                fatal_error("matrix_index not specified");
+                fatal_error("source not specified");
             }
             source = config_setting_get_int(t);
             t = config_setting_get_member(s, "dest");
             if (t == NULL) {
-                fatal_error("matrix_index not specified");
+                fatal_error("dest not specified");
             }
             dest = config_setting_get_int(t);
             ret = msp_add_mass_migration(msp, time, source, dest, proportion);
+        } else if (strcmp(type, "bottleneck") == 0) {
+            t = config_setting_get_member(s, "intensity");
+            if (t == NULL) {
+                fatal_error("intensity not specified");
+            }
+            intensity = config_setting_get_float(t);
+            t = config_setting_get_member(s, "population_id");
+            if (t == NULL) {
+                fatal_error("population_id not specified");
+            }
+            population_id = config_setting_get_int(t);
+            ret = msp_add_bottleneck(msp, time, population_id, intensity);
         } else {
             fatal_error("unknown demographic event type '%s'", type);
         }
@@ -527,8 +540,7 @@ print_haplotypes(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_set_mutations(ts, num_mutations, mutations,
-            "{}", "{}");
+    ret = tree_sequence_set_mutations(ts, num_mutations, mutations);
     if (ret != 0) {
         goto out;
     }
@@ -648,7 +660,7 @@ print_newick_trees(tree_sequence_t *ts)
     }
     while ((ret = newick_converter_next(nc, &length, &tree)) == 1) {
         printf("Tree: %f: %s\n", length, tree);
-        newick_converter_print_state(nc);
+        newick_converter_print_state(nc, stdout);
     }
     if (ret != 0) {
         goto out;
@@ -673,7 +685,7 @@ print_tree_sequence(tree_sequence_t *ts)
     double length;
     sparse_tree_t tree;
     node_record_t *records_in, *records_out, *record;
-    coalescence_record_t cr;
+    coalescence_record_t *cr;
     tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
     sparse_tree_iterator_t *sparse_iter = calloc(1, sizeof(sparse_tree_iterator_t));
     uint32_t tracked_leaves[] = {1, 2};
@@ -687,18 +699,18 @@ print_tree_sequence(tree_sequence_t *ts)
         if (tree_sequence_get_record(ts, j, &cr, MSP_ORDER_TIME) != 0) {
             fatal_error("tree sequence out of bounds\n");
         }
-        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
-                cr.children[1], cr.node, cr.time);
+        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
+                cr->children[1], cr->node, cr->time);
     }
     ret = tree_diff_iterator_alloc(iter, ts);
     if (ret != 0) {
         goto out;
     }
     printf("Tree diffs:\n");
-    tree_diff_iterator_print_state(iter);
+    tree_diff_iterator_print_state(iter, stdout);
     while ((ret = tree_diff_iterator_next(
                     iter, &length, &records_out, &records_in)) == 1) {
-        tree_diff_iterator_print_state(iter);
+        tree_diff_iterator_print_state(iter, stdout);
         printf("New tree: %f\n", length);
         printf("Nodes In:\n");
         record = records_in;
@@ -806,7 +818,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < 4; j++) {
+    for (j = 0; j < 1; j++) {
         ret = msp_reset(msp);
         if (ret != 0) {
             goto out;
@@ -820,7 +832,7 @@ run_simulate(char *conf_file)
                 goto out;
             }
             msp_verify(msp);
-            /* ret = msp_print_state(msp); */
+            /* ret = msp_print_state(msp, stdout); */
         }
         ret = msp_print_state(msp, stdout);
         if (ret != 0) {
@@ -836,34 +848,57 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-
-    print_tree_sequence(tree_seq);
-
-    ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutgen_generate(mutgen);
-    if (ret != 0) {
-        goto out;
-    }
-    mutgen_print_state(mutgen);
-    ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
-            mutgen->mutations, mutgen->parameters, mutgen->environment);
+    ret = tree_sequence_add_provenance_string(tree_seq, "Tree Provenance!!!");
     if (ret != 0) {
         goto out;
     }
     tree_sequence_print_state(tree_seq, stdout);
-    print_stats(tree_seq);
 
-    print_variants(tree_seq);
-
-    ret = print_vcf(tree_seq, 1);
-    if (ret != 0) {
-        goto out;
+    for (j = 0; j < 1; j++) {
+        ret = tree_sequence_dump(tree_seq, output_file, 0);
+        if (ret != 0) {
+            goto out;
+        }
+        tree_sequence_free(tree_seq);
+        memset(tree_seq, 0, sizeof(tree_sequence_t));
+        printf("READING \n");
+        ret = tree_sequence_load(tree_seq, output_file, 0);
+        if (ret != 0) {
+            goto out;
+        }
+        tree_sequence_print_state(tree_seq, stdout);
     }
 
+
     if (0) {
+        ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = mutgen_generate(mutgen);
+        if (ret != 0) {
+            goto out;
+        }
+        mutgen_print_state(mutgen, stdout);
+
+        ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
+                mutgen->mutations);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = tree_sequence_add_provenance_string(tree_seq,
+                "Mutation Provenance!!!");
+        if (ret != 0) {
+            goto out;
+        }
+        print_stats(tree_seq);
+
+        print_variants(tree_seq);
+
+        ret = print_vcf(tree_seq, 1);
+        if (ret != 0) {
+            goto out;
+        }
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);
             if (ret != 0) {
@@ -875,16 +910,14 @@ run_simulate(char *conf_file)
             if (ret != 0) {
                 goto out;
             }
+            tree_sequence_print_state(tree_seq, stdout);
         }
-        tree_sequence_print_state(tree_seq, stdout);
 
         print_newick_trees(tree_seq);
-
-        print_haplotypes(tree_seq);
         print_tree_sequence(tree_seq);
+        print_haplotypes(tree_seq);
 
         tree_sequence_print_state(tree_seq, stdout);
-        print_tree_sequence(tree_seq);
         print_haplotypes(tree_seq);
     }
 out:

@@ -6,6 +6,7 @@ from __future__ import print_function
 from __future__ import division
 
 import time
+import collections
 import math
 import glob
 import subprocess
@@ -21,6 +22,7 @@ import pandas as pd
 matplotlib.use('Agg')
 import matplotlib.pyplot as pyplot
 
+import _msprime
 import msprime
 
 def mutations():
@@ -530,6 +532,61 @@ def records_example():
     for t in ts.trees():
         print(t)
 
+def stuff():
+    before = time.clock()
+    # Run the actual simulations
+    tree_sequence = msprime.simulate(
+        sample_size=10**5,
+        length=100 * 10**6,
+        Ne=1e4,
+        demographic_events=[
+            msprime.Bottleneck(time=100, proportion=0.1),
+            msprime.Bottleneck(time=200, proportion=0.1),
+            msprime.Bottleneck(time=300, proportion=0.1),
+            msprime.Bottleneck(time=500, proportion=0.1)],
+        recombination_rate=1e-8,
+        mutation_rate=1e-8,
+        random_seed=1  # Arbitrary - make this reproducible.
+    )
+    duration = time.clock() - before
+    print("Simulated 100k genomes in {0:.3f} seconds.".format(duration))
+
+    tree_sequence.dump("tmp__NOBACKUP__/bottleneck-example-new3.hdf5")
+
+def examine():
+    ts = msprime.load("tmp__NOBACKUP__/bottleneck-example.hdf5")
+    print("num_records = ", ts.get_num_records())
+    non_binary_records = 0
+    max_record_length = 0
+    for r in ts.records():
+        if len(r.children) > 2:
+            non_binary_records +=1
+            max_record_length = max(max_record_length, len(r.children))
+    print("non_binary_records = ", non_binary_records)
+    print("max_record_length = ", max_record_length)
+    num_nodes = collections.Counter()
+    num_trees = 0
+    for t in ts.trees():
+        num_nodes[len(list(t.nodes(t.get_root())))] += 1
+        num_trees += 1
+    print("num_trees = ", num_trees)
+    for k, v in num_nodes.items():
+        print(k, "->", v)
+
+def convert_dev():
+    filename = "v2.hdf5"
+    ts = msprime.read_legacy_hdf5(filename)
+    msprime.write_legacy_hdf5(ts, "v2p.hdf5")
+    # with msprime.Hdf5FileReader(filename) as reader:
+    #     ts = reader.get_tree_sequence()
+    # print("ts = ")
+    # ll_ts = _msprime.TreeSequence()
+    # ll_ts.load_records(records)
+    # ts = msprime.TreeSequence(ll_ts)
+    # ts.set_mutations(mutations)
+    # print(ts.get_sample_size())
+    ts.dump("v3.hdf5")
+
 
 if __name__ == "__main__":
     # mutations()
@@ -551,4 +608,8 @@ if __name__ == "__main__":
     # variable_recomb_example()
     # pop_example()
     # vcf_example()
-    records_example()
+    # records_example()
+    # stuff()
+    # examine()
+    # convert_dev()
+    ts = msprime.load(sys.argv[1])

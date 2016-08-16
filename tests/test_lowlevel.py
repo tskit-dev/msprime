@@ -1,4 +1,4 @@
-# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -25,24 +25,17 @@ from __future__ import unicode_literals
 import collections
 import heapq
 import itertools
-import json
 import math
-import os.path
 import random
 import tempfile
 import unittest
 
 import tests
 import _msprime
+
 # We don't want to import all of the high-level library
 # here. All we need is the version.
 from msprime import __version__ as _library_version
-
-# We use this to disable hdf5 tests when we're looping through the
-# tests to stress test the low-level memory management, etc. For
-# obscure reasons we cannot import h5py in the normal way (see
-# below for more discussion on this)
-enable_h5py_tests = True
 
 # Root node marker
 NULL_NODE = -1
@@ -152,6 +145,19 @@ def get_mass_migration_event(
     }
 
 
+def get_bottleneck_event(
+        time=0.0, population_id=0, proportion=1):
+    """
+    Returns a bottleneck demographic event.
+    """
+    return {
+        "type": "bottleneck",
+        "time": time,
+        "population_id": population_id,
+        "proportion": proportion
+    }
+
+
 def get_migration_matrix(num_populations, value=1.0):
     """
     Returns a simple migration matrix.
@@ -194,6 +200,10 @@ def get_random_demographic_events(num_populations, num_events):
             events.append(get_mass_migration_event(
                 time=random.random(), proportion=random.choice([0, 1]),
                 source=source, destination=destination))
+            # Add a bottleneck
+            events.append(get_bottleneck_event(
+                time=random.random(), proportion=random.uniform(0, 0.25),
+                population_id=random.randint(0, num_populations - 1)))
     sorted_events = sorted(events, key=lambda x: x["time"])
     return sorted_events
 
@@ -348,8 +358,8 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         consistent coalescent history for a sample of size n.
         """
         self.assertEqual(set(pi.keys()), set(tau.keys()))
-        self.assertEqual(len(pi), 2 * n - 1)
-        self.assertEqual(len(tau), 2 * n - 1)
+        self.assertLessEqual(len(pi), 2 * n - 1)
+        self.assertEqual(len(tau), len(pi))
         # NULL_NODE should not be a node
         self.assertNotIn(NULL_NODE, pi)
         self.assertNotIn(NULL_NODE, tau)
@@ -379,7 +389,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         taup = {}
         for j in pi.keys():
             if j > n:
-                self.assertEqual(num_children[j], 2)
+                self.assertGreaterEqual(num_children[j], 2)
                 self.assertGreater(tau[j], 0.0)
                 taup[j] = tau[j]
         # times of non leaves should be distinct
@@ -397,24 +407,39 @@ class LowLevelTestCase(tests.MsprimeTestCase):
 
     def get_tree_sequence(
             self, sample_size=10, num_loci=100, mutation_rate=10,
-            random_seed=1):
+            random_seed=1, demographic_events=[], num_provenance_strings=5):
         rho = 1.0
         rng = _msprime.RandomGenerator(random_seed)
         sim = _msprime.Simulator(
             get_samples(sample_size), rng, num_loci=num_loci,
-            scaled_recombination_rate=rho)
+            scaled_recombination_rate=rho,
+            demographic_events=demographic_events)
         sim.run()
         ts = _msprime.TreeSequence()
         recomb_map = uniform_recombination_map(sim)
         ts.create(sim, recomb_map)
         ts.generate_mutations(mutation_rate, rng)
+        for j in range(num_provenance_strings):
+            ts.add_provenance_string("xxxxxxx" * (j + 1))
         return ts
 
+    def get_nonbinary_tree_sequence(self):
+        bottlenecks = [
+            get_bottleneck_event(0.1, 0, 0.1),
+            get_bottleneck_event(0.1, 0, 0.9)]
+        return self.get_tree_sequence(
+           demographic_events=bottlenecks)
+
     def get_example_tree_sequences(self):
+        bottlenecks = [
+            get_bottleneck_event(0.1, 0, 0.1),
+            get_bottleneck_event(0.1, 0, 0.9)]
         for n in [2, 3, 100]:
             for m in [1, 2, 100]:
                 for mu in [0, 10]:
                     yield self.get_tree_sequence(n, m, mu)
+                    yield self.get_tree_sequence(
+                        n, m, mu, demographic_events=bottlenecks)
 
     def verify_iterator(self, iterator):
         """
@@ -527,9 +552,6 @@ class TestSimulationState(LowLevelTestCase):
         """
         oriented_forest = [sparse_tree.get_parent(j) for j in range(
             sparse_tree.get_num_nodes())]
-        self.assertEqual(
-            sum(j > 0 for j in oriented_forest),
-            2 * sparse_tree.get_sample_size() - 2)
         mrca_calc = tests.MRCACalculator(oriented_forest)
         nodes = range(sparse_tree.get_num_nodes())
         for u, v in itertools.combinations(nodes, 2):
@@ -584,8 +606,8 @@ class TestSimulationState(LowLevelTestCase):
                     del pi[c]
                 del tau[p]
                 del pops[p]
-            pi[children[0]] = node
-            pi[children[1]] = node
+            for c in children:
+                pi[c] = node
             tau[node] = t
             pops[node] = pop
             # Ensure that records are sorted by time within a block
@@ -666,10 +688,6 @@ class TestSimulationState(LowLevelTestCase):
             ts.get_record(j, _msprime.MSP_ORDER_RIGHT)
             for j in range(len(records))]
         self.assertEqual(ts_records, right_sorted_records)
-        # Check the simulation parameters
-        self.assertEqual(
-            json.loads(ts.get_simulation_parameters()),
-            json.loads(sim.get_configuration_json())),
 
     def verify_random_parameters(self):
         mb = 1024 * 1024
@@ -723,15 +741,6 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(sim.get_migration_matrix(), migration_matrix)
             self.assertEqual(
                 sim.get_population_configuration(), population_configuration)
-            # Check the configuration json
-            config = {
-                "sample_size": n, "num_loci": m,
-                "scaled_recombination_rate": rho,
-                "migration_matrix": migration_matrix,
-                "demographic_events": demographic_events,
-                "population_configuration": population_configuration
-            }
-            self.assertEqual(json.loads(sim.get_configuration_json()), config)
             a = 0
             nodes = set()
             samples = sim.get_samples()
@@ -766,8 +775,6 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertEqual(
                     coalescence_record_block_size,
                     sim.get_coalescence_record_block_size())
-                self.assertEqual(
-                    json.loads(sim.get_configuration_json()), config)
                 # Run this for a tiny amount of time and check the state
                 self.assertFalse(sim.run(1e-8))
                 self.verify_running_simulation(sim)
@@ -781,7 +788,8 @@ class TestSimulationState(LowLevelTestCase):
         length, records_out, records_in = diffs[0]
         self.assertGreaterEqual(length, 0)
         self.assertEqual(len(records_out), 0)
-        self.assertEqual(len(records_in), n - 1)
+        nodes_in = sum(len(children) - 1 for _, children, _ in records_in)
+        self.assertEqual(nodes_in, n - 1)
         # Make sure in records are in increasing time order.
         time_sorted = sorted(records_in, key=lambda x: x[2])
         self.assertEqual(time_sorted, records_in)
@@ -789,7 +797,13 @@ class TestSimulationState(LowLevelTestCase):
         for l, records_out, records_in in diffs[1:]:
             self.assertGreaterEqual(l, 0)
             self.assertGreaterEqual(l, 0)
-            self.assertEqual(len(records_out), len(records_in))
+            nodes_out = 0
+            for _, children, _ in records_out:
+                nodes_out += len(children) - 1
+            nodes_in = 0
+            for _, children, _ in records_in:
+                nodes_in += len(children) - 1
+            self.assertEqual(nodes_out, nodes_in)
             for node, children, time in records_out + records_in:
                 for c in children:
                     self.assertGreaterEqual(c, 0)
@@ -817,7 +831,7 @@ class TestSimulationState(LowLevelTestCase):
                 range(st.get_num_nodes())]
             self.assertEqual(nu, nu_prime)
 
-    def verify_simulation(self, n, m, r):
+    def verify_simulation(self, n, m, r, demographic_events=[]):
         """
         Runs the specified simulation and verifies its state.
         """
@@ -829,6 +843,7 @@ class TestSimulationState(LowLevelTestCase):
             samples=get_samples(n), num_loci=m,
             scaled_recombination_rate=r,
             random_generator=_msprime.RandomGenerator(random_seed),
+            demographic_events=demographic_events,
             max_memory=10 * mb, segment_block_size=1000,
             avl_node_block_size=1000, node_mapping_block_size=1000,
             coalescence_record_block_size=1000)
@@ -861,6 +876,10 @@ class TestSimulationState(LowLevelTestCase):
         self.verify_simulation(3, 100, 0.0)
         self.verify_simulation(3, 10, 1000.0)
         self.verify_simulation(5, 10, 10.0)
+        self.verify_simulation(
+            5, 10, 10.0,
+            demographic_events=[
+                get_bottleneck_event(time=0.2, proportion=1)])
 
     def test_event_by_event(self):
         n = 10
@@ -953,7 +972,11 @@ class TestSimulationState(LowLevelTestCase):
                     pop_sizes[pop_id] += 1
                 if proportion == 1:
                     self.assertEqual(pop_sizes[source], 0)
+            elif event_type == "bottleneck":
+                # Not much we can test for here...
+                pass
             else:
+                self.assertEqual(event_type, "population_parameters_change")
                 population_id = event["population_id"]
                 indexes = [population_id]
                 if population_id == -1:
@@ -1065,9 +1088,6 @@ class TestSimulator(LowLevelTestCase):
         self.assertEqual(
             sim.get_population_configuration(),
             [get_population_configuration()])
-        self.assertEqual(
-            json.loads(sim.get_configuration_json())["demographic_events"],
-            [])
 
     def test_bad_population_configurations(self):
         def f(population_configuration):
@@ -1207,9 +1227,6 @@ class TestSimulator(LowLevelTestCase):
                     migration_matrix=migration_matrix,
                     population_configuration=population_configuration)
                 self.assertEqual(migration_matrix, sim.get_migration_matrix())
-                json_config = json.loads(sim.get_configuration_json())
-                json_matrix = json_config["migration_matrix"]
-                self.assertEqual(migration_matrix, json_matrix)
 
     def test_bad_demographic_event_types(self):
         def f(events):
@@ -1249,7 +1266,7 @@ class TestSimulator(LowLevelTestCase):
         event_generators = [
             get_size_change_event, get_growth_rate_change_event,
             get_migration_rate_change_event,
-            get_mass_migration_event]
+            get_mass_migration_event, get_bottleneck_event]
         for event_generator in event_generators:
             # Negative times not allowed.
             event = event_generator(time=-1)
@@ -1272,6 +1289,8 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(_msprime.InputError, f, [event])
             event = get_mass_migration_event(destination=bad_pop_id)
             self.assertRaises(_msprime.InputError, f, [event])
+            event = get_bottleneck_event(population_id=bad_pop_id)
+            self.assertRaises(_msprime.InputError, f, [event])
         # Negative size values not allowed
         size_change_event = get_size_change_event(size=-5)
         self.assertRaises(_msprime.InputError, f, [size_change_event])
@@ -1293,17 +1312,20 @@ class TestSimulator(LowLevelTestCase):
             for j in range(k):
                 event = event_generator(matrix_index=j * k + j)
                 self.assertRaises(_msprime.InputError, f, [event], k)
-        # Tests specific for mass_migration
+        # Tests specific for mass_migration and bottleneck
         event = get_mass_migration_event(source=0, destination=0)
         self.assertRaises(_msprime.InputError, f, [event])
         for bad_proportion in [-1, 1.1, 1e7]:
             event = get_mass_migration_event(proportion=bad_proportion)
             self.assertRaises(_msprime.InputError, f, [event])
+            event = get_bottleneck_event(proportion=bad_proportion)
+            self.assertRaises(_msprime.InputError, f, [event])
 
     def test_unsorted_demographic_events(self):
         event_generators = [
             get_size_change_event, get_growth_rate_change_event,
-            get_migration_rate_change_event, get_mass_migration_event]
+            get_migration_rate_change_event, get_mass_migration_event,
+            get_bottleneck_event]
         events = []
         for event_generator in event_generators:
             for _ in range(3):
@@ -1314,32 +1336,14 @@ class TestSimulator(LowLevelTestCase):
             _msprime.InputError, _msprime.Simulator, get_samples(10),
             _msprime.RandomGenerator(1), demographic_events=events)
 
-    def test_get_demographic_events(self):
-        # If no events are set, we should get the empty list.
-        sim = _msprime.Simulator(get_samples(2), _msprime.RandomGenerator(1))
-
-        def get_events(s):
-            d = json.loads(s.get_configuration_json())
-            return d["demographic_events"]
-
-        self.assertEqual([], get_events(sim))
-        num_populations = 3
-        events = get_random_demographic_events(3, 3)
-        population_configuration = [
-            get_population_configuration(2),
-            get_population_configuration(0),
-            get_population_configuration(0)]
-        sim = _msprime.Simulator(
-            get_samples(2), _msprime.RandomGenerator(1),
-            population_configuration=population_configuration,
-            migration_matrix=[0 for j in range(num_populations**2)],
-            demographic_events=events)
-        self.assertEqual(events, get_events(sim))
-
     def test_seed_equality(self):
         simulations = [
             {
                 "samples": get_samples(10),
+            }, {
+                "samples": get_samples(100),
+                "demographic_events": [
+                    get_bottleneck_event(0.01, 0, 1.0)],
             }, {
                 "samples": get_samples(10), "num_loci": 100,
                 "scaled_recombination_rate": 0.1,
@@ -1354,7 +1358,8 @@ class TestSimulator(LowLevelTestCase):
                     get_size_change_event(0.1, 0.5),
                     get_migration_rate_change_event(0.2, 2),
                     get_growth_rate_change_event(0.3, 2),
-                    get_mass_migration_event(0.4, 0, 1, 0.5)]
+                    get_mass_migration_event(0.4, 0, 1, 0.5),
+                    get_bottleneck_event(0.5, 0.5)]
             }
         ]
         seed = 10
@@ -1475,8 +1480,8 @@ class TestSimulator(LowLevelTestCase):
         sim = _msprime.Simulator(
             get_samples(n), _msprime.RandomGenerator(1),
             population_configuration=[
-                get_population_configuration(n),
-                get_population_configuration(0)],
+                get_population_configuration(),
+                get_population_configuration()],
             demographic_events=[
                 get_migration_rate_change_event(t),
                 get_mass_migration_event(
@@ -1493,6 +1498,38 @@ class TestSimulator(LowLevelTestCase):
             for _, _, _, pop_id in ind:
                 pop_sizes_after[pop_id] += 1
         self.assertEqual(pop_sizes_before[0], pop_sizes_after[1])
+
+    def test_bottleneck(self):
+        n = 10
+        t1 = 0.01
+        t2 = 0.02
+        t3 = 0.03
+        sim = _msprime.Simulator(
+            get_population_samples(n, n),
+            _msprime.RandomGenerator(1),
+            population_configuration=[
+                get_population_configuration(),
+                get_population_configuration()],
+            demographic_events=[
+                get_bottleneck_event(t1, population_id=0, proportion=1),
+                get_bottleneck_event(t2, population_id=1, proportion=1),
+                get_mass_migration_event(
+                    t3, source=0, destination=1, proportion=1)],
+            migration_matrix=[0, 0, 0, 0])
+        sim.run(t1)
+        pop_sizes = [0, 0]
+        for ind in sim.get_ancestors():
+            for _, _, _, pop_id in ind:
+                pop_sizes[pop_id] += 1
+        self.assertEqual(pop_sizes[0], 1)
+        sim.run(t2)
+        pop_sizes = [0, 0]
+        for ind in sim.get_ancestors():
+            for _, _, _, pop_id in ind:
+                pop_sizes[pop_id] += 1
+        self.assertEqual(pop_sizes[1], 1)
+        sim.run()
+        self.assertGreater(sim.get_time(), t3)
 
     def test_recombination_event_counters(self):
         n = 10
@@ -1651,27 +1688,26 @@ class TestTreeSequence(LowLevelTestCase):
                     max_node = node
             self.assertEqual(max_node + 1, ts.get_num_nodes())
 
-    def test_get_population(self):
+    def test_get_sample(self):
         for ts in self.get_example_tree_sequences():
             for bad_type in ["1", None, []]:
-                self.assertRaises(TypeError, ts.get_population, bad_type)
-            self.assertRaises(_msprime.LibraryError, ts.get_population, -1)
+                self.assertRaises(TypeError, ts.get_sample, bad_type)
+            self.assertRaises(_msprime.LibraryError, ts.get_sample, -1)
             self.assertRaises(
-                _msprime.LibraryError, ts.get_population, ts.get_sample_size())
+                _msprime.LibraryError, ts.get_sample, ts.get_sample_size())
             self.assertRaises(
-                _msprime.LibraryError, ts.get_population,
-                ts.get_sample_size() + 1)
+                _msprime.LibraryError, ts.get_sample, ts.get_sample_size() + 1)
             for j in range(ts.get_sample_size()):
-                # We only check for a single population here. Multi population
+                # We only check for a single sample here. Multi sample
                 # tests are done in test_demography.
-                self.assertEqual(ts.get_population(j), 0)
+                self.assertEqual(ts.get_sample(j), (0.0, 0))
 
     def verify_dump_equality(self, ts, outfile):
         """
         Verifies that we can dump a copy of the specified tree sequence
         to the specified file, and load an identical copy.
         """
-        ts.dump(outfile.name, skip_h5close=True)
+        ts.dump(outfile.name)
         ts2 = _msprime.TreeSequence()
         ts2.load(outfile.name)
         self.assertEqual(ts.get_sample_size(), ts2.get_sample_size())
@@ -1685,9 +1721,7 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertEqual(records1, records2)
         self.assertEqual(ts.get_mutations(), ts2.get_mutations())
         self.assertEqual(
-            ts.get_simulation_parameters(), ts2.get_simulation_parameters())
-        self.assertEqual(
-            ts.get_mutation_parameters(), ts2.get_mutation_parameters())
+            ts.get_provenance_strings(), ts2.get_provenance_strings())
 
     def test_dump_equality(self):
         for ts in self.get_example_tree_sequences():
@@ -1712,7 +1746,6 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(
             TypeError, ts.generate_mutations, mutation_rate=10,
             random_seed=1.0, invalid_param=7)
-        self.assertIsNone(ts.get_mutation_parameters())
 
     def verify_mutations(self, ts):
         mutations = ts.get_mutations()
@@ -1737,14 +1770,9 @@ class TestTreeSequence(LowLevelTestCase):
             ts.generate_mutations(0.0, _msprime.RandomGenerator(1))
             self.assertEqual(ts.get_num_mutations(), 0)
             self.assertEqual(len(ts.get_mutations()), 0)
-            self.assertIsNone(ts.get_mutation_parameters())
             # A non-zero mutation rate will give more than 0 mutations.
             ts.generate_mutations(10.0, _msprime.RandomGenerator(2))
             self.verify_mutations(ts)
-            json_str = ts.get_mutation_parameters()
-            self.assertIsNotNone(json_str)
-            params = json.loads(json_str)
-            self.assertEqual(params["mutation_rate"], 10.0)
 
     def test_mutation_persistence(self):
         ts = self.get_tree_sequence(mutation_rate=0.0)
@@ -1781,10 +1809,6 @@ class TestTreeSequence(LowLevelTestCase):
         for mutations in valid_mutations:
             ts.set_mutations(mutations)
             self.assertEqual(ts.get_mutations(), mutations)
-            if len(mutations) == 0:
-                self.assertIsNone(ts.get_mutation_parameters())
-            else:
-                self.assertEqual("{}", ts.get_mutation_parameters())
             # Test dumping the mutations
             with tempfile.NamedTemporaryFile() as f:
                 self.verify_dump_equality(ts, f)
@@ -1905,23 +1929,33 @@ class TestTreeSequence(LowLevelTestCase):
     def test_load_records_interface(self):
         ts = next(self.get_example_tree_sequences())
         self.assertRaises(ValueError, ts.load_records, [])
+        ts = _msprime.TreeSequence()
         for bad_type in [None, {}, 1234]:
             ts = _msprime.TreeSequence()
             self.assertRaises(
+                TypeError, ts.load_records, bad_type)
+            self.assertRaises(
                 TypeError, ts.load_records, [bad_type])
+        ts = _msprime.TreeSequence()
         record = (0, 1, 2, (0, 1), 1, 0)
         for j in range(len(record)):
             ts = _msprime.TreeSequence()
             sub_record = record[:j]
             self.assertRaises(
-                ValueError, ts.load_records, [sub_record])
+                ValueError, ts.load_records, [tuple(sub_record)])
         for bad_type in [None, {}, ts]:
             for j in range(len(record)):
                 r = list(record)
                 r[j] = bad_type
                 ts = _msprime.TreeSequence()
                 self.assertRaises(
-                    TypeError, ts.load_records, [r])
+                    TypeError, ts.load_records, [tuple(r)])
+        ts = _msprime.TreeSequence()
+        # < 2 children is an error
+        r = list(record)
+        r[3] = 1,
+        self.assertRaises(
+            ValueError, ts.load_records, [tuple(r)])
         for bad_type in ["sdf", {}, ts, None]:
             for j in range(2):
                 r = list(record)
@@ -1929,7 +1963,73 @@ class TestTreeSequence(LowLevelTestCase):
                 r[3][j] = bad_type
                 ts = _msprime.TreeSequence()
                 self.assertRaises(
-                    TypeError, ts.load_records, [r])
+                    TypeError, ts.load_records, [tuple(r)])
+
+    def test_load_records_bad_samples(self):
+        ts = next(self.get_example_tree_sequences())
+        sample_size = ts.get_sample_size()
+        records = [
+            ts.get_record(j) for j in range(ts.get_num_records())]
+        self.assertRaises(ValueError, ts.load_records, [])
+        ts = _msprime.TreeSequence()
+        for bad_type in [None, {}, 1234]:
+            ts = _msprime.TreeSequence()
+            self.assertRaises(ValueError, ts.get_sample_size)
+            self.assertRaises(
+                TypeError, ts.load_records, records, bad_type)
+            self.assertRaises(ValueError, ts.get_sample_size)
+            self.assertRaises(
+                TypeError, ts.load_records, records, [bad_type])
+            self.assertRaises(
+                TypeError, ts.load_records, records, samples=[bad_type])
+        self.assertRaises(_msprime.LibraryError, ts.load_records, records, [])
+        self.assertRaises(
+            _msprime.LibraryError, ts.load_records, records, [(0, 0)])
+        samples = [(0, 0) for _ in range(sample_size)]
+        for j in range(sample_size - 1):
+            self.assertRaises(
+                _msprime.LibraryError, ts.load_records, records, samples[:j])
+            for bad_type in [None, {}, "wsdr"]:
+                copy = list(samples)
+                copy[j] = bad_type
+                self.assertRaises(TypeError, ts.load_records, records, copy)
+                copy = list(samples)
+                copy[j] = (0, bad_type)
+                self.assertRaises(TypeError, ts.load_records, records, copy)
+                copy = list(samples)
+                copy[j] = (bad_type, 0)
+                self.assertRaises(TypeError, ts.load_records, records, copy)
+                copy = list(samples)
+                copy[j] = (-2, 0)
+                self.assertRaises(ValueError, ts.load_records, records, copy)
+                copy[j] = (0, -1)
+                self.assertRaises(ValueError, ts.load_records, records, copy)
+
+    def test_load_records_samples(self):
+        ts = next(self.get_example_tree_sequences())
+        n = ts.get_sample_size()
+        records = [
+            ts.get_record(j) for j in range(ts.get_num_records())]
+        ts = _msprime.TreeSequence()
+        samples = [(0, 0) for _ in range(n)]
+        ts.load_records(records=records, samples=samples)
+        self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
+
+        samples = [(j, 0) for j in range(n)]
+        ts = _msprime.TreeSequence()
+        ts.load_records(records=records, samples=samples)
+        self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
+
+        samples = [(0, j) for j in range(n)]
+        ts = _msprime.TreeSequence()
+        ts.load_records(records=records, samples=samples)
+        self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
+
+        # If we don't set the samples, population should be = -1
+        samples = [(-1, 0) for _ in range(n)]
+        ts = _msprime.TreeSequence()
+        ts.load_records(records=records)
+        self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
 
     def test_load_bad_records(self):
         def f(records):
@@ -1947,215 +2047,31 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(_msprime.LibraryError, f, [r])
         r = (0, 1, 2, (-1, -1), 1, 0)
         self.assertRaises(_msprime.LibraryError, f, [r])
+        # children must be sorted
+        r = (1, 0, 3, (0, 2, 1), 1, 0)
+        self.assertRaises(_msprime.LibraryError, f, [r])
 
+    def test_provenance_strings(self):
+        ts = self.get_tree_sequence(num_provenance_strings=0)
+        for bad_type in [{}, ts, None, 5]:
+            self.assertRaises(TypeError, ts.add_provenance_string, bad_type)
+        # The emtpy string raised a ValueError
+        self.assertRaises(ValueError, ts.add_provenance_string, "")
+        self.assertEqual(ts.get_provenance_strings(), [])
 
-class TestHdf5Format(LowLevelTestCase):
-    """
-    Tests on the HDF5 file format.
-    """
-
-    def verify_mutation_parameters_json(self, json_str):
-        parameters = json.loads(json_str.decode())
-        self.assertIn("mutation_rate", parameters)
-        self.assertIsInstance(parameters["mutation_rate"], int, float)
-
-    def verify_tree_parameters_json(self, json_str):
-        parameters = json.loads(json_str.decode())
-        self.assertIn("scaled_recombination_rate", parameters)
-        self.assertIn("sample_size", parameters)
-        self.assertIn("num_loci", parameters)
-        self.assertIn("population_configuration", parameters)
-        self.assertIn("migration_matrix", parameters)
-        self.assertIn("demographic_events", parameters)
-        self.assertIsInstance(
-            parameters["scaled_recombination_rate"], int, float)
-        self.assertIsInstance(parameters["sample_size"], int)
-        self.assertIsInstance(parameters["num_loci"], int)
-        self.assertIsInstance(parameters["population_configuration"], list)
-        self.assertIsInstance(parameters["migration_matrix"], list)
-        self.assertIsInstance(parameters["demographic_events"], list)
-
-    def verify_environment_json(self, json_str):
-        environment = json.loads(json_str.decode())
-        self.assertIn("msprime_version", environment)
-        version = environment["msprime_version"]
-        self.assertEqual(version, _library_version)
-        self.assertIn("hdf5_version", environment)
-        version = list(map(int, environment["hdf5_version"].split(".")))
-        self.assertEqual(len(version), 3)
-        self.assertIn("gsl_version", environment)
-        version = list(map(int, environment["gsl_version"].split(".")))
-        self.assertEqual(len(version), 2)
-        uname_keys = [
-            "kernel_name", "kernel_release", "kernel_version",
-            "hardware_identifier"]
-        for key in uname_keys:
-            self.assertIn(key, environment)
-
-    def verify_tree_dump_format(self, ts, outfile):
-        uint8 = "uint8"
-        uint32 = "uint32"
-        float64 = "float64"
-        # This is an ugly hack here, but we have to do it to
-        # be able to use h5py, as it keeps some global state
-        # open, and we nuke this when we call h5close() to clean up.
-        import h5py
-        ts.dump(outfile.name, skip_h5close=True)
-        self.assertTrue(os.path.exists(outfile.name))
-        self.assertGreater(os.path.getsize(outfile.name), 0)
-        root = h5py.File(outfile.name, "r")
-        keys = set(root.keys())
-        self.assertLessEqual(keys, set(["mutations", "trees", "samples"]))
-        self.assertIn("trees", keys)
-        self.assertIn("samples", keys)
-        if ts.get_num_mutations() == 0:
-            self.assertNotIn("mutations", keys)
-        else:
-            self.assertIn("mutations", keys)
-        # Check the basic root attributes
-        format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 2)
-        self.assertEqual(format_version[1], 1)
-        self.assertEqual(root.attrs["sample_size"], ts.get_sample_size())
-        self.assertEqual(
-            root.attrs["sequence_length"], ts.get_sequence_length())
-        if ts.get_num_mutations() > 0:
-            g = root["mutations"]
-            # Check the parameters and environment attributes
-            self.verify_mutation_parameters_json(g.attrs["parameters"])
-            self.verify_environment_json(g.attrs["environment"])
-            fields = [("node", uint32), ("position", float64)]
-            self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
-            for name, dtype in fields:
-                self.assertEqual(len(g[name].shape), 1)
-                self.assertEqual(g[name].shape[0], ts.get_num_mutations())
-                self.assertEqual(g[name].dtype, dtype)
-        g = root["trees"]
-        self.verify_tree_parameters_json(g.attrs["parameters"])
-        self.verify_environment_json(g.attrs["environment"])
-        fields = [
-            ("left", float64, 1), ("right", float64, 1),
-            ("node", uint32, 1), ("children", uint32, 2),
-            ("population", uint8, 1), ("time", float64, 1)]
-        self.assertEqual(set(g.keys()), set([name for name, _, _ in fields]))
-        for name, dtype, dims in fields:
-            self.assertEqual(len(g[name].shape), dims)
-            self.assertEqual(g[name].shape[0], ts.get_num_records())
-            if dims == 2:
-                self.assertEqual(g[name].shape[1], 2)
-            self.assertEqual(g[name].dtype, dtype)
-        g = root["samples"]
-        fields = [("population", uint8), ("time", float)]
-        self.assertEqual(set(g.keys()), set([name for name, _, in fields]))
-        for name, dtype in fields:
-            self.assertEqual(len(g[name].shape), 1)
-            self.assertEqual(g[name].shape[0], ts.get_sample_size())
-            self.assertEqual(g[name].dtype, dtype)
-        root.close()
-
-    def test_dump_format(self):
-        if enable_h5py_tests:
-            for ts in self.get_example_tree_sequences():
-                with tempfile.NamedTemporaryFile() as f:
-                    self.verify_tree_dump_format(ts, f)
-
-    # @unittest.skip("Skipping due to weird h5py behaviour")
-    def test_load_malformed_hdf5(self):
-        if enable_h5py_tests:
-            # See above for why we import h5py here.
-            import h5py
-            ts = _msprime.TreeSequence()
-            with tempfile.NamedTemporaryFile() as f:
-                hfile = h5py.File(f.name, "w")
-                # First try the empty hdf5 file.
-                hfile.close()
-                self.assertRaises(
-                    _msprime.LibraryError, ts.load, f.name, skip_h5close=True)
-
-    @unittest.skip("Skipping due to weird h5py behaviour")
-    # This test works when it's run on its own, but fails when other tests
-    # are run.
-    def test_version_load_error(self):
-        if enable_h5py_tests:
-            # See above for why we import h5py here.
-            import h5py
-            ts = list(self.get_example_tree_sequences())[0]
-            for bad_version in [(0, 1), (0, 8), (2, 0)]:
-                with tempfile.NamedTemporaryFile() as f:
-                    ts.dump(f.name, skip_h5close=True)
-                    hfile = h5py.File(f.name, "r+")
-                    hfile.attrs['format_version'] = bad_version
-                    hfile.close()
-                    other_ts = _msprime.TreeSequence()
-                    self.assertRaises(
-                        _msprime.LibraryError, other_ts.load, f.name)
-
-    @unittest.skip("Skipping due to weird h5py behaviour")
-    def test_optional_population(self):
-        if enable_h5py_tests:
-            ts = list(self.get_example_tree_sequences())[-1]
-            # See above for why we import h5py here.
-            import h5py
-            with tempfile.NamedTemporaryFile() as f:
-                ts.dump(f.name, skip_h5close=True)
-                hfile = h5py.File(f.name, "r+")
-                del hfile["trees"]["population"]
-                hfile.close()
-                del hfile
-                other_ts = _msprime.TreeSequence()
-                other_ts.load(f.name)
-                self.assertEqual(
-                    ts.get_num_records(), other_ts.get_num_records())
-                for j in range(other_ts.get_num_records()):
-                    record = other_ts.get_record(j)
-                    pop = record[-1]
-                    self.assertEqual(pop, NULL_POPULATION)
-                    old_record = ts.get_record(j)
-                    self.assertEqual(record[:-1], old_record[:-1])
-
-    def test_optional_samples(self):
-        if enable_h5py_tests:
-            ts = list(self.get_example_tree_sequences())[-1]
-            # See above for why we import h5py here.
-            import h5py
-            with tempfile.NamedTemporaryFile() as f:
-                ts.dump(f.name, skip_h5close=True)
-                hfile = h5py.File(f.name, "r+")
-                del hfile["samples"]["population"]
-                hfile.close()
-                del hfile
-                other_ts = _msprime.TreeSequence()
-                other_ts.load(f.name)
-                self.assertEqual(
-                    ts.get_num_records(), other_ts.get_num_records())
-                for j in range(ts.get_num_records()):
-                    record = other_ts.get_record(j)
-                    old_record = ts.get_record(j)
-                    self.assertEqual(record, old_record)
-                self.assertEqual(
-                    ts.get_mutations(), other_ts.get_mutations())
-                # Check that we get the NULL for leaf nodes.
-                st = _msprime.SparseTree(other_ts)
-                for _ in _msprime.SparseTreeIterator(other_ts, st):
-                    for j in range(ts.get_sample_size()):
-                        self.assertEqual(
-                            st.get_population(j), NULL_POPULATION)
-
-    def test_load_bad_formats(self):
-        # try loading a bunch of files in various formats.
-        ts = _msprime.TreeSequence()
-        with tempfile.NamedTemporaryFile("wb") as f:
-            # First, check the emtpy file.
-            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
-            # Now some ascii text
-            f.write(b"Some ASCII text")
-            f.flush()
-            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
-            f.seek(0)
-            # Now write 8k of random bytes
-            f.write(os.urandom(8192))
-            f.flush()
-            self.assertRaises(_msprime.LibraryError, ts.load, f.name)
+        for j in range(10):
+            ts = self.get_tree_sequence(num_provenance_strings=0)
+            strings = []
+            for k in range(j):
+                # Use some fairly big strings to stress things out
+                strings.append("x" * (k + 1) * 8192)
+                ts.add_provenance_string(strings[-1])
+            self.assertEqual(ts.get_provenance_strings(), strings)
+            with tempfile.NamedTemporaryFile(prefix="msp_ll_test_ps") as f:
+                ts.dump(f.name)
+                ts2 = _msprime.TreeSequence()
+                ts2.load(f.name)
+                self.assertEqual(ts2.get_provenance_strings(), strings)
 
 
 class TestNewickConverter(LowLevelTestCase):
@@ -2227,6 +2143,13 @@ class TestNewickConverter(LowLevelTestCase):
                     else:
                         point = t.find(".")
                         self.assertEqual(precision, len(t) - point - 1)
+
+    def test_nonbinary_trees(self):
+        ts = self.get_nonbinary_tree_sequence()
+
+        def f():
+            return list(_msprime.NewickConverter(ts))
+        self.assertRaises(_msprime.LibraryError, f)
 
 
 class TestVcfConverter(LowLevelTestCase):
@@ -2524,7 +2447,7 @@ class TestSparseTree(LowLevelTestCase):
         for bad_type in ["", {}, True, 1, None]:
             self.assertRaises(TypeError, _msprime.SparseTree, ts, bad_type)
         for n in range(1, 10):
-            ts = self.get_tree_sequence(num_loci=n)
+            ts = self.get_tree_sequence(sample_size=10, num_loci=n)
             st = _msprime.SparseTree(ts)
             self.assertEqual(st.get_num_nodes(), ts.get_num_nodes())
             self.assertEqual(st.get_sample_size(), ts.get_sample_size())
@@ -2535,8 +2458,29 @@ class TestSparseTree(LowLevelTestCase):
             for j in range(n):
                 self.assertEqual(st.get_parent(j), NULL_NODE)
                 self.assertEqual(st.get_population(j), NULL_POPULATION)
-                self.assertEqual(st.get_children(j), (NULL_NODE, NULL_NODE))
+                self.assertEqual(st.get_children(j), tuple())
                 self.assertEqual(st.get_time(j), 0)
+
+    def test_memory_error(self):
+        # This provokes a bug where we weren't reference counting
+        # the tree sequence properly, and the underlying memory for a
+        # sparse tree was getting corrupted.
+        for n in range(1, 10):
+            ts = self.get_tree_sequence(sample_size=100, num_loci=n)
+            num_nodes = ts.get_num_nodes()
+            st = _msprime.SparseTree(ts)
+            # deleting the tree sequence should still give a well formed
+            # sparse tree.
+            st_iter = _msprime.SparseTreeIterator(ts, st)
+            next(st_iter)
+            del ts
+            del st_iter
+            # Do a quick traversal just to exercise the tree
+            stack = [st.get_root()]
+            while len(stack) > 0:
+                u = stack.pop()
+                self.assertLess(u, num_nodes)
+                stack.extend(st.get_children(u))
 
     def test_bad_tracked_leaves(self):
         ts = self.get_tree_sequence()
@@ -2554,53 +2498,69 @@ class TestSparseTree(LowLevelTestCase):
                 [1, bad_leaf, 1])
 
     def test_count_all_leaves(self):
-        ts = self.get_tree_sequence(num_loci=10)
-        st = _msprime.SparseTree(ts)
-        # Without initialisation we should be 0 leaves for every node
-        # that is not a leaf.
-        for j in range(st.get_num_nodes()):
-            l = 1 if j < st.get_sample_size() else 0
-            self.assertEqual(st.get_num_leaves(j), l)
-            self.assertEqual(st.get_num_tracked_leaves(j), 0)
-        # Now, try this for a tree sequence.
-        for st in _msprime.SparseTreeIterator(ts, st):
-            nu = get_leaf_counts(st)
-            nu_prime = [
-                st.get_num_leaves(j) for j in
-                range(st.get_num_nodes())]
-            self.assertEqual(nu, nu_prime)
-            # For tracked leaves, this should be all zeros.
-            nu = [
-                st.get_num_tracked_leaves(j) for j in
-                range(st.get_num_nodes())]
-            self.assertEqual(nu, list([0 for _ in nu]))
+        for ts in self.get_example_tree_sequences():
+            self.verify_iterator(_msprime.TreeDiffIterator(ts))
+            st = _msprime.SparseTree(ts)
+            # Without initialisation we should be 0 leaves for every node
+            # that is not a leaf.
+            for j in range(st.get_num_nodes()):
+                l = 1 if j < st.get_sample_size() else 0
+                self.assertEqual(st.get_num_leaves(j), l)
+                self.assertEqual(st.get_num_tracked_leaves(j), 0)
+            # Now, try this for a tree sequence.
+            for st in _msprime.SparseTreeIterator(ts, st):
+                nu = get_leaf_counts(st)
+                nu_prime = [
+                    st.get_num_leaves(j) for j in
+                    range(st.get_num_nodes())]
+                self.assertEqual(nu, nu_prime)
+                # For tracked leaves, this should be all zeros.
+                nu = [
+                    st.get_num_tracked_leaves(j) for j in
+                    range(st.get_num_nodes())]
+                self.assertEqual(nu, list([0 for _ in nu]))
 
     def test_count_tracked_leaves(self):
-        ts = self.get_tree_sequence(sample_size=5, num_loci=10)
-        leaves = [j for j in range(ts.get_sample_size())]
-        powerset = itertools.chain.from_iterable(
-            itertools.combinations(leaves, r) for r in range(len(leaves) + 1))
-        for subset in map(list, powerset):
-            # Ordering shouldn't make any different.
-            random.shuffle(subset)
-            st = _msprime.SparseTree(ts, subset)
-            for st in _msprime.SparseTreeIterator(ts, st):
-                nu = get_tracked_leaf_counts(st, subset)
-                nu_prime = [
-                    st.get_num_tracked_leaves(j) for j in
-                    range(st.get_num_nodes())]
-                self.assertEqual(nu, nu_prime)
-        # Passing duplicated values should have no effect.
-        leaf = 1
-        for j in range(1, 20):
-            tracked_leaves = [leaf for _ in range(j)]
-            st = _msprime.SparseTree(ts, tracked_leaves)
-            for st in _msprime.SparseTreeIterator(ts, st):
-                nu = get_tracked_leaf_counts(st, [leaf])
-                nu_prime = [
-                    st.get_num_tracked_leaves(j) for j in
-                    range(st.get_num_nodes())]
-                self.assertEqual(nu, nu_prime)
+        examples = [
+            self.get_tree_sequence(sample_size=5, num_loci=10),
+            self.get_tree_sequence(
+                sample_size=12,
+                demographic_events=[
+                    get_bottleneck_event(0.2, proportion=1.0)])]
+        # Ensure that the second example does have some non-binary records
+        ts = examples[1]
+        found = False
+        for j in range(ts.get_num_records()):
+            r = ts.get_record(j)
+            if len(r[3]) > 2:
+                found = True
+        self.assertTrue(found)
+        for ts in examples:
+            leaves = [j for j in range(ts.get_sample_size())]
+            powerset = itertools.chain.from_iterable(
+                itertools.combinations(leaves, r)
+                for r in range(len(leaves) + 1))
+            for subset in map(list, powerset):
+                # Ordering shouldn't make any different.
+                random.shuffle(subset)
+                st = _msprime.SparseTree(ts, subset)
+                for st in _msprime.SparseTreeIterator(ts, st):
+                    nu = get_tracked_leaf_counts(st, subset)
+                    nu_prime = [
+                        st.get_num_tracked_leaves(j) for j in
+                        range(st.get_num_nodes())]
+                    self.assertEqual(nu, nu_prime)
+            # Passing duplicated values should have no effect.
+            leaf = 1
+            for j in range(1, 20):
+                tracked_leaves = [leaf for _ in range(j)]
+                st = _msprime.SparseTree(ts, tracked_leaves)
+                for st in _msprime.SparseTreeIterator(ts, st):
+                    nu = get_tracked_leaf_counts(st, [leaf])
+                    nu_prime = [
+                        st.get_num_tracked_leaves(j) for j in
+                        range(st.get_num_nodes())]
+                    self.assertEqual(nu, nu_prime)
 
     def test_bounds_checking(self):
         for m in range(1, 10):
@@ -2704,22 +2664,27 @@ class TestLeafListIterator(LowLevelTestCase):
                 _msprime.LeafListIterator(tree, tree.get_root()))
 
     def test_leaf_list(self):
-        ts = self.get_tree_sequence()
-        st = _msprime.SparseTree(ts)
-        for t in _msprime.SparseTreeIterator(ts, st):
-            # All leaf nodes should have themselves.
-            for j in range(t.get_sample_size()):
-                leaves = list(_msprime.LeafListIterator(t, j))
-                self.assertEqual(leaves, [j])
-            # All non-tree nodes should have 0
-            for j in range(t.get_num_nodes()):
-                if t.get_parent(j) == 0 and j != t.get_root():
+        examples = [
+            self.get_tree_sequence(sample_size=5, num_loci=10),
+            self.get_tree_sequence(
+                demographic_events=[
+                    get_bottleneck_event(0.2, proportion=1.0)])]
+        for ts in examples:
+            st = _msprime.SparseTree(ts)
+            for t in _msprime.SparseTreeIterator(ts, st):
+                # All leaf nodes should have themselves.
+                for j in range(t.get_sample_size()):
                     leaves = list(_msprime.LeafListIterator(t, j))
-                    self.assertEqual(len(leaves), 0)
-            # The root should have all leaves.
-            leaves = list(_msprime.LeafListIterator(t, t.get_root()))
-            self.assertEqual(
-                sorted(leaves), list(range(t.get_sample_size())))
+                    self.assertEqual(leaves, [j])
+                # All non-tree nodes should have 0
+                for j in range(t.get_num_nodes()):
+                    if t.get_parent(j) == 0 and j != t.get_root():
+                        leaves = list(_msprime.LeafListIterator(t, j))
+                        self.assertEqual(len(leaves), 0)
+                # The root should have all leaves.
+                leaves = list(_msprime.LeafListIterator(t, t.get_root()))
+                self.assertEqual(
+                    sorted(leaves), list(range(t.get_sample_size())))
 
 
 class TestRecombinationMap(LowLevelTestCase):

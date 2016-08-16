@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -51,7 +51,8 @@ hdf5_error_walker(unsigned n, const H5E_error2_t *err_desc, void *client_data)
     if (_hdf5_error[0] == '\0') {
         snprintf(_hdf5_error, MSP_HDF5_ERR_MSG_SIZE,
                 "HDF5 Error: %d: %d:'%s'",
-                err_desc->maj_num, err_desc->min_num, err_desc->desc);
+                (int) err_desc->maj_num, (int) err_desc->min_num,
+                err_desc->desc);
     }
     return 0;
 }
@@ -67,8 +68,6 @@ msp_strerror(int err)
         ret = "Generic error; please file a bug report";
     } else if (err == MSP_ERR_FILE_FORMAT) {
         ret = "File format error";
-    } else if (err == MSP_ERR_FILE_VERSION) {
-        ret = "Unsupported file format version";
     } else if (err == MSP_ERR_BAD_STATE) {
         ret = "Bad simulator state. initialise or reset must be called.";
     } else if (err == MSP_ERR_NEWICK_OVERFLOW) {
@@ -81,8 +80,6 @@ msp_strerror(int err)
         ret = "Links Overflow occured.";
     } else if (err == MSP_ERR_OUT_OF_BOUNDS) {
         ret = "Array index out of bounds";
-    } else if (err == MSP_ERR_UNSUPPORTED_FILE_VERSION) {
-        ret = "Unsupported file format version.";
     } else if (err == MSP_ERR_BAD_ORDERING) {
         ret = "Bad record ordering requested";
     } else if (err == MSP_ERR_BAD_MUTATION) {
@@ -113,6 +110,16 @@ msp_strerror(int err)
         ret = "Bad coalescence records in file.";
     } else if (err == MSP_ERR_BAD_SAMPLES) {
         ret = "Bad sample configuration provided.";
+    } else if (err == MSP_ERR_NONBINARY_NEWICK) {
+        ret = "Newick export not supported for non binary trees.";
+    } else if (err == MSP_ERR_FILE_VERSION_TOO_OLD) {
+        ret = "HDF5 file version too old. Please upgrade using the "
+            "'msp upgrade' command";
+    } else if (err == MSP_ERR_FILE_VERSION_TOO_NEW) {
+        ret = "HDF5 file version is too new for this version of msprime. "
+            "Please upgrade msprime to the latest version.";
+    } else if (err == MSP_ERR_NONBINARY_NEWICK) {
+        ret = "Newick export not supported for non binary trees.";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -139,6 +146,19 @@ cmp_individual(const void *a, const void *b) {
     return (ia->id > ib->id) - (ia->id < ib->id);
 }
 
+/* For the segment priority queue we want to sort on the left
+ * coordinate and to break ties we arbitrarily use the ID */
+static int
+cmp_segment_queue(const void *a, const void *b) {
+    const segment_t *ia = (const segment_t *) a;
+    const segment_t *ib = (const segment_t *) b;
+    int ret = (ia->left > ib->left) - (ia->left < ib->left);
+    if (ret == 0)  {
+        ret = (ia->id > ib->id) - (ia->id < ib->id);
+    }
+    return ret;
+}
+
 static int
 cmp_node_mapping(const void *a, const void *b) {
     const node_mapping_t *ia = (const node_mapping_t *) a;
@@ -153,6 +173,13 @@ cmp_sampling_event(const void *a, const void *b) {
     return (ia->time > ib->time) - (ia->time < ib->time);
 }
 
+static int
+cmp_uint32_t(const void *a, const void *b) {
+    const uint32_t *ia = (const uint32_t *) a;
+    const uint32_t *ib = (const uint32_t *) b;
+    return (*ia > *ib) - (*ia < *ib);
+}
+
 static void
 segment_init(void **obj, size_t id)
 {
@@ -165,6 +192,13 @@ msp_get_avl_node_mem_increment(msp_t *self)
 {
     return sizeof(void *) + self->avl_node_block_size
             * (sizeof(avl_node_t) + sizeof(void *));
+}
+
+static size_t
+msp_get_binary_children_mem_increment(msp_t *self)
+{
+    return sizeof(void *) + self->coalescence_record_block_size
+            * (2 * sizeof(uint32_t) + sizeof(void *));
 }
 
 static size_t
@@ -426,243 +460,6 @@ msp_set_coalescence_record_block_size(msp_t *self, size_t block_size)
 out:
     return ret;
 }
-/* JSON provenance strings */
-
-static int WARN_UNUSED
-msp_generate_migration_matrix_json(msp_t *self, char **output)
-{
-    int ret = -1;
-    size_t N = self->num_populations;
-    size_t buffer_size = 0;
-    size_t offset = 0;
-    char *buffer;
-    size_t j;
-    int written;
-    const char *pattern = MSP_LOSSLESS_DBL ", ";
-
-    assert(self->num_populations > 0);
-    for (j = 0; j < N * N; j++) {
-        written = snprintf(NULL, 0, pattern, self->initial_migration_matrix[j]);
-        if (written < 0) {
-            ret = MSP_ERR_IO;
-            goto out;
-        }
-        buffer_size += (size_t) written;
-    }
-    /* Allow some wiggle room */
-    buffer_size += 8;
-    buffer = malloc(buffer_size);
-    if (buffer == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    buffer[0] = '[';
-    offset = 1;
-    for (j = 0; j < N * N; j++) {
-        written = snprintf(buffer + offset, buffer_size - offset, pattern,
-            self->initial_migration_matrix[j]);
-        if (written < 0) {
-            ret = MSP_ERR_IO;
-            goto out;
-        }
-        offset += (size_t) written;
-        assert(offset < buffer_size - 1);
-    }
-    /* wipe out the last ', ' */
-    offset -= 2;
-    assert(offset < buffer_size - 2);
-    buffer[offset] = ']';
-    buffer[offset + 1] = '\0';
-
-    *output = buffer;
-    ret = 0;
-out:
-    return ret;
-}
-
-
-static int WARN_UNUSED
-msp_generate_population_configuration_json(msp_t *self, char **output)
-{
-    int ret = -1;
-    size_t buffer_size = 0;
-    size_t offset = 0;
-    char *buffer;
-    size_t j;
-    int written;
-    const char *pattern = "{"
-        "\"initial_size\":" MSP_LOSSLESS_DBL ", "
-        "\"growth_rate\":" MSP_LOSSLESS_DBL
-        "}, ";
-    population_t *pop;
-
-    assert(self->num_populations > 0);
-    for (j = 0; j < self->num_populations; j++) {
-        pop = &self->initial_populations[j];
-        written = snprintf(NULL, 0, pattern, pop->initial_size,
-                pop->growth_rate);
-        if (written < 0) {
-            ret = MSP_ERR_IO;
-            goto out;
-        }
-        buffer_size += (size_t) written;
-    }
-    /* Allow some wiggle room */
-    buffer_size += 8;
-    buffer = malloc(buffer_size);
-    if (buffer == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    buffer[0] = '[';
-    offset = 1;
-    for (j = 0; j < self->num_populations; j++) {
-        pop = &self->initial_populations[j];
-        written = snprintf(buffer + offset, buffer_size - offset, pattern,
-                pop->initial_size, pop->growth_rate);
-        if (written < 0) {
-            ret = MSP_ERR_IO;
-            goto out;
-        }
-        offset += (size_t) written;
-        assert(offset < buffer_size - 1);
-    }
-    /* wipe out the last ', ' */
-    offset -= 2;
-    assert(offset < buffer_size - 2);
-    buffer[offset] = ']';
-    buffer[offset + 1] = '\0';
-
-    *output = buffer;
-    ret = 0;
-out:
-    return ret;
-}
-
-static int WARN_UNUSED
-msp_generate_demographic_events_json(msp_t *self, char **output)
-{
-    int ret = -1;
-    size_t buffer_size = 0;
-    size_t offset = 0;
-    char *buffer;
-    int written;
-    int empty_list;
-    demographic_event_t *de;
-
-    for (de = self->demographic_events_head; de != NULL; de = de->next) {
-        written = de->json_snprintf(de, NULL, 0);
-        if (written < 0) {
-            ret = MSP_ERR_IO;
-            goto out;
-        }
-        buffer_size += (size_t) written;
-    }
-    empty_list = buffer_size == 0;
-    /* Allow some wiggle room */
-    buffer_size += 8;
-    buffer = malloc(buffer_size);
-    if (buffer == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    buffer[0] = '[';
-    offset = 1;
-    for (de = self->demographic_events_head; de != NULL; de = de->next) {
-        written = de->json_snprintf(de, buffer + offset, buffer_size - offset);
-        if (written < 0) {
-            ret = MSP_ERR_IO;
-            goto out;
-        }
-        offset += (size_t) written;
-        assert(offset < buffer_size - 1);
-    }
-    if (!empty_list) {
-        /* wipe out the last ', ' */
-        offset -= 2;
-    }
-    assert(offset < buffer_size - 2);
-    buffer[offset] = ']';
-    buffer[offset + 1] = '\0';
-
-    *output = buffer;
-    ret = 0;
-out:
-    return ret;
-}
-
-static int WARN_UNUSED
-msp_generate_provenance_strings(msp_t *self)
-{
-    int ret = 0;
-    size_t buffer_size = 0;
-    char *buffer = NULL;
-    char *migration_matrix = NULL;
-    char *population_configuration = NULL;
-    char *demographic_events = NULL;
-    int written;
-    const char *pattern = "{"
-        "\"sample_size\": %d, "
-        "\"num_loci\": %u, "
-        "\"scaled_recombination_rate\": " MSP_LOSSLESS_DBL ", "
-        "\"migration_matrix\": %s, "
-        "\"population_configuration\": %s, "
-        "\"demographic_events\": %s}";
-
-    ret = msp_generate_migration_matrix_json(self, &migration_matrix);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_generate_population_configuration_json(self,
-            &population_configuration);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_generate_demographic_events_json(self, &demographic_events);
-    if (ret != 0) {
-        goto out;
-    }
-    written = snprintf(NULL, 0, pattern,
-        self->sample_size,
-        self->num_loci,
-        self->scaled_recombination_rate,
-        migration_matrix,
-        population_configuration,
-        demographic_events);
-    if (written < 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    buffer_size = (size_t) written + 1;
-    buffer = malloc(buffer_size);
-    if (buffer == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->configuration_json = buffer;
-    written = snprintf(buffer, buffer_size, pattern,
-        self->sample_size,
-        self->num_loci,
-        self->scaled_recombination_rate,
-        migration_matrix,
-        population_configuration,
-        demographic_events);
-    if (written < 0 || written != (int) buffer_size - 1) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-out:
-    if (migration_matrix != NULL) {
-        free(migration_matrix);
-    }
-    if (population_configuration != NULL) {
-        free(population_configuration);
-    }
-    if (demographic_events != NULL) {
-        free(demographic_events);
-    }
-    return ret;
-}
 
 /* Top level allocators and initialisation */
 
@@ -774,6 +571,11 @@ msp_alloc_memory_blocks(msp_t *self)
     if (ret != 0) {
         goto out;
     }
+    ret = object_heap_init(&self->binary_children_heap, 2 * sizeof(uint32_t),
+           self->coalescence_record_block_size, NULL);
+    if (ret != 0) {
+        goto out;
+    }
     /* allocate the segments and Fenwick tree */
     ret = object_heap_init(&self->segment_heap, sizeof(segment_t),
            self->segment_block_size, segment_init);
@@ -809,13 +611,62 @@ msp_is_completed(msp_t *self)
     return self->state == MSP_STATE_SIMULATING && n == 0;
 }
 
+static uint32_t *
+msp_alloc_children(msp_t *self, uint32_t num_children)
+{
+    uint32_t *ret = NULL;
+
+    /* Binary children are by far the most common, so we optimise for this
+     * case with a fixed memory heap. We malloc the rest directly. This
+     * means that we must always iterate through the set of coalescence
+     * records when freeing and be careful to always leave the records in
+     * a consistent state. */
+    if (num_children == 2) {
+        if (object_heap_empty(&self->binary_children_heap)) {
+            self->used_memory += msp_get_binary_children_mem_increment(self);
+            if (self->used_memory > self->max_memory) {
+                goto out;
+            }
+            if (object_heap_expand(&self->binary_children_heap) != 0) {
+                goto out;
+            }
+        }
+        ret = (uint32_t *) object_heap_alloc_object(
+                &self->binary_children_heap);
+    } else {
+        ret = malloc(num_children * sizeof(uint32_t));
+    }
+out:
+    return ret;
+}
+
+static void
+msp_free_children(msp_t *self, uint32_t num_children, uint32_t *children)
+{
+    if (num_children == 2) {
+        object_heap_free_object(&self->binary_children_heap, children);
+    } else {
+        free(children);
+    }
+}
+
 int
 msp_free(msp_t *self)
 {
     int ret = -1;
     demographic_event_t *de = self->demographic_events_head;
     demographic_event_t *tmp;
+    coalescence_record_t *cr;
+    size_t j;
 
+    /* Because we malloc the children for non-binary records
+     * directly we must free these memory blocks */
+    for (j = 0; j < self->num_coalescence_records; j++) {
+        cr = &self->coalescence_records[j];
+        if (cr->children != NULL) {
+            msp_free_children(self, cr->num_children, cr->children);
+        }
+    }
     while (de != NULL) {
         tmp = de->next;
         free(de);
@@ -846,12 +697,10 @@ msp_free(msp_t *self)
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->segment_heap);
     object_heap_free(&self->node_mapping_heap);
+    object_heap_free(&self->binary_children_heap);
     fenwick_free(&self->links);
     if (self->coalescence_records != NULL) {
         free(self->coalescence_records);
-    }
-    if (self->configuration_json != NULL) {
-        free(self->configuration_json);
     }
     ret = 0;
     return ret;
@@ -994,8 +843,8 @@ msp_print_segment_chain(msp_t *self, segment_t *head, FILE *out)
     fprintf(out, "\n");
 }
 
-void
-msp_verify(msp_t *self)
+static void
+msp_verify_segments(msp_t *self)
 {
     int64_t s, ss, total_links, left, right, alt_total_links;
     size_t j;
@@ -1051,6 +900,62 @@ msp_verify(msp_t *self)
     }
 }
 
+static void
+msp_verify_overlaps(msp_t *self)
+{
+    avl_node_t *node;
+    node_mapping_t *nm;
+    segment_t *u;
+    uint32_t j, k, left, right, count;
+    /* We check for every locus, so obviously this rules out large numbers
+     * of loci. This code should never be called except during testing,
+     * so we don't need to recover from malloc failure.
+     */
+    uint32_t *overlaps = calloc(self->num_loci, sizeof(uint32_t));
+
+    assert(overlaps != NULL);
+    /* Add in the counts for any historical samples that haven't been
+     * included yet.
+     */
+    for (j = 0; j < self->sample_size; j++) {
+        if (self->samples[j].time > self->time) {
+            for (k = 0; k < self->num_loci; k++) {
+                overlaps[k]++;
+            }
+        }
+    }
+    for (j = 0; j < self->num_populations; j++) {
+        for (node = (&self->populations[j].ancestors)->head; node != NULL;
+                node = node->next) {
+            u = (segment_t *) node->item;
+            while (u != NULL) {
+                for (k = u->left; k < u->right; k++) {
+                    overlaps[k]++;
+                }
+                u = u->next;
+            }
+        }
+    }
+    for (node = self->overlap_counts.head; node->next != NULL;
+            node = node->next) {
+        nm = (node_mapping_t *) node->item;
+        left = nm->left;
+        right = ((node_mapping_t *) node->next->item)->left;
+        count = nm->value;
+        for (k = left; k < right; k++) {
+            assert(overlaps[k] == count);
+        }
+    }
+    free(overlaps);
+}
+
+void
+msp_verify(msp_t *self)
+{
+    msp_verify_segments(self);
+    msp_verify_overlaps(self);
+}
+
 int
 msp_print_state(msp_t *self, FILE *out)
 {
@@ -1079,7 +984,6 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "max_memory  = %f MiB\n", (double) self->max_memory / gig);
     fprintf(out, "n = %d\n", self->sample_size);
     fprintf(out, "m = %d\n", self->num_loci);
-    fprintf(out, "configuration = %s\n", self->configuration_json);
     fprintf(out, "Samples = \n");
     for (j = 0; j < self->sample_size; j++) {
         fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j, self->samples[j].population_id,
@@ -1145,11 +1049,19 @@ msp_print_state(msp_t *self, FILE *out)
         nm = (node_mapping_t *) node->item;
         fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
-    fprintf(out, "Coalescence records = %ld\n", (long) self->num_coalescence_records);
+    fprintf(out, "Coalescence records = %ld\n",
+            (long) self->num_coalescence_records);
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
-        fprintf(out, "\t%f\t%f\t%d\t%d\t%d\t%f\t%d\n", cr->left, cr->right, cr->children[0],
-                cr->children[1], cr->node, cr->time, cr->population_id);
+        fprintf(out, "\t%f\t%f\t%d\t(", cr->left, cr->right,
+                cr->node);
+        for (k = 0; k < cr->num_children; k++) {
+            fprintf(out, "%d", cr->children[k]);
+            if (k < cr->num_children - 1) {
+                fprintf(out, ", ");
+            }
+        }
+        fprintf(out, ")\t%f\t%d\n", cr->time, cr->population_id);
     }
     fprintf(out, "Memory heaps\n");
     fprintf(out, "avl_node_heap:");
@@ -1158,6 +1070,8 @@ msp_print_state(msp_t *self, FILE *out)
     object_heap_print_state(&self->segment_heap, out);
     fprintf(out, "node_mapping_heap:");
     object_heap_print_state(&self->node_mapping_heap, out);
+    fprintf(out, "binary_children_heap:");
+    object_heap_print_state(&self->binary_children_heap, out);
     msp_verify(self);
 out:
     if (ancestors != NULL) {
@@ -1183,390 +1097,6 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         x = x->next;
     }
     ret = msp_insert_individual(self, ind);
-    return ret;
-}
-
-/* Demographic events */
-static demographic_event_t * WARN_UNUSED
-msp_add_demographic_event(msp_t *self, double time)
-{
-    demographic_event_t *ret = NULL;
-
-    ret = calloc(1, sizeof(demographic_event_t));
-    if (ret == NULL) {
-        goto out;
-    }
-    ret->time = time;
-    /* now insert this event at the end of the chain. */
-    if (self->demographic_events_head == NULL) {
-        self->demographic_events_head = ret;
-        self->demographic_events_tail = ret;
-    } else {
-        self->demographic_events_tail->next = ret;
-        self->demographic_events_tail = ret;
-    }
-out:
-    return ret;
-}
-
-/* Population parameter change */
-
-static int
-msp_change_single_population_parameters(msp_t *self, size_t population_id,
-        double time, double initial_size, double growth_rate)
-{
-    int ret = 0;
-    double dt;
-    population_t *pop;
-
-    if (population_id >= self->num_populations) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    pop = &self->populations[population_id];
-    /* If initial_size is not specified, calculate the initial_size of the
-     * population over the coming time period based on the growth rate over
-     * the preceeding period.
-     */
-    if (gsl_isnan(initial_size)) {
-        dt = time - pop->start_time;
-        pop->initial_size = pop->initial_size * exp(-pop->growth_rate * dt);
-    } else {
-        pop->initial_size = initial_size;
-    }
-    /* Do not change the growth_rate unless it is specified */
-    if (!gsl_isnan(growth_rate)) {
-        pop->growth_rate = growth_rate;
-    }
-    pop->start_time = time;
-out:
-    return ret;
-}
-
-static int
-msp_change_population_parameters(msp_t *self, demographic_event_t *event)
-{
-    int ret = 0;
-    int pid = event->params.population_parameters_change.population_id;
-    double initial_size =
-        event->params.population_parameters_change.initial_size;
-    double growth_rate =
-        event->params.population_parameters_change.growth_rate;
-
-    if (pid == -1) {
-        for (pid = 0; pid < (int) self->num_populations; pid++) {
-            ret = msp_change_single_population_parameters(self, (size_t) pid,
-                    event->time, initial_size, growth_rate);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-    } else {
-        ret = msp_change_single_population_parameters(self, (size_t) pid,
-                event->time, initial_size, growth_rate);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-out:
-    return ret;
-}
-
-static void
-msp_print_population_parameters_change(msp_t *self,
-        demographic_event_t *event, FILE *out)
-{
-    fprintf(out,
-            "%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
-            event->time,
-            event->params.population_parameters_change.population_id,
-            event->params.population_parameters_change.initial_size,
-            event->params.population_parameters_change.growth_rate);
-}
-
-static int
-json_snprintf_population_parameters_change(demographic_event_t *event, char *buffer,
-        size_t size)
-{
-    const char *pattern;
-    int ret;
-    if (gsl_isnan(event->params.population_parameters_change.growth_rate)) {
-        pattern = "{"
-            "\"type\": \"population_parameters_change\", "
-            "\"time\": " MSP_LOSSLESS_DBL ", "
-            "\"population_id\": %d, "
-            "\"initial_size\": " MSP_LOSSLESS_DBL ", "
-            "}, ";
-        ret = snprintf(buffer, size, pattern, event->time,
-            event->params.population_parameters_change.population_id,
-            event->params.population_parameters_change.initial_size);
-
-    } else if (gsl_isnan(
-            event->params.population_parameters_change.initial_size)) {
-        pattern = "{"
-            "\"type\": \"population_parameters_change\", "
-            "\"time\": " MSP_LOSSLESS_DBL ", "
-            "\"population_id\": %d, "
-            "\"growth_rate\": " MSP_LOSSLESS_DBL
-            "}, ";
-        ret = snprintf(buffer, size, pattern, event->time,
-            event->params.population_parameters_change.population_id,
-            event->params.population_parameters_change.growth_rate);
-    } else {
-        pattern = "{"
-            "\"type\": \"population_parameters_change\", "
-            "\"time\": " MSP_LOSSLESS_DBL ", "
-            "\"population_id\": %d, "
-            "\"initial_size\": " MSP_LOSSLESS_DBL ", "
-            "\"growth_rate\": " MSP_LOSSLESS_DBL
-            "}, ";
-        ret = snprintf(buffer, size, pattern, event->time,
-            event->params.population_parameters_change.population_id,
-            event->params.population_parameters_change.initial_size,
-            event->params.population_parameters_change.growth_rate);
-    }
-    return ret;
-}
-
-int
-msp_add_population_parameters_change(msp_t *self, double time, int population_id,
-        double initial_size, double growth_rate)
-{
-    int ret = -1;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
-    int N = (int) self->num_populations;
-
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (population_id < -1 || population_id >= N) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    if (initial_size < 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    if (gsl_isnan(initial_size) && gsl_isnan(growth_rate)) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    de->params.population_parameters_change.population_id = population_id;
-    de->params.population_parameters_change.initial_size = initial_size;
-    de->params.population_parameters_change.growth_rate = growth_rate;
-    de->change_state = msp_change_population_parameters;
-    de->print_state = msp_print_population_parameters_change;
-    de->json_snprintf = json_snprintf_population_parameters_change;
-    ret = 0;
-out:
-    return ret;
-}
-
-/* Migration rate change */
-
-static int WARN_UNUSED
-msp_change_migration_matrix_entry(msp_t *self, size_t index, double rate)
-{
-    int ret = 0;
-    size_t N = self->num_populations;
-
-    if (index >= N * N) {
-        ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
-        goto out;
-    }
-    if (index % (N + 1) == 0) {
-        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
-        goto out;
-    }
-    self->migration_matrix[index] = rate;
-out:
-    return ret;
-}
-
-static int
-msp_change_migration_rate(msp_t *self, demographic_event_t *event)
-{
-    int ret = 0;
-    int index = event->params.migration_rate_change.matrix_index;
-    double rate  = event->params.migration_rate_change.migration_rate;
-    int N = (int) self->num_populations;
-
-    if (index == -1) {
-        for (index = 0; index < N * N; index++) {
-            if (index % (N + 1) != 0) {
-                ret = msp_change_migration_matrix_entry(self, (size_t) index,
-                        rate);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
-        }
-    } else {
-        ret = msp_change_migration_matrix_entry(self, (size_t) index, rate);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-out:
-    return ret;
-}
-
-static void
-msp_print_migration_rate_change(msp_t *self,
-        demographic_event_t *event, FILE *out)
-{
-    fprintf(out, "%f\tmigration_rate_change: %d -> %f\n",
-            event->time,
-            event->params.migration_rate_change.matrix_index,
-            event->params.migration_rate_change.migration_rate);
-}
-
-static int
-json_snprintf_migration_rate_change(demographic_event_t *event, char *buffer,
-        size_t size)
-{
-    const char *pattern = "{"
-        "\"type\": \"migration_rate_change\", "
-        "\"time\": " MSP_LOSSLESS_DBL ", "
-        "\"migration_rate\": " MSP_LOSSLESS_DBL ", "
-        "\"matrix_index\": %d"
-        "}, ";
-    return snprintf(buffer, size, pattern, event->time,
-            event->params.migration_rate_change.matrix_index,
-            event->params.migration_rate_change.migration_rate);
-}
-
-int WARN_UNUSED
-msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
-        double migration_rate)
-{
-    int ret = -1;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
-    int N = (int) self->num_populations;
-
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (matrix_index < -1 || matrix_index >= N * N) {
-        ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
-        goto out;
-    }
-    if (migration_rate < 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    if (matrix_index % (N + 1) == 0) {
-        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
-        goto out;
-    }
-    de->params.migration_rate_change.migration_rate = migration_rate;
-    de->params.migration_rate_change.matrix_index = matrix_index;
-    de->change_state = msp_change_migration_rate;
-    de->print_state = msp_print_migration_rate_change;
-    de->json_snprintf = json_snprintf_migration_rate_change;
-    ret = 0;
-out:
-    return ret;
-}
-
-/* Mass migration */
-
-static int
-msp_mass_migration(msp_t *self, demographic_event_t *event)
-{
-    int ret = 0;
-    int source = event->params.mass_migration.source;
-    int dest = event->params.mass_migration.destination;
-    double p = event->params.mass_migration.proportion;
-    int N = (int) self->num_populations;
-    avl_node_t *node, *next;
-    avl_tree_t *pop;
-
-    /* This should have been caught on adding the event */
-    if (source < 0 || source > N || dest < 0 || dest > N) {
-        ret = MSP_ERR_ASSERTION_FAILED;
-        goto out;
-    }
-    /*
-     * Move lineages from source to dest with propabality p.
-     */
-    pop = &self->populations[source].ancestors;
-    node = pop->head;
-    while (node != NULL) {
-        next = node->next;
-        if (gsl_rng_uniform(self->rng) < p) {
-            ret = msp_move_individual(self, node, pop, (uint32_t) dest);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-        node = next;
-    }
-out:
-    return ret;
-}
-
-static void
-msp_print_mass_migration(msp_t *self, demographic_event_t *event, FILE *out)
-{
-    fprintf(out, "%f\tmass_migration: %d -> %d p = %f\n",
-            event->time,
-            event->params.mass_migration.source,
-            event->params.mass_migration.destination,
-            event->params.mass_migration.proportion);
-}
-
-static int
-json_snprintf_mass_migration(demographic_event_t *event, char *buffer,
-        size_t size)
-{
-    const char *pattern = "{"
-        "\"type\": \"mass_migration\", "
-        "\"time\": " MSP_LOSSLESS_DBL ", "
-        "\"source\": %d, "
-        "\"destination\": %d, "
-        "\"proportion\": " MSP_LOSSLESS_DBL
-        "}, ";
-    return snprintf(buffer, size, pattern, event->time,
-            event->params.mass_migration.source,
-            event->params.mass_migration.destination,
-            event->params.mass_migration.proportion);
-}
-
-int WARN_UNUSED
-msp_add_mass_migration(msp_t *self, double time, int source, int destination,
-        double proportion)
-{
-    int ret = 0;
-    demographic_event_t *de = msp_add_demographic_event(self, time);
-    int N = (int) self->num_populations;
-
-    if (de == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    if (source < 0 || source >= N || destination < 0 || destination >= N) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    if (source == destination) {
-        ret = MSP_ERR_SOURCE_DEST_EQUAL;
-        goto out;
-    }
-    if (proportion < 0.0 || proportion > 1.0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    de->params.mass_migration.source = source;
-    de->params.mass_migration.destination = destination;
-    de->params.mass_migration.proportion = proportion;
-    de->change_state = msp_mass_migration;
-    de->print_state = msp_print_mass_migration;
-    de->json_snprintf = json_snprintf_mass_migration;
-    ret = 0;
-out:
     return ret;
 }
 
@@ -1644,12 +1174,12 @@ msp_copy_overlap_count(msp_t *self, uint32_t k)
 
 static int WARN_UNUSED
 msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
-        uint32_t child1, uint32_t child2, uint32_t node,
+        uint32_t num_children, uint32_t *children, uint32_t node,
         uint32_t population_id)
 {
     int ret = 0;
-    uint32_t c1 = GSL_MIN(child1, child2);
-    uint32_t c2 = GSL_MAX(child1, child2);
+    int equal;
+    uint32_t j;
     coalescence_record_t *cr;
     coalescence_record_t *lcr;
 
@@ -1665,23 +1195,32 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         self->coalescence_records = cr;
         self->num_coalescence_record_blocks++;
     }
+    /* Sort the children */
+    qsort(children, num_children, sizeof(uint32_t), cmp_uint32_t);
+
     cr = &self->coalescence_records[self->num_coalescence_records];
     if (self->num_coalescence_records != 0) {
         lcr = &self->coalescence_records[self->num_coalescence_records - 1];
-        if (lcr->right == left
-                && lcr->children[0] == c1
-                && lcr->children[1] == c2
+        if (lcr->right == left && lcr->num_children == num_children
                 && lcr->node == node) {
-            /* squash this record into the last */
-            lcr->right = right;
-            cr = NULL;
+            /* Compare the children */
+            equal = 1;
+            for (j = 0; equal && j < num_children; j++) {
+                equal = equal && (children[j] == lcr->children[j]);
+            }
+            if (equal) {
+                /* squash this record into the last */
+                lcr->right = right;
+                cr = NULL;
+                msp_free_children(self, num_children, children);
+            }
         }
     }
     if (cr != NULL) {
+        cr->num_children = num_children;
+        cr->children = children;
         cr->left = (double) left;
         cr->right = (double) right;
-        cr->children[0] = c1;
-        cr->children[1] = c2;
         cr->node = node;
         cr->time = self->time;
         cr->population_id = (uint8_t) population_id;
@@ -1719,6 +1258,49 @@ msp_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
         }
     } while (node2 != NULL && nm2->left <= r);
     return ret;
+}
+
+static int WARN_UNUSED
+msp_conditional_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
+{
+    int ret = 0;
+    double covered_fraction = (r - l) / (double) self->num_loci;
+
+    /* This is a heuristic to prevent us spending a lot of time pointlessly
+     * trying to defragment during the early stages of the simulation.
+     * 5% of the overall length seems like a good value and leads to
+     * a ~15% time reduction when doing large simulations.
+     */
+    if (covered_fraction < 0.05) {
+        ret = msp_compress_overlap_counts(self, l, r);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+msp_defrag_segment_chain(msp_t *self, segment_t *z)
+{
+    segment_t *y, *x;
+
+    y = z;
+    while (y->prev != NULL) {
+        x = y->prev;
+        if (x->right == y->left && x->value == y->value) {
+            x->right = y->right;
+            x->next = y->next;
+            if (y->next != NULL) {
+                y->next->prev = x;
+            }
+            fenwick_increment(&self->links, x->id, y->right - y->left);
+            msp_free_segment(self, y);
+        }
+        y = x;
+    }
+    return 0;
 }
 
 static int WARN_UNUSED
@@ -1784,8 +1366,7 @@ msp_common_ancestor_event(msp_t *self, uint32_t population_id)
     int ret = 0;
     int coalescence = 0;
     int defrag_required = 0;
-    double covered_fraction;
-    uint32_t j, n, l, r, l_min, r_max, v;
+    uint32_t j, n, l, r, l_min, r_max, v, *children;
     avl_tree_t *ancestors;
     avl_node_t *node;
     node_mapping_t *nm, search;
@@ -1897,7 +1478,14 @@ msp_common_ancestor_event(msp_t *self, uint32_t population_id)
                         goto out;
                     }
                 }
-                ret = msp_record_coalescence(self, l, r, x->value, y->value, v,
+                children = msp_alloc_children(self, 2);
+                if (children == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                children[0] = x->value;
+                children[1] = y->value;
+                ret = msp_record_coalescence(self, l, r, 2, children, v,
                         population_id);
                 if (ret != 0) {
                     goto out;
@@ -1937,36 +1525,225 @@ msp_common_ancestor_event(msp_t *self, uint32_t population_id)
         }
     }
     if (defrag_required) {
-        y = z;
-        while (y->prev != NULL) {
-            x = y->prev;
-            if (x->right == y->left && x->value == y->value) {
-                x->right = y->right;
-                x->next = y->next;
-                if (y->next != NULL) {
-                    y->next->prev = x;
-                }
-                fenwick_increment(&self->links, x->id, y->right - y->left);
-                msp_free_segment(self, y);
-            }
-            y = x;
+        ret = msp_defrag_segment_chain(self, z);
+        if (ret != 0) {
+            goto out;
         }
     }
     if (coalescence) {
-        covered_fraction = (r_max - l_min) / (double) self->num_loci;
-        /* This is a heuristic to prevent us spending a lot of time pointlessly
-         * trying to defragment during the early stages of the simulation.
-         * 5% of the overall length seems like a good value and leads to
-         * a ~15% time reduction when doing large simulations.
-         */
-        if (covered_fraction < 0.05) {
-            ret = msp_compress_overlap_counts(self, l_min, r_max);
+        ret = msp_conditional_compress_overlap_counts(self, l_min, r_max);
+        if (ret != 0) {
+            goto out;
+        }
+
+    }
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+msp_priority_queue_insert(msp_t *self, avl_tree_t *Q, segment_t *u)
+{
+    int ret = 0;
+    avl_node_t *node;
+
+    assert(u != NULL);
+    node = msp_alloc_avl_node(self);
+    if (node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    avl_init_node(node, u);
+    node = avl_insert_node(Q, node);
+    assert(node != NULL);
+out:
+    return ret;
+}
+
+/* Merge the specified set of ancestors into a single ancestor. This is a
+ * generalisation of the msp_common_ancestor_event method where we allow
+ * any number of ancestors to merge. The avl tree is a priority queue in
+ * sorted by left coordinate.
+ */
+static int WARN_UNUSED
+msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
+{
+    int ret = MSP_ERR_GENERIC;
+    int coalescence = 0;
+    int defrag_required = 0;
+    uint32_t j, l, r, h, r_max, next_l, l_min, v, *children;
+    avl_node_t *node;
+    node_mapping_t *nm, search;
+    segment_t *x, *z, *alpha;
+    segment_t **H = NULL;
+
+    H = malloc(avl_count(Q) * sizeof(segment_t *));
+    if (H == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    l_min = 0;
+    z = NULL;
+    while (avl_count(Q) > 0) {
+        h = 0;
+        node = Q->head;
+        l = ((segment_t *) node->item)->left;
+        r_max = self->num_loci;
+        while (node != NULL && ((segment_t *) node->item)->left == l) {
+            H[h] = (segment_t *) node->item;
+            r_max = GSL_MIN(r_max, H[h]->right);
+            h++;
+            msp_free_avl_node(self, node);
+            avl_unlink_node(Q, node);
+            node = node->next;
+        }
+        next_l = 0;
+        if (node != NULL) {
+            next_l = ((segment_t *) node->item)->left;
+            r_max = GSL_MIN(r_max, next_l);
+        }
+        alpha = NULL;
+        if (h == 1) {
+            x = H[0];
+            if (node != NULL && next_l < x->right) {
+                alpha = msp_alloc_segment(self, x->left, next_l, x->value,
+                        x->population_id, NULL, NULL);
+                if (alpha == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                x->left = next_l;
+            } else {
+                alpha = x;
+                x = x->next;
+                alpha->next = NULL;
+            }
+            if (x != NULL) {
+                ret = msp_priority_queue_insert(self, Q, x);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        } else {
+            if (!coalescence) {
+                coalescence = 1;
+                l_min = l;
+                self->next_node++;
+                /* Check for overflow */
+                assert(self->next_node != 0);
+            }
+            v = self->next_node - 1;
+            /* Insert overlap counts for bounds, if necessary */
+            search.left = l;
+            node = avl_search(&self->overlap_counts, &search);
+            if (node == NULL) {
+                ret = msp_copy_overlap_count(self, l);
+                if (ret < 0) {
+                    goto out;
+                }
+            }
+            search.left = r_max;
+            node = avl_search(&self->overlap_counts, &search);
+            if (node == NULL) {
+                ret = msp_copy_overlap_count(self, r_max);
+                if (ret < 0) {
+                    goto out;
+                }
+            }
+            /* Update the extant segments and allocate alpha if the interval
+             * has not coalesced. */
+            search.left = l;
+            node = avl_search(&self->overlap_counts, &search);
+            assert(node != NULL);
+            nm = (node_mapping_t *) node->item;
+            if (nm->value == h) {
+                nm->value = 0;
+                node = node->next;
+                assert(node != NULL);
+                nm = (node_mapping_t *) node->item;
+                r = nm->left;
+            } else {
+                r = l;
+                while (nm->value != h && r < r_max) {
+                    nm->value -= h - 1;
+                    node = node->next;
+                    assert(node != NULL);
+                    nm = (node_mapping_t *) node->item;
+                    r = nm->left;
+                }
+                alpha = msp_alloc_segment(self, l, r, v, population_id,
+                        NULL, NULL);
+                if (alpha == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+            }
+            /* Create the record and update the priority queue */
+            children = msp_alloc_children(self, h);
+            if (children == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            for (j = 0; j < h; j++) {
+                x = H[j];
+                children[j] = x->value;
+                if (x->right == r) {
+                    msp_free_segment(self, x);
+                    x = x->next;
+                } else if (x->right > r) {
+                    x->left = r;
+                }
+                if (x != NULL) {
+                    ret = msp_priority_queue_insert(self, Q, x);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                }
+            }
+            ret = msp_record_coalescence(self, l, r, h, children, v,
+                    population_id);
             if (ret != 0) {
                 goto out;
             }
         }
+        /* Loop tail; integrate alpha into the global state */
+        if (alpha != NULL) {
+            if (z == NULL) {
+                ret = msp_insert_individual(self, alpha);
+                if (ret != 0) {
+                    goto out;
+                }
+                fenwick_set_value(&self->links, alpha->id,
+                        alpha->right - alpha->left - 1);
+            } else {
+                defrag_required |=
+                    z->right == alpha->left && z->value == alpha->value;
+                z->next = alpha;
+                fenwick_set_value(&self->links, alpha->id,
+                        alpha->right - z->right);
+            }
+            alpha->prev = z;
+            z = alpha;
+        }
     }
+    if (defrag_required) {
+        ret = msp_defrag_segment_chain(self, z);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (coalescence) {
+        ret = msp_conditional_compress_overlap_counts(self, l_min, r_max);
+        if (ret != 0) {
+            goto out;
+        }
+
+    }
+    ret = 0;
 out:
+    if (H != NULL) {
+        free(H);
+    }
     return ret;
 }
 
@@ -1996,6 +1773,7 @@ msp_reset_memory_state(msp_t *self)
     node_mapping_t *nm;
     population_t *pop;
     segment_t *u, *v;
+    coalescence_record_t *cr;
     size_t j;
 
     for (j = 0; j < self->num_populations; j++) {
@@ -2022,6 +1800,13 @@ msp_reset_memory_state(msp_t *self)
         avl_unlink_node(&self->overlap_counts, node);
         msp_free_avl_node(self, node);
         msp_free_node_mapping(self, nm);
+    }
+    for (j = 0; j < self->num_coalescence_records; j++) {
+        cr = &self->coalescence_records[j];
+        if (cr->children != NULL) {
+            msp_free_children(self, cr->num_children, cr->children);
+        }
+        cr->children = NULL;
     }
     return ret;
 }
@@ -2111,9 +1896,7 @@ int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
     int ret = -1;
-    double t;
     uint32_t j;
-    demographic_event_t *de;
 
     /* These should really be proper checks with a return value */
     assert(self->sample_size > 1);
@@ -2130,24 +1913,6 @@ msp_initialise(msp_t *self)
             ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
-    }
-    /* Are the demographic events time sorted? */
-    t = 0;
-    for (de = self->demographic_events_head; de != NULL; de = de->next) {
-        if (de->time < 0) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        if (de->time < t) {
-            ret = MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS;
-            goto out;
-        }
-        t = de->time;
-    }
-    /* TODO generate these lazily on demand? */
-    ret = msp_generate_provenance_strings(self);
-    if (ret != 0) {
-        goto out;
     }
     ret = msp_reset(self);
     if (ret != 0) {
@@ -2214,14 +1979,13 @@ static int WARN_UNUSED
 msp_apply_demographic_events(msp_t *self)
 {
     int ret = 0;
-    double t_event;
     demographic_event_t *event;
 
     assert(self->next_demographic_event != NULL);
     /* Process all events with equal time in one block. */
-    t_event = self->next_demographic_event->time;
+    self->time = self->next_demographic_event->time;
     while (self->next_demographic_event != NULL
-            && self->next_demographic_event->time == t_event) {
+            && self->next_demographic_event->time == self->time) {
         /* We skip ahead to the start time for the next demographic
          * event, and use its change_state method to update the
          * state of the simulation.
@@ -2232,7 +1996,6 @@ msp_apply_demographic_events(msp_t *self)
         if (ret != 0) {
             goto out;
         }
-        self->time = event->time;
         self->next_demographic_event = event->next;
     }
 out:
@@ -2326,12 +2089,12 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         if (sampling_event_time < t_temp
                 && sampling_event_time < demographic_event_time) {
             se = &self->sampling_events[self->next_sampling_event];
+            self->time = se->time;
             ret = msp_insert_sample(self, se->sample, se->population_id);
             if (ret != 0) {
                 goto out;
             }
             self->next_sampling_event++;
-            self->time = se->time;
         } else if (demographic_event_time < t_temp) {
             ret = msp_apply_demographic_events(self);
             if (ret != 0) {
@@ -2478,7 +2241,6 @@ msp_get_migration_matrix(msp_t *self, double *migration_matrix)
     return 0;
 }
 
-
 int WARN_UNUSED
 msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
 {
@@ -2489,20 +2251,17 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
     return 0;
 }
 
-
 int WARN_UNUSED
-msp_get_coalescence_records(msp_t *self, coalescence_record_t *coalescence_records)
+msp_get_coalescence_records(msp_t *self, coalescence_record_t **coalescence_records)
 {
-    memcpy(coalescence_records, self->coalescence_records,
-            self->num_coalescence_records * sizeof(coalescence_record_t));
+    *coalescence_records = self->coalescence_records;
     return 0;
 }
 
 int WARN_UNUSED
-msp_get_samples(msp_t *self, sample_t *samples)
+msp_get_samples(msp_t *self, sample_t **samples)
 {
-    assert(self->samples != NULL);
-    memcpy(samples, self->samples, self->sample_size * sizeof(sample_t));
+    *samples = self->samples;
     return 0;
 }
 
@@ -2539,8 +2298,404 @@ out:
     return ret;
 }
 
-char * WARN_UNUSED
-msp_get_configuration_json(msp_t *self)
+/* Demographic events */
+static int WARN_UNUSED
+msp_add_demographic_event(msp_t *self, double time, demographic_event_t **event)
 {
-    return self->configuration_json;
+    int ret = MSP_ERR_GENERIC;
+    demographic_event_t *ret_event = NULL;
+
+    if (self->demographic_events_tail != NULL) {
+        if (time < self->demographic_events_tail->time) {
+            ret = MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS;
+            goto out;
+        }
+    }
+    ret_event = calloc(1, sizeof(demographic_event_t));
+    if (ret_event == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret_event->time = time;
+    /* now insert this event at the end of the chain. */
+    if (self->demographic_events_head == NULL) {
+        self->demographic_events_head = ret_event;
+        self->demographic_events_tail = ret_event;
+    } else {
+        self->demographic_events_tail->next = ret_event;
+        self->demographic_events_tail = ret_event;
+    }
+    *event = ret_event;
+    ret = 0;
+out:
+    return ret;
 }
+
+/* Population parameter change */
+
+static int
+msp_change_single_population_parameters(msp_t *self, size_t population_id,
+        double time, double initial_size, double growth_rate)
+{
+    int ret = 0;
+    double dt;
+    population_t *pop;
+
+    if (population_id >= self->num_populations) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    pop = &self->populations[population_id];
+    /* If initial_size is not specified, calculate the initial_size of the
+     * population over the coming time period based on the growth rate over
+     * the preceeding period.
+     */
+    if (gsl_isnan(initial_size)) {
+        dt = time - pop->start_time;
+        pop->initial_size = pop->initial_size * exp(-pop->growth_rate * dt);
+    } else {
+        pop->initial_size = initial_size;
+    }
+    /* Do not change the growth_rate unless it is specified */
+    if (!gsl_isnan(growth_rate)) {
+        pop->growth_rate = growth_rate;
+    }
+    pop->start_time = time;
+out:
+    return ret;
+}
+
+static int
+msp_change_population_parameters(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    int pid = event->params.population_parameters_change.population_id;
+    double initial_size =
+        event->params.population_parameters_change.initial_size;
+    double growth_rate =
+        event->params.population_parameters_change.growth_rate;
+
+    if (pid == -1) {
+        for (pid = 0; pid < (int) self->num_populations; pid++) {
+            ret = msp_change_single_population_parameters(self, (size_t) pid,
+                    event->time, initial_size, growth_rate);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    } else {
+        ret = msp_change_single_population_parameters(self, (size_t) pid,
+                event->time, initial_size, growth_rate);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static void
+msp_print_population_parameters_change(msp_t *self,
+        demographic_event_t *event, FILE *out)
+{
+    fprintf(out,
+            "%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
+            event->time,
+            event->params.population_parameters_change.population_id,
+            event->params.population_parameters_change.initial_size,
+            event->params.population_parameters_change.growth_rate);
+}
+
+int
+msp_add_population_parameters_change(msp_t *self, double time, int population_id,
+        double initial_size, double growth_rate)
+{
+    int ret = -1;
+    demographic_event_t *de;
+    int N = (int) self->num_populations;
+
+    if (population_id < -1 || population_id >= N) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    if (initial_size < 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (gsl_isnan(initial_size) && gsl_isnan(growth_rate)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+    de->params.population_parameters_change.population_id = population_id;
+    de->params.population_parameters_change.initial_size = initial_size;
+    de->params.population_parameters_change.growth_rate = growth_rate;
+    de->change_state = msp_change_population_parameters;
+    de->print_state = msp_print_population_parameters_change;
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Migration rate change */
+
+static int WARN_UNUSED
+msp_change_migration_matrix_entry(msp_t *self, size_t index, double rate)
+{
+    int ret = 0;
+    size_t N = self->num_populations;
+
+    if (index >= N * N) {
+        ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
+    if (index % (N + 1) == 0) {
+        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
+    self->migration_matrix[index] = rate;
+out:
+    return ret;
+}
+
+static int
+msp_change_migration_rate(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    int index = event->params.migration_rate_change.matrix_index;
+    double rate  = event->params.migration_rate_change.migration_rate;
+    int N = (int) self->num_populations;
+
+    if (index == -1) {
+        for (index = 0; index < N * N; index++) {
+            if (index % (N + 1) != 0) {
+                ret = msp_change_migration_matrix_entry(self, (size_t) index,
+                        rate);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+    } else {
+        ret = msp_change_migration_matrix_entry(self, (size_t) index, rate);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static void
+msp_print_migration_rate_change(msp_t *self,
+        demographic_event_t *event, FILE *out)
+{
+    fprintf(out, "%f\tmigration_rate_change: %d -> %f\n",
+            event->time,
+            event->params.migration_rate_change.matrix_index,
+            event->params.migration_rate_change.migration_rate);
+}
+
+int WARN_UNUSED
+msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
+        double migration_rate)
+{
+    int ret = -1;
+    demographic_event_t *de;
+    int N = (int) self->num_populations;
+
+    if (matrix_index < -1 || matrix_index >= N * N) {
+        ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
+    if (migration_rate < 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (matrix_index % (N + 1) == 0) {
+        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+    de->params.migration_rate_change.migration_rate = migration_rate;
+    de->params.migration_rate_change.matrix_index = matrix_index;
+    de->change_state = msp_change_migration_rate;
+    de->print_state = msp_print_migration_rate_change;
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Mass migration */
+
+static int
+msp_mass_migration(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    int source = event->params.mass_migration.source;
+    int dest = event->params.mass_migration.destination;
+    double p = event->params.mass_migration.proportion;
+    int N = (int) self->num_populations;
+    avl_node_t *node, *next;
+    avl_tree_t *pop;
+
+    /* This should have been caught on adding the event */
+    if (source < 0 || source > N || dest < 0 || dest > N) {
+        ret = MSP_ERR_ASSERTION_FAILED;
+        goto out;
+    }
+    /*
+     * Move lineages from source to dest with propabality p.
+     */
+    pop = &self->populations[source].ancestors;
+    node = pop->head;
+    while (node != NULL) {
+        next = node->next;
+        if (gsl_rng_uniform(self->rng) < p) {
+            ret = msp_move_individual(self, node, pop, (uint32_t) dest);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        node = next;
+    }
+out:
+    return ret;
+}
+
+static void
+msp_print_mass_migration(msp_t *self, demographic_event_t *event, FILE *out)
+{
+    fprintf(out, "%f\tmass_migration: %d -> %d p = %f\n",
+            event->time,
+            event->params.mass_migration.source,
+            event->params.mass_migration.destination,
+            event->params.mass_migration.proportion);
+}
+
+int WARN_UNUSED
+msp_add_mass_migration(msp_t *self, double time, int source, int destination,
+        double proportion)
+{
+    int ret = 0;
+    demographic_event_t *de;
+    int N = (int) self->num_populations;
+
+    if (source < 0 || source >= N || destination < 0 || destination >= N) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    if (source == destination) {
+        ret = MSP_ERR_SOURCE_DEST_EQUAL;
+        goto out;
+    }
+    if (proportion < 0.0 || proportion > 1.0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+    de->params.mass_migration.source = source;
+    de->params.mass_migration.destination = destination;
+    de->params.mass_migration.proportion = proportion;
+    de->change_state = msp_mass_migration;
+    de->print_state = msp_print_mass_migration;
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Bottlenecks */
+
+static int
+msp_bottleneck(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    int population_id = event->params.bottleneck.population_id;
+    double p = event->params.bottleneck.proportion;
+    int N = (int) self->num_populations;
+    avl_node_t *node, *next, *q_node;
+    avl_tree_t *pop, Q;
+    segment_t *u;
+
+    /* This should have been caught on adding the event */
+    if (population_id < 0 || population_id > N) {
+        ret = MSP_ERR_ASSERTION_FAILED;
+        goto out;
+    }
+    avl_init_tree(&Q, cmp_segment_queue, NULL);
+    /*
+     * Find the individuals that descend from the common ancestor
+     * during this bottleneck.
+     */
+    pop = &self->populations[population_id].ancestors;
+    node = pop->head;
+    while (node != NULL) {
+        next = node->next;
+        if (gsl_rng_uniform(self->rng) < p) {
+            u = (segment_t *) node->item;
+            avl_unlink_node(pop, node);
+            msp_free_avl_node(self, node);
+            q_node = msp_alloc_avl_node(self);
+            if (q_node == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            avl_init_node(q_node, u);
+            q_node = avl_insert_node(&Q, q_node);
+            assert(q_node != NULL);
+        }
+        node = next;
+    }
+    ret = msp_merge_ancestors(self, &Q, (uint32_t) population_id);
+out:
+    return ret;
+}
+
+static void
+msp_print_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
+{
+    fprintf(out, "%f\tbottleneck: %d I = %f\n",
+            event->time,
+            event->params.bottleneck.population_id,
+            event->params.bottleneck.proportion);
+}
+
+int WARN_UNUSED
+msp_add_bottleneck(msp_t *self, double time, int population_id,
+        double proportion)
+{
+    int ret = 0;
+    demographic_event_t *de;
+    int N = (int) self->num_populations;
+
+    if (population_id < 0 || population_id >= N) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    if (proportion < 0.0 || proportion > 1.0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+    de->params.bottleneck.population_id = population_id;
+    de->params.bottleneck.proportion = proportion;
+    de->change_state = msp_bottleneck;
+    de->print_state = msp_print_bottleneck;
+    ret = 0;
+out:
+    return ret;
+}
+
+

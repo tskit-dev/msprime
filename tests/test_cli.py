@@ -1179,6 +1179,16 @@ class TestMspArgumentParser(unittest.TestCase):
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.precision, 5)
 
+    def test_upgrade_default_values(self):
+        parser = cli.get_msp_parser()
+        cmd = "upgrade"
+        source = "in.hdf5"
+        destination = "out.hdf5"
+        args = parser.parse_args([
+            cmd, source, destination])
+        self.assertEqual(args.source, source)
+        self.assertEqual(args.destination, destination)
+
 
 class TestMspSimulateOutput(unittest.TestCase):
     """
@@ -1363,3 +1373,28 @@ class TestMspConversionOutput(unittest.TestCase):
             self.assertEqual(len(col), n)
             for j in range(n):
                 self.assertEqual(col[j], haplotypes[j][site])
+
+
+class TestUpgrade(unittest.TestCase):
+    """
+    Tests the results of the upgrade operation to ensure they are
+    correct.
+    """
+    def test_conversion(self):
+        ts1 = msprime.simulate(10)
+        with tempfile.NamedTemporaryFile("w+") as v2_file, \
+                tempfile.NamedTemporaryFile("w+") as v3_file:
+            msprime.dump_legacy(ts1, v2_file.name)
+            stdout, stderr = capture_output(cli.msp_main, [
+                "upgrade", v2_file.name, v3_file.name])
+            ts2 = msprime.load(v3_file.name)
+        self.assertEqual(stdout, "")
+        # We get some cruft on stderr that comes from h5py. This only happens
+        # because we're mixing h5py and msprime for this test, so we can ignore
+        # it.
+        # self.assertEqual(stderr, "")
+        # Quick checks to ensure we have the right tree sequence.
+        # More thorough checks are done elsewhere.
+        self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
+        self.assertEqual(ts1.get_num_records(), ts2.get_num_records())
+        self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())

@@ -30,7 +30,6 @@ except ImportError:
     pass
 
 import math
-import json
 import os
 import random
 import tempfile
@@ -38,6 +37,7 @@ import unittest
 import xml.etree
 
 import msprime
+import _msprime
 import tests
 
 
@@ -95,8 +95,10 @@ def sparse_tree_to_newick(st, precision, Ne):
 
 
 def _build_newick(node, root, tree, branch_lengths):
-    c1, c2 = tree.get_children(node)
-    if c1 != msprime.NULL_NODE:
+    if tree.is_leaf(node):
+        s = "{0}:{1}".format(node + 1, branch_lengths[node])
+    else:
+        c1, c2 = tree.get_children(node)
         s1 = _build_newick(c1, root, tree, branch_lengths)
         s2 = _build_newick(c2, root, tree, branch_lengths)
         if node == root:
@@ -105,9 +107,6 @@ def _build_newick(node, root, tree, branch_lengths):
         else:
             s = "({0},{1}):{2}".format(
                 s1, s2, branch_lengths[node])
-    else:
-        # Leaf node
-        s = "{0}:{1}".format(node + 1, branch_lengths[node])
     return s
 
 
@@ -203,6 +202,21 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests on the high level interface.
     """
+    def get_bottleneck_examples(self):
+        """
+        Returns an iterator of example tree sequences with nonbinary
+        trees.
+        """
+        bottlenecks = [
+            msprime.Bottleneck(0.01, proportion=0.05),
+            msprime.Bottleneck(0.02, proportion=0.25),
+            msprime.Bottleneck(0.03, proportion=1)]
+        for n in [3, 10, 100]:
+            ts = msprime.simulate(
+                n, length=100, recombination_rate=1,
+                demographic_events=bottlenecks,
+                random_seed=n)
+            yield ts
 
     def verify_sparse_tree_mrcas(self, st):
         # Check the mrcas
@@ -242,7 +256,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertEqual(u, st.get_root())
             self.assertEqual(times, sorted(times))
         used_nodes.add(st.get_root())
-        self.assertEqual(len(used_nodes), 2 * st.get_sample_size() - 1)
+        self.assertLessEqual(len(used_nodes), 2 * st.get_sample_size() - 1)
         # for every entry other than used_nodes we should have an empty row
         for j in range(st.get_root()):
             if j not in used_nodes:
@@ -258,8 +272,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertNotEqual(u, msprime.NULL_NODE)
             if st.is_leaf(u):
                 leaves.append(u)
-                self.assertEqual(st.get_children(u)[0], msprime.NULL_NODE)
-                self.assertEqual(st.get_children(u)[1], msprime.NULL_NODE)
+                self.assertEqual(len(st.get_children(u)), 0)
             else:
                 for c in reversed(st.get_children(u)):
                     stack.append(c)
@@ -270,7 +283,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertEqual(sorted(leaves), list(range(st.get_sample_size())))
         # Check the parent dict
         pi = st.get_parent_dict()
-        self.assertEqual(len(pi), 2 * st.get_sample_size() - 1)
+        self.assertLessEqual(len(pi), 2 * st.get_sample_size() - 1)
         self.assertEqual(pi[st.get_root()], msprime.NULL_NODE)
         for k, v in pi.items():
             self.assertEqual(st.get_parent(k), v)
@@ -402,6 +415,10 @@ class TestMultiLocusSimulation(HighLevelTestCase):
         for r in [0.001, 0.01]:
             self.verify_sparse_trees(msprime.simulate(n, m, r))
 
+    def test_nonbinary_cases(self):
+        for ts in self.get_bottleneck_examples():
+            self.verify_sparse_trees(ts)
+
     def test_error_cases(self):
         def f(n, m, r):
             return msprime.simulate(
@@ -416,16 +433,6 @@ class TestTreeSimulator(HighLevelTestCase):
     """
     Runs tests on the underlying TreeSimulator object.
     """
-    def verify_parameters(self, sim, tree_sequence):
-        parameters = tree_sequence.get_parameters()
-        self.assertIsInstance(parameters, dict)
-        self.assertEqual(parameters["sample_size"], sim.get_sample_size())
-        self.assertEqual(parameters["num_loci"], sim.get_num_loci())
-        self.assertEqual(
-            parameters["scaled_recombination_rate"],
-            sim.get_per_locus_scaled_recombination_rate())
-        config = sim.get_configuration()
-        self.assertEqual(config, parameters)
 
     def verify_dump_load(self, tree_sequence):
         """
@@ -438,6 +445,9 @@ class TestTreeSimulator(HighLevelTestCase):
         records = list(tree_sequence.records())
         other_records = list(other.records())
         self.assertEqual(records, other_records)
+        haplotypes = list(tree_sequence.haplotypes())
+        other_haplotypes = list(other.haplotypes())
+        self.assertEqual(haplotypes, other_haplotypes)
 
     def verify_simulation(self, n, m, r):
         """
@@ -468,7 +478,6 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertGreaterEqual(sim.get_total_num_migration_events(), 0)
         self.assertGreaterEqual(sim.get_num_multiple_recombination_events(), 0)
         self.verify_sparse_trees(tree_sequence)
-        self.verify_parameters(sim, tree_sequence)
         self.verify_dump_load(tree_sequence)
 
     def test_random_parameters(self):
@@ -537,13 +546,8 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             self.assertEqual(zeros + ones, n)
             self.assertEqual(col, variants[k])
 
-    def verify_simulation(self, n, m, r, theta):
-        """
-        Verifies a simulation for the specified parameters.
-        """
-        recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-        tree_sequence = msprime.simulate(
-            n, recombination_map=recomb_map, mutation_rate=theta)
+    def verify_tree_sequence(self, tree_sequence):
+        n = tree_sequence.get_sample_size()
         haplotypes = list(tree_sequence.haplotypes())
         for h in haplotypes:
             self.assertEqual(len(h), tree_sequence.get_num_mutations())
@@ -555,6 +559,15 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             [pos for pos, _ in tree_sequence.variants()],
             [pos for pos, _ in tree_sequence.mutations()])
 
+    def verify_simulation(self, n, m, r, theta):
+        """
+        Verifies a simulation for the specified parameters.
+        """
+        recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
+        tree_sequence = msprime.simulate(
+            n, recombination_map=recomb_map, mutation_rate=theta)
+        self.verify_tree_sequence(tree_sequence)
+
     def test_random_parameters(self):
         num_random_sims = 10
         for j in range(num_random_sims):
@@ -563,6 +576,10 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             r = random.random()
             theta = random.uniform(0, 2)
             self.verify_simulation(n, m, r, theta)
+
+    def test_nonbinary_trees(self):
+        for ts in self.get_bottleneck_examples():
+            self.verify_tree_sequence(ts)
 
 
 class TestNewickConversion(HighLevelTestCase):
@@ -671,6 +688,8 @@ class TestTreeSequence(HighLevelTestCase):
                     ts = msprime.simulate(
                         n, recombination_map=recomb_map, mutation_rate=0.1)
                     yield ts
+        for ts in self.get_bottleneck_examples():
+            yield ts
 
     def test_sparse_trees(self):
         for ts in self.get_example_tree_sequences():
@@ -753,6 +772,15 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertRaises(ValueError, ts.get_population, n + 1)
             self.assertEqual(ts.get_population(0), 0)
             self.assertEqual(ts.get_population(n - 1), 0)
+
+    def test_get_time(self):
+        for ts in self.get_example_tree_sequences():
+            n = ts.get_sample_size()
+            self.assertRaises(ValueError, ts.get_time, -1)
+            self.assertRaises(ValueError, ts.get_time, n)
+            self.assertRaises(ValueError, ts.get_time, n + 1)
+            self.assertEqual(ts.get_time(0), 0)
+            self.assertEqual(ts.get_time(n - 1), 0)
 
     def test_get_samples(self):
         for ts in self.get_example_tree_sequences():
@@ -1149,15 +1177,6 @@ class TestRecombinationMap(unittest.TestCase):
             self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
 
 
-def get_ll_demographic_events(ll_sim):
-    """
-    Utility function to get the low-level demographic events from the
-    specified low-level simulator.
-    """
-    d = json.loads(ll_sim.get_configuration_json())
-    return d["demographic_events"]
-
-
 class TestSimulatorFactory(unittest.TestCase):
     """
     Tests that the simulator factory high-level function correctly
@@ -1297,11 +1316,6 @@ class TestSimulatorFactory(unittest.TestCase):
                 TypeError, msprime.simulator_factory, 2,
                 demographic_events=bad_type)
         # TODO test for bad values.
-
-    def test_default_demographic_events(self):
-        sim = msprime.simulator_factory(10)
-        ll_sim = sim.create_ll_instance()
-        self.assertEqual(get_ll_demographic_events(ll_sim), [])
 
     def test_recombination_rate(self):
         def f(recomb_rate):
@@ -1451,3 +1465,113 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_sample_size(), n)
         self.assertGreater(ts.get_num_trees(), 1)
         self.assertEqual(ts.get_num_mutations(), 0)
+
+
+class TestNodeOrdering(unittest.TestCase):
+    """
+    Verify that we can use any node ordering for internal nodes
+    and get the same topologies.
+    """
+    num_random_permutations = 10
+
+    def verify_tree_sequences_equal(self, ts1, ts2, approx=False):
+        self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())
+        self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
+        self.assertEqual(ts1.get_num_nodes(), ts2.get_num_nodes())
+        j = 0
+        for r1, r2 in zip(ts1.records(), ts2.records()):
+            self.assertEqual(r1.node, r2.node)
+            self.assertEqual(r1.children, r2.children)
+            self.assertEqual(r1.population, r2.population)
+            if approx:
+                self.assertAlmostEqual(r1.left, r2.left)
+                self.assertAlmostEqual(r1.right, r2.right)
+                self.assertAlmostEqual(r1.time, r2.time)
+            else:
+                self.assertEqual(r1.left, r2.left)
+                self.assertEqual(r1.right, r2.right)
+                self.assertEqual(r1.time, r2.time)
+            j += 1
+        self.assertEqual(ts1.get_num_records(), j)
+
+    def verify_random_permutation(self, ts):
+        n = ts.get_sample_size()
+        node_map = {}
+        for j in range(ts.get_sample_size()):
+            node_map[j] = j
+        internal_nodes = list(range(n, ts.get_num_nodes()))
+        random.shuffle(internal_nodes)
+        for j, node in enumerate(internal_nodes):
+            node_map[n + j] = node
+        new_records = []
+        for record in ts.records():
+            new_record = msprime.CoalescenceRecord(
+                left=record.left,
+                right=record.right,
+                time=record.time,
+                population=record.population,
+                node=node_map[record.node],
+                children=tuple(
+                    sorted([node_map[c] for c in record.children])))
+            new_records.append(new_record)
+        ll_ts = _msprime.TreeSequence()
+        ll_ts.load_records(new_records)
+        other_ts = msprime.TreeSequence(ll_ts)
+        self.assertEqual(ts.get_num_trees(), other_ts.get_num_trees())
+        self.assertEqual(ts.get_sample_size(), other_ts.get_sample_size())
+        self.assertEqual(ts.get_num_nodes(), other_ts.get_num_nodes())
+        j = 0
+        for t1, t2 in zip(ts.trees(), other_ts.trees()):
+            # Verify the topologies are identical. We do this by traversing
+            # upwards to the root for every leaf and checking if we map to
+            # the correct node and time.
+            for u in range(n):
+                v_orig = u
+                v_map = u
+                while v_orig != msprime.NULL_NODE:
+                    self.assertEqual(node_map[v_orig], v_map)
+                    self.assertEqual(
+                        t1.get_time(v_orig),
+                        t2.get_time(v_map))
+                    v_orig = t1.get_parent(v_orig)
+                    v_map = t2.get_parent(v_map)
+                self.assertEqual(v_orig, msprime.NULL_NODE)
+                self.assertEqual(v_map, msprime.NULL_NODE)
+            j += 1
+        self.assertEqual(j, ts.get_num_trees())
+        # Verify we can dump this new tree sequence OK.
+        with tempfile.NamedTemporaryFile("w+") as f:
+            other_ts.dump(f.name)
+            ts3 = msprime.load(f.name)
+            self.verify_tree_sequences_equal(other_ts, ts3)
+        # Also verify we can read the text version.
+        with tempfile.NamedTemporaryFile("w+") as f:
+            other_ts.write_records(f, precision=14)
+            f.seek(0)
+            f.flush()
+            ts3 = msprime.load_txt(f.name)
+            self.verify_tree_sequences_equal(other_ts, ts3, True)
+
+    def test_single_locus(self):
+        ts = msprime.simulate(7)
+        for _ in range(self.num_random_permutations):
+            self.verify_random_permutation(ts)
+
+    def test_multi_locus(self):
+        ts = msprime.simulate(20, recombination_rate=10)
+        for _ in range(self.num_random_permutations):
+            self.verify_random_permutation(ts)
+
+    def test_nonbinary(self):
+        ts = msprime.simulate(
+            sample_size=20, recombination_rate=10,
+            demographic_events=[
+                msprime.Bottleneck(time=0.5, proportion=1)])
+        # Make sure this really has some non-binary nodes
+        found = False
+        for r in ts.records():
+            if len(r.children) > 2:
+                found = True
+        self.assertTrue(found)
+        for _ in range(self.num_random_permutations):
+            self.verify_random_permutation(ts)

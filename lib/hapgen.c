@@ -35,20 +35,20 @@ hapgen_check_state(hapgen_t *self)
 }
 
 void
-hapgen_print_state(hapgen_t *self)
+hapgen_print_state(hapgen_t *self, FILE *out)
 {
     size_t j, k;
 
-    printf("Hapgen state\n");
-    printf("num_mutations = %d\n", (int) self->num_mutations);
-    printf("words_per_row = %d\n", (int) self->words_per_row);
-    printf("haplotype matrix\n");
+    fprintf(out, "Hapgen state\n");
+    fprintf(out, "num_mutations = %d\n", (int) self->num_mutations);
+    fprintf(out, "words_per_row = %d\n", (int) self->words_per_row);
+    fprintf(out, "haplotype matrix\n");
     for (j = 0; j < self->sample_size; j++) {
         for (k = 0; k < self->words_per_row; k++) {
-            printf("%llu ", (unsigned long long)
+            fprintf(out, "%llu ", (unsigned long long)
                     self->haplotype_matrix[j * self->words_per_row + k]);
         }
-        printf("\n");
+        fprintf(out, "\n");
     }
     hapgen_check_state(self);
 }

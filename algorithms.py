@@ -6,7 +6,9 @@ from __future__ import division
 
 import sys
 import random
+import tempfile
 import argparse
+import heapq
 import math
 
 import bintrees
@@ -229,7 +231,7 @@ class Simulator(object):
             self, sample_size, num_loci, recombination_rate, migration_matrix,
             sample_configuration, population_growth_rates, population_sizes,
             population_growth_rate_changes, population_size_changes,
-            migration_matrix_element_changes, max_segments=100):
+            migration_matrix_element_changes, bottlenecks, max_segments=100):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -255,7 +257,7 @@ class Simulator(object):
         self.C = []
         self.L = FenwickTree(self.max_segments)
         self.S = bintrees.AVLTree()
-        j = 1
+        j = 0
         for pop_index in range(N):
             sample_size = sample_configuration[pop_index]
             self.P[pop_index].set_start_size(population_sizes[pop_index])
@@ -269,7 +271,7 @@ class Simulator(object):
         self.S[0] = self.n
         self.S[self.m] = -1
         self.t = 0
-        self.w = self.n + 1
+        self.w = self.n
         self.num_ca_events = 0
         self.num_re_events = 0
         self.modifier_events = [(sys.float_info.max, None, None)]
@@ -284,6 +286,9 @@ class Simulator(object):
             self.modifier_events.append(
                 (time, self.change_migration_matrix_element,
                     (int(pop_i), int(pop_j), new_rate)))
+        for time, pop_id, intensity in bottlenecks:
+            self.modifier_events.append(
+                (time, self.bottleneck_event, (int(pop_id), intensity)))
         self.modifier_events.sort()
 
     def change_population_size(self, pop_id, size):
@@ -326,8 +331,7 @@ class Simulator(object):
         """
         infinity = sys.float_info.max
         while sum(pop.get_num_ancestors() for pop in self.P) != 0:
-            self.print_state()
-            # self.verify()
+            self.verify()
             rate = self.r * self.L.get_total()
             t_re = infinity
             if rate != 0:
@@ -355,8 +359,8 @@ class Simulator(object):
             assert min_time != infinity
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
-                func(*args)
                 self.t = t
+                func(*args)
             else:
                 self.t += min_time
                 if min_time == t_re:
@@ -385,7 +389,6 @@ class Simulator(object):
             u = u.next
         # print("AFTER Population sizes:", [len(pop) for pop in self.P])
 
-
     def recombination_event(self):
         """
         Implements a recombination event.
@@ -413,6 +416,141 @@ class Simulator(object):
         self.L.set_value(z.index, z.right - z.left - 1)
         self.P[z.population].add(z)
 
+    def print_heaps(self, L):
+        copy = list(L)
+        ordered = [heapq.heappop(copy) for _ in L]
+        print("L = ")
+        for l, x in ordered:
+            print("\t", l, ":", end="")
+            u = x
+            s = ""
+            while u is not None:
+                s += "({0}-{1}->{2}({3}))".format(
+                    u.left, u.right, u.node, u.index)
+                u = u.next
+            print(s)
+
+    def bottleneck_event(self, pop_id, intensity):
+        # self.print_state()
+        # Merge some of the ancestors.
+        pop = self.P[pop_id]
+        H = []
+        for _ in range(pop.get_num_ancestors()):
+            if random.random() < intensity:
+                x = pop.remove(0)
+                heapq.heappush(H, (x.left, x))
+        self.merge_ancestors(H, pop_id)
+
+    def merge_ancestors(self, H, pop_id):
+        pop = self.P[pop_id]
+        defrag_required = False
+        coalescence = False
+        alpha = None
+        z = None
+        while len(H) > 0:
+            # print("LOOP HEAD")
+            # self.print_heaps(H)
+            alpha = None
+            l = H[0][0]
+            X = []
+            r_max = self.m + 1
+            while len(H) > 0 and H[0][0] == l:
+                x = heapq.heappop(H)[1]
+                X.append(x)
+                r_max = min(r_max, x.right)
+            if len(H) > 0:
+                r_max = min(r_max, H[0][0])
+            if len(X) == 1:
+                x = X[0]
+                if len(H) > 0 and H[0][0] < x.right:
+                    alpha = self.alloc_segment(
+                        x.left, H[0][0], x.node, x.population)
+                    x.left = H[0][0]
+                    heapq.heappush(H, (x.left, x))
+                else:
+                    if x.next is not None:
+                        y = x.next
+                        heapq.heappush(H, (y.left, y))
+                    alpha = x
+                    alpha.next = None
+            else:
+                if not coalescence:
+                    coalescence = True
+                    self.w += 1
+                u = self.w - 1
+                # We must also break if the next left value is less than
+                # any of the right values in the current overlap set.
+                if l not in self.S:
+                    j = self.S.floor_key(l)
+                    self.S[l] = self.S[j]
+                if r_max not in self.S:
+                    j = self.S.floor_key(r_max)
+                    self.S[r_max] = self.S[j]
+                # Update the number of extant segments.
+                if self.S[l] == len(X):
+                    self.S[l] = 0
+                    r = self.S.succ_key(l)
+                else:
+                    r = l
+                    while r < r_max and self.S[r] != len(X):
+                        self.S[r] -= len(X) - 1
+                        r = self.S.succ_key(r)
+                    alpha = self.alloc_segment(l, r, u, pop_id)
+                # Update the heaps and make the record.
+                children = []
+                for x in X:
+                    children.append(x.node)
+                    if x.right == r:
+                        self.free_segment(x)
+                        if x.next is not None:
+                            y = x.next
+                            heapq.heappush(H, (y.left, y))
+                    elif x.right > r:
+                        x.left = r
+                        heapq.heappush(H, (x.left, x))
+                self.C.append((l, r, u, children, self.t))
+
+            # loop tail; update alpha and integrate it into the state.
+            if alpha is not None:
+                if z is None:
+                    pop.add(alpha)
+                    self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
+                else:
+                    defrag_required |= (
+                        z.right == alpha.left and z.node == alpha.node)
+                    z.next = alpha
+                    self.L.set_value(alpha.index, alpha.right - z.right)
+                alpha.prev = z
+                z = alpha
+        if defrag_required:
+            self.defrag_segment_chain(z)
+        if coalescence:
+            self.defrag_breakpoints()
+
+    def defrag_segment_chain(self, z):
+        y = z
+        while y.prev is not None:
+            x = y.prev
+            if x.right == y.left and x.node == y.node:
+                x.right = y.right
+                x.next = y.next
+                if y.next is not None:
+                    y.next.prev = x
+                self.L.increment(x.index, y.right - y.left)
+                self.free_segment(y)
+            y = x
+
+    def defrag_breakpoints(self):
+        # Defrag the breakpoints set
+        j = 0
+        k = 0
+        while k < self.m:
+            k = self.S.succ_key(j)
+            if self.S[j] == self.S[k]:
+                del self.S[k]
+            else:
+                j = k
+
     def common_ancestor_event(self, population_index):
         """
         Implements a coancestry event.
@@ -424,10 +562,10 @@ class Simulator(object):
         x = pop.remove(j)
         j = random.randint(0, pop.get_num_ancestors() - 1)
         y = pop.remove(j)
+        pop = self.P[population_index]
         z = None
         coalescence = False
         defrag_required = False
-
         while x is not None or y is not None:
             alpha = None
             if x is None or y is None:
@@ -475,7 +613,7 @@ class Simulator(object):
                             self.S[r] -= 1
                             r = self.S.succ_key(r)
                         alpha = self.alloc_segment(l, r, u, population_index)
-                    self.C.append((l, r, x.node, y.node, u, self.t))
+                    self.C.append((l, r, u, (x.node, y.node), self.t))
                     # Now trim the ends of x and y to the right sizes.
                     if x.right == r:
                         self.free_segment(x)
@@ -502,27 +640,9 @@ class Simulator(object):
                 z = alpha
 
         if defrag_required:
-            y = z
-            while y.prev is not None:
-                x = y.prev
-                if x.right == y.left and x.node == y.node:
-                    x.right = y.right
-                    x.next = y.next
-                    if y.next is not None:
-                        y.next.prev = x
-                    self.L.increment(x.index, y.right - y.left)
-                    self.free_segment(y)
-                y = x
+            self.defrag_segment_chain(z)
         if coalescence:
-            # Defrag the breakpoints set
-            j = 0
-            k = 0
-            while k < self.m:
-                k = self.S.succ_key(j)
-                if self.S[j] == self.S[k]:
-                    del self.S[k]
-                else:
-                    j = k
+            self.defrag_breakpoints()
 
     def print_state(self):
         print("State @ time ", self.t)
@@ -572,6 +692,9 @@ class Simulator(object):
                     v = u.next
                     if v is not None:
                         assert v.prev == u
+                        if u.right > v.left:
+                            print("ERROR", u, v)
+                        assert u.right <= v.left
                     u = v
                 q += right - left - 1
         assert q == self.L.get_total()
@@ -620,6 +743,15 @@ class Simulator(object):
                     c += 1
             assert c == self.n - 1
 
+    def write_records(self, out):
+        """
+        Writes the records out as text.
+        """
+        for left, right, u, children, time in self.C:
+            print(
+                left, right, u, ",".join(str(c) for c in sorted(children)),
+                time, 0, sep="\t", file=out)
+
 
 def generate_trees(l, r, u, c, t):
     """
@@ -630,21 +762,22 @@ def generate_trees(l, r, u, c, t):
     M = len(l)
     I = sorted(range(M), key=lambda j: (l[j], t[j]))
     O = sorted(range(M), key=lambda j: (r[j], -t[j]))
-    pi = [0 for j in range(max(u) + 1)]
+    pi = [-1 for j in range(max(u) + 1)]
     j = 0
     k = 0
     while j < M:
         x = l[I[j]]
         while r[O[k]] == x:
             h = O[k]
-            pi[c[h][0]] = pi[c[h][1]] = 0
+            for q in c[h]:
+                pi[q] = -1
             k = k + 1
         while j < M and l[I[j]] == x:
             h = I[j]
-            pi[c[h][0]] = pi[c[h][1]] = u[h]
+            for q in c[h]:
+                pi[q] = u[h]
             j += 1
         yield pi
-
 
 def count_leaves(l, r, u, c, t, S):
     """
@@ -656,7 +789,7 @@ def count_leaves(l, r, u, c, t, S):
     M = len(l)
     I = sorted(range(M), key=lambda j: (l[j], t[j]))
     O = sorted(range(M), key=lambda j: (r[j], -t[j]))
-    pi = [0 for j in range(max(u) + 1)]
+    pi = [-1 for j in range(max(u) + 1)]
     beta = [0 for j in range(max(u) + 1)]
     for j in S:
         beta[j] = 1
@@ -666,58 +799,237 @@ def count_leaves(l, r, u, c, t, S):
         x = l[I[j]]
         while r[O[k]] == x:
             h = O[k]
-            pi[c[h][0]] = pi[c[h][1]] = 0
-            b = beta[c[h][0]] + beta[c[h][1]]
+            b = 0
+            for q in c[h]:
+                pi[q] = -1
+                b += beta[q]
             k += 1
             v = u[h]
-            while v != 0:
+            while v != -1:
                 beta[v] -= b
                 v = pi[v]
         while j < M and l[I[j]] == x:
             h = I[j]
-            pi[c[h][0]] = pi[c[h][1]] = u[h]
-            b = beta[c[h][0]] + beta[c[h][1]]
+            b = 0
+            for q in c[h]:
+                pi[q] = u[h]
+                b += beta[q]
             j = j + 1
             v = u[h]
-            while v != 0:
+            while v != -1:
                 beta[v] += b
                 v = pi[v]
         yield pi, beta
 
-def run_trees(args):
-    tree_sequence = msprime.load(args.history_file)
-    N = tree_sequence.get_num_nodes()
-    records = list(tree_sequence.records())
-    l = [record[0] for record in records]
-    r = [record[1] for record in records]
-    u = [record[2] for record in records]
-    c = [record[3] for record in records]
-    t = [record[4] for record in records]
-    local_trees = []
-    print("Trees:")
-    for pi in generate_trees(l, r, u, c, t):
-        local_trees.append(list(pi))
-        print("\t", pi)
-    local_counts = []
-    S = set(range(1, tree_sequence.get_sample_size() + 1))
-    print("Counts:")
-    for pi, beta in count_leaves(l, r, u, c, t, S):
-        local_counts.append(list(beta))
-        print("\t", beta)
-    msp_trees = []
-    msp_counts = []
-    for t in tree_sequence.trees():
-        pi = [t.get_parent(j) for j in range(N + 1)]
-        beta = [t.get_num_leaves(j) for j in range(N + 1)]
-        msp_trees.append(pi)
-        msp_counts.append(beta)
-    assert msp_trees == local_trees
-    assert msp_counts == local_counts
+class LeafListNode(object):
+    def __init__(self, value, next=None):
+        self.value = value
+        self.next = next
+
+    def __str__(self):
+        next = -1 if self.next is None else self.next.value
+        return "{}->{}".format(self.value, next)
+
+def propagate_leaf_loss(u, pi, xi, head, tail):
+    # Invalidate the head and tail pointers above u that depend
+    # on this node.
+    head[u] = None
+    tail[u] = None
 
 
-def run_verify(args):
+def propagate_leaf_gain(u, pi, xi, head, tail):
+    num_children = len(xi[u])
+    for j in range(1, num_children):
+        tail[xi[u][j - 1]].next = head[xi[u][j]]
+    head[u] = head[xi[u][0]]
+    tail[u] = tail[xi[u][-1]]
+
+    v = u
+    w = pi[v]
+    while w != -1:
+        j = xi[w].index(v)
+        if j != 0:
+            break
+        head[w] = head[u]
+        v = w
+        w = pi[w]
+    v = u
+    w = pi[v]
+    while w != -1:
+        j = xi[w].index(v)
+        if j !=len(xi[w]) - 1:
+            break
+        tail[w] = tail[u]
+        v = w
+        w = pi[w]
+
+def post_propagate_leaf_gain(u, pi, xi, head, tail):
+    v = u
+    w = pi[v]
+    while w != -1:
+        j = xi[w].index(v)
+        if j < len(xi[w]) - 1:
+            tail[v].next = head[xi[w][j + 1]]
+        if j > 0:
+            tail[xi[w][j - 1]].next = head[v]
+        v = w
+        w = pi[w]
+
+
+def leaf_sets(l, r, u, c, t, S):
     """
-    Checks that the distibution of events we get is the same as msprime.
+    Sequentially visits all trees in the specified
+    tree sequence and maintain the leaf sets for all leaves in
+    specified set for each node.
+    """
+    # Calculate the index vectors
+    M = len(l)
+    I = sorted(range(M), key=lambda j: (l[j], t[j]))
+    O = sorted(range(M), key=lambda j: (r[j], -t[j]))
+    pi = [-1 for j in range(max(u) + 1)]
+    xi = [[] for j in range(max(u) + 1)]
+    head = [None for j in range(max(u) + 1)]
+    tail = [None for j in range(max(u) + 1)]
+    for j in S:
+        node = LeafListNode(j)
+        head[j] = node
+        tail[j] = node
+    j = 0
+    k = 0
+    while j < M:
+        x = l[I[j]]
+        while r[O[k]] == x:
+            h = O[k]
+            propagate_leaf_loss(u[h], pi, xi, head, tail)
+            for q in c[h]:
+                pi[q] = -1
+            xi[u[h]] = []
+            k += 1
+        before = j
+        while j < M and l[I[j]] == x:
+            h = I[j]
+            for q in c[h]:
+                pi[q] = u[h]
+            xi[u[h]] = c[h]
+            propagate_leaf_gain(u[h], pi, xi, head, tail)
+            j += 1
+        j = before
+        while j < M and l[I[j]] == x:
+            h = I[j]
+            post_propagate_leaf_gain(u[h], pi, xi, head, tail)
+            j += 1
+        yield pi, xi, head, tail
+
+
+def check_consistency(n, pi, xi, head, tail):
+    """
+    Checks the consistency of the specified parent list, child list
+    and head and tail leaf list pointers.
+    """
+    root = 0
+    while pi[root] != -1:
+        root = pi[root]
+    all_leaves = list(leaves(root, xi))
+    assert set(all_leaves) == set(range(n))
+    for u in nodes(root, xi):
+        node_leaves = list(leaves(u, xi))
+        if node_leaves[0] != head[u].value:
+            print("HERROR: head incorrect:", head[u].value)
+        if node_leaves[-1] != tail[u].value:
+            print("TERROR: tail incorrect:", tail[u].value)
+        list_leaves = []
+        x = head[u]
+        while True:
+            if x.value in list_leaves:
+                print("ERROR!!!", x.value, "already in leaf list at index",
+                        list_leaves.index(x.value), "len = ", len(list_leaves))
+                break
+            list_leaves.append(x.value)
+            if x == tail[u]:
+                break
+            x = x.next
+        if list_leaves != node_leaves:
+            print("ERROR")
+            print(list_leaves)
+            print(node_leaves)
+        # assert list_leaves == node_leaves
+        # print(list_leaves)
+        # print(list_leaves == node_leaves)
+
+    print("TREE")
+    print_tree(root, xi, head, tail, 0)
+
+def print_tree(u, xi, head, tail, depth):
+    indent = "  " * depth
+    leaf_list = []
+    # x = head[u]
+    # while True:
+    #     leaf_list.append(x.value)
+    #     if x == tail[u]:
+    #         break
+    #     x = x.next
+    print("{}[{}:{}]\thead = {}; tail = {}\t{}".format(
+        indent, u, len(xi[u]), head[u], tail[u], leaf_list))
+    for v in xi[u]:
+        print_tree(v, xi, head, tail, depth + 1)
+
+def nodes(root, xi):
+    """
+    Returns an iterator over the nodes in the specified tree
+    """
+    stack = [root]
+    while len(stack) > 0:
+        u = stack.pop()
+        stack.extend(reversed(xi[u]))
+        yield u
+
+def leaves(u, xi):
+    """
+    Returns an iterator over the leaves below the specified node.
+    """
+    for v in nodes(u, xi):
+        if len(xi[v]) == 0:
+            yield v
+
+
+def run_trees(args):
+    process_trees(args.history_file)
+
+
+def process_trees(records_file):
+    # Read in the records
+    l = []
+    r = []
+    u = []
+    c = []
+    t = []
+    with open(records_file) as f:
+        for line in f:
+            toks = line.split()
+            l.append(float(toks[0]))
+            r.append(float(toks[1]))
+            u.append(int(toks[2]))
+            children = list(map(int, toks[3].split(",")))
+            c.append(children)
+            t.append(float(toks[4]))
+    N = len(l)
+    # print("Trees:")
+    # for pi in generate_trees(l, r, u, c, t):
+    #     print("\t", pi)
+    n = min(u)
+    S = set(range(n))
+    # print("Counts:")
+    # for pi, beta in count_leaves(l, r, u, c, t, S):
+    #     print("\t", beta)
+    print("Counts:")
+    for pi, xi, head, tail in leaf_sets(l, r, u, c, t, S):
+        check_consistency(n, pi, xi, head, tail)
+        print(pi)
+        print(xi)
+
+def run_simulate(args):
+    """
+    Runs the simulation and outputs the results in text.
     """
     n = args.sample_size
     m = args.num_loci
@@ -736,29 +1048,52 @@ def run_verify(args):
         population_growth_rates = args.population_growth_rates
     if args.population_sizes is not None:
         population_sizes = args.population_sizes
-    msp_events = np.zeros(args.num_replicates)
-    local_events = np.zeros(args.num_replicates)
-    for j in range(args.num_replicates):
-        random.seed(j)
-        s = Simulator(
-            n, m, rho, migration_matrix,
-            sample_configuration, population_growth_rates,
-            population_sizes, args.population_growth_rate_change,
-            args.population_size_change,
-            args.migration_matrix_element_change,
-            10000)
-        s.simulate()
-        s.print_state()
-        # local_events[j] = s.num_re_events
-        # s = msprime.TreeSimulator(n)
-        # s.set_num_loci(m)
-        # s.set_scaled_recombination_rate(rho)
-        # s.set_random_seed(j)
-        # s.run()
-        # msp_events[j] = s.get_num_recombination_events()
-    # sm.graphics.qqplot(local_events)
-    # sm.qqplot_2samples(local_events, msp_events, line="45")
-    # pyplot.savefig(args.outfile, dpi=72)
+    random.seed(args.random_seed)
+    s = Simulator(
+        n, m, rho, migration_matrix,
+        sample_configuration, population_growth_rates,
+        population_sizes, args.population_growth_rate_change,
+        args.population_size_change,
+        args.migration_matrix_element_change,
+        args.bottleneck, 10000)
+    s.simulate()
+    # TEMP
+    with tempfile.NamedTemporaryFile(prefix="msp_alg") as f:
+        s.write_records(f)
+        f.flush()
+        process_trees(f.name)
+
+def add_simulator_arguments(parser):
+    parser.add_argument("sample_size", type=int)
+    parser.add_argument(
+        "--random-seed", "-s", type=int, default=1)
+    parser.add_argument(
+        "--num-loci", "-m", type=int, default=100)
+    parser.add_argument(
+        "--num-replicates", "-R", type=int, default=1000)
+    parser.add_argument(
+        "--recombination-rate", "-r", type=float, default=0.1)
+    parser.add_argument(
+        "--num-populations", "-p", type=int, default=1)
+    parser.add_argument(
+        "--migration-rate", "-g", type=float, default=1)
+    parser.add_argument(
+        "--sample-configuration", type=int, nargs="+", default=None)
+    parser.add_argument(
+        "--population-growth-rates", type=float, nargs="+", default=None)
+    parser.add_argument(
+        "--population-sizes", type=float, nargs="+", default=None)
+    parser.add_argument(
+        "--population-size-change", type=float, nargs=3, action="append",
+        default=[])
+    parser.add_argument(
+        "--population-growth-rate-change", type=float, nargs=3,
+        action="append", default=[])
+    parser.add_argument(
+        "--migration-matrix-element-change", type=float, nargs=4,
+        action="append", default=[])
+    parser.add_argument(
+        "--bottleneck", type=float, nargs=3, action="append", default=[])
 
 
 def main():
@@ -767,42 +1102,15 @@ def main():
     subparsers = parser.add_subparsers(dest="subcommand")
     subparsers.required = True
 
-    verify_parser = subparsers.add_parser(
-        "verify",
-        help="Verify the local algorithm against msprime")
-    verify_parser.add_argument("outfile")
-    verify_parser.add_argument(
-        "--sample-size", "-n", type=int, default=10)
-    verify_parser.add_argument(
-        "--num-loci", "-m", type=int, default=100)
-    verify_parser.add_argument(
-        "--num-replicates", "-R", type=int, default=1000)
-    verify_parser.add_argument(
-        "--recombination-rate", "-r", type=float, default=0.1)
-    verify_parser.add_argument(
-        "--num-populations", "-p", type=int, default=1)
-    verify_parser.add_argument(
-        "--migration-rate", "-g", type=float, default=1)
-    verify_parser.add_argument(
-        "--sample-configuration", type=int, nargs="+", default=None)
-    verify_parser.add_argument(
-        "--population-growth-rates", type=float, nargs="+", default=None)
-    verify_parser.add_argument(
-        "--population-sizes", type=float, nargs="+", default=None)
-    verify_parser.add_argument(
-        "--population-size-change", type=float, nargs=3, action="append",
-        default=[])
-    verify_parser.add_argument(
-        "--population-growth-rate-change", type=float, nargs=3,
-        action="append", default=[])
-    verify_parser.add_argument(
-        "--migration-matrix-element-change", type=float, nargs=4,
-        action="append", default=[])
-    verify_parser.set_defaults(runner=run_verify)
+    simulate_parser = subparsers.add_parser(
+        "simulate",
+        help="Simulate the process and output the results in text")
+    add_simulator_arguments(simulate_parser)
+    simulate_parser.set_defaults(runner=run_simulate)
 
     trees_parser = subparsers.add_parser(
         "trees",
-        help="Shows the trees from an msprime history file")
+        help="Shows the trees from an text records file")
     trees_parser.add_argument("history_file")
 
     trees_parser.set_defaults(runner=run_trees)

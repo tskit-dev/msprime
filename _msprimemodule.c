@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2014 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2014-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -63,6 +63,7 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    TreeSequence *tree_sequence;
     sparse_tree_t *sparse_tree;
 } SparseTree;
 
@@ -123,17 +124,6 @@ handle_input_error(int err)
     PyErr_SetString(MsprimeInputError, msp_strerror(err));
 }
 
-static PyObject *
-make_coalescence_record(coalescence_record_t *cr)
-{
-    int population_id =
-        cr->population_id == MSP_NULL_POPULATION_ID ? -1: cr->population_id;
-    return Py_BuildValue("ddI(II)di",
-            cr->left, cr->right, (unsigned int) cr->node,
-            (unsigned int) cr->children[0], (unsigned int) cr->children[1],
-            cr->time, population_id);
-}
-
 static int
 parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
 {
@@ -191,11 +181,17 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
         PyErr_SetString(PyExc_TypeError, "children must be a tuple.");
         goto out;
     }
-    if (PyTuple_Size(children) != 2) {
-        PyErr_SetString(PyExc_ValueError, "Binary records only supported");
+    if (PyTuple_Size(children) < 2) {
+        PyErr_SetString(PyExc_ValueError, "Must be >= 2 children");
         goto out;
     }
-    for (j = 0; j < 2; j++) {
+    cr->num_children = PyTuple_Size(children);
+    cr->children = PyMem_Malloc(cr->num_children * sizeof(uint32_t));
+    if (cr->children == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < cr->num_children; j++) {
         item = PyTuple_GetItem(children, j);
         if (!PyNumber_Check(item)) {
             PyErr_Format(PyExc_TypeError, "children[%d]' is not number",
@@ -236,6 +232,69 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
 out:
     return ret;
 }
+
+static int
+parse_samples(PyObject *py_samples, Py_ssize_t *sample_size,
+        sample_t **samples)
+{
+    int ret = -1;
+    long tmp_long;
+    Py_ssize_t j, n;
+    PyObject *sample, *value;
+    sample_t *ret_samples = NULL;
+
+    n = PyList_Size(py_samples);
+    ret_samples = PyMem_Malloc(n * sizeof(sample_t));
+    if (ret_samples == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < n; j++) {
+        sample = PyList_GetItem(py_samples, j);
+        if (!PyTuple_Check(sample)) {
+            PyErr_SetString(PyExc_TypeError, "not a tuple");
+            goto out;
+        }
+        if (PyTuple_Size(sample) != 2) {
+            PyErr_SetString(PyExc_ValueError,
+                    "sample must be (population,time) tuple");
+            goto out;
+        }
+        value = PyTuple_GetItem(sample, 0);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'population' is not number");
+            goto out;
+        }
+        tmp_long = PyLong_AsLong(value);
+        if (tmp_long < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
+            goto out;
+        }
+        ret_samples[j].population_id = (uint8_t) tmp_long;
+        value = PyTuple_GetItem(sample, 1);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'time' is not number");
+            goto out;
+        }
+        ret_samples[j].time = PyFloat_AsDouble(value);
+        if (ret_samples[j].time < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative times not valid");
+            goto out;
+        }
+    }
+    *samples = ret_samples;
+    *sample_size = n;
+    ret = 0;
+    ret_samples = NULL;
+out:
+    if (ret_samples != NULL) {
+        PyMem_Free(ret_samples);
+    }
+    return ret;
+}
+
+
+
 
 /*
  * Retrieves the PyObject* corresponding the specified key in the
@@ -311,6 +370,56 @@ out:
 }
 
 static PyObject *
+convert_string_list(char **list, size_t size)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_str = NULL;
+    size_t j;
+
+    l = PyList_New(size);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        py_str = Py_BuildValue("s", list[j]);
+        if (py_str == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_str);
+    }
+    ret = l;
+out:
+    return ret;
+}
+
+static PyObject *
+convert_children(uint32_t *children, uint32_t num_children)
+{
+    PyObject *ret = NULL;
+    PyObject *t;
+    PyObject *py_int;
+    uint32_t j;
+
+    t = PyTuple_New(num_children);
+    if (t == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_children; j++) {
+        py_int = Py_BuildValue("I", (unsigned int) children[j]);
+        if (py_int == NULL) {
+            Py_DECREF(children);
+            goto out;
+        }
+        PyTuple_SET_ITEM(t, j, py_int);
+    }
+    ret = t;
+out:
+    return ret;
+}
+
+static PyObject *
 convert_float_list(double *list, size_t size)
 {
     PyObject *ret = NULL;
@@ -361,6 +470,26 @@ out:
     return ret;
 }
 
+static PyObject *
+make_coalescence_record(coalescence_record_t *cr)
+{
+    int population_id =
+        cr->population_id == MSP_NULL_POPULATION_ID ? -1: cr->population_id;
+    PyObject *children = NULL;
+    PyObject *ret = NULL;
+
+    children = convert_children(cr->children, cr->num_children);
+    if (children == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("ddIOdi",
+            cr->left, cr->right, (unsigned int) cr->node, children,
+            cr->time, population_id);
+out:
+    Py_XDECREF(children);
+    return ret;
+}
+
 /*===================================================================
  * RandomGenerator
  *===================================================================
@@ -392,13 +521,13 @@ RandomGenerator_init(RandomGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     static char *kwlist[] = {"seed", NULL};
-    unsigned long seed = 0;
+    unsigned long long seed = 0;
 
     self->rng  = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "k", kwlist, &seed)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "K", kwlist, &seed)) {
         goto out;
     }
-    if (seed == 0 || seed >= (1UL<<32)) {
+    if (seed == 0 || seed >= (1ULL<<32)) {
         PyErr_Format(PyExc_ValueError,
             "seeds must be greater than 0 and less than 2^32");
         goto out;
@@ -600,11 +729,12 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     double time, initial_size, growth_rate, migration_rate, proportion;
     int err, population_id, matrix_index, source, destination;
     int is_population_parameter_change, is_migration_rate_change,
-        is_mass_migration;
+        is_mass_migration, is_bottleneck;
     PyObject *item, *value, *type;
     PyObject *population_parameter_change_s = NULL;
     PyObject *migration_rate_change_s = NULL;
     PyObject *mass_migration_s = NULL;
+    PyObject *bottleneck_s = NULL;
     PyObject *initial_size_s = NULL;
     PyObject *growth_rate_s = NULL;
 
@@ -624,6 +754,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     }
     mass_migration_s = Py_BuildValue("s", "mass_migration");
     if (mass_migration_s == NULL) {
+        goto out;
+    }
+    bottleneck_s = Py_BuildValue("s", "bottleneck");
+    if (bottleneck_s == NULL) {
         goto out;
     }
     initial_size_s = Py_BuildValue("s", "initial_size");
@@ -671,6 +805,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
         is_mass_migration = PyObject_RichCompareBool(type, mass_migration_s,
                 Py_EQ);
         if (is_mass_migration == -1) {
+            goto out;
+        }
+        is_bottleneck = PyObject_RichCompareBool(type, bottleneck_s, Py_EQ);
+        if (is_bottleneck == -1) {
             goto out;
         }
         if (is_population_parameter_change) {
@@ -728,6 +866,19 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             destination = (int) PyLong_AsLong(value);
             err = msp_add_mass_migration(self->sim, time, source, destination,
                     proportion);
+        } else if (is_bottleneck) {
+            value = get_dict_number(item, "proportion");
+            if (value == NULL) {
+                goto out;
+            }
+            proportion = PyFloat_AsDouble(value);
+            value = get_dict_number(item, "population_id");
+            if (value == NULL) {
+                goto out;
+            }
+            population_id = (int) PyLong_AsLong(value);
+            err = msp_add_bottleneck(self->sim, time, population_id,
+                    proportion);
         } else {
             PyErr_Format(PyExc_ValueError, "Unknown demographic event type");
             goto out;
@@ -742,68 +893,9 @@ out:
     Py_DECREF(population_parameter_change_s);
     Py_DECREF(migration_rate_change_s);
     Py_DECREF(mass_migration_s);
+    Py_DECREF(bottleneck_s);
     Py_DECREF(initial_size_s);
     Py_DECREF(growth_rate_s);
-    return ret;
-}
-
-static int
-Simulator_parse_samples(Simulator *self, PyObject *py_samples,
-        Py_ssize_t *sample_size, sample_t **samples)
-{
-    int ret = -1;
-    long tmp_long;
-    Py_ssize_t j, n;
-    PyObject *sample, *value;
-    sample_t *ret_samples = NULL;
-
-    n = PyList_Size(py_samples);
-    ret_samples = PyMem_Malloc(n * sizeof(sample_t));
-    if (ret_samples == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    for (j = 0; j < n; j++) {
-        sample = PyList_GetItem(py_samples, j);
-        if (!PyTuple_Check(sample)) {
-            PyErr_SetString(PyExc_TypeError, "not a tuple");
-            goto out;
-        }
-        if (PyTuple_Size(sample) != 2) {
-            PyErr_SetString(PyExc_ValueError,
-                    "sample must be (population,time) tuple");
-            goto out;
-        }
-        value = PyTuple_GetItem(sample, 0);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError, "'population' is not number");
-            goto out;
-        }
-        tmp_long = PyLong_AsLong(value);
-        if (tmp_long < 0) {
-            PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
-            goto out;
-        }
-        ret_samples[j].population_id = (uint8_t) tmp_long;
-        value = PyTuple_GetItem(sample, 1);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError, "'time' is not number");
-            goto out;
-        }
-        ret_samples[j].time = PyFloat_AsDouble(value);
-        if (ret_samples[j].time < 0) {
-            PyErr_SetString(PyExc_ValueError, "negative times not valid");
-            goto out;
-        }
-    }
-    *samples = ret_samples;
-    *sample_size = n;
-    ret = 0;
-    ret_samples = NULL;
-out:
-    if (ret_samples != NULL) {
-        PyMem_Free(ret_samples);
-    }
     return ret;
 }
 
@@ -863,7 +955,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (RandomGenerator_check_state(self->random_generator) != 0) {
         goto out;
     }
-    if (Simulator_parse_samples(self, py_samples, &sample_size, &samples) != 0) {
+    if (parse_samples(py_samples, &sample_size, &samples) != 0) {
         goto out;
     }
     self->sim = PyMem_Malloc(sizeof(msp_t));
@@ -1396,22 +1488,6 @@ out:
 }
 
 static PyObject *
-Simulator_get_configuration_json(Simulator *self)
-{
-    PyObject *ret = NULL;
-    char *json;
-
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    json = msp_get_configuration_json(self->sim);
-    assert(json != NULL);
-    ret = Py_BuildValue("s", json);
-out:
-    return ret;
-}
-
-static PyObject *
 Simulator_get_coalescence_records(Simulator *self)
 {
     PyObject *ret = NULL;
@@ -1426,13 +1502,7 @@ Simulator_get_coalescence_records(Simulator *self)
         goto out;
     }
     num_coalescence_records = msp_get_num_coalescence_records(self->sim);
-    coalescence_records = PyMem_Malloc(
-            num_coalescence_records * sizeof(coalescence_record_t));
-    if (coalescence_records == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = msp_get_coalescence_records(self->sim, coalescence_records);
+    err = msp_get_coalescence_records(self->sim, &coalescence_records);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1452,9 +1522,6 @@ Simulator_get_coalescence_records(Simulator *self)
     }
     ret = l;
 out:
-    if (coalescence_records != NULL) {
-        PyMem_Free(coalescence_records);
-    }
     return ret;
 }
 
@@ -1515,12 +1582,7 @@ Simulator_get_samples(Simulator *self)
         goto out;
     }
     sample_size = msp_get_sample_size(self->sim);
-    samples = PyMem_Malloc(sample_size * sizeof(sample_t));
-    if (samples == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    sim_ret = msp_get_samples(self->sim, samples);
+    sim_ret = msp_get_samples(self->sim, &samples);
     if (sim_ret != 0) {
         handle_library_error(sim_ret);
         goto out;
@@ -1542,9 +1604,6 @@ Simulator_get_samples(Simulator *self)
     l = NULL;
 out:
     Py_XDECREF(l);
-    if (samples != NULL) {
-        PyMem_Free(samples);
-    }
     return ret;
 }
 
@@ -1715,8 +1774,6 @@ static PyMethodDef Simulator_methods[] = {
             METH_NOARGS, "Returns the list of breakpoints." },
     {"get_migration_matrix", (PyCFunction) Simulator_get_migration_matrix,
             METH_NOARGS, "Returns the migration matrix." },
-    {"get_configuration_json", (PyCFunction) Simulator_get_configuration_json,
-            METH_NOARGS, "Returns the initial configuration as JSON." },
     {"get_coalescence_records", (PyCFunction) Simulator_get_coalescence_records,
             METH_NOARGS, "Returns the coalescence records." },
     {"get_population_configuration",
@@ -2195,23 +2252,18 @@ TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
     char *path;
     PyObject *ret = NULL;
     int zlib_compression = 0;
-    int skip_h5close = 0;
     int flags = 0;
-    static char *kwlist[] = {"path", "zlib_compression", "skip_h5close",
-        NULL};
+    static char *kwlist[] = {"path", "zlib_compression", NULL};
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ii", kwlist,
-                &path, &zlib_compression, &skip_h5close)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
+                &path, &zlib_compression)) {
         goto out;
     }
     if (zlib_compression) {
         flags = MSP_ZLIB_COMPRESSION;
-    }
-    if (skip_h5close) {
-        flags |= MSP_SKIP_H5CLOSE;
     }
     /* Silence the low-level error reporting HDF5 */
     if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
@@ -2234,17 +2286,20 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
     int err;
     PyObject *ret = NULL;
     PyObject *py_records = NULL;
+    PyObject *py_samples = NULL;
     PyObject *item;
     coalescence_record_t *records = NULL;
+    sample_t *samples = NULL;
+    Py_ssize_t sample_size;
     size_t num_records, j;
-    static char *kwlist[] = {"records", NULL};
+    static char *kwlist[] = {"records", "samples", NULL};
 
     if (self->tree_sequence != NULL) {
         PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-                &PyList_Type, &py_records)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
+                &PyList_Type, &py_records, &PyList_Type, &py_samples)) {
         goto out;
     }
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
@@ -2259,6 +2314,7 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
+    memset(records, 0, num_records * sizeof(coalescence_record_t));
     for (j = 0; j < num_records; j++) {
         item = PyList_GetItem(py_records, j);
         if (parse_coalescence_record(item, &records[j]) != 0) {
@@ -2271,13 +2327,37 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
+    if (py_samples != NULL) {
+        if (parse_samples(py_samples, &sample_size, &samples) != 0) {
+            goto out;
+        }
+        err = tree_sequence_set_samples(
+                self->tree_sequence, sample_size, samples);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
     ret = Py_BuildValue("");
 out:
     if (records != NULL) {
-        free(records);
+        for (j = 0; j < num_records; j++) {
+            if (records[j].children != NULL) {
+                PyMem_Free(records[j].children);
+            }
+        }
+        PyMem_Free(records);
+    }
+    if (samples != NULL) {
+        PyMem_Free(samples);
+    }
+    if (ret == NULL && self->tree_sequence != NULL) {
+        /* Ensure that the state of the tree sequence is consistent */
+        tree_sequence_free(self->tree_sequence);
+        PyMem_Free(self->tree_sequence);
+        self->tree_sequence = NULL;
     }
     return ret;
-
 }
 
 static PyObject *
@@ -2286,16 +2366,15 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     int err;
     char *path;
     int flags = 0;
-    int skip_h5close = 0;
     PyObject *ret = NULL;
-    static char *kwlist[] = {"path", "skip_h5close", NULL};
+    static char *kwlist[] = {"path", NULL};
 
     if (self->tree_sequence != NULL) {
         PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
-                &path, &skip_h5close)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
+                &path)) {
         goto out;
     }
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
@@ -2304,9 +2383,6 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
-    if (skip_h5close) {
-        flags |= MSP_SKIP_H5CLOSE;
-    }
     /* Silence the low-level error reporting HDF5 */
     if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
         PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
@@ -2362,7 +2438,7 @@ TreeSequence_generate_mutations(TreeSequence *self,
         goto out;
     }
     err = tree_sequence_set_mutations(self->tree_sequence, mutgen->num_mutations,
-            mutgen->mutations, mutgen->parameters, mutgen->environment);
+            mutgen->mutations);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2387,9 +2463,6 @@ TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"mutations", NULL};
     size_t num_mutations = 0;
     mutation_t *mutations = NULL;
-    /* TODO fix the provenance information for arbitrary mutations. */
-    char *parameters = "{}";
-    char *environment = "{}";
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
@@ -2424,10 +2497,8 @@ TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
         mutations[j].position = PyFloat_AsDouble(pos);
         mutations[j].node = (uint32_t) PyLong_AsLong(node);
     }
-    /* TODO this interface for setting the provenance information is very
-     * brittle and needs to be fixed. */
     err = tree_sequence_set_mutations(self->tree_sequence, num_mutations,
-            mutations, parameters, environment);
+            mutations);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2441,13 +2512,63 @@ out:
 }
 
 static PyObject *
+TreeSequence_add_provenance_string(TreeSequence *self, PyObject *args)
+{
+    int err;
+    char *s;
+    PyObject *ret = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "s", &s)) {
+        goto out;
+    }
+    if (strlen(s) == 0) {
+        PyErr_SetString(PyExc_ValueError,
+                "Empty string is not permitted for provenance.");
+        goto out;
+    }
+    err = tree_sequence_add_provenance_string(self->tree_sequence, s);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_provenance_strings(TreeSequence *self)
+{
+    int err;
+    PyObject *ret = NULL;
+    size_t num_provenance_strings;
+    char **provenance_strings;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    err = tree_sequence_get_provenance_strings(self->tree_sequence,
+            &num_provenance_strings, &provenance_strings);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_string_list(provenance_strings, num_provenance_strings);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_record(TreeSequence *self, PyObject *args)
 {
     int err;
     PyObject *ret = NULL;
     int order = MSP_ORDER_TIME;
     Py_ssize_t record_index, num_records;
-    coalescence_record_t cr;
+    coalescence_record_t *cr;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
@@ -2467,7 +2588,7 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    ret = make_coalescence_record(&cr);
+    ret = make_coalescence_record(cr);
 out:
     return ret;
 }
@@ -2562,14 +2683,13 @@ out:
 }
 
 static PyObject *
-TreeSequence_get_population(TreeSequence *self, PyObject *args)
+TreeSequence_get_sample(TreeSequence *self, PyObject *args)
 {
     PyObject *ret = NULL;
     unsigned int node;
     sample_t sample;
     int population, err;
 
-    /* TODO deprecate this in favour of get_sample returning a dict */
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
@@ -2585,7 +2705,7 @@ TreeSequence_get_population(TreeSequence *self, PyObject *args)
     if (sample.population_id == MSP_NULL_POPULATION_ID) {
         population = -1;
     }
-    ret = Py_BuildValue("i", population);
+    ret = Py_BuildValue("id", population, sample.time);
 out:
     return ret;
 }
@@ -2650,7 +2770,6 @@ out:
     return ret;
 }
 
-
 static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
 {
@@ -2665,37 +2784,6 @@ TreeSequence_get_num_mutations(TreeSequence  *self)
 out:
     return ret;
 }
-
-static PyObject *
-TreeSequence_get_simulation_parameters(TreeSequence  *self)
-{
-    PyObject *ret = NULL;
-    char *str = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    str = tree_sequence_get_simulation_parameters(self->tree_sequence);
-    ret = Py_BuildValue("s", str);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_mutation_parameters(TreeSequence  *self)
-{
-    PyObject *ret = NULL;
-    char *str = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    str = tree_sequence_get_mutation_parameters(self->tree_sequence);
-    ret = Py_BuildValue("s", str);
-out:
-    return ret;
-}
-
 
 static PyMemberDef TreeSequence_members[] = {
     {NULL}  /* Sentinel */
@@ -2719,6 +2807,10 @@ static PyMethodDef TreeSequence_methods[] = {
     {"set_mutations", (PyCFunction) TreeSequence_set_mutations,
         METH_VARARGS|METH_KEYWORDS,
         "Sets the mutations to the specified list of tuples."},
+    {"add_provenance_string", (PyCFunction) TreeSequence_add_provenance_string,
+        METH_VARARGS, "Appends a provenance string to the list."},
+    {"get_provenance_strings", (PyCFunction) TreeSequence_get_provenance_strings,
+        METH_NOARGS, "Returns the list of provenance strings."},
     {"get_mutations", (PyCFunction) TreeSequence_get_mutations,
         METH_NOARGS, "Returns the list of mutations"},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
@@ -2733,17 +2825,11 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
         "Returns the sample size" },
-    {"get_population", (PyCFunction) TreeSequence_get_population, METH_VARARGS,
-        "Returns the population associated with the specified node." },
+    {"get_sample", (PyCFunction) TreeSequence_get_sample, METH_VARARGS,
+        "Returns a dictionary describing the specified sample." },
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
-    {"get_simulation_parameters",
-        (PyCFunction) TreeSequence_get_simulation_parameters, METH_NOARGS,
-        "Returns the simulation parameters encoded as JSON." },
-    {"get_mutation_parameters",
-        (PyCFunction) TreeSequence_get_mutation_parameters, METH_NOARGS,
-        "Returns the mutation parameters encoded as JSON." },
     {NULL}  /* Sentinel */
 };
 
@@ -2821,6 +2907,7 @@ SparseTree_dealloc(SparseTree* self)
         PyMem_Free(self->sparse_tree);
         self->sparse_tree = NULL;
     }
+    Py_XDECREF(self->tree_sequence);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -2843,6 +2930,8 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
             &py_tracked_leaves)) {
         goto out;
     }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
     if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
         goto out;
     }
@@ -3056,8 +3145,9 @@ static PyObject *
 SparseTree_get_children(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    uint32_t children[2];
+    uint32_t *children, num_children;
     unsigned int node;
+    int err;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
@@ -3068,9 +3158,17 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
     if (SparseTree_check_bounds(self, node)) {
         goto out;
     }
-    children[0] = self->sparse_tree->children[2 * node];
-    children[1] = self->sparse_tree->children[2 * node + 1];
-    ret = Py_BuildValue("ii", (int) children[0], (int) children[1]);
+    err = sparse_tree_get_children(self->sparse_tree,
+            (uint32_t) node, &num_children, &children);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (num_children == 0) {
+        ret = Py_BuildValue("()");
+    } else {
+        ret = convert_children(children, num_children);
+    }
 out:
     return ret;
 }
@@ -3343,6 +3441,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
     PyObject *out_list = NULL;
     PyObject *in_list = NULL;
     PyObject *value = NULL;
+    PyObject *children = NULL;
     int err;
     double length;
     size_t list_size, j;
@@ -3372,9 +3471,13 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         record = records_out;
         j = 0;
         while (record != NULL) {
-            value = Py_BuildValue("I(II)d", (unsigned int) record->node,
-                    (unsigned int) record->children[0],
-                    (unsigned int) record->children[1], record->time);
+            children = convert_children(record->children, record->num_children);
+            if (children == NULL) {
+                goto out;
+            }
+            value = Py_BuildValue("IOd", (unsigned int) record->node,
+                    children, record->time);
+            Py_DECREF(children);
             if (value == NULL) {
                 goto out;
             }
@@ -3396,9 +3499,13 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         record = records_in;
         j = 0;
         while (record != NULL) {
-            value = Py_BuildValue("I(II)d", (unsigned int) record->node,
-                    (unsigned int) record->children[0],
-                    (unsigned int) record->children[1], record->time);
+            children = convert_children(record->children, record->num_children);
+            if (children == NULL) {
+                goto out;
+            }
+            value = Py_BuildValue("IOd", (unsigned int) record->node,
+                    children, record->time);
+            Py_DECREF(children);
             if (value == NULL) {
                 goto out;
             }
@@ -4334,6 +4441,23 @@ out:
     return ret;
 }
 
+
+static PyObject *
+msprime_h5close(PyObject *self)
+{
+    herr_t status;
+    PyObject *ret = NULL;
+
+    status = H5close();
+    if (status != 0) {
+        PyErr_SetString(PyExc_SystemError, "Error calling H5close");
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
 static PyObject *
 msprime_get_library_version_str(PyObject *self)
 {
@@ -4346,6 +4470,8 @@ static PyMethodDef msprime_methods[] = {
             "Returns the version of GSL we are linking against." },
     {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,
             "Returns the version of HDF5 we are linking against." },
+    {"h5close", (PyCFunction) msprime_h5close, METH_NOARGS,
+            "Calls H5close()" },
     {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,
             METH_NOARGS, "Returns the version of the msp C library." },
     {NULL}        /* Sentinel */
