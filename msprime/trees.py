@@ -538,11 +538,17 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
-def _replicate_generator(sim, rng, mutation_rate, num_replicates):
+def _replicate_generator(
+        sim, rng, mutation_rate, num_replicates, provenance_dict):
     """
     Generator function for the many-replicates case of the simulate
     function.
     """
+    # TODO like in the single replicate case, we need to encode the
+    # simulation parameters so that particular simulations can be
+    # replicated. This will also involve encoding the state of the
+    # random generator.
+    provenance = json.dumps(provenance_dict)
     # Should use range here, but Python 2 makes this awkward...
     j = 0
     while j < num_replicates:
@@ -550,6 +556,7 @@ def _replicate_generator(sim, rng, mutation_rate, num_replicates):
         sim.run()
         tree_sequence = sim.get_tree_sequence()
         tree_sequence.generate_mutations(mutation_rate, rng)
+        tree_sequence.add_provenance(provenance)
         yield tree_sequence
         sim.reset()
 
@@ -728,14 +735,19 @@ def simulate(
         migration_matrix=migration_matrix,
         demographic_events=demographic_events,
         samples=samples)
+    # The provenance API is very tentative, and only included now as a
+    # pre-alpha feature.
+    parameters = {"TODO": "encode simulation parameters"}
+    provenance = get_provenance_dict("simulate", parameters)
     mu = 0 if mutation_rate is None else mutation_rate
     if num_replicates is None:
         sim.run()
         tree_sequence = sim.get_tree_sequence()
         tree_sequence.generate_mutations(mu, rng)
+        tree_sequence.add_provenance(json.dumps(provenance))
         return tree_sequence
     else:
-        return _replicate_generator(sim, rng, mu, num_replicates)
+        return _replicate_generator(sim, rng, mu, num_replicates, provenance)
 
 
 def load(path):
@@ -1004,11 +1016,6 @@ class TreeSimulator(object):
     def get_configuration(self):
         return json.loads(self._ll_sim.get_configuration_json())
 
-    def _get_provenance_json(self):
-        # TODO set the parameters for the simulation!!
-        return json.dumps(
-            get_provenance_dict("generate_trees", parameters={}))
-
     def set_effective_population_size(self, effective_population_size):
         if effective_population_size <= 0:
             raise ValueError("Cannot set Ne to a non-positive value.")
@@ -1120,8 +1127,6 @@ class TreeSimulator(object):
         ll_recomb_map = self._recombination_map.get_ll_recombination_map()
         Ne = self.get_effective_population_size()
         ll_tree_sequence.create(self._ll_sim, ll_recomb_map, Ne)
-        ll_tree_sequence.add_provenance_string(
-                self._get_provenance_json())
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
@@ -1236,6 +1241,9 @@ class TreeSequence(object):
 
     def get_provenance(self):
         return self._ll_tree_sequence.get_provenance_strings()
+
+    def add_provenance(self, provenance):
+        self._ll_tree_sequence.add_provenance_string(provenance)
 
     def get_mutations(self):
         # TODO should we provide this???
@@ -1491,10 +1499,6 @@ class TreeSequence(object):
         # RandomGenerator as well.
         self._ll_tree_sequence.generate_mutations(
             mutation_rate, random_generator)
-        provenance = json.dumps(get_provenance_dict(
-            "generate_mutations",
-            parameters={"mutation_rate": mutation_rate}))
-        self._ll_tree_sequence.add_provenance_string(provenance)
 
     def set_mutations(self, mutations):
         """
