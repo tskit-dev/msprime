@@ -63,4 +63,9 @@
 
 #define MSP_ERR_use_for_next_err_code1                              -5
 #define MSP_ERR_use_for_next_err_code2                              -15
+
+#define MSP_ERR_JOE_testing                                         -40 // Joe's testing errors starts from -40
+#define MSP_ERR_BAD_POPULATION_CONFIGURATION_INITIAL_SIZE           -191
+#define MSP_ERR_BAD_POPULATION_CONFIGURATION_GROWTH_RATE            -192
+#define MSP_ERR_BAD_POPULATION_CONFIGURATION_MULTI_MERGR_PARA       -193
 #endif /*__ERR_H__*/

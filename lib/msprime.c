@@ -25,6 +25,7 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics_int.h>
+#include <gsl/gsl_sf.h>
 
 #include <hdf5.h>
 
@@ -90,6 +91,12 @@ msp_strerror(int err)
         ret = "Operation cannot be performed in current configuration";
     } else if (err == MSP_ERR_BAD_POPULATION_CONFIGURATION) {
         ret = "Bad population configuration provided.";
+    } else if (err == MSP_ERR_BAD_POPULATION_CONFIGURATION_INITIAL_SIZE) {
+        ret = "Bad population configuration (initial_size) provided.";
+    } else if (err == MSP_ERR_BAD_POPULATION_CONFIGURATION_GROWTH_RATE) {
+        ret = "Bad population configuration (growth_rate) provided.";
+    } else if (err == MSP_ERR_BAD_POPULATION_CONFIGURATION_MULTI_MERGR_PARA) {
+        ret = "Bad population configuration (multiple_merger_para) provided.";
     } else if (err == MSP_ERR_BAD_POPULATION_ID) {
         ret = "Bad population id provided.";
     } else if (err == MSP_ERR_BAD_MIGRATION_MATRIX) {
@@ -272,6 +279,12 @@ out:
     return ret;
 }
 
+/*! \brief Initialize the poulation configuration to default values
+ * \param growth_rate = 0.0
+ * \param initial_size = 1.0
+ * \param multiple_merger_para = 2.0
+ * \param start_time = 0.0
+ */
 int
 msp_set_num_populations(msp_t *self, size_t num_populations)
 {
@@ -321,6 +334,8 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
         /* Set the default sizes and growth rates. */
         self->initial_populations[j].growth_rate = 0.0;
         self->initial_populations[j].initial_size = 1.0;
+        /* Multiple merger para is set to be Kingman coalescent by default*/
+        self->initial_populations[j].multiple_merger_para = 2.0;
         self->initial_populations[j].start_time = 0.0;
     }
 out:
@@ -342,9 +357,10 @@ out:
     return ret;
 }
 
+/*! \brief Set the poulation configuration from given parameters*/
 int
 msp_set_population_configuration(msp_t *self, int population_id,
-        double initial_size, double growth_rate)
+        double initial_size, double growth_rate, double multiple_merger_para)
 {
     int ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
 
@@ -352,8 +368,18 @@ msp_set_population_configuration(msp_t *self, int population_id,
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
+    if ( initial_size < 0.0 ){
+        ret = MSP_ERR_BAD_POPULATION_CONFIGURATION_INITIAL_SIZE;
+        goto out;
+    }
+    if ( multiple_merger_para < 0.0 || multiple_merger_para > 2.0 ){
+        ret = MSP_ERR_BAD_POPULATION_CONFIGURATION_MULTI_MERGR_PARA;
+        goto out;
+    }
     self->initial_populations[population_id].initial_size = initial_size;
     self->initial_populations[population_id].growth_rate = growth_rate;
+    self->initial_populations[population_id].multiple_merger_para =
+        multiple_merger_para;
     ret = 0;
 out:
     return ret;
@@ -461,8 +487,8 @@ out:
     return ret;
 }
 
-/* Top level allocators and initialisation */
 
+/*! \brief Top level allocators and initialisation */
 int
 msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng)
 {
@@ -600,8 +626,8 @@ out:
     return ret;
 }
 
-/*
- * Returns true if the simulation has completed.
+/*! \brief Check if the simulation has completed.
+ * \return true if it is completed
  */
 int
 msp_is_completed(msp_t *self)
@@ -1023,6 +1049,8 @@ msp_print_state(msp_t *self, FILE *out)
         fprintf(out, "\tstart_time = %f\n", self->populations[j].start_time);
         fprintf(out, "\tinitial_size = %f\n", self->populations[j].initial_size);
         fprintf(out, "\tgrowth_rate = %f\n", self->populations[j].growth_rate);
+        fprintf(out, "\tmultiple_merger_para = %f\n",
+                self->populations[j].multiple_merger_para);
     }
     fprintf(out, "Time = %f\n", self->time);
     for (j = 0; j < msp_get_num_ancestors(self); j++) {
@@ -1747,6 +1775,66 @@ out:
     return ret;
 }
 
+
+static int WARN_UNUSED
+msp_multiple_merger_event(msp_t *self, uint32_t population_id, uint32_t num_lineages)
+{
+    int err;
+    int ret = 0;
+    avl_node_t *node, *next, *q_node;
+    avl_tree_t *pop, Q;
+    segment_t *u;
+    avl_node_t **all_lineages = NULL;
+    avl_node_t **merging_lineages = NULL;
+    uint32_t j;
+
+    pop = &self->populations[population_id].ancestors;
+    all_lineages = malloc(avl_count(pop) * sizeof(avl_node_t *));
+    merging_lineages = malloc(num_lineages * sizeof(avl_node_t *));
+    if (all_lineages == NULL || merging_lineages == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    j = 0;
+    for (node = pop->head; node != NULL; node = node->next) {
+        all_lineages[j] = node;
+        j++;
+    }
+    err = gsl_ran_choose(self->rng, merging_lineages, num_lineages,
+            all_lineages, avl_count(pop), sizeof(avl_node_t *));
+    if (err != 0) {
+        ret = MSP_ERR_GENERIC;
+        goto out;
+    }
+    avl_init_tree(&Q, cmp_segment_queue, NULL);
+    for (j = 0; j < num_lineages; j++) {
+        node = merging_lineages[j];
+        u = (segment_t *) node->item;
+        avl_unlink_node(pop, node);
+        msp_free_avl_node(self, node);
+        q_node = msp_alloc_avl_node(self);
+        if (q_node == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        avl_init_node(q_node, u);
+        q_node = avl_insert_node(&Q, q_node);
+        assert(q_node != NULL);
+    }
+    node = next;
+
+    ret = msp_merge_ancestors(self, &Q, (uint32_t) population_id);
+
+out:
+    if (all_lineages != NULL) {
+        free(all_lineages);
+    }
+    if (merging_lineages != NULL) {
+        free(merging_lineages);
+    }
+    return ret;
+}
+
 static int WARN_UNUSED
 msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
 {
@@ -1852,6 +1940,7 @@ msp_reset(msp_t *self)
         initial_pop = &self->initial_populations[population_id];
         pop->growth_rate = initial_pop->growth_rate;
         pop->initial_size = initial_pop->initial_size;
+        pop->multiple_merger_para = initial_pop->multiple_merger_para;
         pop->start_time = 0.0;
     }
     /* Set up the sample */
@@ -1919,6 +2008,79 @@ msp_initialise(msp_t *self)
         goto out;
     }
 out:
+    return ret;
+}
+
+
+double
+msp_compute_lambda_alpha(unsigned int b, unsigned int k, double para)
+{
+    assert(b >= k);
+    assert(k > 1);
+    assert(para < 2);
+    assert(para > 1);
+
+    double ret = gsl_sf_exp(gsl_sf_lnchoose (b, k) +
+                     gsl_sf_lnbeta((double)k-para, (double)(b-k)+para) -
+                     gsl_sf_lnbeta(2.0-para, para));
+    return ret;
+}
+
+
+double
+msp_compute_lambda_psi (unsigned int b, unsigned int k, double para)
+{
+    assert (b >= k);
+    assert (k > 1);
+
+    //.2 is psi lambda_bk=\binom{b}{k}\psi^{k-2} (1-\psi)^{b-k}
+    if (para == 1.0 && b == k){
+        return 1.0;
+    } else if (para == 1.0 && b != k){
+        return 0.0;
+    } else if (para == 0.0 && k == 2){
+        return gsl_sf_choose(b, k);
+    } else if (para == 0.0 && k != 2){
+        return 0.0;
+    } else {
+        return gsl_sf_exp(gsl_sf_lnchoose(b, k) +
+                   (double)(k-2)*log(para) +
+                   (double)(b-k)*log(1.0-para));
+    }
+}
+
+
+static double
+msp_get_multiple_merger_waiting_time(msp_t *self, uint32_t population_id, unsigned int k)
+{
+    double ret = DBL_MAX;
+    population_t *pop = &self->populations[population_id];
+    unsigned int n = avl_count(&pop->ancestors);
+    double alpha = pop->growth_rate;
+    double t = self->time;
+    double u, dt, z;
+    double mm_rate;
+    double mm_para = pop->multiple_merger_para;
+
+    if (mm_para > 1.0){
+        mm_rate = msp_compute_lambda_alpha(n, k, mm_para);
+    } else {
+        mm_rate = msp_compute_lambda_psi(n, k, mm_para);
+    }
+
+    if (mm_rate > 0.0) {
+        u = gsl_ran_exponential(self->rng, 1.0/mm_rate)/2.0;
+        if (alpha == 0.0) {
+            ret = pop->initial_size * u;
+        } else {
+            dt = t - pop->start_time;
+            z = 1 + alpha * pop->initial_size * exp(-alpha * dt) * u;
+            /* if z is <= 0 no coancestry can occur */
+            if (z > 0) {
+                ret = log(z) / alpha;
+            }
+        }
+    }
     return ret;
 }
 
@@ -2002,17 +2164,21 @@ out:
     return ret;
 }
 
+
 int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait,
-           sampling_event_time, demographic_event_time;
+    double lambda, t_temp, t_wait, ca_t_wait, mm_t_wait,
+           re_t_wait, mig_t_wait, sampling_event_time,
+           demographic_event_time;
     int64_t num_links;
     uint32_t j, k, n;
-    uint32_t ca_pop_id, mig_source_pop, mig_dest_pop;
+    uint32_t ca_pop_id, mm_pop_id, mm_num_lineages,
+             mig_source_pop, mig_dest_pop;
     unsigned long events = 0;
     sampling_event_t *se;
+    double multiple_merger_para;
 
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_SIMULATING;
@@ -2036,13 +2202,31 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
         }
         /* Common ancestors */
+        /* now need to also consider the case of Lambda coalescent common ancestors */
         ca_t_wait = DBL_MAX;
         ca_pop_id = 0;
+        mm_t_wait = DBL_MAX;
+        mm_pop_id = 0;
+        mm_num_lineages = 0;
+
         for (j = 0; j < self->num_populations; j++) {
-            t_temp = msp_get_common_ancestor_waiting_time(self, j);
-            if (t_temp < ca_t_wait) {
-                ca_t_wait = t_temp;
-                ca_pop_id = j;
+            multiple_merger_para = (&self->populations[j])->multiple_merger_para;
+            if ( multiple_merger_para == 2.0 ){
+                t_temp = msp_get_common_ancestor_waiting_time(self, j);
+                if (t_temp < ca_t_wait) {
+                    ca_t_wait = t_temp;
+                    ca_pop_id = j;
+                }
+            } else {
+                n = avl_count(&self->populations[j].ancestors);
+                for (k = 2; k <= n; k++) {
+                    t_temp = msp_get_multiple_merger_waiting_time(self, j, k);
+                    if (t_temp < mm_t_wait) {
+                        mm_t_wait = t_temp;
+                        mm_pop_id = j;
+                        mm_num_lineages = k;
+                    }
+                }
             }
         }
         /* Migration */
@@ -2069,7 +2253,11 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
                 }
             }
         }
-        t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
+        t_wait = GSL_MIN(GSL_MIN(GSL_MIN(
+                         mm_t_wait,
+                         ca_t_wait),
+                         re_t_wait),
+                         mig_t_wait);
         if (self->next_demographic_event == NULL
                 && self->next_sampling_event == self->num_sampling_events
                 && t_wait == DBL_MAX) {
@@ -2104,6 +2292,8 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             self->time += t_wait;
             if (re_t_wait == t_wait) {
                 ret = msp_recombination_event(self);
+            } else if (mm_t_wait == t_wait) {
+                ret = msp_multiple_merger_event(self, mm_pop_id, mm_num_lineages);
             } else if (ca_t_wait == t_wait) {
                 ret = msp_common_ancestor_event(self, ca_pop_id);
             } else {
@@ -2399,11 +2589,13 @@ msp_print_population_parameters_change(msp_t *self,
         demographic_event_t *event, FILE *out)
 {
     fprintf(out,
-            "%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
+            "%f\tpopulation_parameters_change: %d -> initial_size=%f, "
+            "growth_rate=%f, multiple_merger_para=%f\n",
             event->time,
             event->params.population_parameters_change.population_id,
             event->params.population_parameters_change.initial_size,
-            event->params.population_parameters_change.growth_rate);
+            event->params.population_parameters_change.growth_rate,
+            event->params.population_parameters_change.multiple_merger_para);
 }
 
 int
@@ -2697,5 +2889,4 @@ msp_add_bottleneck(msp_t *self, double time, int population_id,
 out:
     return ret;
 }
-
 

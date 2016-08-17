@@ -1,0 +1,6 @@
+# Temp files
+*o
+
+# Temp files for testing coverage locally
+*gcda
+*gcno
