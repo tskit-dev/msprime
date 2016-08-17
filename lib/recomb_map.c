@@ -26,18 +26,18 @@
 #include "msprime.h"
 
 void
-recomb_map_print_state(recomb_map_t *self)
+recomb_map_print_state(recomb_map_t *self, FILE *out)
 {
     size_t j;
 
-    printf("recombination_map:: size = %d\n", (int) self->size);
-    printf("\tnum_loci = %d\n", recomb_map_get_num_loci(self));
-    printf("\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
-    printf("\tper_locus_rate = %f\n",
+    fprintf(out, "recombination_map:: size = %d\n", (int) self->size);
+    fprintf(out, "\tnum_loci = %d\n", recomb_map_get_num_loci(self));
+    fprintf(out, "\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
+    fprintf(out, "\tper_locus_rate = %f\n",
             recomb_map_get_per_locus_recombination_rate(self));
-    printf("\tindex\tlocation\trate\n");
+    fprintf(out, "\tindex\tlocation\trate\n");
     for (j = 0; j < self->size; j++) {
-        printf("\t%d\t%f\t%f\n", (int) j, self->positions[j], self->rates[j]);
+        fprintf(out, "\t%d\t%f\t%f\n", (int) j, self->positions[j], self->rates[j]);
     }
 }
 

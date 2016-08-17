@@ -840,7 +840,7 @@ run_simulate(char *conf_file)
         }
     }
 
-    recomb_map_print_state(recomb_map);
+    recomb_map_print_state(recomb_map, stdout);
     /* Create the tree_sequence from the state of the simulator.
      * We want to use coalescent time here, so use an Ne of 1/4
      * to cancel scaling factor. */
