@@ -198,8 +198,7 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
         if (x > 0) {
             s = 0;
             k = 0;
-            while (s < x) {
-                assert(k < self->size - 1);
+            while (s < x && k < self->size - 1) {
                 s += (p[k + 1] - p[k]) * r[k];
                 k++;
             }
@@ -207,7 +206,6 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
             ret = p[k] - excess;
         }
     }
-    assert(ret >= 0 && ret <= self->sequence_length);
     return ret;
 }
 
@@ -253,8 +251,8 @@ recomb_map_genetic_to_phys_bulk(recomb_map_t *self, double *values, size_t n)
                 goto out;
             }
             x = (values[j] / self->num_loci) * self->total_recombination_rate;
-            while (s < x) {
-                assert(k < self->size - 1);
+            while (s < x && k < self->size - 1) {
+                /* assert(k < self->size - 1); */
                 s += (p[k + 1] - p[k]) * r[k];
                 k++;
             }

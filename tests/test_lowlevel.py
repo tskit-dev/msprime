@@ -2731,7 +2731,7 @@ class TestRecombinationMap(LowLevelTestCase):
         self.assertEqual(rm.get_positions(), positions)
         self.assertEqual(rm.get_rates(), rates)
         self.assertEqual(rm.genetic_to_physical(0), 0)
-        self.assertEqual(rm.genetic_to_physical(num_loci), 1)
+        self.assertAlmostEqual(rm.genetic_to_physical(num_loci), 1)
         total_rate = rm.get_total_recombination_rate()
         self.assertGreater(total_rate, 0)
         self.assertEqual(
