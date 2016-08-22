@@ -50,7 +50,11 @@ recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
     size_t j;
 
     memset(self, 0, sizeof(recomb_map_t));
-    if (size < 2) {
+    if (size < 2 || num_loci == 0) {
+        goto out;
+    }
+    /* Check the framing positions */
+    if (positions[0] != 0.0 || positions[size - 1] != sequence_length) {
         goto out;
     }
     self->positions = malloc(size * sizeof(double));
@@ -63,13 +67,6 @@ recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
     self->size = size;
     self->num_loci = num_loci;
     self->sequence_length = sequence_length;
-    /* Check the framing positions */
-    if (positions[0] != 0.0 || positions[size - 1] != sequence_length) {
-        goto out;
-    }
-    if (num_loci == 0) {
-        goto out;
-    }
     for (j = 0; j < size; j++) {
         if (rates[j] < 0 || positions[j] < 0) {
             goto out;
@@ -252,7 +249,6 @@ recomb_map_genetic_to_phys_bulk(recomb_map_t *self, double *values, size_t n)
             }
             x = (values[j] / self->num_loci) * self->total_recombination_rate;
             while (s < x && k < self->size - 1) {
-                /* assert(k < self->size - 1); */
                 s += (p[k + 1] - p[k]) * r[k];
                 k++;
             }
