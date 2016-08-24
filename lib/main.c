@@ -575,8 +575,8 @@ static void
 print_ld_matrix(tree_sequence_t *ts)
 {
     int ret;
-    uint32_t j;
-    mutation_t m1;
+    uint32_t j, k;
+    mutation_t m1, m2;
     sparse_tree_t t1, t2;
     sparse_tree_iterator_t iter1, iter2;
 
@@ -584,7 +584,7 @@ print_ld_matrix(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_alloc(&t2, ts, MSP_COUNT_LEAVES);
+    ret = sparse_tree_alloc(&t2, ts, 0);
     if (ret != 0) {
         goto out;
     }
@@ -592,19 +592,39 @@ print_ld_matrix(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
+    ret = sparse_tree_iterator_alloc(&iter2, &t2);
+    if (ret != 0) {
+        goto out;
+    }
     while ((ret = sparse_tree_iterator_next(&iter1)) == 1) {
+        /* printf("ITER1\n"); */
+        /* sparse_tree_iterator_print_state(&iter1, stdout); */
         for (j = 0; j < t1.num_mutations; j++) {
             m1 = t1.mutations[j];
             printf("m1 = (%f, %d)\n", m1.position, m1.node);
-            ret = sparse_tree_iterator_copy(&iter1, &iter2);
-            /* if (ret != 0) { */
-            /*     goto out; */
-            /* } */
-
+            ret = sparse_tree_iterator_copy(&iter2, &iter1);
+            if (ret != 0) {
+                goto out;
+            }
+            while ((ret = sparse_tree_iterator_next(&iter2)) == 1) {
+                for (k = 0; k < t2.num_mutations; k++) {
+                    m2 = t2.mutations[k];
+                    printf("\tm2 = (%f, %d)\n", m2.position, m2.node);
+                }
+            }
+            if (ret != 0) {
+                goto out;
+            }
+            /* printf("ITER2\n"); */
+            /* sparse_tree_iterator_print_state(&iter2, stdout); */
 
         }
         printf("Outer: tree: (%f-%f)\n", t1.right, t1.left);
     }
+    sparse_tree_iterator_free(&iter1);
+    sparse_tree_iterator_free(&iter2);
+    sparse_tree_free(&t1);
+    sparse_tree_free(&t2);
 out:
     if (ret != 0) {
         fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));

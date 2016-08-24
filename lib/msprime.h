@@ -43,12 +43,9 @@
 #define MSP_ORDER_RIGHT 2
 
 #define MSP_COUNT_LEAVES 1
+#define MSP_LEAF_LISTS   2
 
 #define MAX_BRANCH_LENGTH_STRING 24
-
-/* printf pattern to print out double values losslessly;
- * TODO put this into a private header file somewhere so it's not exported */
-#define MSP_LOSSLESS_DBL "%.17g"
 
 /* The root node indicator */
 #define MSP_NULL_NODE UINT32_MAX
@@ -301,6 +298,7 @@ typedef struct {
      * from a specific subset. */
     uint32_t *num_leaves;
     uint32_t *num_tracked_leaves;
+    /* These are for the optional leaf list tracking. */
     leaf_list_node_t **leaf_list_head;
     leaf_list_node_t **leaf_list_tail;
     leaf_list_node_t *leaf_list_node_mem;
@@ -464,6 +462,7 @@ int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
+size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
@@ -475,9 +474,6 @@ int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u,
         sample_t *sample);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     uint32_t *samples, uint32_t num_samples, double *pi);
-int tree_sequence_alloc_sparse_tree(tree_sequence_t *self,
-        sparse_tree_t *tree, uint32_t *tracked_leaves,
-        uint32_t num_tracked_leaves, int flags);
 int tree_sequence_set_samples(tree_sequence_t *self, size_t sample_size,
         sample_t *samples);
 int tree_sequence_set_mutations(tree_sequence_t *self,
@@ -497,6 +493,8 @@ void tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out);
 int sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, 
         int flags);
 int sparse_tree_free(sparse_tree_t *self);
+int sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source);
+int sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other);
 int sparse_tree_set_tracked_leaves(sparse_tree_t *self, 
         uint32_t num_tracked_leaves, uint32_t *tracked_leaves);
 int sparse_tree_clear(sparse_tree_t *self);
@@ -515,6 +513,7 @@ int sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
         leaf_list_node_t **head, leaf_list_node_t **tail);
 int sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
         mutation_t **mutations);
+void sparse_tree_print_state(sparse_tree_t *self, FILE *out);
 
 int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
         sparse_tree_t *tree);

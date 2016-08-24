@@ -131,7 +131,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->tree_sequence = tree_sequence;
 
-    ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_COUNT_LEAVES);
+    ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
     if (ret != 0) {
         goto out;
     }

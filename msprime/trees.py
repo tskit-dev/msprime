@@ -607,8 +607,8 @@ def simulator_factory(
             for conf in population_configurations:
                 if conf.sample_size is not None:
                     raise ValueError(
-                         "Cannot specify population configuration sample size"
-                         "and samples simultaneously")
+                        "Cannot specify population configuration sample size"
+                        "and samples simultaneously")
             the_samples = samples
     elif samples is not None:
         the_samples = samples
@@ -1466,8 +1466,7 @@ class TreeSequence(object):
         """
         ll_sparse_tree = _msprime.SparseTree(
             self._ll_tree_sequence, tracked_leaves)
-        iterator = _msprime.SparseTreeIterator(
-            self._ll_tree_sequence, ll_sparse_tree)
+        iterator = _msprime.SparseTreeIterator(ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree)
         for _ in iterator:
             yield sparse_tree
