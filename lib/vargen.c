@@ -66,13 +66,11 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence)
     if (self->variant == NULL) {
         goto out;
     }
-    ret = tree_sequence_alloc_sparse_tree(tree_sequence, &self->tree,
-            NULL, 0, MSP_COUNT_LEAVES);
+    ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_COUNT_LEAVES);
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_iterator_alloc(&self->tree_iterator,
-            self->tree_sequence, &self->tree);
+    ret = sparse_tree_iterator_alloc(&self->tree_iterator, &self->tree);
     if (ret != 0) {
         goto out;
     }

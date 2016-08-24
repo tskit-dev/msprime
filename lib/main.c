@@ -572,6 +572,46 @@ out:
 }
 
 static void
+print_ld_matrix(tree_sequence_t *ts)
+{
+    int ret;
+    uint32_t j;
+    mutation_t m1;
+    sparse_tree_t t1, t2;
+    sparse_tree_iterator_t iter1, iter2;
+
+    ret = sparse_tree_alloc(&t1, ts, MSP_COUNT_LEAVES);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = sparse_tree_alloc(&t2, ts, MSP_COUNT_LEAVES);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = sparse_tree_iterator_alloc(&iter1, &t1);
+    if (ret != 0) {
+        goto out;
+    }
+    while ((ret = sparse_tree_iterator_next(&iter1)) == 1) {
+        for (j = 0; j < t1.num_mutations; j++) {
+            m1 = t1.mutations[j];
+            printf("m1 = (%f, %d)\n", m1.position, m1.node);
+            ret = sparse_tree_iterator_copy(&iter1, &iter2);
+            /* if (ret != 0) { */
+            /*     goto out; */
+            /* } */
+
+
+        }
+        printf("Outer: tree: (%f-%f)\n", t1.right, t1.left);
+    }
+out:
+    if (ret != 0) {
+        fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
+    }
+}
+
+static void
 print_stats(tree_sequence_t *ts)
 {
     int ret = 0;
@@ -741,7 +781,7 @@ print_tree_sequence(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_iterator_alloc(sparse_iter, ts, &tree);
+    ret = sparse_tree_iterator_alloc(sparse_iter, &tree);
     if (ret != 0) {
         goto out;
     }
@@ -802,21 +842,23 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    /* print out the demographic event debug state */
-    start_time = 0;
-    do {
+    if (0) {
+        /* print out the demographic event debug state */
+        start_time = 0;
+        do {
 
-        ret = msp_debug_demography(msp, &end_time);
-        printf("interval %f - %f\n", start_time, end_time);
-        msp_print_state(msp, stdout);
-        start_time = end_time;
-    } while (! gsl_isinf(end_time));
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_reset(msp);
-    if (ret != 0) {
-        goto out;
+            ret = msp_debug_demography(msp, &end_time);
+            printf("interval %f - %f\n", start_time, end_time);
+            msp_print_state(msp, stdout);
+            start_time = end_time;
+        } while (! gsl_isinf(end_time));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_reset(msp);
+        if (ret != 0) {
+            goto out;
+        }
     }
     for (j = 0; j < 1; j++) {
         ret = msp_reset(msp);
@@ -839,8 +881,6 @@ run_simulate(char *conf_file)
             goto out;
         }
     }
-
-    recomb_map_print_state(recomb_map, stdout);
     /* Create the tree_sequence from the state of the simulator.
      * We want to use coalescent time here, so use an Ne of 1/4
      * to cancel scaling factor. */
@@ -852,25 +892,39 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    tree_sequence_print_state(tree_seq, stdout);
-
-    for (j = 0; j < 1; j++) {
-        ret = tree_sequence_dump(tree_seq, output_file, 0);
-        if (ret != 0) {
-            goto out;
-        }
-        tree_sequence_free(tree_seq);
-        memset(tree_seq, 0, sizeof(tree_sequence_t));
-        printf("READING \n");
-        ret = tree_sequence_load(tree_seq, output_file, 0);
-        if (ret != 0) {
-            goto out;
-        }
-        tree_sequence_print_state(tree_seq, stdout);
+    ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
+    if (ret != 0) {
+        goto out;
     }
-
+    ret = mutgen_generate(mutgen);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
+            mutgen->mutations);
+    if (ret != 0) {
+        goto out;
+    }
+    print_ld_matrix(tree_seq);
 
     if (0) {
+
+        for (j = 0; j < 1; j++) {
+            ret = tree_sequence_dump(tree_seq, output_file, 0);
+            if (ret != 0) {
+                goto out;
+            }
+            tree_sequence_free(tree_seq);
+            memset(tree_seq, 0, sizeof(tree_sequence_t));
+            printf("READING \n");
+            ret = tree_sequence_load(tree_seq, output_file, 0);
+            if (ret != 0) {
+                goto out;
+            }
+            tree_sequence_print_state(tree_seq, stdout);
+        }
+
+
         ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
         if (ret != 0) {
             goto out;
