@@ -313,7 +313,7 @@ get_example_tree_sequences(int include_nonbinary)
     ret[0] = get_example_tree_sequence(10, 0, 100, 100.0, 1.0, 1.0, 0, NULL);
     ret[1] = get_example_tree_sequence(2, 0, 1, 0.1, 1.0, 1.0, 0, NULL);
     ret[2] = get_example_tree_sequence(3, 0, 3, 10.0, 10.0, 0.0, 0, NULL);
-    ret[3] = get_example_tree_sequence(10, 0, 4294967295, 10.0,
+    ret[3] = get_example_tree_sequence(10, 0, UINT32_MAX, 10.0,
             9.31322575049e-08, 10.0, 0, NULL);
     k = 4;
     if (include_nonbinary) {
@@ -405,6 +405,171 @@ test_vcf(void)
     free(vc);
     tree_sequence_free(ts);
     free(ts);
+}
+
+static void
+test_simple_recomb_map(void)
+{
+    int ret;
+    recomb_map_t recomb_map;
+    double positions[] = {0.0, 1.0};
+    double rates[] = {0.0, 1.0};
+    uint32_t num_loci[] = {1, 100, UINT32_MAX};
+    size_t j;
+
+    for (j = 0; j < sizeof(num_loci) / sizeof(uint32_t); j++) {
+        ret = recomb_map_alloc(&recomb_map, num_loci[j], 1.0,
+                positions, rates, 2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        recomb_map_print_state(&recomb_map, _devnull);
+        CU_ASSERT_EQUAL(recomb_map_get_num_loci(&recomb_map), num_loci[j]);
+        CU_ASSERT_EQUAL(recomb_map_get_size(&recomb_map), 2);
+        CU_ASSERT_EQUAL(recomb_map_get_sequence_length(&recomb_map), 1.0);
+        CU_ASSERT_EQUAL(
+                recomb_map_genetic_to_phys(&recomb_map, num_loci[j]), 1.0);
+        CU_ASSERT_EQUAL(
+                recomb_map_phys_to_genetic(&recomb_map, 1.0), num_loci[j]);
+        ret = recomb_map_free(&recomb_map);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
+}
+
+static void
+test_recomb_map_errors(void)
+{
+    int ret;
+    recomb_map_t recomb_map;
+    double positions[] = {0.0, 1.0, 2.0};
+    double rates[] = {1.0, 2.0, 0.0};
+    double values[] = {0.0, 1.0};
+
+    ret = recomb_map_alloc(&recomb_map, 10, 1.0, positions, rates, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    recomb_map_free(&recomb_map);
+
+    ret = recomb_map_alloc(&recomb_map, 10, 1.0, positions, rates, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    recomb_map_free(&recomb_map);
+
+    ret = recomb_map_alloc(&recomb_map, 0, 1.0, positions, rates, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    recomb_map_free(&recomb_map);
+
+    ret = recomb_map_alloc(&recomb_map, 10, 2.0, positions, rates, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    recomb_map_free(&recomb_map);
+
+    positions[0] = 1;
+    ret = recomb_map_alloc(&recomb_map, 10, 1.0, positions, rates, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    recomb_map_free(&recomb_map);
+    positions[0] = 0;
+
+    positions[1] = 3.0;
+    ret = recomb_map_alloc(&recomb_map, 10, 2.0, positions, rates, 3);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    recomb_map_free(&recomb_map);
+    positions[1] = 1.0;
+
+    ret = recomb_map_alloc(&recomb_map, 10, 2.0, positions, rates, 3);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = recomb_map_genetic_to_phys_bulk(&recomb_map, values, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* values must be increasing */
+    values[0] = 2.0;
+    ret = recomb_map_genetic_to_phys_bulk(&recomb_map, values, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_GENERIC);
+
+    /* values must be <= num_loci */
+    values[0] = 1000;
+    ret = recomb_map_genetic_to_phys_bulk(&recomb_map, values, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_GENERIC);
+
+    recomb_map_free(&recomb_map);
+}
+
+static void
+verify_recomb_map(uint32_t num_loci, double length, double *positions,
+        double *rates, size_t size)
+{
+
+    int ret;
+    recomb_map_t recomb_map;
+    double total_rate, x, y, z;
+    size_t j;
+    size_t num_checks = 1000;
+    double eps = 1e-6;
+    double *ret_rates, *ret_positions, *bulk_x;
+
+    ret_rates = malloc(size * sizeof(double));
+    ret_positions = malloc(size * sizeof(double));
+    bulk_x = malloc(num_checks * sizeof(double));
+
+    CU_ASSERT_FATAL(ret_rates != NULL);
+    CU_ASSERT_FATAL(ret_positions != NULL);
+
+    ret = recomb_map_alloc(&recomb_map, num_loci, length,
+           positions, rates, size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    recomb_map_print_state(&recomb_map, _devnull);
+
+    CU_ASSERT_EQUAL(recomb_map_get_num_loci(&recomb_map), num_loci);
+    CU_ASSERT_EQUAL(recomb_map_get_size(&recomb_map), size);
+    CU_ASSERT_EQUAL(recomb_map_genetic_to_phys(&recomb_map, 0), 0);
+    CU_ASSERT_EQUAL(
+            recomb_map_genetic_to_phys(&recomb_map, num_loci), length);
+    total_rate = recomb_map_get_total_recombination_rate(&recomb_map);
+    CU_ASSERT_DOUBLE_EQUAL(
+            total_rate / (num_loci - 1),
+            recomb_map_get_per_locus_recombination_rate(&recomb_map), eps)
+
+    for (j = 0; j < num_checks; j++) {
+        x = j * (num_loci / num_checks);
+        bulk_x[j] = x;
+        y = recomb_map_genetic_to_phys(&recomb_map, x);
+        CU_ASSERT_TRUE(0 <= y && y <= length);
+        z = recomb_map_phys_to_genetic(&recomb_map, y);
+        CU_ASSERT_DOUBLE_EQUAL(x, z, eps);
+    }
+    ret = recomb_map_genetic_to_phys_bulk(&recomb_map, bulk_x, num_checks);
+    CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < num_checks; j++) {
+        x = j * (num_loci / num_checks);
+        y = recomb_map_genetic_to_phys(&recomb_map, x);
+        CU_ASSERT_DOUBLE_EQUAL(bulk_x[j], y, 1e-12);
+    }
+    ret = recomb_map_get_positions(&recomb_map, ret_positions);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = recomb_map_get_rates(&recomb_map, ret_rates);
+    CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < size; j++) {
+        CU_ASSERT_EQUAL(ret_rates[j], rates[j]);
+        CU_ASSERT_EQUAL(ret_positions[j], positions[j]);
+    }
+    ret = recomb_map_free(&recomb_map);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    free(ret_rates);
+    free(ret_positions);
+    free(bulk_x);
+}
+
+static void
+test_recomb_map_examples(void)
+{
+    double p1[] =  {0, 0.05019838393314813, 0.36933662489552865, 1};
+    double r1[] = {3.5510784169955434, 4.184964179610539, 3.800808140657212, 0};
+    double p2[] =  {0, 0.125, 0.875, 1, 4, 8, 16};
+    double r2[] = {0.1, 6.0, 3.333, 2.1, 0.0, 2.2, 0};
+
+    verify_recomb_map(2, 1.0, p1, r1, 4);
+    verify_recomb_map(1000, 1.0, p1, r1, 4);
+    verify_recomb_map(UINT32_MAX, 1.0, p1, r1, 4);
+
+    verify_recomb_map(2, 16.0, p2, r2, 7);
+    verify_recomb_map(100, 16.0, p2, r2, 7);
+    verify_recomb_map(UINT32_MAX, 16.0, p2, r2, 7);
 }
 
 static void
@@ -3164,6 +3329,9 @@ main(void)
     CU_TestInfo tests[] = {
         {"Fenwick tree", test_fenwick},
         {"VCF", test_vcf},
+        {"Simple recombination map", test_simple_recomb_map},
+        {"Recombination map errors", test_recomb_map_errors},
+        {"Recombination map examples", test_recomb_map_examples},
         {"Simplest records", test_simplest_records},
         {"Simplest nonbinary records", test_simplest_nonbinary_records},
         {"Simplest bad records", test_simplest_bad_records},

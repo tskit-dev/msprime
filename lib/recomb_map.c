@@ -26,18 +26,18 @@
 #include "msprime.h"
 
 void
-recomb_map_print_state(recomb_map_t *self)
+recomb_map_print_state(recomb_map_t *self, FILE *out)
 {
     size_t j;
 
-    printf("recombination_map:: size = %d\n", (int) self->size);
-    printf("\tnum_loci = %d\n", recomb_map_get_num_loci(self));
-    printf("\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
-    printf("\tper_locus_rate = %f\n",
+    fprintf(out, "recombination_map:: size = %d\n", (int) self->size);
+    fprintf(out, "\tnum_loci = %d\n", recomb_map_get_num_loci(self));
+    fprintf(out, "\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
+    fprintf(out, "\tper_locus_rate = %f\n",
             recomb_map_get_per_locus_recombination_rate(self));
-    printf("\tindex\tlocation\trate\n");
+    fprintf(out, "\tindex\tlocation\trate\n");
     for (j = 0; j < self->size; j++) {
-        printf("\t%d\t%f\t%f\n", (int) j, self->positions[j], self->rates[j]);
+        fprintf(out, "\t%d\t%f\t%f\n", (int) j, self->positions[j], self->rates[j]);
     }
 }
 
@@ -50,7 +50,11 @@ recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
     size_t j;
 
     memset(self, 0, sizeof(recomb_map_t));
-    if (size < 2) {
+    if (size < 2 || num_loci == 0) {
+        goto out;
+    }
+    /* Check the framing positions */
+    if (positions[0] != 0.0 || positions[size - 1] != sequence_length) {
         goto out;
     }
     self->positions = malloc(size * sizeof(double));
@@ -63,13 +67,6 @@ recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
     self->size = size;
     self->num_loci = num_loci;
     self->sequence_length = sequence_length;
-    /* Check the framing positions */
-    if (positions[0] != 0.0 || positions[size - 1] != sequence_length) {
-        goto out;
-    }
-    if (num_loci == 0) {
-        goto out;
-    }
     for (j = 0; j < size; j++) {
         if (rates[j] < 0 || positions[j] < 0) {
             goto out;
@@ -198,8 +195,7 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
         if (x > 0) {
             s = 0;
             k = 0;
-            while (s < x) {
-                assert(k < self->size - 1);
+            while (s < x && k < self->size - 1) {
                 s += (p[k + 1] - p[k]) * r[k];
                 k++;
             }
@@ -207,7 +203,6 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
             ret = p[k] - excess;
         }
     }
-    assert(ret >= 0 && ret <= self->sequence_length);
     return ret;
 }
 
@@ -253,8 +248,7 @@ recomb_map_genetic_to_phys_bulk(recomb_map_t *self, double *values, size_t n)
                 goto out;
             }
             x = (values[j] / self->num_loci) * self->total_recombination_rate;
-            while (s < x) {
-                assert(k < self->size - 1);
+            while (s < x && k < self->size - 1) {
                 s += (p[k + 1] - p[k]) * r[k];
                 k++;
             }

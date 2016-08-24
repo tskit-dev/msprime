@@ -562,7 +562,7 @@ size_t recomb_map_get_size(recomb_map_t *self);
 int recomb_map_get_positions(recomb_map_t *self, double *positions);
 int recomb_map_get_rates(recomb_map_t *self, double *rates);
 
-void recomb_map_print_state(recomb_map_t *self);
+void recomb_map_print_state(recomb_map_t *self, FILE *out);
 
 int mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         double mutation_rate, gsl_rng *rng);
