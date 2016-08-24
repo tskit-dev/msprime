@@ -622,6 +622,7 @@ class TestSimulationState(LowLevelTestCase):
         st = next(st_iter)
         self.verify_trees_equal(n, pi, tau, pops, st)
         num_trees += 1
+        self.assertEqual(ts.get_num_trees(), num_trees)
         self.assertLessEqual(num_trees, sim.get_num_breakpoints() + 2)
         self.assertRaises(StopIteration, next, st_iter)
 

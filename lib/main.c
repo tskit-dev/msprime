@@ -796,8 +796,12 @@ print_tree_sequence(tree_sequence_t *ts)
     }
 
     /* sparse trees */
-    ret = tree_sequence_alloc_sparse_tree(ts, &tree, tracked_leaves,
-            sizeof(tracked_leaves) / sizeof(uint32_t), MSP_COUNT_LEAVES);
+    ret = sparse_tree_alloc(&tree, ts, MSP_COUNT_LEAVES);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = sparse_tree_set_tracked_leaves(&tree,
+            sizeof(tracked_leaves) / sizeof(uint32_t), tracked_leaves);
     if (ret != 0) {
         goto out;
     }

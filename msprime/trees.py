@@ -1324,10 +1324,7 @@ class TreeSequence(object):
         :return: The number of trees in this tree sequence.
         :rtype: int
         """
-        count = 0
-        for _ in self.trees():
-            count += 1
-        return count
+        return self._ll_tree_sequence.get_num_trees()
 
     def get_num_mutations(self):
         """

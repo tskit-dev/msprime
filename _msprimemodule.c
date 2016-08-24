@@ -69,7 +69,6 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
-    TreeSequence *tree_sequence;
     SparseTree *sparse_tree;
     sparse_tree_iterator_t *sparse_tree_iterator;
 } SparseTreeIterator;
@@ -2639,6 +2638,21 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_num_trees(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_trees;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_trees = tree_sequence_get_num_trees(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_trees);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_sequence_length(TreeSequence  *self)
 {
     PyObject *ret = NULL;
@@ -2817,6 +2831,8 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the record at the specified index."},
     {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
         METH_NOARGS, "Returns the number of coalescence records." },
+    {"get_num_trees", (PyCFunction) TreeSequence_get_num_trees,
+        METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
@@ -3727,7 +3743,6 @@ SparseTreeIterator_dealloc(SparseTreeIterator* self)
         PyMem_Free(self->sparse_tree_iterator);
         self->sparse_tree_iterator = NULL;
     }
-    Py_XDECREF(self->tree_sequence);
     Py_XDECREF(self->sparse_tree);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }

@@ -2501,6 +2501,34 @@ verify_tree_iter_copy(tree_sequence_t *ts)
 }
 
 static void
+verify_tree_iter_copy_errors(tree_sequence_t *ts1, tree_sequence_t *ts2)
+{
+    int ret;
+    sparse_tree_t t1, t2;
+    sparse_tree_iterator_t iter1, iter2;
+
+    /* Check that copy fails on different tree sequences */
+    ret = sparse_tree_alloc(&t1, ts1, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = sparse_tree_alloc(&t2, ts2, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = sparse_tree_iterator_alloc(&iter1, &t1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = sparse_tree_iterator_alloc(&iter2, &t2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = sparse_tree_iterator_copy(&iter1, &iter2);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = sparse_tree_iterator_free(&iter1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = sparse_tree_iterator_free(&iter2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = sparse_tree_free(&t1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = sparse_tree_free(&t2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+}
+
+static void
 verify_tree_equals(tree_sequence_t *ts)
 {
     int ret;
@@ -3102,6 +3130,11 @@ test_tree_iter_copy_from_examples(void)
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         verify_tree_iter_copy(examples[j]);
+        if (j > 0) {
+            verify_tree_iter_copy_errors(examples[j - 1], examples[j]);
+        }
+    }
+    for (j = 0; examples[j] != NULL; j++) {
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -3618,24 +3651,12 @@ main(void)
         {"Tree sequence diff iter", test_tree_sequence_diff_iter},
         {"Nonbinary Tree sequence diff iter",
             test_nonbinary_tree_sequence_diff_iter},
-        {"Test diff iter from examples", test_diff_iter_from_examples},
-        {"Test tree iter from examples", test_tree_iter_from_examples},
-        {"Test tree iter copy from examples",
+        {"diff iter from examples", test_diff_iter_from_examples},
+        {"tree iter from examples", test_tree_iter_from_examples},
+        {"tree iter copy from examples",
             test_tree_iter_copy_from_examples},
-        {"Test tree equals from examples", test_tree_equals_from_examples},
-        {"Test leaf sets from examples", test_leaf_sets_from_examples},
-        {"Test hapgen from examples", test_hapgen_from_examples},
-        {"Test vargen from examples", test_vargen_from_examples},
-        {"Test newick from examples", test_newick_from_examples},
-        {"Test records equivalent after import", test_records_equivalent},
-        {"Test saving to HDF5", test_save_hdf5},
-        {"Test saving records to HDF5", test_save_records_hdf5},
-        {"Historical samples two populations",
-            test_single_locus_two_populations},
-        {"Historical samples", test_single_locus_historical_sample},
-        {"Simulator getters/setters", test_simulator_getters_setters},
-        {"Demographic events", test_simulator_demographic_events},
-        {"Test leaf sets from examples", test_leaf_sets_from_examples},
+        {"tree equals from examples", test_tree_equals_from_examples},
+        {"leaf sets from examples", test_leaf_sets_from_examples},
         {"Test hapgen from examples", test_hapgen_from_examples},
         {"Test vargen from examples", test_vargen_from_examples},
         {"Test newick from examples", test_newick_from_examples},
