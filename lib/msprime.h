@@ -285,6 +285,10 @@ typedef struct {
     uint32_t num_nodes;
     int flags;
     uint32_t root;
+    /* These are indexes into the breakpoints array */
+    uint32_t left_breakpoint;
+    uint32_t right_breakpoint;
+    /* Left and right physical coordinates of the tree */
     double left;
     double right;
     uint8_t *population;
@@ -490,13 +494,15 @@ int tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
         node_record_t **nodes_out, node_record_t **nodes_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out);
 
-int sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, 
+int sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence,
         int flags);
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source);
 int sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other);
-int sparse_tree_set_tracked_leaves(sparse_tree_t *self, 
+int sparse_tree_set_tracked_leaves(sparse_tree_t *self,
         uint32_t num_tracked_leaves, uint32_t *tracked_leaves);
+int sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
+        leaf_list_node_t *head, leaf_list_node_t *tail);
 int sparse_tree_clear(sparse_tree_t *self);
 int sparse_tree_get_root(sparse_tree_t *self, uint32_t *root);
 int sparse_tree_get_parent(sparse_tree_t *self, uint32_t u, uint32_t *parent);
@@ -515,7 +521,7 @@ int sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
         mutation_t **mutations);
 void sparse_tree_print_state(sparse_tree_t *self, FILE *out);
 
-int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self, 
+int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
         sparse_tree_t *tree);
 int sparse_tree_iterator_copy(sparse_tree_iterator_t *self,
         sparse_tree_iterator_t *other);

@@ -2431,6 +2431,13 @@ get_tree_list(tree_sequence_t *ts)
         ret = sparse_tree_copy(&trees[t.index], &t);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = sparse_tree_equal(&trees[t.index], &t);
+        if (ret != 0) {
+            printf("ERROR copy: %d\n",ret);
+            sparse_tree_print_state(&trees[t.index], stdout);
+            printf("T2\n");
+            sparse_tree_print_state(&t, stdout);
+        }
+
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
     CU_ASSERT_EQUAL_FATAL(iter_ret, 0);
@@ -2526,6 +2533,7 @@ verify_tree_iter_copy_errors(tree_sequence_t *ts1, tree_sequence_t *ts2)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = sparse_tree_free(&t2);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+
 }
 
 static void

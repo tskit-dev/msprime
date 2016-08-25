@@ -576,15 +576,18 @@ print_ld_matrix(tree_sequence_t *ts)
 {
     int ret;
     uint32_t j, k;
+    double fA, fB, fAB, D, r2;
+    double n = tree_sequence_get_sample_size(ts);
     mutation_t m1, m2;
     sparse_tree_t t1, t2;
     sparse_tree_iterator_t iter1, iter2;
+    leaf_list_node_t *head, *tail;
 
-    ret = sparse_tree_alloc(&t1, ts, MSP_COUNT_LEAVES);
+    ret = sparse_tree_alloc(&t1, ts, MSP_COUNT_LEAVES|MSP_LEAF_LISTS);
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_alloc(&t2, ts, 0);
+    ret = sparse_tree_alloc(&t2, ts, MSP_COUNT_LEAVES);
     if (ret != 0) {
         goto out;
     }
@@ -596,12 +599,25 @@ print_ld_matrix(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
+    printf("LD table:\n");
+    printf("pos_A\tpos_B\tr2\n");
     while ((ret = sparse_tree_iterator_next(&iter1)) == 1) {
-        /* printf("ITER1\n"); */
-        /* sparse_tree_iterator_print_state(&iter1, stdout); */
         for (j = 0; j < t1.num_mutations; j++) {
             m1 = t1.mutations[j];
-            printf("m1 = (%f, %d)\n", m1.position, m1.node);
+            fA = t1.num_leaves[m1.node] / n;
+            ret = sparse_tree_get_leaf_list(&t1, m1.node, &head, &tail);
+            if (ret != 0) {
+                goto out;
+            }
+            ret = sparse_tree_clear(&t2);
+            if (ret != 0) {
+                goto out;
+            }
+            ret = sparse_tree_set_tracked_leaves_from_leaf_list(&t2,
+                    head, tail);
+            if (ret != 0) {
+                goto out;
+            }
             ret = sparse_tree_iterator_copy(&iter2, &iter1);
             if (ret != 0) {
                 goto out;
@@ -609,7 +625,13 @@ print_ld_matrix(tree_sequence_t *ts)
             while ((ret = sparse_tree_iterator_next(&iter2)) == 1) {
                 for (k = 0; k < t2.num_mutations; k++) {
                     m2 = t2.mutations[k];
-                    printf("\tm2 = (%f, %d)\n", m2.position, m2.node);
+                    fB = t2.num_leaves[m2.node] / n;
+                    fAB = t2.num_tracked_leaves[m2.node] / n;
+                    D = fAB - fA * fB;
+                    r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
+                    /* printf("\tm2 = (%f, %d) fB = %f fAB = %f\n", */
+                    /*         m2.position, m2.node, fB, fAB); */
+                    printf("%f\t%f\t%f\n", m1.position, m2.position, r2);
                 }
             }
             if (ret != 0) {
@@ -619,7 +641,6 @@ print_ld_matrix(tree_sequence_t *ts)
             /* sparse_tree_iterator_print_state(&iter2, stdout); */
 
         }
-        printf("Outer: tree: (%f-%f)\n", t1.right, t1.left);
     }
     sparse_tree_iterator_free(&iter1);
     sparse_tree_iterator_free(&iter2);

@@ -1636,7 +1636,9 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     }
     self->max_mutations = tree_sequence->num_mutations;
     self->num_mutations = 0;
-    self->mutations = malloc(self->max_mutations * sizeof(mutation_t));
+    /* we want the mutations buffer zero'd so that all padding bytes are
+     * zero and we can use memcmp to compare mutation lists */
+    self->mutations = calloc(self->max_mutations, sizeof(mutation_t));
     if (self->mutations == NULL) {
         goto out;
     }
@@ -1717,6 +1719,20 @@ sparse_tree_free(sparse_tree_t *self)
     return 0;
 }
 
+static int WARN_UNUSED
+sparse_tree_reset_tracked_leaves(sparse_tree_t *self)
+{
+    int ret = 0;
+
+    if (!(self->flags & MSP_COUNT_LEAVES)) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
+    memset(self->num_tracked_leaves, 0, self->num_nodes * sizeof(uint32_t));
+out:
+    return ret;
+}
+
 int WARN_UNUSED
 sparse_tree_set_tracked_leaves(sparse_tree_t *self, uint32_t num_tracked_leaves,
         uint32_t *tracked_leaves)
@@ -1724,6 +1740,10 @@ sparse_tree_set_tracked_leaves(sparse_tree_t *self, uint32_t num_tracked_leaves,
     int ret = MSP_ERR_GENERIC;
     uint32_t j, u;
 
+    ret = sparse_tree_reset_tracked_leaves(self);
+    if (ret != 0) {
+        goto out;
+    }
     for (j = 0; j < num_tracked_leaves; j++) {
         u = tracked_leaves[j];
         if (u >= self->sample_size) {
@@ -1732,8 +1752,59 @@ sparse_tree_set_tracked_leaves(sparse_tree_t *self, uint32_t num_tracked_leaves,
         }
         self->num_tracked_leaves[u] = 1;
     }
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
+        leaf_list_node_t *head, leaf_list_node_t *tail)
+{
+    int ret = MSP_ERR_GENERIC;
+    leaf_list_node_t *u = head;
+
+    if (head == NULL || tail == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = sparse_tree_reset_tracked_leaves(self);
+    if (ret != 0) {
+        goto out;
+    }
+    while (1) {
+        self->num_tracked_leaves[u->node] = 1;
+        if (u == tail) {
+            break;
+        }
+        u = u->next;
+    }
     ret = 0;
 out:
+    return ret;
+}
+
+/* Propagate the initial tracked leaf counts from the leaves throughout
+ * the tree. This is intended to be used only after a copy operation
+ * has been performed; otherwise, all leaf tracking operations are
+ * taken care of in the sparse_tree_iterator.
+ */
+static int WARN_UNUSED
+sparse_tree_propagate_num_tracked_leaves(sparse_tree_t *self)
+{
+    int ret = 0;
+    uint32_t u, v, k;
+
+    for (u = 0; u < self->sample_size; u++) {
+        k = self->num_tracked_leaves[u];
+        if (k > 0) {
+            v = self->parent[u];
+            while (v != MSP_NULL_NODE) {
+                self->num_tracked_leaves[v] += k;
+                v = self->parent[v];
+
+            }
+        }
+    }
     return ret;
 }
 
@@ -1742,30 +1813,43 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
 {
     int ret = MSP_ERR_GENERIC;
     size_t N = self->num_nodes;
-    /* size_t n = self->sample_size; */
+    size_t n = self->sample_size;
 
     if (self->tree_sequence != source->tree_sequence) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->left = source->left;
+    self->left_breakpoint = source->left_breakpoint;
     self->right = source->right;
+    self->right_breakpoint = source->right_breakpoint;
     self->root = source->root;
     self->index = source->index;
+    self->num_mutations = source->num_mutations;
 
     memcpy(self->parent, source->parent, N * sizeof(uint32_t));
     memcpy(self->population, source->population, N * sizeof(uint8_t));
     memcpy(self->time, source->time, N * sizeof(double));
     memcpy(self->num_children, source->num_children, N * sizeof(uint32_t));
     memcpy(self->children, source->children, N * sizeof(uint32_t *));
-    /* if (self->flags & MSP_COUNT_LEAVES) { */
-    /*     memset(self->num_leaves + n, 0, (N - n) * sizeof(uint32_t)); */
-    /*     memset(self->num_tracked_leaves + n, 0, (N - n) * sizeof(uint32_t)); */
-    /*     memset(self->leaf_list_head + n, 0, */
-    /*             (N - n) * sizeof(leaf_list_node_t *)); */
-    /*     memset(self->leaf_list_tail + n, 0, */
-    /*             (N - n) * sizeof(leaf_list_node_t *)); */
-    /* } */
+    memcpy(self->mutations, source->mutations,
+            self->num_mutations * sizeof(mutation_t));
+    if (self->flags & MSP_COUNT_LEAVES) {
+        if (! (source->flags & MSP_COUNT_LEAVES)) {
+            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            goto out;
+        }
+        memcpy(self->num_leaves + n, source->num_leaves + n,
+                (N - n) * sizeof(uint32_t));
+        ret = sparse_tree_propagate_num_tracked_leaves(self);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (self->flags & MSP_LEAF_LISTS) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
     ret = 0;
 out:
     return ret;
@@ -1773,6 +1857,9 @@ out:
 
 /* Returns 0 if the specified sparse trees are equal, 1 if they are
  * not equal, and < 0 if an error occurs.
+ *
+ * We only consider topological properties of the tree. Optional
+ * counts and leaf lists are not considered for equality.
  */
 int WARN_UNUSED
 sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
@@ -1787,9 +1874,10 @@ sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
         goto out;
     }
     condition = self->index == other->index
-        && self->left == other->left
-        && self->right == other->right
+        && self->left_breakpoint == other->left_breakpoint
+        && self->right_breakpoint == other->right_breakpoint
         && self->root == other->root
+        && self->num_mutations == other->num_mutations
         && memcmp(self->parent, other->parent, N * sizeof(uint32_t)) == 0
         && memcmp(self->population, other->population,
                 N * sizeof(uint8_t)) == 0
@@ -1797,7 +1885,9 @@ sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
         && memcmp(self->num_children, other->num_children,
                 N * sizeof(uint32_t)) == 0
         && memcmp(self->children, other->children,
-                N * sizeof(uint32_t *)) == 0;
+                N * sizeof(uint32_t *)) == 0
+        && memcmp(self->mutations, other->mutations,
+                self->num_mutations * sizeof(mutation_t)) == 0;
     if (condition) {
         ret = 0;
     }
@@ -1813,7 +1903,9 @@ sparse_tree_clear(sparse_tree_t *self)
     size_t n = self->sample_size;
 
     self->left = 0;
+    self->left_breakpoint = 0;
     self->right = 0;
+    self->right_breakpoint = 0;
     self->root = 0;
     self->index = UINT32_MAX;
     memset(self->parent, (int) MSP_NULL_NODE, N * sizeof(uint32_t));
@@ -2100,7 +2192,9 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
     fprintf(out, "Sparse tree state:\n");
     fprintf(out, "flags = %d\n", self->flags);
     fprintf(out, "left = %f\n", self->left);
+    fprintf(out, "left_breakpoint = %d\n", self->left_breakpoint);
     fprintf(out, "right = %f\n", self->right);
+    fprintf(out, "right_breakpoint = %d\n", self->right_breakpoint);
     fprintf(out, "root = %d\n", self->root);
     fprintf(out, "index = %d\n", self->index);
     for (j = 0; j < self->num_nodes; j++) {
@@ -2379,9 +2473,9 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
     assert(t != NULL && s != NULL);
     if (self->insertion_index < self->num_records) {
         /* First we remove the stale records */
-        while (s->trees.breakpoints[s->trees.records.right[
-                s->trees.indexes.removal_order[self->removal_index]]]
-                    == t->right) {
+        while (s->trees.records.right[
+                s->trees.indexes.removal_order[self->removal_index]]
+                    == t->right_breakpoint) {
             k = s->trees.indexes.removal_order[self->removal_index];
             u = s->trees.records.node[k];
             out_count += t->num_children[u] - 1;
@@ -2411,16 +2505,18 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
             }
         }
         /* Update the interval */
+        t->left_breakpoint = t->right_breakpoint;
         t->left = t->right;
-        t->right = s->trees.breakpoints[s->trees.records.right[
-            s->trees.indexes.removal_order[self->removal_index]]];
+        t->right_breakpoint = s->trees.records.right[
+            s->trees.indexes.removal_order[self->removal_index]];
+        t->right = s->trees.breakpoints[t->right_breakpoint];
 
         /* Now insert the new records */
         h = self->insertion_index;
         while (self->insertion_index < self->num_records &&
-                s->trees.breakpoints[s->trees.records.left[
-                    s->trees.indexes.insertion_order[self->insertion_index]]]
-                        == t->left) {
+                s->trees.records.left[
+                    s->trees.indexes.insertion_order[self->insertion_index]]
+                        == t->left_breakpoint) {
             k = s->trees.indexes.insertion_order[self->insertion_index];
             u = s->trees.records.node[k];
             for (j = 0; j < s->trees.records.num_children[k]; j++) {
@@ -2444,8 +2540,8 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
         }
         if (t->flags & MSP_LEAF_LISTS) {
             while (h < self->num_records &&
-                    s->trees.breakpoints[s->trees.records.left[
-                        s->trees.indexes.insertion_order[h]]] == t->left) {
+                    s->trees.records.left[
+                        s->trees.indexes.insertion_order[h]] == t->left_breakpoint) {
                 k = s->trees.indexes.insertion_order[h];
                 u = s->trees.records.node[k];
                 sparse_tree_iterator_post_propagate_leaf_list_gain(self, u);
