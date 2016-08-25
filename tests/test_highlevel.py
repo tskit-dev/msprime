@@ -667,7 +667,7 @@ class TestNewickConversion(HighLevelTestCase):
             Ne = random.uniform(1, 20)
             recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
             ts = msprime.simulator_factory(
-                    n, Ne=Ne, recombination_map=recomb_map)
+                n, Ne=Ne, recombination_map=recomb_map)
             ts.run()
             tree_sequence = ts.get_tree_sequence()
             breakpoints = ts.get_breakpoints()

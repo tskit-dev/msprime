@@ -607,8 +607,8 @@ def simulator_factory(
             for conf in population_configurations:
                 if conf.sample_size is not None:
                     raise ValueError(
-                         "Cannot specify population configuration sample size"
-                         "and samples simultaneously")
+                        "Cannot specify population configuration sample size"
+                        "and samples simultaneously")
             the_samples = samples
     elif samples is not None:
         the_samples = samples
@@ -1324,10 +1324,7 @@ class TreeSequence(object):
         :return: The number of trees in this tree sequence.
         :rtype: int
         """
-        count = 0
-        for _ in self.trees():
-            count += 1
-        return count
+        return self._ll_tree_sequence.get_num_trees()
 
     def get_num_mutations(self):
         """
@@ -1466,8 +1463,7 @@ class TreeSequence(object):
         """
         ll_sparse_tree = _msprime.SparseTree(
             self._ll_tree_sequence, tracked_leaves)
-        iterator = _msprime.SparseTreeIterator(
-            self._ll_tree_sequence, ll_sparse_tree)
+        iterator = _msprime.SparseTreeIterator(ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree)
         for _ in iterator:
             yield sparse_tree

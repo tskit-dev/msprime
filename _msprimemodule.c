@@ -69,7 +69,6 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
-    TreeSequence *tree_sequence;
     SparseTree *sparse_tree;
     sparse_tree_iterator_t *sparse_tree_iterator;
 } SparseTreeIterator;
@@ -2639,6 +2638,21 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_num_trees(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_trees;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_trees = tree_sequence_get_num_trees(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_trees);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_sequence_length(TreeSequence  *self)
 {
     PyObject *ret = NULL;
@@ -2817,6 +2831,8 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the record at the specified index."},
     {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
         METH_NOARGS, "Returns the number of coalescence records." },
+    {"get_num_trees", (PyCFunction) TreeSequence_get_num_trees,
+        METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
@@ -2920,7 +2936,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     PyObject *py_tracked_leaves = NULL;
     TreeSequence *tree_sequence = NULL;
     uint32_t *tracked_leaves = NULL;
-    int flags = MSP_COUNT_LEAVES;
+    int flags = MSP_COUNT_LEAVES | MSP_LEAF_LISTS;
     uint32_t j, n, num_tracked_leaves;
     PyObject *item;
 
@@ -2962,8 +2978,14 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tree_sequence_alloc_sparse_tree(tree_sequence->tree_sequence,
-            self->sparse_tree, tracked_leaves, num_tracked_leaves, flags);
+    err = sparse_tree_alloc(self->sparse_tree, tree_sequence->tree_sequence,
+           flags);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    err = sparse_tree_set_tracked_leaves(self->sparse_tree, num_tracked_leaves,
+            tracked_leaves);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3721,7 +3743,6 @@ SparseTreeIterator_dealloc(SparseTreeIterator* self)
         PyMem_Free(self->sparse_tree_iterator);
         self->sparse_tree_iterator = NULL;
     }
-    Py_XDECREF(self->tree_sequence);
     Py_XDECREF(self->sparse_tree);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -3731,21 +3752,13 @@ SparseTreeIterator_init(SparseTreeIterator *self, PyObject *args, PyObject *kwds
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "sparse_tree", NULL};
-    TreeSequence *tree_sequence;
+    static char *kwlist[] = {"sparse_tree", NULL};
     SparseTree *sparse_tree;
 
     self->sparse_tree_iterator = NULL;
-    self->tree_sequence = NULL;
     self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!", kwlist,
-            &TreeSequenceType, &tree_sequence,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
             &SparseTreeType, &sparse_tree)) {
-        goto out;
-    }
-    self->tree_sequence = tree_sequence;
-    Py_INCREF(self->tree_sequence);
-    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
     }
     self->sparse_tree = sparse_tree;
@@ -3759,7 +3772,6 @@ SparseTreeIterator_init(SparseTreeIterator *self, PyObject *args, PyObject *kwds
         goto out;
     }
     err = sparse_tree_iterator_alloc(self->sparse_tree_iterator,
-            self->tree_sequence->tree_sequence,
             self->sparse_tree->sparse_tree);
     if (err != 0) {
         handle_library_error(err);
