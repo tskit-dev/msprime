@@ -1247,7 +1247,7 @@ tree_sequence_write_ld_table(tree_sequence_t *self, size_t max_sites,
 {
     int ret = MSP_ERR_GENERIC;
     int err, i1_ret, i2_ret, done;
-    uint32_t j, k;
+    uint32_t j, k, u, v;
     size_t num_compared_sites;
     mutation_t m1, m2;
     sparse_tree_t *t1 = NULL;
@@ -1288,49 +1288,93 @@ tree_sequence_write_ld_table(tree_sequence_t *self, size_t max_sites,
         for (j = 0; j < t1->num_mutations; j++) {
             m1 = t1->mutations[j];
             fA = t1->num_leaves[m1.node] / n;
-            ret = sparse_tree_get_leaf_list(t1, m1.node, &head, &tail);
-            if (ret != 0) {
-                goto out;
-            }
-            ret = sparse_tree_clear(t2);
-            if (ret != 0) {
-                goto out;
-            }
-            ret = sparse_tree_set_tracked_leaves_from_leaf_list(t2, head,
-                    tail);
-            if (ret != 0) {
-                goto out;
-            }
-            ret = sparse_tree_iterator_copy(iter2, iter1);
-            if (ret != 0) {
-                goto out;
-            }
             num_compared_sites = 0;
             done = 0;
-            while (!done && (i2_ret = sparse_tree_iterator_next(iter2)) == 1) {
-                for (k = 0; k < t2->num_mutations; k++) {
-                    m2 = t2->mutations[k];
-                    if (num_compared_sites >= max_sites
-                            || m2.position - m1.position > max_distance) {
-                        break;
-                        done = 1;
-                    }
-                    fB = t2->num_leaves[m2.node] / n;
-                    fAB = t2->num_tracked_leaves[m2.node] / n;
-                    D = fAB - fA * fB;
-                    r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
-                    err = fprintf(out, "%f\t%f\t%f\n", m1.position,
-                            m2.position, r2);
-                    if (err < 0) {
-                        ret = MSP_ERR_IO;
-                        goto out;
-                    }
-                    num_compared_sites++;
+            /* First compute LD for all the mutations on this tree. This
+             * is a much simplified case, since fAB is either 0, fA or fB
+             */
+            for (k = j + 1; k < t1->num_mutations; k++) {
+                m2 = t1->mutations[k];
+                if (num_compared_sites >= max_sites
+                        || m2.position - m1.position > max_distance) {
+                    done = 1;
+                    break;
                 }
+                fB = t1->num_leaves[m2.node] / n;
+                u = m1.node;
+                v = m2.node;
+                if (t1->time[u] > t1->time[v]) {
+                    v = m1.node;
+                    u = m2.node;
+                }
+                while (u != v && u != MSP_NULL_NODE) {
+                    u = t1->parent[u];
+                }
+                fAB = 0;
+                if (u == v) {
+                    if (v == m1.node) {
+                        fAB = fB;
+                    } else {
+                        fAB = fA;
+                    }
+                }
+                D = fAB - fA * fB;
+                r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
+                err = fprintf(out, "%d:%d\t%f\t%d:%d\t%f\t%G\n",
+                        t1->index, j, m1.position, t1->index, k, m2.position, r2);
+                if (err < 0) {
+                    ret = MSP_ERR_IO;
+                    goto out;
+                }
+                num_compared_sites++;
             }
-            if (i2_ret < 0) {
-                ret = i2_ret;
-                goto out;
+
+            /* TODO we need to break this out into an outer loop so that we can
+             * do the copy outside of the mutation loop.
+             */
+            if (!done) {
+                ret = sparse_tree_get_leaf_list(t1, m1.node, &head, &tail);
+                if (ret != 0) {
+                    goto out;
+                }
+                ret = sparse_tree_clear(t2);
+                if (ret != 0) {
+                    goto out;
+                }
+                ret = sparse_tree_set_tracked_leaves_from_leaf_list(t2, head,
+                        tail);
+                if (ret != 0) {
+                    goto out;
+                }
+                ret = sparse_tree_iterator_copy(iter2, iter1);
+                if (ret != 0) {
+                    goto out;
+                }
+                while (!done && (i2_ret = sparse_tree_iterator_next(iter2)) == 1) {
+                    for (k = 0; k < t2->num_mutations; k++) {
+                        m2 = t2->mutations[k];
+                        if (num_compared_sites >= max_sites
+                                || m2.position - m1.position > max_distance) {
+                            done = 1;
+                            break;
+                        }
+                        fB = t2->num_leaves[m2.node] / n;
+                        fAB = t2->num_tracked_leaves[m2.node] / n;
+                        D = fAB - fA * fB;
+                        r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
+                        err = fprintf(out, "%d:%d\t%f\t%d:%d\t%f\t%G\n",
+                                t1->index, j, m1.position, t2->index, k, m2.position, r2);
+                        if (err < 0) {
+                            ret = MSP_ERR_IO;
+                            goto out;
+                        }
+                        num_compared_sites++;
+                    }
+                }
+                if (i2_ret < 0) {
+                    ret = i2_ret;
+                    goto out;
+                }
             }
         }
     }

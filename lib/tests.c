@@ -2431,14 +2431,10 @@ get_tree_list(tree_sequence_t *ts)
         ret = sparse_tree_copy(&trees[t.index], &t);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = sparse_tree_equal(&trees[t.index], &t);
-        if (ret != 0) {
-            printf("ERROR copy: %d\n",ret);
-            sparse_tree_print_state(&trees[t.index], stdout);
-            printf("T2\n");
-            sparse_tree_print_state(&t, stdout);
-        }
-
         CU_ASSERT_EQUAL_FATAL(ret, 0);
+        /* Make sure the left and right coordinates are also OK */
+        CU_ASSERT_DOUBLE_EQUAL(trees[t.index].left, t.left, 1e-6);
+        CU_ASSERT_DOUBLE_EQUAL(trees[t.index].right, t.right, 1e-6);
     }
     CU_ASSERT_EQUAL_FATAL(iter_ret, 0);
     ret = sparse_tree_iterator_free(&iter);
@@ -2474,6 +2470,9 @@ verify_tree_iter_copy(tree_sequence_t *ts)
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = sparse_tree_equal(&t1, &t2);
             CU_ASSERT_EQUAL(ret, 0);
+            /* Make sure the left and right coordinates are also OK */
+            CU_ASSERT_DOUBLE_EQUAL(t1.left, t2.left, 1e-6);
+            CU_ASSERT_DOUBLE_EQUAL(t1.right, t2.right, 1e-6);
             k = 0;
             while ((ret = sparse_tree_iterator_next(&iter2)) == 1) {
                 k++;

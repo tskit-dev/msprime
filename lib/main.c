@@ -575,7 +575,8 @@ static void
 print_ld_matrix(tree_sequence_t *ts)
 {
     int ret;
-    ret = tree_sequence_write_ld_table(ts, UINT32_MAX, 50, stdout);
+    printf("LD TABLE\n");
+    ret = tree_sequence_write_ld_table(ts, 10, 20, stdout);
     if (ret != 0) {
         goto out;
     }
