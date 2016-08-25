@@ -613,3 +613,5 @@ if __name__ == "__main__":
     # examine()
     # convert_dev()
     ts = msprime.load(sys.argv[1])
+    ts.write_ld_table("table.txt", max_sites=2)
+

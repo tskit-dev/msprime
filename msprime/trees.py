@@ -1534,6 +1534,9 @@ class TreeSequence(object):
             leaves = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(leaves)
 
+    def write_ld_table(self, filename, **kwargs):
+        self._ll_tree_sequence.write_ld_table(filename, **kwargs)
+
     def get_time(self, sample):
         """
         Returns the time that the specified sample ID was sampled at.

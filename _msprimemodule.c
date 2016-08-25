@@ -2785,6 +2785,54 @@ out:
 }
 
 static PyObject *
+TreeSequence_write_ld_table(TreeSequence *self, PyObject *args,
+        PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    static char *kwlist[] = {"filename", "max_sites", "max_distance", NULL};
+    Py_ssize_t max_sites = PY_SSIZE_T_MAX;
+    double max_distance = DBL_MAX;
+    char *filename;
+    int err;
+    FILE *out = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|nd", kwlist,
+            &filename, &max_sites, &max_distance)) {
+        goto out;
+    }
+    out = fopen(filename, "w");
+    if (out == NULL) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        goto out;
+    }
+    err = tree_sequence_write_ld_table(self->tree_sequence, (size_t) max_sites,
+        max_distance, out);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    err = fclose(out);
+    out = NULL;
+    if (err != 0) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    if (out != NULL) {
+        /* The nominal case is handled above. Here we're closing the FD
+         * in an error condition, so we don't try to catch any IO errors
+         * that might occur.
+         */
+        fclose(out);
+    }
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
 {
     PyObject *ret = NULL;
@@ -2846,6 +2894,9 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
+    {"write_ld_table",
+        (PyCFunction) TreeSequence_write_ld_table,
+        METH_VARARGS|METH_KEYWORDS, "Writes a table of LD values to a file." },
     {NULL}  /* Sentinel */
 };
 
