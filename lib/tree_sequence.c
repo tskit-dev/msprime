@@ -2615,6 +2615,14 @@ sparse_tree_iterator_post_propagate_leaf_list_gain(sparse_tree_iterator_t *self,
 }
 
 int WARN_UNUSED
+sparse_tree_iterator_prev(sparse_tree_iterator_t *self)
+{
+    int ret = 0;
+
+    return ret;
+}
+
+int WARN_UNUSED
 sparse_tree_iterator_next(sparse_tree_iterator_t *self)
 {
     int ret = 0;
