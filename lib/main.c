@@ -29,8 +29,8 @@
 #include "msprime.h"
 #include "err.h"
 
-/* This file defines a crude CLI for msprime. It is intended for development
- * use only.
+/*! \file This file defines a crude CLI for msprime. It is intended for
+ * development use only.
  */
 
 typedef struct {
@@ -102,7 +102,7 @@ read_population_configuration(msp_t *msp, config_t *config)
 {
     int ret = 0;
     int j;
-    double growth_rate, initial_size;
+    double growth_rate, initial_size, multiple_merger_para;
     int num_populations;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "population_configuration");
@@ -136,8 +136,13 @@ read_population_configuration(msp_t *msp, config_t *config)
             fatal_error("initial_size not specified");
         }
         initial_size = config_setting_get_float(t);
+        t = config_setting_get_member(s, "multiple_merger_para");
+        if (t == NULL) {
+            fatal_error("multiple_merger_para not specified");
+        }
+        multiple_merger_para = config_setting_get_float(t);
         ret = msp_set_population_configuration(msp, j, initial_size,
-                growth_rate);
+                growth_rate, multiple_merger_para);
         if (ret != 0) {
             goto out;
         }
@@ -354,11 +359,12 @@ out:
 
 static int
 get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
-        recomb_map_t *recomb_map, char **output_file, const char *filename)
+        recomb_map_t *recomb_map, char **output_file, const char *filename, int* num_repeat)
 {
     int ret = 0;
     int err;
     int int_tmp;
+    //int num_repeat;
     char *str;
     const char *str_tmp;
     double rho;
@@ -389,6 +395,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
+    if (config_lookup_int(config, "num_repeat", &int_tmp) == CONFIG_FALSE) {
+        fatal_error("num_repeat is a required parameter");
+    }
+    *num_repeat = int_tmp;
     ret = msp_set_num_loci(msp, (size_t) int_tmp);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
@@ -509,6 +519,18 @@ out:
     }
 }
 
+
+static void
+print_positions(tree_sequence_t *ts){
+    printf("positions:");
+    size_t j;
+    for ( j = 0; j < ts->num_mutations; j++){
+        printf(" %f", ts->mutations.position[j]/ts->sequence_length);
+    }
+
+    printf("\n");
+}
+
 static void
 print_haplotypes(tree_sequence_t *ts)
 {
@@ -519,7 +541,6 @@ print_haplotypes(tree_sequence_t *ts)
     uint32_t j;
     char *haplotype;
 
-    printf("haplotypes \n");
     if (hg == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -533,7 +554,6 @@ print_haplotypes(tree_sequence_t *ts)
         if (ret < 0) {
             goto out;
         }
-        printf("%d\t%s\n", j, haplotype);
     }
     /* Get the mutations, reset them, redo the same thing to check */
     ret = tree_sequence_get_mutations(ts, mutations);
@@ -545,7 +565,6 @@ print_haplotypes(tree_sequence_t *ts)
         goto out;
     }
     hapgen_free(hg);
-    printf("checking set_mutations\n");
     ret = hapgen_alloc(hg, ts);
     if (ret != 0) {
         goto out;
@@ -555,7 +574,7 @@ print_haplotypes(tree_sequence_t *ts)
         if (ret < 0) {
             goto out;
         }
-        printf("%d\t%s\n", j, haplotype);
+        printf("%s\n", haplotype);
     }
 
 out:
@@ -648,7 +667,6 @@ print_newick_trees(tree_sequence_t *ts)
     double length;
     char *tree;
 
-    printf("converting newick trees\n");
     if (nc == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -659,8 +677,7 @@ print_newick_trees(tree_sequence_t *ts)
         goto out;
     }
     while ((ret = newick_converter_next(nc, &length, &tree)) == 1) {
-        printf("Tree: %f: %s\n", length, tree);
-        newick_converter_print_state(nc, stdout);
+        printf("%s\n", tree);
     }
     if (ret != 0) {
         goto out;
@@ -778,8 +795,8 @@ static void
 run_simulate(char *conf_file)
 {
     int ret = -1;
-    int result, j;
-    double start_time, end_time;
+    int result, j, num_repeat;
+    //double start_time, end_time;
     mutation_params_t mutation_params;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     msp_t *msp = calloc(1, sizeof(msp_t));
@@ -793,7 +810,7 @@ run_simulate(char *conf_file)
         goto out;
     }
     ret = get_configuration(rng, msp, &mutation_params, recomb_map,
-            &output_file, conf_file);
+            &output_file, conf_file, &num_repeat);
     if (ret != 0) {
         goto out;
     }
@@ -802,15 +819,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    /* print out the demographic event debug state */
-    start_time = 0;
-    do {
 
-        ret = msp_debug_demography(msp, &end_time);
-        printf("interval %f - %f\n", start_time, end_time);
-        msp_print_state(msp, stdout);
-        start_time = end_time;
-    } while (! gsl_isinf(end_time));
     if (ret != 0) {
         goto out;
     }
@@ -818,12 +827,14 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < 1; j++) {
+    printf("msprime %d %d\n\n", msp->sample_size, num_repeat);
+
+    for (j = 0; j < num_repeat; j++) {
         ret = msp_reset(msp);
         if (ret != 0) {
             goto out;
         }
-        printf("Simulation run %d::\n", j);
+        printf("\n//\n");
         result = 1;
         while (result == 1) {
             result = msp_run(msp, DBL_MAX, 1);
@@ -832,45 +843,56 @@ run_simulate(char *conf_file)
                 goto out;
             }
             msp_verify(msp);
-            /* ret = msp_print_state(msp, stdout); */
         }
-        ret = msp_print_state(msp, stdout);
+
+        //recomb_map_print_state(recomb_map);
+        /* Create the tree_sequence from the state of the simulator.
+         * We want to use coalescent time here, so use an Ne of 1/4
+         * to cancel scaling factor. */
+        //ret = tree_sequence_create(tree_seq, msp, recomb_map, 0.25);
+        ret = tree_sequence_create(tree_seq, msp, recomb_map, 0.25);
         if (ret != 0) {
             goto out;
         }
-    }
 
-    recomb_map_print_state(recomb_map, stdout);
-    /* Create the tree_sequence from the state of the simulator.
-     * We want to use coalescent time here, so use an Ne of 1/4
-     * to cancel scaling factor. */
-    ret = tree_sequence_create(tree_seq, msp, recomb_map, 0.25);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_add_provenance_string(tree_seq, "Tree Provenance!!!");
-    if (ret != 0) {
-        goto out;
-    }
-    tree_sequence_print_state(tree_seq, stdout);
-
-    for (j = 0; j < 1; j++) {
-        ret = tree_sequence_dump(tree_seq, output_file, 0);
+        ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
         if (ret != 0) {
             goto out;
         }
-        tree_sequence_free(tree_seq);
-        memset(tree_seq, 0, sizeof(tree_sequence_t));
-        printf("READING \n");
-        ret = tree_sequence_load(tree_seq, output_file, 0);
+        ret = mutgen_generate(mutgen);
         if (ret != 0) {
             goto out;
         }
-        tree_sequence_print_state(tree_seq, stdout);
+        ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
+                mutgen->mutations);
+        if (ret != 0) {
+            goto out;
+        }
+        //print_newick_trees(tree_seq);
+        //tree_sequence_print_state(tree_seq, stdout); // Need to set mutations, before print
+        printf("segsites: %d\n", (int) mutgen->num_mutations);
+        if ( mutgen->num_mutations > 0 ){
+            print_positions(tree_seq);
+            print_haplotypes(tree_seq);
+        }
     }
-
 
     if (0) {
+
+        for (j = 0; j < 10; j++) {
+            ret = tree_sequence_dump(tree_seq, output_file, 0);
+            if (ret != 0) {
+                goto out;
+            }
+            tree_sequence_free(tree_seq);
+            memset(tree_seq, 0, sizeof(tree_sequence_t));
+            printf("READING \n");
+            ret = tree_sequence_load(tree_seq, output_file, 0);
+            if (ret != 0) {
+                goto out;
+            }
+            tree_sequence_print_state(tree_seq, stdout);
+        }
         ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
         if (ret != 0) {
             goto out;
@@ -915,7 +937,6 @@ run_simulate(char *conf_file)
 
         print_newick_trees(tree_seq);
         print_tree_sequence(tree_seq);
-        print_haplotypes(tree_seq);
 
         tree_sequence_print_state(tree_seq, stdout);
         print_haplotypes(tree_seq);

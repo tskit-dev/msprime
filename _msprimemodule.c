@@ -625,7 +625,7 @@ Simulator_parse_population_configuration(Simulator *self,
 {
     int ret = -1;
     Py_ssize_t j, num_populations;
-    double initial_size, growth_rate;
+    double initial_size, growth_rate, multiple_merger_para;
     int err;
     PyObject *item, *value;
 
@@ -658,8 +658,13 @@ Simulator_parse_population_configuration(Simulator *self,
             goto out;
         }
         growth_rate = PyFloat_AsDouble(value);
+        value = get_dict_number(item, "multiple_merger_para");
+        if (value == NULL) {
+            goto out;
+        }
+        multiple_merger_para = PyFloat_AsDouble(value);
         err = msp_set_population_configuration(self->sim, j,
-                initial_size, growth_rate);
+                initial_size, growth_rate, multiple_merger_para);
         if (err != 0) {
             handle_input_error(err);
             goto out;

@@ -1851,7 +1851,8 @@ class PopulationConfiguration(object):
         initial_size = Ne if self.initial_size is None else self.initial_size
         return {
             "initial_size": initial_size / Ne,
-            "growth_rate": self.growth_rate * 4 * Ne
+            "growth_rate": self.growth_rate * 4 * Ne,
+            "multiple_merger_para": 2.0
         }
 
 
