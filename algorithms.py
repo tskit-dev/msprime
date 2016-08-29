@@ -785,50 +785,53 @@ class Tree(object):
         self.__left_index = self.__num_records - 1
         self.__right_index = self.__num_records - 1
         self.__direction = -1
-        self.index = 0
+        self.index = self.num_trees
         self.prev()
 
     def next(self):
+        if self.index == self.num_trees - 1:
+            raise ValueError("Cannot call next on last tree")
         j = int(self.__direction != 1)
         self.__direction = 1
-        il = (self.__left_index + j) % self.__num_records
-        ir = (self.__right_index + j) % self.__num_records
+        il = self.__left_index + j
+        ir = self.__right_index + j
         x = self.__left[self.__left_order[il]]
-        L = max(self.__right)
-        while math.fmod(self.__right[self.__right_order[ir]], L) == x:
+        M = self.__num_records
+        while self.__right[self.__right_order[ir]] == x:
             h = self.__right_order[ir]
             for q in self.__children[h]:
                 self.parent[q] = -1
-            ir = (ir + 1) % self.__num_records
-        while self.__left[self.__left_order[il]] == x:
+            ir += 1
+        while il < M and self.__left[self.__left_order[il]] == x:
             h = self.__left_order[il]
             for q in self.__children[h]:
                 self.parent[q] = self.__node[h]
-            il = (il + 1) % self.__num_records
+            il += 1
         self.__left_index = il
         self.__right_index = ir
-        self.index = (self.index + 1) % self.num_trees
+        self.index += 1
 
     def prev(self):
+        if self.index == 0:
+            raise ValueError("Cannot call prev on the first tree")
         j = int(self.__direction != -1)
         self.__direction = -1
-        il = (self.__left_index - j) % self.__num_records
-        ir = (self.__right_index - j) % self.__num_records
-        L = max(self.__right)
-        x = math.fmod(self.__right[self.__right_order[ir]], L)
+        il = self.__left_index - j
+        ir = self.__right_index - j
+        x = self.__right[self.__right_order[ir]]
         while self.__left[self.__left_order[il]] == x:
             h = self.__left_order[il]
             for q in self.__children[h]:
                 self.parent[q] = -1
-            il = (il - 1) % self.__num_records
-        while math.fmod(self.__right[self.__right_order[ir]], L) == x:
+            il -= 1
+        while ir >= 0 and self.__right[self.__right_order[ir]] == x:
             h = self.__right_order[ir]
             for q in self.__children[h]:
                 self.parent[q] = self.__node[h]
-            ir = (ir - 1) % self.__num_records
+            ir -= 1
         self.__left_index = il
         self.__right_index = ir
-        self.index = (self.index - 1) % self.num_trees
+        self.index -= 1
 
 
 def generate_trees(l, r, u, c, t):
@@ -1125,43 +1128,43 @@ def process_trees(records_file):
     print("START")
     tree = Tree(l, r, u, c, t)
     tree.first()
+    for j in range(T):
+        assert tree.index == j
+        assert tree.parent == forward[j]
+        if j < T - 1:
+            tree.next()
+
+    tree = Tree(l, r, u, c, t)
+    tree.last()
+    for j in range(T):
+        print(j, tree.index, T)
+        assert tree.index == T - j - 1
+        assert tree.parent == forward[T - j - 1]
+        if j < T - 1:
+            tree.prev()
+
+    tree = Tree(l, r, u, c, t)
+    tree.first()
     print("first done")
     assert tree.parent == forward[0]
     assert tree.index == 0
-    for j in range(1):
-        length = random.randint(0, T)
-        print("WALK", length)
-        if random.random() < 0.5:
-            print("FORWARD:")
-            for j in range(length):
-                tree.next()
-                print("\t", tree.index)
-                assert tree.parent == forward[tree.index]
-        else:
-            print("BACK:")
-            for j in range(length):
+    for _ in range(1):
+        for _ in range(T // 2):
+            tree.next()
+            print("\t", tree.index)
+            assert tree.parent == forward[tree.index]
+        for j in range(10):
+            print("Reverse")
+            for _ in range(T // 3):
                 tree.prev()
                 print("\t", tree.index)
                 assert tree.parent == forward[tree.index]
-    print("RESET")
-    tree.last()
-    assert tree.parent == forward[-1]
-    assert tree.index == T - 1
-    for j in range(1000):
-        length = random.randint(0, T)
-        print("WALK", length)
-        if random.random() < 0.5:
-            print("FORWARD:")
-            for j in range(length):
+            print("Forward")
+            for _ in range(T // 3):
                 tree.next()
                 print("\t", tree.index)
                 assert tree.parent == forward[tree.index]
-        else:
-            print("BACK:")
-            for j in range(length):
-                tree.prev()
-                print("\t", tree.index)
-                assert tree.parent == forward[tree.index]
+
 
     # n = min(u)
     # S = set(range(n))

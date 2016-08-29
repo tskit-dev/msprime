@@ -212,6 +212,11 @@ typedef struct {
     double *rates;
 } recomb_map_t;
 
+typedef struct {
+    double position;
+    uint32_t node;
+} mutation_t;
+
 /* Tree sequences */
 typedef struct {
     uint32_t sample_size;
@@ -239,6 +244,8 @@ typedef struct {
     struct {
         uint32_t *node;
         double *position;
+        mutation_t *tree_mutations_mem;
+        mutation_t **tree_mutations;
     } mutations;
     char **provenance_strings;
     size_t num_provenance_strings;
@@ -256,11 +263,6 @@ typedef struct node_record {
     double time;
     struct node_record *next;
 } node_record_t;
-
-typedef struct {
-    double position;
-    uint32_t node;
-} mutation_t;
 
 typedef struct leaf_list_node {
     uint32_t node;
@@ -319,9 +321,10 @@ typedef struct {
     uint32_t sample_size;
     size_t num_nodes;
     size_t num_records;
-    size_t insertion_index;
-    size_t removal_index;
+    size_t left_index;
+    size_t right_index;
     size_t mutation_index;
+    int direction;
     sparse_tree_t *tree;
     tree_sequence_t *tree_sequence;
 } sparse_tree_iterator_t;

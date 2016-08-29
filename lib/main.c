@@ -695,18 +695,14 @@ static void
 print_tree_sequence(tree_sequence_t *ts)
 {
     int ret = 0;
-    size_t j;
+    size_t j, k, l;
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
-    uint32_t mrca;
-    double length;
     sparse_tree_t tree;
-    node_record_t *records_in, *records_out, *record;
     coalescence_record_t *cr;
-    tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
     sparse_tree_iterator_t *sparse_iter = calloc(1, sizeof(sparse_tree_iterator_t));
     uint32_t tracked_leaves[] = {1, 2};
 
-    if (iter == NULL || sparse_iter == NULL) {
+    if (sparse_iter == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -718,39 +714,9 @@ print_tree_sequence(tree_sequence_t *ts)
         printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
                 cr->children[1], cr->node, cr->time);
     }
-    ret = tree_diff_iterator_alloc(iter, ts);
-    if (ret != 0) {
-        goto out;
-    }
-    printf("Tree diffs:\n");
-    tree_diff_iterator_print_state(iter, stdout);
-    while ((ret = tree_diff_iterator_next(
-                    iter, &length, &records_out, &records_in)) == 1) {
-        tree_diff_iterator_print_state(iter, stdout);
-        printf("New tree: %f\n", length);
-        printf("Nodes In:\n");
-        record = records_in;
-        while (record != NULL) {
-            printf("\t(%d\t%d)\t%d\n", record->children[0],
-                    record->children[1], record->node);
-            record = record->next;
-        }
-        printf("Nodes Out:\n");
-        record = records_out;
-        while (record != NULL) {
-            printf("\t(%d\t%d)\t%d\n", record->children[0],
-                    record->children[1], record->node);
-            record = record->next;
-        }
-    }
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_diff_iterator_free(iter);
-    if (ret != 0) {
-        goto out;
-    }
 
+
+    tree_sequence_print_state(ts, stdout);
     /* sparse trees */
     ret = sparse_tree_alloc(&tree, ts, MSP_COUNT_LEAVES);
     if (ret != 0) {
@@ -770,22 +736,36 @@ print_tree_sequence(tree_sequence_t *ts)
         printf("New tree: %f (%d)\n", tree.right - tree.left,
                 (int) tree.num_nodes);
         sparse_tree_iterator_print_state(sparse_iter, stdout);
-        /* print some mrcas */
-        printf("MRCAS:\n");
+        printf("%d:\t", tree.index);
         for (j = 0; j < tree.num_nodes; j++) {
-            ret = sparse_tree_get_mrca(&tree, 1, (uint32_t) j, &mrca);
-            if (ret != 0) {
-                goto out;
+            printf("%02d ", tree.parent[j]);
+        }
+        printf("\n");
+        l = tree.index;
+        if (tree.index > 2) {
+            printf("BACK\n");
+            for (k = 0; k < l - 1; k ++) {
+                sparse_tree_iterator_prev(sparse_iter);
+                printf("\t%d\t%d:\t", tree.index, (int) tree.num_mutations);
+                for (j = 0; j < tree.num_nodes; j++) {
+                    printf("%02d ", tree.parent[j]);
+                }
+                printf("\n");
             }
-            printf("\t%d %d -> %d\n", 1, (int) j, mrca);
+            printf("FORW\n");
+            for (k = 0; k < l - 1; k++) {
+                sparse_tree_iterator_next(sparse_iter);
+                printf("\t%d\t%d:\t", tree.index, (int) tree.num_mutations);
+                for (j = 0; j < tree.num_nodes; j++) {
+                    printf("%02d ", tree.parent[j]);
+                }
+                printf("\n");
+            }
         }
     }
     sparse_tree_iterator_free(sparse_iter);
     sparse_tree_free(&tree);
 out:
-    if (iter != NULL) {
-        free(iter);
-    }
     if (sparse_iter != NULL) {
         free(sparse_iter);
     }
@@ -885,10 +865,12 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    print_ld_matrix(tree_seq);
+    print_tree_sequence(tree_seq);
+    print_haplotypes(tree_seq);
 
     if (0) {
 
+        print_ld_matrix(tree_seq);
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);
             if (ret != 0) {
