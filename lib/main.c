@@ -865,12 +865,12 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    print_tree_sequence(tree_seq);
-    print_haplotypes(tree_seq);
+    print_ld_matrix(tree_seq);
 
     if (0) {
+        print_tree_sequence(tree_seq);
+        print_haplotypes(tree_seq);
 
-        print_ld_matrix(tree_seq);
         for (j = 0; j < 1; j++) {
             ret = tree_sequence_dump(tree_seq, output_file, 0);
             if (ret != 0) {

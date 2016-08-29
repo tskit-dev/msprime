@@ -2846,6 +2846,7 @@ test_tree_sequence_iter_failure(void)
     free_local_records(num_records, records);
 }
 
+#if 0
 static void
 test_tree_sequence_mutations_iter_failure(void)
 {
@@ -2925,6 +2926,7 @@ test_tree_sequence_mutations_iter_failure(void)
 
     free_local_records(num_records, records);
 }
+#endif
 
 static void
 verify_tree_diffs(tree_sequence_t *ts)

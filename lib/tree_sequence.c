@@ -1345,6 +1345,9 @@ tree_sequence_write_ld_table(tree_sequence_t *self, size_t max_sites,
 
     /* Allocation done; we can now move on to the main algorithm */
     while ((i1_ret = sparse_tree_iterator_next(iter1)) == 1) {
+        i2_ret = sparse_tree_iterator_next(iter2);
+        assert(i2_ret == 1);
+        assert(t1->index == t2->index);
         for (j = 0; j < t1->num_mutations; j++) {
             m1 = t1->mutations[j];
             fA = t1->num_leaves[m1.node] / n;
@@ -1397,16 +1400,8 @@ tree_sequence_write_ld_table(tree_sequence_t *self, size_t max_sites,
                 if (ret != 0) {
                     goto out;
                 }
-                ret = sparse_tree_clear(t2);
-                if (ret != 0) {
-                    goto out;
-                }
                 ret = sparse_tree_set_tracked_leaves_from_leaf_list(t2, head,
                         tail);
-                if (ret != 0) {
-                    goto out;
-                }
-                ret = sparse_tree_iterator_copy(iter2, iter1);
                 if (ret != 0) {
                     goto out;
                 }
@@ -1434,6 +1429,14 @@ tree_sequence_write_ld_table(tree_sequence_t *self, size_t max_sites,
                 if (i2_ret < 0) {
                     ret = i2_ret;
                     goto out;
+                }
+                /* Rewind t2 back to t1 */
+                while (t2->index != t1->index) {
+                    i2_ret = sparse_tree_iterator_prev(iter2);
+                    if (i2_ret != 0) {
+                        ret = i2_ret;
+                        goto out;
+                    }
                 }
             }
         }
@@ -1962,55 +1965,6 @@ out:
     return ret;
 }
 
-int WARN_UNUSED
-sparse_tree_set_tracked_leaves(sparse_tree_t *self, uint32_t num_tracked_leaves,
-        uint32_t *tracked_leaves)
-{
-    int ret = MSP_ERR_GENERIC;
-    uint32_t j, u;
-
-    ret = sparse_tree_reset_tracked_leaves(self);
-    if (ret != 0) {
-        goto out;
-    }
-    for (j = 0; j < num_tracked_leaves; j++) {
-        u = tracked_leaves[j];
-        if (u >= self->sample_size) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        self->num_tracked_leaves[u] = 1;
-    }
-out:
-    return ret;
-}
-
-int WARN_UNUSED
-sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
-        leaf_list_node_t *head, leaf_list_node_t *tail)
-{
-    int ret = MSP_ERR_GENERIC;
-    leaf_list_node_t *u = head;
-
-    if (head == NULL || tail == NULL) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    ret = sparse_tree_reset_tracked_leaves(self);
-    if (ret != 0) {
-        goto out;
-    }
-    while (1) {
-        self->num_tracked_leaves[u->node] = 1;
-        if (u == tail) {
-            break;
-        }
-        u = u->next;
-    }
-    ret = 0;
-out:
-    return ret;
-}
 
 /* Propagate the initial tracked leaf counts from the leaves throughout
  * the tree. This is intended to be used only after a copy operation
@@ -2036,6 +1990,64 @@ sparse_tree_propagate_num_tracked_leaves(sparse_tree_t *self)
     }
     return ret;
 }
+
+int WARN_UNUSED
+sparse_tree_set_tracked_leaves(sparse_tree_t *self, uint32_t num_tracked_leaves,
+        uint32_t *tracked_leaves)
+{
+    int ret = MSP_ERR_GENERIC;
+    uint32_t j, u;
+
+    ret = sparse_tree_reset_tracked_leaves(self);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_tracked_leaves; j++) {
+        u = tracked_leaves[j];
+        if (u >= self->sample_size) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+        self->num_tracked_leaves[u] = 1;
+    }
+out:
+    return ret;
+}
+
+/* TODO really need to sort out these APIs and figure out the
+ * conditions under which they can be called. This form can be
+ * called after a clear_tracked_leaves and includes a propagate.
+ * The other form above must only be called before initialising
+ * an iterator. Definitely, definetely need to figure out a new
+ * shape for this API!!
+ */
+int WARN_UNUSED
+sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
+        leaf_list_node_t *head, leaf_list_node_t *tail)
+{
+    int ret = MSP_ERR_GENERIC;
+    leaf_list_node_t *u = head;
+    int done;
+
+    if (head == NULL || tail == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = sparse_tree_reset_tracked_leaves(self);
+    if (ret != 0) {
+        goto out;
+    }
+    done = 0;
+    while (!done) {
+        self->num_tracked_leaves[u->node] = 1;
+        done = u == tail;
+        u = u->next;
+    }
+    ret = sparse_tree_propagate_num_tracked_leaves(self);
+out:
+    return ret;
+}
+
 
 int WARN_UNUSED
 sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
@@ -2069,10 +2081,6 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
         }
         memcpy(self->num_leaves + n, source->num_leaves + n,
                 (N - n) * sizeof(uint32_t));
-        ret = sparse_tree_propagate_num_tracked_leaves(self);
-        if (ret != 0) {
-            goto out;
-        }
     }
     if (self->flags & MSP_LEAF_LISTS) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
