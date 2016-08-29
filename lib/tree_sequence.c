@@ -124,6 +124,17 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
         fprintf(out, "\t%d\t%f\t%d\n", (int) j, self->mutations.position[j],
                (int) self->mutations.node[j]);
     }
+    if (self->num_mutations > 0) {
+        fprintf(out, "tree_mutations\n");
+        for (j = 0; j < self->trees.num_breakpoints; j++) {
+            fprintf(out, "\ttree %d\t%f\n", (int) j, self->trees.breakpoints[j]);
+            for (k = 0; k < self->mutations.num_tree_mutations[j]; k++) {
+                fprintf(out, "\t\t%f\t%d\n",
+                        self->mutations.tree_mutations[j][k].position,
+                        self->mutations.tree_mutations[j][k].node);
+            }
+        }
+    }
     tree_sequence_check_state(self);
 }
 
@@ -239,6 +250,15 @@ tree_sequence_free(tree_sequence_t *self)
     }
     if (self->mutations.position != NULL) {
         free(self->mutations.position);
+    }
+    if (self->mutations.tree_mutations_mem != NULL) {
+        free(self->mutations.tree_mutations_mem);
+    }
+    if (self->mutations.tree_mutations != NULL) {
+        free(self->mutations.tree_mutations);
+    }
+    if (self->mutations.num_tree_mutations != NULL) {
+        free(self->mutations.num_tree_mutations);
     }
     return 0;
 }
@@ -557,6 +577,45 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     self->sequence_length = recomb_map_get_sequence_length(recomb_map);
     ret = recomb_map_genetic_to_phys_bulk(
         recomb_map, self->trees.breakpoints, self->trees.num_breakpoints);
+out:
+    return ret;
+}
+
+/* Sets up the memory for the mutations associated with each tree.
+ */
+static int
+tree_sequence_init_tree_mutations(tree_sequence_t *self)
+{
+    int ret = MSP_ERR_GENERIC;
+    size_t j, tree_index;
+    mutation_t *mut;
+
+    self->mutations.tree_mutations_mem = malloc(
+            self->num_mutations * sizeof(mutation_t));
+    self->mutations.tree_mutations = calloc(self->trees.num_breakpoints,
+            sizeof(mutation_t *));
+    self->mutations.num_tree_mutations = calloc(self->trees.num_breakpoints,
+            sizeof(size_t));
+    if (self->mutations.tree_mutations_mem == NULL ||
+            self->mutations.tree_mutations == NULL ||
+            self->mutations.num_tree_mutations == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    tree_index = 0;
+    self->mutations.tree_mutations[0] = self->mutations.tree_mutations_mem;
+    for (j = 0; j < self->num_mutations; j++) {
+        mut = &self->mutations.tree_mutations_mem[j];
+        mut->position = self->mutations.position[j];
+        mut->node = self->mutations.node[j];
+        assert(tree_index < self->trees.num_breakpoints - 1);
+        while (mut->position >= self->trees.breakpoints[tree_index + 1]) {
+            tree_index++;
+            self->mutations.tree_mutations[tree_index] = mut;
+        }
+        self->mutations.num_tree_mutations[tree_index]++;
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -896,10 +955,12 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         self->sample_size = GSL_MIN(self->sample_size,
                 self->trees.records.node[j]);
     }
-    /* ret = tree_sequence_init_tree_mutations(self); */
-    /* if (ret != 0) { */
-    /*     goto out; */
-    /* } */
+    self->sequence_length = self->trees.breakpoints[
+        self->trees.num_breakpoints - 1];
+    ret = tree_sequence_init_tree_mutations(self);
+    if (ret != 0) {
+        goto out;
+    }
     ret = 0;
 out:
     return ret;
@@ -1567,9 +1628,23 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
         /* any mutations that were there previously are overwritten. */
         if (self->mutations.node != NULL) {
             free(self->mutations.node);
+            self->mutations.node = NULL;
         }
         if (self->mutations.position != NULL) {
             free(self->mutations.position);
+            self->mutations.position = NULL;
+        }
+        if (self->mutations.tree_mutations_mem != NULL) {
+            free(self->mutations.tree_mutations_mem);
+            self->mutations.tree_mutations_mem = NULL;
+        }
+        if (self->mutations.tree_mutations != NULL) {
+            free(self->mutations.tree_mutations);
+            self->mutations.tree_mutations = NULL;
+        }
+        if (self->mutations.num_tree_mutations != NULL) {
+            free(self->mutations.num_tree_mutations);
+            self->mutations.num_tree_mutations = NULL;
         }
     }
     self->num_mutations = 0;
@@ -1599,10 +1674,14 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
         qsort(mutation_ptrs, num_mutations, sizeof(mutation_t *),
                 cmp_mutation_pointer);
         self->num_mutations = num_mutations;
-        /* ret = tree_sequence_init_tree_mutations(self); */
-        /* if (ret != 0) { */
-        /*     goto out; */
-        /* } */
+        for (j = 0; j < num_mutations; j++) {
+            self->mutations.node[j] = mutation_ptrs[j]->node;
+            self->mutations.position[j] = mutation_ptrs[j]->position;
+        }
+        ret = tree_sequence_init_tree_mutations(self);
+        if (ret != 0) {
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -1795,14 +1874,6 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     if (self->stack1 == NULL || self->stack2 == NULL) {
         goto out;
     }
-    self->max_mutations = tree_sequence->num_mutations;
-    self->num_mutations = 0;
-    /* we want the mutations buffer zero'd so that all padding bytes are
-     * zero and we can use memcmp to compare mutation lists */
-    self->mutations = calloc(self->max_mutations, sizeof(mutation_t));
-    if (self->mutations == NULL) {
-        goto out;
-    }
     if (self->flags & MSP_COUNT_LEAVES) {
         self->num_leaves = calloc(num_nodes, sizeof(uint32_t));
         self->num_tracked_leaves = calloc(num_nodes, sizeof(uint32_t));
@@ -1858,9 +1929,6 @@ sparse_tree_free(sparse_tree_t *self)
     }
     if (self->stack2 != NULL) {
         free(self->stack2);
-    }
-    if (self->mutations != NULL) {
-        free(self->mutations);
     }
     if (self->num_leaves != NULL) {
         free(self->num_leaves);
@@ -1987,14 +2055,13 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
     self->root = source->root;
     self->index = source->index;
     self->num_mutations = source->num_mutations;
+    self->mutations = source->mutations;
 
     memcpy(self->parent, source->parent, N * sizeof(uint32_t));
     memcpy(self->population, source->population, N * sizeof(uint8_t));
     memcpy(self->time, source->time, N * sizeof(double));
     memcpy(self->num_children, source->num_children, N * sizeof(uint32_t));
     memcpy(self->children, source->children, N * sizeof(uint32_t *));
-    memcpy(self->mutations, source->mutations,
-            self->num_mutations * sizeof(mutation_t));
     if (self->flags & MSP_COUNT_LEAVES) {
         if (! (source->flags & MSP_COUNT_LEAVES)) {
             ret = MSP_ERR_UNSUPPORTED_OPERATION;
@@ -2039,6 +2106,7 @@ sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
         && self->right_breakpoint == other->right_breakpoint
         && self->root == other->root
         && self->num_mutations == other->num_mutations
+        && self->mutations == other->mutations
         && memcmp(self->parent, other->parent, N * sizeof(uint32_t)) == 0
         && memcmp(self->population, other->population,
                 N * sizeof(uint8_t)) == 0
@@ -2046,9 +2114,7 @@ sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
         && memcmp(self->num_children, other->num_children,
                 N * sizeof(uint32_t)) == 0
         && memcmp(self->children, other->children,
-                N * sizeof(uint32_t *)) == 0
-        && memcmp(self->mutations, other->mutations,
-                self->num_mutations * sizeof(mutation_t)) == 0;
+                N * sizeof(uint32_t *)) == 0;
     if (condition) {
         ret = 0;
     }
@@ -2723,6 +2789,10 @@ sparse_tree_iterator_advance(sparse_tree_iterator_t *self, int direction,
     t->index = (uint32_t) ((int) t->index + direction);
     *out_index = (size_t) out;
     *in_index = (size_t) in;
+    if (s->num_mutations > 0) {
+        t->mutations = s->mutations.tree_mutations[t->index];
+        t->num_mutations = s->mutations.num_tree_mutations[t->index];
+    }
 
     /* TODO These are all redundant and can be derived from the tree index */
     t->left_breakpoint = t->index;
@@ -2730,37 +2800,6 @@ sparse_tree_iterator_advance(sparse_tree_iterator_t *self, int direction,
     t->left = s->trees.breakpoints[t->left_breakpoint];
     t->right = s->trees.breakpoints[t->right_breakpoint];
 
-
-    /* now update the mutations */
-    t->num_mutations = 0;
-#if 0
-    while (self->mutation_index < s->num_mutations
-            && s->mutations.position[self->mutation_index] < t->right) {
-        assert(t->num_mutations < t->max_mutations);
-        /* Throw an error if the mutation is for a node not in the
-         * tree or a root.
-         * */
-        v = s->mutations.node[self->mutation_index];
-        if (t->parent[v] == MSP_NULL_NODE) {
-            ret = MSP_ERR_BAD_MUTATION;
-            goto out;
-        }
-        t->mutations[t->num_mutations].node = v;
-        t->mutations[t->num_mutations].position =
-            s->mutations.position[self->mutation_index];
-        /* TODO fix mutations for backwards*/
-        assert(direction == MSP_DIR_FORWARD);
-        self->mutation_index++;
-        t->num_mutations++;
-    }
-#endif
-
-
-    /*     } */
-    /* } */
-    /* self->mutation_index = (size_t) mut; */
-
-    /* sparse_tree_iterator_print_state(self, stdout); */
 out:
     return ret;
 }

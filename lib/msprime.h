@@ -244,6 +244,7 @@ typedef struct {
     struct {
         uint32_t *node;
         double *position;
+        size_t *num_tree_mutations;
         mutation_t *tree_mutations_mem;
         mutation_t **tree_mutations;
     } mutations;
@@ -314,7 +315,6 @@ typedef struct {
     /* mutation storage */
     mutation_t *mutations;
     size_t num_mutations;
-    size_t max_mutations;
 } sparse_tree_t;
 
 typedef struct {

@@ -3653,8 +3653,10 @@ main(void)
         {"Tree sequence bad records", test_tree_sequence_bad_records},
         {"Single tree iterator failure", test_single_tree_iter_failure},
         {"Tree sequence iterator failure", test_tree_sequence_iter_failure},
-        {"Tree sequence mutation iterator failure",
-            test_tree_sequence_mutations_iter_failure},
+        /* Disabled this test as we no longer check mutations during
+         * iteration. */
+        /* {"Tree sequence mutation iterator failure", */
+        /*     test_tree_sequence_mutations_iter_failure}, */
         {"Tree sequence diff iter", test_tree_sequence_diff_iter},
         {"Nonbinary Tree sequence diff iter",
             test_nonbinary_tree_sequence_diff_iter},
