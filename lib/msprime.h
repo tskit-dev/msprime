@@ -305,6 +305,8 @@ typedef struct {
      * from a specific subset. */
     uint32_t *num_leaves;
     uint32_t *num_tracked_leaves;
+    uint32_t *marked;
+    uint32_t mark;
     /* These are for the optional leaf list tracking. */
     leaf_list_node_t **leaf_list_head;
     leaf_list_node_t **leaf_list_tail;
@@ -386,6 +388,21 @@ typedef struct {
     unsigned long last_position;
     vargen_t *vargen;
 } vcf_converter_t;
+
+typedef struct {
+    size_t max_sites;
+    double max_distance;
+    sparse_tree_t *outer_tree;
+    sparse_tree_t *inner_tree;
+    sparse_tree_iterator_t *outer_iter;
+    sparse_tree_iterator_t *inner_iter;
+    mutation_t *mutations;
+    char **position_labels;
+    char *label_mem;
+    size_t num_mutations;
+    int tree_changed;
+    tree_sequence_t *tree_sequence;
+} ld_calc_t;
 
 typedef struct {
     gsl_rng *rng;
@@ -548,6 +565,13 @@ int vcf_converter_get_header(vcf_converter_t *self, char **header);
 int vcf_converter_next(vcf_converter_t *self, char **record);
 int vcf_converter_free(vcf_converter_t *self);
 void vcf_converter_print_state(vcf_converter_t *self, FILE *out);
+
+int ld_calc_alloc(ld_calc_t *self,
+        tree_sequence_t *tree_sequence, size_t max_sites,
+        double max_distance);
+int ld_calc_free(ld_calc_t *self);
+void ld_calc_print_state(ld_calc_t *self, FILE *out);
+int ld_calc_write_table(ld_calc_t *self, FILE *out);
 
 int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);

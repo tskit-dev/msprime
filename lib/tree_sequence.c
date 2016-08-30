@@ -1306,162 +1306,17 @@ tree_sequence_write_ld_table(tree_sequence_t *self, size_t max_sites,
         double max_distance, FILE *out)
 {
     int ret = MSP_ERR_GENERIC;
-    int err, i1_ret, i2_ret, done;
-    uint32_t j, k, u, v;
-    size_t num_compared_sites;
-    mutation_t m1, m2;
-    sparse_tree_t *t1 = NULL;
-    sparse_tree_t *t2 = NULL;
-    sparse_tree_iterator_t *iter1 = NULL;
-    sparse_tree_iterator_t *iter2 = NULL;
-    leaf_list_node_t *head, *tail;
-    double fA, fB, fAB, D, r2;
-    double n = self->sample_size;
+    ld_calc_t *ld_calc = malloc(sizeof(ld_calc_t));
 
-    t1 = calloc(1, sizeof(sparse_tree_t));
-    t2 = calloc(1, sizeof(sparse_tree_t));
-    iter1 = calloc(1, sizeof(sparse_tree_iterator_t));
-    iter2 = calloc(1, sizeof(sparse_tree_iterator_t));
-    if (t1 == NULL || t2 == NULL || iter1 == NULL || iter2 == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = sparse_tree_alloc(t1, self, MSP_COUNT_LEAVES|MSP_LEAF_LISTS);
+    ret = ld_calc_alloc(ld_calc, self, max_sites, max_distance);
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_alloc(t2, self, MSP_COUNT_LEAVES);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = sparse_tree_iterator_alloc(iter1, t1);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = sparse_tree_iterator_alloc(iter2, t2);
-    if (ret != 0) {
-        goto out;
-    }
-
-    /* Allocation done; we can now move on to the main algorithm */
-    while ((i1_ret = sparse_tree_iterator_next(iter1)) == 1) {
-        i2_ret = sparse_tree_iterator_next(iter2);
-        assert(i2_ret == 1);
-        assert(t1->index == t2->index);
-        for (j = 0; j < t1->num_mutations; j++) {
-            m1 = t1->mutations[j];
-            fA = t1->num_leaves[m1.node] / n;
-            num_compared_sites = 0;
-            done = 0;
-            /* First compute LD for all the mutations on this tree. This
-             * is a much simplified case, since fAB is either 0, fA or fB
-             */
-            for (k = j + 1; k < t1->num_mutations; k++) {
-                m2 = t1->mutations[k];
-                if (num_compared_sites >= max_sites
-                        || m2.position - m1.position > max_distance) {
-                    done = 1;
-                    break;
-                }
-                fB = t1->num_leaves[m2.node] / n;
-                u = m1.node;
-                v = m2.node;
-                if (t1->time[u] > t1->time[v]) {
-                    v = m1.node;
-                    u = m2.node;
-                }
-                while (u != v && u != MSP_NULL_NODE) {
-                    u = t1->parent[u];
-                }
-                fAB = 0;
-                if (u == v) {
-                    if (v == m1.node) {
-                        fAB = fB;
-                    } else {
-                        fAB = fA;
-                    }
-                }
-                D = fAB - fA * fB;
-                r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
-                err = fprintf(out, "%d:%d\t%f\t%d:%d\t%f\t%G\n",
-                        t1->index, j, m1.position, t1->index, k, m2.position, r2);
-                if (err < 0) {
-                    ret = MSP_ERR_IO;
-                    goto out;
-                }
-                num_compared_sites++;
-            }
-
-            /* TODO we need to break this out into an outer loop so that we can
-             * do the copy outside of the mutation loop.
-             */
-            if (!done) {
-                ret = sparse_tree_get_leaf_list(t1, m1.node, &head, &tail);
-                if (ret != 0) {
-                    goto out;
-                }
-                ret = sparse_tree_set_tracked_leaves_from_leaf_list(t2, head,
-                        tail);
-                if (ret != 0) {
-                    goto out;
-                }
-                while (!done && (i2_ret = sparse_tree_iterator_next(iter2)) == 1) {
-                    for (k = 0; k < t2->num_mutations; k++) {
-                        m2 = t2->mutations[k];
-                        if (num_compared_sites >= max_sites
-                                || m2.position - m1.position > max_distance) {
-                            done = 1;
-                            break;
-                        }
-                        fB = t2->num_leaves[m2.node] / n;
-                        fAB = t2->num_tracked_leaves[m2.node] / n;
-                        D = fAB - fA * fB;
-                        r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
-                        err = fprintf(out, "%d:%d\t%f\t%d:%d\t%f\t%G\n",
-                                t1->index, j, m1.position, t2->index, k, m2.position, r2);
-                        if (err < 0) {
-                            ret = MSP_ERR_IO;
-                            goto out;
-                        }
-                        num_compared_sites++;
-                    }
-                }
-                if (i2_ret < 0) {
-                    ret = i2_ret;
-                    goto out;
-                }
-                /* Rewind t2 back to t1 */
-                while (t2->index != t1->index) {
-                    i2_ret = sparse_tree_iterator_prev(iter2);
-                    if (i2_ret != 0) {
-                        ret = i2_ret;
-                        goto out;
-                    }
-                }
-            }
-        }
-    }
-    if (i1_ret != 0) {
-        ret = i1_ret;
-        goto out;
-    }
-    ret = 0;
+    ret = ld_calc_write_table(ld_calc, out);
 out:
-    if (iter1 != NULL) {
-        sparse_tree_iterator_free(iter1);
-        free(iter1);
-    }
-    if (iter2 != NULL) {
-        sparse_tree_iterator_free(iter2);
-        free(iter2);
-    }
-    if (t1 != NULL) {
-        sparse_tree_free(t1);
-        free(t1);
-    }
-    if (t2 != NULL) {
-        sparse_tree_free(t2);
-        free(t2);
+    if (ld_calc != NULL) {
+        ld_calc_free(ld_calc);
+        free(ld_calc);
     }
     return ret;
 }
@@ -1880,7 +1735,9 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     if (self->flags & MSP_COUNT_LEAVES) {
         self->num_leaves = calloc(num_nodes, sizeof(uint32_t));
         self->num_tracked_leaves = calloc(num_nodes, sizeof(uint32_t));
-        if (self->num_leaves == NULL || self->num_tracked_leaves == NULL) {
+        self->marked = calloc(num_nodes, sizeof(uint32_t));
+        if (self->num_leaves == NULL || self->num_tracked_leaves == NULL
+                || self->marked == NULL) {
             goto out;
         }
         for (j = 0; j < sample_size; j++) {
@@ -1939,6 +1796,9 @@ sparse_tree_free(sparse_tree_t *self)
     if (self->num_tracked_leaves != NULL) {
         free(self->num_tracked_leaves);
     }
+    if (self->marked != NULL) {
+        free(self->marked);
+    }
     if (self->leaf_list_head != NULL) {
         free(self->leaf_list_head);
     }
@@ -1965,31 +1825,6 @@ out:
     return ret;
 }
 
-
-/* Propagate the initial tracked leaf counts from the leaves throughout
- * the tree. This is intended to be used only after a copy operation
- * has been performed; otherwise, all leaf tracking operations are
- * taken care of in the sparse_tree_iterator.
- */
-static int WARN_UNUSED
-sparse_tree_propagate_num_tracked_leaves(sparse_tree_t *self)
-{
-    int ret = 0;
-    uint32_t u, v, k;
-
-    for (u = 0; u < self->sample_size; u++) {
-        k = self->num_tracked_leaves[u];
-        if (k > 0) {
-            v = self->parent[u];
-            while (v != MSP_NULL_NODE) {
-                self->num_tracked_leaves[v] += k;
-                v = self->parent[v];
-
-            }
-        }
-    }
-    return ret;
-}
 
 int WARN_UNUSED
 sparse_tree_set_tracked_leaves(sparse_tree_t *self, uint32_t num_tracked_leaves,
@@ -2026,8 +1861,9 @@ sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
         leaf_list_node_t *head, leaf_list_node_t *tail)
 {
     int ret = MSP_ERR_GENERIC;
-    leaf_list_node_t *u = head;
-    int done;
+    leaf_list_node_t *list_node = head;
+    uint32_t u;
+    int not_done;
 
     if (head == NULL || tail == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -2037,13 +1873,16 @@ sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
     if (ret != 0) {
         goto out;
     }
-    done = 0;
-    while (!done) {
-        self->num_tracked_leaves[u->node] = 1;
-        done = u == tail;
-        u = u->next;
+    not_done = 1;
+    while (not_done) {
+        u = list_node->node;
+        while (u != MSP_NULL_NODE) {
+            self->num_tracked_leaves[u] += 1;
+            u = self->parent[u];
+        }
+        not_done = list_node != tail;
+        list_node = list_node->next;
     }
-    ret = sparse_tree_propagate_num_tracked_leaves(self);
 out:
     return ret;
 }
@@ -2151,6 +1990,7 @@ sparse_tree_clear(sparse_tree_t *self)
     if (self->flags & MSP_COUNT_LEAVES) {
         memset(self->num_leaves + n, 0, (N - n) * sizeof(uint32_t));
         memset(self->num_tracked_leaves + n, 0, (N - n) * sizeof(uint32_t));
+        memset(self->marked, 0, N * sizeof(uint32_t));
     }
     if (self->flags & MSP_LEAF_LISTS) {
         memset(self->leaf_list_head + n, 0,
@@ -2443,8 +2283,8 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
         }
         fprintf(out, ")");
         if (self->flags & MSP_COUNT_LEAVES) {
-            fprintf(out, "\t%d\t%d", self->num_leaves[j],
-                    self->num_tracked_leaves[j]);
+            fprintf(out, "\t%d\t%d\t%d", self->num_leaves[j],
+                    self->num_tracked_leaves[j], self->marked[j]);
         }
         if (self->flags & MSP_LEAF_LISTS) {
             fprintf(out, "\t[");
@@ -2584,6 +2424,7 @@ sparse_tree_iterator_propagate_leaf_count_loss(sparse_tree_iterator_t *self,
     while (v != MSP_NULL_NODE) {
         t->num_leaves[v] -= all_leaves_diff;
         t->num_tracked_leaves[v] -= tracked_leaves_diff;
+        t->marked[v] = t->mark;
         v = t->parent[v];
     }
 }
@@ -2620,6 +2461,7 @@ sparse_tree_iterator_propagate_leaf_count_gain(sparse_tree_iterator_t *self, uin
     while (v != MSP_NULL_NODE) {
         t->num_leaves[v] += all_leaves_diff;
         t->num_tracked_leaves[v] += tracked_leaves_diff;
+        t->marked[v] = t->mark;
         v = t->parent[v];
     }
 }
@@ -2743,7 +2585,7 @@ sparse_tree_iterator_advance(sparse_tree_iterator_t *self, int direction,
     }
 
     h = in;
-    while (in < R && in_breakpoints[in_order[in]] == x) {
+    while (in >= 0 && in < R && in_breakpoints[in_order[in]] == x) {
         k = in_order[in];
         u = s->trees.records.node[k];
         for (j = 0; j < s->trees.records.num_children[k]; j++) {

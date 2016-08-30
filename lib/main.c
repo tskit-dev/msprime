@@ -575,12 +575,19 @@ static void
 print_ld_matrix(tree_sequence_t *ts)
 {
     int ret;
+    ld_calc_t ld_calc;
+
     printf("LD TABLE\n");
-    ret = tree_sequence_write_ld_table(ts, 10, 20, stdout);
+    ret = ld_calc_alloc(&ld_calc, ts, 10, DBL_MAX);
     if (ret != 0) {
         goto out;
     }
-
+    ld_calc_print_state(&ld_calc, stdout);
+    ret = ld_calc_write_table(&ld_calc, stdout);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = ld_calc_free(&ld_calc);
 out:
     if (ret != 0) {
         fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
@@ -732,6 +739,7 @@ print_tree_sequence(tree_sequence_t *ts)
         goto out;
     }
     printf("Sparse trees:\n");
+    tree.mark = 0;
     while ((ret = sparse_tree_iterator_next(sparse_iter)) == 1) {
         printf("New tree: %f (%d)\n", tree.right - tree.left,
                 (int) tree.num_nodes);

@@ -648,5 +648,6 @@ if __name__ == "__main__":
     # ld_dev()
 
     ts = msprime.load(sys.argv[1])
-    ts.write_ld_table("tmp__NOBACKUP__/table.txt", max_sites=100)
+    max_sites = int(sys.argv[2])
+    ts.write_ld_table("tmp__NOBACKUP__/table.txt", max_sites=max_sites)
 
