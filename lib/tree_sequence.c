@@ -1302,26 +1302,6 @@ out:
 }
 
 int WARN_UNUSED
-tree_sequence_write_ld_table(tree_sequence_t *self, size_t max_sites,
-        double max_distance, FILE *out)
-{
-    int ret = MSP_ERR_GENERIC;
-    ld_calc_t *ld_calc = malloc(sizeof(ld_calc_t));
-
-    ret = ld_calc_alloc(ld_calc, self, max_sites, max_distance);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = ld_calc_write_table(ld_calc, out);
-out:
-    if (ld_calc != NULL) {
-        ld_calc_free(ld_calc);
-        free(ld_calc);
-    }
-    return ret;
-}
-
-int WARN_UNUSED
 tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     uint32_t *samples, uint32_t num_samples, double *pi)
 {

@@ -578,7 +578,7 @@ print_ld_matrix(tree_sequence_t *ts)
     ld_calc_t ld_calc;
 
     printf("LD TABLE\n");
-    ret = ld_calc_alloc(&ld_calc, ts, 10, DBL_MAX);
+    ret = ld_calc_alloc(&ld_calc, ts, 10, DBL_MAX, 0.0);
     if (ret != 0) {
         goto out;
     }

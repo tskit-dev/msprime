@@ -64,7 +64,7 @@ out:
 
 int WARN_UNUSED
 ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence, size_t max_sites,
-        double max_distance)
+        double max_distance, double r2_threshold)
 {
 
     int ret = MSP_ERR_GENERIC;
@@ -73,6 +73,7 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence, size_t max_sites,
     self->tree_sequence = tree_sequence;
     self->max_sites = max_sites;
     self->max_distance = max_distance;
+    self->r2_threshold = r2_threshold;
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->outer_tree = malloc(sizeof(sparse_tree_t));
     self->inner_tree = malloc(sizeof(sparse_tree_t));
@@ -152,6 +153,7 @@ ld_calc_print_state(ld_calc_t *self, FILE *out)
     fprintf(out, "tree_sequence = %p\n", (void *) self->tree_sequence);
     fprintf(out, "max_sites = %d\n", (int) self->max_sites);
     fprintf(out, "max_distance = %f\n", self->max_distance);
+    fprintf(out, "r2_threshold = %f\n", self->r2_threshold);
     fprintf(out, "outer tree index = %d\n", (int) self->outer_tree->index);
     fprintf(out, "inner tree index = %d\n", (int) self->inner_tree->index);
 }
@@ -206,11 +208,6 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
     sparse_tree_t *tA, *tB;
     double n = tree_sequence_get_sample_size(self->tree_sequence);
 
-    size_t within_tree = 0;
-    size_t similar_tree = 0;
-    size_t general = 0;
-
-
     /* set the trees to the first tree */
     ret = sparse_tree_iterator_next(self->outer_iter);
     if (ret < 0) {
@@ -226,7 +223,6 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
     for (j = 0; j < self->num_mutations; j++) {
         assert(tA->index == tB->index);
         mA = self->mutations[j];
-        fA = tA->num_leaves[mA.node] / n;
         while (mA.position >= tA->right) {
             ret = sparse_tree_iterator_next(self->outer_iter);
             if (ret < 0) {
@@ -237,6 +233,9 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
                 goto out;
             }
         }
+        assert(tA->parent[mA.node] != MSP_NULL_NODE);
+        fA = tA->num_leaves[mA.node] / n;
+        assert(fA > 0);
         tB->mark = 1;
         tracked_leaves_set = 0;
         for (k = j + 1; k < self->num_mutations; k++) {
@@ -245,15 +244,16 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
                     mB.position - mA.position > self->max_distance) {
                 break;
             }
+            while (mB.position >= tB->right) {
+                ret = sparse_tree_iterator_next(self->inner_iter);
+                assert(ret == 1);
+            }
+            assert(tB->parent[mB.node] != MSP_NULL_NODE);
             fB = tB->num_leaves[mB.node] / n;
+            assert(fB > 0);
             if (mB.position < tA->right) {
-                within_tree++;
                 nAB = ld_calc_overlap_within_tree(self, mA, mB);
             } else {
-                while (mB.position >= tB->right) {
-                    ret = sparse_tree_iterator_next(self->inner_iter);
-                    assert(ret == 1);
-                }
                 if (!tracked_leaves_set && tB->marked[mA.node] == 1) {
                     tracked_leaves_set = 1;
                     ret = ld_calc_set_tracked_leaves(self, mA);
@@ -263,32 +263,29 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
                 }
                 if (tracked_leaves_set) {
                     nAB = tB->num_tracked_leaves[mB.node];
-                    general++;
                 } else {
-                    similar_tree++;
                     nAB = ld_calc_overlap_within_tree(self, mA, mB);
                 }
             }
             fAB = nAB / n;
             D = fAB - fA * fB;
             r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
-            err = fputs(self->position_labels[j], out);
-            if (err < 0) {
-                ret = MSP_ERR_IO;
-                goto out;
-            }
-            err = fputs(self->position_labels[k], out);
-            if (err < 0) {
-                ret = MSP_ERR_IO;
-                goto out;
-            }
-            err = fprintf(out, "%G\n", r2);
-            /* err = fprintf(out, "%d:%d\t%f\t%d:%d\t%f\t%G\n", */
-            /*         (int) tA->index, (int) j, mA.position, (int) tB->index, */
-            /*         (int) k, mB.position, r2); */
-            if (err < 0) {
-                ret = MSP_ERR_IO;
-                goto out;
+            if (r2 >= self->r2_threshold) {
+                err = fputs(self->position_labels[j], out);
+                if (err < 0) {
+                    ret = MSP_ERR_IO;
+                    goto out;
+                }
+                err = fputs(self->position_labels[k], out);
+                if (err < 0) {
+                    ret = MSP_ERR_IO;
+                    goto out;
+                }
+                err = fprintf(out, "%G\n", r2);
+                if (err < 0) {
+                    ret = MSP_ERR_IO;
+                    goto out;
+                }
             }
         }
         tB->mark = 0;
@@ -300,10 +297,6 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
             }
         }
     }
-    printf("within_tree  = %d\n", (int) within_tree);
-    printf("similar_tree = %d\n", (int) similar_tree);
-    printf("general      = %d\n", (int) general);
-
     ret = 0;
 out:
     return ret;

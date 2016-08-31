@@ -392,6 +392,7 @@ typedef struct {
 typedef struct {
     size_t max_sites;
     double max_distance;
+    double r2_threshold;
     sparse_tree_t *outer_tree;
     sparse_tree_t *inner_tree;
     sparse_tree_iterator_t *outer_iter;
@@ -498,8 +499,6 @@ int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u,
         sample_t *sample);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     uint32_t *samples, uint32_t num_samples, double *pi);
-int tree_sequence_write_ld_table(tree_sequence_t *self,
-    size_t max_sites, double max_distance, FILE *out);
 int tree_sequence_set_samples(tree_sequence_t *self, size_t sample_size,
         sample_t *samples);
 int tree_sequence_set_mutations(tree_sequence_t *self,
@@ -568,7 +567,7 @@ void vcf_converter_print_state(vcf_converter_t *self, FILE *out);
 
 int ld_calc_alloc(ld_calc_t *self,
         tree_sequence_t *tree_sequence, size_t max_sites,
-        double max_distance);
+        double max_distance, double r2_threshold);
 int ld_calc_free(ld_calc_t *self);
 void ld_calc_print_state(ld_calc_t *self, FILE *out);
 int ld_calc_write_table(ld_calc_t *self, FILE *out);

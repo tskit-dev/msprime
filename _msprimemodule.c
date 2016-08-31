@@ -2789,9 +2789,12 @@ TreeSequence_write_ld_table(TreeSequence *self, PyObject *args,
         PyObject *kwds)
 {
     PyObject *ret = NULL;
-    static char *kwlist[] = {"filename", "max_sites", "max_distance", NULL};
+    static char *kwlist[] = {"filename", "max_sites", "max_distance",
+        "r2_threshold", NULL};
     Py_ssize_t max_sites = PY_SSIZE_T_MAX;
+    ld_calc_t *ld_calc = NULL;
     double max_distance = DBL_MAX;
+    double r2_threshold = 0.0;
     char *filename;
     int err;
     FILE *out = NULL;
@@ -2799,8 +2802,8 @@ TreeSequence_write_ld_table(TreeSequence *self, PyObject *args,
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|nd", kwlist,
-            &filename, &max_sites, &max_distance)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ndd", kwlist,
+            &filename, &max_sites, &max_distance, &r2_threshold)) {
         goto out;
     }
     out = fopen(filename, "w");
@@ -2808,8 +2811,18 @@ TreeSequence_write_ld_table(TreeSequence *self, PyObject *args,
         PyErr_SetFromErrno(PyExc_OSError);
         goto out;
     }
-    err = tree_sequence_write_ld_table(self->tree_sequence, (size_t) max_sites,
-        max_distance, out);
+    ld_calc = PyMem_Malloc(sizeof(ld_calc_t));
+    if (ld_calc == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = ld_calc_alloc(ld_calc, self->tree_sequence, max_sites, max_distance,
+            r2_threshold);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    err = ld_calc_write_table(ld_calc, out);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2828,6 +2841,10 @@ out:
          * that might occur.
          */
         fclose(out);
+    }
+    if (ld_calc != NULL) {
+        ld_calc_free(ld_calc);
+        PyMem_Free(ld_calc);
     }
     return ret;
 }
