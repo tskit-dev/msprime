@@ -42,7 +42,7 @@
 #define MSP_ORDER_LEFT 1
 #define MSP_ORDER_RIGHT 2
 
-#define MSP_COUNT_LEAVES 1
+#define MSP_LEAF_COUNTS  1
 #define MSP_LEAF_LISTS   2
 
 #define MAX_BRANCH_LENGTH_STRING 24

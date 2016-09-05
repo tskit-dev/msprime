@@ -3000,18 +3000,19 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "tracked_leaves", NULL};
+    static char *kwlist[] = {"tree_sequence", "flags", "tracked_leaves",
+        NULL};
     PyObject *py_tracked_leaves = NULL;
     TreeSequence *tree_sequence = NULL;
     uint32_t *tracked_leaves = NULL;
-    int flags = MSP_COUNT_LEAVES | MSP_LEAF_LISTS;
+    int flags = 0;
     uint32_t j, n, num_tracked_leaves;
     PyObject *item;
 
     self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
-            &TreeSequenceType, &tree_sequence, &PyList_Type,
-            &py_tracked_leaves)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|iO!", kwlist,
+            &TreeSequenceType, &tree_sequence,
+            &flags, &PyList_Type, &py_tracked_leaves)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -3022,6 +3023,11 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     n = tree_sequence_get_sample_size(tree_sequence->tree_sequence);
     num_tracked_leaves = 0;
     if (py_tracked_leaves != NULL) {
+        if (!flags & MSP_LEAF_COUNTS) {
+            PyErr_SetString(PyExc_ValueError,
+                "Cannot specified tracked_leaves without count_leaves flag");
+            goto out;
+        }
         num_tracked_leaves = PyList_Size(py_tracked_leaves);
     }
     tracked_leaves = PyMem_Malloc(num_tracked_leaves * sizeof(uint32_t));
@@ -3052,11 +3058,13 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
-    err = sparse_tree_set_tracked_leaves(self->sparse_tree, num_tracked_leaves,
-            tracked_leaves);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
+    if (flags & MSP_LEAF_COUNTS) {
+        err = sparse_tree_set_tracked_leaves(self->sparse_tree, num_tracked_leaves,
+                tracked_leaves);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
     err = sparse_tree_clear(self->sparse_tree);
     if (err != 0) {
@@ -3150,14 +3158,14 @@ out:
 }
 
 static PyObject *
-SparseTree_get_count_leaves(SparseTree *self)
+SparseTree_get_flags(SparseTree *self)
 {
     PyObject *ret = NULL;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    ret = PyBool_FromLong(self->sparse_tree->flags & MSP_COUNT_LEAVES);
+    ret = Py_BuildValue("i", self->sparse_tree->flags);
 out:
     return ret;
 }
@@ -3397,8 +3405,8 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the right-most coordinate (exclusive)." },
     {"get_mutations", (PyCFunction) SparseTree_get_mutations, METH_NOARGS,
             "Returns the list of mutations on this tree." },
-    {"get_count_leaves", (PyCFunction) SparseTree_get_count_leaves, METH_NOARGS,
-            "Returns True if fast leaf counting is enabled." },
+    {"get_flags", (PyCFunction) SparseTree_get_flags, METH_NOARGS,
+            "Returns the value of the flags variable." },
     {"get_num_mutations", (PyCFunction) SparseTree_get_num_mutations, METH_NOARGS,
             "Returns the number of mutations on this tree." },
     {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
@@ -4697,6 +4705,9 @@ init_msprime(void)
     PyModule_AddIntConstant(module, "MSP_ORDER_TIME", MSP_ORDER_TIME);
     PyModule_AddIntConstant(module, "MSP_ORDER_LEFT", MSP_ORDER_LEFT);
     PyModule_AddIntConstant(module, "MSP_ORDER_RIGHT", MSP_ORDER_RIGHT);
+    /* Tree flags */
+    PyModule_AddIntConstant(module, "LEAF_COUNTS", MSP_LEAF_COUNTS);
+    PyModule_AddIntConstant(module, "LEAF_LISTS", MSP_LEAF_LISTS);
     /* turn off GSL error handler so we don't abort on memory error */
     gsl_set_error_handler_off();
 

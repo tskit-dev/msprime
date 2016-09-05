@@ -90,12 +90,12 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence, size_t max_sites,
         goto out;
     }
     ret = sparse_tree_alloc(self->outer_tree, self->tree_sequence,
-            MSP_COUNT_LEAVES|MSP_LEAF_LISTS);
+            MSP_LEAF_COUNTS|MSP_LEAF_LISTS);
     if (ret != 0) {
         goto out;
     }
     ret = sparse_tree_alloc(self->inner_tree, self->tree_sequence,
-            MSP_COUNT_LEAVES);
+            MSP_LEAF_COUNTS);
     if (ret != 0) {
         goto out;
     }

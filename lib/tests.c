@@ -2211,7 +2211,7 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests,
 
     n = tree_sequence_get_sample_size(ts);
 
-    /* First run without the MSP_COUNT_LEAVES feature */
+    /* First run without the MSP_LEAF_COUNTS feature */
     ret = sparse_tree_alloc(&tree, ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_iterator_alloc(&iter, &tree);
@@ -2235,8 +2235,8 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests,
     sparse_tree_iterator_free(&iter);
     sparse_tree_free(&tree);
 
-    /* Now run with MSP_COUNT_LEAVES but with no leaves tracked. */
-    ret = sparse_tree_alloc(&tree, ts, MSP_COUNT_LEAVES);
+    /* Now run with MSP_LEAF_COUNTS but with no leaves tracked. */
+    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_iterator_alloc(&iter, &tree);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2261,7 +2261,7 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests,
     sparse_tree_iterator_free(&iter);
     sparse_tree_free(&tree);
 
-    /* Run with MSP_LEAF_LISTS, but without MSP_COUNT_LEAVES */
+    /* Run with MSP_LEAF_LISTS, but without MSP_LEAF_COUNTS */
     ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_LISTS);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_iterator_alloc(&iter, &tree);
@@ -2296,12 +2296,12 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests,
     sparse_tree_iterator_free(&iter);
     sparse_tree_free(&tree);
 
-    /* Now use MSP_COUNT_LEAVES|MSP_LEAF_LISTS */
+    /* Now use MSP_LEAF_COUNTS|MSP_LEAF_LISTS */
     tracked_leaves = malloc(n * sizeof(uint32_t));
     for (j = 0; j < n; j++) {
         tracked_leaves[j] = j;
     }
-    ret = sparse_tree_alloc(&tree, ts, MSP_COUNT_LEAVES|MSP_LEAF_LISTS);
+    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS|MSP_LEAF_LISTS);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_set_tracked_leaves(&tree, n, tracked_leaves);
     ret = sparse_tree_iterator_alloc(&iter, &tree);
@@ -2355,7 +2355,7 @@ verify_leaf_sets(tree_sequence_t *ts)
     leaves = malloc(n * sizeof(uint32_t));
     CU_ASSERT_FATAL(stack != NULL);
     CU_ASSERT_FATAL(leaves != NULL);
-    ret = sparse_tree_alloc(&tree, ts, MSP_COUNT_LEAVES|MSP_LEAF_LISTS);
+    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS|MSP_LEAF_LISTS);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_iterator_alloc(&iter, &tree);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2451,8 +2451,8 @@ verify_tree_iter_copy(tree_sequence_t *ts)
     sparse_tree_t *trees, t1, t2;
     sparse_tree_iterator_t iter1, iter2;
     size_t j, k;
-    int flags[] = {0, MSP_LEAF_LISTS, MSP_COUNT_LEAVES,
-        MSP_LEAF_LISTS | MSP_COUNT_LEAVES};
+    int flags[] = {0, MSP_LEAF_LISTS, MSP_LEAF_COUNTS,
+        MSP_LEAF_LISTS | MSP_LEAF_COUNTS};
     size_t inner_max = 10;
 
     trees = get_tree_list(ts);
@@ -2544,8 +2544,8 @@ verify_tree_equals(tree_sequence_t *ts)
     size_t j, k;
     tree_sequence_t *other_ts = get_example_tree_sequence(
             10, 0, 100, 100.0, 1.0, 1.0, 0, NULL);
-    int flags[] = {0, MSP_LEAF_LISTS, MSP_COUNT_LEAVES,
-        MSP_LEAF_LISTS | MSP_COUNT_LEAVES};
+    int flags[] = {0, MSP_LEAF_LISTS, MSP_LEAF_COUNTS,
+        MSP_LEAF_LISTS | MSP_LEAF_COUNTS};
 
     trees = get_tree_list(ts);
     ret = sparse_tree_alloc(&t, other_ts, 0);

@@ -1316,7 +1316,7 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = sparse_tree_alloc(tree, self, MSP_COUNT_LEAVES);
+    ret = sparse_tree_alloc(tree, self, MSP_LEAF_COUNTS);
     if (ret != 0) {
         goto out;
     }
@@ -1712,7 +1712,7 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     if (self->stack1 == NULL || self->stack2 == NULL) {
         goto out;
     }
-    if (self->flags & MSP_COUNT_LEAVES) {
+    if (self->flags & MSP_LEAF_COUNTS) {
         self->num_leaves = calloc(num_nodes, sizeof(uint32_t));
         self->num_tracked_leaves = calloc(num_nodes, sizeof(uint32_t));
         self->marked = calloc(num_nodes, sizeof(uint32_t));
@@ -1796,7 +1796,7 @@ sparse_tree_reset_tracked_leaves(sparse_tree_t *self)
 {
     int ret = 0;
 
-    if (!(self->flags & MSP_COUNT_LEAVES)) {
+    if (!(self->flags & MSP_LEAF_COUNTS)) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
@@ -1893,8 +1893,8 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
     memcpy(self->time, source->time, N * sizeof(double));
     memcpy(self->num_children, source->num_children, N * sizeof(uint32_t));
     memcpy(self->children, source->children, N * sizeof(uint32_t *));
-    if (self->flags & MSP_COUNT_LEAVES) {
-        if (! (source->flags & MSP_COUNT_LEAVES)) {
+    if (self->flags & MSP_LEAF_COUNTS) {
+        if (! (source->flags & MSP_LEAF_COUNTS)) {
             ret = MSP_ERR_UNSUPPORTED_OPERATION;
             goto out;
         }
@@ -1967,7 +1967,7 @@ sparse_tree_clear(sparse_tree_t *self)
     memset(self->time, 0, N * sizeof(double));
     memset(self->num_children, 0, N * sizeof(uint32_t));
     memset(self->children, 0, N * sizeof(uint32_t *));
-    if (self->flags & MSP_COUNT_LEAVES) {
+    if (self->flags & MSP_LEAF_COUNTS) {
         memset(self->num_leaves + n, 0, (N - n) * sizeof(uint32_t));
         memset(self->num_tracked_leaves + n, 0, (N - n) * sizeof(uint32_t));
         memset(self->marked, 0, N * sizeof(uint32_t));
@@ -2073,7 +2073,7 @@ sparse_tree_get_num_leaves(sparse_tree_t *self, uint32_t u,
         goto out;
     }
 
-    if (self->flags & MSP_COUNT_LEAVES) {
+    if (self->flags & MSP_LEAF_COUNTS) {
         *num_leaves = self->num_leaves[u];
     } else {
         ret = sparse_tree_get_num_leaves_by_traversal(self, u, num_leaves);
@@ -2092,7 +2092,7 @@ sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, uint32_t u,
     if (ret != 0) {
         goto out;
     }
-    if (! (self->flags & MSP_COUNT_LEAVES)) {
+    if (! (self->flags & MSP_LEAF_COUNTS)) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
@@ -2214,7 +2214,7 @@ sparse_tree_check_state(sparse_tree_t *self)
         }
         assert(u == self->root);
     }
-    if (self->flags & MSP_COUNT_LEAVES) {
+    if (self->flags & MSP_LEAF_COUNTS) {
         assert(self->num_leaves != NULL);
         assert(self->num_tracked_leaves != NULL);
         for (j = 0; j < self->num_nodes; j++) {
@@ -2262,7 +2262,7 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
             }
         }
         fprintf(out, ")");
-        if (self->flags & MSP_COUNT_LEAVES) {
+        if (self->flags & MSP_LEAF_COUNTS) {
             fprintf(out, "\t%d\t%d\t%d", self->num_leaves[j],
                     self->num_tracked_leaves[j], self->marked[j]);
         }
@@ -2554,7 +2554,7 @@ sparse_tree_iterator_advance(sparse_tree_iterator_t *self, int direction,
         if (u == t->root) {
             t->root = oldest_child;
         }
-        if (t->flags & MSP_COUNT_LEAVES) {
+        if (t->flags & MSP_LEAF_COUNTS) {
             sparse_tree_iterator_propagate_leaf_count_loss(self, u);
         }
         if (t->flags & MSP_LEAF_LISTS) {
@@ -2579,7 +2579,7 @@ sparse_tree_iterator_advance(sparse_tree_iterator_t *self, int direction,
         if (t->time[u] > t->time[t->root]) {
             t->root = u;
         }
-        if (t->flags & MSP_COUNT_LEAVES) {
+        if (t->flags & MSP_LEAF_COUNTS) {
             sparse_tree_iterator_propagate_leaf_count_gain(self, u);
         }
         if (t->flags & MSP_LEAF_LISTS) {

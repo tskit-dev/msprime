@@ -725,7 +725,7 @@ print_tree_sequence(tree_sequence_t *ts)
 
     tree_sequence_print_state(ts, stdout);
     /* sparse trees */
-    ret = sparse_tree_alloc(&tree, ts, MSP_COUNT_LEAVES);
+    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS);
     if (ret != 0) {
         goto out;
     }

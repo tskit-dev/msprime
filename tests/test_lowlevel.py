@@ -822,9 +822,10 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(diffs, python_diffs)
 
     def verify_leaf_counts(self, tree_sequence):
-        st = _msprime.SparseTree(tree_sequence, [])
+        st = _msprime.SparseTree(
+            tree_sequence, flags=_msprime.LEAF_COUNTS, tracked_leaves=[])
         for _ in _msprime.SparseTreeIterator(st):
-            self.assertEqual(st.get_count_leaves(), True)
+            self.assertEqual(st.get_flags(), _msprime.LEAF_COUNTS)
             nu = get_leaf_counts(st)
             nu_prime = [
                 st.get_num_leaves(j) for j in
@@ -2389,6 +2390,36 @@ class TestSparseTree(LowLevelTestCase):
     """
     Tests on the low-level sparse tree interface.
     """
+
+    def test_flags(self):
+        ts = self.get_tree_sequence()
+        st = _msprime.SparseTree(ts)
+        self.assertEqual(st.get_flags(), 0)
+        # We should still be able to count the leaves, just inefficiently.
+        self.assertEqual(st.get_num_leaves(0), 1)
+        self.assertRaises(
+            _msprime.LibraryError, st.get_num_tracked_leaves, 0)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.LeafListIterator, st, 0)
+        all_flags = [
+            0, _msprime.LEAF_COUNTS, _msprime.LEAF_LISTS,
+            _msprime.LEAF_COUNTS | _msprime.LEAF_LISTS]
+        for flags in all_flags:
+            st = _msprime.SparseTree(ts, flags=flags)
+            self.assertEqual(st.get_flags(), flags)
+            self.assertEqual(st.get_num_leaves(0), 1)
+            if flags & _msprime.LEAF_COUNTS:
+                self.assertEqual(st.get_num_tracked_leaves(0), 0)
+            else:
+                self.assertRaises(
+                    _msprime.LibraryError, st.get_num_tracked_leaves, 0)
+            if flags & _msprime.LEAF_LISTS:
+                leaves = list(_msprime.LeafListIterator(st, 0))
+                self.assertEqual(leaves, [0])
+            else:
+                self.assertRaises(
+                    _msprime.LibraryError, _msprime.LeafListIterator, st, 0)
+
     def test_mutations(self):
         for ts in self.get_example_tree_sequences():
             st = _msprime.SparseTree(ts)
@@ -2410,7 +2441,11 @@ class TestSparseTree(LowLevelTestCase):
                 TypeError, _msprime.SparseTree, bad_type)
         ts = self.get_tree_sequence()
         for bad_type in ["", {}, True, 1, None]:
-            self.assertRaises(TypeError, _msprime.SparseTree, ts, bad_type)
+            self.assertRaises(
+                TypeError, _msprime.SparseTree, ts, tracked_leaves=bad_type)
+        for bad_type in ["", {}, None, []]:
+            self.assertRaises(
+                TypeError, _msprime.SparseTree, ts, flags=bad_type)
         for n in range(1, 10):
             ts = self.get_tree_sequence(sample_size=10, num_loci=n)
             st = _msprime.SparseTree(ts)
@@ -2449,23 +2484,29 @@ class TestSparseTree(LowLevelTestCase):
 
     def test_bad_tracked_leaves(self):
         ts = self.get_tree_sequence()
+        flags = _msprime.LEAF_COUNTS
         for bad_type in ["", {}, [], None]:
-            self.assertRaises(TypeError, _msprime.SparseTree, ts, [bad_type])
             self.assertRaises(
-                TypeError, _msprime.SparseTree, ts, [1, bad_type])
+                TypeError, _msprime.SparseTree, ts, flags=flags,
+                tracked_leaves=[bad_type])
+            self.assertRaises(
+                TypeError, _msprime.SparseTree, ts, flags=flags,
+                tracked_leaves=[1, bad_type])
         for bad_leaf in [ts.get_sample_size(), 10**6, -1e6]:
             self.assertRaises(
-                ValueError, _msprime.SparseTree, ts, [bad_leaf])
+                ValueError, _msprime.SparseTree, ts, flags=flags,
+                tracked_leaves=[bad_leaf])
             self.assertRaises(
-                ValueError, _msprime.SparseTree, ts, [1, bad_leaf])
+                ValueError, _msprime.SparseTree, ts, flags=flags,
+                tracked_leaves=[1, bad_leaf])
             self.assertRaises(
                 ValueError, _msprime.SparseTree, ts,
-                [1, bad_leaf, 1])
+                tracked_leaves=[1, bad_leaf, 1])
 
     def test_count_all_leaves(self):
         for ts in self.get_example_tree_sequences():
             self.verify_iterator(_msprime.TreeDiffIterator(ts))
-            st = _msprime.SparseTree(ts)
+            st = _msprime.SparseTree(ts, flags=_msprime.LEAF_COUNTS)
             # Without initialisation we should be 0 leaves for every node
             # that is not a leaf.
             for j in range(st.get_num_nodes()):
@@ -2508,7 +2549,8 @@ class TestSparseTree(LowLevelTestCase):
             for subset in map(list, powerset):
                 # Ordering shouldn't make any different.
                 random.shuffle(subset)
-                st = _msprime.SparseTree(ts, subset)
+                st = _msprime.SparseTree(
+                    ts, flags=_msprime.LEAF_COUNTS, tracked_leaves=subset)
                 for st in _msprime.SparseTreeIterator(st):
                     nu = get_tracked_leaf_counts(st, subset)
                     nu_prime = [
@@ -2519,7 +2561,9 @@ class TestSparseTree(LowLevelTestCase):
             leaf = 1
             for j in range(1, 20):
                 tracked_leaves = [leaf for _ in range(j)]
-                st = _msprime.SparseTree(ts, tracked_leaves)
+                st = _msprime.SparseTree(
+                    ts, flags=_msprime.LEAF_COUNTS,
+                    tracked_leaves=tracked_leaves)
                 for st in _msprime.SparseTreeIterator(st):
                     nu = get_tracked_leaf_counts(st, [leaf])
                     nu_prime = [
@@ -2606,7 +2650,8 @@ class TestLeafListIterator(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.LeafListIterator)
         self.assertRaises(TypeError, _msprime.LeafListIterator, None)
         ts = self.get_tree_sequence()
-        tree = _msprime.SparseTree(ts)
+        flags = _msprime.LEAF_COUNTS | _msprime.LEAF_LISTS
+        tree = _msprime.SparseTree(ts, flags=flags)
         for bad_type in [None, "1", []]:
             self.assertRaises(
                 TypeError, _msprime.LeafListIterator, tree, bad_type)
@@ -2621,7 +2666,8 @@ class TestLeafListIterator(LowLevelTestCase):
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
-        tree = _msprime.SparseTree(ts)
+        flags = _msprime.LEAF_COUNTS | _msprime.LEAF_LISTS
+        tree = _msprime.SparseTree(ts, flags=flags)
         for tree in _msprime.SparseTreeIterator(tree):
             self.verify_iterator(_msprime.LeafListIterator(tree, 1))
             self.verify_iterator(
@@ -2633,8 +2679,9 @@ class TestLeafListIterator(LowLevelTestCase):
             self.get_tree_sequence(
                 demographic_events=[
                     get_bottleneck_event(0.2, proportion=1.0)])]
+        flags = _msprime.LEAF_COUNTS | _msprime.LEAF_LISTS
         for ts in examples:
-            st = _msprime.SparseTree(ts)
+            st = _msprime.SparseTree(ts, flags=flags)
             for t in _msprime.SparseTreeIterator(st):
                 # All leaf nodes should have themselves.
                 for j in range(t.get_sample_size()):
