@@ -751,6 +751,45 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in self.get_example_tree_sequences():
             self.verify_tracked_leaves(ts)
 
+    def test_trees_interface(self):
+        ts = list(self.get_example_tree_sequences())[0]
+        # The defaults should make sense and count leaves.
+        # get_num_tracked_leaves
+        for t in ts.trees():
+            self.assertEqual(t.get_num_leaves(0), 1)
+            self.assertEqual(t.get_num_tracked_leaves(0), 0)
+            self.assertEqual(list(t.leaves(0)), [0])
+
+        for t in ts.trees(leaf_counts=False):
+            self.assertEqual(t.get_num_leaves(0), 1)
+            self.assertRaises(RuntimeError, t.get_num_tracked_leaves, 0)
+            self.assertEqual(list(t.leaves(0)), [0])
+
+        for t in ts.trees(leaf_counts=True):
+            self.assertEqual(t.get_num_leaves(0), 1)
+            self.assertEqual(t.get_num_tracked_leaves(0), 0)
+            self.assertEqual(list(t.leaves(0)), [0])
+
+        for t in ts.trees(leaf_counts=True, tracked_leaves=[0]):
+            self.assertEqual(t.get_num_leaves(0), 1)
+            self.assertEqual(t.get_num_tracked_leaves(0), 1)
+            self.assertEqual(list(t.leaves(0)), [0])
+
+        for t in ts.trees(leaf_lists=True, leaf_counts=True):
+            self.assertEqual(t.get_num_leaves(0), 1)
+            self.assertEqual(t.get_num_tracked_leaves(0), 0)
+            self.assertEqual(list(t.leaves(0)), [0])
+
+        for t in ts.trees(leaf_lists=True, leaf_counts=False):
+            self.assertEqual(t.get_num_leaves(0), 1)
+            self.assertRaises(RuntimeError, t.get_num_tracked_leaves, 0)
+            self.assertEqual(list(t.leaves(0)), [0])
+
+        # This is a bit weird as we don't seem to actually execute the
+        # method until it is iterated.
+        self.assertRaises(
+            ValueError, list, ts.trees(leaf_counts=False, tracked_leaves=[0]))
+
     def test_get_pairwise_diversity(self):
         for ts in self.get_example_tree_sequences():
             n = ts.get_sample_size()
@@ -983,9 +1022,9 @@ class TestSparseTree(HighLevelTestCase):
     """
     Some simple tests on the API for the sparse tree.
     """
-    def get_tree(self):
+    def get_tree(self, leaf_lists=False):
         ts = msprime.simulate(10, random_seed=1, mutation_rate=1)
-        return next(ts.trees())
+        return next(ts.trees(leaf_lists=leaf_lists))
 
     def test_str(self):
         t = self.get_tree()
@@ -993,30 +1032,31 @@ class TestSparseTree(HighLevelTestCase):
         self.assertEqual(str(t), str(t.get_parent_dict()))
 
     def test_leaves(self):
-        t = self.get_tree()
-        n = t.get_sample_size()
-        all_leaves = list(t.leaves(t.get_root()))
-        self.assertEqual(sorted(all_leaves), list(range(n)))
-        for j in range(n):
-            self.assertEqual(list(t.leaves(j)), [j])
+        for leaf_lists in [True, False]:
+            t = self.get_tree(leaf_lists)
+            n = t.get_sample_size()
+            all_leaves = list(t.leaves(t.get_root()))
+            self.assertEqual(sorted(all_leaves), list(range(n)))
+            for j in range(n):
+                self.assertEqual(list(t.leaves(j)), [j])
 
-        def test_func(t, u):
-            """
-            Simple test definition of the traversal.
-            """
-            stack = [u]
-            while len(stack) > 0:
-                v = stack.pop()
-                if t.is_internal(v):
-                    for c in reversed(t.get_children(v)):
-                        stack.append(c)
-                else:
-                    yield v
-        for u in t.nodes():
-            l1 = list(t.leaves(u))
-            l2 = list(test_func(t, u))
-            self.assertEqual(l1, l2)
-            self.assertEqual(t.get_num_leaves(u), len(l1))
+            def test_func(t, u):
+                """
+                Simple test definition of the traversal.
+                """
+                stack = [u]
+                while len(stack) > 0:
+                    v = stack.pop()
+                    if t.is_internal(v):
+                        for c in reversed(t.get_children(v)):
+                            stack.append(c)
+                    else:
+                        yield v
+            for u in t.nodes():
+                l1 = list(t.leaves(u))
+                l2 = list(test_func(t, u))
+                self.assertEqual(l1, l2)
+                self.assertEqual(t.get_num_leaves(u), len(l1))
 
     def test_draw(self):
         t = self.get_tree()

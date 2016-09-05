@@ -425,21 +425,37 @@ class SparseTree(object):
         for position, node in self._ll_sparse_tree.get_mutations():
             yield Mutation(position, node)
 
+    def _leaf_generator(self, u):
+        for v in self.nodes(u):
+            if self.is_leaf(v):
+                yield v
+
     def leaves(self, u):
         """
         Returns an iterator over all the leaves in this tree underneath
         the specified node.
 
+        If the :meth:`.TreeSequence.trees` method is called with
+        ``leaf_lists=True``, this method uses an efficient algorithm to find
+        the leaves. If not, a simple traversal based method is used.
+
         :param int u: The node of interest.
         :return: An iterator over all leaves in the subtree rooted at u.
         :rtype: iterator
         """
-        return _msprime.LeafListIterator(self._ll_sparse_tree, u)
+        if self._ll_sparse_tree.get_flags() & _msprime.LEAF_LISTS:
+            return _msprime.LeafListIterator(self._ll_sparse_tree, u)
+        else:
+            return self._leaf_generator(u)
 
     def get_num_leaves(self, u):
         """
         Returns the number of leaves in this tree underneath the specified
-        node. This is a constant time operation.
+        node.
+
+        If the :meth:`.TreeSequence.trees` method is called with
+        ``leaf_counts=True`` this method is a constant time operation. If not,
+        a slower traversal based algorithm is used to count the leaves.
 
         :param int u: The node of interest.
         :return: The number of leaves in the subtree rooted at u.
@@ -450,15 +466,20 @@ class SparseTree(object):
     def get_num_tracked_leaves(self, u):
         """
         Returns the number of leaves in the set specified in the
-        ``tracked_leaves`` parameter of the :meth:`msprime.TreeSequence.trees`
-        method underneath the specified node. This is a constant time
-        operation.
+        ``tracked_leaves`` parameter of the :meth:`.TreeSequence.trees` method
+        underneath the specified node. This is a constant time operation.
 
         :param int u: The node of interest.
         :return: The number of leaves within the set of tracked leaves in
             the subtree rooted at u.
         :rtype: int
+        :raises RuntimeError: if the :meth:`.TreeSequence.trees`
+            method is not called with ``leaf_counts=True``.
         """
+        if not (self._ll_sparse_tree.get_flags() & _msprime.LEAF_COUNTS):
+            raise RuntimeError(
+                "The get_num_tracked_leaves method is only supported "
+                "when leaf_counts=True.")
         return self._ll_sparse_tree.get_num_tracked_leaves(u)
 
     def _preorder_traversal(self, u):
@@ -1441,14 +1462,24 @@ class TreeSequence(object):
         for t in self.trees():
             yield t.get_interval()[1]
 
-    def trees(self, tracked_leaves=[]):
+    def trees(self, tracked_leaves=None, leaf_counts=True, leaf_lists=False):
         """
         Returns an iterator over the trees in this tree sequence. Each value
         returned in this iterator is an instance of
-        :class:`msprime.SparseTree`.  The ``tracked_leaves`` parameter can be
-        used to efficiently count the number of leaves in a given set that
-        exist in a particular subtree using the
-        :meth:`msprime.SparseTree.get_num_tracked_leaves` method.
+        :class:`.SparseTree`.
+
+        The ``leaf_counts`` and ``leaf_lists`` parameters control the
+        features that are enabled for the resulting trees. If ``leaf_counts``
+        is True, then it is possible to count the number of leaves underneath
+        a particular node in constant time using the :meth:`.get_num_leaves`
+        method. If ``leaf_lists`` is True a more efficient algorithm is
+        used in the :meth:`.SparseTree.leaves` method.
+
+        The ``tracked_leaves`` parameter can be used to efficiently count the
+        number of leaves in a given set that exist in a particular subtree
+        using the :meth:`.SparseTree.get_num_tracked_leaves` method. It is an
+        error to use the ``tracked_leaves`` parameter when the ``leaf_counts``
+        flag is False.
 
         :warning: Do not store the results of this iterator in a list!
            For performance reasons, the same underlying object is used
@@ -1456,13 +1487,28 @@ class TreeSequence(object):
            behaviour.
 
         :param list tracked_leaves: The list of leaves to be tracked and
-            counted using the
-            :meth:`msprime.SparseTree.get_num_tracked_leaves` method.
+            counted using the :meth:`.SparseTree.get_num_tracked_leaves`
+            method.
+        :param bool leaf_counts: If True, support constant time leaf counts
+            via the :meth:`.SparseTree.get_num_leaves` and
+            :meth:`.SparseTree.get_num_tracked_leaves` methods.
+        :param bool leaf_lists: If True, provide more efficient access
+            to the leaves beneath a give node using the
+            :meth:`.SparseTree.leaves` method.
         :return: An iterator over the sparse trees in this tree sequence.
         :rtype: iter
         """
-        ll_sparse_tree = _msprime.SparseTree(
-            self._ll_tree_sequence, tracked_leaves)
+        flags = 0
+        if leaf_counts:
+            flags |= _msprime.LEAF_COUNTS
+        elif tracked_leaves is not None:
+            raise ValueError("Cannot set tracked_leaves without leaf_counts")
+        if leaf_lists:
+            flags |= _msprime.LEAF_LISTS
+        kwargs = {"flags": flags}
+        if tracked_leaves is not None:
+            kwargs["tracked_leaves"] = tracked_leaves
+        ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence, **kwargs)
         iterator = _msprime.SparseTreeIterator(ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree)
         for _ in iterator:
