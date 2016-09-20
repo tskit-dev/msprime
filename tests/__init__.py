@@ -203,7 +203,7 @@ class PythonTreeSequence(object):
             st.right += length
             # Add in all the mutations
             st.mutation_list = [
-                (p, u) for (p, u) in self._mutations
+                (p, u, j) for (p, u, j) in self._mutations
                 if st.left <= p < st.right
             ]
             yield st

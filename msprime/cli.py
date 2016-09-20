@@ -215,8 +215,8 @@ class SimulationRunner(object):
                 if s != 0:
                     print("positions: ", end="", file=output)
                     positions = [
-                        p / self._num_loci for p, _ in
-                        tree_sequence.get_mutations()]
+                        mutation.position / self._num_loci for mutation in
+                        tree_sequence.mutations()]
                     positions.sort()
                     for position in positions:
                         print(

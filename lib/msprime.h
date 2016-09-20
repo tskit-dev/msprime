@@ -215,6 +215,7 @@ typedef struct {
 typedef struct {
     double position;
     uint32_t node;
+    size_t index;
 } mutation_t;
 
 /* Tree sequences */
@@ -502,7 +503,7 @@ double tree_sequence_get_sequence_length(tree_sequence_t *self);
 
 int tree_sequence_get_record(tree_sequence_t *self, size_t index,
         coalescence_record_t **record, int order);
-int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations);
+int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t **mutations);
 int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u,
         sample_t *sample);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,

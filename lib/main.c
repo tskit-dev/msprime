@@ -515,7 +515,7 @@ print_haplotypes(tree_sequence_t *ts)
     int ret = 0;
     hapgen_t *hg = calloc(1, sizeof(hapgen_t));
     size_t num_mutations = tree_sequence_get_num_mutations(ts);
-    mutation_t *mutations = malloc(num_mutations * sizeof(mutation_t));
+    mutation_t *mutations;
     uint32_t j;
     char *haplotype;
 
@@ -536,7 +536,7 @@ print_haplotypes(tree_sequence_t *ts)
         printf("%d\t%s\n", j, haplotype);
     }
     /* Get the mutations, reset them, redo the same thing to check */
-    ret = tree_sequence_get_mutations(ts, mutations);
+    ret = tree_sequence_get_mutations(ts, &mutations);
     if (ret != 0) {
         goto out;
     }
@@ -563,9 +563,6 @@ out:
         hapgen_free(hg);
         free(hg);
     }
-    if (mutations != NULL) {
-        free(mutations);
-    }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));
     }
@@ -579,6 +576,7 @@ print_ld_matrix(tree_sequence_t *ts)
 
     printf("LD TABLE\n");
     ret = ld_calc_alloc(&ld_calc, ts, 10, DBL_MAX, 0.0);
+    printf("alloc: ret = %d\n", ret);
     if (ret != 0) {
         goto out;
     }

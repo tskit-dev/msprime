@@ -1461,7 +1461,7 @@ test_single_tree_good_mutations(void)
     };
     coalescence_record_t *records = NULL;
     mutation_t *mutations = NULL;
-    mutation_t *other_mutations = NULL;
+    mutation_t *other_mutations;
     size_t num_mutations = 6;
     size_t num_records = 3;
     size_t j;
@@ -1486,16 +1486,14 @@ test_single_tree_good_mutations(void)
     ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), num_mutations);
-    other_mutations = malloc(num_mutations * sizeof(mutation_t));
-    CU_ASSERT_FATAL(other_mutations != NULL);
-    ret = tree_sequence_get_mutations(&ts, other_mutations);
+    ret = tree_sequence_get_mutations(&ts, &other_mutations);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_mutations; j++) {
+        CU_ASSERT_EQUAL(other_mutations[j].index, j);
         CU_ASSERT_EQUAL(mutations[j].position, other_mutations[j].position);
         CU_ASSERT_EQUAL(mutations[j].node, other_mutations[j].node);
     }
     free(mutations);
-    free(other_mutations);
     tree_sequence_free(&ts);
     free_local_records(num_records, records);
 }
@@ -1977,6 +1975,7 @@ verify_trees(size_t num_records, coalescence_record_t *records,
                 &tree_mutations);
         CU_ASSERT_EQUAL(ret, 0);
         for (k = 0; k < num_tree_mutations; k++) {
+            CU_ASSERT_EQUAL(tree_mutations[k].index, mutation_index);
             CU_ASSERT_EQUAL(
                 tree_mutations[k].position, mutations[mutation_index].position);
             CU_ASSERT_EQUAL(
@@ -3286,13 +3285,9 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
     coalescence_record_t *r1, *r2;
     char **ps1, **ps2;
     size_t num_mutations = tree_sequence_get_num_mutations(ts1);
-    mutation_t *mutations_1 = malloc(num_mutations * sizeof(mutation_t));
-    mutation_t *mutations_2 = malloc(num_mutations * sizeof(mutation_t));
+    mutation_t *mutations_1, *mutations_2;
     sparse_tree_t t1, t2;
     sparse_tree_iterator_t iter1, iter2;
-
-    CU_ASSERT_FATAL(mutations_1 != NULL);
-    CU_ASSERT_FATAL(mutations_2 != NULL);
 
     CU_ASSERT_EQUAL(
         tree_sequence_get_sample_size(ts1),
@@ -3331,11 +3326,13 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
         verify_coalescence_records_equal(r1, r2, 1.0);
     }
 
-    ret = tree_sequence_get_mutations(ts1, mutations_1);
+    ret = tree_sequence_get_mutations(ts1, &mutations_1);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_sequence_get_mutations(ts2, mutations_2);
+    ret = tree_sequence_get_mutations(ts2, &mutations_2);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_mutations; j++) {
+        CU_ASSERT_EQUAL(mutations_1[j].index, j);
+        CU_ASSERT_EQUAL(mutations_1[j].index, mutations_2[j].index);
         CU_ASSERT_EQUAL(mutations_1[j].position, mutations_2[j].position);
         CU_ASSERT_EQUAL(mutations_1[j].node, mutations_2[j].node);
     }
@@ -3382,8 +3379,6 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
     sparse_tree_iterator_free(&iter2);
     sparse_tree_free(&t1);
     sparse_tree_free(&t2);
-    free(mutations_1);
-    free(mutations_2);
 }
 
 static void
@@ -3448,8 +3443,7 @@ test_save_records_hdf5(void)
             CU_ASSERT_EQUAL(ret, 0);
         }
         num_mutations = tree_sequence_get_num_mutations(ts1);
-        mutations = malloc(num_mutations * sizeof(mutation_t));
-        ret = tree_sequence_get_mutations(ts1, mutations);
+        ret = tree_sequence_get_mutations(ts1, &mutations);
         CU_ASSERT_EQUAL(ret, 0);
         ret = tree_sequence_load_records(&ts2, num_records, records);
         CU_ASSERT_EQUAL(ret, 0);
@@ -3469,7 +3463,6 @@ test_save_records_hdf5(void)
         tree_sequence_free(ts1);
         free(ts1);
         free(samples);
-        free(mutations);
         free_local_records(num_records, records);
     }
     free(examples);

@@ -99,7 +99,8 @@ def _load_legacy_hdf5(root):
         num_mutations = len(node)
         mutations = num_mutations * [None]
         for j in range(num_mutations):
-            mutations[j] = msprime.Mutation(position=position[j], node=node[j])
+            mutations[j] = msprime.Mutation(
+                position=position[j], node=node[j], index=j)
 
     ll_ts = _msprime.TreeSequence()
     if samples is None:

@@ -53,7 +53,7 @@ CoalescenceRecord = collections.namedtuple(
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["position", "node"])
+    ["position", "node", "index"])
 
 
 Variant = collections.namedtuple(
@@ -104,9 +104,9 @@ class TreeDrawer(object):
         self._leaf_x = 1
         self._assign_x_coordinates(self._tree.get_root())
         self._mutations = []
-        for pos, u in tree.mutations():
-            x = self._x_coords[u], self._y_coords[u]
-            v = tree.get_parent(u)
+        for mutation in tree.mutations():
+            x = self._x_coords[mutation.node], self._y_coords[mutation.node]
+            v = tree.get_parent(mutation.node)
             y = self._x_coords[v], self._y_coords[v]
             z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
             self._mutations.append(z)
@@ -408,22 +408,26 @@ class SparseTree(object):
     def mutations(self):
         """
         Returns an iterator over the mutations in this tree. Each
-        mutation is represented as a tuple :math:`(x, u)` where :math:`x`
+        mutation is represented as a tuple :math:`(x, u, j)` where :math:`x`
         is the position of the mutation in the sequence in chromosome
-        coordinates and :math:`u` is the node over which the mutation
-        occurred. Mutations are returned in non-decreasing order of
-        position.
+        coordinates, :math:`u` is the node over which the mutation
+        occurred and :math:`j` is the zero-based index of the mutation within
+        the overall tree sequence. Mutations are returned in non-decreasing
+        order of position and increasing index.
 
         Each mutation returned is an instance of
         :func:`collections.namedtuple`, and may be accessed via the attributes
-        ``position`` and ``node`` as well as the usual positional approach.
+        ``position``, ``node`` and ``index`` as well as the usual positional
+        approach. This is the recommended interface for working with mutations
+        as it is both more readable and also ensures that code is forward
+        compatible with future extensions.
 
-        :return: An iterator of all :math:`(x, u)` tuples defining
+        :return: An iterator of all :math:`(x, u, j)` tuples defining
             the mutations in this tree.
         :rtype: iter
         """
-        for position, node in self._ll_sparse_tree.get_mutations():
-            yield Mutation(position, node)
+        for position, node, index in self._ll_sparse_tree.get_mutations():
+            yield Mutation(position, node, index)
 
     def _leaf_generator(self, u):
         for v in self.nodes(u):
@@ -1248,7 +1252,7 @@ class TreeSequence(object):
         tokens = line.split()
         position = float(tokens[0])
         node = int(tokens[1])
-        return Mutation(position=position, node=node)
+        return Mutation(position=position, node=node, index=0)
 
     def load_mutations(self, input_file):
         mutations = []
@@ -1265,10 +1269,6 @@ class TreeSequence(object):
 
     def add_provenance(self, provenance):
         self._ll_tree_sequence.add_provenance_string(provenance)
-
-    def get_mutations(self):
-        # TODO should we provide this???
-        return self._ll_tree_sequence.get_mutations()
 
     def newick_trees(self, precision=3, breakpoints=None, Ne=1):
         # TODO document this method.
@@ -1428,22 +1428,26 @@ class TreeSequence(object):
     def mutations(self):
         """
         Returns an iterator over the mutations in this tree sequence. Each
-        mutation is represented as a tuple :math:`(x, u)` where :math:`x`
+        mutation is represented as a tuple :math:`(x, u, j)` where :math:`x`
         is the position of the mutation in the sequence in chromosome
-        coordinates and :math:`u` is the node over which the mutation
-        occurred. Mutations are returned in non-decreasing order of
-        position.
+        coordinates, :math:`u` is the node over which the mutation
+        occurred and :math:`j` is the zero-based index of the mutation within
+        the overall tree sequence. Mutations are returned in non-decreasing
+        order of position and increasing index.
 
         Each mutation returned is an instance of
         :func:`collections.namedtuple`, and may be accessed via the attributes
-        ``position`` and ``node`` as well as the usual positional approach.
+        ``position``, ``node`` and ``index`` as well as the usual positional
+        approach. This is the recommended interface for working with mutations
+        as it is both more readable and also ensures that code is forward
+        compatible with future extensions.
 
-        :return: An iterator of all :math:`(x, u)` tuples defining
-            the mutations in this tree sequence.
+        :return: An iterator of all :math:`(x, u, j)` tuples defining
+            the mutations in this tree.
         :rtype: iter
         """
-        for position, node in self._ll_tree_sequence.get_mutations():
-            yield Mutation(position, node)
+        for position, node, index in self._ll_tree_sequence.get_mutations():
+            yield Mutation(position, node, index)
 
     def breakpoints(self):
         """
@@ -1545,14 +1549,16 @@ class TreeSequence(object):
     def set_mutations(self, mutations):
         """
         Sets the mutations in this tree sequence to the specified list of
-        `(position, node)` tuples.  Each entry in the list must be a tuple of
-        the form :math:`(x, u)`, where :math:`x` is a floating point value
-        defining a genomic position and :math:`u` is an integer defining a tree
-        node. A genomic position :math:`x` must satisfy :math:`0 \leq x < L`
-        where :math:`L` is the sequence length (see
-        :meth:`.get_sequence_length`). A node :math:`u` must satisfy
-        :math:`0 < u < N` where :math:`N` is the number of nodes in
-        the tree sequence (see :meth:`.get_num_nodes`).
+        mutations.  Each entry in the list must be either a ``Mutation``
+        named-tuple instance (as returned by the
+        :meth:`.TreeSequence.mutations` method) or tuple of the form :math:`(x,
+        u, ...)`, where :math:`x` is a floating point value defining a genomic
+        position and :math:`u` is an integer defining a tree node. A genomic
+        position :math:`x` must satisfy :math:`0 \leq x < L` where :math:`L` is
+        the sequence length (see :meth:`.get_sequence_length`). A node
+        :math:`u` must satisfy :math:`0 < u < N` where :math:`N` is the number
+        of nodes in the tree sequence (see :meth:`.get_num_nodes`). Values
+        other than ``position`` and ``node`` in the input tuples are ignored.
 
         :param list mutations: The list of mutations to be assigned to this
             tree sequence.

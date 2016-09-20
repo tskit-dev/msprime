@@ -623,6 +623,7 @@ tree_sequence_init_tree_mutations(tree_sequence_t *self)
     self->mutations.tree_mutations[0] = self->mutations.tree_mutations_mem;
     for (j = 0; j < self->num_mutations; j++) {
         mut = &self->mutations.tree_mutations_mem[j];
+        mut->index = j;
         mut->position = self->mutations.position[j];
         mut->node = self->mutations.node[j];
         assert(tree_index < self->trees.num_breakpoints - 1);
@@ -1435,17 +1436,10 @@ out:
 }
 
 int WARN_UNUSED
-tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations)
+tree_sequence_get_mutations(tree_sequence_t *self, mutation_t **mutations)
 {
-    int ret = 0;
-    size_t j;
-
-    assert(mutations != NULL);
-    for (j = 0; j < self->num_mutations; j++) {
-        mutations[j].position = self->mutations.position[j];
-        mutations[j].node = self->mutations.node[j];
-    }
-    return ret;
+    *mutations = self->mutations.tree_mutations_mem;
+    return 0;
 }
 
 

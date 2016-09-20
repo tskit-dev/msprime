@@ -1753,7 +1753,8 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertGreater(ts.get_num_mutations(), 0)
         self.assertEqual(len(mutations), ts.get_num_mutations())
         # Check the form of the mutations
-        for position, node in mutations:
+        for j, (position, node, index) in enumerate(mutations):
+            self.assertEqual(j, index)
             self.assertIsInstance(node, int)
             self.assertGreaterEqual(node, 0)
             self.assertLessEqual(node, ts.get_num_nodes())
@@ -1794,7 +1795,7 @@ class TestTreeSequence(LowLevelTestCase):
         invalid_mutations = ["", [1, 1], {1, 1}, None]
         for mutation in invalid_mutations:
             self.assertRaises(TypeError, ts.set_mutations, [mutation])
-        invalid_mutations = [tuple(), (1,), (1, 2, 3)]
+        invalid_mutations = [tuple(), (1,)]
         for mutation in invalid_mutations:
             self.assertRaises(ValueError, ts.set_mutations, [mutation])
         invalid_mutations = [("1", 0), (0, "1"), (None, 0), ([], 0)]
@@ -1806,7 +1807,7 @@ class TestTreeSequence(LowLevelTestCase):
         for mutation in invalid_mutations:
             self.assertRaises(
                 _msprime.LibraryError, ts.set_mutations, [mutation])
-        valid_mutations = [[], [(0.1, 1)], [(0.1, 1), (0.2, 2)]]
+        valid_mutations = [[], [(0.1, 1, 0)], [(0.1, 1, 0), (0.2, 2, 1)]]
         for mutations in valid_mutations:
             ts.set_mutations(mutations)
             self.assertEqual(ts.get_mutations(), mutations)
@@ -1816,7 +1817,7 @@ class TestTreeSequence(LowLevelTestCase):
 
     def test_set_mutations_tree_refcount(self):
         ts = self.get_tree_sequence(mutation_rate=0.0)
-        mutations = [(0.1, 1), (0.2, 2)]
+        mutations = [(0.1, 1, 0), (0.2, 2, 1)]
         ts.set_mutations(mutations)
         tree = _msprime.SparseTree(ts)
         self.assertRaises(_msprime.LibraryError, ts.set_mutations, [])
@@ -2398,7 +2399,7 @@ class TestVariantGenerator(LowLevelTestCase):
             self.assertEqual(len(variant), ts.get_sample_size())
         self.assertEqual(
             positions,
-            [pos for pos, _ in ts.get_mutations()])
+            [pos for pos, _, _ in ts.get_mutations()])
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
@@ -2445,13 +2446,16 @@ class TestSparseTree(LowLevelTestCase):
             st = _msprime.SparseTree(ts)
             all_mutations = ts.get_mutations()
             all_tree_mutations = []
+            j = 0
             for st in _msprime.SparseTreeIterator(st):
                 tree_mutations = st.get_mutations()
                 self.assertEqual(st.get_num_mutations(), len(tree_mutations))
                 all_tree_mutations.extend(tree_mutations)
-                for position, node in tree_mutations:
+                for position, node, index in tree_mutations:
                     self.assertTrue(st.get_left() <= position < st.get_right())
                     self.assertNotEqual(st.get_parent(node), 0)
+                    self.assertEqual(index, j)
+                    j += 1
             self.assertEqual(all_tree_mutations, all_mutations)
 
     def test_constructor(self):

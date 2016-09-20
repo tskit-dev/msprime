@@ -456,8 +456,9 @@ convert_mutations(mutation_t *mutations, size_t num_mutations)
         goto out;
     }
     for (j = 0; j < num_mutations; j++) {
-        py_mutation = Py_BuildValue("dI", mutations[j].position,
-                (unsigned int) mutations[j].node);
+        py_mutation = Py_BuildValue("dIn", mutations[j].position,
+                (unsigned int) mutations[j].node,
+                (Py_ssize_t) mutations[j].index);
         if (py_mutation == NULL) {
             Py_DECREF(l);
             goto out;
@@ -2478,9 +2479,9 @@ TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
             PyErr_SetString(PyExc_TypeError, "not a tuple");
             goto out;
         }
-        if (PyTuple_Size(item) != 2) {
+        if (PyTuple_Size(item) < 2) {
             PyErr_SetString(PyExc_ValueError,
-                    "mutations must (node, pos) tuples");
+                    "mutations must (node, pos, ...) tuples");
             goto out;
         }
         pos = PyTuple_GetItem(item, 0);
@@ -2596,7 +2597,7 @@ static PyObject *
 TreeSequence_get_mutations(TreeSequence *self)
 {
     PyObject *ret = NULL;
-    mutation_t *mutations = NULL;
+    mutation_t *mutations;
     size_t num_mutations;
     int err;
 
@@ -2609,16 +2610,13 @@ TreeSequence_get_mutations(TreeSequence *self)
         PyErr_NoMemory();
         goto out;
     }
-    err = tree_sequence_get_mutations(self->tree_sequence, mutations);
+    err = tree_sequence_get_mutations(self->tree_sequence, &mutations);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = convert_mutations(mutations, num_mutations);
 out:
-    if (mutations != NULL) {
-        PyMem_Free(mutations);
-    }
     return ret;
 }
 

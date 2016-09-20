@@ -79,13 +79,11 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence, size_t max_sites,
     self->inner_tree = malloc(sizeof(sparse_tree_t));
     self->outer_iter = malloc(sizeof(sparse_tree_iterator_t));
     self->inner_iter = malloc(sizeof(sparse_tree_iterator_t));
-    self->mutations = malloc(self->num_mutations * sizeof(mutation_t));
     self->position_labels = malloc(self->num_mutations * sizeof(char *));
     self->label_mem = malloc(self->num_mutations * MAX_LABEL_LEN);
     if (self->outer_tree == NULL || self->inner_tree == NULL
             || self->outer_iter == NULL || self->inner_iter == NULL
-            || self->mutations == NULL || self->position_labels == NULL
-            || self->label_mem == NULL) {
+            || self->position_labels == NULL || self->label_mem == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -107,7 +105,7 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence, size_t max_sites,
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_get_mutations(self->tree_sequence, self->mutations);
+    ret = tree_sequence_get_mutations(self->tree_sequence, &self->mutations);
     if (ret != 0) {
         goto out;
     }
@@ -134,9 +132,6 @@ ld_calc_free(ld_calc_t *self)
     if (self->outer_tree != NULL) {
         sparse_tree_free(self->outer_tree);
         free(self->outer_tree);
-    }
-    if (self->mutations != NULL) {
-        free(self->mutations);
     }
     if (self->position_labels != NULL) {
         free(self->position_labels);
