@@ -2654,7 +2654,6 @@ sparse_tree_iterator_next(sparse_tree_iterator_t *self)
     tree_sequence_t *s = self->tree_sequence;
     size_t num_trees = tree_sequence_get_num_trees(s);
 
-    /* printf("NEXT: %d %d\n", (int) self->tree->index, self->tree->index == UINT32_MAX); */
     if (self->tree->index == UINT32_MAX || self->tree->index < num_trees - 1) {
         ret = sparse_tree_iterator_advance(self, MSP_DIR_FORWARD,
                 s->trees.records.right, s->trees.indexes.removal_order,
