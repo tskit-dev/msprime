@@ -84,6 +84,7 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     size_t j, k;
 
     fprintf(out, "tree_sequence state\n");
+    fprintf(out, "refcount = %d\n", self->refcount);
     fprintf(out, "sample_size = %d\n", self->sample_size);
     fprintf(out, "provenance = (%d)\n", (int) self->num_provenance_strings);
     for (j = 0; j < self->num_provenance_strings; j++) {
@@ -260,6 +261,22 @@ tree_sequence_free(tree_sequence_t *self)
     if (self->mutations.num_tree_mutations != NULL) {
         free(self->mutations.num_tree_mutations);
     }
+    return 0;
+}
+
+int
+tree_sequence_increment_refcount(tree_sequence_t *self)
+{
+    /* TODO make this threadsafe. */
+    self->refcount++;
+    return 0;
+}
+
+int
+tree_sequence_decrement_refcount(tree_sequence_t *self)
+{
+    /* TODO make this threadsafe. */
+    self->refcount--;
     return 0;
 }
 
@@ -1462,6 +1479,11 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
     size_t j;
     mutation_t **mutation_ptrs = NULL;
 
+    /* TODO make this threadsafe! */
+    if (self->refcount != 0) {
+        ret = MSP_ERR_REFCOUNT_NONZERO;
+        goto out;
+    }
     if (self->num_mutations > 0) {
         /* any mutations that were there previously are overwritten. */
         if (self->mutations.node != NULL) {
@@ -1695,6 +1717,10 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     self->num_nodes = (uint32_t) num_nodes;
     self->sample_size = sample_size;
     self->tree_sequence = tree_sequence;
+    ret = tree_sequence_increment_refcount(self->tree_sequence);
+    if (ret != 0) {
+        goto out;
+    }
     self->flags = flags;
     self->parent = malloc(num_nodes * sizeof(uint32_t));
     self->population = malloc(num_nodes * sizeof(uint8_t));
@@ -1741,7 +1767,6 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
             self->leaf_list_tail[j] = w;
         }
     }
-    ret = 0;
 out:
     return ret;
 }
@@ -1749,6 +1774,9 @@ out:
 int WARN_UNUSED
 sparse_tree_free(sparse_tree_t *self)
 {
+    if (self->tree_sequence != NULL) {
+        tree_sequence_decrement_refcount(self->tree_sequence);
+    }
     if (self->parent != NULL) {
         free(self->parent);
     }

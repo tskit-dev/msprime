@@ -33,7 +33,7 @@
 #define MSP_ERR_NO_MEMORY                                           -2
 #define MSP_ERR_IO                                                  -3
 #define MSP_ERR_FILE_FORMAT                                         -4
-
+#define MSP_ERR_REFCOUNT_NONZERO                                    -5
 #define MSP_ERR_BAD_STATE                                           -6
 #define MSP_ERR_BAD_PARAM_VALUE                                     -7
 #define MSP_ERR_OUT_OF_BOUNDS                                       -8
@@ -61,6 +61,5 @@
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
 
-#define MSP_ERR_use_for_next_err_code1                              -5
-#define MSP_ERR_use_for_next_err_code2                              -15
+#define MSP_ERR_use_for_next_err_code1                              -15
 #endif /*__ERR_H__*/

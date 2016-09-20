@@ -2192,6 +2192,65 @@ test_left_to_right_tree_sequence_iter(void)
     free_local_records(num_records, records);
 }
 
+static void
+test_tree_sequence_set_mutations(void)
+{
+    const char * text_records[] = {
+        "2 10 4 2,3 0.071 0",
+        "0 2  5 1,3 0.090 0",
+        "2 10 5 1,4 0.090 0",
+        "0 7  6 0,5 0.170 0",
+        "7 10 7 0,5 0.202 0",
+        "0 2  8 2,6 0.253 0"
+    };
+    /* We make one mutation for each tree */
+    mutation_t mutations[] = {{1, 2}, {4.5, 0}, {8.5, 5}};
+    tree_sequence_t ts;
+    size_t j;
+    const size_t num_trees = 3;
+    const size_t num_records = 6;
+    uint32_t num_mutations = 3;
+    coalescence_record_t *records;
+    sparse_tree_t trees[num_trees];
+    int ret;
+
+    parse_text_records(num_records, text_records, &records);
+
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_set_mutations(&ts, 1, mutations);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 1);
+    ret = tree_sequence_set_mutations(&ts, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), num_mutations);
+
+    for (j = 0; j < num_trees; j++) {
+        ret = sparse_tree_alloc(&trees[j], &ts, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(ts.refcount, j + 1);
+        ret = tree_sequence_set_mutations(&ts, 1, mutations);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_REFCOUNT_NONZERO);
+
+    }
+    for (j = 0; j < num_trees; j++) {
+        ret = tree_sequence_set_mutations(&ts, 1, mutations);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_REFCOUNT_NONZERO);
+        ret = sparse_tree_free(&trees[j]);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(ts.refcount, num_trees - j - 1);
+    }
+    ret = tree_sequence_set_mutations(&ts, 1, mutations);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 1);
+
+    tree_sequence_free(&ts);
+    free_local_records(num_records, records);
+}
+
 typedef struct {
     uint32_t tree_index;
     uint32_t node;
@@ -2845,88 +2904,6 @@ test_tree_sequence_iter_failure(void)
 
     free_local_records(num_records, records);
 }
-
-#if 0
-static void
-test_tree_sequence_mutations_iter_failure(void)
-{
-    const char * text_records[] = {
-        "2 10 4 2,3 0.071 0",
-        "0 2  5 1,3 0.090 0",
-        "2 10 5 1,4 0.090 0",
-        "0 7  6 0,5 0.170 0",
-        "7 10 7 0,5 0.202 0",
-        "0 2  8 2,6 0.253 0"
-    };
-    uint32_t parents[] = {
-        6, 5, 8, 5, MSP_NULL_NODE, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
-        6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
-        7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
-    };
-    mutation_t mutations[] = {{0, 0}};
-    size_t num_records = 6;
-    size_t num_mutations = 1;
-    uint32_t num_nodes = 9;
-    uint32_t num_trees = 3;
-    coalescence_record_t *records;
-
-    parse_text_records(num_records, text_records, &records);
-
-    /* Mutation over the root in the first tree */
-    mutations[0].node = 8;
-    verify_tree_iter_fails(num_records, records, num_mutations, mutations, 0,
-            MSP_ERR_BAD_MUTATION);
-    mutations[0].node = 0;
-    verify_trees(num_records, records, num_trees, num_nodes, parents,
-            num_mutations, mutations);
-
-    /* Mutation at a node that does not exist in the first tree */
-    mutations[0].node = 7;
-    verify_tree_iter_fails(num_records, records, num_mutations, mutations, 0,
-            MSP_ERR_BAD_MUTATION);
-    mutations[0].node = 0;
-    verify_trees(num_records, records, num_trees, num_nodes, parents,
-            num_mutations, mutations);
-
-    /* Mutation over the root in the first tree */
-    mutations[0].node = 6;
-    mutations[0].position = 2;
-    verify_tree_iter_fails(num_records, records, num_mutations, mutations, 1,
-            MSP_ERR_BAD_MUTATION);
-    mutations[0].node = 0;
-    verify_trees(num_records, records, num_trees, num_nodes, parents,
-            num_mutations, mutations);
-
-    /* Mutation at a node that does not exist in the second tree */
-    mutations[0].node = 8;
-    mutations[0].position = 2;
-    verify_tree_iter_fails(num_records, records, num_mutations, mutations, 1,
-            MSP_ERR_BAD_MUTATION);
-    mutations[0].node = 0;
-    verify_trees(num_records, records, num_trees, num_nodes, parents,
-            num_mutations, mutations);
-
-    /* Mutation over the root in the third tree */
-    mutations[0].node = 7;
-    mutations[0].position = 7;
-    verify_tree_iter_fails(num_records, records, num_mutations, mutations, 2,
-            MSP_ERR_BAD_MUTATION);
-    mutations[0].node = 0;
-    verify_trees(num_records, records, num_trees, num_nodes, parents,
-            num_mutations, mutations);
-
-    /* Mutation at a node that does not exist in the third tree */
-    mutations[0].node = 6;
-    mutations[0].position = 7;
-    verify_tree_iter_fails(num_records, records, num_mutations, mutations, 2,
-            MSP_ERR_BAD_MUTATION);
-    mutations[0].node = 0;
-    verify_trees(num_records, records, num_trees, num_nodes, parents,
-            num_mutations, mutations);
-
-    free_local_records(num_records, records);
-}
-#endif
 
 static void
 verify_tree_diffs(tree_sequence_t *ts)
@@ -3653,12 +3630,9 @@ main(void)
         {"Left-to-right tree sequence iterator",
             test_left_to_right_tree_sequence_iter},
         {"Tree sequence bad records", test_tree_sequence_bad_records},
+        {"Set mutations", test_tree_sequence_set_mutations},
         {"Single tree iterator failure", test_single_tree_iter_failure},
         {"Tree sequence iterator failure", test_tree_sequence_iter_failure},
-        /* Disabled this test as we no longer check mutations during
-         * iteration. */
-        /* {"Tree sequence mutation iterator failure", */
-        /*     test_tree_sequence_mutations_iter_failure}, */
         {"Tree sequence diff iter", test_tree_sequence_diff_iter},
         {"Nonbinary Tree sequence diff iter",
             test_nonbinary_tree_sequence_diff_iter},

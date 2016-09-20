@@ -703,6 +703,9 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_num_mutations(), 0)
             for st in ts.trees():
                 self.assertEqual(st.get_num_mutations(), 0)
+            # We explicitly free remove the sparse tree here to so we
+            # can reset the mutations.
+            del st
             # choose a mutation rate that hopefully guarantees mutations,
             # but not too many.
             mu = 10 / ts.get_sequence_length()

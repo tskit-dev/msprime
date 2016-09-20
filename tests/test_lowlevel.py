@@ -1814,6 +1814,26 @@ class TestTreeSequence(LowLevelTestCase):
             with tempfile.NamedTemporaryFile() as f:
                 self.verify_dump_equality(ts, f)
 
+    def test_set_mutations_tree_refcount(self):
+        ts = self.get_tree_sequence(mutation_rate=0.0)
+        mutations = [(0.1, 1), (0.2, 2)]
+        ts.set_mutations(mutations)
+        tree = _msprime.SparseTree(ts)
+        self.assertRaises(_msprime.LibraryError, ts.set_mutations, [])
+        self.assertEqual(ts.get_mutations(), mutations)
+        del tree
+        ts.set_mutations([])
+        self.assertEqual(ts.get_num_mutations(), 0)
+
+        trees = [_msprime.SparseTree(ts) for _ in range(20)]
+        for j, tree in enumerate(trees):
+            self.assertRaises(
+                _msprime.LibraryError, ts.set_mutations, mutations)
+            trees[j] = None
+            del tree
+        ts.set_mutations(mutations)
+        self.assertEqual(ts.get_mutations(), mutations)
+
     def test_constructor_interface(self):
         tree_sequence = _msprime.TreeSequence()
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
@@ -2627,6 +2647,9 @@ class TestSparseTree(LowLevelTestCase):
                         other_ts)
                     vg = _msprime.VariantGenerator(other_ts)
                     self.assertRaises(_msprime.LibraryError, list, vg)
+                    # We must free the variant generator to decrement the
+                    # refcount on other_ts
+                    del vg
 
 
 class TestLeafListIterator(LowLevelTestCase):
