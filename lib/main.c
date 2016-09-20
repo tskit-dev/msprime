@@ -700,17 +700,12 @@ static void
 print_tree_sequence(tree_sequence_t *ts)
 {
     int ret = 0;
-    size_t j, k, l;
+    size_t j, k; //, k, l;
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
     sparse_tree_t tree;
     coalescence_record_t *cr;
-    sparse_tree_iterator_t *sparse_iter = calloc(1, sizeof(sparse_tree_iterator_t));
     uint32_t tracked_leaves[] = {1, 2};
 
-    if (sparse_iter == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     printf("Records:\n");
     for (j = 0; j < num_records; j++) {
         if (tree_sequence_get_record(ts, j, &cr, MSP_ORDER_TIME) != 0) {
@@ -719,7 +714,6 @@ print_tree_sequence(tree_sequence_t *ts)
         printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
                 cr->children[1], cr->node, cr->time);
     }
-
 
     tree_sequence_print_state(ts, stdout);
     /* sparse trees */
@@ -732,49 +726,62 @@ print_tree_sequence(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_iterator_alloc(sparse_iter, &tree);
-    if (ret != 0) {
+    for (ret = sparse_tree_first(&tree); ret == 1;
+            ret = sparse_tree_next(&tree)) {
+        printf("New tree: %d: %f (%d)\n", tree.index, tree.right - tree.left,
+                (int) tree.num_nodes);
+        /* sparse_tree_print_state(&tree, stdout); */
+        k = tree.index;
+        if (k > 3) {
+            printf("Rewinding\n");
+            for (j = 0; j < 2; j++) {
+                ret = sparse_tree_prev(&tree);
+                if (ret != 1) {
+                    goto out;
+                }
+                printf("\twent back to %d\n", tree.index);
+            }
+            printf("Going forward again\n");
+            for (j = 0; j < 2; j++) {
+                ret = sparse_tree_next(&tree);
+                if (ret != 1) {
+                    goto out;
+                }
+                printf("\twent forward to %d\n", tree.index);
+            }
+        }
+    }
+        /* printf("%d:\t", tree.index); */
+        /* for (j = 0; j < tree.num_nodes; j++) { */
+        /*     printf("%02d ", tree.parent[j]); */
+        /* } */
+        /* printf("\n"); */
+        /* l = tree.index; */
+        /* if (tree.index > 2) { */
+        /*     printf("BACK\n"); */
+        /*     for (k = 0; k < l - 1; k ++) { */
+        /*         sparse_tree_iterator_prev(sparse_iter); */
+        /*         printf("\t%d\t%d:\t", tree.index, (int) tree.num_mutations); */
+        /*         for (j = 0; j < tree.num_nodes; j++) { */
+        /*             printf("%02d ", tree.parent[j]); */
+        /*         } */
+        /*         printf("\n"); */
+        /*     } */
+        /*     printf("FORW\n"); */
+        /*     for (k = 0; k < l - 1; k++) { */
+        /*         sparse_tree_iterator_next(sparse_iter); */
+        /*         printf("\t%d\t%d:\t", tree.index, (int) tree.num_mutations); */
+        /*         for (j = 0; j < tree.num_nodes; j++) { */
+        /*             printf("%02d ", tree.parent[j]); */
+        /*         } */
+        /*         printf("\n"); */
+        /*     } */
+        /* } */
+    if (ret < 0) {
         goto out;
     }
-    printf("Sparse trees:\n");
-    tree.mark = 0;
-    while ((ret = sparse_tree_iterator_next(sparse_iter)) == 1) {
-        printf("New tree: %f (%d)\n", tree.right - tree.left,
-                (int) tree.num_nodes);
-        sparse_tree_iterator_print_state(sparse_iter, stdout);
-        printf("%d:\t", tree.index);
-        for (j = 0; j < tree.num_nodes; j++) {
-            printf("%02d ", tree.parent[j]);
-        }
-        printf("\n");
-        l = tree.index;
-        if (tree.index > 2) {
-            printf("BACK\n");
-            for (k = 0; k < l - 1; k ++) {
-                sparse_tree_iterator_prev(sparse_iter);
-                printf("\t%d\t%d:\t", tree.index, (int) tree.num_mutations);
-                for (j = 0; j < tree.num_nodes; j++) {
-                    printf("%02d ", tree.parent[j]);
-                }
-                printf("\n");
-            }
-            printf("FORW\n");
-            for (k = 0; k < l - 1; k++) {
-                sparse_tree_iterator_next(sparse_iter);
-                printf("\t%d\t%d:\t", tree.index, (int) tree.num_mutations);
-                for (j = 0; j < tree.num_nodes; j++) {
-                    printf("%02d ", tree.parent[j]);
-                }
-                printf("\n");
-            }
-        }
-    }
-    sparse_tree_iterator_free(sparse_iter);
     sparse_tree_free(&tree);
 out:
-    if (sparse_iter != NULL) {
-        free(sparse_iter);
-    }
     if (ret != 0) {
         fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
@@ -871,10 +878,10 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    print_ld_matrix(tree_seq);
 
+    print_tree_sequence(tree_seq);
     if (0) {
-        print_tree_sequence(tree_seq);
+        print_ld_matrix(tree_seq);
         print_haplotypes(tree_seq);
 
         for (j = 0; j < 1; j++) {

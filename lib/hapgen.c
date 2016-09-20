@@ -66,14 +66,14 @@ hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
 }
 
 static int
-hapgen_apply_tree_mutation(hapgen_t *self, size_t site, mutation_t *mut)
+hapgen_apply_tree_mutation(hapgen_t *self, mutation_t mut)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
     uint32_t parent;
     int not_done = 1;
 
-    ret = sparse_tree_get_parent(&self->tree, mut->node, &parent);
+    ret = sparse_tree_get_parent(&self->tree, mut.node, &parent);
     if (ret != 0) {
         goto out;
     }
@@ -81,13 +81,13 @@ hapgen_apply_tree_mutation(hapgen_t *self, size_t site, mutation_t *mut)
         ret = MSP_ERR_BAD_MUTATION;
         goto out;
     }
-    ret = sparse_tree_get_leaf_list(&self->tree, mut->node, &w, &tail);
+    ret = sparse_tree_get_leaf_list(&self->tree, mut.node, &w, &tail);
     if (ret != 0) {
         goto out;
     }
     while (not_done) {
         assert(w != NULL);
-        hapgen_set_bit(self, w->node, site);
+        hapgen_set_bit(self, w->node, mut.index);
         not_done = w != tail;
         w = w->next;
     }
@@ -99,21 +99,16 @@ static int
 hapgen_generate_all_haplotypes(hapgen_t *self)
 {
     int ret = 0;
-    size_t j, site;
-    sparse_tree_t *tree = &self->tree;
+    size_t j;
+    sparse_tree_t *t = &self->tree;
 
-    site = 0;
-    while ((ret = sparse_tree_iterator_next(&self->tree_iterator)) == 1) {
-        for (j = 0; j < tree->num_mutations; j++) {
-            ret = hapgen_apply_tree_mutation(self, site, &tree->mutations[j]);
+    for (ret = sparse_tree_first(t); ret == 1; ret = sparse_tree_next(t)) {
+        for (j = 0; j < t->num_mutations; j++) {
+            ret = hapgen_apply_tree_mutation(self, t->mutations[j]);
             if (ret != 0) {
                 goto out;
             }
-            site++;
         }
-    }
-    if (ret != 0) {
-        goto out;
     }
 out:
     return ret;
@@ -132,10 +127,6 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     self->tree_sequence = tree_sequence;
 
     ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = sparse_tree_iterator_alloc(&self->tree_iterator, &self->tree);
     if (ret != 0) {
         goto out;
     }
@@ -168,7 +159,6 @@ hapgen_free(hapgen_t *self)
         free(self->haplotype);
     }
     sparse_tree_free(&self->tree);
-    sparse_tree_iterator_free(&self->tree_iterator);
     return 0;
 }
 

@@ -77,12 +77,9 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence, size_t max_sites,
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->outer_tree = malloc(sizeof(sparse_tree_t));
     self->inner_tree = malloc(sizeof(sparse_tree_t));
-    self->outer_iter = malloc(sizeof(sparse_tree_iterator_t));
-    self->inner_iter = malloc(sizeof(sparse_tree_iterator_t));
     self->position_labels = malloc(self->num_mutations * sizeof(char *));
     self->label_mem = malloc(self->num_mutations * MAX_LABEL_LEN);
     if (self->outer_tree == NULL || self->inner_tree == NULL
-            || self->outer_iter == NULL || self->inner_iter == NULL
             || self->position_labels == NULL || self->label_mem == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -94,14 +91,6 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence, size_t max_sites,
     }
     ret = sparse_tree_alloc(self->inner_tree, self->tree_sequence,
             MSP_LEAF_COUNTS);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = sparse_tree_iterator_alloc(self->outer_iter, self->outer_tree);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = sparse_tree_iterator_alloc(self->inner_iter, self->inner_tree);
     if (ret != 0) {
         goto out;
     }
@@ -117,14 +106,6 @@ out:
 int
 ld_calc_free(ld_calc_t *self)
 {
-    if (self->inner_iter != NULL) {
-        sparse_tree_iterator_free(self->inner_iter);
-        free(self->inner_iter);
-    }
-    if (self->outer_iter != NULL) {
-        sparse_tree_iterator_free(self->outer_iter);
-        free(self->outer_iter);
-    }
     if (self->inner_tree != NULL) {
         sparse_tree_free(self->inner_tree);
         free(self->inner_tree);
@@ -204,26 +185,26 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
     double n = tree_sequence_get_sample_size(self->tree_sequence);
 
     /* set the trees to the first tree */
-    ret = sparse_tree_iterator_next(self->outer_iter);
-    if (ret < 0) {
-        goto out;
-    }
-    ret = sparse_tree_iterator_next(self->inner_iter);
-    if (ret < 0) {
-        goto out;
-    }
     tA = self->outer_tree;
     tB = self->inner_tree;
+    ret = sparse_tree_first(tA);
+    if (ret < 0) {
+        goto out;
+    }
+    ret = sparse_tree_next(tB);
+    if (ret < 0) {
+        goto out;
+    }
 
     for (j = 0; j < self->num_mutations; j++) {
         assert(tA->index == tB->index);
         mA = self->mutations[j];
         while (mA.position >= tA->right) {
-            ret = sparse_tree_iterator_next(self->outer_iter);
+            ret = sparse_tree_next(tA);
             if (ret < 0) {
                 goto out;
             }
-            ret = sparse_tree_iterator_next(self->inner_iter);
+            ret = sparse_tree_next(tB);
             if (ret < 0) {
                 goto out;
             }
@@ -240,7 +221,7 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
                 break;
             }
             while (mB.position >= tB->right) {
-                ret = sparse_tree_iterator_next(self->inner_iter);
+                ret = sparse_tree_next(tB);
                 assert(ret == 1);
             }
             assert(tB->parent[mB.node] != MSP_NULL_NODE);
@@ -286,7 +267,7 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
         tB->mark = 0;
         /* Now rewind back the inner iterator */
         while (tB->index > tA->index) {
-            ret = sparse_tree_iterator_prev(self->inner_iter);
+            ret = sparse_tree_prev(tB);
             if (ret < 0) {
                 goto out;
             }

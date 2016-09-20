@@ -2481,7 +2481,7 @@ class TestSparseTree(LowLevelTestCase):
             self.assertEqual(st.get_right(), 0)
             for j in range(n):
                 self.assertEqual(st.get_parent(j), NULL_NODE)
-                self.assertEqual(st.get_population(j), NULL_POPULATION)
+                self.assertEqual(st.get_population(j), 0)
                 self.assertEqual(st.get_children(j), tuple())
                 self.assertEqual(st.get_time(j), 0)
 

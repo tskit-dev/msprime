@@ -70,7 +70,7 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     SparseTree *sparse_tree;
-    sparse_tree_iterator_t *sparse_tree_iterator;
+    int first;
 } SparseTreeIterator;
 
 typedef struct {
@@ -3064,11 +3064,6 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = sparse_tree_clear(self->sparse_tree);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
     ret = 0;
 out:
     if (tracked_leaves != NULL) {
@@ -3802,21 +3797,12 @@ static int
 SparseTreeIterator_check_state(SparseTreeIterator *self)
 {
     int ret = 0;
-    if (self->sparse_tree_iterator == NULL) {
-        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
-        ret = -1;
-    }
     return ret;
 }
 
 static void
 SparseTreeIterator_dealloc(SparseTreeIterator* self)
 {
-    if (self->sparse_tree_iterator != NULL) {
-        sparse_tree_iterator_free(self->sparse_tree_iterator);
-        PyMem_Free(self->sparse_tree_iterator);
-        self->sparse_tree_iterator = NULL;
-    }
     Py_XDECREF(self->sparse_tree);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -3825,11 +3811,10 @@ static int
 SparseTreeIterator_init(SparseTreeIterator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
-    int err;
     static char *kwlist[] = {"sparse_tree", NULL};
     SparseTree *sparse_tree;
 
-    self->sparse_tree_iterator = NULL;
+    self->first = 1;
     self->sparse_tree = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
             &SparseTreeType, &sparse_tree)) {
@@ -3838,17 +3823,6 @@ SparseTreeIterator_init(SparseTreeIterator *self, PyObject *args, PyObject *kwds
     self->sparse_tree = sparse_tree;
     Py_INCREF(self->sparse_tree);
     if (SparseTree_check_sparse_tree(self->sparse_tree) != 0) {
-        goto out;
-    }
-    self->sparse_tree_iterator = PyMem_Malloc(sizeof(sparse_tree_iterator_t));
-    if (self->sparse_tree_iterator == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = sparse_tree_iterator_alloc(self->sparse_tree_iterator,
-            self->sparse_tree->sparse_tree);
-    if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = 0;
@@ -3865,7 +3839,13 @@ SparseTreeIterator_next(SparseTreeIterator  *self)
     if (SparseTreeIterator_check_state(self) != 0) {
         goto out;
     }
-    err = sparse_tree_iterator_next(self->sparse_tree_iterator);
+
+    if (self->first) {
+        err = sparse_tree_first(self->sparse_tree->sparse_tree);
+        self->first = 0;
+    } else {
+        err = sparse_tree_next(self->sparse_tree->sparse_tree);
+    }
     if (err < 0) {
         handle_library_error(err);
         goto out;

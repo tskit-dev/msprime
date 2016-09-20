@@ -324,19 +324,11 @@ typedef struct {
     /* mutation storage */
     mutation_t *mutations;
     size_t num_mutations;
-} sparse_tree_t;
-
-typedef struct {
-    uint32_t sample_size;
-    size_t num_nodes;
-    size_t num_records;
+    /* Counters needed for next() and prev() transformations. */
+    int direction;
     size_t left_index;
     size_t right_index;
-    size_t mutation_index;
-    int direction;
-    sparse_tree_t *tree;
-    tree_sequence_t *tree_sequence;
-} sparse_tree_iterator_t;
+} sparse_tree_t;
 
 typedef struct newick_tree_node {
     uint32_t id;
@@ -368,7 +360,6 @@ typedef struct {
     uint64_t *haplotype_matrix;
     char *haplotype;
     sparse_tree_t tree;
-    sparse_tree_iterator_t tree_iterator;
 } hapgen_t;
 
 typedef struct {
@@ -380,7 +371,6 @@ typedef struct {
     size_t tree_mutation_index;
     int finished;
     sparse_tree_t tree;
-    sparse_tree_iterator_t tree_iterator;
 } vargen_t;
 
 typedef struct {
@@ -402,8 +392,6 @@ typedef struct {
     double r2_threshold;
     sparse_tree_t *outer_tree;
     sparse_tree_t *inner_tree;
-    sparse_tree_iterator_t *outer_iter;
-    sparse_tree_iterator_t *inner_iter;
     mutation_t *mutations;
     char **position_labels;
     char *label_mem;
@@ -533,7 +521,6 @@ int sparse_tree_set_tracked_leaves(sparse_tree_t *self,
         uint32_t num_tracked_leaves, uint32_t *tracked_leaves);
 int sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
         leaf_list_node_t *head, leaf_list_node_t *tail);
-int sparse_tree_clear(sparse_tree_t *self);
 int sparse_tree_get_root(sparse_tree_t *self, uint32_t *root);
 int sparse_tree_get_parent(sparse_tree_t *self, uint32_t u, uint32_t *parent);
 int sparse_tree_get_children(sparse_tree_t *self, uint32_t u,
@@ -550,15 +537,11 @@ int sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
 int sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
         mutation_t **mutations);
 void sparse_tree_print_state(sparse_tree_t *self, FILE *out);
-
-int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
-        sparse_tree_t *tree);
-int sparse_tree_iterator_copy(sparse_tree_iterator_t *self,
-        sparse_tree_iterator_t *other);
-int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
-int sparse_tree_iterator_next(sparse_tree_iterator_t *self);
-int sparse_tree_iterator_prev(sparse_tree_iterator_t *self);
-void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self, FILE *out);
+/* Method for positioning the tree in the sequence. */
+int sparse_tree_first(sparse_tree_t *self);
+int sparse_tree_last(sparse_tree_t *self);
+int sparse_tree_next(sparse_tree_t *self);
+int sparse_tree_prev(sparse_tree_t *self);
 
 int newick_converter_alloc(newick_converter_t *self,
         tree_sequence_t *tree_sequence, size_t precision, double Ne);
