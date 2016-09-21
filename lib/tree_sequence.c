@@ -297,9 +297,8 @@ tree_sequence_add_provenance_string(tree_sequence_t *self,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->num_provenance_strings++;
     p = realloc(self->provenance_strings,
-            self->num_provenance_strings * sizeof(char *));
+            (self->num_provenance_strings + 1) * sizeof(char *));
     if (p == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -312,7 +311,8 @@ tree_sequence_add_provenance_string(tree_sequence_t *self,
         goto out;
     }
     strncpy(s, provenance_string, size);
-    self->provenance_strings[self->num_provenance_strings - 1] = s;
+    self->provenance_strings[self->num_provenance_strings] = s;
+    self->num_provenance_strings++;
     ret = 0;
 out:
     return ret;
@@ -1093,18 +1093,29 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     };
     size_t num_groups = sizeof(groups) / sizeof(struct _hdf5_group_write);
     size_t j;
-    hid_t vlen_str;
+    /* We need to use separate types for storage and memory here because
+     * we seem to get a memory leak in HDF5 otherwise.*/
+    hid_t filetype_str = -1;
+    hid_t memtype_str = -1;
 
-    vlen_str = H5Tcopy(H5T_C_S1);
-    if (vlen_str < 0) {
+    filetype_str = H5Tcopy(H5T_C_S1);
+    if (filetype_str < 0) {
         goto out;
     }
-    status = H5Tset_size(vlen_str, H5T_VARIABLE);
+    status = H5Tset_size(filetype_str, H5T_VARIABLE);
     if (status < 0) {
         goto out;
     }
-    fields[0].storage_type = vlen_str;
-    fields[0].memory_type = vlen_str;
+    memtype_str = H5Tcopy(H5T_C_S1);
+    if (memtype_str < 0) {
+        goto out;
+    }
+    status = H5Tset_size(memtype_str, H5T_VARIABLE);
+    if (status < 0) {
+        goto out;
+    }
+    fields[0].storage_type = filetype_str;
+    fields[0].memory_type = memtype_str;
 
     /* We only create the mutations group if it's non-empty */
     if (self->num_mutations == 0) {
@@ -1144,7 +1155,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
                 goto out;
             }
             if (fields[j].memory_type != H5T_NATIVE_DOUBLE &&
-                    fields[j].memory_type != vlen_str) {
+                    fields[j].memory_type != memtype_str) {
                 /* For integer types, use the scale offset compression */
                 status = H5Pset_scaleoffset(plist_id, H5Z_SO_INT,
                          H5Z_SO_INT_MINBITS_DEFAULT);
@@ -1192,14 +1203,26 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
             if (status < 0) {
                 goto out;
             }
+            status = H5Sclose(dataspace_id);
+            if (status < 0) {
+                goto out;
+            }
         }
-    }
-    status = H5Tclose(vlen_str);
-    if (status < 0) {
-        goto out;
     }
     ret = 0;
 out:
+    if (filetype_str != -1) {
+        status = H5Tclose(filetype_str);
+        if (status < 0) {
+            ret = MSP_ERR_HDF5;
+        }
+    }
+    if (memtype_str != -1) {
+        status = H5Tclose(memtype_str);
+        if (status < 0) {
+            ret = MSP_ERR_HDF5;
+        }
+    }
     return ret;
 }
 

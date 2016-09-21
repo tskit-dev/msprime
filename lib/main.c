@@ -861,6 +861,7 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+
     ret = tree_sequence_add_provenance_string(tree_seq, "Tree Provenance!!!");
     if (ret != 0) {
         goto out;

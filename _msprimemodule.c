@@ -2605,11 +2605,6 @@ TreeSequence_get_mutations(TreeSequence *self)
         goto out;
     }
     num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
-    mutations = PyMem_Malloc(num_mutations * sizeof(mutation_t));
-    if (mutations == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
     err = tree_sequence_get_mutations(self->tree_sequence, &mutations);
     if (err != 0) {
         handle_library_error(err);
