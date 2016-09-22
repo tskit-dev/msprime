@@ -1714,7 +1714,7 @@ sparse_tree_clear(sparse_tree_t *self)
     self->right = 0;
     self->right_breakpoint = 0;
     self->root = 0;
-    self->index = UINT32_MAX;
+    self->index = (size_t) -1;
     memset(self->parent, (int) MSP_NULL_NODE, N * sizeof(uint32_t));
     memset(self->population + n, (int) MSP_NULL_POPULATION_ID,
             (N - n) * sizeof(uint8_t));
@@ -1724,7 +1724,7 @@ sparse_tree_clear(sparse_tree_t *self)
     if (self->flags & MSP_LEAF_COUNTS) {
         memset(self->num_leaves + n, 0, (N - n) * sizeof(uint32_t));
         memset(self->num_tracked_leaves + n, 0, (N - n) * sizeof(uint32_t));
-        memset(self->marked, 0, N * sizeof(uint32_t));
+        memset(self->marked, 0, N * sizeof(uint8_t));
     }
     if (self->flags & MSP_LEAF_LISTS) {
         memset(self->leaf_list_head + n, 0,
@@ -1777,7 +1777,7 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     if (self->flags & MSP_LEAF_COUNTS) {
         self->num_leaves = calloc(num_nodes, sizeof(uint32_t));
         self->num_tracked_leaves = calloc(num_nodes, sizeof(uint32_t));
-        self->marked = calloc(num_nodes, sizeof(uint32_t));
+        self->marked = calloc(num_nodes, sizeof(uint8_t));
         if (self->num_leaves == NULL || self->num_tracked_leaves == NULL
                 || self->marked == NULL) {
             goto out;
@@ -1885,6 +1885,9 @@ sparse_tree_set_tracked_leaves(sparse_tree_t *self, uint32_t num_tracked_leaves,
     int ret = MSP_ERR_GENERIC;
     uint32_t j, u;
 
+    /* TODO This is not needed when the sparse tree is new. We should use the
+     * state machine to check and only reset the tracked leaves when needed.
+     */
     ret = sparse_tree_reset_tracked_leaves(self);
     if (ret != 0) {
         goto out;
@@ -1892,22 +1895,23 @@ sparse_tree_set_tracked_leaves(sparse_tree_t *self, uint32_t num_tracked_leaves,
     for (j = 0; j < num_tracked_leaves; j++) {
         u = tracked_leaves[j];
         if (u >= self->sample_size) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
+            ret = MSP_ERR_OUT_OF_BOUNDS;
             goto out;
         }
-        self->num_tracked_leaves[u] = 1;
+        if (self->num_tracked_leaves[u] != 0) {
+            ret = MSP_ERR_DUPLICATE_TRACKED_LEAF;
+            goto out;
+        }
+        /* Propagate this upwards */
+        while (u != MSP_NULL_NODE) {
+            self->num_tracked_leaves[u] += 1;
+            u = self->parent[u];
+        }
     }
 out:
     return ret;
 }
 
-/* TODO really need to sort out these APIs and figure out the
- * conditions under which they can be called. This form can be
- * called after a clear_tracked_leaves and includes a propagate.
- * The other form above must only be called before initialising
- * an iterator. Definitely, definetely need to figure out a new
- * shape for this API!!
- */
 int WARN_UNUSED
 sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
         leaf_list_node_t *head, leaf_list_node_t *tail)
@@ -1921,6 +1925,9 @@ sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    /* TODO This is not needed when the sparse tree is new. We should use the
+     * state machine to check and only reset the tracked leaves when needed.
+     */
     ret = sparse_tree_reset_tracked_leaves(self);
     if (ret != 0) {
         goto out;
@@ -1928,6 +1935,7 @@ sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
     not_done = 1;
     while (not_done) {
         u = list_node->node;
+        /* Propagate this upwards */
         while (u != MSP_NULL_NODE) {
             self->num_tracked_leaves[u] += 1;
             u = self->parent[u];
@@ -1947,6 +1955,10 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
     size_t N = self->num_nodes;
     size_t n = self->sample_size;
 
+    if (self == source) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     if (self->tree_sequence != source->tree_sequence) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -2025,7 +2037,7 @@ static int
 sparse_tree_check_node(sparse_tree_t *self, uint32_t u)
 {
     int ret = 0;
-    if (u > self->num_nodes) {
+    if (u >= self->num_nodes) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
     }
     return ret;
@@ -2044,7 +2056,7 @@ sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
     int l1, l2;
 
     if (u >= self->num_nodes || v >= self->num_nodes) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
+        ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
     j = u;
@@ -2291,7 +2303,7 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
     fprintf(out, "right = %f\n", self->right);
     fprintf(out, "right_breakpoint = %d\n", self->right_breakpoint);
     fprintf(out, "root = %d\n", self->root);
-    fprintf(out, "index = %d\n", self->index);
+    fprintf(out, "index = %d\n", (int) self->index);
     for (j = 0; j < self->num_nodes; j++) {
         fprintf(out, "\t%d\t%d\t%f\t%d\t(", (int) j, self->parent[j],
             self->time[j], self->population[j]);
@@ -2339,15 +2351,16 @@ static inline void
 sparse_tree_propagate_leaf_count_loss(sparse_tree_t *self,
         uint32_t u)
 {
-    uint32_t all_leaves_diff = self->num_leaves[u];
-    uint32_t tracked_leaves_diff = self->num_tracked_leaves[u];
+    const uint32_t all_leaves_diff = self->num_leaves[u];
+    const uint32_t tracked_leaves_diff = self->num_tracked_leaves[u];
+    const uint8_t mark = self->mark;
     uint32_t v = u;
 
     /* propogate this loss up as far as we can */
     while (v != MSP_NULL_NODE) {
         self->num_leaves[v] -= all_leaves_diff;
         self->num_tracked_leaves[v] -= tracked_leaves_diff;
-        self->marked[v] = self->mark;
+        self->marked[v] = mark;
         v = self->parent[v];
     }
 }
@@ -2370,6 +2383,7 @@ sparse_tree_propagate_leaf_count_gain(sparse_tree_t *self, uint32_t u)
     uint32_t j, k, v, *c;
     uint32_t all_leaves_diff = 0;
     uint32_t tracked_leaves_diff = 0;
+    const uint8_t mark = self->mark;
 
     c = self->children[u];
     k = self->num_children[u];
@@ -2382,7 +2396,7 @@ sparse_tree_propagate_leaf_count_gain(sparse_tree_t *self, uint32_t u)
     while (v != MSP_NULL_NODE) {
         self->num_leaves[v] += all_leaves_diff;
         self->num_tracked_leaves[v] += tracked_leaves_diff;
-        self->marked[v] = self->mark;
+        self->marked[v] = mark;
         v = self->parent[v];
     }
 }
@@ -2450,7 +2464,8 @@ sparse_tree_post_propagate_leaf_list_gain(sparse_tree_t *self, uint32_t u)
 static int
 sparse_tree_advance(sparse_tree_t *self, int direction,
         uint32_t *out_breakpoints, uint32_t *out_order, size_t *out_index,
-        uint32_t *in_breakpoints, uint32_t *in_order, size_t *in_index)
+        uint32_t *in_breakpoints, uint32_t *in_order, size_t *in_index,
+        int first_tree)
 {
     int ret = 0;
     int direction_change = direction * (direction != self->direction);
@@ -2462,12 +2477,6 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     double oldest_child_time;
     tree_sequence_t *s = self->tree_sequence;
     ssize_t R = (ssize_t) s->num_records;
-    /* To detect errors we look for situations when the trees are not
-     * completed. The propery is that we should have
-     * n - 1 = sum(k - 1) where k is the arity of the node over the
-     * whole tree.
-     */
-    int first_tree = self->left_index == 0;
     size_t in_count = 0;
     size_t out_count = 0;
 
@@ -2562,8 +2571,8 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     }
 
     /* TODO These are all redundant and can be derived from the tree index */
-    self->left_breakpoint = self->index;
-    self->right_breakpoint = self->index + 1;
+    self->left_breakpoint = (uint32_t) self->index;
+    self->right_breakpoint = (uint32_t) self->index + 1;
     self->left = s->trees.breakpoints[self->left_breakpoint];
     self->right = s->trees.breakpoints[self->right_breakpoint];
     ret = 1;
@@ -2593,7 +2602,7 @@ sparse_tree_first(sparse_tree_t *self)
     ret = sparse_tree_advance(self, MSP_DIR_FORWARD,
             s->trees.records.right, s->trees.indexes.removal_order,
             &self->right_index, s->trees.records.left,
-            s->trees.indexes.insertion_order, &self->left_index);
+            s->trees.indexes.insertion_order, &self->left_index, 1);
 out:
     return ret;
 }
@@ -2601,7 +2610,27 @@ out:
 int WARN_UNUSED
 sparse_tree_last(sparse_tree_t *self)
 {
-    int ret = -1;
+    int ret = 0;
+    tree_sequence_t *s = self->tree_sequence;
+
+    /* TODO this is redundant if this is the first usage of the tree. We
+     * should add a state machine here so we know what state the tree is
+     * in and can take the appropriate actions.
+     */
+    ret = sparse_tree_clear(self);
+    if (ret != 0) {
+        goto out;
+    }
+    self->left_index = s->num_records - 1;
+    self->right_index = s->num_records - 1;
+    self->direction = MSP_DIR_REVERSE;
+    self->index = tree_sequence_get_num_trees(s);
+
+    ret = sparse_tree_advance(self, MSP_DIR_REVERSE,
+            s->trees.records.left, s->trees.indexes.insertion_order,
+            &self->left_index, s->trees.records.right,
+            s->trees.indexes.removal_order, &self->right_index, 1);
+out:
     return ret;
 }
 
@@ -2616,7 +2645,7 @@ sparse_tree_next(sparse_tree_t *self)
         ret = sparse_tree_advance(self, MSP_DIR_FORWARD,
                 s->trees.records.right, s->trees.indexes.removal_order,
                 &self->right_index, s->trees.records.left,
-                s->trees.indexes.insertion_order, &self->left_index);
+                s->trees.indexes.insertion_order, &self->left_index, 0);
     }
     return ret;
 }
@@ -2631,7 +2660,7 @@ sparse_tree_prev(sparse_tree_t *self)
         ret = sparse_tree_advance(self, MSP_DIR_REVERSE,
                 s->trees.records.left, s->trees.indexes.insertion_order,
                 &self->left_index, s->trees.records.right,
-                s->trees.indexes.removal_order, &self->right_index);
+                s->trees.indexes.removal_order, &self->right_index, 0);
     }
     return ret;
 }

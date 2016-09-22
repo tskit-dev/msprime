@@ -1927,6 +1927,8 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertRaises(
                 ValueError, ts.get_pairwise_diversity,
                 [0, ts.get_sample_size()])
+            self.assertRaises(
+                _msprime.LibraryError, ts.get_pairwise_diversity, [0, 0])
             samples = list(range(ts.get_sample_size()))
             pi1 = ts.get_pairwise_diversity(samples)
             self.assertGreaterEqual(pi1, 0)
@@ -2581,19 +2583,14 @@ class TestSparseTree(LowLevelTestCase):
                         st.get_num_tracked_leaves(j) for j in
                         range(st.get_num_nodes())]
                     self.assertEqual(nu, nu_prime)
-            # Passing duplicated values should have no effect.
+            # Passing duplicated values should raise an error
             leaf = 1
-            for j in range(1, 20):
+            for j in range(2, 20):
                 tracked_leaves = [leaf for _ in range(j)]
-                st = _msprime.SparseTree(
+                self.assertRaises(
+                    _msprime.LibraryError, _msprime.SparseTree,
                     ts, flags=_msprime.LEAF_COUNTS,
                     tracked_leaves=tracked_leaves)
-                for st in _msprime.SparseTreeIterator(st):
-                    nu = get_tracked_leaf_counts(st, [leaf])
-                    nu_prime = [
-                        st.get_num_tracked_leaves(j) for j in
-                        range(st.get_num_nodes())]
-                    self.assertEqual(nu, nu_prime)
 
     def test_bounds_checking(self):
         for m in range(1, 10):

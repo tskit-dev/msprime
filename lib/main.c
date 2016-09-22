@@ -728,8 +728,8 @@ print_tree_sequence(tree_sequence_t *ts)
     }
     for (ret = sparse_tree_first(&tree); ret == 1;
             ret = sparse_tree_next(&tree)) {
-        printf("New tree: %d: %f (%d)\n", tree.index, tree.right - tree.left,
-                (int) tree.num_nodes);
+        printf("New tree: %d: %f (%d)\n", (int) tree.index,
+                tree.right - tree.left, (int) tree.num_nodes);
         /* sparse_tree_print_state(&tree, stdout); */
         k = tree.index;
         if (k > 3) {
@@ -739,7 +739,7 @@ print_tree_sequence(tree_sequence_t *ts)
                 if (ret != 1) {
                     goto out;
                 }
-                printf("\twent back to %d\n", tree.index);
+                printf("\twent back to %d\n", (int) tree.index);
             }
             printf("Going forward again\n");
             for (j = 0; j < 2; j++) {
@@ -747,7 +747,7 @@ print_tree_sequence(tree_sequence_t *ts)
                 if (ret != 1) {
                     goto out;
                 }
-                printf("\twent forward to %d\n", tree.index);
+                printf("\twent forward to %d\n", (int) tree.index);
             }
         }
     }

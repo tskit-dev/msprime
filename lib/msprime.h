@@ -306,14 +306,16 @@ typedef struct {
     uint32_t *num_children;
     uint32_t **children;
     double *time;
-    uint32_t index;
+    size_t index;
     /* These are involved in the optional leaf tracking; num_leaves counts
      * all leaves below a give node, and num_tracked_leaves counts those
      * from a specific subset. */
     uint32_t *num_leaves;
     uint32_t *num_tracked_leaves;
-    uint32_t *marked;
-    uint32_t mark;
+    /* All nodes that are marked during a particular transition are marked
+     * with a given value. */
+    uint8_t *marked;
+    uint8_t mark;
     /* These are for the optional leaf list tracking. */
     leaf_list_node_t **leaf_list_head;
     leaf_list_node_t **leaf_list_tail;

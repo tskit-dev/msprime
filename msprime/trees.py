@@ -1570,10 +1570,6 @@ class TreeSequence(object):
         Returns the value of pi, the pairwise nucleotide site diversity.
         If `samples` is specified, calculate the diversity within this set.
 
-        Note that we do not check for duplicates within the list of samples,
-        and if samples are provided multiple times incorrect results will
-        be returned.
-
         :param iterable samples: The set of samples within which we calculate
             the diversity. If None, calculate diversity within the entire
             sample.
