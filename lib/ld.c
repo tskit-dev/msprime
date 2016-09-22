@@ -191,7 +191,7 @@ ld_calc_write_table(ld_calc_t *self, FILE *out)
     if (ret < 0) {
         goto out;
     }
-    ret = sparse_tree_next(tB);
+    ret = sparse_tree_first(tB);
     if (ret < 0) {
         goto out;
     }
