@@ -12,6 +12,7 @@ import glob
 import subprocess
 import sys
 import itertools
+import threading
 
 import numpy as np
 import numpy.ma as ma
@@ -588,38 +589,121 @@ def convert_dev():
     ts.dump("v3.hdf5")
 
 
+def ld_worker(ld_calc, start, stop, num_mutations, index, lock, progress):
+    t = threading.current_thread()
+    with lock:
+        print("Thread ", t.name, "active")
+    buff = bytearray(num_mutations * 8)
+    for j in range(start, stop):
+        v = ld_calc.get_r2(
+            dest=buff, source_index=j, max_mutations=num_mutations - 1,
+            max_distance=1e100)
+        # print(list(buff[:v * 8]))
+        a = np.frombuffer(buff, "d", v)
+        x = np.mean(a)
+        if j % 1000 == 0:
+            with lock:
+                progress[index] = (j - start) / (stop - start)
+                s = "\t".join("{:.2f}".format(p) for p in progress)
+                print(t.name, ":", s, end="\r")
+                sys.stdout.flush()
+
+
 def ld_dev():
-    ts = msprime.simulate(100, recombination_rate=10, mutation_rate=10,
-            random_seed=1)
+    # ts = msprime.simulate(100, recombination_rate=10, mutation_rate=5,
+    #         random_seed=1)
+    num_threads = 10
+    ts = msprime.load(sys.argv[1])
     print("num trees = ", ts.get_num_trees())
     print("num mutations  = ", ts.get_num_mutations())
-    filename = "tmp__NOBACKUP__/test_tmp.txt"
-    ts.write_ld_table(filename)
-    l1 = []
-    with open(filename) as f:
-        for line in f:
-            s = line.split()
-            l1.append((float(s[1]), float(s[3]), float(s[4])))
-    l2 = []
-    n = ts.get_sample_size()
-    for t1 in ts.trees():
-        for mA in t1.mutations():
-            fA = t1.get_num_leaves(mA.node) / n
-            leaves = list(t1.leaves(mA.node))
-            for t2 in ts.trees(tracked_leaves=leaves):
-                for mB in t2.mutations():
-                    if mB.position > mA.position:
-                        fB = t2.get_num_leaves(mB.node) / n
-                        fAB = t2.get_num_tracked_leaves(mB.node) / n
-                        D = fAB - fA * fB;
-                        r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
-                        l2.append((mA.position, mB.position, r2))
-    assert len(l1) == len(l2)
+    # num_mutations = min(ts.get_num_mutations(), 100000)
+    # num_mutations = ts.get_num_mutations()
+    num_mutations = 1000
+    ld_calcs = [
+        _msprime.LdCalculator(ts._ll_tree_sequence) for _ in range(num_threads)]
+    k = ts.get_num_trees() // num_threads
+    start = 0
+    next_block = k
+    intervals = []
+    for t in ts.trees():
+        if t.get_index() >= next_block:
+            mutations = list(t.mutations())
+            if len(mutations) > 0:
+                stop = mutations[-1].index
+                intervals.append((start, stop))
+                start = stop
+                next_block += k
 
-    for x, y in zip(l1, l2):
-        for v1, v2 in zip(x, y):
-            d = abs(v1 - v2)
-            assert d < 1e-6
+    threads = []
+    lock = threading.Lock()
+    progress = [0 for j in range(num_threads)]
+    for j in range(num_threads):
+        start, stop = intervals[j]
+        t = threading.Thread(
+            name="ld_worker_{}".format(j), target=ld_worker,
+            args=(ld_calcs[j], start, stop, num_mutations, j, lock, progress))
+        t.start()
+        threads.append(t)
+
+    print("Main thread joining")
+    for t in threads:
+        t.join()
+    print("Main thread done")
+
+
+
+    # buff = bytearray(num_mutations * 8)
+    # # print("matrix memory required = ", (num_mutations**2 * 8) / (1024**3), "GB")
+    # # A = np.ones((num_mutations, num_mutations), dtype=float)
+    # for j in range(ts.get_num_mutations() - 1):
+    #     # v = ld_calc.get_r2(
+    #     #     dest=buff, source_index=j, max_mutations=num_mutations - j - 1, max_distance=1e100)
+    #     v = ld_calc.get_r2(
+    #         dest=buff, source_index=j, max_mutations=num_mutations,
+    #         max_distance=1e100)
+    #     # print(list(buff[:v * 8]))
+    #     a = np.frombuffer(buff, "d", v)
+    #     x = np.mean(a)
+    #     if j % 1000 == 0:
+    #         print(j, "\t", x, end="\r")
+    #         sys.stdout.flush()
+    #     # print(x)
+    #     # print(a)
+    #     # print(v, np.mean(a))
+    #     # A[j, j + 1:] = a
+    #     # A[j + 1:, j] = a
+    # print(A)
+
+
+
+
+    # filename = "tmp__NOBACKUP__/test_tmp.txt"
+    # ts.write_ld_table(filename)
+    # l1 = []
+    # with open(filename) as f:
+    #     for line in f:
+    #         s = line.split()
+    #         l1.append((float(s[1]), float(s[3]), float(s[4])))
+    # l2 = []
+    # n = ts.get_sample_size()
+    # for t1 in ts.trees():
+    #     for mA in t1.mutations():
+    #         fA = t1.get_num_leaves(mA.node) / n
+    #         leaves = list(t1.leaves(mA.node))
+    #         for t2 in ts.trees(tracked_leaves=leaves):
+    #             for mB in t2.mutations():
+    #                 if mB.position > mA.position:
+    #                     fB = t2.get_num_leaves(mB.node) / n
+    #                     fAB = t2.get_num_tracked_leaves(mB.node) / n
+    #                     D = fAB - fA * fB;
+    #                     r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
+    #                     l2.append((mA.position, mB.position, r2))
+    # assert len(l1) == len(l2)
+
+    # for x, y in zip(l1, l2):
+    #     for v1, v2 in zip(x, y):
+    #         d = abs(v1 - v2)
+    #         assert d < 1e-6
 
 if __name__ == "__main__":
     # mutations()
@@ -645,11 +729,4 @@ if __name__ == "__main__":
     # stuff()
     # examine()
     # convert_dev()
-    # ld_dev()
-
-    ts = msprime.load(sys.argv[1])
-    max_sites = int(sys.argv[2])
-    ts.write_ld_table(
-            "tmp__NOBACKUP__/table.txt", max_sites=max_sites,
-            r2_threshold=0.2)
-
+    ld_dev()

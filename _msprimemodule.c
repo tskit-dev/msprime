@@ -111,6 +111,12 @@ typedef struct {
     vargen_t *variant_generator;
 } VariantGenerator;
 
+typedef struct {
+    PyObject_HEAD
+    TreeSequence *tree_sequence;
+    ld_calc_t *ld_calc;
+} LdCalculator;
+
 static void
 handle_library_error(int err)
 {
@@ -4319,12 +4325,12 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
     }
-    self->variant_generator = PyMem_Malloc(sizeof(hapgen_t));
+    self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
     if (self->variant_generator == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    memset(self->variant_generator, 0, sizeof(hapgen_t));
+    memset(self->variant_generator, 0, sizeof(vargen_t));
     err = vargen_alloc(self->variant_generator,
             self->tree_sequence->tree_sequence);
     if (err != 0) {
@@ -4405,6 +4411,171 @@ static PyTypeObject VariantGeneratorType = {
     0,                         /* tp_dictoffset */
     (initproc)VariantGenerator_init,      /* tp_init */
 };
+
+/*===================================================================
+ * LdCalculator
+ *===================================================================
+ */
+
+static int
+LdCalculator_check_state(LdCalculator *self)
+{
+    int ret = 0;
+    if (self->ld_calc == NULL) {
+        PyErr_SetString(PyExc_SystemError, "converter not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+LdCalculator_dealloc(LdCalculator* self)
+{
+    if (self->ld_calc != NULL) {
+        ld_calc_free(self->ld_calc);
+        PyMem_Free(self->ld_calc);
+        self->ld_calc = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+LdCalculator_init(LdCalculator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", NULL};
+    TreeSequence *tree_sequence;
+
+    self->ld_calc = NULL;
+    self->tree_sequence = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    self->ld_calc = PyMem_Malloc(sizeof(ld_calc_t));
+    if (self->ld_calc == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->ld_calc, 0, sizeof(ld_calc_t));
+    err = ld_calc_alloc(self->ld_calc, self->tree_sequence->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+LdCalculator_get_r2(LdCalculator *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    static char *kwlist[] = {
+        "dest", "source_index", "max_mutations", "max_distance", NULL};
+    PyObject *dest = NULL;
+    Py_buffer buffer;
+    Py_ssize_t source_index, max_mutations;
+    double max_distance;
+    size_t num_r2_values = 0;
+    int buffer_acquired = 0;
+
+    if (LdCalculator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Onnd", kwlist,
+            &dest, &source_index, &max_mutations, &max_distance)) {
+        goto out;
+    }
+    if (!PyObject_CheckBuffer(dest)) {
+        PyErr_SetString(PyExc_TypeError,
+            "dest buffer must support the Python buffer protocol.");
+        goto out;
+    }
+    if (PyObject_GetBuffer(dest, &buffer, PyBUF_SIMPLE|PyBUF_WRITABLE) != 0) {
+        goto out;
+    }
+    buffer_acquired = 1;
+    if (max_mutations * sizeof(double) >= buffer.len) {
+        PyErr_SetString(PyExc_BufferError,
+            "dest buffer is too small for the results");
+        goto out;
+    }
+    Py_BEGIN_ALLOW_THREADS
+    err = ld_calc_get_r2(
+        self->ld_calc, (size_t) source_index, (size_t) max_mutations,
+        max_distance, (double *) buffer.buf, &num_r2_values);
+    Py_END_ALLOW_THREADS
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) num_r2_values);
+out:
+    if (buffer_acquired) {
+        PyBuffer_Release(&buffer);
+    }
+    return ret;
+}
+
+static PyMemberDef LdCalculator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef LdCalculator_methods[] = {
+    {"get_r2", (PyCFunction) LdCalculator_get_r2, METH_VARARGS|METH_KEYWORDS,
+        "Returns r2 statistic for a given mutation over specified range"},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject LdCalculatorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.LdCalculator",             /* tp_name */
+    sizeof(LdCalculator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)LdCalculator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "LdCalculator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    LdCalculator_methods,             /* tp_methods */
+    LdCalculator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)LdCalculator_init,      /* tp_init */
+};
+
 
 /*===================================================================
  * Module level functions
@@ -4598,6 +4769,13 @@ init_msprime(void)
     Py_INCREF(&VariantGeneratorType);
     PyModule_AddObject(module, "VariantGenerator",
             (PyObject *) &VariantGeneratorType);
+    /* LdCalculator type */
+    LdCalculatorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&LdCalculatorType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&LdCalculatorType);
+    PyModule_AddObject(module, "LdCalculator", (PyObject *) &LdCalculatorType);
     /* Errors and constants */
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
