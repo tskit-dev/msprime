@@ -2778,71 +2778,6 @@ out:
 }
 
 static PyObject *
-TreeSequence_write_ld_table(TreeSequence *self, PyObject *args,
-        PyObject *kwds)
-{
-    PyObject *ret = NULL;
-    static char *kwlist[] = {"filename", "max_sites", "max_distance",
-        "r2_threshold", NULL};
-    Py_ssize_t max_sites = PY_SSIZE_T_MAX;
-    ld_calc_t *ld_calc = NULL;
-    double max_distance = DBL_MAX;
-    double r2_threshold = 0.0;
-    char *filename;
-    int err;
-    FILE *out = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ndd", kwlist,
-            &filename, &max_sites, &max_distance, &r2_threshold)) {
-        goto out;
-    }
-    out = fopen(filename, "w");
-    if (out == NULL) {
-        PyErr_SetFromErrno(PyExc_OSError);
-        goto out;
-    }
-    ld_calc = PyMem_Malloc(sizeof(ld_calc_t));
-    if (ld_calc == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = ld_calc_alloc(ld_calc, self->tree_sequence, max_sites, max_distance,
-            r2_threshold);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    err = ld_calc_write_table(ld_calc, out);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    err = fclose(out);
-    out = NULL;
-    if (err != 0) {
-        PyErr_SetFromErrno(PyExc_OSError);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    if (out != NULL) {
-        /* The nominal case is handled above. Here we're closing the FD
-         * in an error condition, so we don't try to catch any IO errors
-         * that might occur.
-         */
-        fclose(out);
-    }
-    if (ld_calc != NULL) {
-        ld_calc_free(ld_calc);
-        PyMem_Free(ld_calc);
-    }
-    return ret;
-}
-
-static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
 {
     PyObject *ret = NULL;
@@ -2904,9 +2839,6 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
-    {"write_ld_table",
-        (PyCFunction) TreeSequence_write_ld_table,
-        METH_VARARGS|METH_KEYWORDS, "Writes a table of LD values to a file." },
     {NULL}  /* Sentinel */
 };
 

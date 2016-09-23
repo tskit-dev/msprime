@@ -524,19 +524,39 @@ static void
 print_ld_matrix(tree_sequence_t *ts)
 {
     int ret;
+    size_t num_mutations = tree_sequence_get_num_mutations(ts);
+    mutation_t *mutations;
+    double *r2 = malloc(num_mutations * sizeof(double));
+    size_t j, k, num_r2_values;
     ld_calc_t ld_calc;
 
-    printf("LD TABLE\n");
-    ret = ld_calc_alloc(&ld_calc, ts, 10, DBL_MAX, 0.0);
+    if (r2 == NULL) {
+        fatal_error("no memory");
+    }
+    ret = tree_sequence_get_mutations(ts, &mutations);
+    if (ret != 0) {
+        fatal_library_error(ret, "get_mutations");
+    }
+    ret = ld_calc_alloc(&ld_calc, ts);
     printf("alloc: ret = %d\n", ret);
     if (ret != 0) {
         fatal_library_error(ret, "ld_calc_alloc");
     }
     ld_calc_print_state(&ld_calc, stdout);
-    ret = ld_calc_write_table(&ld_calc, stdout);
-    if (ret != 0) {
-        fatal_library_error(ret, "ld_calc_write_table");
+    for (j = 0; j < num_mutations; j++) {
+        ret = ld_calc_get_r2(&ld_calc, j, num_mutations, DBL_MAX,
+                r2, &num_r2_values);
+        if (ret != 0) {
+            fatal_library_error(ret, "ld_calc_get_r2");
+        }
+        for (k = 0; k < num_r2_values; k++) {
+            printf("%d\t%f\t%d\t%f\t%.3f\n",
+                (int) mutations[j].index, mutations[j].position,
+                (int) mutations[j + k + 1].index,
+                mutations[j + k + 1].position, r2[k]);
+        }
     }
+    free(r2);
     ret = ld_calc_free(&ld_calc);
     if (ret != 0) {
         fatal_library_error(ret, "ld_calc_write_table");

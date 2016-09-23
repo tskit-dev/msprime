@@ -1936,6 +1936,7 @@ sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
     while (not_done) {
         u = list_node->node;
         /* Propagate this upwards */
+        assert(self->num_tracked_leaves[u] == 0);
         while (u != MSP_NULL_NODE) {
             self->num_tracked_leaves[u] += 1;
             u = self->parent[u];
@@ -2534,11 +2535,11 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         in += direction;
     }
     if (self->flags & MSP_LEAF_LISTS) {
-        while (h < R && in_breakpoints[in_order[h]] == x) {
+        while (h >= 0 && h < R && in_breakpoints[in_order[h]] == x) {
             k = in_order[h];
             u = s->trees.records.node[k];
             sparse_tree_post_propagate_leaf_list_gain(self, u);
-            h++;
+            h += direction;
         }
     }
 

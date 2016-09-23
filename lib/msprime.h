@@ -389,14 +389,9 @@ typedef struct {
 } vcf_converter_t;
 
 typedef struct {
-    size_t max_sites;
-    double max_distance;
-    double r2_threshold;
     sparse_tree_t *outer_tree;
     sparse_tree_t *inner_tree;
     mutation_t *mutations;
-    char **position_labels;
-    char *label_mem;
     size_t num_mutations;
     int tree_changed;
     tree_sequence_t *tree_sequence;
@@ -559,12 +554,12 @@ int vcf_converter_next(vcf_converter_t *self, char **record);
 int vcf_converter_free(vcf_converter_t *self);
 void vcf_converter_print_state(vcf_converter_t *self, FILE *out);
 
-int ld_calc_alloc(ld_calc_t *self,
-        tree_sequence_t *tree_sequence, size_t max_sites,
-        double max_distance, double r2_threshold);
+int ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence);
 int ld_calc_free(ld_calc_t *self);
 void ld_calc_print_state(ld_calc_t *self, FILE *out);
-int ld_calc_write_table(ld_calc_t *self, FILE *out);
+int ld_calc_get_r2(ld_calc_t *self, size_t source_index,
+        size_t max_mutations, double max_distance,
+        double *r2, size_t *num_r2_values);
 
 int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);
