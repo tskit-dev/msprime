@@ -4481,19 +4481,31 @@ LdCalculator_get_r2(LdCalculator *self, PyObject *args, PyObject *kwds)
     int err;
     PyObject *ret = NULL;
     static char *kwlist[] = {
-        "dest", "source_index", "max_mutations", "max_distance", NULL};
+        "dest", "source_index", "direction", "max_mutations",
+        "max_distance", NULL};
     PyObject *dest = NULL;
     Py_buffer buffer;
-    Py_ssize_t source_index, max_mutations;
-    double max_distance;
+    Py_ssize_t source_index;
+    Py_ssize_t max_mutations = -1;
+    double max_distance = DBL_MAX;
+    int direction = MSP_DIR_FORWARD;
     size_t num_r2_values = 0;
     int buffer_acquired = 0;
 
     if (LdCalculator_check_state(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Onnd", kwlist,
-            &dest, &source_index, &max_mutations, &max_distance)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "On|ind", kwlist,
+            &dest, &source_index, &direction, &max_mutations, &max_distance)) {
+        goto out;
+    }
+    if (direction != MSP_DIR_FORWARD && direction != MSP_DIR_REVERSE) {
+        PyErr_SetString(PyExc_ValueError,
+            "direction must be FORWARD or REVERSE");
+        goto out;
+    }
+    if (max_distance <= 0) {
+        PyErr_SetString(PyExc_ValueError, "max_distance must be > 0");
         goto out;
     }
     if (!PyObject_CheckBuffer(dest)) {
@@ -4505,15 +4517,19 @@ LdCalculator_get_r2(LdCalculator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     buffer_acquired = 1;
-    if (max_mutations * sizeof(double) >= buffer.len) {
+    if (max_mutations == -1) {
+        max_mutations = buffer.len / sizeof(double);
+    } else if (max_mutations * sizeof(double) > buffer.len) {
         PyErr_SetString(PyExc_BufferError,
             "dest buffer is too small for the results");
         goto out;
     }
+
     Py_BEGIN_ALLOW_THREADS
     err = ld_calc_get_r2(
-        self->ld_calc, (size_t) source_index, (size_t) max_mutations,
-        max_distance, (double *) buffer.buf, &num_r2_values);
+        self->ld_calc, (size_t) source_index, direction,
+        (size_t) max_mutations, max_distance,
+        (double *) buffer.buf, &num_r2_values);
     Py_END_ALLOW_THREADS
     if (err != 0) {
         handle_library_error(err);
@@ -4791,6 +4807,10 @@ init_msprime(void)
     /* Tree flags */
     PyModule_AddIntConstant(module, "LEAF_COUNTS", MSP_LEAF_COUNTS);
     PyModule_AddIntConstant(module, "LEAF_LISTS", MSP_LEAF_LISTS);
+    /* Directions */
+    PyModule_AddIntConstant(module, "FORWARD", MSP_DIR_FORWARD);
+    PyModule_AddIntConstant(module, "REVERSE", MSP_DIR_REVERSE);
+
     /* turn off GSL error handler so we don't abort on memory error */
     gsl_set_error_handler_off();
 

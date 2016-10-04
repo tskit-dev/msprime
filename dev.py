@@ -651,29 +651,45 @@ def ld_dev():
     print("Main thread done")
 
 
+def ld_plot():
+    # ts = msprime.simulate(100, recombination_rate=10, mutation_rate=5,
+    #         random_seed=1)
 
-    # buff = bytearray(num_mutations * 8)
-    # # print("matrix memory required = ", (num_mutations**2 * 8) / (1024**3), "GB")
-    # # A = np.ones((num_mutations, num_mutations), dtype=float)
-    # for j in range(ts.get_num_mutations() - 1):
-    #     # v = ld_calc.get_r2(
-    #     #     dest=buff, source_index=j, max_mutations=num_mutations - j - 1, max_distance=1e100)
-    #     v = ld_calc.get_r2(
-    #         dest=buff, source_index=j, max_mutations=num_mutations,
-    #         max_distance=1e100)
-    #     # print(list(buff[:v * 8]))
-    #     a = np.frombuffer(buff, "d", v)
-    #     x = np.mean(a)
-    #     if j % 1000 == 0:
-    #         print(j, "\t", x, end="\r")
-    #         sys.stdout.flush()
-    #     # print(x)
-    #     # print(a)
-    #     # print(v, np.mean(a))
-    #     # A[j, j + 1:] = a
-    #     # A[j + 1:, j] = a
-    # print(A)
+    ts = msprime.load(sys.argv[1])
+    ld_calc = _msprime.LdCalculator(ts._ll_tree_sequence)
+    num_mutations = 100
+    buff = bytearray((num_mutations + 1) * 8)
+    # start = ts.get_num_mutations() // 4
+    start = 0
+    print("matrix memory required = ", (num_mutations**2 * 8) / (1024**3), "GB")
+    print("num_mutations = ", num_mutations)
+    print("start = ", start)
 
+    A = np.ones((num_mutations, num_mutations), dtype=float)
+    for j in range(num_mutations - 1):
+        v = ld_calc.get_r2(
+            dest=buff, direction=_msprime.FORWARD, source_index=start + j,
+            max_mutations=num_mutations - j, max_distance=1e100)
+        # print(list(buff[:v * 8]))
+        a = np.frombuffer(buff, "d", v - 1)
+        print(a)
+        A[j, j + 1:] = a
+        A[j + 1:, j] = a
+    print(A)
+
+    x = A.shape[0] / pyplot.rcParams['savefig.dpi']
+    x = max(x, pyplot.rcParams['figure.figsize'][0])
+    fig, ax = pyplot.subplots(figsize=(x, x))
+    fig.tight_layout(pad=0)
+
+    im = ax.imshow(A, interpolation="none", vmin=0, vmax=1, cmap="Blues")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for s in 'top', 'bottom', 'left', 'right':
+        ax.spines[s].set_visible(False)
+    pyplot.gcf().colorbar(im, shrink=.5, pad=0)
+    pyplot.savefig("ld.png")
+    pyplot.savefig("ld.png")
 
 
 
@@ -729,4 +745,5 @@ if __name__ == "__main__":
     # stuff()
     # examine()
     # convert_dev()
-    ld_dev()
+    # ld_dev()
+    ld_plot()

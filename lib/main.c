@@ -544,8 +544,8 @@ print_ld_matrix(tree_sequence_t *ts)
     }
     ld_calc_print_state(&ld_calc, stdout);
     for (j = 0; j < num_mutations; j++) {
-        ret = ld_calc_get_r2(&ld_calc, j, num_mutations, DBL_MAX,
-                r2, &num_r2_values);
+        ret = ld_calc_get_r2(&ld_calc, j, MSP_DIR_FORWARD, num_mutations,
+                DBL_MAX, r2, &num_r2_values);
         if (ret != 0) {
             fatal_library_error(ret, "ld_calc_get_r2");
         }

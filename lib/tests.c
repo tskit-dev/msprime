@@ -3265,8 +3265,9 @@ verify_ld(tree_sequence_t *ts)
 {
     int ret;
     size_t num_mutations = tree_sequence_get_num_mutations(ts);
+    mutation_t *mutations;
     ld_calc_t ld_calc;
-    double *r2, *r2_prime;
+    double *r2, *r2_prime, x;
     size_t j, num_r2_values;
 
     r2 = malloc(num_mutations * sizeof(double));
@@ -3277,20 +3278,49 @@ verify_ld(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ld_calc_print_state(&ld_calc, _devnull);
 
+    ret = tree_sequence_get_mutations(ts, &mutations);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
     if (num_mutations > 0) {
-        ret = ld_calc_get_r2(&ld_calc, 0, num_mutations, DBL_MAX,
+        /* Some checks in the forward direction */
+        ret = ld_calc_get_r2(&ld_calc, 0, MSP_DIR_FORWARD,
+                num_mutations, DBL_MAX, r2, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_mutations - 1);
+        ld_calc_print_state(&ld_calc, _devnull);
+
+        ret = ld_calc_get_r2(&ld_calc, num_mutations - 2, MSP_DIR_FORWARD,
+                num_mutations, DBL_MAX, r2_prime, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        ld_calc_print_state(&ld_calc, _devnull);
+
+        ret = ld_calc_get_r2(&ld_calc, 0, MSP_DIR_FORWARD,
+                num_mutations, DBL_MAX, r2_prime, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_mutations - 1);
+        ld_calc_print_state(&ld_calc, _devnull);
+
+        for (j = 0; j < num_r2_values; j++) {
+            CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]);
+        }
+
+        /* Some checks in the reverse direction */
+        ret = ld_calc_get_r2(&ld_calc, num_mutations - 1,
+                MSP_DIR_REVERSE, num_mutations, DBL_MAX,
                 r2, &num_r2_values);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL_FATAL(num_r2_values, num_mutations - 1);
         ld_calc_print_state(&ld_calc, _devnull);
 
-        ret = ld_calc_get_r2(&ld_calc, num_mutations - 2, num_mutations,
-                DBL_MAX, r2_prime, &num_r2_values);
+        ret = ld_calc_get_r2(&ld_calc, 1, MSP_DIR_REVERSE,
+                num_mutations, DBL_MAX, r2_prime, &num_r2_values);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
         ld_calc_print_state(&ld_calc, _devnull);
 
-        ret = ld_calc_get_r2(&ld_calc, 0, num_mutations, DBL_MAX,
+        ret = ld_calc_get_r2(&ld_calc, num_mutations - 1,
+                MSP_DIR_REVERSE, num_mutations, DBL_MAX,
                 r2_prime, &num_r2_values);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL_FATAL(num_r2_values, num_mutations - 1);
@@ -3299,11 +3329,32 @@ verify_ld(tree_sequence_t *ts)
         for (j = 0; j < num_r2_values; j++) {
             CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]);
         }
+
+        /* Check some error conditions */
+        ret = ld_calc_get_r2(&ld_calc, 0, 0, num_mutations, DBL_MAX,
+            r2, &num_r2_values);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    }
+
+    if (num_mutations > 3) {
+        /* Check for some basic distance calculations */
+        j = num_mutations / 2;
+        x = mutations[j + 1].position - mutations[j].position;
+        ret = ld_calc_get_r2(&ld_calc, j, MSP_DIR_FORWARD, num_mutations,
+                x, r2, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+
+        x = mutations[j].position - mutations[j - 1].position;
+        ret = ld_calc_get_r2(&ld_calc, j, MSP_DIR_REVERSE, num_mutations,
+                x, r2, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
     }
     /* Check some error conditions */
     for (j = num_mutations; j < num_mutations + 2; j++) {
-        ret = ld_calc_get_r2(&ld_calc, j, num_mutations, DBL_MAX,
-                r2, &num_r2_values);
+        ret = ld_calc_get_r2(&ld_calc, j, MSP_DIR_FORWARD,
+                num_mutations, DBL_MAX, r2, &num_r2_values);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     }
 

@@ -45,6 +45,9 @@
 #define MSP_LEAF_COUNTS  1
 #define MSP_LEAF_LISTS   2
 
+#define MSP_DIR_FORWARD 1
+#define MSP_DIR_REVERSE -1
+
 #define MAX_BRANCH_LENGTH_STRING 24
 
 /* The root node indicator */
@@ -557,7 +560,7 @@ void vcf_converter_print_state(vcf_converter_t *self, FILE *out);
 int ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence);
 int ld_calc_free(ld_calc_t *self);
 void ld_calc_print_state(ld_calc_t *self, FILE *out);
-int ld_calc_get_r2(ld_calc_t *self, size_t source_index,
+int ld_calc_get_r2(ld_calc_t *self, size_t source_index, int direction,
         size_t max_mutations, double max_distance,
         double *r2, size_t *num_r2_values);
 

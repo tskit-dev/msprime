@@ -27,8 +27,6 @@
 #include "err.h"
 #include "msprime.h"
 
-#define MSP_DIR_FORWARD 1
-#define MSP_DIR_REVERSE -1
 
 typedef struct {
     double value;
