@@ -120,7 +120,11 @@ typedef struct {
 static void
 handle_library_error(int err)
 {
-    PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+    if (err == MSP_ERR_OUT_OF_BOUNDS) {
+        PyErr_SetString(PyExc_IndexError, msp_strerror(err));
+    } else{
+        PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+    }
 }
 
 static void
@@ -4476,7 +4480,33 @@ out:
 }
 
 static PyObject *
-LdCalculator_get_r2(LdCalculator *self, PyObject *args, PyObject *kwds)
+LdCalculator_get_r2(LdCalculator *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t a, b;
+    double r2;
+
+    if (LdCalculator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "nn", &a, &b)) {
+        goto out;
+    }
+    Py_BEGIN_ALLOW_THREADS
+    err = ld_calc_get_r2(self->ld_calc, (size_t) a, (size_t) b, &r2);
+    Py_END_ALLOW_THREADS
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("d", r2);
+out:
+    return ret;
+}
+
+static PyObject *
+LdCalculator_get_r2_array(LdCalculator *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
@@ -4526,7 +4556,7 @@ LdCalculator_get_r2(LdCalculator *self, PyObject *args, PyObject *kwds)
     }
 
     Py_BEGIN_ALLOW_THREADS
-    err = ld_calc_get_r2(
+    err = ld_calc_get_r2_array(
         self->ld_calc, (size_t) source_index, direction,
         (size_t) max_mutations, max_distance,
         (double *) buffer.buf, &num_r2_values);
@@ -4548,7 +4578,11 @@ static PyMemberDef LdCalculator_members[] = {
 };
 
 static PyMethodDef LdCalculator_methods[] = {
-    {"get_r2", (PyCFunction) LdCalculator_get_r2, METH_VARARGS|METH_KEYWORDS,
+    {"get_r2", (PyCFunction) LdCalculator_get_r2, METH_VARARGS,
+        "Returns the value of the r2 statistic between the specified pair of "
+        "mutation indexes"},
+    {"get_r2_array", (PyCFunction) LdCalculator_get_r2_array,
+        METH_VARARGS|METH_KEYWORDS,
         "Returns r2 statistic for a given mutation over specified range"},
     {NULL}  /* Sentinel */
 };

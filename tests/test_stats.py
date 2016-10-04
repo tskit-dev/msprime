@@ -73,16 +73,21 @@ class TestLdCalculator(unittest.TestCase):
         # Now look at each row in turn, and verify it's the same
         # when we use get_r2 directly.
         for j in range(m):
-            a = ldc.get_r2(j, direction=msprime.FORWARD)
+            a = ldc.get_r2_array(j, direction=msprime.FORWARD)
             b = A[j, j + 1:]
             self.assertEqual(a.shape[0], m - j - 1)
             self.assertEqual(b.shape[0], m - j - 1)
             self.assertTrue(np.allclose(a, b))
-            a = ldc.get_r2(j, direction=msprime.REVERSE)
+            a = ldc.get_r2_array(j, direction=msprime.REVERSE)
             b = A[j, :j]
             self.assertEqual(a.shape[0], j)
             self.assertEqual(b.shape[0], j)
             self.assertTrue(np.allclose(a[::-1], b))
+
+        # Now check every cell in the matrix in turn.
+        for j in range(m):
+            for k in range(m):
+                self.assertAlmostEqual(ldc.get_r2(j, k), A[j, k])
 
     def test_single_tree_simulated_mutations(self):
         ts = msprime.simulate(20, mutation_rate=10)

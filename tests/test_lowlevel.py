@@ -1697,11 +1697,10 @@ class TestTreeSequence(LowLevelTestCase):
         for ts in self.get_example_tree_sequences():
             for bad_type in ["1", None, []]:
                 self.assertRaises(TypeError, ts.get_sample, bad_type)
-            self.assertRaises(_msprime.LibraryError, ts.get_sample, -1)
+            self.assertRaises(IndexError, ts.get_sample, -1)
+            self.assertRaises(IndexError, ts.get_sample, ts.get_sample_size())
             self.assertRaises(
-                _msprime.LibraryError, ts.get_sample, ts.get_sample_size())
-            self.assertRaises(
-                _msprime.LibraryError, ts.get_sample, ts.get_sample_size() + 1)
+                IndexError, ts.get_sample, ts.get_sample_size() + 1)
             for j in range(ts.get_sample_size()):
                 # We only check for a single sample here. Multi sample
                 # tests are done in test_demography.
@@ -2882,60 +2881,82 @@ class TestLdCalculator(LowLevelTestCase):
         ts = self.get_tree_sequence()
         ldc = _msprime.LdCalculator(ts)
         buff = self.get_buffer(1)
-        v = ldc.get_r2(dest=buff, source_index=0)
+        v = ldc.get_r2_array(dest=buff, source_index=0)
         self.assertEqual(v, 1)
         a = self.get_array(buff)
         # Delete the underlying tree sequence to ensure that nothing
         # nasty happens
         del ts
         buff = self.get_buffer(1)
-        v = ldc.get_r2(dest=buff, source_index=0)
+        v = ldc.get_r2_array(dest=buff, source_index=0)
         self.assertEqual(v, 1)
         b = self.get_array(buff)
         self.assertEqual(a, b)
 
+    def test_bad_mutation_indexes(self):
+        ts = self.get_tree_sequence()
+        m = ts.get_num_mutations()
+        self.assertGreater(m, 0)
+        bad_indexes = [-1, m, m + 1, m + 100]
+        ldc = _msprime.LdCalculator(ts)
+        for bad_index in bad_indexes:
+            self.assertRaises(
+                IndexError, ldc.get_r2_array, self.get_buffer(1), bad_index)
+            self.assertRaises(IndexError, ldc.get_r2, bad_index, 0)
+            self.assertRaises(IndexError, ldc.get_r2, 0, bad_index)
+
     def test_get_r2_interface(self):
         ts = self.get_tree_sequence()
         ldc = _msprime.LdCalculator(ts)
+        self.assertRaises(TypeError, ldc.get_r2)
+        self.assertRaises(TypeError, ldc.get_r2, 0)
         for bad_type in [None, "1", []]:
+            self.assertRaises(TypeError, ldc.get_r2, 0, bad_type)
             self.assertRaises(TypeError, ldc.get_r2, bad_type, 0)
+
+    def test_get_r2_array_interface(self):
+        ts = self.get_tree_sequence()
+        ldc = _msprime.LdCalculator(ts)
+        for bad_type in [None, "1", []]:
+            self.assertRaises(TypeError, ldc.get_r2_array, bad_type, 0)
             self.assertRaises(
-                TypeError, ldc.get_r2, self.get_buffer(1), bad_type)
+                TypeError, ldc.get_r2_array, self.get_buffer(1), bad_type)
             self.assertRaises(
-                TypeError, ldc.get_r2, self.get_buffer(1), 0,
+                TypeError, ldc.get_r2_array, self.get_buffer(1), 0,
                 direction=bad_type)
             self.assertRaises(
-                TypeError, ldc.get_r2, self.get_buffer(1), 0,
+                TypeError, ldc.get_r2_array, self.get_buffer(1), 0,
                 max_mutations=bad_type)
             self.assertRaises(
-                TypeError, ldc.get_r2, self.get_buffer(1), 0,
+                TypeError, ldc.get_r2_array, self.get_buffer(1), 0,
                 max_distance=bad_type)
         buffers = [b'bytes', bytes()]
         for bad_buff in buffers:
-            self.assertRaises(BufferError, ldc.get_r2, bad_buff, 0)
+            self.assertRaises(BufferError, ldc.get_r2_array, bad_buff, 0)
         for j in range(min(10, ts.get_num_mutations())):
             buff = self.get_buffer(j)
             # If we pass a buffer of a given size we should get back this
             # number of values.
-            v = ldc.get_r2(buff, 0)
+            v = ldc.get_r2_array(buff, 0)
             self.assertEqual(v, j)
-            v = ldc.get_r2(buff, 0, max_mutations=j)
+            v = ldc.get_r2_array(buff, 0, max_mutations=j)
             self.assertEqual(v, j)
             # If we set max_mutations to > size of the buffer this should
             # be an error.
             for k in range(1, 5):
                 self.assertRaises(
-                    BufferError, ldc.get_r2, buff, 0, max_mutations=j + k)
+                    BufferError, ldc.get_r2_array, buff, 0,
+                    max_mutations=j + k)
         for bad_direction in [0, -2, 2, 10**6]:
             self.assertRaises(
-                ValueError, ldc.get_r2, self.get_buffer(0), 0,
+                ValueError, ldc.get_r2_array, self.get_buffer(0), 0,
                 direction=bad_direction)
         for bad_distance in [0, -1, -1e6]:
             self.assertRaises(
-                ValueError, ldc.get_r2, self.get_buffer(0), 0,
+                ValueError, ldc.get_r2_array, self.get_buffer(0), 0,
                 max_distance=bad_distance)
 
-    def test_get_r2_from_new(self):
+    def test_get_r2_array_from_new(self):
         ts = self.get_tree_sequence()
         self.assertGreater(ts.get_num_trees(), 1)
         self.assertGreater(ts.get_num_mutations(), 3)
@@ -2944,31 +2965,31 @@ class TestLdCalculator(LowLevelTestCase):
         # We create a new instance of ldc each time to make sure we get
         # the correct behaviour on a new instance.
         ldc = _msprime.LdCalculator(ts)
-        v = ldc.get_r2(
+        v = ldc.get_r2_array(
             buff, 0, direction=_msprime.FORWARD, max_mutations=1)
         self.assertEqual(v, 1)
         ldc = _msprime.LdCalculator(ts)
-        v = ldc.get_r2(
+        v = ldc.get_r2_array(
             buff, 0, direction=_msprime.REVERSE, max_mutations=1)
         self.assertEqual(v, 0)
         ldc = _msprime.LdCalculator(ts)
-        v = ldc.get_r2(
+        v = ldc.get_r2_array(
             buff, m - 1, direction=_msprime.FORWARD, max_mutations=1)
         self.assertEqual(v, 0)
         ldc = _msprime.LdCalculator(ts)
-        v = ldc.get_r2(
+        v = ldc.get_r2_array(
             buff, m - 1, direction=_msprime.REVERSE, max_mutations=1)
         self.assertEqual(v, 1)
         ldc = _msprime.LdCalculator(ts)
-        v = ldc.get_r2(
+        v = ldc.get_r2_array(
             buff, m // 2, direction=_msprime.FORWARD, max_mutations=1)
         self.assertEqual(v, 1)
         ldc = _msprime.LdCalculator(ts)
-        v = ldc.get_r2(
+        v = ldc.get_r2_array(
             buff, m // 2, direction=_msprime.REVERSE, max_mutations=1)
         self.assertEqual(v, 1)
 
-    def test_get_r2_random_seeks(self):
+    def test_get_r2_array_random_seeks(self):
         num_start_positions = 100
         num_retries = 3
         ts = self.get_tree_sequence()
@@ -2985,7 +3006,7 @@ class TestLdCalculator(LowLevelTestCase):
         ldc = _msprime.LdCalculator(ts)
         for _ in range(num_retries):
             for j in range(num_start_positions):
-                v = ldc.get_r2(
+                v = ldc.get_r2_array(
                     buff, start_positions[j], direction=directions[j],
                     max_mutations=10)
                 self.assertLessEqual(v, 10)

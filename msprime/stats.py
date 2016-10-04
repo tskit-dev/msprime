@@ -55,15 +55,22 @@ class LdCalculator(object):
         self._buffer = bytearray(
             tree_sequence.get_num_mutations() * item_size)
 
-    def get_r2(
-            self, start_index, direction=msprime.FORWARD, max_mutations=None,
+    def get_r2(self, a, b):
+        """
+        Returns the value of the r^2 statistic between the pair of mutations
+        at the specified indexes.
+        """
+        return self._ll_ld_calculator.get_r2(a, b)
+
+    def get_r2_array(
+            self, a, direction=msprime.FORWARD, max_mutations=None,
             max_distance=None):
         if max_mutations is None:
             max_mutations = -1
         if max_distance is None:
             max_distance = sys.float_info.max
-        num_values = self._ll_ld_calculator.get_r2(
-            self._buffer, start_index, direction=direction,
+        num_values = self._ll_ld_calculator.get_r2_array(
+            self._buffer, a, direction=direction,
             max_mutations=max_mutations, max_distance=max_distance)
         return np.frombuffer(self._buffer, "d", num_values)
 
@@ -71,7 +78,7 @@ class LdCalculator(object):
         m = self._tree_sequence.get_num_mutations()
         A = np.ones((m, m), dtype=float)
         for j in range(m - 1):
-            a = self.get_r2(j)
+            a = self.get_r2_array(j)
             A[j, j + 1:] = a
             A[j + 1:, j] = a
         return A

@@ -195,7 +195,7 @@ out:
 }
 
 static int WARN_UNUSED
-ld_calc_get_r2_forward(ld_calc_t *self, size_t source_index,
+ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
         size_t max_mutations, double max_distance, double *r2,
         size_t *num_r2_values)
 {
@@ -207,6 +207,8 @@ ld_calc_get_r2_forward(ld_calc_t *self, size_t source_index,
     double n = tree_sequence_get_sample_size(self->tree_sequence);
     uint32_t nAB;
     size_t j;
+
+    /* We can probably do a lot better than this implementation... */
 
     tA = self->outer_tree;
     tB = self->inner_tree;
@@ -271,7 +273,7 @@ out:
 }
 
 static int WARN_UNUSED
-ld_calc_get_r2_reverse(ld_calc_t *self, size_t source_index,
+ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
         size_t max_mutations, double max_distance, double *r2,
         size_t *num_r2_values)
 {
@@ -348,31 +350,97 @@ out:
     return ret;
 }
 
-
 int WARN_UNUSED
-ld_calc_get_r2(ld_calc_t *self, size_t source_index, int direction,
+ld_calc_get_r2_array(ld_calc_t *self, size_t a, int direction,
         size_t max_mutations, double max_distance, double *r2,
         size_t *num_r2_values)
 {
     int ret = MSP_ERR_GENERIC;
 
-    if (source_index >= self->num_mutations) {
+    if (a >= self->num_mutations) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    ret = ld_calc_position_trees(self, source_index);
+    ret = ld_calc_position_trees(self, a);
     if (ret != 0) {
         goto out;
     }
     if (direction == MSP_DIR_FORWARD) {
-        ret = ld_calc_get_r2_forward(self, source_index, max_mutations,
-                max_distance, r2, num_r2_values);
+        ret = ld_calc_get_r2_array_forward(self, a, max_mutations, max_distance,
+                r2, num_r2_values);
     } else if (direction == MSP_DIR_REVERSE) {
-        ret = ld_calc_get_r2_reverse(self, source_index, max_mutations,
-                max_distance, r2, num_r2_values);
+        ret = ld_calc_get_r2_array_reverse(self, a, max_mutations, max_distance,
+                r2, num_r2_values);
     } else {
         ret = MSP_ERR_BAD_PARAM_VALUE;
     }
 out:
     return ret;
 }
+
+int WARN_UNUSED
+ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
+{
+    int ret = MSP_ERR_GENERIC;
+    mutation_t mA, mB;
+    double fA, fB, fAB, D;
+    sparse_tree_t *tA, *tB;
+    double n = tree_sequence_get_sample_size(self->tree_sequence);
+    uint32_t nAB;
+    size_t tmp;
+
+    if (a >= self->num_mutations || b >= self->num_mutations) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    if (a > b) {
+        tmp = a;
+        a = b;
+        b = tmp;
+    }
+    ret = ld_calc_position_trees(self, a);
+    if (ret != 0) {
+        goto out;
+    }
+
+    tA = self->outer_tree;
+    tB = self->inner_tree;
+    mA = self->mutations[a];
+    mB = self->mutations[b];
+    assert(tA->parent[mA.node] != MSP_NULL_NODE);
+    fA = tA->num_leaves[mA.node] / n;
+    assert(fA > 0);
+    ret = ld_calc_set_tracked_leaves(self, mA);
+    if (ret != 0) {
+        goto out;
+    }
+
+    while (mB.position >= tB->right) {
+        ret = sparse_tree_next(tB);
+        if (ret < 0) {
+            goto out;
+        }
+        assert(ret == 1);
+    }
+    assert(tB->parent[mB.node] != MSP_NULL_NODE);
+    fB = tB->num_leaves[mB.node] / n;
+    assert(fB > 0);
+    nAB = tB->num_tracked_leaves[mB.node];
+    fAB = nAB / n;
+    D = fAB - fA * fB;
+    *r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
+
+    /* Now rewind the inner iterator back. */
+    while (tB->index > tA->index) {
+        ret = sparse_tree_prev(tB);
+        if (ret < 0) {
+            goto out;
+        }
+        assert(ret == 1);
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+

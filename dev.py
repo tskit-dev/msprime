@@ -13,6 +13,8 @@ import subprocess
 import sys
 import itertools
 import threading
+import random
+
 
 import numpy as np
 import numpy.ma as ma
@@ -22,6 +24,7 @@ import pandas as pd
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
 import matplotlib.pyplot as pyplot
+import tqdm
 
 import _msprime
 import msprime
@@ -651,31 +654,13 @@ def ld_dev():
     print("Main thread done")
 
 
-def ld_plot():
-    # ts = msprime.simulate(100, recombination_rate=10, mutation_rate=5,
-    #         random_seed=1)
+def ld_triangle_plot():
+    ts = msprime.simulate(100, recombination_rate=10, mutation_rate=20,
+            random_seed=1)
 
-    ts = msprime.load(sys.argv[1])
-    ld_calc = _msprime.LdCalculator(ts._ll_tree_sequence)
-    num_mutations = 100
-    buff = bytearray((num_mutations + 1) * 8)
-    # start = ts.get_num_mutations() // 4
-    start = 0
-    print("matrix memory required = ", (num_mutations**2 * 8) / (1024**3), "GB")
-    print("num_mutations = ", num_mutations)
-    print("start = ", start)
-
-    A = np.ones((num_mutations, num_mutations), dtype=float)
-    for j in range(num_mutations - 1):
-        v = ld_calc.get_r2(
-            dest=buff, direction=_msprime.FORWARD, source_index=start + j,
-            max_mutations=num_mutations - j, max_distance=1e100)
-        # print(list(buff[:v * 8]))
-        a = np.frombuffer(buff, "d", v - 1)
-        print(a)
-        A[j, j + 1:] = a
-        A[j + 1:, j] = a
-    print(A)
+    print("num_mutations = ", ts.get_num_mutations())
+    ld_calc = msprime.LdCalculator(ts)
+    A = ld_calc.get_r2_matrix()
 
     x = A.shape[0] / pyplot.rcParams['savefig.dpi']
     x = max(x, pyplot.rcParams['figure.figsize'][0])
@@ -689,37 +674,72 @@ def ld_plot():
         ax.spines[s].set_visible(False)
     pyplot.gcf().colorbar(im, shrink=.5, pad=0)
     pyplot.savefig("ld.png")
-    pyplot.savefig("ld.png")
 
 
+class LdFinder(object):
+    """
+    Class that finds all mutations that are in approximate LD with a
+    given set of mutations in a TreeSequence.
+    """
+    def __init__(
+            self, tree_sequence, focal_mutations, max_distance=1e6,
+            r2_threshold=0.5, num_threads=8):
+        self.tree_sequence = tree_sequence
+        self.focal_mutations = sorted(focal_mutations)
+        self.r2_threshold = r2_threshold
+        self.max_distance = max_distance
+        self.num_threads = num_threads
+        self.ld_calculators = [
+            msprime.LdCalculator(tree_sequence) for _ in range(num_threads)]
+        self.results = {}
+        self.progress_lock = threading.Lock()
+        self.progress_bar = tqdm.tqdm(total=len(focal_mutations))
+        self.threads = [
+            threading.Thread(target=self.__thread_worker, args=(j,))
+            for j in range(num_threads)]
 
-    # filename = "tmp__NOBACKUP__/test_tmp.txt"
-    # ts.write_ld_table(filename)
-    # l1 = []
-    # with open(filename) as f:
-    #     for line in f:
-    #         s = line.split()
-    #         l1.append((float(s[1]), float(s[3]), float(s[4])))
-    # l2 = []
-    # n = ts.get_sample_size()
-    # for t1 in ts.trees():
-    #     for mA in t1.mutations():
-    #         fA = t1.get_num_leaves(mA.node) / n
-    #         leaves = list(t1.leaves(mA.node))
-    #         for t2 in ts.trees(tracked_leaves=leaves):
-    #             for mB in t2.mutations():
-    #                 if mB.position > mA.position:
-    #                     fB = t2.get_num_leaves(mB.node) / n
-    #                     fAB = t2.get_num_tracked_leaves(mB.node) / n
-    #                     D = fAB - fA * fB;
-    #                     r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));
-    #                     l2.append((mA.position, mB.position, r2))
-    # assert len(l1) == len(l2)
+    def __thread_worker(self, thread_index):
+        chunk_size = len(self.focal_mutations) // self.num_threads
+        start = thread_index * chunk_size
+        ld_calc = self.ld_calculators[thread_index]
+        if thread_index == self.num_threads - 1:
+            subset = self.focal_mutations[start:]
+        else:
+            subset = self.focal_mutations[start: start + chunk_size]
+        for focal_mutation in subset:
+            a = ld_calc.get_r2_array(
+                focal_mutation, max_distance=self.max_distance,
+                direction=msprime.REVERSE)
+            rev_indexes = focal_mutation - np.where(a >= self.r2_threshold)[0] - 1
+            a = ld_calc.get_r2_array(
+                focal_mutation, max_distance=self.max_distance,
+                direction=msprime.FORWARD)
+            fwd_indexes = focal_mutation + np.where(a >= self.r2_threshold)[0] + 1
+            indexes = np.concatenate((rev_indexes[::-1], fwd_indexes))
+            self.results[focal_mutation] = indexes
+            with self.progress_lock:
+                self.progress_bar.update(1)
 
-    # for x, y in zip(l1, l2):
-    #     for v1, v2 in zip(x, y):
-    #         d = abs(v1 - v2)
-    #         assert d < 1e-6
+    def run(self):
+        for t in self.threads:
+            t.start()
+        for t in self.threads:
+            t.join()
+        self.progress_bar.close()
+        return self.results
+
+def ld_example():
+    ts = msprime.load(sys.argv[1])
+    np.random.seed(1)
+    num_focal_mutations = 1000
+    print("num_mutations = ", ts.get_num_mutations())
+    focal_mutations = np.random.randint(
+        ts.get_num_mutations(), size=num_focal_mutations)
+
+    ldf = LdFinder(ts, focal_mutations, num_threads=20, max_distance=10e6)
+    results = ldf.run()
+    # for k, v in results.items():
+    #     print(k, "has ", len(v), "mutation in LD")
 
 if __name__ == "__main__":
     # mutations()
@@ -746,4 +766,5 @@ if __name__ == "__main__":
     # examine()
     # convert_dev()
     # ld_dev()
-    ld_plot()
+    # ld_triangle_plot()
+    ld_example()
