@@ -533,4 +533,69 @@ breakpoints follows the recombination rate closely.
    :width: 800px
    :alt: Density of breakpoints along the chromosome.
 
+**************
+Calculating LD
+**************
 
+
+
+********************
+Working with threads
+********************
+
+
+.. code-block:: python
+
+    import numpy as np
+    import tqdm
+    import msprime
+
+    def find_ld_sites(
+            tree_sequence, focal_mutations, max_distance=1e6, r2_threshold=0.5,
+            num_threads=8):
+        """
+        Finds all mutations within a given distance that are in approximate LD
+        with a given set of mutations in a TreeSequence.
+        """
+        results = {}
+        progress_bar = tqdm.tqdm(total=len(focal_mutations))
+        num_threads = min(num_threads, len(focal_mutations))
+
+        def thread_worker(thread_index):
+            ld_calc = msprime.LdCalculator(tree_sequence)
+            chunk_size = int(math.ceil(len(focal_mutations) / num_threads))
+            start = thread_index * chunk_size
+            for focal_mutation in focal_mutations[start: start + chunk_size]:
+                a = ld_calc.get_r2_array(
+                    focal_mutation, max_distance=max_distance,
+                    direction=msprime.REVERSE)
+                rev_indexes = focal_mutation - np.nonzero(a >= r2_threshold)[0] - 1
+                a = ld_calc.get_r2_array(
+                    focal_mutation, max_distance=max_distance,
+                    direction=msprime.FORWARD)
+                fwd_indexes = focal_mutation + np.nonzero(a >= r2_threshold)[0] + 1
+                indexes = np.concatenate((rev_indexes[::-1], fwd_indexes))
+                results[focal_mutation] = indexes
+                progress_bar.update()
+
+        threads = [
+            threading.Thread(target=thread_worker, args=(j,))
+            for j in range(num_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        progress_bar.close()
+        return results
+
+    def threads_example():
+        ts = msprime.simulate(
+            sample_size=1000, Ne=1e4, length=1e7, recombination_rate=2e-8,
+            mutation_rate=2e-8)
+        np.random.seed(1)
+        num_focal_mutations = 100
+        print("num_mutations = ", ts.get_num_mutations())
+        focal_mutations = np.sort(np.random.randint(
+            ts.get_num_mutations(), size=num_focal_mutations))
+        results = find_ld_sites(ts, focal_mutations, num_threads=8)
+        print("found LD sites for", len(results), "random mutations")

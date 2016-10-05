@@ -684,19 +684,14 @@ def find_ld_sites(
     with a given set of mutations in a TreeSequence.
     """
     results = {}
-    progress_lock = threading.Lock()
     progress_bar = tqdm.tqdm(total=len(focal_mutations))
-    num_threads = min(num_threads, len(focal_mutations)
+    num_threads = min(num_threads, len(focal_mutations))
 
     def thread_worker(thread_index):
         ld_calc = msprime.LdCalculator(tree_sequence)
         chunk_size = int(math.ceil(len(focal_mutations) / num_threads))
         start = thread_index * chunk_size
-        if thread_index == num_threads - 1:
-            subset = focal_mutations[start:]
-        else:
-            subset = focal_mutations[start: start + chunk_size]
-        for focal_mutation in subset:
+        for focal_mutation in focal_mutations[start: start + chunk_size]:
             a = ld_calc.get_r2_array(
                 focal_mutation, max_distance=max_distance,
                 direction=msprime.REVERSE)
@@ -707,8 +702,7 @@ def find_ld_sites(
             fwd_indexes = focal_mutation + np.nonzero(a >= r2_threshold)[0] + 1
             indexes = np.concatenate((rev_indexes[::-1], fwd_indexes))
             results[focal_mutation] = indexes
-            with progress_lock:
-                progress_bar.update(1)
+            progress_bar.update()
 
     threads = [
         threading.Thread(target=thread_worker, args=(j,))
@@ -720,25 +714,25 @@ def find_ld_sites(
     progress_bar.close()
     return results
 
-def ld_example():
-    ts = msprime.load(sys.argv[1])
+def threads_example():
+    # ts = msprime.load(sys.argv[1])
+
+    ts = msprime.simulate(
+        sample_size=1000, Ne=1e4, length=1e7, recombination_rate=2e-8,
+        mutation_rate=2e-8)
     np.random.seed(1)
     num_focal_mutations = 100
     print("num_mutations = ", ts.get_num_mutations())
-    focal_mutations = sorted(np.random.randint(
+    focal_mutations = np.sort(np.random.randint(
         ts.get_num_mutations(), size=num_focal_mutations))
+    results = find_ld_sites(ts, focal_mutations, num_threads=8)
+    print("found LD sites for", len(results), "random mutations")
 
-    focal_mutations = list(range(100))
-    n = 6
-    for j in range(n):
-        start = j * chunk_size
-        print(start, start + chunk_size)
-        print(focal_mutations[start: start + chunk_size])
-
-
-    # results = find_ld_sites(ts, focal_mutations, num_threads=40, max_distance=10e6)
     # for k, v in results.items():
     #     print(k, "has ", len(v), "mutation in LD")
+    #     ld_calc = msprime.LdCalculator(ts)
+    #     for j in v:
+    #         print("\t", k, j, ld_calc.get_r2(k, j))
 
 if __name__ == "__main__":
     # mutations()
@@ -766,4 +760,4 @@ if __name__ == "__main__":
     # convert_dev()
     # ld_dev()
     # ld_triangle_plot()
-    ld_example()
+    threads_example()
