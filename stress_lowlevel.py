@@ -16,6 +16,9 @@ import tests.test_demography as test_demography
 import tests.test_highlevel as test_highlevel
 import tests.test_lowlevel as test_lowlevel
 import tests.test_vcf as test_vcf
+import tests.test_threads as test_threads
+import tests.test_stats as test_stats
+
 # import tests.test_cli as test_cli
 
 import msprime

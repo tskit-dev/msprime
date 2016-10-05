@@ -539,6 +539,8 @@ Calculating LD
 
 
 
+.. _sec-tutorial-threads:
+
 ********************
 Working with threads
 ********************
