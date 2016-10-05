@@ -537,7 +537,45 @@ breakpoints follows the recombination rate closely.
 Calculating LD
 **************
 
+The ``msprime`` API provides methods to efficiently calculate
+population genetics statistics. For example, the :class:`.LdCalculator`
+class allows us to compute pairwise `linkage disequilibrium
+<https://en.wikipedia.org/wiki/Linkage_disequilibrium>`_ coefficients.
+Here we use the :meth:`.get_r2_matrix` method to easily make an
+LD plot using `matplotlib <http://matplotlib.org/>`_. (Thanks to
+the excellent `scikit-allel
+<http://scikit-allel.readthedocs.io/en/latest/index.html>`_
+for the basic `plotting code
+<http://scikit-allel.readthedocs.io/en/latest/_modules/allel/stats/ld.html#plot_pairwise_ld>`_
+used here.)
 
+.. code-block:: python
+
+    import msprime
+    import matplotlib.pyplot as pyplot
+
+    def ld_matrix_example():
+        ts = msprime.simulate(100, recombination_rate=10, mutation_rate=20,
+                random_seed=1)
+        ld_calc = msprime.LdCalculator(ts)
+        A = ld_calc.get_r2_matrix()
+        # Now plot this matrix.
+        x = A.shape[0] / pyplot.rcParams['savefig.dpi']
+        x = max(x, pyplot.rcParams['figure.figsize'][0])
+        fig, ax = pyplot.subplots(figsize=(x, x))
+        fig.tight_layout(pad=0)
+        im = ax.imshow(A, interpolation="none", vmin=0, vmax=1, cmap="Blues")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for s in 'top', 'bottom', 'left', 'right':
+            ax.spines[s].set_visible(False)
+        pyplot.gcf().colorbar(im, shrink=.5, pad=0)
+        pyplot.savefig("ld.svg")
+
+
+.. image:: _static/ld.svg
+   :width: 800px
+   :alt: An example LD matrix plot.
 
 .. _sec-tutorial-threads:
 
@@ -545,9 +583,40 @@ Calculating LD
 Working with threads
 ********************
 
+When performing large calculations it's often useful to split the
+work over multiple processes or threads. The msprime API can
+be used without issues across multiple processes, and the Python
+:mod:`multiprocessing` module often provides a very effective way to
+work with many replicate simulations in parallel.
+
+When we wish to work with a single very large dataset, however, threads can
+offer better resource usage because of the shared memory space. The Python
+:mod:`threading` library gives a very simple interface to lightweight CPU
+threads and allows us to perform several CPU intensive tasks in parallel. The
+``msprime`` API is designed to allow multiple threads to work in parallel when
+CPU intensive tasks are being undertaken.
+
+.. note:: In the CPython implementation the `Global Interpreter Lock
+   <https://wiki.python.org/moin/GlobalInterpreterLock>`_ ensures that
+   only one thread executes Python bytecode at one time. This means that
+   Python code does not parallelise well across threads, but avoids a large
+   number of nasty pitfalls associated with multiple threads updating
+   data structures in parallel. Native C extensions like ``numpy`` and ``msprime``
+   release the GIL while expensive tasks are being performed, therefore
+   allowing these calculations to proceed in parallel.
+
+In the following example we wish to find all mutations that are in approximate
+LD (:math:`r^2 < 0.5`) with a given set of mutations. We parallelise this
+by splitting the input array between a number of threads, and use the
+:meth:`.LdCalculator.get_r2_array` method to compute the :math:`r^2` value
+both up and downstream of each focal mutation, filter out those that
+exceed our threshold, and store the results in a dictionary. We also
+use the very cool `tqdm <https://pypi.python.org/pypi/tqdm>`_ module to give us a
+progress bar on this computation.
 
 .. code-block:: python
 
+    import threading
     import numpy as np
     import tqdm
     import msprime
@@ -555,10 +624,6 @@ Working with threads
     def find_ld_sites(
             tree_sequence, focal_mutations, max_distance=1e6, r2_threshold=0.5,
             num_threads=8):
-        """
-        Finds all mutations within a given distance that are in approximate LD
-        with a given set of mutations in a TreeSequence.
-        """
         results = {}
         progress_bar = tqdm.tqdm(total=len(focal_mutations))
         num_threads = min(num_threads, len(focal_mutations))
@@ -595,9 +660,40 @@ Working with threads
             sample_size=1000, Ne=1e4, length=1e7, recombination_rate=2e-8,
             mutation_rate=2e-8)
         np.random.seed(1)
-        num_focal_mutations = 100
-        print("num_mutations = ", ts.get_num_mutations())
-        focal_mutations = np.sort(np.random.randint(
-            ts.get_num_mutations(), size=num_focal_mutations))
+        num_focal_mutations = 1000
+        focal_mutations = np.sort(np.random.choice(
+            np.arange(ts.get_num_mutations()), replace=False,
+            size=num_focal_mutations))
         results = find_ld_sites(ts, focal_mutations, num_threads=8)
-        print("found LD sites for", len(results), "random mutations")
+        print(
+            "found LD sites for", len(results), "random mutations out of ",
+            ts.get_num_mutations())
+
+Here we first simulate 1000 samples of 10 megabases, and then randomly choose
+1000 of the resulting mutations to be our focal mutations. (We wouldn't choose
+these randomly for real applications of course, but we can imagine picking a
+set of 'interesting' mutations using any number of criteria.) We then call the
+``find_ld_sites()`` function to find all mutations that are within 1 megabase
+and have an :math:`r^2` statistic of less than 0.5 with these focal mutations.
+
+Within the ``find_ld_sites()`` function we perform these calculations in
+parallel using 8 threads. The actual calculations are done in the nested
+``thread_worker()`` function, which is called once by each thread. In the
+thread worker, we first allocate an instance of the :class:`.LdCalculator`
+class. (It is **critically important** that each thread has its own instance of
+:class:`.LdCalculator`, as the threads will not work efficiently otherwise.)
+After this, each thread works out the slice of the input array that it is
+responsible for, and then iterates over each focal mutation in turn. After the
+:math:`r^2` values have been calculated, we then find the indexes of the
+mutations corresponding to values greater than 0.5 using
+:func:`numpy.nonzero`. Finally, the thread stores the resulting array
+of mutation indexes in the ``results`` dictionary, and moves on to the next
+focal mutation.
+
+
+Running this example we get::
+
+    >>> threads_example()
+    100%|████████████████████████████████████████████████| 1000/1000 [00:02<00:00, 384.76it/s]
+    found LD sites for 1000 random mutations out of 59660
+

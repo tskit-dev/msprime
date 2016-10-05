@@ -18,6 +18,9 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as pyplot
 import matplotlib.collections
 
+import tqdm
+import threading
+
 
 def segregating_sites_example(n, theta, num_replicates):
     S = np.zeros(num_replicates)
@@ -219,6 +222,77 @@ def variable_recomb_example():
     fig.savefig("_static/hapmap_chr22.svg")
 
 
+def ld_matrix_example():
+    ts = msprime.simulate(100, recombination_rate=10, mutation_rate=20,
+            random_seed=1)
+    ld_calc = msprime.LdCalculator(ts)
+    A = ld_calc.get_r2_matrix()
+    # Now plot this matrix.
+    x = A.shape[0] / pyplot.rcParams['savefig.dpi']
+    x = max(x, pyplot.rcParams['figure.figsize'][0])
+    fig, ax = pyplot.subplots(figsize=(x, x))
+    fig.tight_layout(pad=0)
+    im = ax.imshow(A, interpolation="none", vmin=0, vmax=1, cmap="Blues")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for s in 'top', 'bottom', 'left', 'right':
+        ax.spines[s].set_visible(False)
+    pyplot.gcf().colorbar(im, shrink=.5, pad=0)
+    pyplot.savefig("_static/ld.svg")
+
+
+def find_ld_sites(
+        tree_sequence, focal_mutations, max_distance=1e6, r2_threshold=0.5,
+        num_threads=8):
+    """
+    Finds all mutations within a given distance that are in approximate LD
+    with a given set of mutations in a TreeSequence.
+    """
+    results = {}
+    progress_bar = tqdm.tqdm(total=len(focal_mutations), ncols=90)
+    num_threads = min(num_threads, len(focal_mutations))
+
+    def thread_worker(thread_index):
+        ld_calc = msprime.LdCalculator(tree_sequence)
+        chunk_size = int(math.ceil(len(focal_mutations) / num_threads))
+        start = thread_index * chunk_size
+        for focal_mutation in focal_mutations[start: start + chunk_size]:
+            a = ld_calc.get_r2_array(
+                focal_mutation, max_distance=max_distance,
+                direction=msprime.REVERSE)
+            rev_indexes = focal_mutation - np.nonzero(a >= r2_threshold)[0] - 1
+            a = ld_calc.get_r2_array(
+                focal_mutation, max_distance=max_distance,
+                direction=msprime.FORWARD)
+            fwd_indexes = focal_mutation + np.nonzero(a >= r2_threshold)[0] + 1
+            indexes = np.concatenate((rev_indexes[::-1], fwd_indexes))
+            results[focal_mutation] = indexes
+            progress_bar.update()
+
+    threads = [
+        threading.Thread(target=thread_worker, args=(j,))
+        for j in range(num_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    progress_bar.close()
+    return results
+
+def threads_example():
+    ts = msprime.simulate(
+        sample_size=1000, Ne=1e4, length=1e7, recombination_rate=2e-8,
+        mutation_rate=2e-8)
+    np.random.seed(1)
+    num_focal_mutations = 1000
+    focal_mutations = np.sort(np.random.choice(
+        np.arange(ts.get_num_mutations()), replace=False,
+        size=num_focal_mutations))
+    results = find_ld_sites(ts, focal_mutations, num_threads=8)
+    print(
+        "found LD sites for", len(results), "random mutations out of",
+        ts.get_num_mutations())
+
 if __name__ == "__main__":
     # single_locus_example()
     # multi_locus_example()
@@ -226,4 +300,6 @@ if __name__ == "__main__":
     # segregating_sites_example(10, 5, 100000)
     # migration_example()
     # out_of_africa()
-    variable_recomb_example()
+    # variable_recomb_example()
+    # ld_matrix_example()
+    threads_example()
