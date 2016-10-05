@@ -676,68 +676,67 @@ def ld_triangle_plot():
     pyplot.savefig("ld.png")
 
 
-class LdFinder(object):
+def find_ld_sites(
+        tree_sequence, focal_mutations, max_distance=1e6, r2_threshold=0.5,
+        num_threads=8):
     """
-    Class that finds all mutations that are in approximate LD with a
-    given set of mutations in a TreeSequence.
+    Finds all mutations within a given distance that are in approximate LD
+    with a given set of mutations in a TreeSequence.
     """
-    def __init__(
-            self, tree_sequence, focal_mutations, max_distance=1e6,
-            r2_threshold=0.5, num_threads=8):
-        self.tree_sequence = tree_sequence
-        self.focal_mutations = sorted(focal_mutations)
-        self.r2_threshold = r2_threshold
-        self.max_distance = max_distance
-        self.num_threads = num_threads
-        self.ld_calculators = [
-            msprime.LdCalculator(tree_sequence) for _ in range(num_threads)]
-        self.results = {}
-        self.progress_lock = threading.Lock()
-        self.progress_bar = tqdm.tqdm(total=len(focal_mutations))
-        self.threads = [
-            threading.Thread(target=self.__thread_worker, args=(j,))
-            for j in range(num_threads)]
+    results = {}
+    progress_lock = threading.Lock()
+    progress_bar = tqdm.tqdm(total=len(focal_mutations))
+    num_threads = min(num_threads, len(focal_mutations)
 
-    def __thread_worker(self, thread_index):
-        chunk_size = len(self.focal_mutations) // self.num_threads
+    def thread_worker(thread_index):
+        ld_calc = msprime.LdCalculator(tree_sequence)
+        chunk_size = int(math.ceil(len(focal_mutations) / num_threads))
         start = thread_index * chunk_size
-        ld_calc = self.ld_calculators[thread_index]
-        if thread_index == self.num_threads - 1:
-            subset = self.focal_mutations[start:]
+        if thread_index == num_threads - 1:
+            subset = focal_mutations[start:]
         else:
-            subset = self.focal_mutations[start: start + chunk_size]
+            subset = focal_mutations[start: start + chunk_size]
         for focal_mutation in subset:
             a = ld_calc.get_r2_array(
-                focal_mutation, max_distance=self.max_distance,
+                focal_mutation, max_distance=max_distance,
                 direction=msprime.REVERSE)
-            rev_indexes = focal_mutation - np.where(a >= self.r2_threshold)[0] - 1
+            rev_indexes = focal_mutation - np.nonzero(a >= r2_threshold)[0] - 1
             a = ld_calc.get_r2_array(
-                focal_mutation, max_distance=self.max_distance,
+                focal_mutation, max_distance=max_distance,
                 direction=msprime.FORWARD)
-            fwd_indexes = focal_mutation + np.where(a >= self.r2_threshold)[0] + 1
+            fwd_indexes = focal_mutation + np.nonzero(a >= r2_threshold)[0] + 1
             indexes = np.concatenate((rev_indexes[::-1], fwd_indexes))
-            self.results[focal_mutation] = indexes
-            with self.progress_lock:
-                self.progress_bar.update(1)
+            results[focal_mutation] = indexes
+            with progress_lock:
+                progress_bar.update(1)
 
-    def run(self):
-        for t in self.threads:
-            t.start()
-        for t in self.threads:
-            t.join()
-        self.progress_bar.close()
-        return self.results
+    threads = [
+        threading.Thread(target=thread_worker, args=(j,))
+        for j in range(num_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    progress_bar.close()
+    return results
 
 def ld_example():
     ts = msprime.load(sys.argv[1])
     np.random.seed(1)
-    num_focal_mutations = 1000
+    num_focal_mutations = 100
     print("num_mutations = ", ts.get_num_mutations())
-    focal_mutations = np.random.randint(
-        ts.get_num_mutations(), size=num_focal_mutations)
+    focal_mutations = sorted(np.random.randint(
+        ts.get_num_mutations(), size=num_focal_mutations))
 
-    ldf = LdFinder(ts, focal_mutations, num_threads=20, max_distance=10e6)
-    results = ldf.run()
+    focal_mutations = list(range(100))
+    n = 6
+    for j in range(n):
+        start = j * chunk_size
+        print(start, start + chunk_size)
+        print(focal_mutations[start: start + chunk_size])
+
+
+    # results = find_ld_sites(ts, focal_mutations, num_threads=40, max_distance=10e6)
     # for k, v in results.items():
     #     print(k, "has ", len(v), "mutation in LD")
 

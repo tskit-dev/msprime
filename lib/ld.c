@@ -63,6 +63,10 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence)
     int ret = MSP_ERR_GENERIC;
 
     memset(self, 0, sizeof(ld_calc_t));
+    if (pthread_mutex_init(&self->work_mutex, NULL) != 0) {
+        ret = MSP_ERR_PTHREAD;
+        goto out;
+    }
     self->tree_sequence = tree_sequence;
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->outer_tree = malloc(sizeof(sparse_tree_t));
@@ -110,6 +114,7 @@ ld_calc_free(ld_calc_t *self)
         sparse_tree_free(self->outer_tree);
         free(self->outer_tree);
     }
+    pthread_mutex_destroy(&self->work_mutex);
     return 0;
 }
 
@@ -207,8 +212,6 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
     double n = tree_sequence_get_sample_size(self->tree_sequence);
     uint32_t nAB;
     size_t j;
-
-    /* We can probably do a lot better than this implementation... */
 
     tA = self->outer_tree;
     tB = self->inner_tree;
@@ -356,6 +359,13 @@ ld_calc_get_r2_array(ld_calc_t *self, size_t a, int direction,
         size_t *num_r2_values)
 {
     int ret = MSP_ERR_GENERIC;
+    int lock_acquired = 0;
+
+    if (pthread_mutex_lock(&self->work_mutex) != 0) {
+        ret = MSP_ERR_PTHREAD;
+        goto out;
+    }
+    lock_acquired = 1;
 
     if (a >= self->num_mutations) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
@@ -375,6 +385,13 @@ ld_calc_get_r2_array(ld_calc_t *self, size_t a, int direction,
         ret = MSP_ERR_BAD_PARAM_VALUE;
     }
 out:
+    if (lock_acquired) {
+        if (pthread_mutex_unlock(&self->work_mutex) != 0) {
+            if (ret != 0) {
+                ret = MSP_ERR_PTHREAD;
+            }
+        }
+    }
     return ret;
 }
 
@@ -388,6 +405,13 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     double n = tree_sequence_get_sample_size(self->tree_sequence);
     uint32_t nAB;
     size_t tmp;
+    int lock_acquired = 0;
+
+    if (pthread_mutex_lock(&self->work_mutex) != 0) {
+        ret = MSP_ERR_PTHREAD;
+        goto out;
+    }
+    lock_acquired = 1;
 
     if (a >= self->num_mutations || b >= self->num_mutations) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
@@ -402,7 +426,7 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     if (ret != 0) {
         goto out;
     }
-
+    /* We can probably do a lot better than this implementation... */
     tA = self->outer_tree;
     tB = self->inner_tree;
     mA = self->mutations[a];
@@ -440,7 +464,12 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     }
     ret = 0;
 out:
+    if (lock_acquired) {
+        if (pthread_mutex_unlock(&self->work_mutex) != 0) {
+            if (ret != 0) {
+                ret = MSP_ERR_PTHREAD;
+            }
+        }
+    }
     return ret;
 }
-
-
