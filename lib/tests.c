@@ -3402,25 +3402,25 @@ verify_vargen(tree_sequence_t *ts)
 {
     int ret;
     vargen_t vargen;
-    char *variant;
-    double x;
+    mutation_t *mut;
     size_t sample_size = tree_sequence_get_sample_size(ts);
     size_t num_mutations = tree_sequence_get_num_mutations(ts);
+    uint8_t *genotypes = malloc(sample_size * sizeof(uint8_t));
     size_t j;
 
+    CU_ASSERT_FATAL(genotypes != NULL);
     ret = vargen_alloc(&vargen, ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     vargen_print_state(&vargen, _devnull);
 
     j = 0;
-    while ((ret = vargen_next(&vargen, &x, &variant)) == 1) {
-        CU_ASSERT_FATAL(variant != NULL);
-        CU_ASSERT_EQUAL(strlen(variant), sample_size);
+    while ((ret = vargen_next(&vargen, &mut, genotypes)) == 1) {
+        CU_ASSERT_EQUAL(mut->index, j);
         j++;
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(j, num_mutations);
-    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &x, &variant), 0);
+    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &mut, genotypes), 0);
 
     ret = vargen_free(&vargen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);

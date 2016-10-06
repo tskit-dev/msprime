@@ -30,7 +30,6 @@ vargen_print_state(vargen_t *self, FILE *out)
 {
     fprintf(out, "vargen state\n");
     fprintf(out, "tree_mutation_index = %d\n", (int) self->tree_mutation_index);
-    fprintf(out, "variant = '%s'\n", self->variant);
 }
 
 static int
@@ -60,11 +59,7 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence)
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->tree_sequence = tree_sequence;
-    self->variant = calloc(self->sample_size + 1, sizeof(char));
 
-    if (self->variant == NULL) {
-        goto out;
-    }
     ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
     if (ret != 0) {
         goto out;
@@ -84,15 +79,12 @@ out:
 int
 vargen_free(vargen_t *self)
 {
-    if (self->variant != NULL) {
-        free(self->variant);
-    }
     sparse_tree_free(&self->tree);
     return 0;
 }
 
 static int
-vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut)
+vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, uint8_t *genotypes)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
@@ -114,7 +106,7 @@ vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut)
     while (not_done) {
         assert(w != NULL);
         assert(w->node < self->sample_size);
-        self->variant[w->node] = '1';
+        genotypes[w->node] = 1;
         not_done = w != tail;
         w = w->next;
     }
@@ -123,11 +115,11 @@ out:
 }
 
 int
-vargen_next(vargen_t *self, double *position, char **variant)
+vargen_next(vargen_t *self, mutation_t **mutation, uint8_t *genotypes)
 {
     int ret = 0;
     int not_done = 1;
-    mutation_t *mutation;
+    mutation_t *m;
 
     if (!self->finished) {
         while (not_done && self->tree_mutation_index == self->tree.num_mutations) {
@@ -138,15 +130,14 @@ vargen_next(vargen_t *self, double *position, char **variant)
             not_done = ret == 1;
         }
         if (not_done) {
-            memset(self->variant, '0', self->sample_size);
-            mutation = &self->tree.mutations[self->tree_mutation_index];
-            ret = vargen_apply_tree_mutation(self, mutation);
+            memset(genotypes, 0, self->sample_size);
+            m = &self->tree.mutations[self->tree_mutation_index];
+            ret = vargen_apply_tree_mutation(self, m, genotypes);
             if (ret != 0) {
                 goto out;
             }
             self->tree_mutation_index++;
-            *variant = self->variant;
-            *position = mutation->position;
+            *mutation = m;
             ret = 1;
         }
     }

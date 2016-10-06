@@ -37,6 +37,8 @@ import tempfile
 import unittest
 import xml.etree
 
+import numpy as np
+
 import msprime
 import _msprime
 import tests
@@ -554,16 +556,14 @@ class TestHaplotypeGenerator(HighLevelTestCase):
     Tests the haplotype generation code.
     """
 
-    def verify_haplotypes_variants(self, n, haplotypes, variants):
+    def verify_haplotypes(self, n, haplotypes):
         """
-        Verify that the specified set of haplotypes and variants are
-        consistent.
+        Verify that the specified set of haplotypes is consistent.
         """
         self.assertEqual(len(haplotypes), n)
         m = len(haplotypes[0])
         for h in haplotypes:
             self.assertEqual(len(h), m)
-        self.assertEqual(len(variants), m)
         # Examine each column in H; we must have a mixture of 0s and 1s
         for k in range(m):
             zeros = 0
@@ -577,20 +577,29 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             self.assertGreater(zeros, 0)
             self.assertGreater(ones, 0)
             self.assertEqual(zeros + ones, n)
-            self.assertEqual(col, variants[k])
 
     def verify_tree_sequence(self, tree_sequence):
         n = tree_sequence.get_sample_size()
+        m = tree_sequence.get_num_mutations()
         haplotypes = list(tree_sequence.haplotypes())
-        for h in haplotypes:
-            self.assertEqual(len(h), tree_sequence.get_num_mutations())
-        variants = [variant for _, variant in tree_sequence.variants()]
-        for v in variants:
-            self.assertEqual(len(v), tree_sequence.get_sample_size())
-        self.verify_haplotypes_variants(n, haplotypes, variants)
+        A = np.zeros((n, m), dtype='u1')
+        B = np.zeros((n, m), dtype='u1')
+        for j, h in enumerate(haplotypes):
+            self.assertEqual(len(h), m)
+            A[j] = np.fromstring(h, np.uint8) - ord('0')
+        for variant in tree_sequence.variants():
+            B[:, variant.index] = variant.genotypes
+        self.assertTrue(np.all(A == B))
+        self.verify_haplotypes(n, haplotypes)
         self.assertEqual(
             [variant.position for variant in tree_sequence.variants()],
             [mutation.position for mutation in tree_sequence.mutations()])
+        self.assertEqual(
+            [variant.node for variant in tree_sequence.variants()],
+            [mutation.node for mutation in tree_sequence.mutations()])
+        self.assertEqual(
+            [variant.index for variant in tree_sequence.variants()],
+            [mutation.index for mutation in tree_sequence.mutations()])
 
     def verify_simulation(self, n, m, r, theta):
         """

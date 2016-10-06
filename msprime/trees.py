@@ -35,6 +35,13 @@ try:
 except ImportError:
     _svgwrite_imported = False
 
+try:
+    import numpy as np
+    _numpy_imported = True
+except ImportError:
+    _numpy_imported = False
+
+
 import _msprime
 import msprime.environment
 
@@ -45,6 +52,10 @@ NULL_NODE = -1
 
 NULL_POPULATION = -1
 
+
+def check_numpy():
+    if not _numpy_imported:
+        raise RuntimeError("numpy is required for this operation.")
 
 CoalescenceRecord = collections.namedtuple(
     "CoalescenceRecord",
@@ -58,7 +69,7 @@ Mutation = collections.namedtuple(
 
 Variant = collections.namedtuple(
     "Variant",
-    ["position", "genotypes"])
+    ["position", "node", "index", "genotypes"])
 
 
 Sample = collections.namedtuple(
@@ -1546,9 +1557,17 @@ class TreeSequence(object):
         """
         return HaplotypeGenerator(self).haplotypes()
 
-    def variants(self):
-        for variant in _msprime.VariantGenerator(self._ll_tree_sequence):
-            yield Variant(*variant)
+    def variants(self, as_bytes=False):
+        n = self.get_sample_size()
+        genotypes_buffer = bytearray(n)
+        iterator = _msprime.VariantGenerator(
+            self._ll_tree_sequence, genotypes_buffer)
+        for position, node, index in iterator:
+            g = np.frombuffer(genotypes_buffer, "u1", n)
+            if as_bytes:
+                g = (g + ord('0')).tostring()
+            yield Variant(
+                position=position, node=node, index=index, genotypes=g)
 
     def generate_mutations(self, mutation_rate, random_generator):
         # TODO document this function when it's ready to be brought back

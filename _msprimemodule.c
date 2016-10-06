@@ -108,7 +108,10 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     TreeSequence *tree_sequence;
+    PyObject *genotypes_buffer;
     vargen_t *variant_generator;
+    Py_buffer buffer;
+    int buffer_acquired;
 } VariantGenerator;
 
 typedef struct {
@@ -4307,6 +4310,10 @@ VariantGenerator_dealloc(VariantGenerator* self)
         self->variant_generator = NULL;
     }
     Py_XDECREF(self->tree_sequence);
+    Py_XDECREF(self->genotypes_buffer);
+    if (self->buffer_acquired) {
+        PyBuffer_Release(&self->buffer);
+    }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -4315,18 +4322,40 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
-    TreeSequence *tree_sequence;
+    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", NULL};
+    TreeSequence *tree_sequence = NULL;
+    PyObject *genotypes_buffer = NULL;
+    size_t sample_size;
 
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &tree_sequence)) {
+    self->genotypes_buffer = NULL;
+    self->buffer_acquired = 0;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O", kwlist,
+            &TreeSequenceType, &tree_sequence, &genotypes_buffer)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
     Py_INCREF(self->tree_sequence);
+    self->genotypes_buffer = genotypes_buffer;
+    Py_INCREF(self->genotypes_buffer);
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    sample_size = tree_sequence_get_sample_size(
+            self->tree_sequence->tree_sequence);
+    if (!PyObject_CheckBuffer(genotypes_buffer)) {
+        PyErr_SetString(PyExc_TypeError,
+            "genotypes buffer must support the Python buffer protocol.");
+        goto out;
+    }
+    if (PyObject_GetBuffer(genotypes_buffer, &self->buffer,
+                PyBUF_SIMPLE|PyBUF_WRITABLE) != 0) {
+        goto out;
+    }
+    self->buffer_acquired = 1;
+    if (sample_size * sizeof(uint8_t) > self->buffer.len) {
+        PyErr_SetString(PyExc_BufferError, "genotypes buffer is too small");
         goto out;
     }
     self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
@@ -4334,7 +4363,6 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    memset(self->variant_generator, 0, sizeof(vargen_t));
     err = vargen_alloc(self->variant_generator,
             self->tree_sequence->tree_sequence);
     if (err != 0) {
@@ -4350,20 +4378,21 @@ static PyObject *
 VariantGenerator_next(VariantGenerator *self)
 {
     PyObject *ret = NULL;
-    char *variant;
-    double position;
+    mutation_t *mutation;
     int err;
+    uint8_t *genotypes = (uint8_t *) self->buffer.buf;
 
     if (VariantGenerator_check_state(self) != 0) {
         goto out;
     }
-    err = vargen_next(self->variant_generator, &position, &variant);
+    err = vargen_next(self->variant_generator, &mutation, genotypes);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     if (err == 1) {
-        ret = Py_BuildValue("ds", position, variant);
+        ret = Py_BuildValue("dIn", mutation->position,
+                (unsigned int) mutation->node, (Py_ssize_t) mutation->index);
     }
 out:
     return ret;

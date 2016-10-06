@@ -734,6 +734,13 @@ def threads_example():
     #     for j in v:
     #         print("\t", k, j, ld_calc.get_r2(k, j))
 
+
+def api_stuff():
+    ts = msprime.simulate(10, mutation_rate=10)
+
+    for variant in ts.variants():
+        print(variant)
+
 if __name__ == "__main__":
     # mutations()
 
@@ -760,4 +767,5 @@ if __name__ == "__main__":
     # convert_dev()
     # ld_dev()
     # ld_triangle_plot()
-    threads_example()
+    # threads_example()
+    api_stuff()

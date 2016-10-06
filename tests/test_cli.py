@@ -1322,7 +1322,9 @@ class TestMspConversionOutput(unittest.TestCase):
         self.verify_haplotypes(output_haplotypes)
 
     def verify_variants(self, output_variants):
-        variants = list(self._tree_sequence.variants())
+        variants = [
+            (v.position, v.genotypes.decode())
+            for v in self._tree_sequence.variants(as_bytes=True)]
         self.assertEqual(len(variants), len(output_variants))
         for (pos, v), line in zip(variants, output_variants):
             self.assertEqual("{}\t{}".format(pos, v), line)

@@ -32,8 +32,8 @@ vcf_converter_print_state(vcf_converter_t *self, FILE* out)
     fprintf(out, "sample_size = %d\n", self->sample_size);
     fprintf(out, "num_vcf_samples = %d\n", self->num_vcf_samples);
     fprintf(out, "header = %d bytes\n", (int) strlen(self->header));
-    fprintf(out, "genotypes = %d bytes: %s", (int) self->genotypes_size,
-            self->genotypes);
+    fprintf(out, "vcf_genotypes = %d bytes: %s", (int) self->vcf_genotypes_size,
+            self->vcf_genotypes);
     fprintf(out, "record = %d bytes\n", (int) self->record_size);
 }
 
@@ -95,36 +95,37 @@ vcf_converter_make_record(vcf_converter_t *self)
     uint32_t n = self->num_vcf_samples;
     uint32_t j, k;
 
-    self->genotypes_size = 2 * self->sample_size + 1;
+    self->vcf_genotypes_size = 2 * self->sample_size + 1;
     /* it's not worth working out exactly what size the record prefix
      * will be. 1K is plenty for us */
-    self->record_size = 1024 + self->genotypes_size;
+    self->record_size = 1024 + self->vcf_genotypes_size;
     self->record = malloc(self->record_size);
-    self->genotypes = malloc(self->genotypes_size);
-    if (self->record == NULL || self->genotypes == NULL) {
+    self->vcf_genotypes = malloc(self->vcf_genotypes_size);
+    self->genotypes = malloc(self->sample_size * sizeof(uint8_t));
+    if (self->record == NULL || self->vcf_genotypes == NULL
+            || self->genotypes == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    /* Set up the genotypes string. We don't want to have to put
+    /* Set up the vcf_genotypes string. We don't want to have to put
      * in tabs and |s for every row so we insert them at the start.
      */
     for (j = 0; j < n; j++) {
         for (k = 0; k < ploidy; k++) {
-            self->genotypes[2 * ploidy * j + 2 * k] = '0';
-            self->genotypes[2 * ploidy * j + 2 * k + 1] = '|';
+            self->vcf_genotypes[2 * ploidy * j + 2 * k] = '0';
+            self->vcf_genotypes[2 * ploidy * j + 2 * k + 1] = '|';
         }
-        self->genotypes[2 * ploidy * (j + 1) - 1] = '\t';
+        self->vcf_genotypes[2 * ploidy * (j + 1) - 1] = '\t';
     }
-    self->genotypes[self->genotypes_size - 2] = '\n';
-    self->genotypes[self->genotypes_size - 1] = '\0';
+    self->vcf_genotypes[self->vcf_genotypes_size - 2] = '\n';
+    self->vcf_genotypes[self->vcf_genotypes_size - 1] = '\0';
     ret = 0;
 out:
     return ret;
 }
 
 static int WARN_UNUSED
-vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
-        char *variant)
+vcf_converter_write_record(vcf_converter_t *self, unsigned long pos)
 {
     int ret = MSP_ERR_GENERIC;
     int written;
@@ -142,11 +143,12 @@ vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
 
     for (j = 0; j < self->num_vcf_samples; j++) {
         for (k = 0; k < p; k++) {
-            self->genotypes[2 * p * j + 2 * k] = variant[j * p + k];
+            self->vcf_genotypes[2 * p * j + 2 * k] =
+                (char) ('0' + self->genotypes[j * p + k]);
         }
     }
-    assert(offset + self->genotypes_size < self->record_size);
-    memcpy(self->record + offset, self->genotypes, self->genotypes_size);
+    assert(offset + self->vcf_genotypes_size < self->record_size);
+    memcpy(self->record + offset, self->vcf_genotypes, self->vcf_genotypes_size);
     ret = 0;
 out:
     return ret;
@@ -164,22 +166,21 @@ vcf_converter_next(vcf_converter_t *self, char **record)
 {
     int ret = -1;
     int err;
-    char *variant;
     unsigned long pos;
-    double x;
+    mutation_t *mut;
 
-    ret = vargen_next(self->vargen, &x, &variant);
+    ret = vargen_next(self->vargen, &mut, self->genotypes);
     if (ret < 0) {
         goto out;
     }
     if (ret == 1) {
         /* update pos. We use a simple algorithm to ensure positions
          * are unique. */
-        pos = (unsigned long) round(x);
+        pos = (unsigned long) round(mut->position);
         if (pos <= self->last_position) {
             pos = self->last_position + 1;
         }
-        err = vcf_converter_write_record(self, pos, variant);
+        err = vcf_converter_write_record(self, pos);
         if (err != 0) {
             ret = err;
             goto out;
@@ -233,11 +234,14 @@ int
 vcf_converter_free(vcf_converter_t *self)
 {
 
+    if (self->genotypes != NULL) {
+        free(self->genotypes);
+    }
     if (self->header != NULL) {
         free(self->header);
     }
-    if (self->genotypes != NULL) {
-        free(self->genotypes);
+    if (self->vcf_genotypes != NULL) {
+        free(self->vcf_genotypes);
     }
     if (self->record != NULL) {
         free(self->record);
