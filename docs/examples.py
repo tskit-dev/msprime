@@ -283,14 +283,14 @@ def threads_example():
     ts = msprime.simulate(
         sample_size=1000, Ne=1e4, length=1e7, recombination_rate=2e-8,
         mutation_rate=2e-8)
-    np.random.seed(1)
-    num_focal_mutations = 1000
-    focal_mutations = np.sort(np.random.choice(
-        np.arange(ts.get_num_mutations()), replace=False,
-        size=num_focal_mutations))
-    results = find_ld_sites(ts, focal_mutations, num_threads=8)
+    counts = np.zeros(ts.get_num_mutations())
+    for t in ts.trees():
+        for mutation in t.mutations():
+            counts[mutation.index] = t.get_num_leaves(mutation.node)
+    doubletons = np.nonzero(counts == 2)[0]
+    results = find_ld_sites(ts, doubletons, num_threads=8)
     print(
-        "found LD sites for", len(results), "random mutations out of",
+        "Found LD sites for", len(results), "doubleton mutations out of",
         ts.get_num_mutations())
 
 if __name__ == "__main__":

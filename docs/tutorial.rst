@@ -606,7 +606,7 @@ CPU intensive tasks are being undertaken.
    allowing these calculations to proceed in parallel.
 
 In the following example we wish to find all mutations that are in approximate
-LD (:math:`r^2 < 0.5`) with a given set of mutations. We parallelise this
+LD (:math:`r^2 \geq 0.5`) with a given set of mutations. We parallelise this
 by splitting the input array between a number of threads, and use the
 :meth:`.LdCalculator.get_r2_array` method to compute the :math:`r^2` value
 both up and downstream of each focal mutation, filter out those that
@@ -659,34 +659,31 @@ progress bar on this computation.
         ts = msprime.simulate(
             sample_size=1000, Ne=1e4, length=1e7, recombination_rate=2e-8,
             mutation_rate=2e-8)
-        np.random.seed(1)
-        num_focal_mutations = 1000
-        focal_mutations = np.sort(np.random.choice(
-            np.arange(ts.get_num_mutations()), replace=False,
-            size=num_focal_mutations))
-        results = find_ld_sites(ts, focal_mutations, num_threads=8)
+        counts = np.zeros(ts.get_num_mutations())
+        for t in ts.trees():
+            for mutation in t.mutations():
+                counts[mutation.index] = t.get_num_leaves(mutation.node)
+        doubletons = np.nonzero(counts == 2)[0]
+        results = find_ld_sites(ts, doubletons, num_threads=8)
         print(
-            "found LD sites for", len(results), "random mutations out of ",
+            "Found LD sites for", len(results), "doubleton mutations out of",
             ts.get_num_mutations())
 
-Here we first simulate 1000 samples of 10 megabases, and then randomly choose
-1000 of the resulting mutations to be our focal mutations. (We wouldn't choose
-these randomly for real applications of course, but we can imagine picking a
-set of 'interesting' mutations using any number of criteria.) We then call the
+In this example, we first simulate 1000 samples of 10 megabases and find all
+doubleton mutations in the resulting tree sequence. We then call the
 ``find_ld_sites()`` function to find all mutations that are within 1 megabase
-and have an :math:`r^2` statistic of less than 0.5 with these focal mutations.
+of these doubletons and have an :math:`r^2` statistic of greater than 0.5.
 
-Within the ``find_ld_sites()`` function we perform these calculations in
-parallel using 8 threads. The actual calculations are done in the nested
-``thread_worker()`` function, which is called once by each thread. In the
-thread worker, we first allocate an instance of the :class:`.LdCalculator`
-class. (It is **critically important** that each thread has its own instance of
-:class:`.LdCalculator`, as the threads will not work efficiently otherwise.)
-After this, each thread works out the slice of the input array that it is
-responsible for, and then iterates over each focal mutation in turn. After the
-:math:`r^2` values have been calculated, we then find the indexes of the
-mutations corresponding to values greater than 0.5 using
-:func:`numpy.nonzero`. Finally, the thread stores the resulting array
+The ``find_ld_sites()`` function performs these calculations in parallel using
+8 threads. The real work is done in the nested ``thread_worker()`` function,
+which is called once by each thread. In the thread worker, we first allocate an
+instance of the :class:`.LdCalculator` class. (It is **critically important**
+that each thread has its own instance of :class:`.LdCalculator`, as the threads
+will not work efficiently otherwise.) After this, each thread works out the
+slice of the input array that it is responsible for, and then iterates over
+each focal mutation in turn. After the :math:`r^2` values have been calculated,
+we then find the indexes of the mutations corresponding to values greater than
+0.5 using :func:`numpy.nonzero`. Finally, the thread stores the resulting array
 of mutation indexes in the ``results`` dictionary, and moves on to the next
 focal mutation.
 
@@ -694,6 +691,6 @@ focal mutation.
 Running this example we get::
 
     >>> threads_example()
-    100%|████████████████████████████████████████████████| 1000/1000 [00:02<00:00, 384.76it/s]
-    found LD sites for 1000 random mutations out of 59660
+    100%|████████████████████████████████████████████████| 4045/4045 [00:09<00:00, 440.29it/s]
+    Found LD sites for 4045 doubleton mutations out of 60100
 
