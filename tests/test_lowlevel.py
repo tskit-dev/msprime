@@ -22,11 +22,13 @@ from __future__ import print_function
 from __future__ import division
 from __future__ import unicode_literals
 
+import array
 import collections
 import heapq
 import itertools
 import math
 import random
+import sys
 import tempfile
 import unittest
 
@@ -40,6 +42,8 @@ from msprime import __version__ as _library_version
 # Root node marker
 NULL_NODE = -1
 NULL_POPULATION = -1
+
+IS_PY2 = sys.version_info[0] < 3
 
 
 def uniform_recombination_map(sim):
@@ -427,8 +431,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         bottlenecks = [
             get_bottleneck_event(0.1, 0, 0.1),
             get_bottleneck_event(0.1, 0, 0.9)]
-        return self.get_tree_sequence(
-           demographic_events=bottlenecks)
+        return self.get_tree_sequence(demographic_events=bottlenecks)
 
     def get_example_tree_sequences(self):
         bottlenecks = [
@@ -566,7 +569,7 @@ class TestSimulationState(LowLevelTestCase):
         ts = _msprime.TreeSequence()
         ts.create(sim, uniform_recombination_map(sim))
         st = _msprime.SparseTree(ts)
-        st_iter = _msprime.SparseTreeIterator(ts, st)
+        st_iter = _msprime.SparseTreeIterator(st)
         n = sim.get_sample_size()
         pi = {}
         tau = {j: 0 for j in range(n)}
@@ -623,6 +626,7 @@ class TestSimulationState(LowLevelTestCase):
         st = next(st_iter)
         self.verify_trees_equal(n, pi, tau, pops, st)
         num_trees += 1
+        self.assertEqual(ts.get_num_trees(), num_trees)
         self.assertLessEqual(num_trees, sim.get_num_breakpoints() + 2)
         self.assertRaises(StopIteration, next, st_iter)
 
@@ -822,9 +826,10 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(diffs, python_diffs)
 
     def verify_leaf_counts(self, tree_sequence):
-        st = _msprime.SparseTree(tree_sequence, [])
-        for _ in _msprime.SparseTreeIterator(tree_sequence, st):
-            self.assertEqual(st.get_count_leaves(), True)
+        st = _msprime.SparseTree(
+            tree_sequence, flags=_msprime.LEAF_COUNTS, tracked_leaves=[])
+        for _ in _msprime.SparseTreeIterator(st):
+            self.assertEqual(st.get_flags(), _msprime.LEAF_COUNTS)
             nu = get_leaf_counts(st)
             nu_prime = [
                 st.get_num_leaves(j) for j in
@@ -1692,11 +1697,10 @@ class TestTreeSequence(LowLevelTestCase):
         for ts in self.get_example_tree_sequences():
             for bad_type in ["1", None, []]:
                 self.assertRaises(TypeError, ts.get_sample, bad_type)
-            self.assertRaises(_msprime.LibraryError, ts.get_sample, -1)
+            self.assertRaises(IndexError, ts.get_sample, -1)
+            self.assertRaises(IndexError, ts.get_sample, ts.get_sample_size())
             self.assertRaises(
-                _msprime.LibraryError, ts.get_sample, ts.get_sample_size())
-            self.assertRaises(
-                _msprime.LibraryError, ts.get_sample, ts.get_sample_size() + 1)
+                IndexError, ts.get_sample, ts.get_sample_size() + 1)
             for j in range(ts.get_sample_size()):
                 # We only check for a single sample here. Multi sample
                 # tests are done in test_demography.
@@ -1752,7 +1756,8 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertGreater(ts.get_num_mutations(), 0)
         self.assertEqual(len(mutations), ts.get_num_mutations())
         # Check the form of the mutations
-        for position, node in mutations:
+        for j, (position, node, index) in enumerate(mutations):
+            self.assertEqual(j, index)
             self.assertIsInstance(node, int)
             self.assertGreaterEqual(node, 0)
             self.assertLessEqual(node, ts.get_num_nodes())
@@ -1793,7 +1798,7 @@ class TestTreeSequence(LowLevelTestCase):
         invalid_mutations = ["", [1, 1], {1, 1}, None]
         for mutation in invalid_mutations:
             self.assertRaises(TypeError, ts.set_mutations, [mutation])
-        invalid_mutations = [tuple(), (1,), (1, 2, 3)]
+        invalid_mutations = [tuple(), (1,)]
         for mutation in invalid_mutations:
             self.assertRaises(ValueError, ts.set_mutations, [mutation])
         invalid_mutations = [("1", 0), (0, "1"), (None, 0), ([], 0)]
@@ -1805,13 +1810,33 @@ class TestTreeSequence(LowLevelTestCase):
         for mutation in invalid_mutations:
             self.assertRaises(
                 _msprime.LibraryError, ts.set_mutations, [mutation])
-        valid_mutations = [[], [(0.1, 1)], [(0.1, 1), (0.2, 2)]]
+        valid_mutations = [[], [(0.1, 1, 0)], [(0.1, 1, 0), (0.2, 2, 1)]]
         for mutations in valid_mutations:
             ts.set_mutations(mutations)
             self.assertEqual(ts.get_mutations(), mutations)
             # Test dumping the mutations
             with tempfile.NamedTemporaryFile() as f:
                 self.verify_dump_equality(ts, f)
+
+    def test_set_mutations_tree_refcount(self):
+        ts = self.get_tree_sequence(mutation_rate=0.0)
+        mutations = [(0.1, 1, 0), (0.2, 2, 1)]
+        ts.set_mutations(mutations)
+        tree = _msprime.SparseTree(ts)
+        self.assertRaises(_msprime.LibraryError, ts.set_mutations, [])
+        self.assertEqual(ts.get_mutations(), mutations)
+        del tree
+        ts.set_mutations([])
+        self.assertEqual(ts.get_num_mutations(), 0)
+
+        trees = [_msprime.SparseTree(ts) for _ in range(20)]
+        for j, tree in enumerate(trees):
+            self.assertRaises(
+                _msprime.LibraryError, ts.set_mutations, mutations)
+            trees[j] = None
+            del tree
+        ts.set_mutations(mutations)
+        self.assertEqual(ts.get_mutations(), mutations)
 
     def test_constructor_interface(self):
         tree_sequence = _msprime.TreeSequence()
@@ -1826,10 +1851,6 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(ValueError, tree_sequence.get_num_records)
         self.assertRaises(ValueError, _msprime.TreeDiffIterator, tree_sequence)
         self.assertRaises(ValueError, _msprime.SparseTree, tree_sequence)
-        sparse_tree = _msprime.SparseTree(self.get_tree_sequence(2))
-        self.assertRaises(
-            ValueError, _msprime.SparseTreeIterator, tree_sequence,
-            sparse_tree)
         sim.run()
         tree_sequence.create(sim, recomb_map)
         self.assertRaises(ValueError, tree_sequence.create, sim)
@@ -1909,6 +1930,8 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertRaises(
                 ValueError, ts.get_pairwise_diversity,
                 [0, ts.get_sample_size()])
+            self.assertRaises(
+                _msprime.LibraryError, ts.get_pairwise_diversity, [0, 0])
             samples = list(range(ts.get_sample_size()))
             pi1 = ts.get_pairwise_diversity(samples)
             self.assertGreaterEqual(pi1, 0)
@@ -2262,17 +2285,14 @@ class TestSparseTreeIterator(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.SparseTreeIterator)
         self.assertRaises(TypeError, _msprime.SparseTreeIterator, None)
         ts = _msprime.TreeSequence()
-        # This hasn't been initialised, so should fail.
-        other_ts = self.get_tree_sequence(10)
-        tree = _msprime.SparseTree(other_ts)
-        self.assertRaises(ValueError, _msprime.SparseTreeIterator, ts, tree)
+        self.assertRaises(TypeError, _msprime.SparseTreeIterator, ts)
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
         sim.run()
         ts.create(sim, uniform_recombination_map(sim))
         tree = _msprime.SparseTree(ts)
         n_before = 0
         parents_before = []
-        for t in _msprime.SparseTreeIterator(ts, tree):
+        for t in _msprime.SparseTreeIterator(tree):
             n_before += 1
             self.assertIs(t, tree)
             pi = {}
@@ -2281,7 +2301,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
             parents_before.append(pi)
         self.assertEqual(n_before, len(list(_msprime.TreeDiffIterator(ts))))
         # If we remove the objects, we should get the same results.
-        iterator = _msprime.SparseTreeIterator(ts, tree)
+        iterator = _msprime.SparseTreeIterator(tree)
         del tree
         del ts
         n_after = 0
@@ -2299,7 +2319,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
     def test_iterator(self):
         ts = self.get_tree_sequence()
         tree = _msprime.SparseTree(ts)
-        self.verify_iterator(_msprime.SparseTreeIterator(ts, tree))
+        self.verify_iterator(_msprime.SparseTreeIterator(tree))
 
     def test_root_bug(self):
         # Reproduce a simulation that provoked a root calculation bug.
@@ -2314,7 +2334,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
         ts = _msprime.TreeSequence()
         ts.create(sim, uniform_recombination_map(sim))
         st = _msprime.SparseTree(ts)
-        for st in _msprime.SparseTreeIterator(ts, st):
+        for st in _msprime.SparseTreeIterator(st):
             root = 0
             while st.get_parent(root) != NULL_NODE:
                 root = st.get_parent(root)
@@ -2384,7 +2404,7 @@ class TestVariantGenerator(LowLevelTestCase):
             self.assertEqual(len(variant), ts.get_sample_size())
         self.assertEqual(
             positions,
-            [pos for pos, _ in ts.get_mutations()])
+            [pos for pos, _, _ in ts.get_mutations()])
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
@@ -2396,47 +2416,52 @@ class TestSparseTree(LowLevelTestCase):
     """
     Tests on the low-level sparse tree interface.
     """
+
+    def test_flags(self):
+        ts = self.get_tree_sequence()
+        st = _msprime.SparseTree(ts)
+        self.assertEqual(st.get_flags(), 0)
+        # We should still be able to count the leaves, just inefficiently.
+        self.assertEqual(st.get_num_leaves(0), 1)
+        self.assertRaises(
+            _msprime.LibraryError, st.get_num_tracked_leaves, 0)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.LeafListIterator, st, 0)
+        all_flags = [
+            0, _msprime.LEAF_COUNTS, _msprime.LEAF_LISTS,
+            _msprime.LEAF_COUNTS | _msprime.LEAF_LISTS]
+        for flags in all_flags:
+            st = _msprime.SparseTree(ts, flags=flags)
+            self.assertEqual(st.get_flags(), flags)
+            self.assertEqual(st.get_num_leaves(0), 1)
+            if flags & _msprime.LEAF_COUNTS:
+                self.assertEqual(st.get_num_tracked_leaves(0), 0)
+            else:
+                self.assertRaises(
+                    _msprime.LibraryError, st.get_num_tracked_leaves, 0)
+            if flags & _msprime.LEAF_LISTS:
+                leaves = list(_msprime.LeafListIterator(st, 0))
+                self.assertEqual(leaves, [0])
+            else:
+                self.assertRaises(
+                    _msprime.LibraryError, _msprime.LeafListIterator, st, 0)
+
     def test_mutations(self):
         for ts in self.get_example_tree_sequences():
             st = _msprime.SparseTree(ts)
             all_mutations = ts.get_mutations()
             all_tree_mutations = []
-            for st in _msprime.SparseTreeIterator(ts, st):
+            j = 0
+            for st in _msprime.SparseTreeIterator(st):
                 tree_mutations = st.get_mutations()
                 self.assertEqual(st.get_num_mutations(), len(tree_mutations))
                 all_tree_mutations.extend(tree_mutations)
-                for position, node in tree_mutations:
+                for position, node, index in tree_mutations:
                     self.assertTrue(st.get_left() <= position < st.get_right())
                     self.assertNotEqual(st.get_parent(node), 0)
+                    self.assertEqual(index, j)
+                    j += 1
             self.assertEqual(all_tree_mutations, all_mutations)
-
-    def test_wrong_size(self):
-        ts1 = self.get_tree_sequence(sample_size=10)
-        ts2 = self.get_tree_sequence(sample_size=2)
-        st1 = _msprime.SparseTree(ts1)
-        st2 = _msprime.SparseTree(ts2)
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.SparseTreeIterator, ts1, st2)
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.SparseTreeIterator, ts2, st1)
-        ts1 = self.get_tree_sequence(sample_size=10, num_loci=100)
-        ts2 = self.get_tree_sequence(sample_size=10, num_loci=1)
-        st1 = _msprime.SparseTree(ts1)
-        st2 = _msprime.SparseTree(ts2)
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.SparseTreeIterator, ts1, st2)
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.SparseTreeIterator, ts2, st1)
-        ts1 = self.get_tree_sequence(
-            sample_size=10, num_loci=10, mutation_rate=0)
-        ts2 = self.get_tree_sequence(
-            sample_size=10, num_loci=10, mutation_rate=10)
-        st1 = _msprime.SparseTree(ts1)
-        st2 = _msprime.SparseTree(ts2)
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.SparseTreeIterator, ts1, st2)
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.SparseTreeIterator, ts2, st1)
 
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.SparseTree)
@@ -2445,7 +2470,11 @@ class TestSparseTree(LowLevelTestCase):
                 TypeError, _msprime.SparseTree, bad_type)
         ts = self.get_tree_sequence()
         for bad_type in ["", {}, True, 1, None]:
-            self.assertRaises(TypeError, _msprime.SparseTree, ts, bad_type)
+            self.assertRaises(
+                TypeError, _msprime.SparseTree, ts, tracked_leaves=bad_type)
+        for bad_type in ["", {}, None, []]:
+            self.assertRaises(
+                TypeError, _msprime.SparseTree, ts, flags=bad_type)
         for n in range(1, 10):
             ts = self.get_tree_sequence(sample_size=10, num_loci=n)
             st = _msprime.SparseTree(ts)
@@ -2457,7 +2486,7 @@ class TestSparseTree(LowLevelTestCase):
             self.assertEqual(st.get_right(), 0)
             for j in range(n):
                 self.assertEqual(st.get_parent(j), NULL_NODE)
-                self.assertEqual(st.get_population(j), NULL_POPULATION)
+                self.assertEqual(st.get_population(j), 0)
                 self.assertEqual(st.get_children(j), tuple())
                 self.assertEqual(st.get_time(j), 0)
 
@@ -2471,7 +2500,7 @@ class TestSparseTree(LowLevelTestCase):
             st = _msprime.SparseTree(ts)
             # deleting the tree sequence should still give a well formed
             # sparse tree.
-            st_iter = _msprime.SparseTreeIterator(ts, st)
+            st_iter = _msprime.SparseTreeIterator(st)
             next(st_iter)
             del ts
             del st_iter
@@ -2484,23 +2513,29 @@ class TestSparseTree(LowLevelTestCase):
 
     def test_bad_tracked_leaves(self):
         ts = self.get_tree_sequence()
+        flags = _msprime.LEAF_COUNTS
         for bad_type in ["", {}, [], None]:
-            self.assertRaises(TypeError, _msprime.SparseTree, ts, [bad_type])
             self.assertRaises(
-                TypeError, _msprime.SparseTree, ts, [1, bad_type])
+                TypeError, _msprime.SparseTree, ts, flags=flags,
+                tracked_leaves=[bad_type])
+            self.assertRaises(
+                TypeError, _msprime.SparseTree, ts, flags=flags,
+                tracked_leaves=[1, bad_type])
         for bad_leaf in [ts.get_sample_size(), 10**6, -1e6]:
             self.assertRaises(
-                ValueError, _msprime.SparseTree, ts, [bad_leaf])
+                ValueError, _msprime.SparseTree, ts, flags=flags,
+                tracked_leaves=[bad_leaf])
             self.assertRaises(
-                ValueError, _msprime.SparseTree, ts, [1, bad_leaf])
+                ValueError, _msprime.SparseTree, ts, flags=flags,
+                tracked_leaves=[1, bad_leaf])
             self.assertRaises(
                 ValueError, _msprime.SparseTree, ts,
-                [1, bad_leaf, 1])
+                tracked_leaves=[1, bad_leaf, 1])
 
     def test_count_all_leaves(self):
         for ts in self.get_example_tree_sequences():
             self.verify_iterator(_msprime.TreeDiffIterator(ts))
-            st = _msprime.SparseTree(ts)
+            st = _msprime.SparseTree(ts, flags=_msprime.LEAF_COUNTS)
             # Without initialisation we should be 0 leaves for every node
             # that is not a leaf.
             for j in range(st.get_num_nodes()):
@@ -2508,7 +2543,7 @@ class TestSparseTree(LowLevelTestCase):
                 self.assertEqual(st.get_num_leaves(j), l)
                 self.assertEqual(st.get_num_tracked_leaves(j), 0)
             # Now, try this for a tree sequence.
-            for st in _msprime.SparseTreeIterator(ts, st):
+            for st in _msprime.SparseTreeIterator(st):
                 nu = get_leaf_counts(st)
                 nu_prime = [
                     st.get_num_leaves(j) for j in
@@ -2543,24 +2578,22 @@ class TestSparseTree(LowLevelTestCase):
             for subset in map(list, powerset):
                 # Ordering shouldn't make any different.
                 random.shuffle(subset)
-                st = _msprime.SparseTree(ts, subset)
-                for st in _msprime.SparseTreeIterator(ts, st):
+                st = _msprime.SparseTree(
+                    ts, flags=_msprime.LEAF_COUNTS, tracked_leaves=subset)
+                for st in _msprime.SparseTreeIterator(st):
                     nu = get_tracked_leaf_counts(st, subset)
                     nu_prime = [
                         st.get_num_tracked_leaves(j) for j in
                         range(st.get_num_nodes())]
                     self.assertEqual(nu, nu_prime)
-            # Passing duplicated values should have no effect.
+            # Passing duplicated values should raise an error
             leaf = 1
-            for j in range(1, 20):
+            for j in range(2, 20):
                 tracked_leaves = [leaf for _ in range(j)]
-                st = _msprime.SparseTree(ts, tracked_leaves)
-                for st in _msprime.SparseTreeIterator(ts, st):
-                    nu = get_tracked_leaf_counts(st, [leaf])
-                    nu_prime = [
-                        st.get_num_tracked_leaves(j) for j in
-                        range(st.get_num_nodes())]
-                    self.assertEqual(nu, nu_prime)
+                self.assertRaises(
+                    _msprime.LibraryError, _msprime.SparseTree,
+                    ts, flags=_msprime.LEAF_COUNTS,
+                    tracked_leaves=tracked_leaves)
 
     def test_bounds_checking(self):
         for m in range(1, 10):
@@ -2593,7 +2626,7 @@ class TestSparseTree(LowLevelTestCase):
         for num_loci in [1, 100]:
             ts = self.get_tree_sequence(num_loci=num_loci, sample_size=10)
             st = _msprime.SparseTree(ts)
-            for index, st in enumerate(_msprime.SparseTreeIterator(ts, st)):
+            for index, st in enumerate(_msprime.SparseTreeIterator(st)):
                 self.assertEqual(index, st.get_index())
 
     def test_bad_mutations(self):
@@ -2605,7 +2638,7 @@ class TestSparseTree(LowLevelTestCase):
                 _msprime.LibraryError, ts.set_mutations, [(0.1, bad_node)])
         # We shouldn't be able to assign mutations to the root node
         st = _msprime.SparseTree(ts)
-        for st in _msprime.SparseTreeIterator(ts, st):
+        for st in _msprime.SparseTreeIterator(st):
             x = st.get_left()
             # For more subtle issues where we put mutations on nodes not in
             # the tree, we have to wait until later to detect it.
@@ -2616,21 +2649,11 @@ class TestSparseTree(LowLevelTestCase):
                     self.assertRaises(
                         _msprime.LibraryError, _msprime.HaplotypeGenerator,
                         other_ts)
-                    other_st = _msprime.SparseTree(other_ts)
-                    other_iter = _msprime.SparseTreeIterator(
-                        other_ts, other_st)
-                    self.assertRaises(_msprime.LibraryError, list, other_iter)
-                    if st.get_index() == 0:
-                        # If this is the first tree we should throw an error
-                        # immediately
-                        self.assertRaises(
-                            _msprime.LibraryError, _msprime.VariantGenerator,
-                            other_ts)
-                    else:
-                        # Otherwise, we need to wait until we traverse the
-                        # trees.
-                        vg = _msprime.VariantGenerator(other_ts)
-                        self.assertRaises(_msprime.LibraryError, list, vg)
+                    vg = _msprime.VariantGenerator(other_ts)
+                    self.assertRaises(_msprime.LibraryError, list, vg)
+                    # We must free the variant generator to decrement the
+                    # refcount on other_ts
+                    del vg
 
 
 class TestLeafListIterator(LowLevelTestCase):
@@ -2642,7 +2665,8 @@ class TestLeafListIterator(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.LeafListIterator)
         self.assertRaises(TypeError, _msprime.LeafListIterator, None)
         ts = self.get_tree_sequence()
-        tree = _msprime.SparseTree(ts)
+        flags = _msprime.LEAF_COUNTS | _msprime.LEAF_LISTS
+        tree = _msprime.SparseTree(ts, flags=flags)
         for bad_type in [None, "1", []]:
             self.assertRaises(
                 TypeError, _msprime.LeafListIterator, tree, bad_type)
@@ -2657,8 +2681,9 @@ class TestLeafListIterator(LowLevelTestCase):
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
-        tree = _msprime.SparseTree(ts)
-        for tree in _msprime.SparseTreeIterator(ts, tree):
+        flags = _msprime.LEAF_COUNTS | _msprime.LEAF_LISTS
+        tree = _msprime.SparseTree(ts, flags=flags)
+        for tree in _msprime.SparseTreeIterator(tree):
             self.verify_iterator(_msprime.LeafListIterator(tree, 1))
             self.verify_iterator(
                 _msprime.LeafListIterator(tree, tree.get_root()))
@@ -2669,9 +2694,10 @@ class TestLeafListIterator(LowLevelTestCase):
             self.get_tree_sequence(
                 demographic_events=[
                     get_bottleneck_event(0.2, proportion=1.0)])]
+        flags = _msprime.LEAF_COUNTS | _msprime.LEAF_LISTS
         for ts in examples:
-            st = _msprime.SparseTree(ts)
-            for t in _msprime.SparseTreeIterator(ts, st):
+            st = _msprime.SparseTree(ts, flags=flags)
+            for t in _msprime.SparseTreeIterator(st):
                 # All leaf nodes should have themselves.
                 for j in range(t.get_sample_size()):
                     leaves = list(_msprime.LeafListIterator(t, j))
@@ -2821,3 +2847,171 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertRaises(_msprime.LibraryError, sim.run)
         self.assertRaises(_msprime.LibraryError, sim.run)
         self.assertTrue(math.isinf(sim.debug_demography()))
+
+
+class TestLdCalculator(LowLevelTestCase):
+    """
+    Tests for the low-level leaf list iterator.
+    """
+
+    def get_array(self, buff, length=None):
+        """
+        Returns an array of double from a buffer.
+        """
+        code = b'd' if IS_PY2 else 'd'
+        if length is None:
+            return array.array(code, bytes(buff))
+        else:
+            return array.array(code, bytes(buff[:length * 8]))
+
+    def get_buffer(self, num_values):
+        """
+        Returns a buffer suitable for storing the specified number
+        of doubles.
+        """
+        return bytearray(8 * num_values)
+
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.LdCalculator)
+        for bad_type in [None, "1", []]:
+            self.assertRaises(
+                TypeError, _msprime.LeafListIterator, bad_type)
+
+    def test_refcounts(self):
+        ts = self.get_tree_sequence()
+        ldc = _msprime.LdCalculator(ts)
+        buff = self.get_buffer(1)
+        v = ldc.get_r2_array(dest=buff, source_index=0)
+        self.assertEqual(v, 1)
+        a = self.get_array(buff)
+        # Delete the underlying tree sequence to ensure that nothing
+        # nasty happens
+        del ts
+        buff = self.get_buffer(1)
+        v = ldc.get_r2_array(dest=buff, source_index=0)
+        self.assertEqual(v, 1)
+        b = self.get_array(buff)
+        self.assertEqual(a, b)
+
+    def test_bad_mutation_indexes(self):
+        ts = self.get_tree_sequence()
+        m = ts.get_num_mutations()
+        self.assertGreater(m, 0)
+        bad_indexes = [-1, m, m + 1, m + 100]
+        ldc = _msprime.LdCalculator(ts)
+        for bad_index in bad_indexes:
+            self.assertRaises(
+                IndexError, ldc.get_r2_array, self.get_buffer(1), bad_index)
+            self.assertRaises(IndexError, ldc.get_r2, bad_index, 0)
+            self.assertRaises(IndexError, ldc.get_r2, 0, bad_index)
+
+    def test_get_r2_interface(self):
+        ts = self.get_tree_sequence()
+        ldc = _msprime.LdCalculator(ts)
+        self.assertRaises(TypeError, ldc.get_r2)
+        self.assertRaises(TypeError, ldc.get_r2, 0)
+        for bad_type in [None, "1", []]:
+            self.assertRaises(TypeError, ldc.get_r2, 0, bad_type)
+            self.assertRaises(TypeError, ldc.get_r2, bad_type, 0)
+
+    def test_get_r2_array_interface(self):
+        ts = self.get_tree_sequence()
+        ldc = _msprime.LdCalculator(ts)
+        for bad_type in [None, "1", []]:
+            self.assertRaises(TypeError, ldc.get_r2_array, bad_type, 0)
+            self.assertRaises(
+                TypeError, ldc.get_r2_array, self.get_buffer(1), bad_type)
+            self.assertRaises(
+                TypeError, ldc.get_r2_array, self.get_buffer(1), 0,
+                direction=bad_type)
+            self.assertRaises(
+                TypeError, ldc.get_r2_array, self.get_buffer(1), 0,
+                max_mutations=bad_type)
+            self.assertRaises(
+                TypeError, ldc.get_r2_array, self.get_buffer(1), 0,
+                max_distance=bad_type)
+        buffers = [b'bytes', bytes()]
+        for bad_buff in buffers:
+            self.assertRaises(BufferError, ldc.get_r2_array, bad_buff, 0)
+        for j in range(min(10, ts.get_num_mutations())):
+            buff = self.get_buffer(j)
+            # If we pass a buffer of a given size we should get back this
+            # number of values.
+            v = ldc.get_r2_array(buff, 0)
+            self.assertEqual(v, j)
+            v = ldc.get_r2_array(buff, 0, max_mutations=j)
+            self.assertEqual(v, j)
+            # If we set max_mutations to > size of the buffer this should
+            # be an error.
+            for k in range(1, 5):
+                self.assertRaises(
+                    BufferError, ldc.get_r2_array, buff, 0,
+                    max_mutations=j + k)
+        for bad_direction in [0, -2, 2, 10**6]:
+            self.assertRaises(
+                ValueError, ldc.get_r2_array, self.get_buffer(0), 0,
+                direction=bad_direction)
+        for bad_distance in [-1e-6, -1, -1e6]:
+            self.assertRaises(
+                ValueError, ldc.get_r2_array, self.get_buffer(0), 0,
+                max_distance=bad_distance)
+
+    def test_get_r2_array_from_new(self):
+        ts = self.get_tree_sequence()
+        self.assertGreater(ts.get_num_trees(), 1)
+        self.assertGreater(ts.get_num_mutations(), 3)
+        m = ts.get_num_mutations()
+        buff = self.get_buffer(m)
+        # We create a new instance of ldc each time to make sure we get
+        # the correct behaviour on a new instance.
+        ldc = _msprime.LdCalculator(ts)
+        v = ldc.get_r2_array(
+            buff, 0, direction=_msprime.FORWARD, max_mutations=1)
+        self.assertEqual(v, 1)
+        ldc = _msprime.LdCalculator(ts)
+        v = ldc.get_r2_array(
+            buff, 0, direction=_msprime.REVERSE, max_mutations=1)
+        self.assertEqual(v, 0)
+        ldc = _msprime.LdCalculator(ts)
+        v = ldc.get_r2_array(
+            buff, m - 1, direction=_msprime.FORWARD, max_mutations=1)
+        self.assertEqual(v, 0)
+        ldc = _msprime.LdCalculator(ts)
+        v = ldc.get_r2_array(
+            buff, m - 1, direction=_msprime.REVERSE, max_mutations=1)
+        self.assertEqual(v, 1)
+        ldc = _msprime.LdCalculator(ts)
+        v = ldc.get_r2_array(
+            buff, m // 2, direction=_msprime.FORWARD, max_mutations=1)
+        self.assertEqual(v, 1)
+        ldc = _msprime.LdCalculator(ts)
+        v = ldc.get_r2_array(
+            buff, m // 2, direction=_msprime.REVERSE, max_mutations=1)
+        self.assertEqual(v, 1)
+
+    def test_get_r2_array_random_seeks(self):
+        num_start_positions = 100
+        num_retries = 3
+        ts = self.get_tree_sequence()
+        self.assertGreater(ts.get_num_trees(), 1)
+        self.assertGreater(ts.get_num_mutations(), 3)
+        m = ts.get_num_mutations()
+        buff = self.get_buffer(m)
+        start_positions = [
+            random.randint(0, m) for _ in range(num_start_positions)]
+        directions = [
+            random.choice([_msprime.FORWARD, _msprime.REVERSE])
+            for _ in range(num_start_positions)]
+        results = [[] for j in range(num_start_positions)]
+        ldc = _msprime.LdCalculator(ts)
+        for _ in range(num_retries):
+            for j in range(num_start_positions):
+                v = ldc.get_r2_array(
+                    buff, start_positions[j], direction=directions[j],
+                    max_mutations=10)
+                self.assertLessEqual(v, 10)
+                results[j].append(list(self.get_array(buff, v)))
+        for result in results:
+            self.assertEqual(len(result), num_retries)
+            for rp in result[1:]:
+                self.assertEqual(result[0], rp)

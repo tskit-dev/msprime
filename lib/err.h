@@ -33,7 +33,7 @@
 #define MSP_ERR_NO_MEMORY                                           -2
 #define MSP_ERR_IO                                                  -3
 #define MSP_ERR_FILE_FORMAT                                         -4
-
+#define MSP_ERR_REFCOUNT_NONZERO                                    -5
 #define MSP_ERR_BAD_STATE                                           -6
 #define MSP_ERR_BAD_PARAM_VALUE                                     -7
 #define MSP_ERR_OUT_OF_BOUNDS                                       -8
@@ -43,7 +43,7 @@
 #define MSP_ERR_LINKS_OVERFLOW                                      -12
 #define MSP_ERR_HDF5                                                -13
 #define MSP_ERR_BAD_POPULATION_ID                                   -14
-
+#define MSP_ERR_DUPLICATE_TRACKED_LEAF                              -15
 #define MSP_ERR_BAD_ORDERING                                        -16
 #define MSP_ERR_BAD_MUTATION                                        -17
 #define MSP_ERR_UNSUPPORTED_OPERATION                               -18
@@ -60,7 +60,6 @@
 #define MSP_ERR_NONBINARY_NEWICK                                    -29
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
+#define MSP_ERR_PTHREAD                                             -32
 
-#define MSP_ERR_use_for_next_err_code1                              -5
-#define MSP_ERR_use_for_next_err_code2                              -15
 #endif /*__ERR_H__*/

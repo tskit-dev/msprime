@@ -753,6 +753,87 @@ class Simulator(object):
                 time, 0, sep="\t", file=out)
 
 
+class Tree(object):
+    """
+    A tree in a tree sequence. This class represents a single point
+    in the seqeunce of trees and has next() and prev() methods to
+    change the state of the tree into other trees in the sequence.
+    """
+    def __init__(self, left, right, node, children, time):
+        self.__left = left
+        self.__right = right
+        self.__node = node
+        self.__children = children
+        self.__time = time
+        self.__num_records = len(left)
+        self.__left_order = sorted(
+            range(self.__num_records), key=lambda j: (left[j], time[j]))
+        self.__right_order = sorted(
+            range(self.__num_records), key=lambda j: (right[j], -time[j]))
+        self.__direction = -1
+        self.parent = [-1 for j in range(max(node) + 1)]
+        self.num_trees = len(set(left))
+
+    def first(self):
+        self.__left_index = 0
+        self.__right_index = 0
+        self.__direction = 1
+        self.index = -1
+        self.next()
+
+    def last(self):
+        self.__left_index = self.__num_records - 1
+        self.__right_index = self.__num_records - 1
+        self.__direction = -1
+        self.index = self.num_trees
+        self.prev()
+
+    def next(self):
+        if self.index == self.num_trees - 1:
+            raise ValueError("Cannot call next on last tree")
+        j = int(self.__direction != 1)
+        self.__direction = 1
+        il = self.__left_index + j
+        ir = self.__right_index + j
+        x = self.__left[self.__left_order[il]]
+        M = self.__num_records
+        while self.__right[self.__right_order[ir]] == x:
+            h = self.__right_order[ir]
+            for q in self.__children[h]:
+                self.parent[q] = -1
+            ir += 1
+        while il < M and self.__left[self.__left_order[il]] == x:
+            h = self.__left_order[il]
+            for q in self.__children[h]:
+                self.parent[q] = self.__node[h]
+            il += 1
+        self.__left_index = il
+        self.__right_index = ir
+        self.index += 1
+
+    def prev(self):
+        if self.index == 0:
+            raise ValueError("Cannot call prev on the first tree")
+        j = int(self.__direction != -1)
+        self.__direction = -1
+        il = self.__left_index - j
+        ir = self.__right_index - j
+        x = self.__right[self.__right_order[ir]]
+        while self.__left[self.__left_order[il]] == x:
+            h = self.__left_order[il]
+            for q in self.__children[h]:
+                self.parent[q] = -1
+            il -= 1
+        while ir >= 0 and self.__right[self.__right_order[ir]] == x:
+            h = self.__right_order[ir]
+            for q in self.__children[h]:
+                self.parent[q] = self.__node[h]
+            ir -= 1
+        self.__left_index = il
+        self.__right_index = ir
+        self.index -= 1
+
+
 def generate_trees(l, r, u, c, t):
     """
     Algorithm T. Sequentially visits all trees in the specified
@@ -777,6 +858,32 @@ def generate_trees(l, r, u, c, t):
             for q in c[h]:
                 pi[q] = u[h]
             j += 1
+        yield pi
+
+def reverse_generate_trees(l, r, u, c, t):
+    """
+    Reversed version of Algorithm T. Sequentially visits all trees
+    in the specified tree sequence in right-to-left order.
+    """
+    # Calculate the index vectors
+    M = len(l)
+    O = sorted(range(M), key=lambda j: (l[j], t[j]))
+    I = sorted(range(M), key=lambda j: (r[j], -t[j]))
+    pi = [-1 for j in range(max(u) + 1)]
+    j = M - 1
+    k = M - 1
+    while j >= 0:
+        x = r[I[j]]
+        while l[O[k]] == x:
+            h = O[k]
+            for q in c[h]:
+                pi[q] = -1
+            k -= 1
+        while j >= 0 and r[I[j]] == x:
+            h = I[j]
+            for q in c[h]:
+                pi[q] = u[h]
+            j -= 1
         yield pi
 
 def count_leaves(l, r, u, c, t, S):
@@ -1012,20 +1119,63 @@ def process_trees(records_file):
             children = list(map(int, toks[3].split(",")))
             c.append(children)
             t.append(float(toks[4]))
-    N = len(l)
-    # print("Trees:")
-    # for pi in generate_trees(l, r, u, c, t):
-    #     print("\t", pi)
-    n = min(u)
-    S = set(range(n))
+    # N = len(l)
+    print("Trees:")
+    forward = []
+    for pi in generate_trees(l, r, u, c, t):
+        forward.append(list(pi))
+    T = len(forward)
+    print("START")
+    tree = Tree(l, r, u, c, t)
+    tree.first()
+    for j in range(T):
+        assert tree.index == j
+        assert tree.parent == forward[j]
+        if j < T - 1:
+            tree.next()
+
+    tree = Tree(l, r, u, c, t)
+    tree.last()
+    for j in range(T):
+        print(j, tree.index, T)
+        assert tree.index == T - j - 1
+        assert tree.parent == forward[T - j - 1]
+        if j < T - 1:
+            tree.prev()
+
+    tree = Tree(l, r, u, c, t)
+    tree.first()
+    print("first done")
+    assert tree.parent == forward[0]
+    assert tree.index == 0
+    for _ in range(1):
+        for _ in range(T // 2):
+            tree.next()
+            print("\t", tree.index)
+            assert tree.parent == forward[tree.index]
+        for j in range(10):
+            print("Reverse")
+            for _ in range(T // 3):
+                tree.prev()
+                print("\t", tree.index)
+                assert tree.parent == forward[tree.index]
+            print("Forward")
+            for _ in range(T // 3):
+                tree.next()
+                print("\t", tree.index)
+                assert tree.parent == forward[tree.index]
+
+
+    # n = min(u)
+    # S = set(range(n))
+    # # print("Counts:")
+    # # for pi, beta in count_leaves(l, r, u, c, t, S):
+    # #     print("\t", beta)
     # print("Counts:")
-    # for pi, beta in count_leaves(l, r, u, c, t, S):
-    #     print("\t", beta)
-    print("Counts:")
-    for pi, xi, head, tail in leaf_sets(l, r, u, c, t, S):
-        check_consistency(n, pi, xi, head, tail)
-        print(pi)
-        print(xi)
+    # for pi, xi, head, tail in leaf_sets(l, r, u, c, t, S):
+    #     check_consistency(n, pi, xi, head, tail)
+    #     print(pi)
+    #     print(xi)
 
 def run_simulate(args):
     """

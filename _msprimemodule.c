@@ -69,9 +69,8 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
-    TreeSequence *tree_sequence;
     SparseTree *sparse_tree;
-    sparse_tree_iterator_t *sparse_tree_iterator;
+    int first;
 } SparseTreeIterator;
 
 typedef struct {
@@ -112,10 +111,20 @@ typedef struct {
     vargen_t *variant_generator;
 } VariantGenerator;
 
+typedef struct {
+    PyObject_HEAD
+    TreeSequence *tree_sequence;
+    ld_calc_t *ld_calc;
+} LdCalculator;
+
 static void
 handle_library_error(int err)
 {
-    PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+    if (err == MSP_ERR_OUT_OF_BOUNDS) {
+        PyErr_SetString(PyExc_IndexError, msp_strerror(err));
+    } else{
+        PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+    }
 }
 
 static void
@@ -457,8 +466,9 @@ convert_mutations(mutation_t *mutations, size_t num_mutations)
         goto out;
     }
     for (j = 0; j < num_mutations; j++) {
-        py_mutation = Py_BuildValue("dI", mutations[j].position,
-                (unsigned int) mutations[j].node);
+        py_mutation = Py_BuildValue("dIn", mutations[j].position,
+                (unsigned int) mutations[j].node,
+                (Py_ssize_t) mutations[j].index);
         if (py_mutation == NULL) {
             Py_DECREF(l);
             goto out;
@@ -2479,9 +2489,9 @@ TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
             PyErr_SetString(PyExc_TypeError, "not a tuple");
             goto out;
         }
-        if (PyTuple_Size(item) != 2) {
+        if (PyTuple_Size(item) < 2) {
             PyErr_SetString(PyExc_ValueError,
-                    "mutations must (node, pos) tuples");
+                    "mutations must (node, pos, ...) tuples");
             goto out;
         }
         pos = PyTuple_GetItem(item, 0);
@@ -2597,7 +2607,7 @@ static PyObject *
 TreeSequence_get_mutations(TreeSequence *self)
 {
     PyObject *ret = NULL;
-    mutation_t *mutations = NULL;
+    mutation_t *mutations;
     size_t num_mutations;
     int err;
 
@@ -2605,21 +2615,13 @@ TreeSequence_get_mutations(TreeSequence *self)
         goto out;
     }
     num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
-    mutations = PyMem_Malloc(num_mutations * sizeof(mutation_t));
-    if (mutations == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = tree_sequence_get_mutations(self->tree_sequence, mutations);
+    err = tree_sequence_get_mutations(self->tree_sequence, &mutations);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = convert_mutations(mutations, num_mutations);
 out:
-    if (mutations != NULL) {
-        PyMem_Free(mutations);
-    }
     return ret;
 }
 
@@ -2634,6 +2636,21 @@ TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
     }
     num_records = tree_sequence_get_num_coalescence_records(self->tree_sequence);
     ret = Py_BuildValue("n", (Py_ssize_t) num_records);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_num_trees(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_trees;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_trees = tree_sequence_get_num_trees(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_trees);
 out:
     return ret;
 }
@@ -2817,6 +2834,8 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the record at the specified index."},
     {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
         METH_NOARGS, "Returns the number of coalescence records." },
+    {"get_num_trees", (PyCFunction) TreeSequence_get_num_trees,
+        METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
@@ -2916,18 +2935,19 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "tracked_leaves", NULL};
+    static char *kwlist[] = {"tree_sequence", "flags", "tracked_leaves",
+        NULL};
     PyObject *py_tracked_leaves = NULL;
     TreeSequence *tree_sequence = NULL;
     uint32_t *tracked_leaves = NULL;
-    int flags = MSP_COUNT_LEAVES;
+    int flags = 0;
     uint32_t j, n, num_tracked_leaves;
     PyObject *item;
 
     self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
-            &TreeSequenceType, &tree_sequence, &PyList_Type,
-            &py_tracked_leaves)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|iO!", kwlist,
+            &TreeSequenceType, &tree_sequence,
+            &flags, &PyList_Type, &py_tracked_leaves)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -2938,6 +2958,11 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     n = tree_sequence_get_sample_size(tree_sequence->tree_sequence);
     num_tracked_leaves = 0;
     if (py_tracked_leaves != NULL) {
+        if (!flags & MSP_LEAF_COUNTS) {
+            PyErr_SetString(PyExc_ValueError,
+                "Cannot specified tracked_leaves without count_leaves flag");
+            goto out;
+        }
         num_tracked_leaves = PyList_Size(py_tracked_leaves);
     }
     tracked_leaves = PyMem_Malloc(num_tracked_leaves * sizeof(uint32_t));
@@ -2962,16 +2987,19 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tree_sequence_alloc_sparse_tree(tree_sequence->tree_sequence,
-            self->sparse_tree, tracked_leaves, num_tracked_leaves, flags);
+    err = sparse_tree_alloc(self->sparse_tree, tree_sequence->tree_sequence,
+           flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    err = sparse_tree_clear(self->sparse_tree);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
+    if (flags & MSP_LEAF_COUNTS) {
+        err = sparse_tree_set_tracked_leaves(self->sparse_tree, num_tracked_leaves,
+                tracked_leaves);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -3060,14 +3088,14 @@ out:
 }
 
 static PyObject *
-SparseTree_get_count_leaves(SparseTree *self)
+SparseTree_get_flags(SparseTree *self)
 {
     PyObject *ret = NULL;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    ret = PyBool_FromLong(self->sparse_tree->flags & MSP_COUNT_LEAVES);
+    ret = Py_BuildValue("i", self->sparse_tree->flags);
 out:
     return ret;
 }
@@ -3307,8 +3335,8 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the right-most coordinate (exclusive)." },
     {"get_mutations", (PyCFunction) SparseTree_get_mutations, METH_NOARGS,
             "Returns the list of mutations on this tree." },
-    {"get_count_leaves", (PyCFunction) SparseTree_get_count_leaves, METH_NOARGS,
-            "Returns True if fast leaf counting is enabled." },
+    {"get_flags", (PyCFunction) SparseTree_get_flags, METH_NOARGS,
+            "Returns the value of the flags variable." },
     {"get_num_mutations", (PyCFunction) SparseTree_get_num_mutations, METH_NOARGS,
             "Returns the number of mutations on this tree." },
     {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
@@ -3706,22 +3734,12 @@ static int
 SparseTreeIterator_check_state(SparseTreeIterator *self)
 {
     int ret = 0;
-    if (self->sparse_tree_iterator == NULL) {
-        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
-        ret = -1;
-    }
     return ret;
 }
 
 static void
 SparseTreeIterator_dealloc(SparseTreeIterator* self)
 {
-    if (self->sparse_tree_iterator != NULL) {
-        sparse_tree_iterator_free(self->sparse_tree_iterator);
-        PyMem_Free(self->sparse_tree_iterator);
-        self->sparse_tree_iterator = NULL;
-    }
-    Py_XDECREF(self->tree_sequence);
     Py_XDECREF(self->sparse_tree);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -3730,39 +3748,18 @@ static int
 SparseTreeIterator_init(SparseTreeIterator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
-    int err;
-    static char *kwlist[] = {"tree_sequence", "sparse_tree", NULL};
-    TreeSequence *tree_sequence;
+    static char *kwlist[] = {"sparse_tree", NULL};
     SparseTree *sparse_tree;
 
-    self->sparse_tree_iterator = NULL;
-    self->tree_sequence = NULL;
+    self->first = 1;
     self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!", kwlist,
-            &TreeSequenceType, &tree_sequence,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
             &SparseTreeType, &sparse_tree)) {
-        goto out;
-    }
-    self->tree_sequence = tree_sequence;
-    Py_INCREF(self->tree_sequence);
-    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
     }
     self->sparse_tree = sparse_tree;
     Py_INCREF(self->sparse_tree);
     if (SparseTree_check_sparse_tree(self->sparse_tree) != 0) {
-        goto out;
-    }
-    self->sparse_tree_iterator = PyMem_Malloc(sizeof(sparse_tree_iterator_t));
-    if (self->sparse_tree_iterator == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = sparse_tree_iterator_alloc(self->sparse_tree_iterator,
-            self->tree_sequence->tree_sequence,
-            self->sparse_tree->sparse_tree);
-    if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = 0;
@@ -3779,7 +3776,13 @@ SparseTreeIterator_next(SparseTreeIterator  *self)
     if (SparseTreeIterator_check_state(self) != 0) {
         goto out;
     }
-    err = sparse_tree_iterator_next(self->sparse_tree_iterator);
+
+    if (self->first) {
+        err = sparse_tree_first(self->sparse_tree->sparse_tree);
+        self->first = 0;
+    } else {
+        err = sparse_tree_next(self->sparse_tree->sparse_tree);
+    }
     if (err < 0) {
         handle_library_error(err);
         goto out;
@@ -4326,12 +4329,12 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
     }
-    self->variant_generator = PyMem_Malloc(sizeof(hapgen_t));
+    self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
     if (self->variant_generator == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    memset(self->variant_generator, 0, sizeof(hapgen_t));
+    memset(self->variant_generator, 0, sizeof(vargen_t));
     err = vargen_alloc(self->variant_generator,
             self->tree_sequence->tree_sequence);
     if (err != 0) {
@@ -4412,6 +4415,217 @@ static PyTypeObject VariantGeneratorType = {
     0,                         /* tp_dictoffset */
     (initproc)VariantGenerator_init,      /* tp_init */
 };
+
+/*===================================================================
+ * LdCalculator
+ *===================================================================
+ */
+
+static int
+LdCalculator_check_state(LdCalculator *self)
+{
+    int ret = 0;
+    if (self->ld_calc == NULL) {
+        PyErr_SetString(PyExc_SystemError, "converter not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+LdCalculator_dealloc(LdCalculator* self)
+{
+    if (self->ld_calc != NULL) {
+        ld_calc_free(self->ld_calc);
+        PyMem_Free(self->ld_calc);
+        self->ld_calc = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+LdCalculator_init(LdCalculator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", NULL};
+    TreeSequence *tree_sequence;
+
+    self->ld_calc = NULL;
+    self->tree_sequence = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    self->ld_calc = PyMem_Malloc(sizeof(ld_calc_t));
+    if (self->ld_calc == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->ld_calc, 0, sizeof(ld_calc_t));
+    err = ld_calc_alloc(self->ld_calc, self->tree_sequence->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+LdCalculator_get_r2(LdCalculator *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t a, b;
+    double r2;
+
+    if (LdCalculator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "nn", &a, &b)) {
+        goto out;
+    }
+    Py_BEGIN_ALLOW_THREADS
+    err = ld_calc_get_r2(self->ld_calc, (size_t) a, (size_t) b, &r2);
+    Py_END_ALLOW_THREADS
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("d", r2);
+out:
+    return ret;
+}
+
+static PyObject *
+LdCalculator_get_r2_array(LdCalculator *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    static char *kwlist[] = {
+        "dest", "source_index", "direction", "max_mutations",
+        "max_distance", NULL};
+    PyObject *dest = NULL;
+    Py_buffer buffer;
+    Py_ssize_t source_index;
+    Py_ssize_t max_mutations = -1;
+    double max_distance = DBL_MAX;
+    int direction = MSP_DIR_FORWARD;
+    size_t num_r2_values = 0;
+    int buffer_acquired = 0;
+
+    if (LdCalculator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "On|ind", kwlist,
+            &dest, &source_index, &direction, &max_mutations, &max_distance)) {
+        goto out;
+    }
+    if (direction != MSP_DIR_FORWARD && direction != MSP_DIR_REVERSE) {
+        PyErr_SetString(PyExc_ValueError,
+            "direction must be FORWARD or REVERSE");
+        goto out;
+    }
+    if (max_distance < 0) {
+        PyErr_SetString(PyExc_ValueError, "max_distance must be >= 0");
+        goto out;
+    }
+    if (!PyObject_CheckBuffer(dest)) {
+        PyErr_SetString(PyExc_TypeError,
+            "dest buffer must support the Python buffer protocol.");
+        goto out;
+    }
+    if (PyObject_GetBuffer(dest, &buffer, PyBUF_SIMPLE|PyBUF_WRITABLE) != 0) {
+        goto out;
+    }
+    buffer_acquired = 1;
+    if (max_mutations == -1) {
+        max_mutations = buffer.len / sizeof(double);
+    } else if (max_mutations * sizeof(double) > buffer.len) {
+        PyErr_SetString(PyExc_BufferError,
+            "dest buffer is too small for the results");
+        goto out;
+    }
+
+    Py_BEGIN_ALLOW_THREADS
+    err = ld_calc_get_r2_array(
+        self->ld_calc, (size_t) source_index, direction,
+        (size_t) max_mutations, max_distance,
+        (double *) buffer.buf, &num_r2_values);
+    Py_END_ALLOW_THREADS
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) num_r2_values);
+out:
+    if (buffer_acquired) {
+        PyBuffer_Release(&buffer);
+    }
+    return ret;
+}
+
+static PyMemberDef LdCalculator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef LdCalculator_methods[] = {
+    {"get_r2", (PyCFunction) LdCalculator_get_r2, METH_VARARGS,
+        "Returns the value of the r2 statistic between the specified pair of "
+        "mutation indexes"},
+    {"get_r2_array", (PyCFunction) LdCalculator_get_r2_array,
+        METH_VARARGS|METH_KEYWORDS,
+        "Returns r2 statistic for a given mutation over specified range"},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject LdCalculatorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.LdCalculator",             /* tp_name */
+    sizeof(LdCalculator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)LdCalculator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "LdCalculator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    LdCalculator_methods,             /* tp_methods */
+    LdCalculator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)LdCalculator_init,      /* tp_init */
+};
+
 
 /*===================================================================
  * Module level functions
@@ -4605,6 +4819,13 @@ init_msprime(void)
     Py_INCREF(&VariantGeneratorType);
     PyModule_AddObject(module, "VariantGenerator",
             (PyObject *) &VariantGeneratorType);
+    /* LdCalculator type */
+    LdCalculatorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&LdCalculatorType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&LdCalculatorType);
+    PyModule_AddObject(module, "LdCalculator", (PyObject *) &LdCalculatorType);
     /* Errors and constants */
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
@@ -4617,6 +4838,13 @@ init_msprime(void)
     PyModule_AddIntConstant(module, "MSP_ORDER_TIME", MSP_ORDER_TIME);
     PyModule_AddIntConstant(module, "MSP_ORDER_LEFT", MSP_ORDER_LEFT);
     PyModule_AddIntConstant(module, "MSP_ORDER_RIGHT", MSP_ORDER_RIGHT);
+    /* Tree flags */
+    PyModule_AddIntConstant(module, "LEAF_COUNTS", MSP_LEAF_COUNTS);
+    PyModule_AddIntConstant(module, "LEAF_LISTS", MSP_LEAF_LISTS);
+    /* Directions */
+    PyModule_AddIntConstant(module, "FORWARD", MSP_DIR_FORWARD);
+    PyModule_AddIntConstant(module, "REVERSE", MSP_DIR_REVERSE);
+
     /* turn off GSL error handler so we don't abort on memory error */
     gsl_set_error_handler_off();
 

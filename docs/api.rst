@@ -147,19 +147,29 @@ The :class:`.TreeSequence` class represents a sequence of correlated trees
 output by a simulation. The :class:`.SparseTree` class represents a single
 tree in this sequence.
 
-.. data:: msprime.NULL_NODE = - 1
+.. data:: msprime.NULL_NODE = -1
 
     Special reserved value, representing the null node. If the parent of a
     given node is null, then this node is a root. Similarly, if the children of
     a node are null, this node is a leaf.
 
-.. data:: msprime.NULL_POPULATION = - 1
+.. data:: msprime.NULL_POPULATION = -1
 
     Special reserved value, representing the null population ID. If the
     population associated with a particular tree node is not defined,
     or population information was not available in the underlying
     tree sequence, then this value will be returned by
     :meth:`.SparseTree.get_population`.
+
+.. data:: msprime.FORWARD = 1
+
+    Constant representing the forward direction of travel (i.e.,
+    increasing coordinate values).
+
+.. data:: msprime.REVERSE = -1
+
+    Constant representing the reverse direction of travel (i.e.,
+    decreasing coordinate values).
 
 .. autofunction:: msprime.load
 
@@ -169,4 +179,14 @@ tree in this sequence.
     :members:
 
 .. autoclass:: msprime.SparseTree()
+    :members:
+
+**********************
+Calculating statistics
+**********************
+
+The ``msprime`` API provides methods for efficiently calculating
+population genetics statistics from a given :class:`.TreeSequence`.
+
+.. autoclass:: msprime.LdCalculator(tree_sequence)
     :members:

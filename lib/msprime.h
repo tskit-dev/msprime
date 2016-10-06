@@ -27,6 +27,7 @@
 #include <stdio.h>
 
 #include <gsl/gsl_rng.h>
+#include <pthread.h>
 
 #include "err.h"
 #include "avl.h"
@@ -42,13 +43,13 @@
 #define MSP_ORDER_LEFT 1
 #define MSP_ORDER_RIGHT 2
 
-#define MSP_COUNT_LEAVES 1
+#define MSP_LEAF_COUNTS  1
+#define MSP_LEAF_LISTS   2
+
+#define MSP_DIR_FORWARD 1
+#define MSP_DIR_REVERSE -1
 
 #define MAX_BRANCH_LENGTH_STRING 24
-
-/* printf pattern to print out double values losslessly;
- * TODO put this into a private header file somewhere so it's not exported */
-#define MSP_LOSSLESS_DBL "%.17g"
 
 /* The root node indicator */
 #define MSP_NULL_NODE UINT32_MAX
@@ -215,6 +216,12 @@ typedef struct {
     double *rates;
 } recomb_map_t;
 
+typedef struct {
+    double position;
+    uint32_t node;
+    size_t index;
+} mutation_t;
+
 /* Tree sequences */
 typedef struct {
     uint32_t sample_size;
@@ -242,6 +249,9 @@ typedef struct {
     struct {
         uint32_t *node;
         double *position;
+        size_t *num_tree_mutations;
+        mutation_t *tree_mutations_mem;
+        mutation_t **tree_mutations;
     } mutations;
     char **provenance_strings;
     size_t num_provenance_strings;
@@ -250,6 +260,12 @@ typedef struct {
     size_t num_records;
     size_t num_mutations;
     coalescence_record_t returned_record;
+    /* The number of trees referencing this tree sequence.
+     * This is NOT threadsafe! TODO when we want to have trees
+     * in many threads referencing a single tree sequence we will
+     * need to place a mutex of some sort around this.
+     */
+    int refcount;
 } tree_sequence_t;
 
 typedef struct node_record {
@@ -259,11 +275,6 @@ typedef struct node_record {
     double time;
     struct node_record *next;
 } node_record_t;
-
-typedef struct {
-    double position;
-    uint32_t node;
-} mutation_t;
 
 typedef struct leaf_list_node {
     uint32_t node;
@@ -283,10 +294,15 @@ typedef struct {
 } tree_diff_iterator_t;
 
 typedef struct {
-    int flags;
+    tree_sequence_t *tree_sequence;
     uint32_t sample_size;
-    size_t num_nodes;
+    uint32_t num_nodes;
+    int flags;
     uint32_t root;
+    /* These are indexes into the breakpoints array */
+    uint32_t left_breakpoint;
+    uint32_t right_breakpoint;
+    /* Left and right physical coordinates of the tree */
     double left;
     double right;
     uint8_t *population;
@@ -294,12 +310,17 @@ typedef struct {
     uint32_t *num_children;
     uint32_t **children;
     double *time;
-    uint32_t index;
+    size_t index;
     /* These are involved in the optional leaf tracking; num_leaves counts
      * all leaves below a give node, and num_tracked_leaves counts those
      * from a specific subset. */
     uint32_t *num_leaves;
     uint32_t *num_tracked_leaves;
+    /* All nodes that are marked during a particular transition are marked
+     * with a given value. */
+    uint8_t *marked;
+    uint8_t mark;
+    /* These are for the optional leaf list tracking. */
     leaf_list_node_t **leaf_list_head;
     leaf_list_node_t **leaf_list_tail;
     leaf_list_node_t *leaf_list_node_mem;
@@ -309,20 +330,11 @@ typedef struct {
     /* mutation storage */
     mutation_t *mutations;
     size_t num_mutations;
-    size_t max_mutations;
+    /* Counters needed for next() and prev() transformations. */
+    int direction;
+    size_t left_index;
+    size_t right_index;
 } sparse_tree_t;
-
-typedef struct {
-    uint32_t sample_size;
-    double sequence_length;
-    size_t num_nodes;
-    size_t num_records;
-    tree_sequence_t *tree_sequence;
-    sparse_tree_t *tree;
-    size_t insertion_index;
-    size_t removal_index;
-    size_t mutation_index;
-} sparse_tree_iterator_t;
 
 typedef struct newick_tree_node {
     uint32_t id;
@@ -354,7 +366,6 @@ typedef struct {
     uint64_t *haplotype_matrix;
     char *haplotype;
     sparse_tree_t tree;
-    sparse_tree_iterator_t tree_iterator;
 } hapgen_t;
 
 typedef struct {
@@ -366,7 +377,6 @@ typedef struct {
     size_t tree_mutation_index;
     int finished;
     sparse_tree_t tree;
-    sparse_tree_iterator_t tree_iterator;
 } vargen_t;
 
 typedef struct {
@@ -381,6 +391,17 @@ typedef struct {
     unsigned long last_position;
     vargen_t *vargen;
 } vcf_converter_t;
+
+typedef struct {
+    sparse_tree_t *outer_tree;
+    sparse_tree_t *inner_tree;
+    mutation_t *mutations;
+    size_t num_mutations;
+    int tree_changed;
+    tree_sequence_t *tree_sequence;
+    /* Only one method on a ld_calc can be in use at a given time */
+    pthread_mutex_t work_mutex;
+} ld_calc_t;
 
 typedef struct {
     gsl_rng *rng;
@@ -462,22 +483,22 @@ int tree_sequence_load_records(tree_sequence_t *self,
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
+int tree_sequence_increment_refcount(tree_sequence_t *self);
+int tree_sequence_decrement_refcount(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
+size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 
 int tree_sequence_get_record(tree_sequence_t *self, size_t index,
         coalescence_record_t **record, int order);
-int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t *mutations);
+int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t **mutations);
 int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u,
         sample_t *sample);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     uint32_t *samples, uint32_t num_samples, double *pi);
-int tree_sequence_alloc_sparse_tree(tree_sequence_t *self,
-        sparse_tree_t *tree, uint32_t *tracked_leaves,
-        uint32_t num_tracked_leaves, int flags);
 int tree_sequence_set_samples(tree_sequence_t *self, size_t sample_size,
         sample_t *samples);
 int tree_sequence_set_mutations(tree_sequence_t *self,
@@ -494,11 +515,15 @@ int tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
         node_record_t **nodes_out, node_record_t **nodes_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out);
 
-int sparse_tree_alloc(sparse_tree_t *self, uint32_t sample_size,
-        uint32_t num_nodes, size_t max_mutations, uint32_t *tracked_leaves,
-        uint32_t num_tracked_leaves, int flags);
+int sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence,
+        int flags);
 int sparse_tree_free(sparse_tree_t *self);
-int sparse_tree_clear(sparse_tree_t *self);
+int sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source);
+int sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other);
+int sparse_tree_set_tracked_leaves(sparse_tree_t *self,
+        uint32_t num_tracked_leaves, uint32_t *tracked_leaves);
+int sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
+        leaf_list_node_t *head, leaf_list_node_t *tail);
 int sparse_tree_get_root(sparse_tree_t *self, uint32_t *root);
 int sparse_tree_get_parent(sparse_tree_t *self, uint32_t u, uint32_t *parent);
 int sparse_tree_get_children(sparse_tree_t *self, uint32_t u,
@@ -514,12 +539,12 @@ int sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
         leaf_list_node_t **head, leaf_list_node_t **tail);
 int sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
         mutation_t **mutations);
-
-int sparse_tree_iterator_alloc(sparse_tree_iterator_t *self,
-        tree_sequence_t *tree_sequence, sparse_tree_t *tree);
-int sparse_tree_iterator_free(sparse_tree_iterator_t *self);
-int sparse_tree_iterator_next(sparse_tree_iterator_t *self);
-void sparse_tree_iterator_print_state(sparse_tree_iterator_t *self, FILE *out);
+void sparse_tree_print_state(sparse_tree_t *self, FILE *out);
+/* Method for positioning the tree in the sequence. */
+int sparse_tree_first(sparse_tree_t *self);
+int sparse_tree_last(sparse_tree_t *self);
+int sparse_tree_next(sparse_tree_t *self);
+int sparse_tree_prev(sparse_tree_t *self);
 
 int newick_converter_alloc(newick_converter_t *self,
         tree_sequence_t *tree_sequence, size_t precision, double Ne);
@@ -534,6 +559,14 @@ int vcf_converter_get_header(vcf_converter_t *self, char **header);
 int vcf_converter_next(vcf_converter_t *self, char **record);
 int vcf_converter_free(vcf_converter_t *self);
 void vcf_converter_print_state(vcf_converter_t *self, FILE *out);
+
+int ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence);
+int ld_calc_free(ld_calc_t *self);
+void ld_calc_print_state(ld_calc_t *self, FILE *out);
+int ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2);
+int ld_calc_get_r2_array(ld_calc_t *self, size_t a, int direction,
+        size_t max_mutations, double max_distance,
+        double *r2, size_t *num_r2_values);
 
 int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);

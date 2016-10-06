@@ -53,7 +53,7 @@ CoalescenceRecord = collections.namedtuple(
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["position", "node"])
+    ["position", "node", "index"])
 
 
 Variant = collections.namedtuple(
@@ -104,9 +104,9 @@ class TreeDrawer(object):
         self._leaf_x = 1
         self._assign_x_coordinates(self._tree.get_root())
         self._mutations = []
-        for pos, u in tree.mutations():
-            x = self._x_coords[u], self._y_coords[u]
-            v = tree.get_parent(u)
+        for mutation in tree.mutations():
+            x = self._x_coords[mutation.node], self._y_coords[mutation.node]
+            v = tree.get_parent(mutation.node)
             y = self._x_coords[v], self._y_coords[v]
             z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
             self._mutations.append(z)
@@ -408,38 +408,58 @@ class SparseTree(object):
     def mutations(self):
         """
         Returns an iterator over the mutations in this tree. Each
-        mutation is represented as a tuple :math:`(x, u)` where :math:`x`
+        mutation is represented as a tuple :math:`(x, u, j)` where :math:`x`
         is the position of the mutation in the sequence in chromosome
-        coordinates and :math:`u` is the node over which the mutation
-        occurred. Mutations are returned in non-decreasing order of
-        position.
+        coordinates, :math:`u` is the node over which the mutation
+        occurred and :math:`j` is the zero-based index of the mutation within
+        the overall tree sequence. Mutations are returned in non-decreasing
+        order of position and increasing index.
 
         Each mutation returned is an instance of
         :func:`collections.namedtuple`, and may be accessed via the attributes
-        ``position`` and ``node`` as well as the usual positional approach.
+        ``position``, ``node`` and ``index`` as well as the usual positional
+        approach. This is the recommended interface for working with mutations
+        as it is both more readable and also ensures that code is forward
+        compatible with future extensions.
 
-        :return: An iterator of all :math:`(x, u)` tuples defining
+        :return: An iterator of all :math:`(x, u, j)` tuples defining
             the mutations in this tree.
         :rtype: iter
         """
-        for position, node in self._ll_sparse_tree.get_mutations():
-            yield Mutation(position, node)
+        for position, node, index in self._ll_sparse_tree.get_mutations():
+            yield Mutation(position, node, index)
+
+    def _leaf_generator(self, u):
+        for v in self.nodes(u):
+            if self.is_leaf(v):
+                yield v
 
     def leaves(self, u):
         """
         Returns an iterator over all the leaves in this tree underneath
         the specified node.
 
+        If the :meth:`.TreeSequence.trees` method is called with
+        ``leaf_lists=True``, this method uses an efficient algorithm to find
+        the leaves. If not, a simple traversal based method is used.
+
         :param int u: The node of interest.
         :return: An iterator over all leaves in the subtree rooted at u.
         :rtype: iterator
         """
-        return _msprime.LeafListIterator(self._ll_sparse_tree, u)
+        if self._ll_sparse_tree.get_flags() & _msprime.LEAF_LISTS:
+            return _msprime.LeafListIterator(self._ll_sparse_tree, u)
+        else:
+            return self._leaf_generator(u)
 
     def get_num_leaves(self, u):
         """
         Returns the number of leaves in this tree underneath the specified
-        node. This is a constant time operation.
+        node.
+
+        If the :meth:`.TreeSequence.trees` method is called with
+        ``leaf_counts=True`` this method is a constant time operation. If not,
+        a slower traversal based algorithm is used to count the leaves.
 
         :param int u: The node of interest.
         :return: The number of leaves in the subtree rooted at u.
@@ -450,15 +470,20 @@ class SparseTree(object):
     def get_num_tracked_leaves(self, u):
         """
         Returns the number of leaves in the set specified in the
-        ``tracked_leaves`` parameter of the :meth:`msprime.TreeSequence.trees`
-        method underneath the specified node. This is a constant time
-        operation.
+        ``tracked_leaves`` parameter of the :meth:`.TreeSequence.trees` method
+        underneath the specified node. This is a constant time operation.
 
         :param int u: The node of interest.
         :return: The number of leaves within the set of tracked leaves in
             the subtree rooted at u.
         :rtype: int
+        :raises RuntimeError: if the :meth:`.TreeSequence.trees`
+            method is not called with ``leaf_counts=True``.
         """
+        if not (self._ll_sparse_tree.get_flags() & _msprime.LEAF_COUNTS):
+            raise RuntimeError(
+                "The get_num_tracked_leaves method is only supported "
+                "when leaf_counts=True.")
         return self._ll_sparse_tree.get_num_tracked_leaves(u)
 
     def _preorder_traversal(self, u):
@@ -607,8 +632,8 @@ def simulator_factory(
             for conf in population_configurations:
                 if conf.sample_size is not None:
                     raise ValueError(
-                         "Cannot specify population configuration sample size"
-                         "and samples simultaneously")
+                        "Cannot specify population configuration sample size"
+                        "and samples simultaneously")
             the_samples = samples
     elif samples is not None:
         the_samples = samples
@@ -1227,7 +1252,7 @@ class TreeSequence(object):
         tokens = line.split()
         position = float(tokens[0])
         node = int(tokens[1])
-        return Mutation(position=position, node=node)
+        return Mutation(position=position, node=node, index=0)
 
     def load_mutations(self, input_file):
         mutations = []
@@ -1244,10 +1269,6 @@ class TreeSequence(object):
 
     def add_provenance(self, provenance):
         self._ll_tree_sequence.add_provenance_string(provenance)
-
-    def get_mutations(self):
-        # TODO should we provide this???
-        return self._ll_tree_sequence.get_mutations()
 
     def newick_trees(self, precision=3, breakpoints=None, Ne=1):
         # TODO document this method.
@@ -1324,10 +1345,7 @@ class TreeSequence(object):
         :return: The number of trees in this tree sequence.
         :rtype: int
         """
-        count = 0
-        for _ in self.trees():
-            count += 1
-        return count
+        return self._ll_tree_sequence.get_num_trees()
 
     def get_num_mutations(self):
         """
@@ -1410,22 +1428,26 @@ class TreeSequence(object):
     def mutations(self):
         """
         Returns an iterator over the mutations in this tree sequence. Each
-        mutation is represented as a tuple :math:`(x, u)` where :math:`x`
+        mutation is represented as a tuple :math:`(x, u, j)` where :math:`x`
         is the position of the mutation in the sequence in chromosome
-        coordinates and :math:`u` is the node over which the mutation
-        occurred. Mutations are returned in non-decreasing order of
-        position.
+        coordinates, :math:`u` is the node over which the mutation
+        occurred and :math:`j` is the zero-based index of the mutation within
+        the overall tree sequence. Mutations are returned in non-decreasing
+        order of position and increasing index.
 
         Each mutation returned is an instance of
         :func:`collections.namedtuple`, and may be accessed via the attributes
-        ``position`` and ``node`` as well as the usual positional approach.
+        ``position``, ``node`` and ``index`` as well as the usual positional
+        approach. This is the recommended interface for working with mutations
+        as it is both more readable and also ensures that code is forward
+        compatible with future extensions.
 
-        :return: An iterator of all :math:`(x, u)` tuples defining
-            the mutations in this tree sequence.
+        :return: An iterator of all :math:`(x, u, j)` tuples defining
+            the mutations in this tree.
         :rtype: iter
         """
-        for position, node in self._ll_tree_sequence.get_mutations():
-            yield Mutation(position, node)
+        for position, node, index in self._ll_tree_sequence.get_mutations():
+            yield Mutation(position, node, index)
 
     def breakpoints(self):
         """
@@ -1444,14 +1466,24 @@ class TreeSequence(object):
         for t in self.trees():
             yield t.get_interval()[1]
 
-    def trees(self, tracked_leaves=[]):
+    def trees(self, tracked_leaves=None, leaf_counts=True, leaf_lists=False):
         """
         Returns an iterator over the trees in this tree sequence. Each value
         returned in this iterator is an instance of
-        :class:`msprime.SparseTree`.  The ``tracked_leaves`` parameter can be
-        used to efficiently count the number of leaves in a given set that
-        exist in a particular subtree using the
-        :meth:`msprime.SparseTree.get_num_tracked_leaves` method.
+        :class:`.SparseTree`.
+
+        The ``leaf_counts`` and ``leaf_lists`` parameters control the
+        features that are enabled for the resulting trees. If ``leaf_counts``
+        is True, then it is possible to count the number of leaves underneath
+        a particular node in constant time using the :meth:`.get_num_leaves`
+        method. If ``leaf_lists`` is True a more efficient algorithm is
+        used in the :meth:`.SparseTree.leaves` method.
+
+        The ``tracked_leaves`` parameter can be used to efficiently count the
+        number of leaves in a given set that exist in a particular subtree
+        using the :meth:`.SparseTree.get_num_tracked_leaves` method. It is an
+        error to use the ``tracked_leaves`` parameter when the ``leaf_counts``
+        flag is False.
 
         :warning: Do not store the results of this iterator in a list!
            For performance reasons, the same underlying object is used
@@ -1459,15 +1491,29 @@ class TreeSequence(object):
            behaviour.
 
         :param list tracked_leaves: The list of leaves to be tracked and
-            counted using the
-            :meth:`msprime.SparseTree.get_num_tracked_leaves` method.
+            counted using the :meth:`.SparseTree.get_num_tracked_leaves`
+            method.
+        :param bool leaf_counts: If True, support constant time leaf counts
+            via the :meth:`.SparseTree.get_num_leaves` and
+            :meth:`.SparseTree.get_num_tracked_leaves` methods.
+        :param bool leaf_lists: If True, provide more efficient access
+            to the leaves beneath a give node using the
+            :meth:`.SparseTree.leaves` method.
         :return: An iterator over the sparse trees in this tree sequence.
         :rtype: iter
         """
-        ll_sparse_tree = _msprime.SparseTree(
-            self._ll_tree_sequence, tracked_leaves)
-        iterator = _msprime.SparseTreeIterator(
-            self._ll_tree_sequence, ll_sparse_tree)
+        flags = 0
+        if leaf_counts:
+            flags |= _msprime.LEAF_COUNTS
+        elif tracked_leaves is not None:
+            raise ValueError("Cannot set tracked_leaves without leaf_counts")
+        if leaf_lists:
+            flags |= _msprime.LEAF_LISTS
+        kwargs = {"flags": flags}
+        if tracked_leaves is not None:
+            kwargs["tracked_leaves"] = tracked_leaves
+        ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence, **kwargs)
+        iterator = _msprime.SparseTreeIterator(ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree)
         for _ in iterator:
             yield sparse_tree
@@ -1503,14 +1549,16 @@ class TreeSequence(object):
     def set_mutations(self, mutations):
         """
         Sets the mutations in this tree sequence to the specified list of
-        `(position, node)` tuples.  Each entry in the list must be a tuple of
-        the form :math:`(x, u)`, where :math:`x` is a floating point value
-        defining a genomic position and :math:`u` is an integer defining a tree
-        node. A genomic position :math:`x` must satisfy :math:`0 \leq x < L`
-        where :math:`L` is the sequence length (see
-        :meth:`.get_sequence_length`). A node :math:`u` must satisfy
-        :math:`0 < u < N` where :math:`N` is the number of nodes in
-        the tree sequence (see :meth:`.get_num_nodes`).
+        mutations.  Each entry in the list must be either a ``Mutation``
+        named-tuple instance (as returned by the
+        :meth:`.TreeSequence.mutations` method) or tuple of the form :math:`(x,
+        u, ...)`, where :math:`x` is a floating point value defining a genomic
+        position and :math:`u` is an integer defining a tree node. A genomic
+        position :math:`x` must satisfy :math:`0 \leq x < L` where :math:`L` is
+        the sequence length (see :meth:`.get_sequence_length`). A node
+        :math:`u` must satisfy :math:`0 < u < N` where :math:`N` is the number
+        of nodes in the tree sequence (see :meth:`.get_num_nodes`). Values
+        other than ``position`` and ``node`` in the input tuples are ignored.
 
         :param list mutations: The list of mutations to be assigned to this
             tree sequence.
@@ -1521,10 +1569,6 @@ class TreeSequence(object):
         """
         Returns the value of pi, the pairwise nucleotide site diversity.
         If `samples` is specified, calculate the diversity within this set.
-
-        Note that we do not check for duplicates within the list of samples,
-        and if samples are provided multiple times incorrect results will
-        be returned.
 
         :param iterable samples: The set of samples within which we calculate
             the diversity. If None, calculate diversity within the entire
@@ -1537,6 +1581,9 @@ class TreeSequence(object):
         else:
             leaves = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(leaves)
+
+    def write_ld_table(self, filename, **kwargs):
+        self._ll_tree_sequence.write_ld_table(filename, **kwargs)
 
     def get_time(self, sample):
         """

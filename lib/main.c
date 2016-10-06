@@ -49,6 +49,18 @@ fatal_error(const char *msg, ...)
     exit(EXIT_FAILURE);
 }
 
+static void
+fatal_library_error(int err, const char *msg, ...)
+{
+    va_list argp;
+    fprintf(stderr, "error:");
+    va_start(argp, msg);
+    vfprintf(stderr, msg, argp);
+    va_end(argp);
+    fprintf(stderr, ":%d:'%s'\n", err, msp_strerror(err));
+    exit(EXIT_FAILURE);
+}
+
 static int
 read_samples(config_t *config, size_t *sample_size, sample_t **samples)
 {
@@ -354,13 +366,11 @@ out:
 
 static int
 get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
-        recomb_map_t *recomb_map, char **output_file, const char *filename)
+        recomb_map_t *recomb_map, const char *filename)
 {
     int ret = 0;
     int err;
     int int_tmp;
-    char *str;
-    const char *str_tmp;
     double rho;
     size_t sample_size;
     sample_t *samples = NULL;
@@ -437,10 +447,6 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    if (config_lookup_string(config, "output_file", &str_tmp)
-            == CONFIG_FALSE) {
-        fatal_error("output_file is a required parameter");
-    }
     ret = read_recomb_map((uint32_t) msp_get_num_loci(msp),
             recomb_map, config);
     if (ret != 0) {
@@ -451,13 +457,6 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    /* Create a copy of output_file to return */
-    str = malloc(strlen(str_tmp) + 1);
-    if (str == NULL) {
-        fatal_error("Out of memory");
-    }
-    strcpy(str, str_tmp);
-    *output_file = str;
     config_destroy(config);
     free(config);
     free(samples);
@@ -468,106 +467,99 @@ static void
 print_variants(tree_sequence_t *ts)
 {
     int ret = 0;
-    vargen_t *vg = calloc(1, sizeof(vargen_t));
+    vargen_t vg;
     uint32_t j;
     double x;
     char *variant;
 
     printf("variants (%d) \n", (int) ts->num_mutations);
-    if (vg == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = vargen_alloc(vg, ts);
+    ret = vargen_alloc(&vg, ts);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, "vargen_alloc");
     }
     j = 0;
-    while ((ret = vargen_next(vg, &x, &variant)) == 1) {
+    while ((ret = vargen_next(&vg, &x, &variant)) == 1) {
         printf("%d\t%f\t%s\n", j, x, variant);
         j++;
     }
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, "vargen_next");
     }
     if (j != ts->num_mutations) {
         printf("ERROR!! missing variants %d %d\n", j, (int) ts->num_mutations);
     }
 
-    while ((ret = vargen_next(vg, &x, &variant)) == 1) {
+    while ((ret = vargen_next(&vg, &x, &variant)) == 1) {
         /* this should never happen as the iterators should always
          * fail after they finish. */
         assert(0);
     }
-out:
-    if (vg != NULL) {
-        vargen_free(vg);
-        free(vg);
-    }
-    if (ret != 0) {
-        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
-    }
+    vargen_free(&vg);
 }
 
 static void
 print_haplotypes(tree_sequence_t *ts)
 {
     int ret = 0;
-    hapgen_t *hg = calloc(1, sizeof(hapgen_t));
-    size_t num_mutations = tree_sequence_get_num_mutations(ts);
-    mutation_t *mutations = malloc(num_mutations * sizeof(mutation_t));
+    hapgen_t hg;
     uint32_t j;
     char *haplotype;
 
     printf("haplotypes \n");
-    if (hg == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = hapgen_alloc(hg, ts);
+    ret = hapgen_alloc(&hg, ts);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, "hapgen_alloc");
     }
     for (j = 0; j < ts->sample_size; j++) {
-        ret = hapgen_get_haplotype(hg, j, &haplotype);
+        ret = hapgen_get_haplotype(&hg, j, &haplotype);
         if (ret < 0) {
-            goto out;
+            fatal_library_error(ret, "hapgen_get_haplotype");
         }
         printf("%d\t%s\n", j, haplotype);
     }
-    /* Get the mutations, reset them, redo the same thing to check */
-    ret = tree_sequence_get_mutations(ts, mutations);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_set_mutations(ts, num_mutations, mutations);
-    if (ret != 0) {
-        goto out;
-    }
-    hapgen_free(hg);
-    printf("checking set_mutations\n");
-    ret = hapgen_alloc(hg, ts);
-    if (ret != 0) {
-        goto out;
-    }
-    for (j = 0; j < ts->sample_size; j++) {
-        ret = hapgen_get_haplotype(hg, j, &haplotype);
-        if (ret < 0) {
-            goto out;
-        }
-        printf("%d\t%s\n", j, haplotype);
-    }
+    hapgen_free(&hg);
+}
 
-out:
-    if (hg != NULL) {
-        hapgen_free(hg);
-        free(hg);
+static void
+print_ld_matrix(tree_sequence_t *ts)
+{
+    int ret;
+    size_t num_mutations = tree_sequence_get_num_mutations(ts);
+    mutation_t *mutations;
+    double *r2 = malloc(num_mutations * sizeof(double));
+    size_t j, k, num_r2_values;
+    ld_calc_t ld_calc;
+
+    if (r2 == NULL) {
+        fatal_error("no memory");
     }
-    if (mutations != NULL) {
-        free(mutations);
-    }
+    ret = tree_sequence_get_mutations(ts, &mutations);
     if (ret != 0) {
-        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
+        fatal_library_error(ret, "get_mutations");
+    }
+    ret = ld_calc_alloc(&ld_calc, ts);
+    printf("alloc: ret = %d\n", ret);
+    if (ret != 0) {
+        fatal_library_error(ret, "ld_calc_alloc");
+    }
+    ld_calc_print_state(&ld_calc, stdout);
+    for (j = 0; j < num_mutations; j++) {
+        ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_mutations,
+                DBL_MAX, r2, &num_r2_values);
+        if (ret != 0) {
+            fatal_library_error(ret, "ld_calc_get_r2_array");
+        }
+        for (k = 0; k < num_r2_values; k++) {
+            printf("%d\t%f\t%d\t%f\t%.3f\n",
+                (int) mutations[j].index, mutations[j].position,
+                (int) mutations[j + k + 1].index,
+                mutations[j + k + 1].position, r2[k]);
+        }
+    }
+    free(r2);
+    ret = ld_calc_free(&ld_calc);
+    if (ret != 0) {
+        fatal_library_error(ret, "ld_calc_write_table");
     }
 }
 
@@ -581,119 +573,84 @@ print_stats(tree_sequence_t *ts)
     double pi;
 
     if (sample == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
+        fatal_error("no memory");
     }
-
     for (j = 0; j < sample_size; j++) {
         sample[j] = j;
     }
     ret = tree_sequence_get_pairwise_diversity(ts, sample,
         sample_size, &pi);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, "get_pairwise_diversity");
     }
     printf("pi = %f\n", pi);
-out:
-    if (sample != NULL) {
-        free(sample);
-    }
-    if (ret != 0) {
-        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
-    }
+    free(sample);
 }
 
-static int
+static void
 print_vcf(tree_sequence_t *ts, unsigned int ploidy)
 {
     int ret = 0;
     char *record = NULL;
     char *header = NULL;
-    vcf_converter_t *vc = malloc(sizeof(vcf_converter_t));
+    vcf_converter_t vc;
 
-    if (vc == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = vcf_converter_alloc(vc, ts, ploidy);
+    ret = vcf_converter_alloc(&vc, ts, ploidy);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, "vcf alloc");
     }
-    vcf_converter_print_state(vc, stdout);
+    vcf_converter_print_state(&vc, stdout);
     printf("START VCF\n");
-    ret = vcf_converter_get_header(vc, &header);
+    ret = vcf_converter_get_header(&vc, &header);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, "vcf get header");
     }
     printf("%s", header);
-    while ((ret = vcf_converter_next(vc, &record)) == 1) {
+    while ((ret = vcf_converter_next(&vc, &record)) == 1) {
         printf("%s", record);
     }
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, "vcf next");
     }
-out:
-    if (vc != NULL) {
-        vcf_converter_free(vc);
-        free(vc);
-    }
-    return ret;
+    vcf_converter_free(&vc);
 }
 
 static void
 print_newick_trees(tree_sequence_t *ts)
 {
     int ret = 0;
-    newick_converter_t *nc = calloc(1, sizeof(newick_converter_t));
+    newick_converter_t nc;
     double length;
     char *tree;
 
     printf("converting newick trees\n");
-    if (nc == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     /* We're using an Ne of 0.25 here throughout to cancel 4Ne conversions */
-    ret = newick_converter_alloc(nc, ts, 4, 0.25);
+    ret = newick_converter_alloc(&nc, ts, 4, 0.25);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, "newick alloc");
     }
-    while ((ret = newick_converter_next(nc, &length, &tree)) == 1) {
+    while ((ret = newick_converter_next(&nc, &length, &tree)) == 1) {
         printf("Tree: %f: %s\n", length, tree);
-        newick_converter_print_state(nc, stdout);
+        newick_converter_print_state(&nc, stdout);
     }
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, "newick next");
     }
-out:
-    if (nc != NULL) {
-        newick_converter_free(nc);
-        free(nc);
-    }
-    if (ret != 0) {
-        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
-    }
+    newick_converter_free(&nc);
 }
 
 static void
 print_tree_sequence(tree_sequence_t *ts)
 {
     int ret = 0;
-    size_t j;
+    size_t j, k; //, k, l;
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
-    uint32_t mrca;
-    double length;
     sparse_tree_t tree;
-    node_record_t *records_in, *records_out, *record;
     coalescence_record_t *cr;
-    tree_diff_iterator_t *iter = calloc(1, sizeof(tree_diff_iterator_t));
-    sparse_tree_iterator_t *sparse_iter = calloc(1, sizeof(sparse_tree_iterator_t));
     uint32_t tracked_leaves[] = {1, 2};
 
-    if (iter == NULL || sparse_iter == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
+    // TODO tidy this up to make it more specific to the task of examining the
+    // tree sequence itself.
     printf("Records:\n");
     for (j = 0; j < num_records; j++) {
         if (tree_sequence_get_record(ts, j, &cr, MSP_ORDER_TIME) != 0) {
@@ -702,80 +659,55 @@ print_tree_sequence(tree_sequence_t *ts)
         printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
                 cr->children[1], cr->node, cr->time);
     }
-    ret = tree_diff_iterator_alloc(iter, ts);
-    if (ret != 0) {
-        goto out;
-    }
-    printf("Tree diffs:\n");
-    tree_diff_iterator_print_state(iter, stdout);
-    while ((ret = tree_diff_iterator_next(
-                    iter, &length, &records_out, &records_in)) == 1) {
-        tree_diff_iterator_print_state(iter, stdout);
-        printf("New tree: %f\n", length);
-        printf("Nodes In:\n");
-        record = records_in;
-        while (record != NULL) {
-            printf("\t(%d\t%d)\t%d\n", record->children[0],
-                    record->children[1], record->node);
-            record = record->next;
-        }
-        printf("Nodes Out:\n");
-        record = records_out;
-        while (record != NULL) {
-            printf("\t(%d\t%d)\t%d\n", record->children[0],
-                    record->children[1], record->node);
-            record = record->next;
-        }
-    }
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_diff_iterator_free(iter);
-    if (ret != 0) {
-        goto out;
-    }
 
+    tree_sequence_print_state(ts, stdout);
     /* sparse trees */
-    ret = tree_sequence_alloc_sparse_tree(ts, &tree, tracked_leaves,
-            sizeof(tracked_leaves) / sizeof(uint32_t), MSP_COUNT_LEAVES);
+    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS);
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_iterator_alloc(sparse_iter, ts, &tree);
+    ret = sparse_tree_set_tracked_leaves(&tree,
+            sizeof(tracked_leaves) / sizeof(uint32_t), tracked_leaves);
     if (ret != 0) {
         goto out;
     }
-    printf("Sparse trees:\n");
-    while ((ret = sparse_tree_iterator_next(sparse_iter)) == 1) {
-        printf("New tree: %f (%d)\n", tree.right - tree.left,
-                (int) tree.num_nodes);
-        sparse_tree_iterator_print_state(sparse_iter, stdout);
-        /* print some mrcas */
-        printf("MRCAS:\n");
-        for (j = 0; j < tree.num_nodes; j++) {
-            ret = sparse_tree_get_mrca(&tree, 1, (uint32_t) j, &mrca);
-            if (ret != 0) {
-                goto out;
+    for (ret = sparse_tree_first(&tree); ret == 1;
+            ret = sparse_tree_next(&tree)) {
+        printf("New tree: %d: %f (%d)\n", (int) tree.index,
+                tree.right - tree.left, (int) tree.num_nodes);
+        /* sparse_tree_print_state(&tree, stdout); */
+        k = tree.index;
+        if (k > 3) {
+            printf("Rewinding\n");
+            for (j = 0; j < 2; j++) {
+                ret = sparse_tree_prev(&tree);
+                if (ret != 1) {
+                    goto out;
+                }
+                printf("\twent back to %d\n", (int) tree.index);
             }
-            printf("\t%d %d -> %d\n", 1, (int) j, mrca);
+            printf("Going forward again\n");
+            for (j = 0; j < 2; j++) {
+                ret = sparse_tree_next(&tree);
+                if (ret != 1) {
+                    goto out;
+                }
+                printf("\twent forward to %d\n", (int) tree.index);
+            }
         }
     }
-    sparse_tree_iterator_free(sparse_iter);
+    if (ret < 0) {
+        goto out;
+    }
     sparse_tree_free(&tree);
 out:
-    if (iter != NULL) {
-        free(iter);
-    }
-    if (sparse_iter != NULL) {
-        free(sparse_iter);
-    }
     if (ret != 0) {
         fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
 }
 
 static void
-run_simulate(char *conf_file)
+run_simulate(char *conf_file, char *output_file)
 {
     int ret = -1;
     int result, j;
@@ -783,17 +715,16 @@ run_simulate(char *conf_file)
     mutation_params_t mutation_params;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     msp_t *msp = calloc(1, sizeof(msp_t));
-    char *output_file = NULL;
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
 
+    /* TODO tidy this up a bit and make the behaviour configurable. */
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL) {
         goto out;
     }
-    ret = get_configuration(rng, msp, &mutation_params, recomb_map,
-            &output_file, conf_file);
+    ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
     if (ret != 0) {
         goto out;
     }
@@ -802,21 +733,23 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
-    /* print out the demographic event debug state */
-    start_time = 0;
-    do {
+    if (0) {
+        /* print out the demographic event debug state */
+        start_time = 0;
+        do {
 
-        ret = msp_debug_demography(msp, &end_time);
-        printf("interval %f - %f\n", start_time, end_time);
-        msp_print_state(msp, stdout);
-        start_time = end_time;
-    } while (! gsl_isinf(end_time));
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_reset(msp);
-    if (ret != 0) {
-        goto out;
+            ret = msp_debug_demography(msp, &end_time);
+            printf("interval %f - %f\n", start_time, end_time);
+            msp_print_state(msp, stdout);
+            start_time = end_time;
+        } while (! gsl_isinf(end_time));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_reset(msp);
+        if (ret != 0) {
+            goto out;
+        }
     }
     for (j = 0; j < 1; j++) {
         ret = msp_reset(msp);
@@ -839,8 +772,6 @@ run_simulate(char *conf_file)
             goto out;
         }
     }
-
-    recomb_map_print_state(recomb_map, stdout);
     /* Create the tree_sequence from the state of the simulator.
      * We want to use coalescent time here, so use an Ne of 1/4
      * to cancel scaling factor. */
@@ -848,78 +779,29 @@ run_simulate(char *conf_file)
     if (ret != 0) {
         goto out;
     }
+
     ret = tree_sequence_add_provenance_string(tree_seq, "Tree Provenance!!!");
     if (ret != 0) {
         goto out;
     }
-    tree_sequence_print_state(tree_seq, stdout);
-
-    for (j = 0; j < 1; j++) {
-        ret = tree_sequence_dump(tree_seq, output_file, 0);
-        if (ret != 0) {
-            goto out;
-        }
-        tree_sequence_free(tree_seq);
-        memset(tree_seq, 0, sizeof(tree_sequence_t));
-        printf("READING \n");
-        ret = tree_sequence_load(tree_seq, output_file, 0);
-        if (ret != 0) {
-            goto out;
-        }
-        tree_sequence_print_state(tree_seq, stdout);
+    ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutgen_generate(mutgen);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
+            mutgen->mutations);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_dump(tree_seq, output_file, 0);
+    if (ret != 0) {
+        goto out;
     }
 
-
-    if (0) {
-        ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = mutgen_generate(mutgen);
-        if (ret != 0) {
-            goto out;
-        }
-        mutgen_print_state(mutgen, stdout);
-
-        ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
-                mutgen->mutations);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = tree_sequence_add_provenance_string(tree_seq,
-                "Mutation Provenance!!!");
-        if (ret != 0) {
-            goto out;
-        }
-        print_stats(tree_seq);
-
-        print_variants(tree_seq);
-
-        ret = print_vcf(tree_seq, 1);
-        if (ret != 0) {
-            goto out;
-        }
-        for (j = 0; j < 1; j++) {
-            ret = tree_sequence_dump(tree_seq, output_file, 0);
-            if (ret != 0) {
-                goto out;
-            }
-            tree_sequence_free(tree_seq);
-            memset(tree_seq, 0, sizeof(tree_sequence_t));
-            ret = tree_sequence_load(tree_seq, output_file, 0);
-            if (ret != 0) {
-                goto out;
-            }
-            tree_sequence_print_state(tree_seq, stdout);
-        }
-
-        print_newick_trees(tree_seq);
-        print_tree_sequence(tree_seq);
-        print_haplotypes(tree_seq);
-
-        tree_sequence_print_state(tree_seq, stdout);
-        print_haplotypes(tree_seq);
-    }
 out:
     if (msp != NULL) {
         msp_free(msp);
@@ -928,9 +810,6 @@ out:
     if (tree_seq != NULL) {
         tree_sequence_free(tree_seq);
         free(tree_seq);
-    }
-    if (output_file != NULL) {
-        free(output_file);
     }
     if (recomb_map != NULL) {
         recomb_map_free(recomb_map);
@@ -948,12 +827,135 @@ out:
     }
 }
 
+static void
+load_tree_sequence(tree_sequence_t *ts, char *filename)
+{
+    int ret = tree_sequence_load(ts, filename, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "Load error");
+    }
+}
+
+static void
+run_ld(char *filename)
+{
+    tree_sequence_t ts;
+
+    load_tree_sequence(&ts, filename);
+    print_ld_matrix(&ts);
+    tree_sequence_free(&ts);
+}
+
+static void
+run_haplotypes(char *filename)
+{
+    tree_sequence_t ts;
+
+    load_tree_sequence(&ts, filename);
+    print_haplotypes(&ts);
+    tree_sequence_free(&ts);
+}
+
+static void
+run_variants(char *filename)
+{
+    tree_sequence_t ts;
+
+    load_tree_sequence(&ts, filename);
+    print_variants(&ts);
+    tree_sequence_free(&ts);
+}
+
+static void
+run_vcf(char *filename)
+{
+    tree_sequence_t ts;
+
+    load_tree_sequence(&ts, filename);
+    print_vcf(&ts, 1);
+    tree_sequence_free(&ts);
+}
+
+static void
+run_print(char *filename)
+{
+    tree_sequence_t ts;
+
+    load_tree_sequence(&ts, filename);
+    print_tree_sequence(&ts);
+    tree_sequence_free(&ts);
+}
+
+static void
+run_newick(char *filename)
+{
+    tree_sequence_t ts;
+
+    load_tree_sequence(&ts, filename);
+    print_newick_trees(&ts);
+    tree_sequence_free(&ts);
+}
+
+static void
+run_stats(char *filename)
+{
+    tree_sequence_t ts;
+
+    load_tree_sequence(&ts, filename);
+    print_stats(&ts);
+    tree_sequence_free(&ts);
+}
+
 int
 main(int argc, char** argv)
 {
-    if (argc != 2) {
-        fatal_error("usage: %s CONFIG_FILE", argv[0]);
+    char *cmd;
+    if (argc < 2) {
+        fatal_error("usage: %s <cmd>", argv[0]);
     }
-    run_simulate(argv[1]);
+    cmd = argv[1];
+    if (strncmp(cmd, "simulate", strlen(cmd)) == 0) {
+        if (argc < 4) {
+            fatal_error("usage: %s simulate CONFIG_FILE OUTPUT_FILE", argv[0]);
+        }
+        run_simulate(argv[2], argv[3]);
+    } else if (strncmp(cmd, "ld", strlen(cmd)) == 0) {
+        if (argc < 3) {
+            fatal_error("usage: %s ld INPUT_FILE", argv[0]);
+        }
+        run_ld(argv[2]);
+    } else if (strncmp(cmd, "haplotypes", strlen(cmd)) == 0) {
+        if (argc < 3) {
+            fatal_error("usage: %s haplotypes INPUT_FILE", argv[0]);
+        }
+        run_haplotypes(argv[2]);
+    } else if (strncmp(cmd, "variants", strlen(cmd)) == 0) {
+        if (argc < 3) {
+            fatal_error("usage: %s variants INPUT_FILE", argv[0]);
+        }
+        run_variants(argv[2]);
+    } else if (strncmp(cmd, "vcf", strlen(cmd)) == 0) {
+        if (argc < 3) {
+            fatal_error("usage: %s vcf INPUT_FILE", argv[0]);
+        }
+        run_vcf(argv[2]);
+    } else if (strncmp(cmd, "print", strlen(cmd)) == 0) {
+        if (argc < 3) {
+            fatal_error("usage: %s print INPUT_FILE", argv[0]);
+        }
+        run_print(argv[2]);
+    } else if (strncmp(cmd, "newick", strlen(cmd)) == 0) {
+        if (argc < 3) {
+            fatal_error("usage: %s newick INPUT_FILE", argv[0]);
+        }
+        run_newick(argv[2]);
+    } else if (strncmp(cmd, "stats", strlen(cmd)) == 0) {
+        if (argc < 3) {
+            fatal_error("usage: %s stats INPUT_FILE", argv[0]);
+        }
+        run_stats(argv[2]);
+    } else {
+        fatal_error("Unknown command '%s'", cmd);
+    }
     return EXIT_SUCCESS;
 }

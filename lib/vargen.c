@@ -31,7 +31,6 @@ vargen_print_state(vargen_t *self, FILE *out)
     fprintf(out, "vargen state\n");
     fprintf(out, "tree_mutation_index = %d\n", (int) self->tree_mutation_index);
     fprintf(out, "variant = '%s'\n", self->variant);
-    sparse_tree_iterator_print_state(&self->tree_iterator, out);
 }
 
 static int
@@ -39,7 +38,7 @@ vargen_next_tree(vargen_t *self)
 {
     int ret = 0;
 
-    ret = sparse_tree_iterator_next(&self->tree_iterator);
+    ret = sparse_tree_next(&self->tree);
     if (ret == 0) {
         self->finished = 1;
     } else if (ret < 0) {
@@ -66,18 +65,13 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence)
     if (self->variant == NULL) {
         goto out;
     }
-    ret = tree_sequence_alloc_sparse_tree(tree_sequence, &self->tree,
-            NULL, 0, MSP_COUNT_LEAVES);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = sparse_tree_iterator_alloc(&self->tree_iterator,
-            self->tree_sequence, &self->tree);
+    ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
     if (ret != 0) {
         goto out;
     }
     self->finished = 0;
-    ret = vargen_next_tree(self);
+    self->tree_mutation_index = 0;
+    ret = sparse_tree_first(&self->tree);
     if (ret < 0) {
         goto out;
     }
@@ -94,7 +88,6 @@ vargen_free(vargen_t *self)
         free(self->variant);
     }
     sparse_tree_free(&self->tree);
-    sparse_tree_iterator_free(&self->tree_iterator);
     return 0;
 }
 
