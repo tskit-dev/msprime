@@ -89,12 +89,55 @@ class TestLdCalculator(unittest.TestCase):
             for k in range(m):
                 self.assertAlmostEqual(ldc.get_r2(j, k), A[j, k])
 
+    def verify_max_distance(self, ts):
+        """
+        Verifies that the max_distance parameter works as expected.
+        """
+        mutations = list(ts.mutations())
+        ldc = msprime.LdCalculator(ts)
+        A = ldc.get_r2_matrix()
+        j = len(mutations) // 2
+        for k in range(j):
+            x = mutations[j + k].position - mutations[j].position
+            a = ldc.get_r2_array(j, max_distance=x)
+            self.assertEqual(a.shape[0], k)
+            self.assertTrue(np.allclose(A[j, j + 1: j + 1 + k], a))
+            x = mutations[j].position - mutations[j - k].position
+            a = ldc.get_r2_array(j, max_distance=x, direction=msprime.REVERSE)
+            self.assertEqual(a.shape[0], k)
+            self.assertTrue(np.allclose(A[j, j - k: j], a[::-1]))
+        L = ts.get_sequence_length()
+        m = len(mutations)
+        a = ldc.get_r2_array(0, max_distance=L)
+        self.assertEqual(a.shape[0], m - 1)
+        self.assertTrue(np.allclose(A[0, 1:], a))
+        a = ldc.get_r2_array(m - 1, max_distance=L, direction=msprime.REVERSE)
+        self.assertEqual(a.shape[0], m - 1)
+        self.assertTrue(np.allclose(A[m - 1, :-1], a[::-1]))
+
+    def verify_max_mutations(self, ts):
+        """
+        Verifies that the max mutations parameter works as expected.
+        """
+        mutations = list(ts.mutations())
+        ldc = msprime.LdCalculator(ts)
+        A = ldc.get_r2_matrix()
+        j = len(mutations) // 2
+        for k in range(j):
+            a = ldc.get_r2_array(j, max_mutations=k)
+            self.assertEqual(a.shape[0], k)
+            self.assertTrue(np.allclose(A[j, j + 1: j + 1 + k], a))
+            a = ldc.get_r2_array(j, max_mutations=k, direction=msprime.REVERSE)
+            self.assertEqual(a.shape[0], k)
+            self.assertTrue(np.allclose(A[j, j - k: j], a[::-1]))
+
     def test_single_tree_simulated_mutations(self):
         ts = msprime.simulate(20, mutation_rate=10)
         mutations = random.sample(
             list(ts.mutations()), self.num_test_mutations)
         ts.set_mutations(sorted(mutations))
         self.verify_matrix(ts)
+        self.verify_max_distance(ts)
 
     def test_single_tree_regular_mutations(self):
         ts = msprime.simulate(
@@ -102,6 +145,7 @@ class TestLdCalculator(unittest.TestCase):
         mutations = [(j, j) for j in range(self.num_test_mutations)]
         ts.set_mutations(mutations)
         self.verify_matrix(ts)
+        self.verify_max_distance(ts)
 
     def test_tree_sequence_regular_mutations(self):
         ts = msprime.simulate(
@@ -111,6 +155,7 @@ class TestLdCalculator(unittest.TestCase):
         mutations = [(j, j) for j in range(self.num_test_mutations)]
         ts.set_mutations(mutations)
         self.verify_matrix(ts)
+        self.verify_max_distance(ts)
 
     def test_tree_sequence_simulated_mutations(self):
         ts = msprime.simulate(20, mutation_rate=10, recombination_rate=10)
@@ -119,3 +164,5 @@ class TestLdCalculator(unittest.TestCase):
             list(ts.mutations()), self.num_test_mutations)
         ts.set_mutations(sorted(mutations))
         self.verify_matrix(ts)
+        self.verify_max_distance(ts)
+        self.verify_max_mutations(ts)

@@ -2951,7 +2951,7 @@ class TestLdCalculator(LowLevelTestCase):
             self.assertRaises(
                 ValueError, ldc.get_r2_array, self.get_buffer(0), 0,
                 direction=bad_direction)
-        for bad_distance in [0, -1, -1e6]:
+        for bad_distance in [-1e-6, -1, -1e6]:
             self.assertRaises(
                 ValueError, ldc.get_r2_array, self.get_buffer(0), 0,
                 max_distance=bad_distance)

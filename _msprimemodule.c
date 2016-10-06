@@ -4534,8 +4534,8 @@ LdCalculator_get_r2_array(LdCalculator *self, PyObject *args, PyObject *kwds)
             "direction must be FORWARD or REVERSE");
         goto out;
     }
-    if (max_distance <= 0) {
-        PyErr_SetString(PyExc_ValueError, "max_distance must be > 0");
+    if (max_distance < 0) {
+        PyErr_SetString(PyExc_ValueError, "max_distance must be >= 0");
         goto out;
     }
     if (!PyObject_CheckBuffer(dest)) {
