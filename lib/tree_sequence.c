@@ -650,55 +650,42 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     int rank;
     hsize_t dims;
     uint32_t version[2];
-    struct _hdf5_metadata_read {
-        const char *prefix;
-        const char *name;
-        hid_t memory_type;
-        size_t size;
-        void *dest;
-    };
-    struct _hdf5_metadata_read fields[] = {
-        {"/", "format_version", H5T_NATIVE_UINT32, 2, version},
-    };
-    size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_read);
-    size_t j;
 
-    for (j = 0; j < num_fields; j++) {
-        attr_id = H5Aopen_by_name(file_id, fields[j].prefix, fields[j].name,
-                H5P_DEFAULT, H5P_DEFAULT);
-        if (attr_id < 0) {
-            goto out;
-        }
-        dataspace_id = H5Aget_space(attr_id);
-        if (dataspace_id < 0) {
-            goto out;
-        }
-        rank = H5Sget_simple_extent_ndims(dataspace_id);
-        if (rank != 1) {
-            ret = MSP_ERR_FILE_FORMAT;
-            goto out;
-        }
-        status = H5Sget_simple_extent_dims(dataspace_id, &dims, NULL);
-        if (status < 0) {
-            goto out;
-        }
-        if (dims != fields[j].size) {
-            ret = MSP_ERR_FILE_FORMAT;
-            goto out;
-        }
-        status = H5Aread(attr_id, fields[j].memory_type, fields[j].dest);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Sclose(dataspace_id);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Aclose(attr_id);
-        if (status < 0) {
-            goto out;
-        }
+    attr_id = H5Aopen_by_name(file_id, "/", "format_version",
+            H5P_DEFAULT, H5P_DEFAULT);
+    if (attr_id < 0) {
+        goto out;
     }
+    dataspace_id = H5Aget_space(attr_id);
+    if (dataspace_id < 0) {
+        goto out;
+    }
+    rank = H5Sget_simple_extent_ndims(dataspace_id);
+    if (rank != 1) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    status = H5Sget_simple_extent_dims(dataspace_id, &dims, NULL);
+    if (status < 0) {
+        goto out;
+    }
+    if (dims != 2) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    status = H5Aread(attr_id, H5T_NATIVE_UINT32, version);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Sclose(dataspace_id);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Aclose(attr_id);
+    if (status < 0) {
+        goto out;
+    }
+
     /* Sanity check */
     if (version[0] < MSP_FILE_FORMAT_VERSION_MAJOR) {
         ret = MSP_ERR_FILE_VERSION_TOO_OLD;
@@ -1234,6 +1221,7 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     hsize_t dims = 1;
     uint32_t version[2] = {
         MSP_FILE_FORMAT_VERSION_MAJOR, MSP_FILE_FORMAT_VERSION_MINOR};
+    uint32_t unused_value = 0;
 
     struct _hdf5_metadata_write {
         const char *name;
@@ -1245,6 +1233,16 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     };
     struct _hdf5_metadata_write fields[] = {
         {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, version},
+        /* These two attributes are vestigial, and are only included to allow
+         * older versions of msprime give a better error condition when confronted
+         * with a newer file format. Due to a bug in the way that these attributes
+         * we loaded, versions of msprime pre 0.4.0 would complain about a missing
+         * attribute rather than giving a File format error. These attributes
+         * should be removed in a later version of the file format once we can be
+         * fairly sure that these old versions of msprime are no longer around.
+         */
+        {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, &unused_value},
+        {"sequence_length", 0, H5T_IEEE_F64LE, H5T_NATIVE_UINT32, 1, &unused_value},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_write);
     size_t j;
