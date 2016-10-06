@@ -1561,11 +1561,12 @@ class TreeSequence(object):
         n = self.get_sample_size()
         genotypes_buffer = bytearray(n)
         iterator = _msprime.VariantGenerator(
-            self._ll_tree_sequence, genotypes_buffer)
+            self._ll_tree_sequence, genotypes_buffer, as_bytes)
         for position, node, index in iterator:
-            g = np.frombuffer(genotypes_buffer, "u1", n)
             if as_bytes:
-                g = (g + ord('0')).tostring()
+                g = bytes(genotypes_buffer)
+            else:
+                g = np.frombuffer(genotypes_buffer, "u1", n)
             yield Variant(
                 position=position, node=node, index=index, genotypes=g)
 

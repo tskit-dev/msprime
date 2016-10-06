@@ -732,7 +732,7 @@ def run_dump_variants(args):
     tree_sequence = msprime.load(args.history_file)
     for variant in tree_sequence.variants(as_bytes=True):
         print(variant.position, end="\t")
-        print(variant.genotypes.decode())
+        print("{}".format(variant.genotypes.decode()))
 
 
 def run_dump_records(args):
@@ -762,7 +762,7 @@ def run_dump_macs(args):
     for variant in tree_sequence.variants(as_bytes=True):
         print(
             "SITE:", variant.index, variant.position / m, 0.0,
-            variant.genotypes.decode(), sep="\t")
+            "{}".format(variant.genotypes.decode()), sep="\t")
 
 
 def run_simulate(args):

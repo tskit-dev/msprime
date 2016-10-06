@@ -4322,17 +4322,20 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", NULL};
+    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", "as_char"};
     TreeSequence *tree_sequence = NULL;
     PyObject *genotypes_buffer = NULL;
+    int as_char = 0;
+    int flags = 0;
     size_t sample_size;
 
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
     self->genotypes_buffer = NULL;
     self->buffer_acquired = 0;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O", kwlist,
-            &TreeSequenceType, &tree_sequence, &genotypes_buffer)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O|i", kwlist,
+            &TreeSequenceType, &tree_sequence, &genotypes_buffer,
+            &as_char)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -4363,8 +4366,9 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
+    flags = as_char? MSP_GENOTYPES_AS_CHAR: 0;
     err = vargen_alloc(self->variant_generator,
-            self->tree_sequence->tree_sequence);
+            self->tree_sequence->tree_sequence, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4380,7 +4384,7 @@ VariantGenerator_next(VariantGenerator *self)
     PyObject *ret = NULL;
     mutation_t *mutation;
     int err;
-    uint8_t *genotypes = (uint8_t *) self->buffer.buf;
+    char *genotypes = (char *) self->buffer.buf;
 
     if (VariantGenerator_check_state(self) != 0) {
         goto out;

@@ -3405,25 +3405,47 @@ verify_vargen(tree_sequence_t *ts)
     mutation_t *mut;
     size_t sample_size = tree_sequence_get_sample_size(ts);
     size_t num_mutations = tree_sequence_get_num_mutations(ts);
-    uint8_t *genotypes = malloc(sample_size * sizeof(uint8_t));
-    size_t j;
+    char *genotypes = malloc((sample_size + 1) * sizeof(char));
+    size_t j, k;
 
     CU_ASSERT_FATAL(genotypes != NULL);
-    ret = vargen_alloc(&vargen, ts);
+    ret = vargen_alloc(&vargen, ts, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     vargen_print_state(&vargen, _devnull);
-
     j = 0;
     while ((ret = vargen_next(&vargen, &mut, genotypes)) == 1) {
         CU_ASSERT_EQUAL(mut->index, j);
+        for (k = 0; k < sample_size; k++) {
+            CU_ASSERT(genotypes[k] == 0 || genotypes[k] == 1);
+        }
         j++;
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(j, num_mutations);
     CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &mut, genotypes), 0);
-
     ret = vargen_free(&vargen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = vargen_alloc(&vargen, ts, MSP_GENOTYPES_AS_CHAR);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    vargen_print_state(&vargen, _devnull);
+    j = 0;
+    genotypes[sample_size] = '\0';
+    while ((ret = vargen_next(&vargen, &mut, genotypes)) == 1) {
+        CU_ASSERT_EQUAL(mut->index, j);
+        for (k = 0; k < sample_size; k++) {
+            CU_ASSERT(genotypes[k] == '0' || genotypes[k] == '1');
+        }
+        CU_ASSERT_EQUAL_FATAL(genotypes[sample_size], '\0');
+        j++;
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(j, num_mutations);
+    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &mut, genotypes), 0);
+    ret = vargen_free(&vargen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    free(genotypes);
 }
 
 static void

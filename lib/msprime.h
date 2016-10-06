@@ -49,6 +49,8 @@
 #define MSP_DIR_FORWARD 1
 #define MSP_DIR_REVERSE -1
 
+#define MSP_GENOTYPES_AS_CHAR 1
+
 #define MAX_BRANCH_LENGTH_STRING 24
 
 /* The root node indicator */
@@ -376,13 +378,14 @@ typedef struct {
     size_t tree_mutation_index;
     int finished;
     sparse_tree_t tree;
+    int flags;
 } vargen_t;
 
 typedef struct {
     uint32_t sample_size;
     uint32_t num_vcf_samples;
     unsigned int ploidy;
-    uint8_t *genotypes;
+    char *genotypes;
     char *header;
     char *record;
     char *vcf_genotypes;
@@ -574,8 +577,8 @@ size_t hapgen_get_num_segregating_sites(hapgen_t *self);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self, FILE *out);
 
-int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence);
-int vargen_next(vargen_t *self, mutation_t **mutation, uint8_t *genotypes);
+int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags);
+int vargen_next(vargen_t *self, mutation_t **mutation, char *genotypes);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self, FILE *out);
 

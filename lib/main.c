@@ -470,14 +470,13 @@ print_variants(tree_sequence_t *ts)
     vargen_t vg;
     uint32_t j, k;
     mutation_t *mut;
-    uint8_t *genotypes = malloc(
-            tree_sequence_get_sample_size(ts) * sizeof(uint8_t));
+    char *genotypes = malloc(tree_sequence_get_sample_size(ts) * sizeof(char));
 
     if (genotypes == NULL) {
         fatal_error("no memory");
     }
     printf("variants (%d) \n", (int) ts->num_mutations);
-    ret = vargen_alloc(&vg, ts);
+    ret = vargen_alloc(&vg, ts, 0);
     if (ret != 0) {
         fatal_library_error(ret, "vargen_alloc");
     }

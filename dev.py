@@ -738,8 +738,9 @@ def threads_example():
 def api_stuff():
     ts = msprime.simulate(10, mutation_rate=10)
 
-    for variant in ts.variants():
-        print(variant)
+    for variant in ts.variants(as_bytes=True):
+        print(variant.genotypes, type(variant.genotypes),
+                variant.genotypes.decode())
 
 if __name__ == "__main__":
     # mutations()

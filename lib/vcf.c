@@ -101,7 +101,7 @@ vcf_converter_make_record(vcf_converter_t *self)
     self->record_size = 1024 + self->vcf_genotypes_size;
     self->record = malloc(self->record_size);
     self->vcf_genotypes = malloc(self->vcf_genotypes_size);
-    self->genotypes = malloc(self->sample_size * sizeof(uint8_t));
+    self->genotypes = malloc(self->sample_size * sizeof(char));
     if (self->record == NULL || self->vcf_genotypes == NULL
             || self->genotypes == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -143,8 +143,7 @@ vcf_converter_write_record(vcf_converter_t *self, unsigned long pos)
 
     for (j = 0; j < self->num_vcf_samples; j++) {
         for (k = 0; k < p; k++) {
-            self->vcf_genotypes[2 * p * j + 2 * k] =
-                (char) ('0' + self->genotypes[j * p + k]);
+            self->vcf_genotypes[2 * p * j + 2 * k] = self->genotypes[j * p + k];
         }
     }
     assert(offset + self->vcf_genotypes_size < self->record_size);
@@ -212,7 +211,7 @@ vcf_converter_alloc(vcf_converter_t *self,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = vargen_alloc(self->vargen, tree_sequence);
+    ret = vargen_alloc(self->vargen, tree_sequence, MSP_GENOTYPES_AS_CHAR);
     if (ret != 0) {
         goto out;
     }
