@@ -190,7 +190,7 @@ class TestHdf5Format(unittest.TestCase):
         # Check the basic root attributes
         format_version = root.attrs['format_version']
         self.assertEqual(format_version[0], 3)
-        self.assertEqual(format_version[1], 0)
+        self.assertEqual(format_version[1], 1)
         keys = set(root.keys())
         self.assertLessEqual(keys, set(["mutations", "trees", "provenance"]))
         self.assertIn("trees", keys)

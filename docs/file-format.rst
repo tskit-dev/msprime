@@ -22,73 +22,36 @@ The file format is broken into a number of groups. Each group contains
 datasets to define the data along with attributes to provide necessary
 contextual information.
 
-The root group contains a number of attributes, describing the basic
-properties of data set. The ``format_version`` attribute is a
-pair ``(major, minor)`` describing the file format version. This
-document describes version 2.1.
+The root group contains one attributes, ``format_version``. This
+is a pair ``(major, minor)`` describing the file format version. This
+document describes version 3.1.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
 ================    ==============      ======      ===========
 /format_version     H5T_STD_U32LE       2           The (major, minor) file format version.
-/sample_size        H5T_STD_U32LE       Scalar      The simulated sample size :math:`n`.
-/sequence_length    H5T_IEEE_F64LE      Scalar      The simulated sequence length :math:`L`.
 ================    ==============      ======      ===========
 
-+++++++++++
-Trees group
-+++++++++++
+++++++++++++++++++
+Provenance dataset
+++++++++++++++++++
 
-The ``trees`` group is mandatory, and describes the tree sequence.
-This is composed of a sequence of coalescent records, and each
-record consists of
-five fields. The ``left`` and ``right`` fields define the genomic interval
-over which the record applies. The interval is half-open, so that the
-left coordinate is inclusive and the right coordinate is exclusive. Every
-genomic coordinate :math:`x` must lie in the range :math:`0 \leq x < L`,
-where :math:`L` is the sequence length defined in the root attribute
-``sequence_length``.
+The provenance dataset records information relating the the provenance
+of a particular tree sequence file. When a tree sequence file is generated
+all the information required to reproduce the file should be encoded
+as a string and stored in this dataset. Subsequent modifications to the
+file should be also be recorded and appended to the list of strings.
 
-The ``node`` and ``children`` fields in a coalescence record define the
-event of the given node becoming the parent of the given pair of
-children. Every node is a positive integer. The ``time`` field in a
-coalescence record then defines the time at which this event occured.
-
-The ``trees`` group contains these coalescence records. The records are
-stored in the form of a seperate vector for each field for efficiency reasons.
-The following table defines the types and structures of the datasets in
-this group (assuming we have N records).
-
-The order of the records is arbitrary, and should not be relied on.
-
-=================       ==============      ======  ========
-Path                    Type                Dim     Required
-=================       ==============      ======  ========
-/trees/left             H5T_IEEE_F64LE      N       Yes
-/trees/right            H5T_IEEE_F64LE      N       Yes
-/trees/node             H5T_STD_U32LE       N       Yes
-/trees/time             H5T_IEEE_F64LE      N       Yes
-/trees/children         H5T_STD_U32LE       (N, 2)  Yes
-/trees/population       H5T_STD_U8LE        N       No
-=================       ==============      ======  ========
-
-The ``trees`` group also contains some attributes defining provenance
-information required to replicate simulations.
+The format of these strings is implementation defined. In the
+current version of ``msprime`` provenance information is encoded
+as JSON. This information is incomplete, and will be updated in future
+versions.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
 ================    ==============      ======      ===========
-/parameters         H5T_STRING          Scalar      The parameters used to simulate the trees.
-/environment        H5T_STRING          Scalar      The simulation environment.
+/provenance         H5T_STRING          Scalar      Provenance information.
 ================    ==============      ======      ===========
-
-These attributes are implementation defined strings. No internal format
-is required, other than that the original implementation should be
-able to reproduce the exact simulation given these values. In the
-current version of ``msprime`` this provenance information is encoded
-as JSON. The ``parameters`` attribute contains all parameters used to
-run the simulation, and the ``environment``
-value contains platform and library version information.
 
 +++++++++++++++
 Mutations group
@@ -100,11 +63,12 @@ consists of a node (which must be defined in the ``trees`` group) and a
 position. Positions are defined as a floating point value to allow us to
 express infinite sites mutations. A mutation position :math:`x` is defined on the same
 scale as the genomic coordinates for trees, and so we must have
-:math:`0 \leq x < L`.
+:math:`0 \leq x < L`, where :math:`L` is the largest value in the
+``/trees/breakpoints`` dataset.
 
-As for the coalescence records in the `trees` group, mutation records are
-stored as seperate vectors for efficiency reasons. The ordering of the mutation
-records is not defined, and should not be relied on.
+As for the coalescence records in the ``trees`` group, mutation records are
+stored as seperate vectors for efficiency reasons. Mutations must be stored
+in nondecreasing order of position.
 
 ===================     ==============      =====
 Path                    Type                Dim
@@ -113,31 +77,96 @@ Path                    Type                Dim
 /mutations/position     H5T_IEEE_F64LE      M
 ===================     ==============      =====
 
-As for the ``trees`` group, the ``mutations`` also contains attributes
-defining provenance information required to replicate simulations. The
-definitions of these attributes are identical.
++++++++++++
+Trees group
++++++++++++
 
-================    ==============      ======      ===========
-Path                Type                Dim         Description
-================    ==============      ======      ===========
-/parameters         H5T_STRING          Scalar      The parameters used to simulate the trees.
-/environment        H5T_STRING          Scalar      The simulation environment.
-================    ==============      ======      ===========
+The ``trees`` group is mandatory and describes the topology of the tree
+sequence. The ``trees`` group contains a number of nested groups and datasets,
+which we will describe in turn.
 
+^^^^^^^^^^^^^^^^^^^
+Breakpoints dataset
+^^^^^^^^^^^^^^^^^^^
 
-+++++++++++++++
-Samples group
-+++++++++++++++
+The ``/trees/breakpoints`` dataset records the floating point positions of the
+breakpoints between trees in the tree sequence, and the flanking positions
+:math:`0` and :math:`L`. Positions in the ``/trees/records`` group refer to
+(zero based) indexes into this array. The first breakpoint must be zero, and
+they must be listed in increasing order.
 
-The ``samples`` group is optional, and records information about the
-samples (i.e. leaf nodes). Currently the ``samples`` group contains
-two vectors ``population`` and ``time``, which record the population ID
-and sampling time of each sample. The size of these vector must be equal to the
-``sample_size`` specified in the root attribute.
+=======================     ==============
+Path                        Type
+=======================     ==============
+/trees/breakpoints          H5T_IEEE_F64LE
+=======================     ==============
 
-===================     ==============      =====
-Path                    Type                Dim
-===================     ==============      =====
-/samples/population     H5T_STD_U8LE        n
-/samples/time           H5T_IEEE_F64LE      n
-===================     ==============      =====
+^^^^^^^^^^^
+Nodes group
+^^^^^^^^^^^
+
+The ``/trees/nodes`` group records information about the individual
+nodes in a tree sequence. Leaf nodes (from :math:`0` to :math:`n - 1`)
+represent the samples and internal nodes (:math:`\geq n`) represent
+their ancestors. Each node corresponds to a particular individual that
+lived at some time time in the history of the sample. The ``nodes``
+group is used to record information about these individuals.
+
+=======================     ==============
+Path                        Type
+=======================     ==============
+/trees/nodes/population     H5T_STD_U8LE
+/trees/nodes/time           H5T_IEEE_F64LE
+=======================     ==============
+
+^^^^^^^^^^^^^
+Records group
+^^^^^^^^^^^^^
+
+The ``/trees/records`` group stores the individual coalesence records.
+Each record consists of four pieces of information: the left and
+right coordinates of the coalescing interval, the list of child nodes
+and the parent node.
+
+The ``left`` and ``right`` datasets are indexes into the ``/trees/breakpoints``
+dataset and define the genomic interval over which the record applies. The
+interval is half-open, so that the left coordinate is inclusive and the right
+coordinate is exclusive.
+
+The ``node`` dataset records the parent node of the record, and is
+an index into the ``/trees/nodes`` group.
+
+The ``num_children`` dataset records the number of children for a particular
+record. The ``children`` dataset then records the actual child nodes for each
+coalescence record. This 1-dimensional array lists the child nodes for every
+record in order, and therefore by using the ``num_children`` array we can
+efficiently recover the actual children involved in each event. Within a given
+event, child nodes must be sorted in increasing order. The records must be
+listed in time increasing order.
+
+===================       ==============      ======
+Path                      Type                Dim
+===================       ==============      ======
+/trees/left               H5T_STD_U32LE       N
+/trees/right              H5T_STD_U32LE       N
+/trees/node               H5T_STD_U32LE       N
+/trees/num_children       H5T_STD_U32LE       N
+/trees/children           H5T_STD_U32LE       :math:`\leq 2 \times` N
+===================       ==============      ======
+
+^^^^^^^^^^^^^
+Indexes group
+^^^^^^^^^^^^^
+
+The ``/trees/indexes`` group records information required to efficiently
+reconstruct the individual trees from the tree sequence. The
+``insertion_order`` dataset contains the order in which records must be applied
+and the ``removal_order`` dataset the order in which records must be
+removed for a left-to-right traversal of the trees.
+
+==============================     ==============
+Path                               Type
+==============================     ==============
+/trees/indexes/insertion_order     H5T_STD_U32LE
+/trees/indexes/removal_order       H5T_STD_U32LE
+==============================     ==============
