@@ -32,6 +32,7 @@ except ImportError:
 import math
 import os
 import random
+import sys
 import tempfile
 import unittest
 import xml.etree
@@ -120,6 +121,34 @@ class TestHarmonicNumber(unittest.TestCase):
             return sum(1 / k for k in range(1, n + 1))
         for n in range(10, 1000, 100):
             self.assertAlmostEqual(msprime.harmonic_number(n), H(n), 1)
+
+
+class TestAlmostEqual(unittest.TestCase):
+    """
+    Simple tests to ensure that the almost_equal() method is sensible.
+    """
+
+    def test_defaults(self):
+        eps = sys.float_info.epsilon
+        equal = [
+            (1, 1), (0, 0), (1 + eps, 1), (1, 1 - eps),
+            (10.000000000001, 10.0)]
+        for a, b in equal:
+            self.assertAlmostEqual(a, b)
+            self.assertTrue(msprime.almost_equal(a, b))
+
+    def test_near_zero(self):
+        eps = sys.float_info.epsilon
+        equal = [(0, 0), (eps, 0), (0, -eps), (-eps, eps)]
+        for a, b in equal:
+            self.assertAlmostEqual(a, b)
+            self.assertTrue(
+                msprime.almost_equal(a, b, abs_tol=1e-9))
+        not_equal = [(0, 0.0000001), (-0.0000001, 0)]
+        for a, b in not_equal:
+            self.assertNotAlmostEqual(a, b)
+            self.assertFalse(
+                msprime.almost_equal(a, b, abs_tol=1e-9))
 
 
 class TestMsCommandLine(tests.MsprimeTestCase):

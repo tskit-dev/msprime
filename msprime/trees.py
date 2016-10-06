@@ -66,6 +66,17 @@ Sample = collections.namedtuple(
     ["population", "time"])
 
 
+def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
+    """
+    Returns true if the specified pair of integers are equal to
+    within the specified tolerances.
+
+    The signature and implementation are taken from PEP 485,
+    https://www.python.org/dev/peps/pep-0485/
+    """
+    return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
+
 def get_provenance_dict(command, parameters):
     """
     Returns a dictionary encoding an execution of msprime.
@@ -2139,9 +2150,8 @@ class DemographyDebugger(object):
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
-        self._demographic_events = collections.defaultdict(list)
-        for event in demographic_events:
-            self._demographic_events[event.time].append(event)
+        self._demographic_events = sorted(
+            demographic_events, key=lambda e: e.time)
 
     def _scaled_time_to_generations(self, t):
         return 4 * self._Ne * t
@@ -2201,19 +2211,27 @@ class DemographyDebugger(object):
         """
         Prints a summary of the history of the populations.
         """
+        abs_tol = 1e-9
         ll_sim = self._simulator.create_ll_instance()
         N = self._simulator.get_num_populations()
         Ne = self._Ne
         start_time = 0
         scaled_end_time = 0
+        event_index = 0
         while not math.isinf(scaled_end_time):
-            events = self._demographic_events[start_time]
+            events = []
+            while (
+                    event_index < len(self._demographic_events) and
+                    almost_equal(
+                        self._demographic_events[event_index].time,
+                        start_time, abs_tol=abs_tol)):
+                events.append(self._demographic_events[event_index])
+                event_index += 1
             if len(events) > 0:
                 print(
-                    "Events @ generation {}".format(start_time),
-                    file=output)
+                    "Events @ generation {}".format(start_time), file=output)
             for event in events:
-                assert event.time == start_time
+                assert almost_equal(event.time, start_time, abs_tol=abs_tol)
                 print("   -", event, file=output)
             print(file=output)
             scaled_end_time = ll_sim.debug_demography()
