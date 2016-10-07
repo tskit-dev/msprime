@@ -108,7 +108,10 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     TreeSequence *tree_sequence;
+    PyObject *genotypes_buffer;
     vargen_t *variant_generator;
+    Py_buffer buffer;
+    int buffer_acquired;
 } VariantGenerator;
 
 typedef struct {
@@ -453,6 +456,13 @@ out:
     return ret;
 }
 
+static inline PyObject *
+convert_mutation(mutation_t *mutation)
+{
+    return Py_BuildValue("dIn", mutation->position,
+        (unsigned int) mutation->node, (Py_ssize_t) mutation->index);
+}
+
 static PyObject *
 convert_mutations(mutation_t *mutations, size_t num_mutations)
 {
@@ -466,9 +476,7 @@ convert_mutations(mutation_t *mutations, size_t num_mutations)
         goto out;
     }
     for (j = 0; j < num_mutations; j++) {
-        py_mutation = Py_BuildValue("dIn", mutations[j].position,
-                (unsigned int) mutations[j].node,
-                (Py_ssize_t) mutations[j].index);
+        py_mutation = convert_mutation(&mutations[j]);
         if (py_mutation == NULL) {
             Py_DECREF(l);
             goto out;
@@ -2901,7 +2909,7 @@ SparseTree_check_sparse_tree(SparseTree *self)
 {
     int ret = 0;
     if (self->sparse_tree == NULL) {
-        PyErr_SetString(PyExc_ValueError, "sparse_tree not initialised");
+        PyErr_SetString(PyExc_RuntimeError, "sparse_tree not initialised");
         ret = -1;
     }
     return ret;
@@ -3006,6 +3014,25 @@ out:
     if (tracked_leaves != NULL) {
         PyMem_Free(tracked_leaves);
     }
+    return ret;
+}
+
+static PyObject *
+SparseTree_free(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    /* This method is need because we have dangling references to
+     * trees after a for loop and we can't run set_mutations.
+     */
+    sparse_tree_free(self->sparse_tree);
+    PyMem_Free(self->sparse_tree);
+    self->sparse_tree = NULL;
+    ret = Py_BuildValue("");
+out:
     return ret;
 }
 
@@ -3321,6 +3348,8 @@ static PyMemberDef SparseTree_members[] = {
 };
 
 static PyMethodDef SparseTree_methods[] = {
+    {"free", (PyCFunction) SparseTree_free, METH_NOARGS,
+            "Frees the underlying tree object." },
     {"get_num_nodes", (PyCFunction) SparseTree_get_num_nodes, METH_NOARGS,
             "Returns the number of nodes in the sparse tree." },
     {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
@@ -4307,6 +4336,10 @@ VariantGenerator_dealloc(VariantGenerator* self)
         self->variant_generator = NULL;
     }
     Py_XDECREF(self->tree_sequence);
+    Py_XDECREF(self->genotypes_buffer);
+    if (self->buffer_acquired) {
+        PyBuffer_Release(&self->buffer);
+    }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -4315,18 +4348,43 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
-    TreeSequence *tree_sequence;
+    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", "as_char"};
+    TreeSequence *tree_sequence = NULL;
+    PyObject *genotypes_buffer = NULL;
+    int as_char = 0;
+    int flags = 0;
+    size_t sample_size;
 
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &tree_sequence)) {
+    self->genotypes_buffer = NULL;
+    self->buffer_acquired = 0;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O|i", kwlist,
+            &TreeSequenceType, &tree_sequence, &genotypes_buffer,
+            &as_char)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
     Py_INCREF(self->tree_sequence);
+    self->genotypes_buffer = genotypes_buffer;
+    Py_INCREF(self->genotypes_buffer);
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    sample_size = tree_sequence_get_sample_size(
+            self->tree_sequence->tree_sequence);
+    if (!PyObject_CheckBuffer(genotypes_buffer)) {
+        PyErr_SetString(PyExc_TypeError,
+            "genotypes buffer must support the Python buffer protocol.");
+        goto out;
+    }
+    if (PyObject_GetBuffer(genotypes_buffer, &self->buffer,
+                PyBUF_SIMPLE|PyBUF_WRITABLE) != 0) {
+        goto out;
+    }
+    self->buffer_acquired = 1;
+    if (sample_size * sizeof(uint8_t) > self->buffer.len) {
+        PyErr_SetString(PyExc_BufferError, "genotypes buffer is too small");
         goto out;
     }
     self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
@@ -4334,9 +4392,9 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    memset(self->variant_generator, 0, sizeof(vargen_t));
+    flags = as_char? MSP_GENOTYPES_AS_CHAR: 0;
     err = vargen_alloc(self->variant_generator,
-            self->tree_sequence->tree_sequence);
+            self->tree_sequence->tree_sequence, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4350,20 +4408,20 @@ static PyObject *
 VariantGenerator_next(VariantGenerator *self)
 {
     PyObject *ret = NULL;
-    char *variant;
-    double position;
+    mutation_t *mutation;
     int err;
+    char *genotypes = (char *) self->buffer.buf;
 
     if (VariantGenerator_check_state(self) != 0) {
         goto out;
     }
-    err = vargen_next(self->variant_generator, &position, &variant);
+    err = vargen_next(self->variant_generator, &mutation, genotypes);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     if (err == 1) {
-        ret = Py_BuildValue("ds", position, variant);
+        ret = convert_mutation(mutation);
     }
 out:
     return ret;

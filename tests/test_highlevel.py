@@ -37,6 +37,8 @@ import tempfile
 import unittest
 import xml.etree
 
+import numpy as np
+
 import msprime
 import _msprime
 import tests
@@ -351,6 +353,8 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertEqual(ts.get_num_trees(), num_trees)
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
+        # Accessing the trees after iteration is finished gives a RuntimeError
+        self.assertRaises(RuntimeError, st1.get_root)
 
     def verify_haplotype_statistics(self, ts):
         """
@@ -549,21 +553,63 @@ class TestTreeSimulator(HighLevelTestCase):
             ValueError, msprime.TreeSimulator, [(0, 0)], recomb_map)
 
 
+class TestVariantGenerator(HighLevelTestCase):
+    """
+    Tests the variants() method to ensure the output is consistent.
+    """
+    def get_tree_sequence(self):
+        ts = msprime.simulate(
+            10, length=10, recombination_rate=1, mutation_rate=10)
+        self.assertGreater(ts.get_num_mutations(), 10)
+        return ts
+
+    def test_as_bytes(self):
+        ts = self.get_tree_sequence()
+        n = ts.get_sample_size()
+        m = ts.get_num_mutations()
+        A = np.zeros((m, n), dtype='u1')
+        B = np.zeros((m, n), dtype='u1')
+        for variant in ts.variants():
+            A[variant.index] = variant.genotypes
+        for variant in ts.variants(as_bytes=True):
+            self.assertIsInstance(variant.genotypes, bytes)
+            B[variant.index] = np.fromstring(
+                variant.genotypes, np.uint8) - ord('0')
+        self.assertTrue(np.all(A == B))
+        bytes_variants = list(ts.variants(as_bytes=True))
+        for j, variant in enumerate(bytes_variants):
+            self.assertEqual(j, variant.index)
+            row = np.fromstring(variant.genotypes, np.uint8) - ord('0')
+            self.assertTrue(np.all(A[j] == row))
+
+    def test_mutation_information(self):
+        ts = self.get_tree_sequence()
+        for mutation, variant in zip(ts.mutations(), ts.variants()):
+            self.assertEqual(mutation.position, variant.position)
+            self.assertEqual(mutation.node, variant.node)
+            self.assertEqual(mutation.index, variant.index)
+            self.assertEqual(mutation, variant[:-1])
+
+    def test_no_mutations(self):
+        ts = msprime.simulate(10)
+        self.assertEqual(ts.get_num_mutations(), 0)
+        variants = list(ts.variants())
+        self.assertEqual(len(variants), 0)
+
+
 class TestHaplotypeGenerator(HighLevelTestCase):
     """
     Tests the haplotype generation code.
     """
 
-    def verify_haplotypes_variants(self, n, haplotypes, variants):
+    def verify_haplotypes(self, n, haplotypes):
         """
-        Verify that the specified set of haplotypes and variants are
-        consistent.
+        Verify that the specified set of haplotypes is consistent.
         """
         self.assertEqual(len(haplotypes), n)
         m = len(haplotypes[0])
         for h in haplotypes:
             self.assertEqual(len(h), m)
-        self.assertEqual(len(variants), m)
         # Examine each column in H; we must have a mixture of 0s and 1s
         for k in range(m):
             zeros = 0
@@ -577,20 +623,29 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             self.assertGreater(zeros, 0)
             self.assertGreater(ones, 0)
             self.assertEqual(zeros + ones, n)
-            self.assertEqual(col, variants[k])
 
     def verify_tree_sequence(self, tree_sequence):
         n = tree_sequence.get_sample_size()
+        m = tree_sequence.get_num_mutations()
         haplotypes = list(tree_sequence.haplotypes())
-        for h in haplotypes:
-            self.assertEqual(len(h), tree_sequence.get_num_mutations())
-        variants = [variant for _, variant in tree_sequence.variants()]
-        for v in variants:
-            self.assertEqual(len(v), tree_sequence.get_sample_size())
-        self.verify_haplotypes_variants(n, haplotypes, variants)
+        A = np.zeros((n, m), dtype='u1')
+        B = np.zeros((n, m), dtype='u1')
+        for j, h in enumerate(haplotypes):
+            self.assertEqual(len(h), m)
+            A[j] = np.fromstring(h, np.uint8) - ord('0')
+        for variant in tree_sequence.variants():
+            B[:, variant.index] = variant.genotypes
+        self.assertTrue(np.all(A == B))
+        self.verify_haplotypes(n, haplotypes)
         self.assertEqual(
             [variant.position for variant in tree_sequence.variants()],
             [mutation.position for mutation in tree_sequence.mutations()])
+        self.assertEqual(
+            [variant.node for variant in tree_sequence.variants()],
+            [mutation.node for mutation in tree_sequence.mutations()])
+        self.assertEqual(
+            [variant.index for variant in tree_sequence.variants()],
+            [mutation.index for mutation in tree_sequence.mutations()])
 
     def verify_simulation(self, n, m, r, theta):
         """
@@ -736,9 +791,6 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_num_mutations(), 0)
             for st in ts.trees():
                 self.assertEqual(st.get_num_mutations(), 0)
-            # We explicitly free remove the sparse tree here to so we
-            # can reset the mutations.
-            del st
             # choose a mutation rate that hopefully guarantees mutations,
             # but not too many.
             mu = 10 / ts.get_sequence_length()

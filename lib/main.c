@@ -468,18 +468,25 @@ print_variants(tree_sequence_t *ts)
 {
     int ret = 0;
     vargen_t vg;
-    uint32_t j;
-    double x;
-    char *variant;
+    uint32_t j, k;
+    mutation_t *mut;
+    char *genotypes = malloc(tree_sequence_get_sample_size(ts) * sizeof(char));
 
+    if (genotypes == NULL) {
+        fatal_error("no memory");
+    }
     printf("variants (%d) \n", (int) ts->num_mutations);
-    ret = vargen_alloc(&vg, ts);
+    ret = vargen_alloc(&vg, ts, 0);
     if (ret != 0) {
         fatal_library_error(ret, "vargen_alloc");
     }
     j = 0;
-    while ((ret = vargen_next(&vg, &x, &variant)) == 1) {
-        printf("%d\t%f\t%s\n", j, x, variant);
+    while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) {
+        printf("%d\t%f\t", j, mut->position);
+        for (k = 0; k < tree_sequence_get_sample_size(ts); k++) {
+            printf("%d", genotypes[k]);
+        }
+        printf("\n");
         j++;
     }
     if (ret != 0) {
@@ -489,12 +496,13 @@ print_variants(tree_sequence_t *ts)
         printf("ERROR!! missing variants %d %d\n", j, (int) ts->num_mutations);
     }
 
-    while ((ret = vargen_next(&vg, &x, &variant)) == 1) {
+    while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) {
         /* this should never happen as the iterators should always
          * fail after they finish. */
         assert(0);
     }
     vargen_free(&vg);
+    free(genotypes);
 }
 
 static void

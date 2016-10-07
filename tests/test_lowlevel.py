@@ -1838,6 +1838,13 @@ class TestTreeSequence(LowLevelTestCase):
         ts.set_mutations(mutations)
         self.assertEqual(ts.get_mutations(), mutations)
 
+        # We can also use the free_tree method to get rid of the underlying
+        # reference.
+        tree = _msprime.SparseTree(ts)
+        tree.free()
+        ts.set_mutations([])
+        self.assertEqual(ts.get_mutations(), [])
+
     def test_constructor_interface(self):
         tree_sequence = _msprime.TreeSequence()
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
@@ -2379,36 +2386,81 @@ class TestVariantGenerator(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.VariantGenerator)
         ts = _msprime.TreeSequence()
         # This hasn't been initialised, so should fail.
-        self.assertRaises(ValueError, _msprime.VariantGenerator, ts)
+        self.assertRaises(
+            ValueError, _msprime.VariantGenerator, ts, bytearray())
         ts = self.get_tree_sequence(num_loci=10)
-
+        buff = bytearray(ts.get_sample_size())
         for bad_type in ["", {}, [], None]:
             self.assertRaises(
+                TypeError, _msprime.VariantGenerator, bad_type, buff)
+            self.assertRaises(
                 TypeError, _msprime.VariantGenerator, ts, bad_type)
-        vg = _msprime.VariantGenerator(ts)
+            self.assertRaises(
+                TypeError, _msprime.VariantGenerator, ts, buff, bad_type)
+        for size in [0, 1, ts.get_sample_size() - 1]:
+            buff = bytearray(size)
+            self.assertRaises(
+                BufferError, _msprime.VariantGenerator, ts, buff)
+
+        buff = bytearray(ts.get_sample_size())
+        vg = _msprime.VariantGenerator(ts, buff)
         before = list(vg)
-        vg = _msprime.VariantGenerator(ts)
+        vg = _msprime.VariantGenerator(ts, buff)
         del ts
         # We should keep a reference to the tree sequence.
         after = list(vg)
         self.assertEqual(before, after)
 
+    def test_buffer_nastiness(self):
+        ts = self.get_tree_sequence(num_loci=10)
+        buff = bytearray(ts.get_sample_size())
+        variants = list(_msprime.VariantGenerator(ts, buff))
+        del buff
+        j = 0
+        for _ in enumerate(variants):
+            j += 1
+        self.assertEqual(j, ts.get_num_mutations())
+
+        buff = bytearray(ts.get_sample_size())
+        variants = list(_msprime.VariantGenerator(ts, buff))
+        buff.extend(0 for j in range(1000))
+        j = 0
+        for _ in enumerate(variants):
+            j += 1
+        self.assertEqual(j, ts.get_num_mutations())
+
+        buff = bytearray(ts.get_sample_size())
+        variants = list(_msprime.VariantGenerator(ts, buff))
+        buff.pop()
+        j = 0
+        for _ in enumerate(variants):
+            j += 1
+        self.assertEqual(j, ts.get_num_mutations())
+
     def test_form(self):
         ts = self.get_tree_sequence(num_loci=10)
-        variants = list(_msprime.VariantGenerator(ts))
+        buff = bytearray(ts.get_sample_size())
+        variants = list(_msprime.VariantGenerator(ts, buff))
         self.assertGreater(len(variants), 0)
         self.assertEqual(len(variants), ts.get_num_mutations())
-        positions = []
-        for pos, variant in variants:
-            positions.append(pos)
-            self.assertEqual(len(variant), ts.get_sample_size())
-        self.assertEqual(
-            positions,
-            [pos for pos, _, _ in ts.get_mutations()])
+        self.assertEqual(variants, ts.get_mutations())
+        for _ in _msprime.VariantGenerator(ts, buff):
+            self.assertEqual(len(buff), ts.get_sample_size())
+            for b in buff:
+                self.assertIn(b, [0, 1])
+        for _ in _msprime.VariantGenerator(ts, buff, False):
+            self.assertEqual(len(buff), ts.get_sample_size())
+            for b in buff:
+                self.assertIn(b, [0, 1])
+        for _ in _msprime.VariantGenerator(ts, buff, True):
+            self.assertEqual(len(buff), ts.get_sample_size())
+            for b in buff:
+                self.assertIn(b, [ord('0'), ord('1')])
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
-        variants = _msprime.VariantGenerator(ts)
+        buff = bytearray(ts.get_sample_size())
+        variants = _msprime.VariantGenerator(ts, buff)
         self.verify_iterator(variants)
 
 
@@ -2649,11 +2701,39 @@ class TestSparseTree(LowLevelTestCase):
                     self.assertRaises(
                         _msprime.LibraryError, _msprime.HaplotypeGenerator,
                         other_ts)
-                    vg = _msprime.VariantGenerator(other_ts)
+                    buff = bytearray(other_ts.get_sample_size())
+                    vg = _msprime.VariantGenerator(other_ts, buff)
                     self.assertRaises(_msprime.LibraryError, list, vg)
                     # We must free the variant generator to decrement the
                     # refcount on other_ts
                     del vg
+
+    def test_free(self):
+        ts = self.get_tree_sequence()
+        t = _msprime.SparseTree(
+            ts, flags=_msprime.LEAF_COUNTS | _msprime.LEAF_LISTS)
+        no_arg_methods = [
+            t.get_root, t.get_sample_size, t.get_index, t.get_left,
+            t.get_right, t.get_num_mutations, t.get_flags, t.get_mutations,
+            t.get_num_mutations, t.get_num_nodes]
+        node_arg_methods = [
+            t.get_parent, t.get_population, t.get_children, t.get_num_leaves,
+            t.get_num_tracked_leaves]
+        two_node_arg_methods = [t.get_mrca]
+        for method in no_arg_methods:
+            method()
+        for method in node_arg_methods:
+            method(0)
+        for method in two_node_arg_methods:
+            method(0, 0)
+        t.free()
+        self.assertRaises(RuntimeError, t.free)
+        for method in no_arg_methods:
+            self.assertRaises(RuntimeError, method)
+        for method in node_arg_methods:
+            self.assertRaises(RuntimeError, method, 0)
+        for method in two_node_arg_methods:
+            self.assertRaises(RuntimeError, method, 0, 0)
 
 
 class TestLeafListIterator(LowLevelTestCase):
@@ -2872,10 +2952,12 @@ class TestLdCalculator(LowLevelTestCase):
         return bytearray(8 * num_values)
 
     def test_constructor(self):
-        self.assertRaises(TypeError, _msprime.LdCalculator)
+        ts = _msprime.TreeSequence()
+        # This hasn't been initialised, so should fail.
+        self.assertRaises(ValueError, _msprime.LdCalculator, ts)
         for bad_type in [None, "1", []]:
             self.assertRaises(
-                TypeError, _msprime.LeafListIterator, bad_type)
+                TypeError, _msprime.LdCalculator, bad_type)
 
     def test_refcounts(self):
         ts = self.get_tree_sequence()

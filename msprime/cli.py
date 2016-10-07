@@ -730,9 +730,9 @@ def run_dump_haplotypes(args):
 
 def run_dump_variants(args):
     tree_sequence = msprime.load(args.history_file)
-    for pos, v in tree_sequence.variants():
-        print(pos, end="\t")
-        print(v)
+    for variant in tree_sequence.variants(as_bytes=True):
+        print(variant.position, end="\t")
+        print("{}".format(variant.genotypes.decode()))
 
 
 def run_dump_records(args):
@@ -759,12 +759,10 @@ def run_dump_macs(args):
     m = tree_sequence.get_sequence_length()
     print("COMMAND:\tnot_macs {} {}".format(n, m))
     print("SEED:\tASEED")
-    site = 0
-    for position, variant in tree_sequence.variants():
+    for variant in tree_sequence.variants(as_bytes=True):
         print(
-            "SITE:", site, position / m, 0.0, variant, sep="\t"
-        )
-        site += 1
+            "SITE:", variant.index, variant.position / m, 0.0,
+            "{}".format(variant.genotypes.decode()), sep="\t")
 
 
 def run_simulate(args):

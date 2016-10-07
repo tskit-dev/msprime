@@ -94,6 +94,7 @@ def write_vcf(tree_sequence, output, ploidy):
             sep="\t", end="", file=output)
         for j in range(n):
             genotype = "|".join(
+                str(g) for g in
                 variant.genotypes[j * ploidy: j * ploidy + ploidy])
             print("\t", genotype, end="", sep="", file=output)
         print(file=output)

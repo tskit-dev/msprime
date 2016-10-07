@@ -93,7 +93,7 @@ method::
 
 The branch length for node 6 is 778.6 generations as the time for
 node 6 is 1006.7 and the time of its parent is 1785.4. It is also
-often useful to obtain the total branch length of the tree, i.e,
+often useful to obtain the total branch length of the tree, i.e.,
 the sum of the lengths of all branches::
 
     >>> print(tree.get_total_branch_length())
@@ -177,15 +177,16 @@ to our example above, we can use::
     >>> for tree in tree_sequence.trees():
     >>>     print(tree.get_interval(), list(tree.mutations()), sep="\t")
     Total mutations =  1
-    (0.0, 4701.4225005874)	[]
-    (4701.4225005874, 10000.0)	[(5461.212369738915, 6)]
+    (0.0, 4701.4225005874)  []
+    (4701.4225005874, 10000.0)      [Mutation(position=5461.212369738915, node=6, index=0)]
 
 In this example (which has the same genealogies as our example above because
 we use the same random seed), we have one mutation which
-falls on the second tree. Mutations are represented as a
-tuple ``(position, node)``, where ``position`` is the location of the mutation
-in genomic coordinates and ``node`` is the node in the tree above which the
-mutation occurs. Positions are given as a floating point value as we are
+falls on the second tree. Mutations are represented as an object
+with three attributes: ``position`` is the location of the mutation
+in genomic coordinates, ``node`` is the node in the tree above which the
+mutation occurs, and ``index`` is the (zero-based) index of the mutation
+in the list. Positions are given as a floating point value as we are
 using the infinite sites model. Every mutation falls on exactly one tree
 and we obtain the mutations for a particular tree using the
 :meth:`~.TreeSequence.mutations` method. Mutations are always returned
@@ -208,8 +209,120 @@ For example,::
     >>> for tree in tree_sequence.trees():
     ...    for position, node in tree.mutations():
     ...        print("Mutation @ position {} has frequency {}".format(
-    ...            position, tree.get_num_leaves(node) / tree.get_sample_size()))
+    ...            mutation.position,
+    ...            tree.get_num_leaves(mutation.node) / tree.get_sample_size()))
     Mutation @ position 5461.21236974 has frequency 0.4
+
+Sometimes we are only interested in a subset of the mutations
+in a tree sequence. In these situations, it is useful (and efficient)
+to update the tree sequence to only include the mutations we are
+interested in using the :meth:`.TreeSequence.set_mutations` method.
+Here, for example, we simulate some data and then retain only the
+common variants where the allele frequency is greater than 0.5.
+
+.. code-block:: python
+
+    import msprime
+
+    def set_mutations_example():
+        tree_sequence = msprime.simulate(
+            sample_size=10000, Ne=1e4, length=1e7, recombination_rate=2e-8,
+            mutation_rate=2e-8)
+        print("Simulated ", tree_sequence.get_num_mutations(), "mutations")
+        common_mutations = []
+        for tree in tree_sequence.trees():
+            for mutation in tree.mutations():
+                p = tree.get_num_leaves(mutation.node) / tree.get_sample_size()
+                if p >= 0.5:
+                    common_mutations.append(mutation)
+        tree_sequence.set_mutations(common_mutations)
+        print("Reduced to ", tree_sequence.get_num_mutations(), "common mutations")
+
+
+Running this code, we get::
+
+    >>> set_mutations_example()
+    Simulated  78202 mutations
+    Reduced to  5571 common mutations
+
+
+********
+Variants
+********
+
+We are often interesting in accessing the sequence data that results from
+simulations directly. The most efficient way to do this is by using
+the :meth:`.TreeSequence.variants` method, which returns an iterator
+over all the variant objects arising from the trees and mutations.
+Each variant contains all the information in a mutation object, but
+also has the observed sequences for each sample in the ``genotypes``
+field.
+
+.. code-block:: python
+
+    import msprime
+
+    def variants_example():
+        tree_sequence = msprime.simulate(
+            sample_size=20, Ne=1e4, length=5e3, recombination_rate=2e-8,
+            mutation_rate=2e-8, random_seed=10)
+        print("Simulated ", tree_sequence.get_num_mutations(), "mutations")
+        for variant in tree_sequence.variants():
+            print(variant.index, variant.position, variant.genotypes, sep="\t")
+
+In this example we simulate some data and then print out the observed
+sequences. We loop through each variant and print out the observed state of
+each sample as an array of zeros and ones, along with the index and position
+of the corresponding mutation. (The default form for the
+``genotypes`` array here is a :class:`numpy.ndarray`; however, the output can
+also be a plain Python bytes object. See the :meth:`.TreeSequence.variants`
+documentation for details.) Running the code, we get::
+
+    >>> variants_example()
+    Simulated  7 mutations
+    0       2146.29801511   [0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+    1       2475.24314909   [0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0]
+    2       3087.04505359   [0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0]
+    3       3628.35359621   [1 0 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1]
+    4       4587.85827679   [0 0 0 0 0 1 1 0 1 0 0 1 0 1 0 0 0 0 0 0]
+    5       4593.29453791   [1 0 1 0 0 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1]
+    6       4784.26662856   [0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0]
+
+
+This way of working with the sequence data is quite efficient because we
+do not need to keep the entire variant matrix in memory at once.
+
+.. code-block:: python
+
+    import msprime
+    import numpy as np
+
+    def variant_matrix_example():
+        print("\nCreating full variant matrix")
+        tree_sequence = msprime.simulate(
+            sample_size=20, Ne=1e4, length=5e3, recombination_rate=2e-8,
+            mutation_rate=2e-8, random_seed=10)
+        shape = tree_sequence.get_num_mutations(), tree_sequence.get_sample_size()
+        A = np.empty(shape, dtype="u1")
+        for variant in tree_sequence.variants():
+            A[variant.index] = variant.genotypes
+        print(A)
+
+In this example, we run the same simulation but this time
+store entire variant matrix in a two-dimensional numpy array.
+This is useful for integrating with tools such as
+`scikit allel <https://scikit-allel.readthedocs.io/en/latest/>`_.::
+
+    >>> variant_matrix_example()
+    Creating full variant matrix
+    [[0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+     [0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0]
+     [0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0]
+     [1 0 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1]
+     [0 0 0 0 0 1 1 0 1 0 0 1 0 1 0 0 0 0 0 0]
+     [1 0 1 0 0 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1]
+     [0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0]]
+
 
 ***********
 Replication
@@ -333,7 +446,7 @@ Demography
 **********
 
 Msprime provides a flexible and simple way to model past demographic events
-in arbitrary combinations. Here is an example descibing the
+in arbitrary combinations. Here is an example describing the
 `Gutenkunst et al. <http://dx.doi.org/10.1371/journal.pgen.1000695>`_
 out-of-Africa model. See
 `Figure 2B <http://dx.doi.org/10.1371/journal.pgen.1000695.g002>`_
@@ -473,7 +586,7 @@ sizes and growth rates are all as you intend during each epoch::
     that you think would be useful, please `open an issue on GitHub
     <https://github.com/jeromekelleher/msprime/issues>`_
 
-Once you are satistied that the demographic history that you have built
+Once you are satisfied that the demographic history that you have built
 is correct, it can then be simulated by calling the :func:`.simulate`
 function.
 
@@ -482,7 +595,7 @@ Recombination maps
 ******************
 
 The ``msprime`` API allows us to quickly and easily simulate data from an
-arbitary recombination map. In this example we read a recombination
+arbitrary recombination map. In this example we read a recombination
 map for human chromosome 22, and simulate a single replicate. After
 the simulation is completed, we plot histograms of the recombination
 rates and the simulated breakpoints. These show that density of
