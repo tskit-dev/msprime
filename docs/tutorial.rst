@@ -158,6 +158,7 @@ also important differences between the trees.
     the trees returned from the iterator in a list, they will all refer
     to the same tree.
 
+
 *********
 Mutations
 *********
@@ -323,6 +324,46 @@ This is useful for integrating with tools such as
      [1 0 1 0 0 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1]
      [0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0]]
 
+
+******************
+Historical samples
+******************
+
+Simulating coalescent histories in which some of the samples are not
+from the present time is straightforward in ``msprime``.
+By using the ``samples`` argument to :meth:`msprime.simulate`
+we can specify the location and time at which all samples are made.
+
+.. code-block:: python
+
+    def historical_samples_example():
+        samples = [
+            msprime.Sample(population=0, time=0),
+            msprime.Sample(0, 0),  # Or, we can use positional arguments.
+            msprime.Sample(0, 3.0)
+        ]
+        tree_seq = msprime.simulate(samples=samples)
+        tree = next(tree_seq.trees())
+        for u in range(tree_seq.get_num_nodes()):
+            print(u, tree.get_parent(u), tree.get_time(u), sep="\t")
+
+In this example we create three samples, two taken at the present time
+and one taken 1.0 generations in the past. There are a number of
+different ways in which we can describe the samples using the
+``msprime.Sample`` object (samples can be provided as plain tuples also
+if more convenient). Running this example, we get::
+
+    >>> historical_samples_example()
+    0       3       0.0
+    1       3       0.0
+    2       4       1.0
+    3       4       0.502039955384
+    4       -1      4.5595966593
+
+
+Because nodes ``0`` and ``1`` were sampled at time 0, their times in the tree
+are both 0. Node ``2`` was sampled at time 1.0, and so its time is recorded
+as 1.0 in the tree.
 
 ***********
 Replication

@@ -709,8 +709,8 @@ def simulate(
 
     :param int sample_size: The number of individuals in our sample.
         If not specified or None, this defaults to the sum of the
-        subpopulation sample sizes. Either ``sample_size`` or
-        ``population_configurations`` must be specified.
+        subpopulation sample sizes. Either ``sample_size``,
+        ``population_configurations`` or ``samples`` must be specified.
     :param float Ne: The effective (diploid) population size for the reference
         population. This determines the factor by which the per-generation
         recombination and mutation rates are scaled in the simulation.
@@ -749,6 +749,13 @@ def simulate(
         order of time. Events with the same time value will be applied
         sequentially in the order that they were supplied before the
         simulation algorithm continues with the next time step.
+    :param list samples: The list specifying the location and time of
+        all samples. This parameter may be used to specify historical
+        samples, and cannot be used in conjunction with the ``sample_size``
+        parameter. Each sample is a (``population_id``, ``time``) pair
+        such that the sample in position ``j`` in the list of samples
+        is drawn in the specified population at the specfied time. Time
+        is measured in generations, as elsewhere.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
