@@ -114,9 +114,10 @@ def mutations_example():
         j += 1
 
     for tree in tree_sequence.trees():
-        for position, node in tree.mutations():
+        for mutation in tree.mutations():
             print("Mutation @ position {} has frequency {}".format(
-                position, tree.get_num_leaves(node) / tree.get_sample_size()))
+                mutation.position,
+                tree.get_num_leaves(mutation.node) / tree.get_sample_size()))
 
 
 def out_of_africa():
@@ -293,13 +294,49 @@ def threads_example():
         "Found LD sites for", len(results), "doubleton mutations out of",
         ts.get_num_mutations())
 
+def set_mutations_example():
+    tree_sequence = msprime.simulate(
+        sample_size=10000, Ne=1e4, length=1e7, recombination_rate=2e-8,
+        mutation_rate=2e-8)
+    print("Simulated ", tree_sequence.get_num_mutations(), "mutations")
+    common_mutations = []
+    for tree in tree_sequence.trees():
+        for mutation in tree.mutations():
+            p = tree.get_num_leaves(mutation.node) / tree.get_sample_size()
+            if p >= 0.5:
+                common_mutations.append(mutation)
+    tree_sequence.set_mutations(common_mutations)
+    print("Reduced to ", tree_sequence.get_num_mutations(), "common mutations")
+
+def variants_example():
+    tree_sequence = msprime.simulate(
+        sample_size=20, Ne=1e4, length=5e3, recombination_rate=2e-8,
+        mutation_rate=2e-8, random_seed=10)
+    print("Simulated ", tree_sequence.get_num_mutations(), "mutations")
+    for variant in tree_sequence.variants():
+        print(variant.index, variant.position, variant.genotypes, sep="\t")
+
+def variant_matrix_example():
+    print("\nCreating full variant matrix")
+    tree_sequence = msprime.simulate(
+        sample_size=20, Ne=1e4, length=5e3, recombination_rate=2e-8,
+        mutation_rate=2e-8, random_seed=10)
+    shape = tree_sequence.get_num_mutations(), tree_sequence.get_sample_size()
+    A = np.empty(shape, dtype="u1")
+    for variant in tree_sequence.variants():
+        A[variant.index] = variant.genotypes
+    print(A)
+
 if __name__ == "__main__":
     # single_locus_example()
     # multi_locus_example()
     # mutations_example()
+    # set_mutations_example()
+    variants_example()
+    variant_matrix_example()
     # segregating_sites_example(10, 5, 100000)
     # migration_example()
     # out_of_africa()
     # variable_recomb_example()
     # ld_matrix_example()
-    threads_example()
+    # threads_example()
