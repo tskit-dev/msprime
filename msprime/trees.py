@@ -709,8 +709,8 @@ def simulate(
 
     :param int sample_size: The number of individuals in our sample.
         If not specified or None, this defaults to the sum of the
-        subpopulation sample sizes. Either ``sample_size`` or
-        ``population_configurations`` must be specified.
+        subpopulation sample sizes. Either ``sample_size``,
+        ``population_configurations`` or ``samples`` must be specified.
     :param float Ne: The effective (diploid) population size for the reference
         population. This determines the factor by which the per-generation
         recombination and mutation rates are scaled in the simulation.
@@ -749,6 +749,13 @@ def simulate(
         order of time. Events with the same time value will be applied
         sequentially in the order that they were supplied before the
         simulation algorithm continues with the next time step.
+    :param list samples: The list specifying the location and time of
+        all samples. This parameter may be used to specify historical
+        samples, and cannot be used in conjunction with the ``sample_size``
+        parameter. Each sample is a (``population_id``, ``time``) pair
+        such that the sample in position ``j`` in the list of samples
+        is drawn in the specified population at the specfied time. Time
+        is measured in generations, as elsewhere.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
@@ -830,18 +837,13 @@ def load_txt(records_file, mutations_file=None):
     method. The ``left``, ``right`` and ``time`` fields are parsed as base 10
     floating point values, and the ``node`` and ``population`` fields are
     parsed as base 10 integers. The ``children`` field is a comma-separated
-    list of base 10 integer values, and must contain exactly two elements. The
+    list of base 10 integer values, and must contain at least two elements. The
     file may optionally begin with a header line; if the first line begins with
     the text "left" it will be ignored.
 
     Records must be listed in the file in non-decreasing order of the time
-    field. As nodes are also allocated in time-increasing order, the records
-    must also be listed in order of non-decreasing node value. Within a record,
-    children must be listed in increasing order of node value. The left and
-    right coordinates must be non-negative values. Overall, the set of records
-    described must have the property that for a sample of size :math:`n`,
-    any point in the chromosome coordinate space intersects with exactly
-    :math:`n - 1` records.
+    field. Within a record, children must be listed in increasing order of node
+    value. The left and right coordinates must be non-negative values.
 
     An example of a simple tree sequence for four samples with
     three distinct trees is::
@@ -856,11 +858,12 @@ def load_txt(records_file, mutations_file=None):
 
     This example is equivalent to the tree sequence illustrated in Figure 4 of
     the `PLoS Computational Biology paper
-    <http://dx.doi.org/10.1371/journal.pcbi.1004842>`_. Note here that the
-    ``node`` value in the first  record is 4. Since leaf nodes are indexed from
-    zero and nodes are allocated sequentially in time order, the value of the
-    ``node`` field in the first record is equal to the sample size. We assume
-    also that there are no "gaps" in the node space.
+    <http://dx.doi.org/10.1371/journal.pcbi.1004842>`_. Nodes are given here in
+    time order (since this is a backwards-in-time tree sequence), but they may
+    be allocated in any order. In particular, left-to-right tree sequences are
+    fully supported. However, the smallest value in the ``node`` column must be
+    equal to the sample size, and there must not be 'gaps' in the node address
+    space.
 
     The optional ``mutations_file`` has a similiar format, but contains only
     two columns. These correspond to the ``position`` and ``node`` fields as

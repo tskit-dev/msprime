@@ -52,6 +52,23 @@ to the file provided as an argument.
     variety of sequence lengths, so that we need to change only parameter
     and not three simultaneously.
 
++++++++++++
+msp upgrade
++++++++++++
+
+:command:`msp upgrade` is a command line tool to convert tree sequence
+files written by older versions of msprime to the latest version.
+This tool requires `h5py <http://www.h5py.org/>`_, so please ensure that
+it is installed. The upgrade process involves creating a new tree sequence
+file from the records stored in the older file and is non-destructive.
+
+.. argparse::
+    :module: msprime.cli
+    :func: get_msp_parser
+    :prog: msp
+    :path: upgrade
+    :nodefault:
+
 ++++++++++++
 msp records
 ++++++++++++

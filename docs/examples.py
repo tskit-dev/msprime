@@ -327,13 +327,25 @@ def variant_matrix_example():
         A[variant.index] = variant.genotypes
     print(A)
 
+def historical_samples_example():
+    samples = [
+        msprime.Sample(population=0, time=0),
+        msprime.Sample(0, 0),  # Or, we can use positional arguments.
+        msprime.Sample(0, 1.0)
+    ]
+    tree_seq = msprime.simulate(samples=samples, random_seed=5)
+    tree = next(tree_seq.trees())
+    for u in range(tree_seq.get_num_nodes()):
+        print(u, tree.get_parent(u), tree.get_time(u), sep="\t")
+
 if __name__ == "__main__":
     # single_locus_example()
     # multi_locus_example()
     # mutations_example()
     # set_mutations_example()
-    variants_example()
-    variant_matrix_example()
+    # variants_example()
+    # variant_matrix_example()
+    historical_samples_example()
     # segregating_sites_example(10, 5, 100000)
     # migration_example()
     # out_of_africa()
