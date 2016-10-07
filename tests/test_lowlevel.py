@@ -1838,6 +1838,13 @@ class TestTreeSequence(LowLevelTestCase):
         ts.set_mutations(mutations)
         self.assertEqual(ts.get_mutations(), mutations)
 
+        # We can also use the free_tree method to get rid of the underlying
+        # reference.
+        tree = _msprime.SparseTree(ts)
+        tree.free()
+        ts.set_mutations([])
+        self.assertEqual(ts.get_mutations(), [])
+
     def test_constructor_interface(self):
         tree_sequence = _msprime.TreeSequence()
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
@@ -2388,6 +2395,8 @@ class TestVariantGenerator(LowLevelTestCase):
                 TypeError, _msprime.VariantGenerator, bad_type, buff)
             self.assertRaises(
                 TypeError, _msprime.VariantGenerator, ts, bad_type)
+            self.assertRaises(
+                TypeError, _msprime.VariantGenerator, ts, buff, bad_type)
         for size in [0, 1, ts.get_sample_size() - 1]:
             buff = bytearray(size)
             self.assertRaises(
@@ -2439,6 +2448,14 @@ class TestVariantGenerator(LowLevelTestCase):
             self.assertEqual(len(buff), ts.get_sample_size())
             for b in buff:
                 self.assertIn(b, [0, 1])
+        for _ in _msprime.VariantGenerator(ts, buff, False):
+            self.assertEqual(len(buff), ts.get_sample_size())
+            for b in buff:
+                self.assertIn(b, [0, 1])
+        for _ in _msprime.VariantGenerator(ts, buff, True):
+            self.assertEqual(len(buff), ts.get_sample_size())
+            for b in buff:
+                self.assertIn(b, [ord('0'), ord('1')])
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
@@ -2690,6 +2707,33 @@ class TestSparseTree(LowLevelTestCase):
                     # We must free the variant generator to decrement the
                     # refcount on other_ts
                     del vg
+
+    def test_free(self):
+        ts = self.get_tree_sequence()
+        t = _msprime.SparseTree(
+            ts, flags=_msprime.LEAF_COUNTS | _msprime.LEAF_LISTS)
+        no_arg_methods = [
+            t.get_root, t.get_sample_size, t.get_index, t.get_left,
+            t.get_right, t.get_num_mutations, t.get_flags, t.get_mutations,
+            t.get_num_mutations, t.get_num_nodes]
+        node_arg_methods = [
+            t.get_parent, t.get_population, t.get_children, t.get_num_leaves,
+            t.get_num_tracked_leaves]
+        two_node_arg_methods = [t.get_mrca]
+        for method in no_arg_methods:
+            method()
+        for method in node_arg_methods:
+            method(0)
+        for method in two_node_arg_methods:
+            method(0, 0)
+        t.free()
+        self.assertRaises(RuntimeError, t.free)
+        for method in no_arg_methods:
+            self.assertRaises(RuntimeError, method)
+        for method in node_arg_methods:
+            self.assertRaises(RuntimeError, method, 0)
+        for method in two_node_arg_methods:
+            self.assertRaises(RuntimeError, method, 0, 0)
 
 
 class TestLeafListIterator(LowLevelTestCase):

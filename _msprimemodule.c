@@ -456,6 +456,13 @@ out:
     return ret;
 }
 
+static inline PyObject *
+convert_mutation(mutation_t *mutation)
+{
+    return Py_BuildValue("dIn", mutation->position,
+        (unsigned int) mutation->node, (Py_ssize_t) mutation->index);
+}
+
 static PyObject *
 convert_mutations(mutation_t *mutations, size_t num_mutations)
 {
@@ -469,9 +476,7 @@ convert_mutations(mutation_t *mutations, size_t num_mutations)
         goto out;
     }
     for (j = 0; j < num_mutations; j++) {
-        py_mutation = Py_BuildValue("dIn", mutations[j].position,
-                (unsigned int) mutations[j].node,
-                (Py_ssize_t) mutations[j].index);
+        py_mutation = convert_mutation(&mutations[j]);
         if (py_mutation == NULL) {
             Py_DECREF(l);
             goto out;
@@ -2904,7 +2909,7 @@ SparseTree_check_sparse_tree(SparseTree *self)
 {
     int ret = 0;
     if (self->sparse_tree == NULL) {
-        PyErr_SetString(PyExc_ValueError, "sparse_tree not initialised");
+        PyErr_SetString(PyExc_RuntimeError, "sparse_tree not initialised");
         ret = -1;
     }
     return ret;
@@ -3009,6 +3014,25 @@ out:
     if (tracked_leaves != NULL) {
         PyMem_Free(tracked_leaves);
     }
+    return ret;
+}
+
+static PyObject *
+SparseTree_free(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    /* This method is need because we have dangling references to
+     * trees after a for loop and we can't run set_mutations.
+     */
+    sparse_tree_free(self->sparse_tree);
+    PyMem_Free(self->sparse_tree);
+    self->sparse_tree = NULL;
+    ret = Py_BuildValue("");
+out:
     return ret;
 }
 
@@ -3324,6 +3348,8 @@ static PyMemberDef SparseTree_members[] = {
 };
 
 static PyMethodDef SparseTree_methods[] = {
+    {"free", (PyCFunction) SparseTree_free, METH_NOARGS,
+            "Frees the underlying tree object." },
     {"get_num_nodes", (PyCFunction) SparseTree_get_num_nodes, METH_NOARGS,
             "Returns the number of nodes in the sparse tree." },
     {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
@@ -4395,8 +4421,7 @@ VariantGenerator_next(VariantGenerator *self)
         goto out;
     }
     if (err == 1) {
-        ret = Py_BuildValue("dIn", mutation->position,
-                (unsigned int) mutation->node, (Py_ssize_t) mutation->index);
+        ret = convert_mutation(mutation);
     }
 out:
     return ret;
