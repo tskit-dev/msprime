@@ -1,4 +1,85 @@
 ********************
+[0.4.0] - 2016-10-16
+********************
+
+Major release providing new functionality and laying groundwork for
+upcoming functionality.
+
+**Breaking changes**:
+
+- The HDF5 file format has been changed to allow for non-binary trees
+  and to improve performance. It is now both smaller and faster to
+  load. However, msprime cannot directly load tree sequence files
+  written by older versions. The ``msp upgrade`` utility has been
+  developed to provide an upgrade path for existing users, so that
+  files written by older versions of msprime can be converted to the
+  newer format and read by version 0.4.x of msprime.
+
+- The tuples returned by the ``mutations`` method contains an element.
+  This will break code doing things like
+
+      for pos, node in ts.mutations():
+          print(pos, node)
+
+  For better forward compatibility, code should use named attributes
+  rather than positional access:
+
+      for mutation in ts.mutations():
+          print(mutation.position, mutation.node)
+
+- Similarly, the undocumented ``variants`` method has some major changes:
+
+  1. The returned tuple has two new values, ``node`` and ``index``
+    in the middle of the tuple (but see the point above about using
+    named attributes).
+
+  2. The returned genotypes are by default numpy arrays. To revert
+    to the old behaviour of returning Python bytes objects, use the
+    ``as_bytes`` argument to the ``variants()`` method.
+
+**New features**:
+
+- Historical samples. Using the ``samples`` argument to ``simulate``
+  users can specify the location and time of all samples explicitly.
+
+- HDF5 file upgrade utility ``msp upgrade``
+
+- Support for non-binary trees in the tree sequence, and relaxation
+  of the requirements on input tree sequences using the read_txt()
+  function.
+
+- Integration with numpy, with zero-copy access to the low-level C API.
+
+- Documented the variants() method that provides access to the sample
+  genotypes as either numpy arrays or Python bytes objects.
+
+- New LdCalculator class that allows very fast calculation of r^2 values.
+
+- Initial support for threading.
+
+- The values returned mutations() method now also contain an ``index``
+  attribute. This makes many operations simpler.
+
+- New TreeSequence.get_time() method that returns the time a sample
+  was sampled at.
+
+**Performance improvements**:
+
+- File load times substantially reduced by pre-computing and storing
+  traversal indexes.
+
+- O(1) implementation of TreeSequence.get_num_trees()
+
+- Improved control of enabled tree features in TreeSequence.trees()
+  method using the ``leaf_lists`` and ``leaf_counts`` arguments.
+
+**Bug fixes**:
+
+- Fixed a precision problem with DemographyDebugger. #37
+
+- Segfault on large haplotypes. #29
+
+********************
 [0.3.2] - 2016-07-21
 ********************
 
