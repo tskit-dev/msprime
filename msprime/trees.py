@@ -1465,7 +1465,7 @@ class TreeSequence(object):
         compatible with future extensions.
 
         :return: An iterator of all :math:`(x, u, j)` tuples defining
-            the mutations in this tree.
+            the mutations in this tree sequence.
         :rtype: iter
         """
         for position, node, index in self._ll_tree_sequence.get_mutations():
@@ -1558,17 +1558,58 @@ class TreeSequence(object):
         return HaplotypeGenerator(self).haplotypes()
 
     def variants(self, as_bytes=False):
+        """
+        Returns an iterator over the variants in this tree sequence. Each
+        variant corresponds to a single mutation and is represented as a tuple
+        :math:`(x, u, j, g)`. The values of :math:`x`, :math:`u` and :math:`j`
+        are identical to the values returned by the
+        :meth:`.TreeSequence.mutations` method, and :math:`g` represents the
+        sample genotypes for this variant. Thus, :math:`g[k]` is the observed
+        state for sample :math:`k` at this site; zero represents the
+        ancestral type and one the derived type.
+
+        Each variant returned is an instance of :func:`collections.namedtuple`,
+        and may be accessed via the attributes ``position``, ``node``,
+        ``index`` and ``genotypes`` as well as the usual positional approach.
+        This is the recommended interface for working with variants as it is
+        both more readable and also ensures that code is forward compatible
+        with future extensions.
+
+        The returned genotypes may be either a numpy array of 1 byte unsigned
+        integer 0/1 values, or a Python bytes object of '0'/'1' ASCII
+        characters. This behaviour is controller by the ``as_bytes`` parameter.
+        The default behaviour is to return a numpy array, which is
+        substantially more efficient.
+
+        :warning: The same numpy array is used to represent genotypes between
+            iterations, so if you wish the store the results of this
+            iterator you **must** take a copy of the array. This warning
+            does not apply when ``as_bytes`` is True, as a new bytes object
+            is allocated for each variant.
+
+        :param bool as_bytes: If True, the genotype values will be returned
+            as a Python bytes object. This is useful in certain situations
+            (i.e., directly printing the genotypes) or when numpy is
+            not available. Otherwise, genotypes are returned as a numpy
+            array (the default).
+        :return: An iterator of all :math:`(x, u, j, g)` tuples defining
+            the variants in this tree sequence.
+        """
         n = self.get_sample_size()
         genotypes_buffer = bytearray(n)
         iterator = _msprime.VariantGenerator(
             self._ll_tree_sequence, genotypes_buffer, as_bytes)
-        for position, node, index in iterator:
-            if as_bytes:
+        if as_bytes:
+            for position, node, index in iterator:
                 g = bytes(genotypes_buffer)
-            else:
-                g = np.frombuffer(genotypes_buffer, "u1", n)
-            yield Variant(
-                position=position, node=node, index=index, genotypes=g)
+                yield Variant(
+                    position=position, node=node, index=index, genotypes=g)
+        else:
+            check_numpy()
+            g = np.frombuffer(genotypes_buffer, "u1", n)
+            for position, node, index in iterator:
+                yield Variant(
+                    position=position, node=node, index=index, genotypes=g)
 
     def generate_mutations(self, mutation_rate, random_generator):
         # TODO document this function when it's ready to be brought back

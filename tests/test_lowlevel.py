@@ -2388,6 +2388,8 @@ class TestVariantGenerator(LowLevelTestCase):
                 TypeError, _msprime.VariantGenerator, bad_type, buff)
             self.assertRaises(
                 TypeError, _msprime.VariantGenerator, ts, bad_type)
+            self.assertRaises(
+                TypeError, _msprime.VariantGenerator, ts, buff, bad_type)
         for size in [0, 1, ts.get_sample_size() - 1]:
             buff = bytearray(size)
             self.assertRaises(
@@ -2439,6 +2441,14 @@ class TestVariantGenerator(LowLevelTestCase):
             self.assertEqual(len(buff), ts.get_sample_size())
             for b in buff:
                 self.assertIn(b, [0, 1])
+        for _ in _msprime.VariantGenerator(ts, buff, False):
+            self.assertEqual(len(buff), ts.get_sample_size())
+            for b in buff:
+                self.assertIn(b, [0, 1])
+        for _ in _msprime.VariantGenerator(ts, buff, True):
+            self.assertEqual(len(buff), ts.get_sample_size())
+            for b in buff:
+                self.assertIn(b, [ord('0'), ord('1')])
 
     def test_iterator(self):
         ts = self.get_tree_sequence()

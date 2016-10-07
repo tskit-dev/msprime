@@ -551,6 +551,50 @@ class TestTreeSimulator(HighLevelTestCase):
             ValueError, msprime.TreeSimulator, [(0, 0)], recomb_map)
 
 
+class TestVariantGenerator(HighLevelTestCase):
+    """
+    Tests the variants() method to ensure the output is consistent.
+    """
+    def get_tree_sequence(self):
+        ts = msprime.simulate(
+            10, length=10, recombination_rate=1, mutation_rate=10)
+        self.assertGreater(ts.get_num_mutations(), 10)
+        return ts
+
+    def test_as_bytes(self):
+        ts = self.get_tree_sequence()
+        n = ts.get_sample_size()
+        m = ts.get_num_mutations()
+        A = np.zeros((m, n), dtype='u1')
+        B = np.zeros((m, n), dtype='u1')
+        for variant in ts.variants():
+            A[variant.index] = variant.genotypes
+        for variant in ts.variants(as_bytes=True):
+            self.assertIsInstance(variant.genotypes, bytes)
+            B[variant.index] = np.fromstring(
+                variant.genotypes, np.uint8) - ord('0')
+        self.assertTrue(np.all(A == B))
+        bytes_variants = list(ts.variants(as_bytes=True))
+        for j, variant in enumerate(bytes_variants):
+            self.assertEqual(j, variant.index)
+            row = np.fromstring(variant.genotypes, np.uint8) - ord('0')
+            self.assertTrue(np.all(A[j] == row))
+
+    def test_mutation_information(self):
+        ts = self.get_tree_sequence()
+        for mutation, variant in zip(ts.mutations(), ts.variants()):
+            self.assertEqual(mutation.position, variant.position)
+            self.assertEqual(mutation.node, variant.node)
+            self.assertEqual(mutation.index, variant.index)
+            self.assertEqual(mutation, variant[:-1])
+
+    def test_no_mutations(self):
+        ts = msprime.simulate(10)
+        self.assertEqual(ts.get_num_mutations(), 0)
+        variants = list(ts.variants())
+        self.assertEqual(len(variants), 0)
+
+
 class TestHaplotypeGenerator(HighLevelTestCase):
     """
     Tests the haplotype generation code.

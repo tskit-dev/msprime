@@ -456,6 +456,13 @@ out:
     return ret;
 }
 
+static inline PyObject *
+convert_mutation(mutation_t *mutation)
+{
+    return Py_BuildValue("dIn", mutation->position,
+        (unsigned int) mutation->node, (Py_ssize_t) mutation->index);
+}
+
 static PyObject *
 convert_mutations(mutation_t *mutations, size_t num_mutations)
 {
@@ -469,9 +476,7 @@ convert_mutations(mutation_t *mutations, size_t num_mutations)
         goto out;
     }
     for (j = 0; j < num_mutations; j++) {
-        py_mutation = Py_BuildValue("dIn", mutations[j].position,
-                (unsigned int) mutations[j].node,
-                (Py_ssize_t) mutations[j].index);
+        py_mutation = convert_mutation(&mutations[j]);
         if (py_mutation == NULL) {
             Py_DECREF(l);
             goto out;
@@ -4395,8 +4400,7 @@ VariantGenerator_next(VariantGenerator *self)
         goto out;
     }
     if (err == 1) {
-        ret = Py_BuildValue("dIn", mutation->position,
-                (unsigned int) mutation->node, (Py_ssize_t) mutation->index);
+        ret = convert_mutation(mutation);
     }
 out:
     return ret;
