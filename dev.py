@@ -790,6 +790,11 @@ def instantaneous_bottleneck_example():
             record.node, record.children, sep="\t")
 
 
+def smc_example():
+    ts = msprime.simulate(
+        10, Ne=1e4, recombination_rate=1e-3, model="smc_prime", random_seed=1)
+    print(ts.get_num_trees())
+
 if __name__ == "__main__":
     # mutations()
 
@@ -819,4 +824,5 @@ if __name__ == "__main__":
     # threads_example()
     # api_stuff()
     # simple_kingman()
-    instantaneous_bottleneck_example()
+    # instantaneous_bottleneck_example()
+    smc_example()

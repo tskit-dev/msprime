@@ -1064,6 +1064,20 @@ class TestSimulator(LowLevelTestCase):
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, max_memory=2**65)
 
+    def test_models(self):
+
+        def f(sample_size=10, random_seed=1, **kwargs):
+            return _msprime.Simulator(
+                get_samples(sample_size),
+                _msprime.RandomGenerator(random_seed), **kwargs)
+        for bad_type in [0, None, {}, str]:
+            self.assertRaises(TypeError, f, model=bad_type)
+        for bad_model in ["", "SMC", "ABC", "hud"]:
+            self.assertRaises(ValueError, f, model=bad_model)
+        for model in ["hudson", "smc", "smc_prime"]:
+            sim = f(model=model)
+            self.assertEqual(sim.get_model(), model)
+
     def test_bad_samples(self):
         rng = _msprime.RandomGenerator(1)
 

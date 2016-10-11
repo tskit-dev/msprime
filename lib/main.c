@@ -386,8 +386,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     int int_tmp;
     double rho;
     size_t sample_size;
+    const char *model;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
+    config_setting_t *t;
 
     if (config == NULL) {
         fatal_error("no memory");
@@ -447,7 +449,20 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("max_memory is a required parameter");
     }
     msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
-
+    t = config_lookup(config, "model");
+    if (t == NULL) {
+        fatal_error("model not specified");
+    }
+    model = config_setting_get_string(t);
+    if (strcmp(model, "hudson") == 0) {
+        ret = msp_set_model(msp, MSP_MODEL_HUDSON);
+    } else if (strcmp(model, "smc") == 0) {
+        msp_set_model(msp, MSP_MODEL_SMC);
+    } else if (strcmp(model, "smc_prime") == 0) {
+        msp_set_model(msp, MSP_MODEL_SMC_PRIME);
+    } else {
+        fatal_error("Unknown simulation model '%s'", model);
+    }
     ret = read_population_configuration(msp, config);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));

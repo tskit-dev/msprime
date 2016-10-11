@@ -260,9 +260,30 @@ msp_get_num_common_ancestor_events(msp_t *self)
 }
 
 size_t
+msp_get_num_rejected_common_ancestor_events(msp_t *self)
+{
+    return self->num_rejected_ca_events;
+}
+
+size_t
 msp_get_num_recombination_events(msp_t *self)
 {
     return self->num_re_events;
+}
+
+int
+msp_set_model(msp_t *self, int model)
+{
+    int ret = 0;
+
+    if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
+            && model != MSP_MODEL_SMC_PRIME) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->model = model;
+out:
+    return ret;
 }
 
 int
@@ -986,6 +1007,8 @@ msp_print_state(msp_t *self, FILE *out)
     if (ret != 0) {
         goto out;
     }
+    fprintf(out, "simulation model = '%s' (%d)\n", msp_get_model_str(self),
+            msp_get_model(self));
     fprintf(out, "used_memory = %f MiB\n", (double) self->used_memory / gig);
     fprintf(out, "max_memory  = %f MiB\n", (double) self->max_memory / gig);
     fprintf(out, "n = %d\n", self->sample_size);
@@ -1366,34 +1389,53 @@ out:
     return ret;
 }
 
+/* If we're implementing the SMC or SMC', discard this CA event if
+ * there aren't any overlapping segments.
+ */
 static int WARN_UNUSED
-msp_common_ancestor_event(msp_t *self, uint32_t population_id)
+msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
+{
+    int ret = 0;
+    segment_t *x = a;
+    segment_t *y = b;
+    segment_t *beta;
+
+    if (self->model == MSP_MODEL_SMC || self->model == MSP_MODEL_SMC_PRIME) {
+        ret = 1;
+        while (x != NULL && y != NULL) {
+            if (y->left < x->left) {
+                beta = x;
+                x = y;
+                y = beta;
+            }
+            /* For the SMC' we allow any CA which either results in
+             * coalescence or joins together immediately adjacent
+             * segments.
+             */
+            if (x->right >= y->left) {
+                ret = 0;
+                break;
+            }
+            x = x->next;
+        }
+    }
+    return ret;
+}
+
+static int WARN_UNUSED
+msp_merge_two_ancestors(msp_t *self, uint32_t population_id, segment_t *a,
+        segment_t *b)
 {
     int ret = 0;
     int coalescence = 0;
     int defrag_required = 0;
-    uint32_t j, n, l, r, l_min, r_max, v, *children;
-    avl_tree_t *ancestors;
+    uint32_t v, l, r, l_min, r_max, *children;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
 
-    ancestors = &self->populations[population_id].ancestors;
-    self->num_ca_events++;
-    /* Choose x and y */
-    n = avl_count(ancestors);
-    j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
-    node = avl_at(ancestors, j);
-    assert(node != NULL);
-    x = (segment_t *) node->item;
-    avl_unlink_node(ancestors, node);
-    msp_free_avl_node(self, node);
-    j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
-    node = avl_at(ancestors, j);
-    assert(node != NULL);
-    y = (segment_t *) node->item;
-    avl_unlink_node(ancestors, node);
-    msp_free_avl_node(self, node);
+    x = a;
+    y = b;
     /* Keep GCC happy */
     l_min = 0;
     r_max = 0;
@@ -1548,6 +1590,49 @@ out:
 }
 
 static int WARN_UNUSED
+msp_common_ancestor_event(msp_t *self, uint32_t population_id)
+{
+    int ret = 0;
+    uint32_t j, n;
+    avl_tree_t *ancestors;
+    avl_node_t *x_node, *y_node, *node;
+    segment_t *x, *y;
+
+    ancestors = &self->populations[population_id].ancestors;
+    /* Choose x and y */
+    n = avl_count(ancestors);
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
+    x_node = avl_at(ancestors, j);
+    assert(x_node != NULL);
+    x = (segment_t *) x_node->item;
+    avl_unlink_node(ancestors, x_node);
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
+    y_node = avl_at(ancestors, j);
+    assert(y_node != NULL);
+    y = (segment_t *) y_node->item;
+    avl_unlink_node(ancestors, y_node);
+
+    /* For SMC and SMC' models we reject some events to get the required
+     * distribution. */
+    if (msp_reject_ca_event(self, x, y)) {
+        self->num_rejected_ca_events++;
+        /* insert x and y back into the population */
+        assert(x_node->item == x);
+        node = avl_insert_node(ancestors, x_node);
+        assert(node != NULL);
+        assert(y_node->item == y);
+        node = avl_insert_node(ancestors, y_node);
+        assert(node != NULL);
+    } else {
+        self->num_ca_events++;
+        msp_free_avl_node(self, x_node);
+        msp_free_avl_node(self, y_node);
+        ret = msp_merge_two_ancestors(self, population_id, x, y);
+    }
+    return ret;
+}
+
+static int WARN_UNUSED
 msp_priority_queue_insert(msp_t *self, avl_tree_t *Q, segment_t *u)
 {
     int ret = 0;
@@ -1583,6 +1668,10 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
     segment_t *x, *z, *alpha;
     segment_t **H = NULL;
 
+    if (self->model != MSP_MODEL_HUDSON) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
     H = malloc(avl_count(Q) * sizeof(segment_t *));
     if (H == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -1887,6 +1976,7 @@ msp_reset(msp_t *self)
     self->num_coalescence_records = 0;
     self->num_re_events = 0;
     self->num_ca_events = 0;
+    self->num_rejected_ca_events = 0;
     self->num_trapped_re_events = 0;
     self->num_multiple_re_events = 0;
     memset(self->num_migration_events, 0, N * N * sizeof(size_t));
@@ -2165,6 +2255,34 @@ msp_debug_demography(msp_t *self, double *end_time)
     }
     *end_time = t;
 out:
+    return ret;
+}
+
+int
+msp_get_model(msp_t *self)
+{
+    return self->model;
+}
+
+const char *
+msp_get_model_str(msp_t *self)
+{
+    const char *ret;
+
+    switch (self->model) {
+        case MSP_MODEL_HUDSON:
+            ret = "hudson";
+            break;
+        case MSP_MODEL_SMC:
+            ret = "smc";
+            break;
+        case MSP_MODEL_SMC_PRIME:
+            ret = "smc_prime";
+            break;
+        default:
+            ret = "Unknown simulation model";
+            break;
+    }
     return ret;
 }
 

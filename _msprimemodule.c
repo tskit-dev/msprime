@@ -305,8 +305,25 @@ out:
     return ret;
 }
 
+static int
+parse_model(char *model_str, int *model)
+{
+    int ret = -1;
 
-
+    if (strcmp(model_str, "hudson") == 0) {
+        *model = MSP_MODEL_HUDSON;
+    } else if (strcmp(model_str, "smc") == 0) {
+        *model = MSP_MODEL_SMC;
+    } else if (strcmp(model_str, "smc_prime") == 0) {
+        *model = MSP_MODEL_SMC_PRIME;
+    } else {
+        PyErr_Format(PyExc_ValueError, "Unknown model '%s'", model_str);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
 
 /*
  * Retrieves the PyObject* corresponding the specified key in the
@@ -963,17 +980,19 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"samples", "random_generator",
         "num_loci", "scaled_recombination_rate",
         "population_configuration", "migration_matrix", "demographic_events",
-        "max_memory", "avl_node_block_size", "segment_block_size",
+        "model", "max_memory", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "coalescence_record_block_size", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
+    char *model_str = NULL;
     RandomGenerator *random_generator = NULL;
     sample_t *samples = NULL;
     /* parameter defaults */
     Py_ssize_t sample_size = 2;
     Py_ssize_t num_loci = 1;
+    int model = MSP_MODEL_HUDSON;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
@@ -983,14 +1002,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!nnnnn", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!snnnnn", kwlist,
             &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
             &num_loci, &scaled_recombination_rate,
             &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
-            &max_memory, &avl_node_block_size, &segment_block_size,
+            &model_str, &max_memory, &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &coalescence_record_block_size)) {
         goto out;
     }
@@ -1009,6 +1028,16 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     sim_ret = msp_alloc(self->sim, (size_t) sample_size, samples,
             self->random_generator->rng);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    if (model_str != NULL) {
+        if (parse_model(model_str, &model) != 0) {
+            goto out;
+        }
+    }
+    sim_ret = msp_set_model(self->sim, model);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -1098,9 +1127,20 @@ static PyMemberDef Simulator_members[] = {
 };
 
 
+static PyObject *
+Simulator_get_model(Simulator *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("s", msp_get_model_str(self->sim));
+out:
+    return ret;
+}
 
 static PyObject *
-Simulator_get_num_loci(Simulator  *self)
+Simulator_get_num_loci(Simulator *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -1242,6 +1282,19 @@ Simulator_get_num_common_ancestor_events(Simulator  *self)
     }
     ret = Py_BuildValue("n",
         (Py_ssize_t) msp_get_num_common_ancestor_events(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_num_rejected_common_ancestor_events(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) msp_get_num_rejected_common_ancestor_events(self->sim));
 out:
     return ret;
 }
@@ -1752,6 +1805,8 @@ out:
 
 
 static PyMethodDef Simulator_methods[] = {
+    {"get_model", (PyCFunction) Simulator_get_model, METH_NOARGS,
+            "Returns the simulation model" },
     {"get_num_loci", (PyCFunction) Simulator_get_num_loci, METH_NOARGS,
             "Returns the number of loci" },
     {"get_sample_size", (PyCFunction) Simulator_get_sample_size, METH_NOARGS,
@@ -1782,6 +1837,9 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_common_ancestor_events",
             (PyCFunction) Simulator_get_num_common_ancestor_events, METH_NOARGS,
             "Returns the number of common_ancestor_events" },
+    {"get_num_rejected_common_ancestor_events",
+            (PyCFunction) Simulator_get_num_rejected_common_ancestor_events,
+            METH_NOARGS, "Returns the number of rejected common_ancestor_events" },
     {"get_num_recombination_events",
             (PyCFunction) Simulator_get_num_recombination_events, METH_NOARGS,
             "Returns the number of recombination_events" },
