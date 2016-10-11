@@ -777,6 +777,18 @@ def simple_kingman():
     for k, v in roots.items():
         print(k, "->", v)
 
+def instantaneous_bottleneck_example():
+    demographic_events = [
+        msprime.InstantaneousBottleneck(time=1000, strength=1e4)]
+    ts = msprime.simulate(
+            sample_size=10, Ne=1e4, recombination_rate=1e-5,
+            length=10, demographic_events=demographic_events)
+    for record in ts.records():
+        print(
+            "{:.2f}-{:.2f}\t{:.1f}".format(
+                record.left, record.right, record.time),
+            record.node, record.children, sep="\t")
+
 
 if __name__ == "__main__":
     # mutations()
@@ -806,4 +818,5 @@ if __name__ == "__main__":
     # ld_triangle_plot()
     # threads_example()
     # api_stuff()
-    simple_kingman()
+    # simple_kingman()
+    instantaneous_bottleneck_example()

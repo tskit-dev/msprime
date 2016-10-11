@@ -37,11 +37,15 @@
 char * _tmp_file_name;
 FILE * _devnull;
 
+#define SIMPLE_BOTTLENECK 0
+#define INSTANTANEOUS_BOTTLENECK 1
+
 typedef struct {
+    int type;
     double time;
     uint32_t population_id;
-    double intensity;
-} simple_bottleneck_desc_t;
+    double parameter;
+} bottleneck_desc_t;
 
 /* Simple utility to parse records so we can write declaritive
  * tests. This is not intended as a robust general input mechanism.
@@ -166,8 +170,8 @@ static tree_sequence_t *
 get_example_tree_sequence(uint32_t sample_size,
         uint32_t num_historical_samples, uint32_t num_loci,
         double sequence_length, double scaled_recombination_rate,
-        double mutation_rate, uint32_t num_simple_bottlenecks,
-        simple_bottleneck_desc_t *simple_bottlenecks)
+        double mutation_rate, uint32_t num_bottlenecks,
+        bottleneck_desc_t *bottlenecks)
 {
     int ret;
     msp_t *msp = malloc(sizeof(msp_t));
@@ -200,10 +204,17 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_scaled_recombination_rate(msp, scaled_recombination_rate);
     CU_ASSERT_EQUAL(ret, 0);
-    for (j = 0; j < num_simple_bottlenecks; j++) {
-        ret = msp_add_simple_bottleneck(msp, simple_bottlenecks[j].time,
-                simple_bottlenecks[j].population_id, simple_bottlenecks[j].intensity);
-        CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < num_bottlenecks; j++) {
+        if (bottlenecks[j].type == SIMPLE_BOTTLENECK) {
+            ret = msp_add_simple_bottleneck(msp, bottlenecks[j].time,
+                    bottlenecks[j].population_id, bottlenecks[j].parameter);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else if(bottlenecks[j].type == INSTANTANEOUS_BOTTLENECK) {
+            ret = msp_add_instantaneous_bottleneck(msp, bottlenecks[j].time,
+                    bottlenecks[j].population_id, bottlenecks[j].parameter);
+        } else {
+            CU_ASSERT_FATAL(0 == 1);
+        }
     }
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -279,24 +290,25 @@ get_example_nonbinary_tree_sequences(void)
 {
     size_t max_examples = 1024;
     tree_sequence_t **ret = malloc(max_examples * sizeof(tree_sequence_t *));
-    simple_bottleneck_desc_t simple_bottlenecks[] = {
-        {0.1, 0, 0.5},
-        {0.4, 0, 1.0},
+    bottleneck_desc_t bottlenecks[] = {
+        {SIMPLE_BOTTLENECK, 0.1, 0, 0.5},
+        {INSTANTANEOUS_BOTTLENECK, 0.4, 0, 10.0},
     };
-    simple_bottleneck_desc_t other_simple_bottlenecks[] = {
-        {0.1, 0, 0.1},
-        {0.1, 0, 0.9},
+    bottleneck_desc_t other_bottlenecks[] = {
+        {SIMPLE_BOTTLENECK, 0.1, 0, 0.1},
+        {SIMPLE_BOTTLENECK, 0.1, 0, 0.75},
+        {INSTANTANEOUS_BOTTLENECK, 0.2, 0, 0.1},
     };
 
     CU_ASSERT_FATAL(ret != NULL);
     ret[0] = get_example_tree_sequence(100, 0, 100, 100.0, 10.0, 1.0,
-            1, simple_bottlenecks);
+            1, bottlenecks);
     ret[1] = get_example_tree_sequence(10, 2, 100, 10.0, 1.0, 2.0,
-            1, simple_bottlenecks);
+            1, bottlenecks);
     ret[2] = get_example_tree_sequence(500, 10, 10, 1000.0, 0.5, 3.0,
-            2, simple_bottlenecks);
+            2, bottlenecks);
     ret[3] = get_example_tree_sequence(100, 0, 100, 1.0, 1.0, 0.0,
-            2, other_simple_bottlenecks);
+            3, other_bottlenecks);
     ret[4] = NULL;
     return ret;
 }
@@ -1119,7 +1131,7 @@ test_multi_locus_simulation(void)
 }
 
 static void
-test_simple_bottleneck_simulation(void)
+test_bottleneck_simulation(void)
 {
     int ret;
     uint32_t n = 100;
@@ -1154,10 +1166,10 @@ test_simple_bottleneck_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_scaled_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
-    /* Add a simple_bottleneck that does nothing at time t1 */
+    /* Add a bottleneck that does nothing at time t1 */
     ret = msp_add_simple_bottleneck(msp, t1, 0, 0);
     CU_ASSERT_EQUAL(ret, 0);
-    /* Add a simple_bottleneck that coalesces everything at t2 */
+    /* Add a bottleneck that coalesces everything at t2 */
     ret = msp_add_simple_bottleneck(msp, t2, 0, 1);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
@@ -1193,7 +1205,7 @@ test_simple_bottleneck_simulation(void)
 }
 
 static void
-test_large_simple_bottleneck_simulation(void)
+test_large_bottleneck_simulation(void)
 {
     int ret;
     uint32_t j;
@@ -1203,8 +1215,8 @@ test_large_simple_bottleneck_simulation(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    uint32_t num_simple_bottlenecks = 10;
-    simple_bottleneck_desc_t simple_bottlenecks[num_simple_bottlenecks];
+    uint32_t num_bottlenecks = 10;
+    bottleneck_desc_t bottlenecks[num_bottlenecks];
     double t;
 
     CU_ASSERT_FATAL(msp != NULL);
@@ -1212,13 +1224,14 @@ test_large_simple_bottleneck_simulation(void)
     CU_ASSERT_FATAL(rng != NULL);
 
     t = 0.1;
-    for (j = 0; j < num_simple_bottlenecks; j++) {
-        simple_bottlenecks[j].time = t;
-        simple_bottlenecks[j].intensity = 0.1;
+    for (j = 0; j < num_bottlenecks; j++) {
+        bottlenecks[j].type = SIMPLE_BOTTLENECK;
+        bottlenecks[j].time = t;
+        bottlenecks[j].parameter = 0.1;
         t += 0.01;
     }
-    /* Set the last simple_bottleneck to be full intensity */
-    simple_bottlenecks[num_simple_bottlenecks - 1].intensity = 1.0;
+    /* Set the last bottleneck to be full intensity */
+    bottlenecks[num_bottlenecks - 1].parameter = 1.0;
 
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
@@ -1228,32 +1241,32 @@ test_large_simple_bottleneck_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
-    for (j = 0; j < num_simple_bottlenecks; j++) {
-        msp_add_simple_bottleneck(msp, simple_bottlenecks[j].time, 0,
-                simple_bottlenecks[j].intensity);
+    for (j = 0; j < num_bottlenecks; j++) {
+        msp_add_simple_bottleneck(msp, bottlenecks[j].time, 0,
+                bottlenecks[j].parameter);
         CU_ASSERT_EQUAL(ret, 0);
     }
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
 
-    for (j = 0; j < num_simple_bottlenecks - 1; j++) {
-        ret = msp_run(msp, simple_bottlenecks[j].time, ULONG_MAX);
+    for (j = 0; j < num_bottlenecks - 1; j++) {
+        ret = msp_run(msp, bottlenecks[j].time, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, 2);
         CU_ASSERT_FALSE(msp_is_completed(msp));
-        CU_ASSERT_EQUAL(msp->time, simple_bottlenecks[j].time);
+        CU_ASSERT_EQUAL(msp->time, bottlenecks[j].time);
         msp_verify(msp);
     }
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_TRUE(msp_is_completed(msp));
-    CU_ASSERT_EQUAL(msp->time, simple_bottlenecks[num_simple_bottlenecks - 1].time);
+    CU_ASSERT_EQUAL(msp->time, bottlenecks[num_bottlenecks - 1].time);
     msp_verify(msp);
 
     /* Test out resets on partially completed simulations. */
     ret = msp_reset(msp);
     CU_ASSERT_EQUAL(ret, 0);
-    for (j = 0; j < num_simple_bottlenecks - 1; j++) {
-        ret = msp_run(msp, simple_bottlenecks[j].time, ULONG_MAX);
+    for (j = 0; j < num_bottlenecks - 1; j++) {
+        ret = msp_run(msp, bottlenecks[j].time, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, 2);
     }
     ret = msp_reset(msp);
@@ -3924,9 +3937,8 @@ main(void)
         {"Single locus simulation", test_single_locus_simulation},
         {"Simulation memory limit", test_simulation_memory_limit},
         {"Multi locus simulation", test_multi_locus_simulation},
-        {"Bottleneck simulation", test_simple_bottleneck_simulation},
-        {"Large simple_bottleneck simulation",
-            test_large_simple_bottleneck_simulation},
+        {"Bottleneck simulation", test_bottleneck_simulation},
+        {"Large bottleneck simulation", test_large_bottleneck_simulation},
         {"Test error messages", test_strerror},
         CU_TEST_INFO_NULL,
     };

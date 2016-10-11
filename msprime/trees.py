@@ -1977,13 +1977,18 @@ class PopulationConfiguration(object):
         }
 
 
+# TODO use this and its inverse throughout the code.
+def generations_to_coalescent(time, Ne):
+    return time / (4 * Ne)
+
+
 class DemographicEvent(object):
     def __init__(self, type_, time):
         self.type = type_
         self.time = time
 
     def _get_scaled_time(self, Ne):
-        return self.time / (4 * Ne)
+        return generations_to_coalescent(self.time, Ne)
 
     def __str__(self):
         raise NotImplementedError()
@@ -2147,10 +2152,10 @@ class MassMigration(DemographicEvent):
         pass
 
 
-class Bottleneck(DemographicEvent):
+class SimpleBottleneck(DemographicEvent):
     # This is an unsupported/undocumented demographic event.
     def __init__(self, time, population_id=0, proportion=1.0):
-        super(Bottleneck, self).__init__("bottleneck", time)
+        super(SimpleBottleneck, self).__init__("simple_bottleneck", time)
         self.population_id = population_id
         self.proportion = proportion
 
@@ -2167,8 +2172,37 @@ class Bottleneck(DemographicEvent):
 
     def __str__(self):
         return (
-            "Bottleneck: lineages in population {} coalesce "
+            "Simple bottleneck: lineages in population {} coalesce "
             "probability {}".format(self.population_id, self.proportion))
+
+    def apply(self, populations, migration_matrix):
+        pass
+
+
+class InstantaneousBottleneck(DemographicEvent):
+    # TODO document
+
+    def __init__(self, time, population_id=0, strength=1.0):
+        super(InstantaneousBottleneck, self).__init__(
+            "instantaneous_bottleneck", time)
+        self.population_id = population_id
+        self.strength = strength
+
+    def get_ll_representation(self, num_populations, Ne):
+        return {
+            "type": self.type,
+            "time": self._get_scaled_time(Ne),
+            "population_id": self.population_id,
+            "strength": generations_to_coalescent(self.strength, Ne)
+        }
+
+    def get_ms_arguments(self):
+        raise NotImplemented()
+
+    def __str__(self):
+        return (
+            "Instantaneous bottleneck: equivalent to {} generations of "
+            "the coalescent".format(self.population_id, self.strength))
 
     def apply(self, populations, migration_matrix):
         pass

@@ -149,13 +149,13 @@ def get_mass_migration_event(
     }
 
 
-def get_bottleneck_event(
+def get_simple_bottleneck_event(
         time=0.0, population_id=0, proportion=1):
     """
-    Returns a bottleneck demographic event.
+    Returns a simple bottleneck demographic event.
     """
     return {
-        "type": "bottleneck",
+        "type": "simple_bottleneck",
         "time": time,
         "population_id": population_id,
         "proportion": proportion
@@ -205,7 +205,7 @@ def get_random_demographic_events(num_populations, num_events):
                 time=random.random(), proportion=random.choice([0, 1]),
                 source=source, destination=destination))
             # Add a bottleneck
-            events.append(get_bottleneck_event(
+            events.append(get_simple_bottleneck_event(
                 time=random.random(), proportion=random.uniform(0, 0.25),
                 population_id=random.randint(0, num_populations - 1)))
     sorted_events = sorted(events, key=lambda x: x["time"])
@@ -429,14 +429,14 @@ class LowLevelTestCase(tests.MsprimeTestCase):
 
     def get_nonbinary_tree_sequence(self):
         bottlenecks = [
-            get_bottleneck_event(0.1, 0, 0.1),
-            get_bottleneck_event(0.1, 0, 0.9)]
+            get_simple_bottleneck_event(0.1, 0, 0.1),
+            get_simple_bottleneck_event(0.1, 0, 0.9)]
         return self.get_tree_sequence(demographic_events=bottlenecks)
 
     def get_example_tree_sequences(self):
         bottlenecks = [
-            get_bottleneck_event(0.1, 0, 0.1),
-            get_bottleneck_event(0.1, 0, 0.9)]
+            get_simple_bottleneck_event(0.1, 0, 0.1),
+            get_simple_bottleneck_event(0.1, 0, 0.9)]
         for n in [2, 3, 100]:
             for m in [1, 2, 100]:
                 for mu in [0, 10]:
@@ -884,7 +884,7 @@ class TestSimulationState(LowLevelTestCase):
         self.verify_simulation(
             5, 10, 10.0,
             demographic_events=[
-                get_bottleneck_event(time=0.2, proportion=1)])
+                get_simple_bottleneck_event(time=0.2, proportion=1)])
 
     def test_event_by_event(self):
         n = 10
@@ -977,7 +977,7 @@ class TestSimulationState(LowLevelTestCase):
                     pop_sizes[pop_id] += 1
                 if proportion == 1:
                     self.assertEqual(pop_sizes[source], 0)
-            elif event_type == "bottleneck":
+            elif event_type == "simple_bottleneck":
                 # Not much we can test for here...
                 pass
             else:
@@ -1271,7 +1271,7 @@ class TestSimulator(LowLevelTestCase):
         event_generators = [
             get_size_change_event, get_growth_rate_change_event,
             get_migration_rate_change_event,
-            get_mass_migration_event, get_bottleneck_event]
+            get_mass_migration_event, get_simple_bottleneck_event]
         for event_generator in event_generators:
             # Negative times not allowed.
             event = event_generator(time=-1)
@@ -1294,7 +1294,7 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(_msprime.InputError, f, [event])
             event = get_mass_migration_event(destination=bad_pop_id)
             self.assertRaises(_msprime.InputError, f, [event])
-            event = get_bottleneck_event(population_id=bad_pop_id)
+            event = get_simple_bottleneck_event(population_id=bad_pop_id)
             self.assertRaises(_msprime.InputError, f, [event])
         # Negative size values not allowed
         size_change_event = get_size_change_event(size=-5)
@@ -1323,14 +1323,14 @@ class TestSimulator(LowLevelTestCase):
         for bad_proportion in [-1, 1.1, 1e7]:
             event = get_mass_migration_event(proportion=bad_proportion)
             self.assertRaises(_msprime.InputError, f, [event])
-            event = get_bottleneck_event(proportion=bad_proportion)
+            event = get_simple_bottleneck_event(proportion=bad_proportion)
             self.assertRaises(_msprime.InputError, f, [event])
 
     def test_unsorted_demographic_events(self):
         event_generators = [
             get_size_change_event, get_growth_rate_change_event,
             get_migration_rate_change_event, get_mass_migration_event,
-            get_bottleneck_event]
+            get_simple_bottleneck_event]
         events = []
         for event_generator in event_generators:
             for _ in range(3):
@@ -1348,7 +1348,7 @@ class TestSimulator(LowLevelTestCase):
             }, {
                 "samples": get_samples(100),
                 "demographic_events": [
-                    get_bottleneck_event(0.01, 0, 1.0)],
+                    get_simple_bottleneck_event(0.01, 0, 1.0)],
             }, {
                 "samples": get_samples(10), "num_loci": 100,
                 "scaled_recombination_rate": 0.1,
@@ -1364,7 +1364,7 @@ class TestSimulator(LowLevelTestCase):
                     get_migration_rate_change_event(0.2, 2),
                     get_growth_rate_change_event(0.3, 2),
                     get_mass_migration_event(0.4, 0, 1, 0.5),
-                    get_bottleneck_event(0.5, 0.5)]
+                    get_simple_bottleneck_event(0.5, 0.5)]
             }
         ]
         seed = 10
@@ -1516,8 +1516,8 @@ class TestSimulator(LowLevelTestCase):
                 get_population_configuration(),
                 get_population_configuration()],
             demographic_events=[
-                get_bottleneck_event(t1, population_id=0, proportion=1),
-                get_bottleneck_event(t2, population_id=1, proportion=1),
+                get_simple_bottleneck_event(t1, population_id=0, proportion=1),
+                get_simple_bottleneck_event(t2, population_id=1, proportion=1),
                 get_mass_migration_event(
                     t3, source=0, destination=1, proportion=1)],
             migration_matrix=[0, 0, 0, 0])
@@ -2613,7 +2613,7 @@ class TestSparseTree(LowLevelTestCase):
             self.get_tree_sequence(
                 sample_size=12,
                 demographic_events=[
-                    get_bottleneck_event(0.2, proportion=1.0)])]
+                    get_simple_bottleneck_event(0.2, proportion=1.0)])]
         # Ensure that the second example does have some non-binary records
         ts = examples[1]
         found = False
@@ -2773,7 +2773,7 @@ class TestLeafListIterator(LowLevelTestCase):
             self.get_tree_sequence(sample_size=5, num_loci=10),
             self.get_tree_sequence(
                 demographic_events=[
-                    get_bottleneck_event(0.2, proportion=1.0)])]
+                    get_simple_bottleneck_event(0.2, proportion=1.0)])]
         flags = _msprime.LEAF_COUNTS | _msprime.LEAF_LISTS
         for ts in examples:
             st = _msprime.SparseTree(ts, flags=flags)
