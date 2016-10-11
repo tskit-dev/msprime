@@ -4,7 +4,9 @@ flake8
 mock
 nose
 # We need setuptools_scm for building on RTD.
-setuptools_scm
+# TODO we're pinning the version here because of problems on Travis.
+# versions weren't correctly being set for v1.12.1
+setuptools_scm == 1.11.1
 sphinx
 sphinx-argparse
 sphinx_rtd_theme
