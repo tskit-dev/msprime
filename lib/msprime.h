@@ -188,14 +188,20 @@ typedef struct {
 typedef struct {
     int population_id;
     double proportion;
-} bottleneck_t;
+} simple_bottleneck_t;
+
+typedef struct {
+    int population_id;
+    double strength;
+} instantaneous_bottleneck_t;
 
 typedef struct demographic_event_t_t {
     double time;
     int (*change_state)(msp_t *, struct demographic_event_t_t *);
     void (*print_state)(msp_t *, struct demographic_event_t_t *, FILE *out);
     union {
-        bottleneck_t bottleneck;
+        simple_bottleneck_t simple_bottleneck;
+        instantaneous_bottleneck_t instantaneous_bottleneck;
         mass_migration_t mass_migration;
         migration_rate_change_t migration_rate_change;
         population_parameters_change_t population_parameters_change;
@@ -437,8 +443,10 @@ int msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate);
 int msp_add_mass_migration(msp_t *self, double time, int source, int dest,
         double proportion);
-int msp_add_bottleneck(msp_t *self, double time, int population_id,
+int msp_add_simple_bottleneck(msp_t *self, double time, int population_id,
         double intensity);
+int msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
+        double strength);
 
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
