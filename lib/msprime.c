@@ -1399,20 +1399,19 @@ msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
     segment_t *x = a;
     segment_t *y = b;
     segment_t *beta;
+    int64_t overlap, min_overlap;
 
     if (self->model == MSP_MODEL_SMC || self->model == MSP_MODEL_SMC_PRIME) {
         ret = 1;
+        min_overlap = self->model == MSP_MODEL_SMC ? 1: 0;
         while (x != NULL && y != NULL) {
             if (y->left < x->left) {
                 beta = x;
                 x = y;
                 y = beta;
             }
-            /* For the SMC' we allow any CA which either results in
-             * coalescence or joins together immediately adjacent
-             * segments.
-             */
-            if (x->right >= y->left) {
+            overlap = ((int64_t) x->right) - ((int64_t) y->left);
+            if (overlap >= min_overlap) {
                 ret = 0;
                 break;
             }
