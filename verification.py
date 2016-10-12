@@ -28,6 +28,34 @@ import msprime.cli as cli
 import msprime
 
 
+def harmonic_number(n):
+    return np.sum(1 / np.arange(1, n + 1))
+
+
+def hk_f(n, z):
+    """
+    Returns Hudson and Kaplan's f_n(z) function. This is based on the exact
+    value for n=2 and the approximations given in the 1985 Genetics paper.
+    """
+    ret = 0
+    if n == 2:
+        ret = (18 + z) / (z**2 + 13 * z + 18)
+    else:
+        ret = sum(1 / j**2 for j in range(1, n)) * hk_f(2, z)
+        #ret = n / (2 * z * (n - 1))
+    return ret
+
+
+def get_predicted_variance(n, R):
+    # We import this here as it's _very_ slow to import and we
+    # only use it in this case.
+    import scipy.integrate
+    def g(z):
+        return (R - z) * hk_f(n, z)
+    res, err = scipy.integrate.quad(g, 0, R)
+    return R * harmonic_number(n - 1) + 2 * res
+
+
 class SimulationVerifier(object):
     """
     Class to compare msprime against ms to ensure that the same distributions
@@ -37,6 +65,7 @@ class SimulationVerifier(object):
         self._output_dir = output_dir
         self._instances = {}
         self._ms_executable = ["./data/ms/ms"]
+        self._scrm_executable = ["./data/scrm"]
         self._mspms_executable = ["python", "mspms_dev.py"]
 
     def get_ms_seeds(self):
@@ -380,6 +409,222 @@ class SimulationVerifier(object):
             filename = os.path.join(basedir, "hist_{}.png".format(n))
             pyplot.savefig(filename)
 
+    def get_num_trees(self, cmd, R):
+        print("\t", " ".join(cmd))
+        output = subprocess.check_output(cmd)
+        T = np.zeros(R)
+        j = -1
+        for line in output.splitlines():
+            if line.startswith("//"):
+                j += 1
+            if line.startswith("["):
+                T[j] += 1
+        return T
+
+    def get_scrm_num_trees(self, cmd, R):
+        print("\t", " ".join(cmd))
+        output = subprocess.check_output(cmd)
+        T = np.zeros(R)
+        j = -1
+        for line in output.splitlines():
+            if line.startswith("//"):
+                j += 1
+            if line.startswith("time"):
+                T[j] += 1
+        return T
+
+    def get_scrm_oldest_time(self, cmd, R):
+        print("\t", " ".join(cmd))
+        output = subprocess.check_output(cmd)
+        T = np.zeros(R)
+        j = -1
+        for line in output.splitlines():
+            if line.startswith("//"):
+                j += 1
+            if line.startswith("time:"):
+                T[j] = max(T[j], float(line.split()[1]))
+        return T
+
+    def run_cli_num_trees(self):
+        """
+        Runs the check for number of trees using the CLI.
+        """
+        r = 1e-8  # Per generation recombination rate.
+        num_loci = np.linspace(100, 10**5, 10).astype(int)
+        Ne = 10**4
+        n = 100
+        rho = r * 4 * Ne * (num_loci - 1)
+        num_replicates = 100
+        ms_mean = np.zeros_like(rho)
+        msp_mean = np.zeros_like(rho)
+        for j in range(len(num_loci)):
+            cmd = "{} {} -T -r {} {}".format(
+                n, num_replicates, rho[j], num_loci[j])
+            T = self.get_num_trees(
+                self._ms_executable + cmd.split() + self.get_ms_seeds(),
+                num_replicates)
+            ms_mean[j] = np.mean(T)
+
+            T = self.get_num_trees(
+                self._mspms_executable + cmd.split() + self.get_ms_seeds(),
+                num_replicates)
+            msp_mean[j] = np.mean(T)
+        basedir = "tmp__NOBACKUP__/cli_num_trees"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        pyplot.plot(rho, ms_mean, "o")
+        pyplot.plot(rho, msp_mean, "^")
+        pyplot.plot(rho, rho * harmonic_number(n - 1), "-")
+        filename = os.path.join(basedir, "mean.png")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+
+    def run_smc_oldest_time(self):
+        """
+        Runs the check for number of trees using the CLI.
+        """
+        r = 1e-8  # Per generation recombination rate.
+        num_loci = np.linspace(100, 10**5, 10).astype(int)
+        Ne = 10**4
+        n = 100
+        rho = r * 4 * Ne * (num_loci - 1)
+        num_replicates = 1000
+        scrm_mean = np.zeros_like(rho)
+        scrm_smc_mean = np.zeros_like(rho)
+        msp_mean = np.zeros_like(rho)
+        msp_smc_mean = np.zeros_like(rho)
+        for j in range(len(num_loci)):
+
+            cmd = "{} {} -L -r {} {} -p 14".format(
+                n, num_replicates, rho[j], num_loci[j])
+            T = self.get_scrm_oldest_time(
+                self._scrm_executable + cmd.split() + self.get_ms_seeds(),
+                num_replicates)
+            scrm_mean[j] = np.mean(T)
+
+            cmd += " -l 0"
+            T = self.get_scrm_oldest_time(
+                self._scrm_executable + cmd.split() + self.get_ms_seeds(),
+                num_replicates)
+            scrm_smc_mean[j] = np.mean(T)
+
+            for dest, model in [(msp_mean, "hudson"), (msp_smc_mean, "smc_prime")]:
+                replicates = msprime.simulate(
+                    sample_size=n, length=num_loci[j],
+                    recombination_rate=r, Ne=Ne, num_replicates=num_replicates,
+                    model=model)
+                T = np.zeros(num_replicates)
+                for k, ts in enumerate(replicates):
+                    for record in ts.records():
+                        T[k] = max(T[k], record.time)
+                # Normalise back to coalescent time.
+                T /= 4 * Ne
+                dest[j] = np.mean(T)
+        basedir = "tmp__NOBACKUP__/smc_oldest_time"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        pyplot.plot(rho, scrm_mean, "-", color="blue", label="scrm")
+        pyplot.plot(rho, scrm_smc_mean, "-", color="red", label="scrm_smc")
+        pyplot.plot(rho, msp_smc_mean, "--", color="red", label="msprime_smc")
+        pyplot.plot(rho, msp_mean, "--", color="blue", label="msprime")
+        pyplot.xlabel("rho")
+        pyplot.ylabel("Mean oldest coalescence time")
+        pyplot.legend(loc="lower right")
+        filename = os.path.join(basedir, "mean.png")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+    def run_smc_num_trees(self):
+        """
+        Runs the check for number of trees in the SMC and full coalescent
+        using the API. We compare this with scrm using the SMC as a check.
+        """
+        r = 1e-8  # Per generation recombination rate.
+        L = np.linspace(100, 10**5, 10).astype(int)
+        Ne = 10**4
+        n = 100
+        rho = r * 4 * Ne * (L - 1)
+        num_replicates = 10000
+        num_trees = np.zeros(num_replicates)
+        mean_exact = np.zeros_like(rho)
+        var_exact = np.zeros_like(rho)
+        mean_smc = np.zeros_like(rho)
+        var_smc = np.zeros_like(rho)
+        mean_smc_prime = np.zeros_like(rho)
+        var_smc_prime = np.zeros_like(rho)
+        mean_scrm = np.zeros_like(rho)
+        var_scrm = np.zeros_like(rho)
+
+        for j in range(len(L)):
+            # Run SCRM under the SMC to see if we get the correct variance.
+            cmd = "{} {} -L -r {} {} -l 0".format(n, num_replicates, rho[j], L[j])
+            T = self.get_scrm_num_trees(
+                self._scrm_executable + cmd.split() + self.get_ms_seeds(),
+                num_replicates)
+            mean_scrm[j] = np.mean(T)
+            var_scrm[j] = np.var(T)
+            # IMPORTANT!! We have to use the get_num_breakpoints method
+            # on the simulator as there is a significant drop in the number
+            # of trees if we use the tree sequence. There is a significant
+            # number of common ancestor events that result in a recombination
+            # being undone.
+            exact_sim = msprime.simulator_factory(
+                sample_size=n, recombination_rate=r, Ne=Ne, length=L[j])
+            for k in range(num_replicates):
+                exact_sim.run()
+                num_trees[k] = exact_sim.get_num_breakpoints()
+                exact_sim.reset()
+            mean_exact[j] = np.mean(num_trees)
+            var_exact[j] = np.var(num_trees)
+
+            smc_sim = msprime.simulator_factory(
+                sample_size=n, recombination_rate=r, Ne=Ne, length=L[j],
+                model="smc")
+            for k in range(num_replicates):
+                smc_sim.run()
+                num_trees[k] = smc_sim.get_num_breakpoints()
+                smc_sim.reset()
+            mean_smc[j] = np.mean(num_trees)
+            var_smc[j] = np.var(num_trees)
+
+            smc_prime_sim = msprime.simulator_factory(
+                sample_size=n, recombination_rate=r, Ne=Ne, length=L[j],
+                model="smc_prime")
+            for k in range(num_replicates):
+                smc_prime_sim.run()
+                num_trees[k] = smc_prime_sim.get_num_breakpoints()
+                smc_prime_sim.reset()
+            mean_smc_prime[j] = np.mean(num_trees)
+            var_smc_prime[j] = np.var(num_trees)
+
+        basedir = "tmp__NOBACKUP__/smc_num_trees"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        pyplot.plot(rho, mean_exact, "o", label="msprime (hudson)")
+        pyplot.plot(rho, mean_smc, "^", label="msprime (smc)")
+        pyplot.plot(rho, mean_smc_prime, "*", label="msprime (smc_prime)")
+        pyplot.plot(rho, mean_scrm, "x", label="scrm")
+        pyplot.plot(rho, rho * harmonic_number(n - 1), "-")
+        pyplot.legend(loc="upper left")
+        filename = os.path.join(basedir, "mean.png")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+        v = np.zeros(len(rho))
+        for j in range(len(rho)):
+            v[j] = get_predicted_variance(n, rho[j])
+        pyplot.plot(rho, var_exact, "o", label="msprime (hudson)")
+        pyplot.plot(rho, var_smc, "^", label="msprime (smc)")
+        pyplot.plot(rho, var_smc_prime, "*", label="msprime (smc_prime)")
+        pyplot.plot(rho, var_scrm, "x", label="scrm")
+        pyplot.plot(rho, v, "-")
+        pyplot.legend(loc="upper left")
+        filename = os.path.join(basedir, "var.png")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
     def add_s_analytical_check(self):
         """
         Adds a check for the analytical predictions about the distribution
@@ -407,6 +652,27 @@ class SimulationVerifier(object):
         """
         self._instances[
             "analytical_pairwise_island"] = self.run_pairwise_island_model
+
+    def add_smc_num_trees_analytical_check(self):
+        """
+        Adds a check for the analytical number of trees under the SMC
+        and the full coalescent.
+        """
+        self._instances["smc_num_trees"] = self.run_smc_num_trees
+
+    def add_cli_num_trees_analytical_check(self):
+        """
+        Adds a check for the analytical number of trees using the CLI
+        and comparing with ms.
+        """
+        self._instances["cli_num_trees"] = self.run_cli_num_trees
+
+    def add_smc_oldest_time_check(self):
+        """
+        Adds a check the distribution of the oldest time of a
+        coalescence in the smc using scrm.
+        """
+        self._instances["smc_oldest_time"] = self.run_smc_oldest_time
 
     def add_random_instance(
             self, key, num_populations=1, num_replicates=1000,
@@ -464,6 +730,7 @@ class SimulationVerifier(object):
                 cmd += " -eN {} {}".format(t, random.random())
 
         self.add_ms_instance(key, cmd)
+
 
 
 def main():
@@ -611,6 +878,11 @@ def main():
     verifier.add_pi_analytical_check()
     verifier.add_total_branch_length_analytical_check()
     verifier.add_pairwise_island_model_analytical_check()
+    verifier.add_cli_num_trees_analytical_check()
+
+    # Add SMC checks against scrm.
+    verifier.add_smc_num_trees_analytical_check()
+    verifier.add_smc_oldest_time_check()
 
     keys = None
     if len(sys.argv) > 1:
