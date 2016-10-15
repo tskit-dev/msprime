@@ -556,6 +556,9 @@ class IndexedAction(argparse._AppendAction):
             parser, namespace, (IndexedAction.index, values), option_string)
         IndexedAction.index += 1
 
+def convert_arg_line_to_args(arg_line):
+    # from the docs on argparse.ArgumentParser.convert_arg_line_to_args
+    return arg_line.split()
 
 class LoadFromFile (argparse.Action):
     """
@@ -571,9 +574,16 @@ def get_mspms_parser():
     # Ensure that the IndexedAction counter is set to zero. This is useful
     # for testing where we'll be creating lots of these parsers.
     IndexedAction.index = 0
+    fromfile_help_epilog = """
+    Inserting the name of a file prepended with '@' will insert the contents of that file into the command line at that point, for instance:
+       mspms 10 2 @config.txt
+    with arguments listed in 'config.txt'.
+    """
     parser = argparse.ArgumentParser(
         description=mscompat_description,
-        epilog=msprime_citation_text)
+        fromfile_prefix_chars='@',  # can prefix filenames with this to have their contents inserted into argument string at that point
+        epilog=fromfile_help_epilog+"\n\n"+msprime_citation_text)
+    parser.convert_arg_line_to_args = convert_arg_line_to_args
     add_sample_size_argument(parser)
     parser.add_argument(
         "num_replicates", type=positive_int,
