@@ -574,15 +574,10 @@ def get_mspms_parser():
     # Ensure that the IndexedAction counter is set to zero. This is useful
     # for testing where we'll be creating lots of these parsers.
     IndexedAction.index = 0
-    fromfile_help_epilog = """
-    Inserting the name of a file prepended with '@' will insert the contents of that file into the command line at that point, for instance:
-       mspms 10 2 @config.txt
-    with arguments listed in 'config.txt'.
-    """
     parser = argparse.ArgumentParser(
         description=mscompat_description,
         fromfile_prefix_chars='@',  # can prefix filenames with this to have their contents inserted into argument string at that point
-        epilog=fromfile_help_epilog+"\n\n"+msprime_citation_text)
+        epilog=msprime_citation_text)
     parser.convert_arg_line_to_args = convert_arg_line_to_args
     add_sample_size_argument(parser)
     parser.add_argument(
@@ -714,7 +709,11 @@ def get_mspms_parser():
         help="Number of values after decimal place to print")
     group.add_argument(
         "--filename", "-f", type=open, action=LoadFromFile,
-        help="Read command line arguments from this file.")
+        help=(
+            "Read *all* command line arguments from this file. "
+            "Alternatively, inserting the name of a file prepended with '@' "
+            "on the command line will insert the contents of that file at that point, "
+            "for instance: 'mspms 10 1 @config.txt'."))
     return parser
 
 
