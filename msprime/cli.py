@@ -557,6 +557,16 @@ class IndexedAction(argparse._AppendAction):
         IndexedAction.index += 1
 
 
+class LoadFromFile (argparse.Action):
+    """
+    Argparse action class to allow passing a filename containing arguments
+    on the command line (for super-long argument files).
+    From http://stackoverflow.com/questions/27433316/how-to-get-argparse-to-read-arguments-from-a-file-with-an-option-rather-than-pre
+    """
+    def __call__ (self, parser, namespace, values, option_string = None):
+        with values as f:
+            parser.parse_args(f.read().split(), namespace)
+
 def get_mspms_parser():
     # Ensure that the IndexedAction counter is set to zero. This is useful
     # for testing where we'll be creating lots of these parsers.
@@ -692,6 +702,9 @@ def get_mspms_parser():
     group.add_argument(
         "--precision", "-p", type=positive_int, default=3,
         help="Number of values after decimal place to print")
+    group.add_argument(
+        "--filename", "-f", type=open, action=LoadFromFile,
+        help="Read command line arguments from this file.")
     return parser
 
 
