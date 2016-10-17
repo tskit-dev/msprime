@@ -560,32 +560,34 @@ def convert_arg_line_to_args(arg_line):
     # from the docs on argparse.ArgumentParser.convert_arg_line_to_args
     return arg_line.split()
 
-class LoadFromFile (argparse.Action):
+def make_load_file_action(next_parser):
     """
     Argparse action class to allow passing a filename containing arguments
     on the command line (for super-long argument files).
-    From http://stackoverflow.com/questions/27433316/how-to-get-argparse-to-read-arguments-from-a-file-with-an-option-rather-than-pre
+    From 
+        http://stackoverflow.com/questions/27433316/how-to-get-argparse-to-read-arguments-from-a-file-with-an-option-rather-than-pre
+    and 
+        http://stackoverflow.com/questions/40060571/how-to-get-argparse-to-read-arguments-from-a-file-with-an-option-after-positiona/40062344
     """
-    def __call__ (self, parser, namespace, values, option_string = None):
-        with values as f:
-            parser.parse_args(f.read().split(), namespace)
+    class LoadFromFile (argparse.Action):
+        def __call__ (self, parser, namespace, values, option_string = None):
+            with values as f:
+                # note parses with 'next_parser' *not* with parser that is passed in
+                next_parser.parse_args(f.read().split(), namespace)
+
+    return( LoadFromFile )
 
 def get_mspms_parser():
     # Ensure that the IndexedAction counter is set to zero. This is useful
     # for testing where we'll be creating lots of these parsers.
     IndexedAction.index = 0
+    # to allow `-f` options we'll need a parser that can do all the arguments except the positional
+    # (nonoptional) arguments.  We'll create this one first, then at the end make the parser
+    # that includes the positional arguments.
     parser = argparse.ArgumentParser(
         description=mscompat_description,
-        fromfile_prefix_chars='@',  # can prefix filenames with this to have their contents inserted into argument string at that point
         epilog=msprime_citation_text)
     parser.convert_arg_line_to_args = convert_arg_line_to_args
-    add_sample_size_argument(parser)
-    parser.add_argument(
-        "num_replicates", type=positive_int,
-        help="Number of independent replicates")
-    parser.add_argument(
-        "-V", "--version", action='version',
-        version='%(prog)s {}'.format(msprime.__version__))
 
     group = parser.add_argument_group("Behaviour")
     group.add_argument(
@@ -708,13 +710,26 @@ def get_mspms_parser():
         "--precision", "-p", type=positive_int, default=3,
         help="Number of values after decimal place to print")
     group.add_argument(
-        "--filename", "-f", type=open, action=LoadFromFile,
-        help=(
-            "Read *all* command line arguments from this file. "
-            "Alternatively, inserting the name of a file prepended with '@' "
-            "on the command line will insert the contents of that file at that point, "
-            "for instance: 'mspms 10 1 @config.txt'."))
-    return parser
+        "--filename", "-f", type=open, action=make_load_file_action(parser),
+        help= "Insert commands from a file at this point in the command line." )
+
+    # now for the parser that gets called first
+    init_parser = argparse.ArgumentParser(
+        description=mscompat_description,
+        epilog=msprime_citation_text,
+        add_help=False, 
+        parents=[parser])
+    init_parser.convert_arg_line_to_args = convert_arg_line_to_args
+
+    add_sample_size_argument(init_parser)
+    init_parser.add_argument(
+        "num_replicates", type=positive_int,
+        help="Number of independent replicates")
+    init_parser.add_argument(
+        "-V", "--version", action='version',
+        version='%(prog)s {}'.format(msprime.__version__))
+
+    return init_parser
 
 
 def get_mspms_runner(arg_list):
