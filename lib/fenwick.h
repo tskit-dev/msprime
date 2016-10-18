@@ -21,7 +21,6 @@
 #define __FENWICK_H__
 
 #include <stdlib.h>
-#include <inttypes.h>
 
 typedef struct {
     size_t size;

@@ -116,8 +116,11 @@ _msprime_module = Extension(
     undef_macros=["NDEBUG"],
     define_macros=DefineMacros(),
     libraries=["gsl", "gslcblas", "hdf5"],
-    include_dirs=[d] + configurator.include_dirs,
-    library_dirs=configurator.library_dirs,
+    # include_dirs=[d] + configurator.include_dirs,
+    # library_dirs=configurator.library_dirs,
+    # TMP for windows.
+    include_dirs=[d] + ["C:\\Python35_64\\Library\\include"],
+    library_dirs=["C:\\Python35_64\\Library\\libs"],
 )
 
 with open("README.txt") as f:

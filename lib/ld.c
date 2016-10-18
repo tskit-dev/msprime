@@ -63,10 +63,12 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence)
     int ret = MSP_ERR_GENERIC;
 
     memset(self, 0, sizeof(ld_calc_t));
+#if HAVE_PTHREADS
     if (pthread_mutex_init(&self->work_mutex, NULL) != 0) {
         ret = MSP_ERR_PTHREAD;
         goto out;
     }
+#endif
     self->tree_sequence = tree_sequence;
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->outer_tree = malloc(sizeof(sparse_tree_t));
@@ -114,7 +116,9 @@ ld_calc_free(ld_calc_t *self)
         sparse_tree_free(self->outer_tree);
         free(self->outer_tree);
     }
+#if HAVE_PTHREADS
     pthread_mutex_destroy(&self->work_mutex);
+#endif
     return 0;
 }
 
@@ -361,11 +365,13 @@ ld_calc_get_r2_array(ld_calc_t *self, size_t a, int direction,
     int ret = MSP_ERR_GENERIC;
     int lock_acquired = 0;
 
+#if HAVE_PTHREADS
     if (pthread_mutex_lock(&self->work_mutex) != 0) {
         ret = MSP_ERR_PTHREAD;
         goto out;
     }
     lock_acquired = 1;
+#endif
 
     if (a >= self->num_mutations) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
@@ -386,11 +392,13 @@ ld_calc_get_r2_array(ld_calc_t *self, size_t a, int direction,
     }
 out:
     if (lock_acquired) {
+#if HAVE_PTHREADS
         if (pthread_mutex_unlock(&self->work_mutex) != 0) {
             if (ret != 0) {
                 ret = MSP_ERR_PTHREAD;
             }
         }
+#endif
     }
     return ret;
 }
@@ -407,11 +415,13 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     size_t tmp;
     int lock_acquired = 0;
 
+#ifdef HAVE_PTHREADS
     if (pthread_mutex_lock(&self->work_mutex) != 0) {
         ret = MSP_ERR_PTHREAD;
         goto out;
     }
     lock_acquired = 1;
+#endif
 
     if (a >= self->num_mutations || b >= self->num_mutations) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
@@ -465,11 +475,13 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     ret = 0;
 out:
     if (lock_acquired) {
+#ifdef HAVE_PTHREADS
         if (pthread_mutex_unlock(&self->work_mutex) != 0) {
             if (ret != 0) {
                 ret = MSP_ERR_PTHREAD;
             }
         }
+#endif
     }
     return ret;
 }
