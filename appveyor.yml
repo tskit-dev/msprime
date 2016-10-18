@@ -1,7 +1,4 @@
 environment:
-  # See README for information on the token
-  binstar_token:
-    secure: va2cH3651uru58ThstGxm6R/Rvjw4xC13WnQFQpP0bgc8IjYrbBJWLLMvrCuSgWF
 
   global:
     # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
@@ -60,7 +57,7 @@ test_script:
   - "%CMD_IN_ENV% activate test-environment"
   - "%CMD_IN_ENV% conda install --yes --file=requirements_ci.txt"
   - "%CMD_IN_ENV% python setup.py build_ext --inplace"
-  - "%CMD_IN_ENV% nosetests -v allel"
+  - "%CMD_IN_ENV% nosetests"
 
 after_test:
   - "%CMD_IN_ENV% python setup.py bdist_wheel"
