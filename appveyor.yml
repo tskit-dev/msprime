@@ -57,6 +57,7 @@ build: false
 
 test_script:
   - "%CMD_IN_ENV% conda config --add channels conda-forge"
+  - "%CMD_IN_ENV% conda config --add channels pavoljuhas"
   - "%CMD_IN_ENV% conda create --yes -n test-environment python=%PYTHON_VERSION%"
   - "%CMD_IN_ENV% activate test-environment"
   - "%CMD_IN_ENV% conda install --yes --file=requirements_appveyor.txt"
