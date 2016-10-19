@@ -525,6 +525,29 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(ts.get_samples(0), [0])
         self.assertEqual(ts.get_samples(1), [1])
 
+    def test_many_demes(self):
+        num_demes = 300
+        population_configurations = [
+            msprime.PopulationConfiguration(1)] + [
+            msprime.PopulationConfiguration(0) for _ in range(num_demes - 2)
+            ] + [msprime.PopulationConfiguration(1)]
+        t = 5
+        demographic_events = [
+            msprime.MassMigration(time=t, source=0, destination=num_demes - 1),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1)
+        tree = next(ts.trees())
+        self.assertEqual(tree.get_root(), 2)
+        self.assertGreater(tree.get_time(2), t)
+        self.assertEqual(tree.get_population(0), 0)
+        self.assertEqual(tree.get_population(1), num_demes - 1)
+        self.assertEqual(tree.get_population(2), num_demes - 1)
+        self.assertEqual(ts.get_population(0), 0)
+        self.assertEqual(ts.get_population(1), num_demes - 1)
+
 
 class TestTimeUnits(unittest.TestCase):
     """

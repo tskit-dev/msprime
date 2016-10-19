@@ -285,7 +285,7 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
     int ret = 0;
     size_t j;
 
-    if (num_populations < 1 || num_populations > UINT8_MAX) {
+    if (num_populations < 1 || num_populations > UINT32_MAX) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -791,8 +791,7 @@ msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, uint32_t value,
     seg->left = left;
     seg->right = right;
     seg->value = value;
-    assert(population_id < UINT8_MAX);
-    seg->population_id = (uint8_t) population_id;
+    seg->population_id = population_id;
 out:
     return seg;
 }
@@ -1100,7 +1099,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     /* Need to set the population_id for each segment. */
     x = ind;
     while (x != NULL) {
-        x->population_id = (uint8_t) dest_pop;
+        x->population_id = dest_pop;
         x = x->next;
     }
     ret = msp_insert_individual(self, ind);
@@ -1230,7 +1229,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         cr->right = (double) right;
         cr->node = node;
         cr->time = self->time;
-        cr->population_id = (uint8_t) population_id;
+        cr->population_id = population_id;
         self->num_coalescence_records++;
     }
 out:
@@ -1819,7 +1818,7 @@ msp_reset_memory_state(msp_t *self)
 }
 
 static int WARN_UNUSED
-msp_insert_sample(msp_t *self, uint32_t sample, uint8_t population)
+msp_insert_sample(msp_t *self, uint32_t sample, uint32_t population)
 {
     int ret = MSP_ERR_GENERIC;
     segment_t *u;

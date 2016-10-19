@@ -180,7 +180,6 @@ class TestHdf5Format(unittest.TestCase):
     """
 
     def verify_tree_dump_format(self, ts, outfile):
-        uint8 = "uint8"
         uint32 = "uint32"
         float64 = "float64"
         ts.dump(outfile.name)
@@ -190,7 +189,7 @@ class TestHdf5Format(unittest.TestCase):
         # Check the basic root attributes
         format_version = root.attrs['format_version']
         self.assertEqual(format_version[0], 3)
-        self.assertEqual(format_version[1], 1)
+        self.assertEqual(format_version[1], 2)
         keys = set(root.keys())
         self.assertLessEqual(keys, set(["mutations", "trees", "provenance"]))
         self.assertIn("trees", keys)
@@ -230,7 +229,7 @@ class TestHdf5Format(unittest.TestCase):
 
         nodes_group = trees_group["nodes"]
         self.assertEqual(set(nodes_group.keys()), {"population", "time"})
-        self.assertEqual(nodes_group["population"].dtype, uint8)
+        self.assertEqual(nodes_group["population"].dtype, uint32)
         self.assertEqual(nodes_group["time"].dtype, float64)
         population = [0 for j in range(ts.get_num_nodes())]
         time = [0 for j in range(ts.get_num_nodes())]
