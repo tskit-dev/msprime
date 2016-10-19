@@ -296,17 +296,25 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
     """
 
     def setUp(self):
-        self.parser = cli.get_mspms_parser()
 
-        def f(message):
-            # print("error:", message)
+        def error_handler(message):
             raise CustomExceptionForTesting()
-        self.parser.error = f
+
+        self.parser = cli.get_mspms_parser(error_handler)
 
     def assert_parser_error(self, command_line):
+        split_cmd = command_line.split()
         self.assertRaises(
             CustomExceptionForTesting, cli.create_simulation_runner,
-            self.parser, command_line.split())
+            self.parser, split_cmd)
+        with tempfile.NamedTemporaryFile("w+") as f:
+            # We're assuming the first two args are always the sample size
+            # and num_replicates here.
+            f.write(" ".join(split_cmd[2:]))
+            f.flush()
+            self.assertRaises(
+                CustomExceptionForTesting, cli.create_simulation_runner,
+                self.parser, split_cmd[:2] + ["-f", f.name])
 
     def test_trees_or_mutations(self):
         self.assert_parser_error("10 1")
@@ -804,6 +812,72 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         check(
             4, "2 1 -T -I 2 2 0 -es 2.2 1 1 -es 3.3 2 0",
             [(2.2, 0, 2, 0), (3.3, 1, 3, 1.0)])
+
+
+class TestMspmsArgsFromFile(unittest.TestCase):
+    """
+    Test that parsing command line arguments from a file results gives
+    the same results.
+    """
+    # We need to keep the arguments grouped together because they must be
+    # complete when split between the file and command line.
+    cmd_lines = [
+        ["10", "2", "-T"],
+        ["10", "2", "-t 10"],
+        ["2", "1", "-T", "-I 3 2 0 0", "-ema 2.2 3 x 1 2 3 x 4 5 6 x"],
+        ["2", "1", "-T", "-eN 1 2.0", "-eG 1.0 3", "-eN 1 4"],
+        ["2", "1", "-T", "-I 3 2 0 0", "-ej 2.2 1 2", "-ej 2.3 1 3"],
+        ["3",  "10", "-I 2 3 0", "-m 1 2 1.1", "-m 2 1 9.0", "-t 5"],
+    ]
+
+    def verify_parsing(self, cmd_line_args, file_args):
+        parser = cli.get_mspms_parser()
+        cmd_line_result = vars(parser.parse_args(
+            cmd_line_args.split() + file_args.split()))
+        parser = cli.get_mspms_parser()
+        with tempfile.NamedTemporaryFile("w+") as f:
+            f.write(file_args)
+            f.flush()
+            file_result = vars(parser.parse_args(
+                cmd_line_args.split() + ["-f", f.name]))
+        self.assertEqual(cmd_line_result, file_result)
+
+    def test_empty_file(self):
+        for cmd_line in self.cmd_lines:
+            self.verify_parsing(" ".join(cmd_line), "")
+
+    def test_all_options_in_file(self):
+        for cmd_line in self.cmd_lines:
+            self.verify_parsing(" ".join(cmd_line[:2]), " ".join(cmd_line[2:]))
+
+    def test_middle_split(self):
+        for cmd_line in self.cmd_lines:
+            k = max(2, len(cmd_line) // 2)
+            self.verify_parsing(" ".join(cmd_line[:k]), " ".join(cmd_line[k:]))
+
+
+class TestMspmsArgsFromFileErrors(unittest.TestCase):
+    """
+    Tests for errors that can be thrown when reading arguments from a file.
+    """
+
+    def assert_parser_error(self, command_line):
+
+        def error_handler(message):
+            raise CustomExceptionForTesting()
+
+        parser = cli.get_mspms_parser(error_handler)
+        self.assertRaises(
+            CustomExceptionForTesting, cli.create_simulation_runner,
+            parser, command_line.split())
+
+    def test_file_arg_in_file(self):
+        with tempfile.NamedTemporaryFile("w+") as f:
+            f.write("-f otherfile")
+            self.assert_parser_error("10 1 -f {}".format(f.name))
+
+    def test_missing_file(self):
+        self.assert_parser_error("10 1 -f /does/not/exist")
 
 
 class TestMspmsOutput(unittest.TestCase):

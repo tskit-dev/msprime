@@ -133,9 +133,6 @@ class SimulationRunner(object):
         # cancel the factor introduced when calculated the scaled rates.
         self._recombination_rate = scaled_recombination_rate / 4
         self._mutation_rate = scaled_mutation_rate / 4
-        # Confusingly, we need the scaled mutation rate for generating
-        # mutations because we can't used msprime's high-level API
-        # directly.
         # For strict ms-compability we want to have m non-recombining loci
         recomb_map = msprime.RecombinationMap.uniform_map(
             num_loci, self._recombination_rate, num_loci)
@@ -557,20 +554,44 @@ class IndexedAction(argparse._AppendAction):
         IndexedAction.index += 1
 
 
-def get_mspms_parser():
+def convert_arg_line_to_args(arg_line):
+    # from the docs on argparse.ArgumentParser.convert_arg_line_to_args
+    return arg_line.split()
+
+
+def make_load_file_action(next_parser):
+    """
+    Argparse action class to allow passing a filename containing arguments
+    on the command line (for super-long argument files).
+    From
+        http://stackoverflow.com/q/27433316
+    and
+        http://stackoverflow.com/q/40060571
+    """
+    class LoadFromFile(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            try:
+                with open(values) as f:
+                    # note parses with 'next_parser' *not* with parser that is
+                    # passed in
+                    next_parser.parse_args(f.read().split(), namespace)
+            except IOError as ioe:
+                parser.error(ioe)
+    return LoadFromFile
+
+
+def get_mspms_parser(error_handler=None):
     # Ensure that the IndexedAction counter is set to zero. This is useful
     # for testing where we'll be creating lots of these parsers.
     IndexedAction.index = 0
+    # to allow `-f` options we'll need a parser that can do all the
+    # arguments except the positional (nonoptional) arguments.  We'll
+    # create this one first, then at the end make the parser that
+    # includes the positional arguments.
     parser = argparse.ArgumentParser(
         description=mscompat_description,
         epilog=msprime_citation_text)
-    add_sample_size_argument(parser)
-    parser.add_argument(
-        "num_replicates", type=positive_int,
-        help="Number of independent replicates")
-    parser.add_argument(
-        "-V", "--version", action='version',
-        version='%(prog)s {}'.format(msprime.__version__))
+    parser.convert_arg_line_to_args = convert_arg_line_to_args
 
     group = parser.add_argument_group("Behaviour")
     group.add_argument(
@@ -692,7 +713,32 @@ def get_mspms_parser():
     group.add_argument(
         "--precision", "-p", type=positive_int, default=3,
         help="Number of values after decimal place to print")
-    return parser
+
+    # now for the parser that gets called first
+    init_parser = argparse.ArgumentParser(
+        description=mscompat_description,
+        epilog=msprime_citation_text,
+        add_help=False,
+        parents=[parser])
+    init_parser.convert_arg_line_to_args = convert_arg_line_to_args
+
+    add_sample_size_argument(init_parser)
+    init_parser.add_argument(
+        "num_replicates", type=positive_int,
+        help="Number of independent replicates")
+    init_parser.add_argument(
+        "-V", "--version", action='version',
+        version='%(prog)s {}'.format(msprime.__version__))
+    init_parser.add_argument(
+        "-f", "--filename", action=make_load_file_action(parser),
+        help="Insert commands from a file at this point in the command line.")
+
+    # Set the optional error handler (used for testing)
+    if error_handler is not None:
+        parser.error = error_handler
+        init_parser.error = error_handler
+
+    return init_parser
 
 
 def get_mspms_runner(arg_list):
