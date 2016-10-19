@@ -34,8 +34,10 @@ test_script:
   - "%CMD_IN_ENV% conda install --yes --file=requirements_appveyor.txt"
   # There seems to be an issue here, where we're not using the correct 
   # version of Python.
-  - "%CMD_IN_ENV% python setup.py build_ext --inplace"
-  - "%CMD_IN_ENV% nosetests"
+  # - "%CMD_IN_ENV% python setup.py build_ext --inplace"
+  # - "%CMD_IN_ENV% nosetests"
+  - "%CMD_IN_ENV% conda build conda-recipe"
+
 
 after_test:
   - "%CMD_IN_ENV% python setup.py bdist_wheel"
