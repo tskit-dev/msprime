@@ -556,34 +556,39 @@ class IndexedAction(argparse._AppendAction):
             parser, namespace, (IndexedAction.index, values), option_string)
         IndexedAction.index += 1
 
+
 def convert_arg_line_to_args(arg_line):
     # from the docs on argparse.ArgumentParser.convert_arg_line_to_args
     return arg_line.split()
+
 
 def make_load_file_action(next_parser):
     """
     Argparse action class to allow passing a filename containing arguments
     on the command line (for super-long argument files).
-    From 
-        http://stackoverflow.com/questions/27433316/how-to-get-argparse-to-read-arguments-from-a-file-with-an-option-rather-than-pre
-    and 
-        http://stackoverflow.com/questions/40060571/how-to-get-argparse-to-read-arguments-from-a-file-with-an-option-after-positiona/40062344
+    From
+        http://stackoverflow.com/q/27433316
+    and
+        http://stackoverflow.com/q/40060571
     """
-    class LoadFromFile (argparse.Action):
-        def __call__ (self, parser, namespace, values, option_string = None):
+    class LoadFromFile(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
             with values as f:
-                # note parses with 'next_parser' *not* with parser that is passed in
+                # note parses with 'next_parser' *not* with parser that is
+                # passed in
                 next_parser.parse_args(f.read().split(), namespace)
 
-    return( LoadFromFile )
+    return LoadFromFile
+
 
 def get_mspms_parser():
     # Ensure that the IndexedAction counter is set to zero. This is useful
     # for testing where we'll be creating lots of these parsers.
     IndexedAction.index = 0
-    # to allow `-f` options we'll need a parser that can do all the arguments except the positional
-    # (nonoptional) arguments.  We'll create this one first, then at the end make the parser
-    # that includes the positional arguments.
+    # to allow `-f` options we'll need a parser that can do all the
+    # arguments except the positional (nonoptional) arguments.  We'll
+    # create this one first, then at the end make the parser that
+    # includes the positional arguments.
     parser = argparse.ArgumentParser(
         description=mscompat_description,
         epilog=msprime_citation_text)
@@ -711,13 +716,13 @@ def get_mspms_parser():
         help="Number of values after decimal place to print")
     group.add_argument(
         "--filename", "-f", type=open, action=make_load_file_action(parser),
-        help= "Insert commands from a file at this point in the command line." )
+        help="Insert commands from a file at this point in the command line.")
 
     # now for the parser that gets called first
     init_parser = argparse.ArgumentParser(
         description=mscompat_description,
         epilog=msprime_citation_text,
-        add_help=False, 
+        add_help=False,
         parents=[parser])
     init_parser.convert_arg_line_to_args = convert_arg_line_to_args
 
