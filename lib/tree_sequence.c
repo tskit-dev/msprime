@@ -149,7 +149,7 @@ tree_sequence_alloc(tree_sequence_t *self)
     uint32_t j;
 
     self->trees.nodes.time = malloc(self->num_nodes * sizeof(double));
-    self->trees.nodes.population = malloc(self->num_nodes * sizeof(uint8_t));
+    self->trees.nodes.population = malloc(self->num_nodes * sizeof(uint32_t));
     if (self->trees.nodes.time == NULL || self->trees.nodes.population == NULL) {
         goto out;
     }
@@ -878,7 +878,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
             self->mutations.node},
         {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1,
             self->mutations.position},
-        {"/trees/nodes/population", H5T_NATIVE_UINT8, 0, 1,
+        {"/trees/nodes/population", H5T_NATIVE_UINT32, 0, 1,
             self->trees.nodes.population},
         {"/trees/nodes/time", H5T_NATIVE_DOUBLE, 0, 1,
             self->trees.nodes.time},
@@ -1030,7 +1030,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
             0, 0, /* We must set this afterwards */
             self->num_provenance_strings, self->provenance_strings},
         {"/trees/nodes/population",
-            H5T_STD_U8LE, H5T_NATIVE_UINT8,
+            H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->num_nodes, self->trees.nodes.population},
         {"/trees/nodes/time",
             H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
@@ -1715,7 +1715,7 @@ sparse_tree_clear(sparse_tree_t *self)
     self->index = (size_t) -1;
     memset(self->parent, (int) MSP_NULL_NODE, N * sizeof(uint32_t));
     memset(self->population + n, (int) MSP_NULL_POPULATION_ID,
-            (N - n) * sizeof(uint8_t));
+            (N - n) * sizeof(uint32_t));
     memset(self->time + n, 0, (N - n) * sizeof(double));
     memset(self->num_children + n, 0, (N - n) * sizeof(uint32_t));
     memset(self->children + n, 0, (N - n) * sizeof(uint32_t *));
@@ -1757,7 +1757,7 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     }
     self->flags = flags;
     self->parent = malloc(num_nodes * sizeof(uint32_t));
-    self->population = malloc(num_nodes * sizeof(uint8_t));
+    self->population = malloc(num_nodes * sizeof(uint32_t));
     self->time = malloc(num_nodes * sizeof(double));
     self->num_children = malloc(num_nodes * sizeof(uint32_t));
     self->children = malloc(num_nodes * sizeof(uint32_t *));
@@ -1972,7 +1972,7 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
     self->mutations = source->mutations;
 
     memcpy(self->parent, source->parent, N * sizeof(uint32_t));
-    memcpy(self->population, source->population, N * sizeof(uint8_t));
+    memcpy(self->population, source->population, N * sizeof(uint32_t));
     memcpy(self->time, source->time, N * sizeof(double));
     memcpy(self->num_children, source->num_children, N * sizeof(uint32_t));
     memcpy(self->children, source->children, N * sizeof(uint32_t *));
@@ -2019,7 +2019,7 @@ sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
         && self->mutations == other->mutations
         && memcmp(self->parent, other->parent, N * sizeof(uint32_t)) == 0
         && memcmp(self->population, other->population,
-                N * sizeof(uint8_t)) == 0
+                N * sizeof(uint32_t)) == 0
         && memcmp(self->time, other->time, N * sizeof(double)) ==  0
         && memcmp(self->num_children, other->num_children,
                 N * sizeof(uint32_t)) == 0

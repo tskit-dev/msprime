@@ -238,7 +238,7 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
     if (v == -1) {
         cr->population_id = MSP_NULL_POPULATION_ID;
     } else {
-        cr->population_id = (uint8_t) v;
+        cr->population_id = (uint32_t) v;
     }
     ret = 0;
 out:
@@ -282,7 +282,7 @@ parse_samples(PyObject *py_samples, Py_ssize_t *sample_size,
             PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
             goto out;
         }
-        ret_samples[j].population_id = (uint8_t) tmp_long;
+        ret_samples[j].population_id = (uint32_t) tmp_long;
         value = PyTuple_GetItem(sample, 1);
         if (!PyNumber_Check(value)) {
             PyErr_Format(PyExc_TypeError, "'time' is not number");

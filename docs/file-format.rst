@@ -24,7 +24,7 @@ contextual information.
 
 The root group contains one attributes, ``format_version``. This
 is a pair ``(major, minor)`` describing the file format version. This
-document describes version 3.1.
+document describes version 3.2.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
@@ -115,7 +115,7 @@ group is used to record information about these individuals.
 =======================     ==============
 Path                        Type
 =======================     ==============
-/trees/nodes/population     H5T_STD_U8LE
+/trees/nodes/population     H5T_STD_U32LE
 /trees/nodes/time           H5T_IEEE_F64LE
 =======================     ==============
 

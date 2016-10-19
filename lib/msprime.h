@@ -37,7 +37,7 @@
 #define MSP_ZLIB_COMPRESSION 1
 
 #define MSP_FILE_FORMAT_VERSION_MAJOR 3
-#define MSP_FILE_FORMAT_VERSION_MINOR 1
+#define MSP_FILE_FORMAT_VERSION_MINOR 2
 
 #define MSP_ORDER_TIME 0
 #define MSP_ORDER_LEFT 1
@@ -56,14 +56,10 @@
 /* The root node indicator */
 #define MSP_NULL_NODE UINT32_MAX
 /* Indicates the that the population ID has not been set. */
-/* TODO uint8_t for population in the structs is pointless because
- * we don't make any savings due to padding. We should change population
- * ID to uint32_t like the rest for simplicity.
- */
-#define MSP_NULL_POPULATION_ID UINT8_MAX
+#define MSP_NULL_POPULATION_ID UINT32_MAX
 
 typedef struct segment_t_t {
-    uint8_t population_id;
+    uint32_t population_id;
     /* During simulation we use genetic coordinates */
     uint32_t left;
     uint32_t right;
@@ -74,7 +70,7 @@ typedef struct segment_t_t {
 } segment_t;
 
 typedef struct {
-    uint8_t population_id;
+    uint32_t population_id;
     uint32_t num_children;
     /* After simulation, all coordinates are converted to physical coordinates
      * using a genetic map */
@@ -102,7 +98,7 @@ typedef struct {
 } object_heap_t;
 
 typedef struct {
-    uint8_t population_id;
+    uint32_t population_id;
     double time;
 } sample_t;
 
@@ -116,7 +112,7 @@ typedef struct {
 typedef struct {
     double time;
     uint32_t sample;
-    uint8_t population_id;
+    uint32_t population_id;
 } sampling_event_t;
 
 typedef struct {
@@ -233,7 +229,7 @@ typedef struct {
         size_t num_breakpoints;
         struct {
             double *time;
-            uint8_t *population;
+            uint32_t *population;
         } nodes;
         struct {
             uint32_t *left;
@@ -307,7 +303,7 @@ typedef struct {
     /* Left and right physical coordinates of the tree */
     double left;
     double right;
-    uint8_t *population;
+    uint32_t *population;
     uint32_t *parent;
     uint32_t *num_children;
     uint32_t **children;
