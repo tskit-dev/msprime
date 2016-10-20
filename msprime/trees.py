@@ -1993,9 +1993,6 @@ class DemographicEvent(object):
     def __str__(self):
         raise NotImplementedError()
 
-    def apply(self, populations, migration_matrix):
-        raise NotImplementedError()
-
 
 class PopulationParametersChange(DemographicEvent):
     """
@@ -2094,17 +2091,6 @@ class MigrationRateChange(DemographicEvent):
                 self.matrix_index, self.rate)
         return ret
 
-    def apply(self, populations, migration_matrix):
-        if self.matrix_index is None:
-            # Change all non-diagonal values.
-            for j in range(self._num_populations):
-                for k in range(self._num_populations):
-                    if j != k:
-                        migration_matrix[j][k] = self.rate
-        else:
-            j, k = self.matrix_index
-            migration_matrix[j][k] = self.rate
-
 
 class MassMigration(DemographicEvent):
     """
@@ -2148,9 +2134,6 @@ class MassMigration(DemographicEvent):
             "probability {}".format(
                 self.source, self.destination, self.proportion))
 
-    def apply(self, populations, migration_matrix):
-        pass
-
 
 class SimpleBottleneck(DemographicEvent):
     # This is an unsupported/undocumented demographic event.
@@ -2175,9 +2158,6 @@ class SimpleBottleneck(DemographicEvent):
             "Simple bottleneck: lineages in population {} coalesce "
             "probability {}".format(self.population_id, self.proportion))
 
-    def apply(self, populations, migration_matrix):
-        pass
-
 
 class InstantaneousBottleneck(DemographicEvent):
     # TODO document
@@ -2201,11 +2181,9 @@ class InstantaneousBottleneck(DemographicEvent):
 
     def __str__(self):
         return (
-            "Instantaneous bottleneck: equivalent to {} generations of "
-            "the coalescent".format(self.population_id, self.strength))
-
-    def apply(self, populations, migration_matrix):
-        pass
+            "Instantaneous bottleneck in population {}: equivalent to {} "
+            "generations of the coalescent".format(
+                self.population_id, self.strength))
 
 
 class Population(object):

@@ -2861,11 +2861,6 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
     demographic_event_t *de;
     int N = (int) self->num_populations;
 
-    /* We only support N = 1 for now */
-    if (N != 1) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
     if (population_id < 0 || population_id >= N) {
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;

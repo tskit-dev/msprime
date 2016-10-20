@@ -162,6 +162,19 @@ def get_simple_bottleneck_event(
     }
 
 
+def get_instantaneous_bottleneck_event(
+        time=0.0, population_id=0, strength=10):
+    """
+    Returns a instantaneous bottleneck demographic event.
+    """
+    return {
+        "type": "instantaneous_bottleneck",
+        "time": time,
+        "population_id": population_id,
+        "strength": strength
+    }
+
+
 def get_migration_matrix(num_populations, value=1.0):
     """
     Returns a simple migration matrix.
@@ -204,10 +217,14 @@ def get_random_demographic_events(num_populations, num_events):
             events.append(get_mass_migration_event(
                 time=random.random(), proportion=random.choice([0, 1]),
                 source=source, destination=destination))
-            # Add a bottleneck
+            # Add some bottlenecks
             events.append(get_simple_bottleneck_event(
                 time=random.random(), proportion=random.uniform(0, 0.25),
                 population_id=random.randint(0, num_populations - 1)))
+            events.append(get_instantaneous_bottleneck_event(
+                time=random.random(), strength=random.uniform(0, 0.01),
+                population_id=random.randint(0, num_populations - 1)))
+
     sorted_events = sorted(events, key=lambda x: x["time"])
     return sorted_events
 
@@ -430,13 +447,13 @@ class LowLevelTestCase(tests.MsprimeTestCase):
     def get_nonbinary_tree_sequence(self):
         bottlenecks = [
             get_simple_bottleneck_event(0.1, 0, 0.1),
-            get_simple_bottleneck_event(0.1, 0, 0.9)]
+            get_instantaneous_bottleneck_event(0.11, 0, 5)]
         return self.get_tree_sequence(demographic_events=bottlenecks)
 
     def get_example_tree_sequences(self):
         bottlenecks = [
             get_simple_bottleneck_event(0.1, 0, 0.1),
-            get_simple_bottleneck_event(0.1, 0, 0.9)]
+            get_instantaneous_bottleneck_event(0.11, 0, 5)]
         for n in [2, 3, 100]:
             for m in [1, 2, 100]:
                 for mu in [0, 10]:
@@ -977,7 +994,7 @@ class TestSimulationState(LowLevelTestCase):
                     pop_sizes[pop_id] += 1
                 if proportion == 1:
                     self.assertEqual(pop_sizes[source], 0)
-            elif event_type == "simple_bottleneck":
+            elif event_type in ["simple_bottleneck", "instantaneous_bottleneck"]:
                 # Not much we can test for here...
                 pass
             else:
@@ -1238,25 +1255,61 @@ class TestSimulator(LowLevelTestCase):
             _msprime.Simulator(
                 get_samples(2), _msprime.RandomGenerator(1),
                 demographic_events=events)
+        event_generators = [
+            get_size_change_event, get_growth_rate_change_event,
+            get_migration_rate_change_event,
+            get_mass_migration_event, get_simple_bottleneck_event,
+            get_instantaneous_bottleneck_event]
         for bad_type in [None, {}, "", 1]:
             self.assertRaises(TypeError, f, bad_type)
         for bad_type in [None, "", 1, []]:
             self.assertRaises(TypeError, f, [bad_type])
         for bad_type in [None, [], 0]:
-            size_change_event = get_size_change_event()
-            size_change_event["type"] = bad_type
-            self.assertRaises(ValueError, f, [size_change_event])
+            for generator in event_generators:
+                event = generator()
+                event["type"] = bad_type
+                self.assertRaises(ValueError, f, [event])
         for bad_event in [b'', b'1', b'x' * 1000, b'Size_change', 2, 'none']:
-            size_change_event = get_size_change_event()
-            size_change_event["type"] = bad_event
-            self.assertRaises(ValueError, f, [size_change_event])
+            for generator in event_generators:
+                event["type"] = bad_event
+                self.assertRaises(ValueError, f, [event])
         for bad_type in [[], "", {}]:
-            size_change_event = get_size_change_event(time=bad_type)
-            self.assertRaises(TypeError, f, [size_change_event])
-            size_change_event = get_size_change_event(population_id=bad_type)
-            self.assertRaises(TypeError, f, [size_change_event])
-            size_change_event = get_size_change_event(size=bad_type)
-            self.assertRaises(TypeError, f, [size_change_event])
+            for generator in event_generators:
+                event = generator(time=bad_type)
+                self.assertRaises(TypeError, f, [event])
+            event = get_size_change_event(population_id=bad_type)
+            self.assertRaises(TypeError, f, [event])
+            event = get_size_change_event(size=bad_type)
+            self.assertRaises(TypeError, f, [event])
+
+            event = get_instantaneous_bottleneck_event(population_id=bad_type)
+            self.assertRaises(TypeError, f, [event])
+            event = get_instantaneous_bottleneck_event(strength=bad_type)
+            self.assertRaises(TypeError, f, [event])
+
+            event = get_simple_bottleneck_event(population_id=bad_type)
+            self.assertRaises(TypeError, f, [event])
+            event = get_simple_bottleneck_event(proportion=bad_type)
+            self.assertRaises(TypeError, f, [event])
+
+            event = get_mass_migration_event(source=bad_type, destination=0)
+            self.assertRaises(TypeError, f, [event])
+            event = get_mass_migration_event(source=0, destination=bad_type)
+            self.assertRaises(TypeError, f, [event])
+            event = get_mass_migration_event(
+                source=0, destination=1, proportion=bad_type)
+            self.assertRaises(TypeError, f, [event])
+
+            event = get_migration_rate_change_event(matrix_index=bad_type)
+            self.assertRaises(TypeError, f, [event])
+            event = get_migration_rate_change_event(
+                matrix_index=0, migration_rate=bad_type)
+            self.assertRaises(TypeError, f, [event])
+
+            event = get_growth_rate_change_event(population_id=bad_type)
+            self.assertRaises(TypeError, f, [event])
+            event = get_growth_rate_change_event(population_id=0, growth_rate=bad_type)
+            self.assertRaises(TypeError, f, [event])
 
     def test_bad_demographic_event_values(self):
         def f(events, num_populations=1):
@@ -1271,7 +1324,8 @@ class TestSimulator(LowLevelTestCase):
         event_generators = [
             get_size_change_event, get_growth_rate_change_event,
             get_migration_rate_change_event,
-            get_mass_migration_event, get_simple_bottleneck_event]
+            get_mass_migration_event, get_simple_bottleneck_event,
+            get_instantaneous_bottleneck_event]
         for event_generator in event_generators:
             # Negative times not allowed.
             event = event_generator(time=-1)

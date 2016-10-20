@@ -928,6 +928,16 @@ test_simulator_demographic_events(void)
         msp_add_simple_bottleneck(&msp, 10, 0, 1.1),
         MSP_ERR_BAD_PARAM_VALUE);
 
+    CU_ASSERT_EQUAL(
+        msp_add_instantaneous_bottleneck(&msp, 10, 2, 0),
+        MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(
+        msp_add_simple_bottleneck(&msp, 10, 0, -1),
+        MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL_FATAL(
+        msp_add_simple_bottleneck(&msp, 10, -1, 0),
+        MSP_ERR_BAD_POPULATION_ID);
+
     ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_migration_rate_change(&msp, 0.2, 1, 2.0);
@@ -942,7 +952,9 @@ test_simulator_demographic_events(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 1.0);
+    ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_instantaneous_bottleneck(&msp, 0.9, 0, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
 
     CU_ASSERT_EQUAL(
@@ -956,6 +968,9 @@ test_simulator_demographic_events(void)
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
     CU_ASSERT_EQUAL(
             msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+    CU_ASSERT_EQUAL(
+            msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
 
     CU_ASSERT_EQUAL(
@@ -972,7 +987,7 @@ test_simulator_demographic_events(void)
         msp_print_state(&msp, _devnull);
         j++;
     } while (! gsl_isinf(time));
-    CU_ASSERT_EQUAL(j, 9);
+    CU_ASSERT_EQUAL(j, 10);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(
         msp_run(&msp, DBL_MAX, ULONG_MAX),
