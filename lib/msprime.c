@@ -1929,12 +1929,12 @@ out:
 }
 
 static double
-msp_get_common_ancestor_waiting_time(msp_t *self, uint32_t population_id)
+msp_get_common_ancestor_waiting_time_size(msp_t *self, population_t *pop,
+        uint32_t size)
 {
     double ret = DBL_MAX;
-    population_t *pop = &self->populations[population_id];
     /* Need to perform n * (n - 1) as a double due to overflow */
-    double n = (double) avl_count(&pop->ancestors);
+    double n = (double) size;
     double lambda = n * (n - 1.0);
     double alpha = pop->growth_rate;
     double t = self->time;
@@ -1954,6 +1954,15 @@ msp_get_common_ancestor_waiting_time(msp_t *self, uint32_t population_id)
         }
     }
     return ret;
+}
+
+static double
+msp_get_common_ancestor_waiting_time(msp_t *self, uint32_t population_id)
+{
+    population_t *pop = &self->populations[population_id];
+
+    return msp_get_common_ancestor_waiting_time_size(self, pop,
+            (uint32_t) avl_count(&pop->ancestors));
 }
 
 static int WARN_UNUSED
@@ -2619,14 +2628,15 @@ out:
     return ret;
 }
 
-/* Bottlenecks */
+/* Simple bottlenecks. At some time we coalesce a fraction of the
+ * extant lineages into a single ancestor. */
 
 static int
-msp_bottleneck(msp_t *self, demographic_event_t *event)
+msp_simple_bottleneck(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    int population_id = event->params.bottleneck.population_id;
-    double p = event->params.bottleneck.proportion;
+    int population_id = event->params.simple_bottleneck.population_id;
+    double p = event->params.simple_bottleneck.proportion;
     int N = (int) self->num_populations;
     avl_node_t *node, *next, *q_node;
     avl_tree_t *pop, Q;
@@ -2640,7 +2650,7 @@ msp_bottleneck(msp_t *self, demographic_event_t *event)
     avl_init_tree(&Q, cmp_segment_queue, NULL);
     /*
      * Find the individuals that descend from the common ancestor
-     * during this bottleneck.
+     * during this simple_bottleneck.
      */
     pop = &self->populations[population_id].ancestors;
     node = pop->head;
@@ -2667,16 +2677,16 @@ out:
 }
 
 static void
-msp_print_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
+msp_print_simple_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
 {
-    fprintf(out, "%f\tbottleneck: %d I = %f\n",
+    fprintf(out, "%f\tsimple_bottleneck: %d I = %f\n",
             event->time,
-            event->params.bottleneck.population_id,
-            event->params.bottleneck.proportion);
+            event->params.simple_bottleneck.population_id,
+            event->params.simple_bottleneck.proportion);
 }
 
 int WARN_UNUSED
-msp_add_bottleneck(msp_t *self, double time, int population_id,
+msp_add_simple_bottleneck(msp_t *self, double time, int population_id,
         double proportion)
 {
     int ret = 0;
@@ -2695,13 +2705,179 @@ msp_add_bottleneck(msp_t *self, double time, int population_id,
     if (ret != 0) {
         goto out;
     }
-    de->params.bottleneck.population_id = population_id;
-    de->params.bottleneck.proportion = proportion;
-    de->change_state = msp_bottleneck;
-    de->print_state = msp_print_bottleneck;
+    de->params.simple_bottleneck.population_id = population_id;
+    de->params.simple_bottleneck.proportion = proportion;
+    de->change_state = msp_simple_bottleneck;
+    de->print_state = msp_print_simple_bottleneck;
     ret = 0;
 out:
     return ret;
 }
 
+/* Instantaneous bottlenecks. At a time T1 we have a burst of coalescence
+ * equivalent to what would happen in time T2.
+ */
 
+static int
+msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    int population_id = event->params.instantaneous_bottleneck.population_id;
+    double T2 = event->params.instantaneous_bottleneck.strength;
+    int N = (int) self->num_populations;
+    uint32_t *lineages = NULL;
+    uint32_t *pi = NULL;
+    avl_node_t **avl_nodes = NULL;
+    avl_tree_t *sets = NULL;
+    uint32_t j, k, n, u, parent, num_roots;
+    double t;
+    avl_tree_t *pop;
+    avl_node_t *node, *set_node;
+    segment_t *individual;
+
+    /* This should have been caught on adding the event */
+    if (population_id < 0 || population_id >= N) {
+        ret = MSP_ERR_ASSERTION_FAILED;
+        goto out;
+    }
+    pop = &self->populations[population_id].ancestors;
+    n = avl_count(pop);
+    lineages = malloc(n * sizeof(uint32_t));
+    avl_nodes = malloc(n * sizeof(avl_node_t *));
+    pi = malloc(2 * n * sizeof(uint32_t));
+    sets = malloc(2 * n * sizeof(avl_tree_t));
+    if (lineages == NULL || avl_nodes == NULL || pi == NULL
+            || sets == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < n; j++) {
+        lineages[j] = j;
+    }
+    for (j = 0; j < 2 * n; j++) {
+        pi[j] = MSP_NULL_NODE;
+    }
+    j = 0;
+    for (node = pop->head; node != NULL; node = node->next) {
+        avl_nodes[j] = node;
+        j++;
+    }
+
+    /* Now we implement the Kingman coalescent for these lineages until we have
+     * exceeded T2. This is based on the algorithm from Hudson 1990.
+     */
+    j = n - 1;
+    t = 0.0;
+    parent = n;
+    while (j > 0) {
+        t += msp_get_common_ancestor_waiting_time_size(self,
+                &self->populations[population_id], j + 1);
+        if (t >= T2) {
+            break;
+        }
+        /* Note: there might be issues here if we have very large sample
+         * sizes as the uniform_int has a limited range.
+         */
+        k = (uint32_t) gsl_rng_uniform_int(self->rng, j);
+        pi[lineages[k]] = parent;
+        lineages[k] = lineages[j];
+        j--;
+        k = j > 0 ? (uint32_t) gsl_rng_uniform_int(self->rng, j): 0;
+        pi[lineages[k]] = parent;
+        lineages[k] = parent;
+        parent++;
+    }
+    num_roots = j + 1;
+    for (j = 0; j < num_roots; j++) {
+        if (lineages[j] >= n) {
+            avl_init_tree(&sets[lineages[j]], cmp_segment_queue, NULL);
+        }
+    }
+
+    /* Assign each lineage to the set corresponding to a given root.
+     * For any root < n, this lineages has not been affected, so we
+     * leave it alone.
+     */
+    for (j = 0; j < n; j++) {
+        u = j;
+        while (pi[u] != MSP_NULL_NODE) {
+            u = pi[u];
+        }
+        if (u >= n) {
+            /* Remove this node from the population, and add it into the
+             * set for the root at u */
+            individual = (segment_t *) avl_nodes[j]->item;
+            avl_unlink_node(pop, avl_nodes[j]);
+            msp_free_avl_node(self, avl_nodes[j]);
+            set_node = msp_alloc_avl_node(self);
+            if (set_node == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            avl_init_node(set_node, individual);
+            set_node = avl_insert_node(&sets[u], set_node);
+            assert(set_node != NULL);
+        }
+    }
+    for (j = 0; j < num_roots; j++) {
+        if (lineages[j] >= n) {
+            ret = msp_merge_ancestors(self, &sets[lineages[j]],
+                    (uint32_t) population_id);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+out:
+    if (lineages != NULL) {
+        free(lineages);
+    }
+    if (pi != NULL) {
+        free(pi);
+    }
+    if (sets != NULL) {
+        free(sets);
+    }
+    if (avl_nodes != NULL) {
+        free(avl_nodes);
+    }
+    return ret;
+}
+
+static void
+msp_print_instantaneous_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
+{
+    fprintf(out, "%f\tinstantaneous_bottleneck: %d T2 = %f\n",
+            event->time,
+            event->params.instantaneous_bottleneck.population_id,
+            event->params.instantaneous_bottleneck.strength);
+}
+
+int WARN_UNUSED
+msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
+        double strength)
+{
+    int ret = 0;
+    demographic_event_t *de;
+    int N = (int) self->num_populations;
+
+    if (population_id < 0 || population_id >= N) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    if (strength < 0.0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+    de->params.instantaneous_bottleneck.population_id = population_id;
+    de->params.instantaneous_bottleneck.strength = strength;
+    de->change_state = msp_instantaneous_bottleneck;
+    de->print_state = msp_print_instantaneous_bottleneck;
+    ret = 0;
+out:
+    return ret;
+}

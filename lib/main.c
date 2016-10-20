@@ -165,7 +165,7 @@ read_demographic_events(msp_t *msp, config_t *config)
     int j;
     const char *type;
     double time, growth_rate, initial_size, migration_rate, proportion,
-           intensity;
+           intensity, strength;
     int num_demographic_events, population_id, matrix_index, source, dest;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "demographic_events");
@@ -246,7 +246,7 @@ read_demographic_events(msp_t *msp, config_t *config)
             }
             dest = config_setting_get_int(t);
             ret = msp_add_mass_migration(msp, time, source, dest, proportion);
-        } else if (strcmp(type, "bottleneck") == 0) {
+        } else if (strcmp(type, "simple_bottleneck") == 0) {
             t = config_setting_get_member(s, "intensity");
             if (t == NULL) {
                 fatal_error("intensity not specified");
@@ -257,7 +257,20 @@ read_demographic_events(msp_t *msp, config_t *config)
                 fatal_error("population_id not specified");
             }
             population_id = config_setting_get_int(t);
-            ret = msp_add_bottleneck(msp, time, population_id, intensity);
+            ret = msp_add_simple_bottleneck(msp, time, population_id, intensity);
+        } else if (strcmp(type, "instantaneous_bottleneck") == 0) {
+            t = config_setting_get_member(s, "strength");
+            if (t == NULL) {
+                fatal_error("strength not specified");
+            }
+            strength = config_setting_get_float(t);
+            t = config_setting_get_member(s, "population_id");
+            if (t == NULL) {
+                fatal_error("population_id not specified");
+            }
+            population_id = config_setting_get_int(t);
+            ret = msp_add_instantaneous_bottleneck(msp, time, population_id,
+                    strength);
         } else {
             fatal_error("unknown demographic event type '%s'", type);
         }

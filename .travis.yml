@@ -36,7 +36,7 @@ install:
   - CFLAGS=--coverage python setup.py build_ext --inplace
 
 script:
-  - flake8 setup.py msprime tests
+  - flake8 --max-line-length 89 setup.py msprime tests
   - nosetests -v --with-coverage --cover-package msprime
       --cover-branches --cover-erase --cover-xml
       --cover-inclusive --cover-min-percentage 90 tests

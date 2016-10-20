@@ -744,15 +744,17 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 {
     int ret = -1;
     Py_ssize_t j;
-    double time, initial_size, growth_rate, migration_rate, proportion;
+    double time, initial_size, growth_rate, migration_rate, proportion,
+           strength;
     int err, population_id, matrix_index, source, destination;
     int is_population_parameter_change, is_migration_rate_change,
-        is_mass_migration, is_bottleneck;
+        is_mass_migration, is_simple_bottleneck, is_instantaneous_bottleneck;
     PyObject *item, *value, *type;
     PyObject *population_parameter_change_s = NULL;
     PyObject *migration_rate_change_s = NULL;
     PyObject *mass_migration_s = NULL;
-    PyObject *bottleneck_s = NULL;
+    PyObject *simple_bottleneck_s = NULL;
+    PyObject *instantaneous_bottleneck_s = NULL;
     PyObject *initial_size_s = NULL;
     PyObject *growth_rate_s = NULL;
 
@@ -774,8 +776,12 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     if (mass_migration_s == NULL) {
         goto out;
     }
-    bottleneck_s = Py_BuildValue("s", "bottleneck");
-    if (bottleneck_s == NULL) {
+    simple_bottleneck_s = Py_BuildValue("s", "simple_bottleneck");
+    if (simple_bottleneck_s == NULL) {
+        goto out;
+    }
+    instantaneous_bottleneck_s = Py_BuildValue("s", "instantaneous_bottleneck");
+    if (instantaneous_bottleneck_s == NULL) {
         goto out;
     }
     initial_size_s = Py_BuildValue("s", "initial_size");
@@ -825,8 +831,14 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
         if (is_mass_migration == -1) {
             goto out;
         }
-        is_bottleneck = PyObject_RichCompareBool(type, bottleneck_s, Py_EQ);
-        if (is_bottleneck == -1) {
+        is_simple_bottleneck = PyObject_RichCompareBool(
+                type, simple_bottleneck_s, Py_EQ);
+        if (is_simple_bottleneck == -1) {
+            goto out;
+        }
+        is_instantaneous_bottleneck = PyObject_RichCompareBool(
+                type, instantaneous_bottleneck_s, Py_EQ);
+        if (is_instantaneous_bottleneck == -1) {
             goto out;
         }
         if (is_population_parameter_change) {
@@ -884,7 +896,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             destination = (int) PyLong_AsLong(value);
             err = msp_add_mass_migration(self->sim, time, source, destination,
                     proportion);
-        } else if (is_bottleneck) {
+        } else if (is_simple_bottleneck) {
             value = get_dict_number(item, "proportion");
             if (value == NULL) {
                 goto out;
@@ -895,8 +907,21 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             population_id = (int) PyLong_AsLong(value);
-            err = msp_add_bottleneck(self->sim, time, population_id,
+            err = msp_add_simple_bottleneck(self->sim, time, population_id,
                     proportion);
+        } else if (is_instantaneous_bottleneck) {
+            value = get_dict_number(item, "strength");
+            if (value == NULL) {
+                goto out;
+            }
+            strength = PyFloat_AsDouble(value);
+            value = get_dict_number(item, "population_id");
+            if (value == NULL) {
+                goto out;
+            }
+            population_id = (int) PyLong_AsLong(value);
+            err = msp_add_instantaneous_bottleneck(self->sim, time, population_id,
+                    strength);
         } else {
             PyErr_Format(PyExc_ValueError, "Unknown demographic event type");
             goto out;
@@ -911,7 +936,8 @@ out:
     Py_DECREF(population_parameter_change_s);
     Py_DECREF(migration_rate_change_s);
     Py_DECREF(mass_migration_s);
-    Py_DECREF(bottleneck_s);
+    Py_DECREF(simple_bottleneck_s);
+    Py_DECREF(instantaneous_bottleneck_s);
     Py_DECREF(initial_size_s);
     Py_DECREF(growth_rate_s);
     return ret;

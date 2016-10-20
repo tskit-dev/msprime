@@ -18,13 +18,13 @@ import random
 
 import numpy as np
 import numpy.ma as ma
-import matplotlib
-import scipy.stats
-import pandas as pd
-# Force matplotlib to not use any Xwindows backend.
-matplotlib.use('Agg')
-import matplotlib.pyplot as pyplot
-import tqdm
+# import matplotlib
+# import scipy.stats
+# import pandas as pd
+# # Force matplotlib to not use any Xwindows backend.
+# matplotlib.use('Agg')
+# import matplotlib.pyplot as pyplot
+# import tqdm
 
 import _msprime
 import msprime
@@ -742,6 +742,54 @@ def api_stuff():
         print(variant.genotypes, type(variant.genotypes),
                 variant.genotypes.decode())
 
+def simple_kingman():
+    # This is the basic algorithm behind the instantaneous bottlenecks.
+    # Derived from the algorithm in Hudson 1990.
+    random.seed(1)
+    n = 10
+    t_max = 0.06
+    L = [j for j in range(n)]
+    pi = [-1 for j in range(2 * n - 1)]
+    p = n
+    j = n - 1
+    t = 0
+    while j > 0 and t < t_max:
+        t += random.expovariate((j + 1) * j / 2)
+        k = random.randint(0, j)
+        pi[L[k]] = p
+        L[k] = L[j]
+        j -= 1
+        k = random.randint(0, j)
+        pi[L[k]] = p
+        L[k] = p
+        p += 1
+    print("p = ", p)
+    print("j = ", j)
+    print("L = ", L[:j + 1])
+    print("pi= ", pi)
+    num_roots = j + 1
+    roots = {root: set() for root in L[:j + 1]}
+    for j in range(n):
+        u = j
+        while pi[u] != -1:
+            u = pi[u]
+        roots[u].add(j)
+    for k, v in roots.items():
+        print(k, "->", v)
+
+def instantaneous_bottleneck_example():
+    demographic_events = [
+        msprime.InstantaneousBottleneck(time=1000, strength=1e4)]
+    ts = msprime.simulate(
+            sample_size=10, Ne=1e4, recombination_rate=1e-5,
+            length=10, demographic_events=demographic_events)
+    for record in ts.records():
+        print(
+            "{:.2f}-{:.2f}\t{:.1f}".format(
+                record.left, record.right, record.time),
+            record.node, record.children, sep="\t")
+
+
 if __name__ == "__main__":
     # mutations()
 
@@ -769,4 +817,6 @@ if __name__ == "__main__":
     # ld_dev()
     # ld_triangle_plot()
     # threads_example()
-    api_stuff()
+    # api_stuff()
+    # simple_kingman()
+    instantaneous_bottleneck_example()

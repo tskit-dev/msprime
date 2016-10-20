@@ -37,10 +37,14 @@
 char * _tmp_file_name;
 FILE * _devnull;
 
+#define SIMPLE_BOTTLENECK 0
+#define INSTANTANEOUS_BOTTLENECK 1
+
 typedef struct {
+    int type;
     double time;
     uint32_t population_id;
-    double intensity;
+    double parameter;
 } bottleneck_desc_t;
 
 /* Simple utility to parse records so we can write declaritive
@@ -201,9 +205,16 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = msp_set_scaled_recombination_rate(msp, scaled_recombination_rate);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_bottlenecks; j++) {
-        ret = msp_add_bottleneck(msp, bottlenecks[j].time,
-                bottlenecks[j].population_id, bottlenecks[j].intensity);
-        CU_ASSERT_EQUAL(ret, 0);
+        if (bottlenecks[j].type == SIMPLE_BOTTLENECK) {
+            ret = msp_add_simple_bottleneck(msp, bottlenecks[j].time,
+                    bottlenecks[j].population_id, bottlenecks[j].parameter);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else if(bottlenecks[j].type == INSTANTANEOUS_BOTTLENECK) {
+            ret = msp_add_instantaneous_bottleneck(msp, bottlenecks[j].time,
+                    bottlenecks[j].population_id, bottlenecks[j].parameter);
+        } else {
+            CU_ASSERT_FATAL(0 == 1);
+        }
     }
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -280,12 +291,13 @@ get_example_nonbinary_tree_sequences(void)
     size_t max_examples = 1024;
     tree_sequence_t **ret = malloc(max_examples * sizeof(tree_sequence_t *));
     bottleneck_desc_t bottlenecks[] = {
-        {0.1, 0, 0.5},
-        {0.4, 0, 1.0},
+        {SIMPLE_BOTTLENECK, 0.1, 0, 0.5},
+        {INSTANTANEOUS_BOTTLENECK, 0.4, 0, 10.0},
     };
     bottleneck_desc_t other_bottlenecks[] = {
-        {0.1, 0, 0.1},
-        {0.1, 0, 0.9},
+        {SIMPLE_BOTTLENECK, 0.1, 0, 0.1},
+        {SIMPLE_BOTTLENECK, 0.1, 0, 0.75},
+        {INSTANTANEOUS_BOTTLENECK, 0.2, 0, 0.1},
     };
 
     CU_ASSERT_FATAL(ret != NULL);
@@ -296,7 +308,7 @@ get_example_nonbinary_tree_sequences(void)
     ret[2] = get_example_tree_sequence(500, 10, 10, 1000.0, 0.5, 3.0,
             2, bottlenecks);
     ret[3] = get_example_tree_sequence(100, 0, 100, 1.0, 1.0, 0.0,
-            2, other_bottlenecks);
+            3, other_bottlenecks);
     ret[4] = NULL;
     return ret;
 }
@@ -907,14 +919,24 @@ test_simulator_demographic_events(void)
         MSP_ERR_BAD_PARAM_VALUE);
 
     CU_ASSERT_EQUAL(
-        msp_add_bottleneck(&msp, 10, -1, 0),
+        msp_add_simple_bottleneck(&msp, 10, -1, 0),
         MSP_ERR_BAD_POPULATION_ID);
     CU_ASSERT_EQUAL(
-        msp_add_bottleneck(&msp, 10, 0, -1),
+        msp_add_simple_bottleneck(&msp, 10, 0, -1),
         MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(
-        msp_add_bottleneck(&msp, 10, 0, 1.1),
+        msp_add_simple_bottleneck(&msp, 10, 0, 1.1),
         MSP_ERR_BAD_PARAM_VALUE);
+
+    CU_ASSERT_EQUAL(
+        msp_add_instantaneous_bottleneck(&msp, 10, 2, 0),
+        MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(
+        msp_add_simple_bottleneck(&msp, 10, 0, -1),
+        MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL_FATAL(
+        msp_add_simple_bottleneck(&msp, 10, -1, 0),
+        MSP_ERR_BAD_POPULATION_ID);
 
     ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
@@ -930,7 +952,9 @@ test_simulator_demographic_events(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_bottleneck(&msp, 0.8, 0, 1.0);
+    ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_instantaneous_bottleneck(&msp, 0.9, 0, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
 
     CU_ASSERT_EQUAL(
@@ -943,7 +967,10 @@ test_simulator_demographic_events(void)
             msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
     CU_ASSERT_EQUAL(
-            msp_add_bottleneck(&msp, 0.7, 0, 1.0),
+            msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+    CU_ASSERT_EQUAL(
+            msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
 
     CU_ASSERT_EQUAL(
@@ -960,7 +987,7 @@ test_simulator_demographic_events(void)
         msp_print_state(&msp, _devnull);
         j++;
     } while (! gsl_isinf(time));
-    CU_ASSERT_EQUAL(j, 9);
+    CU_ASSERT_EQUAL(j, 10);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(
         msp_run(&msp, DBL_MAX, ULONG_MAX),
@@ -1155,10 +1182,10 @@ test_bottleneck_simulation(void)
     ret = msp_set_scaled_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     /* Add a bottleneck that does nothing at time t1 */
-    ret = msp_add_bottleneck(msp, t1, 0, 0);
+    ret = msp_add_simple_bottleneck(msp, t1, 0, 0);
     CU_ASSERT_EQUAL(ret, 0);
     /* Add a bottleneck that coalesces everything at t2 */
-    ret = msp_add_bottleneck(msp, t2, 0, 1);
+    ret = msp_add_simple_bottleneck(msp, t2, 0, 1);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1213,12 +1240,13 @@ test_large_bottleneck_simulation(void)
 
     t = 0.1;
     for (j = 0; j < num_bottlenecks; j++) {
+        bottlenecks[j].type = SIMPLE_BOTTLENECK;
         bottlenecks[j].time = t;
-        bottlenecks[j].intensity = 0.1;
+        bottlenecks[j].parameter = 0.1;
         t += 0.01;
     }
     /* Set the last bottleneck to be full intensity */
-    bottlenecks[num_bottlenecks - 1].intensity = 1.0;
+    bottlenecks[num_bottlenecks - 1].parameter = 1.0;
 
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
@@ -1229,8 +1257,8 @@ test_large_bottleneck_simulation(void)
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_bottlenecks; j++) {
-        msp_add_bottleneck(msp, bottlenecks[j].time, 0,
-                bottlenecks[j].intensity);
+        msp_add_simple_bottleneck(msp, bottlenecks[j].time, 0,
+                bottlenecks[j].parameter);
         CU_ASSERT_EQUAL(ret, 0);
     }
     ret = msp_initialise(msp);

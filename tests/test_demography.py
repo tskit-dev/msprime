@@ -235,9 +235,9 @@ class TestTimeConversion(unittest.TestCase):
     """
     Tests the time conversion into scaled units.
     """
-    def check_time(self, event, g, Ne):
+    def check_time(self, event, g, Ne, key="time"):
         ll_event = event.get_ll_representation(1, Ne)
-        self.assertEqual(ll_event["time"], g / (4 * Ne))
+        self.assertEqual(ll_event[key], g / (4 * Ne))
 
     def test_population_parameter_change(self):
         g = 8192
@@ -256,6 +256,14 @@ class TestTimeConversion(unittest.TestCase):
         Ne = 100
         event = msprime.MassMigration(time=g, source=0, destination=1)
         self.check_time(event, g, Ne)
+
+    def test_instantaneous_bottleneck(self):
+        g = 100
+        strength = 1000
+        Ne = 100
+        event = msprime.InstantaneousBottleneck(time=g, strength=strength)
+        self.check_time(event, g, Ne)
+        self.check_time(event, strength, Ne, "strength")
 
 
 class TestDemographyDebugger(unittest.TestCase):
@@ -308,7 +316,8 @@ class TestDemographyDebugger(unittest.TestCase):
             msprime.MassMigration(0.2, source=1, destination=0),
             msprime.MigrationRateChange(0.2, rate=0),
             msprime.MigrationRateChange(0.4, matrix_index=(0, 1), rate=1),
-            msprime.MigrationRateChange(0.4, matrix_index=(1, 0), rate=1)]
+            msprime.MigrationRateChange(0.4, matrix_index=(1, 0), rate=1),
+            msprime.InstantaneousBottleneck(0.5, strength=100)]
         self.verify_debug(
             population_configurations, migration_matrix, demographic_events)
 
@@ -548,6 +557,38 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(ts.get_population(0), 0)
         self.assertEqual(ts.get_population(1), num_demes - 1)
 
+    def test_instantaneous_bottleneck_locations(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(100),
+            msprime.PopulationConfiguration(100),
+            msprime.PopulationConfiguration(100),
+        ]
+        strength = 1e6  # Make sure everyone coalescences.
+        t1 = 0.0001
+        t2 = 0.0002
+        t3 = 0.0003
+        t4 = 0.0004
+        demographic_events = [
+            msprime.InstantaneousBottleneck(time=t1, population_id=0, strength=strength),
+            msprime.InstantaneousBottleneck(time=t2, population_id=1, strength=strength),
+            msprime.InstantaneousBottleneck(time=t3, population_id=2, strength=strength),
+            msprime.MassMigration(time=t4, source=2, destination=0),
+            msprime.MassMigration(time=t4, source=1, destination=0)
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1)
+        tree = next(ts.trees())
+        self.assertGreater(tree.get_time(tree.get_root()), t4)
+        self.assertEqual(tree.get_population(tree.get_root()), 0)
+        # The parent of all the samples from each deme should be in that deme.
+        for pop in range(3):
+            parents = [
+                tree.get_parent(u) for u in ts.get_samples(population_id=pop)]
+            for v in parents:
+                self.assertEqual(tree.get_population(v), pop)
+
 
 class TestTimeUnits(unittest.TestCase):
     """
@@ -605,6 +646,30 @@ class TestTimeUnits(unittest.TestCase):
             u = tree.get_mrca(0, 1)
             self.assertEqual(u, 2)
             self.assertAlmostEqual(g, tree.get_time(u), places=1)
+
+    def test_instantaneous_bottleneck(self):
+        Ne = 0.5
+        # Bottleneck occured 0.1 coalescent units ago
+        t = 0.1
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10),
+        ]
+        # At this time, we migrate the lineages in 1 to 0, and
+        # have a very strong bottleneck, resulting in instant
+        # coalescence.
+        demographic_events = [
+            msprime.MassMigration(time=t, source=1, destination=0),
+            msprime.InstantaneousBottleneck(time=t, strength=100)
+        ]
+        reps = msprime.simulate(
+            Ne=Ne,
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1, num_replicates=10)
+        for ts in reps:
+            tree = next(ts.trees())
+            self.assertAlmostEqual(t, tree.get_time(tree.get_root()), places=5)
 
 
 class TestLowLevelConversions(unittest.TestCase):
@@ -804,6 +869,21 @@ class TestLowLevelConversions(unittest.TestCase):
             scaled_mp = [
                 [v * 4 * Ne for v in row] for row in m]
             self.assertEqual(scaled_m, scaled_mp)
+
+    def test_instantaneous_bottleneck(self):
+        Ne = 100
+        g = 51
+        for population in [0, 1, 5]:
+            for strength in [0, 100, 1000, 1e9]:
+                event = msprime.InstantaneousBottleneck(
+                    time=g, population_id=population, strength=strength)
+                d = event.get_ll_representation(1, Ne)
+                dp = {
+                    "time": g / (4 * Ne),
+                    "type": "instantaneous_bottleneck",
+                    "population_id": population,
+                    "strength": strength / (4 * Ne)}
+                self.assertEqual(d, dp)
 
 
 class TestHistoricalSampling(unittest.TestCase):

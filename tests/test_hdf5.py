@@ -74,7 +74,7 @@ def bottleneck_example():
         recombination_rate=0.1,
         length=10,
         demographic_events=[
-            msprime.Bottleneck(time=0.01, proportion=0.75)])
+            msprime.SimpleBottleneck(time=0.01, proportion=0.75)])
 
 
 def historical_sample_example():
@@ -154,7 +154,7 @@ class TestErrors(unittest.TestCase):
     """
     def test_v2_non_binary_records(self):
         demographic_events = [
-            msprime.Bottleneck(time=0.01, proportion=1)
+            msprime.SimpleBottleneck(time=0.01, proportion=1)
         ]
         ts = msprime.simulate(
             sample_size=10,
