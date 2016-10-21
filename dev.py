@@ -790,6 +790,30 @@ def instantaneous_bottleneck_example():
             record.node, record.children, sep="\t")
 
 
+def smc_check():
+    R = 1000
+    Ne = 10**4
+    for L in np.linspace(10**5, 10**6):
+        print()
+        for model in ["hudson", "smc", "smc_prime"]:
+            replicates = msprime.simulate(
+                Ne=Ne, sample_size=100, length=L, mutation_rate=1e-8,
+                recombination_rate=1e-8, num_replicates=R,
+                model=model)
+            num_mutations = np.zeros(R)
+            t_last = np.zeros(R)
+            num_trees = np.zeros(R)
+            for j, ts in enumerate(replicates):
+                num_mutations[j] = ts.get_num_mutations()
+                num_trees[j] = ts.get_num_trees()
+                for record in ts.records():
+                    t_last[j] = record.time / (4 * Ne)
+            print(
+                L, model, np.mean(num_trees), np.mean(num_mutations),
+                np.mean(t_last), sep="\t")
+
+
+
 if __name__ == "__main__":
     # mutations()
 
@@ -819,4 +843,5 @@ if __name__ == "__main__":
     # threads_example()
     # api_stuff()
     # simple_kingman()
-    instantaneous_bottleneck_example()
+    # instantaneous_bottleneck_example()
+    smc_check()

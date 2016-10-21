@@ -51,6 +51,10 @@
 
 #define MSP_GENOTYPES_AS_CHAR 1
 
+#define MSP_MODEL_HUDSON 0
+#define MSP_MODEL_SMC 1
+#define MSP_MODEL_SMC_PRIME 2
+
 #define MAX_BRANCH_LENGTH_STRING 24
 
 /* The root node indicator */
@@ -118,6 +122,7 @@ typedef struct {
 typedef struct {
     gsl_rng *rng;
     /* input parameters */
+    int model;
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
@@ -133,6 +138,7 @@ typedef struct {
     /* Counters for statistics */
     size_t num_re_events;
     size_t num_ca_events;
+    size_t num_rejected_ca_events;
     size_t *num_migration_events;
     size_t num_trapped_re_events;
     size_t num_multiple_re_events;
@@ -421,6 +427,7 @@ typedef struct {
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
+int msp_set_model(msp_t *self, int model);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_scaled_recombination_rate(msp_t *self,
@@ -468,6 +475,8 @@ int msp_get_population(msp_t *self, size_t population_id,
         population_t **population);
 int msp_is_completed(msp_t *self);
 
+int msp_get_model(msp_t *self);
+const char * msp_get_model_str(msp_t *self);
 size_t msp_get_sample_size(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);
@@ -480,6 +489,7 @@ size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_coalescence_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
+size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self, FILE *out);

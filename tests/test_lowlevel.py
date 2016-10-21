@@ -670,8 +670,13 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_time(), 0.0)
         events = sim.get_num_common_ancestor_events()
         events += sim.get_num_recombination_events()
+        events += sim.get_num_rejected_common_ancestor_events()
         events += sum(sim.get_num_migration_events())
         self.assertGreater(events, 0)
+        if sim.get_model() == "hudson":
+            self.assertEqual(sim.get_num_rejected_common_ancestor_events(), 0)
+        elif sim.get_model() in ["smc", "smc_prime"]:
+            self.assertGreaterEqual(sim.get_num_rejected_common_ancestor_events(), 0)
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
@@ -750,6 +755,7 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(0.0, sim.get_time())
             self.assertEqual(n, sim.get_num_ancestors())
             self.assertEqual(0, sim.get_num_common_ancestor_events())
+            self.assertEqual(0, sim.get_num_rejected_common_ancestor_events())
             self.assertEqual(0, sim.get_num_recombination_events())
             self.assertEqual(0, sum(sim.get_num_migration_events()))
             self.assertGreater(sim.get_num_avl_node_blocks(), 0)
@@ -853,7 +859,7 @@ class TestSimulationState(LowLevelTestCase):
                 range(st.get_num_nodes())]
             self.assertEqual(nu, nu_prime)
 
-    def verify_simulation(self, n, m, r, demographic_events=[]):
+    def verify_simulation(self, n, m, r, demographic_events=[], model="hudson"):
         """
         Runs the specified simulation and verifies its state.
         """
@@ -868,7 +874,7 @@ class TestSimulationState(LowLevelTestCase):
             demographic_events=demographic_events,
             max_memory=10 * mb, segment_block_size=1000,
             avl_node_block_size=1000, node_mapping_block_size=1000,
-            coalescence_record_block_size=1000)
+            coalescence_record_block_size=1000, model=model)
         for _ in range(3):
             # Run the sim for a tiny amount of time and check.
             self.assertFalse(sim.run(1e-8))
@@ -902,6 +908,8 @@ class TestSimulationState(LowLevelTestCase):
             5, 10, 10.0,
             demographic_events=[
                 get_simple_bottleneck_event(time=0.2, proportion=1)])
+        self.verify_simulation(3, 10, 1.0, model="smc")
+        self.verify_simulation(4, 10, 2.0, model="smc_prime")
 
     def test_event_by_event(self):
         n = 10
@@ -1063,6 +1071,20 @@ class TestSimulator(LowLevelTestCase):
             _msprime.InputError, f, coalescence_record_block_size=0)
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, max_memory=2**65)
+
+    def test_models(self):
+
+        def f(sample_size=10, random_seed=1, **kwargs):
+            return _msprime.Simulator(
+                get_samples(sample_size),
+                _msprime.RandomGenerator(random_seed), **kwargs)
+        for bad_type in [0, None, {}, str]:
+            self.assertRaises(TypeError, f, model=bad_type)
+        for bad_model in ["", "SMC", "ABC", "hud"]:
+            self.assertRaises(ValueError, f, model=bad_model)
+        for model in ["hudson", "smc", "smc_prime"]:
+            sim = f(model=model)
+            self.assertEqual(sim.get_model(), model)
 
     def test_bad_samples(self):
         rng = _msprime.RandomGenerator(1)

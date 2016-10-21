@@ -618,7 +618,8 @@ def simulator_factory(
         population_configurations=None,
         migration_matrix=None,
         samples=None,
-        demographic_events=[]):
+        demographic_events=[],
+        model=None):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -677,6 +678,8 @@ def simulator_factory(
 
     sim = TreeSimulator(the_samples, recomb_map)
     sim.set_effective_population_size(Ne)
+    if model is not None:
+        sim.set_model(model.lower())
     rng = random_generator
     if rng is None:
         rng = RandomGenerator(_get_random_seed())
@@ -701,6 +704,7 @@ def simulate(
         migration_matrix=None,
         demographic_events=[],
         samples=None,
+        model=None,
         random_seed=None,
         num_replicates=None):
     """
@@ -788,7 +792,7 @@ def simulate(
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
         demographic_events=demographic_events,
-        samples=samples)
+        samples=samples, model=model)
     # The provenance API is very tentative, and only included now as a
     # pre-alpha feature.
     parameters = {"TODO": "encode simulation parameters"}
@@ -916,6 +920,7 @@ class TreeSimulator(object):
         self._samples = samples
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
+        self._model = "hudson"
         self._recombination_map = recombination_map
         self._random_generator = None
         self._effective_population_size = 1
@@ -976,6 +981,9 @@ class TreeSimulator(object):
         return [
             [4 * self.get_effective_population_size() * m for m in row]
             for row in self.get_migration_matrix()]
+
+    def get_model(self):
+        return self._model
 
     def get_migration_matrix(self):
         return self._migration_matrix
@@ -1038,6 +1046,9 @@ class TreeSimulator(object):
 
     def get_num_common_ancestor_events(self):
         return self._ll_sim.get_num_common_ancestor_events()
+
+    def get_num_rejected_common_ancestor_events(self):
+        return self._ll_sim.get_num_rejected_common_ancestor_events()
 
     def get_num_recombination_events(self):
         return self._ll_sim.get_num_recombination_events()
@@ -1113,6 +1124,9 @@ class TreeSimulator(object):
                 raise TypeError(err)
         self._demographic_events = demographic_events
 
+    def set_model(self, model):
+        self._model = model
+
     def set_segment_block_size(self, segment_block_size):
         self._segment_block_size = segment_block_size
 
@@ -1151,6 +1165,7 @@ class TreeSimulator(object):
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
+            model=self._model,
             scaled_recombination_rate=ll_recombination_rate,
             max_memory=self._max_memory,
             segment_block_size=self._segment_block_size,
