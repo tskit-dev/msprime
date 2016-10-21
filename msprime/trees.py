@@ -1830,6 +1830,175 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
+    def subset(self, samples):
+        if len(samples) < 2:
+            raise ValueError("Must have at least two samples")
+
+        records = list(self.records())
+        mutations = list(self.mutations())
+        new_records = []
+        new_mutations = []
+        M = len(records)
+        I = sorted(range(M), key=lambda j: (records[j].left, records[j].time))
+        O = sorted(range(M), key=lambda j: (records[j].right, -records[j].time))
+        pi = [-1 for j in range(self.get_num_nodes())]
+        tau = [-1 for j in range(self.get_num_nodes())]
+        kappa = [-1 for j in range(self.get_num_nodes())]
+        mu = [-1 for j in range(self.get_num_nodes())]
+        chi = [[] for _ in range(self.get_num_nodes())]
+        active_records = {}
+        for u in samples:
+            mu[u] = u
+
+        j = 0
+        k = 0
+        l = 0
+        while j < M:
+            start_records = []
+            end_records = []
+            x = records[I[j]].left
+            while records[O[k]].right == x:
+                h = O[k]
+                # print("\tout:", records[h])
+                k += 1
+                for q in records[h].children:
+                    pi[q] = -1
+                u = records[h].node
+                tau[u] = -1
+                kappa[u] = -1
+                chi[u] = []
+                if mu[u] != -1:
+                    if mu[u] == u:
+                        end_records.append(u)
+                    # At least one path goes through u. Follow this path until we either
+                    # hit the root or another path, resetting it to null.
+                    v = mu[u]
+                    while u != -1 and mu[u] == v:
+                        mu[u] = -1
+                        u = pi[u]
+                    if u != -1:
+                        # We have intersected with another path at u, and therefore need
+                        # to terminate a record here since this coalescence no longer
+                        # exists in the subset tree.
+                        end_records.append(u)
+                        w = -1
+                        for v in chi[u]:
+                            if mu[v] != -1:
+                                w = mu[v] if w == -1 else u
+                        if w == u:
+                            # There is still more than one path going through this node
+                            # and so we must start a new record from here.
+                            end_records.append(u)
+                            start_records.append(u)
+                        else:
+                            assert w != -1
+                            # Now propagate this new mapping up the tree until we hit the
+                            # root or another path.
+                            v = mu[u]
+                            while u != -1 and mu[u] == v:
+                                mu[u] = w
+                                u = pi[u]
+                            if u != -1:
+                                # u is an existing coalescence node where the children
+                                # have now changed.
+                                end_records.append(u)
+                                start_records.append(u)
+
+            while j < M and records[I[j]].left == x:
+                h = I[j]
+                j += 1
+                # print("\tin:", records[h])
+                u = records[h].node
+                tau[u] = records[h].time
+                kappa[u] = records[h].population
+                chi[records[h].node] = records[h].children
+                w = -1
+                for v in records[h].children:
+                    pi[v] = u
+                    if mu[v] != -1:
+                        w = mu[v] if w == -1 else u
+                if w != -1:
+                    if w == u:
+                        start_records.append(u)
+                    # There was one or more mapped children in this record, and so we
+                    # must propagate this mapping up until it either intersects with
+                    # another path or we hit root.
+                    while u != -1 and mu[u] == -1:
+                        mu[u] = w
+                        u = pi[u]
+                    if u != -1:
+                        # u is a coalescence node where the new path intersects with
+                        # one or more existing path. Follow the existing path upwards
+                        # until we intersect with another path, setting the mapping to
+                        # its new value.
+                        start_records.append(u)
+                        v = mu[u]
+                        w = u
+                        while u != -1 and mu[u] == v:
+                            mu[u] = w
+                            u = pi[u]
+                        if u != -1:
+                            # u is an existing coalescence node where the children have
+                            # now changed.
+                            end_records.append(u)
+                            start_records.append(u)
+            # Update the actual records now that the trees have been completed.
+            for u in end_records:
+                if u in active_records:
+                    left, children, time, population = active_records.pop(u)
+                    new_records.append(msprime.CoalescenceRecord(
+                        left=left, right=x, node=u, children=sorted(children),
+                        time=time, population=population))
+            for u in start_records:
+                mapped_children = [mu[c] for c in chi[u] if mu[c] != -1]
+                # For some reason there are times when we add nodes to the list
+                # to be updated when they don't need to be. Simple workaround here,
+                # but we should address the root cause.
+                if len(mapped_children) > 1:
+                    active_records[u] = x, mapped_children, tau[u], kappa[u]
+            # update the mutations for this tree.
+            y = records[O[k]].right
+            while l < self.get_num_mutations() and mutations[l].position < y:
+                u = mutations[l].node
+                if mu[u] != -1:
+                    new_mutations.append((mutations[l].position, mu[u]))
+                l += 1
+
+        for u, (left, children, time, population) in active_records.items():
+            new_records.append(msprime.CoalescenceRecord(
+                left=left, right=self.get_sequence_length(), node=u,
+                children=sorted(children), time=time,
+                population=population))
+
+        new_records.sort(key=lambda r: (r.time, r.left))
+        squashed_records = [new_records[0]]
+        for r2 in new_records[1:]:
+            r1 = squashed_records[-1]
+            if r1.right == r2.left and r1.node == r2.node and r1.children == r2.children:
+                squashed_records[-1] = r1._replace(right=r2.right)
+            else:
+                squashed_records.append(r2)
+        # Now compress the records into a new tree sequence.
+        node_map = [-1 for _ in range(self.get_num_nodes())]
+        for j, u in enumerate(samples):
+            node_map[u] = j
+        compressed_records = []
+        next_node = len(samples)
+        for record in squashed_records:
+            for node in list(record.children) + [record.node]:
+                if node_map[node] == -1:
+                    node_map[node] = next_node
+                    next_node += 1
+            children = tuple(sorted(node_map[c] for c in record.children))
+            compressed_records.append(msprime.CoalescenceRecord(
+                left=record.left, right=record.right, node=node_map[record.node],
+                children=children, time=record.time, population=record.population))
+        compressed_mutations = [(pos, node_map[u]) for (pos, u) in new_mutations]
+        ll_ts = _msprime.TreeSequence()
+        ll_ts.load_records(compressed_records)
+        ll_ts.set_mutations(compressed_mutations)
+        return msprime.TreeSequence(ll_ts)
+
 
 class HaplotypeGenerator(object):
 

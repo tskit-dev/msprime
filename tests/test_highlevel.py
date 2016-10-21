@@ -29,6 +29,8 @@ except ImportError:
     # This fails for Python 3.x, but that's fine.
     pass
 
+import collections
+import itertools
 import math
 import os
 import random
@@ -111,6 +113,87 @@ def _build_newick(node, root, tree, branch_lengths):
             s = "({0},{1}):{2}".format(
                 s1, s2, branch_lengths[node])
     return s
+
+
+def subset_tree_sequence(ts, samples):
+    """
+    Simple tree-by-tree algorithm to get a subset of a tree sequence.
+    """
+    if len(samples) < 2:
+        raise ValueError("Must have at least two samples")
+
+    num_nodes = ts.get_num_nodes()
+    active_records = {}
+    new_records = []
+    new_mutations = []
+    for tree in ts.trees(tracked_leaves=samples):
+        parent = [-1 for j in range(num_nodes)]
+        children = collections.defaultdict(list)
+        for leaf in samples:
+            u = leaf
+            v = tree.get_parent(u)
+            while v != -1:
+                is_parent = (
+                    tree.get_num_tracked_leaves(v) > tree.get_num_tracked_leaves(u))
+                if parent[u] == -1 and is_parent:
+                    parent[u] = v
+                    children[v].append(u)
+                    children[v].sort()
+                    u = v
+                v = tree.get_parent(v)
+        removed = []
+        for u, record in active_records.items():
+            if u not in children:
+                active_records[u][1] = tree.get_interval()[0]
+                new_records.append(msprime.CoalescenceRecord(*record))
+                removed.append(u)
+        for u in removed:
+            del active_records[u]
+        for u, c in children.items():
+            if u not in active_records:
+                active_records[u] = list(tree.get_interval()) + [
+                    u, tuple(c), tree.get_time(u), tree.get_population(u)]
+            elif active_records[u][3] != tuple(c):
+                active_records[u][1] = tree.get_interval()[0]
+                new_records.append(msprime.CoalescenceRecord(*active_records[u]))
+                active_records[u][0] = tree.get_interval()[0]
+                active_records[u][3] = tuple(c)
+        # Now find the new nodes for all mutations that can be mapped back in
+        for mut in tree.mutations():
+            stack = [mut.node]
+            while not len(stack) == 0:
+                u = stack.pop()
+                if parent[u] != -1 or u in children:
+                    new_mutations.append((mut.position, u))
+                    break
+                stack.extend(tree.get_children(u))
+    for record in active_records.values():
+        record[1] = ts.get_sequence_length()
+        new_records.append(msprime.CoalescenceRecord(*record))
+    new_records.sort(key=lambda r: r.time)
+
+    # Now compress the nodes.
+    node_map = [-1 for _ in range(num_nodes)]
+    for j, u in enumerate(samples):
+        node_map[u] = j
+    compressed_records = []
+    next_node = len(samples)
+    for record in new_records:
+        for node in list(record.children) + [record.node]:
+            if node_map[node] == -1:
+                node_map[node] = next_node
+                next_node += 1
+        children = tuple(sorted(node_map[c] for c in record.children))
+        compressed_records.append(msprime.CoalescenceRecord(
+            left=record.left, right=record.right, node=node_map[record.node],
+            children=children, time=record.time, population=record.population))
+    compressed_mutations = []
+    for pos, node in new_mutations:
+        compressed_mutations.append((pos, node_map[node]))
+    ll_ts = _msprime.TreeSequence()
+    ll_ts.load_records(compressed_records)
+    ll_ts.set_mutations(compressed_mutations)
+    return msprime.TreeSequence(ll_ts)
 
 
 class TestHarmonicNumber(unittest.TestCase):
@@ -1104,6 +1187,70 @@ class TestTreeSequence(HighLevelTestCase):
     def test_dump_load_txt(self):
         for ts in self.get_example_tree_sequences():
             self.verify_dump_load_txt(ts)
+
+    def verify_subset_topology(self, ts, sample):
+        new_ts = ts.subset(sample)
+        sample_map = {k: j for j, k in enumerate(sample)}
+        old_trees = ts.trees()
+        old_tree = next(old_trees)
+        self.assertGreaterEqual(ts.get_num_trees(), new_ts.get_num_trees())
+        for new_tree in new_ts.trees():
+            new_left, new_right = new_tree.get_interval()
+            old_left, old_right = old_tree.get_interval()
+            # Skip ahead on the old tree until new_left is within its interval
+            while old_right <= new_left:
+                old_tree = next(old_trees)
+                old_left, old_right = old_tree.get_interval()
+            # If the TMRCA of all pairs of samples is the same, then we have the
+            # same information. We limit this to at most 500 pairs
+            pairs = itertools.islice(itertools.combinations(sample, 2), 500)
+            for pair in pairs:
+                mapped_pair = [sample_map[u] for u in pair]
+                mrca1 = old_tree.get_mrca(*pair)
+                mrca2 = new_tree.get_mrca(*mapped_pair)
+                self.assertEqual(old_tree.get_time(mrca1), new_tree.get_time(mrca2))
+                self.assertEqual(
+                    old_tree.get_population(mrca1), new_tree.get_population(mrca2))
+
+    def verify_subset_mutations(self, ts, sample):
+        # Get the allele counts within the subset.
+        allele_counts = {mut.position: 0 for mut in ts.mutations()}
+        sample_map = {k: j for j, k in enumerate(sample)}
+        leaves = {mut.position: [] for mut in ts.mutations()}
+        for tree in ts.trees(tracked_leaves=sample):
+            for mut in tree.mutations():
+                allele_counts[mut.position] = tree.get_num_tracked_leaves(mut.node)
+                for u in tree.leaves(mut.node):
+                    if u in sample_map:
+                        leaves[mut.position].append(sample_map[u])
+        new_ts = ts.subset(sample)
+        self.assertLessEqual(new_ts.get_num_mutations(), ts.get_num_mutations())
+        for tree in new_ts.trees():
+            for mut in tree.mutations():
+                self.assertEqual(
+                    tree.get_num_leaves(mut.node), allele_counts[mut.position])
+                new_leaves = sorted(tree.leaves(mut.node))
+                self.assertEqual(sorted(leaves[mut.position]), new_leaves)
+
+    def verify_subset_equality(self, ts, sample):
+        s1 = ts.subset(sample)
+        s2 = subset_tree_sequence(ts, sample)
+        self.assertEqual(list(s1.records()), list(s2.records()))
+        self.assertEqual(list(s1.mutations()), list(s2.mutations()))
+
+    def test_subset(self):
+        num_mutations = 0
+        for ts in self.get_example_tree_sequences():
+            n = ts.get_sample_size()
+            num_mutations += ts.get_num_mutations()
+            if n > 2:
+                sample_sizes = set([2, max(2, n // 2), n - 1])
+                for k in sample_sizes:
+                    subset = random.sample(range(ts.get_sample_size()), k)
+                    self.verify_subset_topology(ts, subset)
+                    self.verify_subset_mutations(ts, subset)
+                    self.verify_subset_equality(ts, subset)
+        self.assertGreater(num_mutations, 0)
 
 
 class TestSparseTree(HighLevelTestCase):
