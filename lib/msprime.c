@@ -2279,7 +2279,7 @@ msp_get_model_str(msp_t *self)
             ret = "smc_prime";
             break;
         default:
-            ret = "Unknown simulation model";
+            ret = "BUG: bad model in simulator!";
             break;
     }
     return ret;

@@ -765,6 +765,9 @@ test_simulator_getters_setters(void)
             msp_set_population_configuration(&msp, 3, 0, 0),
             MSP_ERR_BAD_POPULATION_ID);
 
+    CU_ASSERT_EQUAL(msp_set_model(&msp, -1), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_get_model(&msp), MSP_MODEL_HUDSON);
+
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(
@@ -1009,6 +1012,8 @@ static void
 test_single_locus_simulation(void)
 {
     int ret;
+    int model;
+    const char *model_str;
     uint32_t j;
     uint32_t n = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -1034,6 +1039,11 @@ test_single_locus_simulation(void)
     ret = msp_run(msp, DBL_MAX, 1);
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(msp);
+
+    model = msp_get_model(msp);
+    CU_ASSERT_EQUAL(model, MSP_MODEL_HUDSON);
+    model_str = msp_get_model_str(msp);
+    CU_ASSERT_STRING_EQUAL(model_str, "hudson");
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1085,64 +1095,87 @@ test_multi_locus_simulation(void)
     uint32_t n = 100;
     uint32_t m = 100;
     long seed = 10;
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    msp_t *msp = malloc(sizeof(msp_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    int model;
+    int models[] = {MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
+    const char *model_strs[] = {"hudson", "smc", "smc_prime"};
+    const char *model_str;
+    size_t j;
 
-    CU_ASSERT_FATAL(msp != NULL);
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
+    for (j = 0; j < sizeof(models) / sizeof(int); j++) {
+        sample_t *samples = malloc(n * sizeof(sample_t));
+        msp_t *msp = malloc(sizeof(msp_t));
+        gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
-    gsl_rng_set(rng, seed);
-    memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    /* set all the block sizes to something small to provoke the memory
-     * expansions. */
-    ret = msp_set_avl_node_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_node_mapping_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_segment_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_coalescence_record_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(msp, m);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_scaled_recombination_rate(msp, 1.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_initialise(msp);
-    CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_FATAL(msp != NULL);
+        CU_ASSERT_FATAL(samples != NULL);
+        CU_ASSERT_FATAL(rng != NULL);
 
-    num_events = 0;
-    while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+        gsl_rng_set(rng, seed);
+        memset(samples, 0, n * sizeof(sample_t));
+        ret = msp_alloc(msp, n, samples, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        /* set all the block sizes to something small to provoke the memory
+         * expansions. */
+        ret = msp_set_avl_node_block_size(msp, 1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_node_mapping_block_size(msp, 1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_segment_block_size(msp, 1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_coalescence_record_block_size(msp, 1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_num_loci(msp, m);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_scaled_recombination_rate(msp, 1.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_model(msp, models[j]);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_initialise(msp);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        num_events = 0;
+        while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+            msp_verify(msp);
+            num_events++;
+        }
+        CU_ASSERT_EQUAL(ret, 0);
         msp_verify(msp);
-        num_events++;
-    }
-    CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp);
-    CU_ASSERT(num_events > n - 1);
-    CU_ASSERT_EQUAL(1 + num_events,
-            msp_get_num_recombination_events(msp) +
-            msp_get_num_common_ancestor_events(msp))
+        CU_ASSERT(num_events > n - 1);
+        CU_ASSERT_EQUAL(1 + num_events,
+                msp_get_num_recombination_events(msp) +
+                msp_get_num_common_ancestor_events(msp) +
+                msp_get_num_rejected_common_ancestor_events(msp));
+        if (models[j] == MSP_MODEL_HUDSON) {
+            CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
+        }
 
-    gsl_rng_set(rng, seed);
-    ret = msp_reset(msp);
-    num_events = 0;
-    while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
-        msp_verify(msp);
-        num_events++;
-    }
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(1 + num_events,
-            msp_get_num_recombination_events(msp) +
-            msp_get_num_common_ancestor_events(msp))
+        gsl_rng_set(rng, seed);
+        ret = msp_reset(msp);
+        num_events = 0;
+        while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+            msp_verify(msp);
+            num_events++;
+        }
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(1 + num_events,
+                msp_get_num_recombination_events(msp) +
+                msp_get_num_common_ancestor_events(msp) +
+                msp_get_num_rejected_common_ancestor_events(msp));
+        if (models[j] == MSP_MODEL_HUDSON) {
+            CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
+        }
 
-    ret = msp_free(msp);
-    CU_ASSERT_EQUAL(ret, 0);
-    gsl_rng_free(rng);
-    free(msp);
-    free(samples);
+        model = msp_get_model(msp);
+        CU_ASSERT_EQUAL(model, models[j]);
+        model_str = msp_get_model_str(msp);
+        CU_ASSERT_STRING_EQUAL(model_str, model_strs[j]);
+
+        ret = msp_free(msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        gsl_rng_free(rng);
+        free(msp);
+        free(samples);
+    }
 }
 
 static void
