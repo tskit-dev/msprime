@@ -127,6 +127,9 @@ msp_strerror(int err)
             "other objects reference it. Make sure all trees are freed first.";
     } else if (err == MSP_ERR_PTHREAD) {
         ret = "Pthread error. Please file a bug report.";
+    } else if (err == MSP_ERR_BAD_MODEL) {
+        ret = "Model error. Either a bad model, or the requested operation "
+            "is not supported for the current model";
     } else if (err == MSP_ERR_IO) {
         if (errno != 0) {
             ret = strerror(errno);
@@ -278,7 +281,12 @@ msp_set_model(msp_t *self, int model)
 
     if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
             && model != MSP_MODEL_SMC_PRIME) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
+        ret = MSP_ERR_BAD_MODEL;
+        goto out;
+    }
+    if (self->demographic_events_head != NULL) {
+        /* We must set the model before any demographic events */
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
     self->model = model;
@@ -1667,10 +1675,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
     segment_t *x, *z, *alpha;
     segment_t **H = NULL;
 
-    if (self->model != MSP_MODEL_HUDSON) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
-        goto out;
-    }
+    assert(self->model == MSP_MODEL_HUDSON);
     H = malloc(avl_count(Q) * sizeof(segment_t *));
     if (H == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -2818,6 +2823,10 @@ msp_add_simple_bottleneck(msp_t *self, double time, int population_id,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    if (self->model != MSP_MODEL_HUDSON) {
+        ret = MSP_ERR_BAD_MODEL;
+        goto out;
+    }
     ret = msp_add_demographic_event(self, time, &de);
     if (ret != 0) {
         goto out;
@@ -2984,6 +2993,10 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
     }
     if (strength < 0.0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (self->model != MSP_MODEL_HUDSON) {
+        ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
     ret = msp_add_demographic_event(self, time, &de);

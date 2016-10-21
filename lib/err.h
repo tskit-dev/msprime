@@ -61,5 +61,6 @@
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
 #define MSP_ERR_PTHREAD                                             -32
+#define MSP_ERR_BAD_MODEL                                           -33
 
 #endif /*__ERR_H__*/

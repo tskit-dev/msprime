@@ -765,7 +765,7 @@ test_simulator_getters_setters(void)
             msp_set_population_configuration(&msp, 3, 0, 0),
             MSP_ERR_BAD_POPULATION_ID);
 
-    CU_ASSERT_EQUAL(msp_set_model(&msp, -1), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_model(&msp, -1), MSP_ERR_BAD_MODEL);
     CU_ASSERT_EQUAL(msp_get_model(&msp), MSP_MODEL_HUDSON);
 
     ret = msp_set_num_populations(&msp, 2);
@@ -850,6 +850,52 @@ test_simulator_getters_setters(void)
     free(samples);
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+}
+
+static void
+test_simulator_model_errors(void)
+{
+    uint32_t n = 10;
+    uint32_t j;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    int models[] = {MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
+    msp_t msp;
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    for (j = 0; j < n; j++) {
+        samples[j].time = 0;
+        samples[j].population_id = 0;
+    }
+
+    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
+    CU_ASSERT_EQUAL(msp_set_model(&msp, -1), MSP_ERR_BAD_MODEL);
+    CU_ASSERT_EQUAL(msp_get_model(&msp), MSP_MODEL_HUDSON);
+    CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), 0);
+    CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1), 0);
+    CU_ASSERT_EQUAL(msp_initialise(&msp), 0);
+    CU_ASSERT_EQUAL(msp_run(&msp, DBL_MAX, ULONG_MAX), 0);
+    CU_ASSERT_EQUAL(msp_free(&msp), 0);
+
+    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
+    CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), 0);
+    CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1), 0);
+    CU_ASSERT_EQUAL(msp_set_model(&msp, MSP_MODEL_HUDSON),
+            MSP_ERR_UNSUPPORTED_OPERATION);
+    CU_ASSERT_EQUAL(msp_free(&msp), 0);
+
+    for (j = 0; j < sizeof(models) / sizeof(int); j++) {
+        CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
+        CU_ASSERT_EQUAL(msp_set_model(&msp, models[j]), 0);
+        CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), MSP_ERR_BAD_MODEL);
+        CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1),
+                MSP_ERR_BAD_MODEL);
+        CU_ASSERT_EQUAL(msp_free(&msp), 0);
+    }
+
+    free(samples);
     gsl_rng_free(rng);
 }
 
@@ -3981,6 +4027,7 @@ main(void)
         {"Many populations", test_single_locus_many_populations},
         {"Historical samples", test_single_locus_historical_sample},
         {"Simulator getters/setters", test_simulator_getters_setters},
+        {"Model errors", test_simulator_model_errors},
         {"Demographic events", test_simulator_demographic_events},
         {"Single locus simulation", test_single_locus_simulation},
         {"Simulation memory limit", test_simulation_memory_limit},
