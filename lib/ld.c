@@ -288,7 +288,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
     double n = tree_sequence_get_sample_size(self->tree_sequence);
     uint32_t nAB;
     size_t j;
-    ssize_t mutation_index;
+    int64_t mutation_index;
 
     tA = self->outer_tree;
     tB = self->inner_tree;
@@ -298,7 +298,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
     assert(fA > 0);
     tB->mark = 1;
     for (j = 0; j < max_mutations; j++) {
-        mutation_index = ((ssize_t) source_index) - ((ssize_t) j) - 1;
+        mutation_index = ((int64_t) source_index) - ((int64_t) j) - 1;
         if (mutation_index < 0) {
             break;
         }
