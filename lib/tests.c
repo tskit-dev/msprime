@@ -2293,7 +2293,7 @@ test_sparse_tree_errors(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     tracked_leaves[1] = 0;
     ret = sparse_tree_set_tracked_leaves(&t, 2, tracked_leaves);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_TRACKED_LEAF);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_SAMPLE);
     ret = sparse_tree_set_tracked_leaves_from_leaf_list(&t, NULL, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 

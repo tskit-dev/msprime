@@ -524,6 +524,8 @@ int tree_sequence_add_provenance_string(tree_sequence_t *self,
         const char *provenance_string);
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);
+int tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
+        uint32_t sample_size, tree_sequence_t *subset);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence);

@@ -964,10 +964,11 @@ if __name__ == "__main__":
     # simple_kingman()
     # instantaneous_bottleneck_example()
     # smc_check()
-    for k in [2, 10, 50, 100, 200]:
-        subset_samples(30000, list(range(k)))
+    # for k in [2, 10, 50, 100, 200]:
+    #     subset_samples(30000, list(range(k)))
 
     # subset_samples(30000, [5, 7, 8,9, 10, 11])
+    subset_samples(30000, list(range(500)))
 
     # for n in [100, 1000, 10000]:
     #     for k in [2, 10, 50, n - 1, n]:

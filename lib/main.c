@@ -942,6 +942,35 @@ run_stats(char *filename)
     tree_sequence_free(&ts);
 }
 
+static void
+run_subset(char *input_filename, char *output_filename, char **samples,
+        int num_samples)
+{
+    tree_sequence_t ts, subset;
+    uint32_t *parsed_samples = malloc((size_t) num_samples * sizeof(uint32_t));
+    int ret, j;
+
+    if (parsed_samples == NULL) {
+        fatal_error("out of memory");
+    }
+    for (j = 0; j < num_samples; j++) {
+        parsed_samples[j] = (uint32_t) atoi(samples[j]);
+    }
+    load_tree_sequence(&ts, input_filename);
+    ret = tree_sequence_get_subset(&ts, parsed_samples, (uint32_t) num_samples,
+            &subset);
+    if (ret != 0) {
+        fatal_library_error(ret, "Subset error");
+    }
+    /* ret = tree_sequence_dump(&subset, output_filename, 0); */
+    /* if (ret != 0) { */
+    /*     fatal_library_error(ret, "Write error"); */
+    /* } */
+    tree_sequence_free(&ts);
+    /* tree_sequence_free(&subset); */
+    free(parsed_samples);
+}
+
 int
 main(int argc, char** argv)
 {
@@ -990,6 +1019,12 @@ main(int argc, char** argv)
             fatal_error("usage: %s stats INPUT_FILE", argv[0]);
         }
         run_stats(argv[2]);
+    } else if (strncmp(cmd, "subset", strlen(cmd)) == 0) {
+        if (argc < 6) {
+            fatal_error("usage: %s subset INPUT_FILE OUTPUT_FILE s1 s2 <s3 s4 ... sk>",
+                    argv[0]);
+        }
+        run_subset(argv[2], argv[3], argv + 4, argc - 4);
     } else {
         fatal_error("Unknown command '%s'", cmd);
     }

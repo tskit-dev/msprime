@@ -37,6 +37,13 @@ typedef struct {
 } index_sort_t;
 
 static int
+cmp_uint32_t(const void *a, const void *b) {
+    const uint32_t *ia = (const uint32_t *) a;
+    const uint32_t *ib = (const uint32_t *) b;
+    return (*ia > *ib) - (*ia < *ib);
+}
+
+static int
 cmp_double(const void *a, const void *b) {
     const double *ia = (const double *) a;
     const double *ib = (const double *) b;
@@ -65,6 +72,59 @@ cmp_index_sort(const void *a, const void *b) {
     if (ret == 0) {
         ret = (ca->time > cb->time) - (ca->time < cb->time);
     }
+    return ret;
+}
+
+static int
+cmp_record_time_left(const void *a, const void *b) {
+    const coalescence_record_t *ca = (const coalescence_record_t *) a;
+    const coalescence_record_t *cb = (const coalescence_record_t *) b;
+    int ret = (ca->time > cb->time) - (ca->time < cb->time);
+    if (ret == 0) {
+        ret = (ca->left > cb->left) - (ca->left < cb->left);
+    }
+    return ret;
+}
+
+static int
+squash_records(coalescence_record_t *records, size_t num_records,
+        size_t *num_squashed_records)
+{
+    int ret = MSP_ERR_GENERIC;
+    coalescence_record_t *cr, *lcr;
+    int squashable;
+    uint32_t c;
+    size_t j;
+    size_t k = 0;
+
+    /* First sort the records by time and left coordinate */
+    qsort(records, num_records, sizeof(coalescence_record_t),
+            cmp_record_time_left);
+
+    lcr = records;
+    assert(lcr->num_children > 1);
+    for (j = 1; j < num_records; j++) {
+        cr = &records[j];
+        lcr = &records[k];
+        assert(cr->num_children > 1);
+        squashable = 0;
+        if (lcr->right == cr->left && lcr->num_children == cr->num_children
+                && lcr->node == cr->node) {
+            /* Compare the children */
+            squashable = 1;
+            for (c = 0; squashable && c < cr->num_children; c++) {
+                squashable = squashable && (cr->children[c] == lcr->children[c]);
+            }
+        }
+        if (squashable) {
+            lcr->right = cr->right;
+        } else {
+            k++;
+            records[k] = records[j];
+        }
+    }
+    *num_squashed_records = k + 1;
+    ret = 0;
     return ret;
 }
 
@@ -1552,6 +1612,366 @@ out:
     return ret;
 }
 
+int WARN_UNUSED
+tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
+        uint32_t num_samples, tree_sequence_t *subset)
+{
+    int ret = MSP_ERR_GENERIC;
+    typedef struct {
+        char active;
+        uint32_t left;
+        uint32_t *mapped_children;
+        uint32_t num_mapped_children;
+    } active_record_t;
+
+    uint32_t *parent = NULL;
+    uint32_t *num_children = NULL;
+    uint32_t **children = NULL;
+    uint32_t *mapping = NULL;
+    uint32_t *end_records = NULL;
+    uint32_t *start_records = NULL;
+    active_record_t *active_records = NULL;
+    uint32_t *mapped_children_mem = NULL;
+    coalescence_record_t *subset_records = NULL;
+    uint32_t *I = self->trees.indexes.insertion_order;
+    uint32_t *O = self->trees.indexes.removal_order;
+    size_t M = self->num_records;
+    size_t j, k, h, num_start_records, num_end_records, num_squashed_records;
+    uint32_t u, v, w, x, c, num_mapped_children;
+    size_t mapped_children_mem_offset = 0;
+    size_t num_subset_records = 0;
+    active_record_t *ar;
+    coalescence_record_t *cr;
+
+    if (num_samples < 2) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    parent = malloc(self->num_nodes * sizeof(uint32_t));
+    children = malloc(self->num_nodes * sizeof(uint32_t *));
+    num_children = malloc(self->num_nodes * sizeof(uint32_t));
+    mapping = malloc(self->num_nodes * sizeof(uint32_t));
+    start_records = malloc(self->num_nodes * sizeof(uint32_t));
+    end_records = malloc(self->num_nodes * sizeof(uint32_t));
+    active_records = malloc(self->num_nodes * sizeof(active_record_t));
+    mapped_children_mem = malloc(self->num_child_nodes * sizeof(uint32_t));
+    subset_records = malloc(self->num_records * sizeof(coalescence_record_t));
+    if (parent == NULL || children == NULL || num_children == NULL
+            || mapping == NULL || end_records == NULL || end_records == NULL
+            || active_records == NULL || mapped_children_mem == NULL
+            || subset_records == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (u = 0; u < self->num_nodes; u++) {
+        parent[u] = MSP_NULL_NODE;
+        children[u] = NULL;
+        num_children[u] = 0;
+        mapping[u] = MSP_NULL_NODE;
+        active_records[u].active = 0;
+    }
+    for (c = 0; c < num_samples; c++) {
+        u = samples[c];
+        if (u >= self->sample_size) {
+            ret = MSP_ERR_BAD_SAMPLES;
+        }
+        if (mapping[u] != MSP_NULL_NODE) {
+            ret = MSP_ERR_DUPLICATE_SAMPLE;
+            goto out;
+        }
+        mapping[u] = u;
+    }
+
+    j = 0;
+    k = 0;
+    while (j < M) {
+        x = self->trees.records.left[I[j]];
+        num_start_records = 0;
+        num_end_records = 0;
+
+        /* Records out */
+        while (self->trees.records.right[O[k]] == x) {
+            h = O[k];
+            k++;
+            u = self->trees.records.node[h];
+            for (c = 0; c < num_children[u]; c++) {
+                parent[children[u][c]] = MSP_NULL_NODE;
+            }
+            num_children[u] = 0;
+            children[u] = NULL;
+            if (mapping[u] != MSP_NULL_NODE) {
+                if (mapping[u] == u) {
+                    assert(num_end_records < self->num_nodes);
+                    end_records[num_end_records] = u;
+                    num_end_records++;
+                }
+                /* At least one path goes through u. Follow this path until we either
+                 * hit the root or another path, resetting it to null.
+                 */
+                v = mapping[u];
+                while (u != MSP_NULL_NODE && mapping[u] == v) {
+                    mapping[u] = MSP_NULL_NODE;
+                    u = parent[u];
+                }
+                if (u != MSP_NULL_NODE) {
+                    /* We have intersected with another path at u, and therefore need
+                     * to terminate a record here since this coalescence no longer
+                     * exists in the subset tree.
+                     */
+                    assert(num_end_records < self->num_nodes);
+                    end_records[num_end_records] = u;
+                    num_end_records++;
+                    w = MSP_NULL_NODE;
+                    for (c = 0; c < num_children[u]; c++) {
+                        v = children[u][c];
+                        if (mapping[v] != MSP_NULL_NODE) {
+                            w = w == MSP_NULL_NODE ? mapping[v]: u;
+                        }
+                    }
+                    if (w == u) {
+                        /* There is still more than one path going through this node
+                         * and so we must start a new record from here.
+                         */
+                        assert(num_end_records < self->num_nodes);
+                        end_records[num_end_records] = u;
+                        num_end_records++;
+                        assert(num_start_records < self->num_nodes);
+                        start_records[num_start_records] = u;
+                        num_start_records++;
+                    } else {
+                        assert(w != MSP_NULL_NODE);
+                        /* Now propagate this new mapping up the tree until we hit the
+                         * root or another path.
+                         */
+                        v = mapping[u];
+                        while (u != MSP_NULL_NODE && mapping[u] == v) {
+                            mapping[u] = w;
+                            u = parent[u];
+                        }
+                        if (u != MSP_NULL_NODE) {
+                            /* u is an existing coalescence node where the children
+                             * have now changed.
+                             */
+                            assert(num_end_records < self->num_nodes);
+                            end_records[num_end_records] = u;
+                            num_end_records++;
+                            assert(num_start_records < self->num_nodes);
+                            start_records[num_start_records] = u;
+                            num_start_records++;
+                        }
+                    }
+                }
+            }
+        }
+
+        /* Records in */
+        while (j < M && self->trees.records.left[I[j]] == x) {
+            h = I[j];
+            j++;
+            u = self->trees.records.node[h];
+            num_children[u] = self->trees.records.num_children[h];
+            children[u] = self->trees.records.children[h];
+            w = MSP_NULL_NODE;
+            for (c = 0; c < num_children[u]; c++) {
+                v = children[u][c];
+                parent[v] = u;
+                if (mapping[v] != MSP_NULL_NODE) {
+                    w = w == MSP_NULL_NODE ? mapping[v]: u;
+                }
+            }
+            if (w != MSP_NULL_NODE) {
+                if (w == u) {
+                    assert(num_start_records < self->num_nodes);
+                    start_records[num_start_records] = u;
+                    num_start_records++;
+                }
+                /* There was one or more mapped children in this record, and so we
+                 * must propagate this mapping up until it either intersects with
+                 * another path or we hit root.
+                 */
+                while (u != MSP_NULL_NODE && mapping[u] == MSP_NULL_NODE) {
+                    mapping[u] = w;
+                    u = parent[u];
+                }
+                if (u != MSP_NULL_NODE) {
+                    /* u is a coalescence node where the new path intersects with
+                     * one or more existing path. Follow the existing path upwards
+                     * until we intersect with another path, setting the mapping to
+                     * its new value.
+                     */
+                    assert(num_start_records < self->num_nodes);
+                    start_records[num_start_records] = u;
+                    num_start_records++;
+                    v = mapping[u];
+                    w = u;
+                    while (u != MSP_NULL_NODE && mapping[u] == v) {
+                        mapping[u] = w;
+                        u = parent[u];
+                    }
+                    if (u != MSP_NULL_NODE) {
+                        /* u is an existing coalescence node where the children have
+                         * now changed.
+                         */
+                        assert(num_end_records < self->num_nodes);
+                        end_records[num_end_records] = u;
+                        num_end_records++;
+                        assert(num_start_records < self->num_nodes);
+                        start_records[num_start_records] = u;
+                        num_start_records++;
+                    }
+                }
+            }
+        }
+
+        /* printf("New tree at %d (%f)\n", x, self->trees.breakpoints[x]); */
+        /* for (u = 0; u < self->num_nodes; u++) { */
+        /*     printf("%d\t%d\t%d\t%d\n", u, parent[u], num_children[u], mapping[u]); */
+        /* } */
+        /* printf("END records: %d\n", (int) num_end_records); */
+        /* for (c = 0; c < num_end_records; c++) { */
+        /*     printf("%d ", end_records[c]); */
+        /* } */
+        /* printf("\n"); */
+        /* printf("START records: %d\n", (int) num_start_records); */
+        /* for (c = 0; c < num_start_records; c++) { */
+        /*     printf("%d ", start_records[c]); */
+        /* } */
+        /* printf("\n"); */
+
+        /* First allocate new coalescence records for all the records in the
+         * subset tree sequence that end here.
+         */
+        for (h = 0; h < num_end_records; h++) {
+            u = end_records[h];
+            ar = &active_records[u];
+            if (ar->active == 1) {
+                ar->active = 0;
+                assert(num_subset_records < self->num_records);
+                cr = &subset_records[num_subset_records];
+                num_subset_records++;
+                cr->left = self->trees.breakpoints[ar->left];
+                cr->right = self->trees.breakpoints[x];
+                cr->node = u;
+                cr->time = self->trees.nodes.time[u];
+                cr->population_id = self->trees.nodes.population[u];
+                cr->num_children = ar->num_mapped_children;
+                cr->children = ar->mapped_children;
+            }
+        }
+        /* Now start off any new records that begin at this point. */
+        for (h = 0; h < num_start_records; h++) {
+            u = start_records[h];
+            ar = &active_records[u];
+            ar->active = 1;
+            ar->left = x;
+            num_mapped_children = 0;
+            ar->mapped_children = mapped_children_mem + mapped_children_mem_offset;
+            for (c = 0; c < num_children[u]; c++) {
+                v = children[u][c];
+                if (mapping[v] != MSP_NULL_NODE) {
+                    ar->mapped_children[num_mapped_children] = mapping[v];
+                    num_mapped_children++;
+                    mapped_children_mem_offset++;
+                    assert(mapped_children_mem_offset < self->num_child_nodes);
+                }
+            }
+            ar->num_mapped_children = num_mapped_children;
+            if (num_mapped_children < 2) {
+                /* There are times when we only have one mapped child. If so, cancel
+                 * out this active mapping.
+                 */
+                ar->active = 0;
+                if (num_mapped_children == 1) {
+                    mapped_children_mem_offset--;
+                }
+            }
+        }
+    }
+    /* Finally, find all the records that have not been finished and
+     * terminate them.
+     */
+    x = (uint32_t) self->trees.num_breakpoints - 1;
+    for (u = 0; u < self->num_nodes; u++) {
+        ar = &active_records[u];
+        if (ar->active == 1) {
+            ar->active = 0;
+            assert(num_subset_records < self->num_records);
+            cr = &subset_records[num_subset_records];
+            num_subset_records++;
+            cr->left = self->trees.breakpoints[ar->left];
+            cr->right = self->trees.breakpoints[x];
+            cr->node = u;
+            cr->time = self->trees.nodes.time[u];
+            cr->population_id = self->trees.nodes.population[u];
+            cr->num_children = ar->num_mapped_children;
+            cr->children = ar->mapped_children;
+        }
+    }
+    /* We now have all the records in the subset sequence in the same
+     * node space as as the original tree sequence. However, the children
+     * for each record must now be sorted for ease of comparison.
+     */
+    for (j = 0; j < num_subset_records; j++) {
+        cr = &subset_records[j];
+        qsort(cr->children, cr->num_children, sizeof(uint32_t), cmp_uint32_t);
+    }
+    printf("num subset records = %d\n", (int) num_subset_records);
+    /*
+    for (j = 0; j < num_subset_records; j++) {
+        cr = &subset_records[j];
+        printf("(%f, %f)\t %d -> [", cr->left, cr->right, cr->node);
+        for (c = 0; c < cr->num_children; c++) {
+            printf("%d ", cr->children[c]);
+        }
+        printf("]\t%f\n", cr->time);
+    }
+    */
+    ret = squash_records(subset_records, num_subset_records, &num_squashed_records);
+    if (ret != 0) {
+        goto out;
+    }
+    printf("num squashed records = %d\n", (int) num_squashed_records);
+    for (j = 0; j < num_squashed_records; j++) {
+        cr = &subset_records[j];
+        printf("(%f, %f)\t %d -> [", cr->left, cr->right, cr->node);
+        for (c = 0; c < cr->num_children; c++) {
+            printf("%d ", cr->children[c]);
+        }
+        printf("]\t%f\n", cr->time);
+    }
+
+    ret = 0;
+out:
+    if (parent != NULL) {
+        free(parent);
+    }
+    if (children != NULL) {
+        free(children);
+    }
+    if (num_children != NULL) {
+        free(num_children);
+    }
+    if (mapping != NULL) {
+        free(mapping);
+    }
+    if (start_records != NULL) {
+        free(start_records);
+    }
+    if (end_records != NULL) {
+        free(end_records);
+    }
+    if (active_records != NULL) {
+        free(active_records);
+    }
+    if (mapped_children_mem != NULL) {
+        free(mapped_children_mem);
+    }
+    if (subset_records != NULL) {
+        free(subset_records);
+    }
+    return ret;
+}
+
 /* ======================================================== *
  * Tree diff iterator.
  * ======================================================== */
@@ -1897,7 +2317,7 @@ sparse_tree_set_tracked_leaves(sparse_tree_t *self, uint32_t num_tracked_leaves,
             goto out;
         }
         if (self->num_tracked_leaves[u] != 0) {
-            ret = MSP_ERR_DUPLICATE_TRACKED_LEAF;
+            ret = MSP_ERR_DUPLICATE_SAMPLE;
             goto out;
         }
         /* Propagate this upwards */

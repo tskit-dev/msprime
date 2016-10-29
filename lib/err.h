@@ -43,7 +43,7 @@
 #define MSP_ERR_LINKS_OVERFLOW                                      -12
 #define MSP_ERR_HDF5                                                -13
 #define MSP_ERR_BAD_POPULATION_ID                                   -14
-#define MSP_ERR_DUPLICATE_TRACKED_LEAF                              -15
+#define MSP_ERR_DUPLICATE_SAMPLE                                    -15
 #define MSP_ERR_BAD_ORDERING                                        -16
 #define MSP_ERR_BAD_MUTATION                                        -17
 #define MSP_ERR_UNSUPPORTED_OPERATION                               -18
