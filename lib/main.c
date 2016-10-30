@@ -679,11 +679,10 @@ static void
 print_tree_sequence(tree_sequence_t *ts)
 {
     int ret = 0;
-    size_t j, k; //, k, l;
+    size_t j;
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
     sparse_tree_t tree;
     coalescence_record_t *cr;
-    uint32_t tracked_leaves[] = {1, 2};
 
     // TODO tidy this up to make it more specific to the task of examining the
     // tree sequence itself.
@@ -702,35 +701,11 @@ print_tree_sequence(tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_set_tracked_leaves(&tree,
-            sizeof(tracked_leaves) / sizeof(uint32_t), tracked_leaves);
-    if (ret != 0) {
-        goto out;
-    }
     for (ret = sparse_tree_first(&tree); ret == 1;
             ret = sparse_tree_next(&tree)) {
         printf("New tree: %d: %f (%d)\n", (int) tree.index,
                 tree.right - tree.left, (int) tree.num_nodes);
         /* sparse_tree_print_state(&tree, stdout); */
-        k = tree.index;
-        if (k > 3) {
-            printf("Rewinding\n");
-            for (j = 0; j < 2; j++) {
-                ret = sparse_tree_prev(&tree);
-                if (ret != 1) {
-                    goto out;
-                }
-                printf("\twent back to %d\n", (int) tree.index);
-            }
-            printf("Going forward again\n");
-            for (j = 0; j < 2; j++) {
-                ret = sparse_tree_next(&tree);
-                if (ret != 1) {
-                    goto out;
-                }
-                printf("\twent forward to %d\n", (int) tree.index);
-            }
-        }
     }
     if (ret < 0) {
         goto out;
@@ -957,17 +932,18 @@ run_subset(char *input_filename, char *output_filename, char **samples,
         parsed_samples[j] = (uint32_t) atoi(samples[j]);
     }
     load_tree_sequence(&ts, input_filename);
+    printf("loaded trees\n");
     ret = tree_sequence_get_subset(&ts, parsed_samples, (uint32_t) num_samples,
             &subset);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
     }
-    /* ret = tree_sequence_dump(&subset, output_filename, 0); */
-    /* if (ret != 0) { */
-    /*     fatal_library_error(ret, "Write error"); */
-    /* } */
+    ret = tree_sequence_dump(&subset, output_filename, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "Write error");
+    }
     tree_sequence_free(&ts);
-    /* tree_sequence_free(&subset); */
+    tree_sequence_free(&subset);
     free(parsed_samples);
 }
 
