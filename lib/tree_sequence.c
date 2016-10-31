@@ -437,7 +437,6 @@ static int
 tree_sequence_init_from_records(tree_sequence_t *self,
       size_t num_records, coalescence_record_t *records)
 {
-
     int ret = MSP_ERR_GENERIC;
     uint32_t node;
     size_t j, k, offset;
@@ -1650,6 +1649,7 @@ tree_sequence_compress_nodes(tree_sequence_t *self, uint32_t *samples, size_t nu
         for (c = 0; c < cr->num_children; c++) {
             cr->children[c] = node_map[cr->children[c]];
         }
+        qsort(cr->children, cr->num_children, sizeof(uint32_t), cmp_uint32_t);
     }
     for (j = 0; j < num_mutations; j++) {
         mutations[j].node = node_map[mutations[j].node];
@@ -1691,6 +1691,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     size_t M = self->num_records;
     size_t j, k, l, h, num_start_records, num_end_records, num_squashed_records;
     uint32_t u, v, w, x, c, num_mapped_children;
+    size_t max_subset_child_nodes, max_subset_records;
     size_t mapped_children_mem_offset = 0;
     size_t num_subset_records = 0;
     size_t num_subset_mutations = 0;
@@ -1710,8 +1711,17 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     start_records = malloc(self->num_nodes * sizeof(uint32_t));
     end_records = malloc(self->num_nodes * sizeof(uint32_t));
     active_records = malloc(self->num_nodes * sizeof(active_record_t));
-    mapped_children_mem = malloc(self->num_child_nodes * sizeof(uint32_t));
-    subset_records = malloc(self->num_records * sizeof(coalescence_record_t));
+    /* This is an ugly hack until we figure out a better algorithm. The
+     * issue is that we can't accurately upper bound the amount of memory
+     * needed for children in the subset sequence because we do a lot
+     * of record squashing. A better algorithm would avoid creating these
+     * records in the first place.
+     */
+    max_subset_child_nodes = 2 * self->num_child_nodes;
+    mapped_children_mem = malloc(max_subset_child_nodes * sizeof(uint32_t));
+    /* Likewise for the maximum number of records */
+    max_subset_records = 2 * self->num_records;
+    subset_records = malloc(max_subset_records * sizeof(coalescence_record_t));
     subset_mutations = malloc(self->num_mutations * sizeof(mutation_t));
     sample_objects = malloc(num_samples * sizeof(sample_t));
     if (parent == NULL || children == NULL || num_children == NULL
@@ -1739,10 +1749,6 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
         }
         if (mapping[u] != MSP_NULL_NODE) {
             ret = MSP_ERR_DUPLICATE_SAMPLE;
-            goto out;
-        }
-        if (c > 0 && samples[c] <= samples[c - 1]) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
             goto out;
         }
         mapping[u] = u;
@@ -1892,21 +1898,6 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
             }
         }
 
-        /* printf("New tree at %d (%f)\n", x, self->trees.breakpoints[x]); */
-        /* for (u = 0; u < self->num_nodes; u++) { */
-        /*     printf("%d\t%d\t%d\t%d\n", u, parent[u], num_children[u], mapping[u]); */
-        /* } */
-        /* printf("END records: %d\n", (int) num_end_records); */
-        /* for (c = 0; c < num_end_records; c++) { */
-        /*     printf("%d ", end_records[c]); */
-        /* } */
-        /* printf("\n"); */
-        /* printf("START records: %d\n", (int) num_start_records); */
-        /* for (c = 0; c < num_start_records; c++) { */
-        /*     printf("%d ", start_records[c]); */
-        /* } */
-        /* printf("\n"); */
-
         /* First allocate new coalescence records for all the records in the
          * subset tree sequence that end here.
          */
@@ -1915,7 +1906,10 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
             ar = &active_records[u];
             if (ar->active == 1) {
                 ar->active = 0;
-                assert(num_subset_records < self->num_records);
+                if (num_subset_records >= max_subset_records) {
+                    ret = MSP_ERR_ASSERTION_FAILED;
+                    goto out;
+                }
                 cr = &subset_records[num_subset_records];
                 num_subset_records++;
                 cr->left = self->trees.breakpoints[ar->left];
@@ -1940,9 +1934,12 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
                 if (mapping[v] != MSP_NULL_NODE) {
                     ar->mapped_children[num_mapped_children] = mapping[v];
                     num_mapped_children++;
-                    assert(mapped_children_mem_offset < self->num_child_nodes);
                     mapped_children_mem_offset++;
                 }
+            }
+            if (mapped_children_mem_offset >= max_subset_child_nodes) {
+                ret = MSP_ERR_ASSERTION_FAILED;
+                goto out;
             }
             ar->num_mapped_children = num_mapped_children;
             if (num_mapped_children < 2) {
@@ -1968,14 +1965,8 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
             }
             l++;
         }
-            /* # update the mutations for this tree. */
-            /* y = records[O[k]].right */
-            /* while l < self.get_num_mutations() and mutations[l].position < y: */
-            /*     u = mutations[l].node */
-            /*     if mu[u] != -1: */
-            /*         new_mutations.append((mutations[l].position, mu[u])) */
-            /*     l += 1 */
     }
+
     /* After the main loop has completed, find all the records that have not
      * been finished and terminate them.
      */
@@ -1984,7 +1975,10 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
         ar = &active_records[u];
         if (ar->active == 1) {
             ar->active = 0;
-            assert(num_subset_records < self->num_records);
+            if (num_subset_records >= max_subset_records) {
+                ret = MSP_ERR_ASSERTION_FAILED;
+                goto out;
+            }
             cr = &subset_records[num_subset_records];
             num_subset_records++;
             cr->left = self->trees.breakpoints[ar->left];
@@ -2004,47 +1998,16 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
         cr = &subset_records[j];
         qsort(cr->children, cr->num_children, sizeof(uint32_t), cmp_uint32_t);
     }
-    printf("num subset records = %d\n", (int) num_subset_records);
-    /*
-    for (j = 0; j < num_subset_records; j++) {
-        cr = &subset_records[j];
-        printf("(%f, %f)\t %d -> [", cr->left, cr->right, cr->node);
-        for (c = 0; c < cr->num_children; c++) {
-            printf("%d ", cr->children[c]);
-        }
-        printf("]\t%f\n", cr->time);
-    }
-    */
-
     ret = squash_records(subset_records, num_subset_records, &num_squashed_records);
     if (ret != 0) {
         goto out;
     }
-    printf("num squashed records = %d\n", (int) num_squashed_records);
-    /* for (j = 0; j < num_squashed_records; j++) { */
-    /*     cr = &subset_records[j]; */
-    /*     printf("(%f, %f)\t %d -> [", cr->left, cr->right, cr->node); */
-    /*     for (c = 0; c < cr->num_children; c++) { */
-    /*         printf("%d ", cr->children[c]); */
-    /*     } */
-    /*     printf("]\t%f\n", cr->time); */
-    /* } */
     ret = tree_sequence_compress_nodes(self, samples, num_samples,
             subset_records, num_squashed_records, subset_mutations,
             num_subset_mutations);
     if (ret != 0) {
         goto out;
     }
-
-    printf("Compressed = %d\n", (int) num_squashed_records);
-    /* for (j = 0; j < num_squashed_records; j++) { */
-    /*     cr = &subset_records[j]; */
-    /*     printf("(%f, %f)\t %d -> [", cr->left, cr->right, cr->node); */
-    /*     for (c = 0; c < cr->num_children; c++) { */
-    /*         printf("%d ", cr->children[c]); */
-    /*     } */
-    /*     printf("]\t%f\n", cr->time); */
-    /* } */
     /* Alloc a new tree sequence for these records. */
     ret = tree_sequence_load_records(subset, num_squashed_records, subset_records);
     if (ret != 0) {
@@ -2061,6 +2024,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
         tree_sequence_free(subset);
         goto out;
     }
+
 out:
     if (parent != NULL) {
         free(parent);
