@@ -1690,7 +1690,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     uint32_t *O = self->trees.indexes.removal_order;
     size_t M = self->num_records;
     size_t j, k, l, h, num_start_records, num_end_records, num_squashed_records;
-    uint32_t u, v, w, x, c, num_mapped_children;
+    uint32_t u, v, w, x, c, num_mapped_children, subset_root;
     size_t max_subset_child_nodes, max_subset_records;
     size_t mapped_children_mem_offset = 0;
     size_t num_subset_records = 0;
@@ -1952,11 +1952,23 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
                 }
             }
         }
+        /* Find the root of the subset tree.
+         * TODO this could probably be avoided to save a bit of time.
+         */
+        subset_root = MSP_NULL_NODE;
+        u = samples[0];
+        while (u != MSP_NULL_NODE) {
+            if (mapping[u] == u) {
+                subset_root = u;
+            }
+            u = parent[u];
+        }
+        assert(subset_root != MSP_NULL_NODE);
         /* Update the mutations for this tree */
         right = self->trees.breakpoints[self->trees.records.right[O[k]]];
         while (l < self->num_mutations && self->mutations.position[l] < right) {
             u = self->mutations.node[l];
-            if (mapping[u] != MSP_NULL_NODE) {
+            if (mapping[u] != MSP_NULL_NODE && mapping[u] != subset_root) {
                 assert(num_subset_mutations < self->num_mutations);
                 mut = &subset_mutations[num_subset_mutations];
                 num_subset_mutations++;

@@ -932,7 +932,6 @@ run_subset(char *input_filename, char *output_filename, char **samples,
         parsed_samples[j] = (uint32_t) atoi(samples[j]);
     }
     load_tree_sequence(&ts, input_filename);
-    printf("loaded trees\n");
     ret = tree_sequence_get_subset(&ts, parsed_samples, (uint32_t) num_samples,
             &subset);
     if (ret != 0) {
@@ -942,6 +941,7 @@ run_subset(char *input_filename, char *output_filename, char **samples,
     if (ret != 0) {
         fatal_library_error(ret, "Write error");
     }
+    /* tree_sequence_print_state(&subset, stdout); */
     tree_sequence_free(&ts);
     tree_sequence_free(&subset);
     free(parsed_samples);
