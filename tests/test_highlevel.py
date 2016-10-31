@@ -127,15 +127,15 @@ def subset_tree_sequence(ts, samples):
     new_records = []
     new_mutations = []
     for tree in ts.trees(tracked_leaves=samples):
-        parent = [-1 for j in range(num_nodes)]
+        parent = [msprime.NULL_NODE for j in range(num_nodes)]
         children = collections.defaultdict(list)
         for leaf in samples:
             u = leaf
             v = tree.get_parent(u)
-            while v != -1:
+            while v != msprime.NULL_NODE:
                 is_parent = (
                     tree.get_num_tracked_leaves(v) > tree.get_num_tracked_leaves(u))
-                if parent[u] == -1 and is_parent:
+                if parent[u] == msprime.NULL_NODE and is_parent:
                     parent[u] = v
                     children[v].append(u)
                     children[v].sort()
@@ -158,13 +158,17 @@ def subset_tree_sequence(ts, samples):
                 new_records.append(msprime.CoalescenceRecord(*active_records[u]))
                 active_records[u][0] = tree.get_interval()[0]
                 active_records[u][3] = tuple(c)
+        subset_root = samples[0]
+        while parent[subset_root] != msprime.NULL_NODE:
+            subset_root = parent[subset_root]
         # Now find the new nodes for all mutations that can be mapped back in
         for mut in tree.mutations():
             stack = [mut.node]
             while not len(stack) == 0:
                 u = stack.pop()
-                if parent[u] != -1 or u in children:
-                    new_mutations.append((mut.position, u))
+                if parent[u] != msprime.NULL_NODE or u in children:
+                    if u != subset_root:
+                        new_mutations.append((mut.position, u))
                     break
                 stack.extend(tree.get_children(u))
     for record in active_records.values():
@@ -173,14 +177,14 @@ def subset_tree_sequence(ts, samples):
     new_records.sort(key=lambda r: r.time)
 
     # Now compress the nodes.
-    node_map = [-1 for _ in range(num_nodes)]
+    node_map = [msprime.NULL_NODE for _ in range(num_nodes)]
     for j, u in enumerate(samples):
         node_map[u] = j
     compressed_records = []
     next_node = len(samples)
     for record in new_records:
         for node in list(record.children) + [record.node]:
-            if node_map[node] == -1:
+            if node_map[node] == msprime.NULL_NODE:
                 node_map[node] = next_node
                 next_node += 1
         children = tuple(sorted(node_map[c] for c in record.children))
@@ -1237,6 +1241,9 @@ class TestTreeSequence(HighLevelTestCase):
         s2 = subset_tree_sequence(ts, sample)
         self.assertEqual(list(s1.records()), list(s2.records()))
         self.assertEqual(list(s1.mutations()), list(s2.mutations()))
+        self.assertEqual(list(s1.haplotypes()), list(s2.haplotypes()))
+        self.assertEqual(
+            list(s1.variants(as_bytes=True)), list(s2.variants(as_bytes=True)))
 
     def test_subset(self):
         num_mutations = 0

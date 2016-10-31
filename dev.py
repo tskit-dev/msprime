@@ -905,17 +905,19 @@ def get_subset_children(pi, samples):
 
 def subset_samples(n, samples):
     demographic_events=[msprime.SimpleBottleneck(1000, 0.15)]
-    # demographic_events = []
-    # ts = msprime.simulate(
-    #     sample_size=n, Ne=1e4, length=1e4, recombination_rate=5e-8,
-    #     mutation_rate=2e-8, random_seed=5, demographic_events=demographic_events)
-    ts = msprime.load(sys.argv[1])
+    demographic_events = []
+    ts = msprime.simulate(
+        sample_size=n, Ne=1e4, length=1e4, recombination_rate=5e-8,
+        mutation_rate=2e-8, random_seed=5, demographic_events=demographic_events)
+    # ts = msprime.load(sys.argv[1])
 
-    print("starting subsetting", len(samples))
-    before = time.clock()
     subset = ts.subset(samples)
-    duration = time.clock() - before
-    print("Subsetting done", duration)
+
+#     print("starting subsetting", len(samples))
+#     before = time.clock()
+#     subset = ts.subset(samples)
+#     duration = time.clock() - before
+#     print("Subsetting done", duration)
 
     all_trees = ts.trees()
     full_tree = next(all_trees)
@@ -926,7 +928,6 @@ def subset_samples(n, samples):
                 # print(u, v, samples[u], samples[v])
                 t_mrca1 = full_tree.get_tmrca(samples[u], samples[v])
                 t_mrca2 = subset_tree.get_tmrca(u, v)
-                # print(t_mrca1, t_mrca2, t_mrca1 == t_mrca2)
                 assert t_mrca1 == t_mrca2
             full_tree = next(all_trees, None)
             if full_tree is None:
@@ -968,7 +969,7 @@ if __name__ == "__main__":
     #     subset_samples(30000, list(range(k)))
 
     # subset_samples(30000, [5, 7, 8,9, 10, 11])
-    subset_samples(30000, list(range(500)))
+    subset_samples(300, list(range(20)))
 
     # for n in [100, 1000, 10000]:
     #     for k in [2, 10, 50, n - 1, n]:
