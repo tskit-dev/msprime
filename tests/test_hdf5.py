@@ -180,8 +180,8 @@ class TestHdf5Format(unittest.TestCase):
     """
 
     def verify_tree_dump_format(self, ts, outfile):
-        uint32 = "uint32"
-        float64 = "float64"
+        uint32 = "<u4"
+        float64 = "<f8"
         ts.dump(outfile.name)
         self.assertTrue(os.path.exists(outfile.name))
         self.assertGreater(os.path.getsize(outfile.name), 0)
