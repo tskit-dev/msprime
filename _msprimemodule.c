@@ -4523,7 +4523,7 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", "as_char"};
+    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", "as_char", NULL};
     TreeSequence *tree_sequence = NULL;
     PyObject *genotypes_buffer = NULL;
     int as_char = 0;
