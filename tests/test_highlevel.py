@@ -1245,6 +1245,36 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertEqual(
             list(s1.variants(as_bytes=True)), list(s2.variants(as_bytes=True)))
 
+    def verify_subset_variants(self, ts, sample):
+        subset = ts.subset(sample)
+        s = np.array(sample)
+        full_genotypes = np.empty((ts.get_num_mutations(), ts.get_sample_size()))
+        full_positions = np.empty(ts.get_num_mutations())
+        for variant in ts.variants():
+            full_positions[variant.index] = variant.position
+            full_genotypes[variant.index] = variant.genotypes
+        subset_genotypes = np.empty(
+            (subset.get_num_mutations(), subset.get_sample_size()))
+        subset_positions = np.empty(subset.get_num_mutations())
+        for variant in subset.variants():
+            subset_positions[variant.index] = variant.position
+            subset_genotypes[variant.index] = variant.genotypes
+        j = 0
+        for sg, sp in zip(subset_genotypes, subset_positions):
+            while full_positions[j] < sp:
+                unique = np.unique(full_genotypes[j][s])
+                self.assertEqual(unique.shape[0], 1)
+                self.assertIn(unique[0], [0, 1])
+                j += 1
+            self.assertEqual(full_positions[j], sp)
+            self.assertTrue(np.all(sg == full_genotypes[j][s]))
+            j += 1
+        while j < ts.get_num_mutations():
+            unique = np.unique(full_genotypes[j][s])
+            self.assertEqual(unique.shape[0], 1)
+            self.assertIn(unique[0], [0, 1])
+            j += 1
+
     def test_subset(self):
         num_mutations = 0
         for ts in self.get_example_tree_sequences():
@@ -1257,6 +1287,7 @@ class TestTreeSequence(HighLevelTestCase):
                     self.verify_subset_topology(ts, subset)
                     self.verify_subset_mutations(ts, subset)
                     self.verify_subset_equality(ts, subset)
+                    self.verify_subset_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
 
