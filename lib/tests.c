@@ -2293,7 +2293,7 @@ test_sparse_tree_errors(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     tracked_leaves[1] = 0;
     ret = sparse_tree_set_tracked_leaves(&t, 2, tracked_leaves);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_TRACKED_LEAF);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_SAMPLE);
     ret = sparse_tree_set_tracked_leaves_from_leaf_list(&t, NULL, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
@@ -3612,6 +3612,156 @@ test_vargen_from_examples(void)
 }
 
 static void
+verify_subset_properties(tree_sequence_t *ts, tree_sequence_t *subset,
+        uint32_t *samples, uint32_t num_samples)
+{
+    int ret;
+    sample_t s1, s2;
+    sparse_tree_t full_tree, subset_tree;
+    mutation_t *mut;
+    uint32_t j, k, u, mrca1, mrca2;
+    double tmrca1, tmrca2;
+    size_t total_mutations;
+
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_sequence_length(ts),
+        tree_sequence_get_sequence_length(subset));
+    CU_ASSERT(
+        tree_sequence_get_num_nodes(ts) >= tree_sequence_get_num_nodes(subset));
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(subset), num_samples);
+
+    /* Check the sample properties */
+    for (j = 0; j < num_samples; j++) {
+        ret = tree_sequence_get_sample(ts, samples[j], &s1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = tree_sequence_get_sample(subset, j, &s2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(s1.population_id, s2.population_id);
+        CU_ASSERT_EQUAL_FATAL(s1.time, s2.time);
+    }
+    /* Check the pairwise MRCAs */
+    ret = sparse_tree_alloc(&full_tree, ts, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_alloc(&subset_tree, subset, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&full_tree);
+    CU_ASSERT_EQUAL(ret, 1);
+    ret = sparse_tree_first(&subset_tree);
+    CU_ASSERT_EQUAL(ret, 1);
+
+    total_mutations = 0;
+    while (1) {
+        while (full_tree.right <= subset_tree.right) {
+            for (j = 0; j < num_samples; j++) {
+                for (k = j + 1; k < num_samples; k++) {
+                    ret = sparse_tree_get_mrca(&full_tree, samples[j], samples[k],
+                            &mrca1);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    ret = sparse_tree_get_time(&full_tree, mrca1, &tmrca1);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    ret = sparse_tree_get_mrca(&subset_tree, j, k, &mrca2);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    ret = sparse_tree_get_time(&subset_tree, mrca2, &tmrca2);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    CU_ASSERT_EQUAL(tmrca1, tmrca2);
+                }
+            }
+            ret = sparse_tree_next(&full_tree);
+            CU_ASSERT_FATAL(ret >= 0);
+            if (ret != 1) {
+                break;
+            }
+        }
+        /* Check the mutations in this tree */
+        for (j = 0; j < subset_tree.num_mutations; j++) {
+            mut = &subset_tree.mutations[j];
+            CU_ASSERT(subset_tree.left <= mut->position);
+            CU_ASSERT(mut->position < subset_tree.right);
+            ret = sparse_tree_get_parent(&subset_tree, mut->node, &u);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT(u != MSP_NULL_NODE);
+            total_mutations++;
+        }
+        ret = sparse_tree_next(&subset_tree);
+        if (ret != 1) {
+            break;
+        }
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(subset), total_mutations);
+
+    sparse_tree_free(&subset_tree);
+    sparse_tree_free(&full_tree);
+
+    /* Check some other operations on the subset */
+    verify_vargen(subset);
+    verify_hapgen(subset);
+}
+
+static void
+verify_subset(tree_sequence_t *ts)
+{
+    int ret;
+    uint32_t n = tree_sequence_get_sample_size(ts);
+    uint32_t sample_sizes[] = {2, 3, n / 2, n - 1, n};
+    size_t j;
+    uint32_t *sample = malloc(n * sizeof(uint32_t));
+    tree_sequence_t subset;
+
+    CU_ASSERT_FATAL(sample != NULL);
+    for (j = 0; j < n; j++) {
+        sample[j] = j;
+    }
+    for (j = 0; j < sizeof(sample_sizes) / sizeof(uint32_t); j++) {
+        if (sample_sizes[j] > 1 && sample_sizes[j] <= n) {
+            ret = tree_sequence_get_subset(ts, sample, sample_sizes[j], &subset);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            verify_subset_properties(ts, &subset, sample, sample_sizes[j]);
+            tree_sequence_free(&subset);
+        }
+    }
+    free(sample);
+}
+
+static void
+verify_subset_errors(tree_sequence_t *ts)
+{
+    int ret;
+    uint32_t n = tree_sequence_get_sample_size(ts);
+    tree_sequence_t subset;
+    uint32_t sample[] = {0, 1, 2, 3};
+
+    ret = tree_sequence_get_subset(ts, sample, 0, &subset);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = tree_sequence_get_subset(ts, sample, 1, &subset);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    sample[1] = n;
+    ret = tree_sequence_get_subset(ts, sample, 2, &subset);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SAMPLES);
+    sample[0] = 0;
+    sample[1] = 0;
+    ret = tree_sequence_get_subset(ts, sample, 2, &subset);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SAMPLE);
+
+}
+
+static void
+test_subset_from_examples(void)
+{
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    uint32_t j;
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        verify_subset(examples[j]);
+        verify_subset_errors(examples[j]);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
+static void
 verify_newick(tree_sequence_t *ts, int should_fail)
 {
     newick_converter_t nc;
@@ -4019,6 +4169,7 @@ main(void)
         {"Test vargen from examples", test_vargen_from_examples},
         {"Test newick from examples", test_newick_from_examples},
         {"Test ld from examples", test_ld_from_examples},
+        {"Test subset from examples", test_subset_from_examples},
         {"Test records equivalent after import", test_records_equivalent},
         {"Test saving to HDF5", test_save_hdf5},
         {"Test saving records to HDF5", test_save_records_hdf5},

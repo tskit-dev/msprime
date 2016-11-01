@@ -120,7 +120,7 @@ msp_strerror(int err)
             "Please upgrade msprime to the latest version.";
     } else if (err == MSP_ERR_NONBINARY_NEWICK) {
         ret = "Newick export not supported for non binary trees.";
-    } else if (err == MSP_ERR_DUPLICATE_TRACKED_LEAF) {
+    } else if (err == MSP_ERR_DUPLICATE_SAMPLE) {
         ret = "Duplicate value provided in tracked leaf list.";
     } else if (err == MSP_ERR_REFCOUNT_NONZERO) {
         ret = "Cannot change the state of the tree sequence when "

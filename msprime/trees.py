@@ -1830,6 +1830,16 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
+    def subset(self, samples):
+        ll_subset = self._ll_tree_sequence.get_subset(samples)
+        subset = msprime.TreeSequence(ll_subset)
+        for provenance in self.get_provenance():
+            subset.add_provenance(provenance)
+        parameters = {"TODO": "encode subset parameters"}
+        subset_provenance = get_provenance_dict("subset", parameters)
+        subset.add_provenance(json.dumps(subset_provenance))
+        return subset
+
 
 class HaplotypeGenerator(object):
 

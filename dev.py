@@ -812,6 +812,126 @@ def smc_check():
                 L, model, np.mean(num_trees), np.mean(num_mutations),
                 np.mean(t_last), sep="\t")
 
+def trees(records):
+    M = len(records)
+    I = sorted(range(M), key=lambda j: (records[j].left, records[j].time))
+    O = sorted(range(M), key=lambda j: (records[j].right, -records[j].time))
+    pi = [-1 for j in range(max(r.node for r in records) + 1)]
+    j = 0
+    k = 0
+    while j < M:
+        x = records[I[j]].left
+        while records[O[k]].right == x:
+            h = O[k]
+            print("\tout:", records[h])
+            for q in records[h].children:
+                pi[q] = -1
+            k += 1
+        while j < M and records[I[j]].left == x:
+            h = I[j]
+            print("\tin:", records[h])
+            for q in records[h].children:
+                pi[q] = records[h].node
+            j += 1
+        yield pi
+
+
+def get_mrca(tree, u, v):
+    path1 = []
+    w = u
+    while w != -1:
+        path1.append(w)
+        w = tree[w]
+    path2 = []
+    w = v
+    while w != -1:
+        path2.append(w)
+        w = tree[w]
+    k = -1
+    while path1[k] == path2[k]:
+        k -= 1
+    return path1[k + 1]
+
+
+def get_subset_mapping(pi, samples):
+    mu = [-1 for _ in pi]
+
+    for u in samples:
+        while u != -1:
+            # Propagate up until we either hit the root or another path.
+            v = u
+            w = mu[u]
+            # print("propagating upwards for ", u, v, w)
+            while v != -1 and mu[v] == w:
+                mu[v] = u
+                # print("\tSet mu[",v, "] = ", u)
+                v = pi[v]
+            u = v
+    # now check the mapping. For all pairs of samples the MRCA should
+    # have mu[w] = w
+    max_w = -1
+    for u, v in itertools.combinations(samples, 2):
+        w = get_mrca(pi, u, v)
+        if w > max_w:
+            max_w = w
+        assert mu[w] == w
+    # The path from the MRCA of all the samples to root should be w
+    u = max_w
+    while u != -1:
+        assert mu[u] == max_w
+        u = pi[u]
+    return mu
+
+
+def get_subset_children(pi, samples):
+    chi = [[] for _ in pi]
+    for u in samples:
+        v = u
+        while v != -1 and len(chi[v]) == 0:
+            chi[v].append(u)
+            v = pi[v]
+        if v != -1:
+            # if we are not at the root, then we need to make a coalescence
+            # in the subset tree
+            assert len(chi[v]) == 1
+            chi[v].append(u)
+            chi[v].sort()
+            w = v
+            v = pi[v]
+            while v != -1 and len(chi[v]) == 1:
+                chi[v] = [w]
+                v = pi[v]
+    return chi
+
+def subset_samples(n, samples):
+    demographic_events=[msprime.SimpleBottleneck(1000, 0.15)]
+    demographic_events = []
+    ts = msprime.simulate(
+        sample_size=n, Ne=1e4, length=1e4, recombination_rate=5e-8,
+        mutation_rate=2e-8, random_seed=5, demographic_events=demographic_events)
+    # ts = msprime.load(sys.argv[1])
+
+    subset = ts.subset(samples)
+
+#     print("starting subsetting", len(samples))
+#     before = time.clock()
+#     subset = ts.subset(samples)
+#     duration = time.clock() - before
+#     print("Subsetting done", duration)
+
+    all_trees = ts.trees()
+    full_tree = next(all_trees)
+    for subset_tree in subset.trees():
+        while full_tree.get_interval()[1] <= subset_tree.get_interval()[1]:
+            # print(full_tree.get_interval(), subset_tree.get_interval())
+            for u, v in itertools.combinations(range(len(samples)), 2):
+                # print(u, v, samples[u], samples[v])
+                t_mrca1 = full_tree.get_tmrca(samples[u], samples[v])
+                t_mrca2 = subset_tree.get_tmrca(u, v)
+                assert t_mrca1 == t_mrca2
+            full_tree = next(all_trees, None)
+            if full_tree is None:
+                break
 
 
 if __name__ == "__main__":
@@ -844,4 +964,14 @@ if __name__ == "__main__":
     # api_stuff()
     # simple_kingman()
     # instantaneous_bottleneck_example()
-    smc_check()
+    # smc_check()
+    # for k in [2, 10, 50, 100, 200]:
+    #     subset_samples(30000, list(range(k)))
+
+    # subset_samples(30000, [5, 7, 8,9, 10, 11])
+    subset_samples(300, list(range(20)))
+
+    # for n in [100, 1000, 10000]:
+    #     for k in [2, 10, 50, n - 1, n]:
+    #         print(n, k, file=sys.stderr)
+    #         subset_samples(n, range(k))

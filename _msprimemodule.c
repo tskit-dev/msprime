@@ -246,6 +246,50 @@ out:
 }
 
 static int
+parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
+        uint32_t **samples)
+{
+    int ret = -1;
+    PyObject *item;
+    size_t j;
+    Py_ssize_t num_samples_local;
+    uint32_t *samples_local = NULL;
+    uint32_t n = tree_sequence_get_sample_size(ts);
+
+    num_samples_local = PyList_Size(py_samples);
+    if (num_samples_local < 2) {
+        PyErr_SetString(PyExc_ValueError, "Must provide at least 2 samples");
+        goto out;
+    }
+    samples_local = PyMem_Malloc(num_samples_local * sizeof(uint32_t));
+    if (samples_local == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < num_samples_local; j++) {
+        item = PyList_GetItem(py_samples, j);
+        if (!PyNumber_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "sample id must be a number");
+            goto out;
+        }
+        samples_local[j] = (uint32_t) PyLong_AsLong(item);
+        if (samples_local[j] >= n) {
+            PyErr_SetString(PyExc_ValueError, "sample ids must be < sample_size");
+            goto out;
+        }
+    }
+    *num_samples = (size_t) num_samples_local;
+    *samples = samples_local;
+    samples_local = NULL;
+    ret = 0;
+out:
+    if (samples_local != NULL) {
+        PyMem_Free(samples_local);
+    }
+    return ret;
+}
+
+static int
 parse_samples(PyObject *py_samples, Py_ssize_t *sample_size,
         sample_t **samples)
 {
@@ -2825,11 +2869,9 @@ TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args,
 {
     PyObject *ret = NULL;
     PyObject *py_samples = NULL;
-    PyObject *item;
     static char *kwlist[] = {"samples", NULL};
     uint32_t *samples = NULL;
     size_t num_samples = 0;
-    uint32_t j, n;
     double pi;
     int err;
 
@@ -2840,29 +2882,8 @@ TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args,
             &PyList_Type, &py_samples)) {
         goto out;
     }
-    n = tree_sequence_get_sample_size(self->tree_sequence);
-    num_samples = PyList_Size(py_samples);
-    if (num_samples < 2) {
-        PyErr_SetString(PyExc_ValueError, "Must provide at least 2 samples");
+    if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
         goto out;
-    }
-    samples = PyMem_Malloc(num_samples * sizeof(uint32_t));
-    if (samples == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    for (j = 0; j < num_samples; j++) {
-        item = PyList_GetItem(py_samples, j);
-        if (!PyNumber_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "sample id must be a number");
-            goto out;
-        }
-        samples[j] = (uint32_t) PyLong_AsLong(item);
-        if (samples[j] >= n) {
-            PyErr_SetString(PyExc_ValueError,
-                    "sample ids must be < sample_size");
-            goto out;
-        }
     }
     err = tree_sequence_get_pairwise_diversity(
         self->tree_sequence, samples, (uint32_t) num_samples, &pi);
@@ -2876,6 +2897,58 @@ out:
         PyMem_Free(samples);
     }
 
+    return ret;
+}
+
+/* Forward declaration */
+static PyObject * build_TreeSequence(tree_sequence_t *ts);
+static PyObject *
+TreeSequence_get_subset(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    PyObject *py_samples = NULL;
+    static char *kwlist[] = {"samples", NULL};
+    uint32_t *samples = NULL;
+    size_t num_samples = 0;
+    tree_sequence_t *subset_ts = NULL;
+    int err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &PyList_Type, &py_samples)) {
+        goto out;
+    }
+    if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
+        goto out;
+    }
+    subset_ts = PyMem_Malloc(sizeof(tree_sequence_t));
+    if (subset_ts == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(subset_ts, 0, sizeof(tree_sequence_t));
+    err = tree_sequence_get_subset(
+        self->tree_sequence, samples, (uint32_t) num_samples, subset_ts);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = build_TreeSequence(subset_ts);
+    if (ret != NULL) {
+        /* the new TreeSequence object now has ownership of the tree
+         * sequence so we must not free it */
+        subset_ts = NULL;
+    }
+out:
+    if (samples != NULL) {
+        PyMem_Free(samples);
+    }
+    if (subset_ts != NULL) {
+        tree_sequence_free(subset_ts);
+        PyMem_Free(subset_ts);
+    }
     return ret;
 }
 
@@ -2931,7 +3004,7 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
-        "Returns the number of loci" },
+        "Returns the number of mutations" },
     {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
         "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
@@ -2941,6 +3014,8 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
+    {"get_subset", (PyCFunction) TreeSequence_get_subset,
+        METH_VARARGS|METH_KEYWORDS, "Returns a subset of this TreeSequence." },
     {NULL}  /* Sentinel */
 };
 
@@ -2982,6 +3057,22 @@ static PyTypeObject TreeSequenceType = {
     0,                         /* tp_dictoffset */
     (initproc)TreeSequence_init,      /* tp_init */
 };
+
+static PyObject *
+build_TreeSequence(tree_sequence_t *ts)
+{
+    PyObject *ret = NULL;
+    TreeSequence *new_ts = NULL;
+
+    new_ts = (TreeSequence *) PyObject_CallObject((PyObject *) &TreeSequenceType, NULL);
+    if (new_ts == NULL) {
+        goto out;
+    }
+    new_ts->tree_sequence = ts;
+    ret = (PyObject *) new_ts;
+out:
+    return ret;
+}
 
 /*===================================================================
  * SparseTree
