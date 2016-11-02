@@ -30,24 +30,24 @@ NB: below is the initial set of targets for the changes. To list all possible, u
 
 ```
 msprime/trees.py=class SparseTree(object):
-msprime/trees.py:    def get_branch_length(self, u):
-msprime/trees.py:    def get_total_branch_length(self):
-msprime/trees.py:    def get_mrca(self, u, v):
-msprime/trees.py:    def get_tmrca(self, u, v):
-msprime/trees.py:    def get_parent(self, u):
-msprime/trees.py:    def get_children(self, u):
-msprime/trees.py:    def get_time(self, u):
-msprime/trees.py:    def get_population(self, u):
 msprime/trees.py:    def get_root(self):
 msprime/trees.py:    def get_index(self):
 msprime/trees.py:    def get_interval(self):
 msprime/trees.py:    def get_length(self):
 msprime/trees.py:    def get_sample_size(self):
 msprime/trees.py:    def get_num_mutations(self):
-msprime/trees.py:    def get_num_leaves(self, u):
-msprime/trees.py:    def get_num_tracked_leaves(self, u):
 msprime/trees.py:    def get_parent_dict(self):
 msprime/trees.py:    def get_time_dict(self):
+msprime/trees.py:    def get_total_branch_length(self):
+msprime/trees.py:    def get_branch_length(self, u):
+msprime/trees.py:    def get_mrca(self, u, v):
+msprime/trees.py:    def get_tmrca(self, u, v):
+msprime/trees.py:    def get_parent(self, u):
+msprime/trees.py:    def get_children(self, u):
+msprime/trees.py:    def get_time(self, u):
+msprime/trees.py:    def get_population(self, u):
+msprime/trees.py:    def get_num_leaves(self, u):
+msprime/trees.py:    def get_num_tracked_leaves(self, u):
 ```
 
 ### In `TreeSequence`

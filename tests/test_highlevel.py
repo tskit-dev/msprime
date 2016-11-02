@@ -1393,6 +1393,36 @@ class TestSparseTree(HighLevelTestCase):
         self.assertGreater(bl, 0)
         self.assertEqual(t1.get_total_branch_length(), bl)
 
+    def test_apis(self):
+        # tree properties
+        t1 = self.get_tree()
+        self.assertEqual(t1.get_root(), t1.root)
+        self.assertEqual(t1.get_index(), t1.index)
+        self.assertEqual(t1.get_interval(), t1.interval)
+        self.assertEqual(t1.get_length(), t1.length)
+        self.assertEqual(t1.get_sample_size(), t1.sample_size)
+        self.assertEqual(t1.get_num_mutations(), t1.num_mutations)
+        self.assertEqual(t1.get_parent_dict(), t1.parent_dict)
+        self.assertEqual(t1.get_time_dict(), t1.time_dict)
+        self.assertEqual(t1.get_total_branch_length(), t1.total_branch_length)
+        # node properties
+        root = t1.get_root()
+        for node in t1.nodes():
+            if node != root:
+                self.assertEqual(t1.get_parent(node), t1.parent(node))
+                self.assertEqual(t1.get_children(node), t1.children(node))
+                self.assertEqual(t1.get_population(node), t1.population(node))
+                self.assertEqual(t1.get_num_leaves(node), t1.num_leaves(node))
+                self.assertEqual(t1.get_branch_length(node),
+                                 t1.branch_length(node))
+                self.assertEqual(t1.get_num_tracked_leaves(node),
+                                 t1.num_tracked_leaves(node))
+
+        pairs = itertools.islice(itertools.combinations(t1.nodes(), 2), 50)
+        for pair in pairs:
+            self.assertEqual(t1.get_mrca(*pair), t1.mrca(*pair))
+            self.assertEqual(t1.get_tmrca(*pair), t1.tmrca(*pair))
+
 
 class TestRecombinationMap(unittest.TestCase):
     """
