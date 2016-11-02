@@ -1291,6 +1291,29 @@ class TestTreeSequence(HighLevelTestCase):
                     self.verify_subset_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
+    def test_apis(self):
+        for ts in self.get_example_tree_sequences():
+            self.assertEqual(ts.get_ll_tree_sequence(), ts.ll_tree_sequence)
+            self.assertEqual(ts.get_provenance(), ts.provenance)
+            self.assertEqual(ts.get_sample_size(), ts.sample_size)
+            self.assertEqual(ts.get_sequence_length(), ts.sequence_length)
+            self.assertEqual(ts.get_num_records(), ts.num_records)
+            self.assertEqual(ts.get_num_trees(), ts.num_trees)
+            self.assertEqual(ts.get_num_mutations(), ts.num_mutations)
+            self.assertEqual(ts.get_num_nodes(), ts.num_nodes)
+
+            self.assertEqual(ts.get_pairwise_diversity(),
+                             ts.pairwise_diversity())
+            samples = range(ts.get_sample_size() // 2 + 1)
+            self.assertEqual(ts.get_pairwise_diversity(samples),
+                             ts.pairwise_diversity(samples))
+            for s in samples:
+                self.assertEqual(ts.get_time(s), ts.time(s))
+                p = ts.get_population(s)
+                self.assertEqual(p, ts.population(s))
+                self.assertEqual(ts.get_samples(p), ts.samples(p))
+            self.assertEqual(ts.get_samples(), ts.samples())
+
 
 class TestSparseTree(HighLevelTestCase):
     """
