@@ -570,7 +570,39 @@ class SparseTree(object):
             if self.is_internal(v):
                 stack.extend(reversed(self.get_children(v)))
             yield v
+    
+    def _postorder_traversal(self, u):
+        stack = [u]
+        k = NULL_NODE
+        while stack:
+            v = stack[-1]
+            if self.is_internal(v) and v != k:
+                stack.extend(reversed(self.get_children(v)))
+            else:
+                k = self.get_parent(v)
+                yield stack.pop()
 
+    def _inorder_traversal(self, u):
+        stack = [u]
+        k, j = NULL_NODE, NULL_NODE
+        while stack:
+            v = stack.pop()
+            if self.is_internal(v) and v != k and v != j:
+                children = self.get_children(v)
+                j = stack[-1] if stack else NULL_NODE
+                stack.extend([children[1], v, children[0]])
+            else:
+                k = self.get_parent(v)
+                yield v
+    
+    def _levelorder_traversal(self, u):
+        queue = collections.deque([u])
+        while queue:
+            v = queue.popleft()
+            if self.is_internal(v):
+                queue.extend(self.get_children(v))
+            yield v
+    
     def nodes(self, root=None, order="preorder"):
         """
         Returns an iterator over the nodes in this tree. If the root parameter
@@ -579,13 +611,19 @@ class SparseTree(object):
         is provided, iterate over the nodes in required tree traversal order.
 
         :param int root: The root of the subtree we are traversing.
-        :param str order: The traversal ordering. Currently only 'preorder'
-            is supported.
+        :param str order: The traversal ordering. Currently 'preorder', 'inorder',
+            'postorder' and 'levelorder' ('breadthfirst') are supported.
         :rtype: iterator
         """
         u = self.get_root() if root is None else root
         if order == "preorder":
             return self._preorder_traversal(u)
+        elif order == "postorder":
+            return self._postorder_traversal(u)
+        elif order == "inorder":
+            return self._inorder_traversal(u)
+        elif order == "levelorder" or order == "breadthfirst":
+            return self._levelorder_traversal(u)
         else:
             raise ValueError(
                 "Traversal ordering '{}' not supported".format(order))
