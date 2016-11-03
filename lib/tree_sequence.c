@@ -1689,7 +1689,8 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     uint32_t *I = self->trees.indexes.insertion_order;
     uint32_t *O = self->trees.indexes.removal_order;
     size_t M = self->num_records;
-    size_t j, k, l, h, num_start_records, num_end_records, num_squashed_records;
+    size_t j, k, l, h, num_start_records, num_end_records, num_squashed_records,
+           in_count, out_count;
     uint32_t u, v, w, x, c, num_mapped_children, subset_root;
     size_t max_subset_child_nodes, max_subset_records;
     size_t mapped_children_mem_offset = 0;
@@ -1699,6 +1700,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     coalescence_record_t *cr;
     mutation_t *mut;
     double right;
+    int first_tree;
 
     if (num_samples < 2) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -1759,16 +1761,20 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     j = 0;
     k = 0;
     l = 0;
+    first_tree = 1;
     while (j < M) {
         x = self->trees.records.left[I[j]];
         num_start_records = 0;
         num_end_records = 0;
+        out_count = 0;
+        in_count = 0;
 
         /* Records out */
         while (self->trees.records.right[O[k]] == x) {
             h = O[k];
             k++;
             u = self->trees.records.node[h];
+            out_count += num_children[u] - 1;
             for (c = 0; c < num_children[u]; c++) {
                 parent[children[u][c]] = MSP_NULL_NODE;
             }
@@ -1776,8 +1782,11 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
             children[u] = NULL;
             if (mapping[u] != MSP_NULL_NODE) {
                 if (mapping[u] == u) {
-                    assert(num_end_records < self->num_nodes);
-                    end_records[num_end_records] = u;
+                    /* We take all of these mod the maximum to avoid memory
+                     * corruption on errors. The node counts should find all
+                     * bad tree topologies.
+                     * */
+                    end_records[num_end_records % self->num_nodes] = u;
                     num_end_records++;
                 }
                 /* At least one path goes through u. Follow this path until we either
@@ -1793,8 +1802,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
                      * to terminate a record here since this coalescence no longer
                      * exists in the subset tree.
                      */
-                    assert(num_end_records < self->num_nodes);
-                    end_records[num_end_records] = u;
+                    end_records[num_end_records % self->num_nodes] = u;
                     num_end_records++;
                     w = MSP_NULL_NODE;
                     for (c = 0; c < num_children[u]; c++) {
@@ -1807,11 +1815,9 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
                         /* There is still more than one path going through this node
                          * and so we must start a new record from here.
                          */
-                        assert(num_end_records < self->num_nodes);
-                        end_records[num_end_records] = u;
+                        end_records[num_end_records % self->num_nodes] = u;
                         num_end_records++;
-                        assert(num_start_records < self->num_nodes);
-                        start_records[num_start_records] = u;
+                        start_records[num_start_records % self->num_nodes] = u;
                         num_start_records++;
                     } else {
                         assert(w != MSP_NULL_NODE);
@@ -1827,11 +1833,9 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
                             /* u is an existing coalescence node where the children
                              * have now changed.
                              */
-                            assert(num_end_records < self->num_nodes);
-                            end_records[num_end_records] = u;
+                            end_records[num_end_records % self->num_nodes] = u;
                             num_end_records++;
-                            assert(num_start_records < self->num_nodes);
-                            start_records[num_start_records] = u;
+                            start_records[num_start_records % self->num_nodes] = u;
                             num_start_records++;
                         }
                     }
@@ -1846,6 +1850,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
             u = self->trees.records.node[h];
             num_children[u] = self->trees.records.num_children[h];
             children[u] = self->trees.records.children[h];
+            in_count += num_children[u] - 1;
             w = MSP_NULL_NODE;
             for (c = 0; c < num_children[u]; c++) {
                 v = children[u][c];
@@ -1856,7 +1861,6 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
             }
             if (w != MSP_NULL_NODE) {
                 if (w == u) {
-                    assert(num_start_records < self->num_nodes);
                     start_records[num_start_records] = u;
                     num_start_records++;
                 }
@@ -1874,8 +1878,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
                      * until we intersect with another path, setting the mapping to
                      * its new value.
                      */
-                    assert(num_start_records < self->num_nodes);
-                    start_records[num_start_records] = u;
+                    start_records[num_start_records % self->num_nodes] = u;
                     num_start_records++;
                     v = mapping[u];
                     w = u;
@@ -1887,14 +1890,26 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
                         /* u is an existing coalescence node where the children have
                          * now changed.
                          */
-                        assert(num_end_records < self->num_nodes);
-                        end_records[num_end_records] = u;
+                        end_records[num_end_records % self->num_nodes] = u;
                         num_end_records++;
-                        assert(num_start_records < self->num_nodes);
-                        start_records[num_start_records] = u;
+                        start_records[num_start_records % self->num_nodes] = u;
                         num_start_records++;
                     }
                 }
+            }
+        }
+
+        /* Check for errors. */
+        if (first_tree) {
+            if (out_count != 0 || in_count != self->sample_size - 1) {
+                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                goto out;
+            }
+            first_tree = 0;
+        } else {
+            if (in_count != out_count) {
+                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                goto out;
             }
         }
 

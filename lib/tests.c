@@ -2232,6 +2232,21 @@ verify_diff_iter_fails(size_t num_records, coalescence_record_t *records,
 }
 
 static void
+verify_subset_fails(size_t num_records, coalescence_record_t *records, int error_code)
+{
+    int ret;
+    uint32_t samples[] = {0, 1};
+    tree_sequence_t ts, subset;
+
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_get_subset(&ts, samples, 2, &subset);
+    CU_ASSERT_EQUAL_FATAL(ret, error_code);
+
+    tree_sequence_free(&ts);
+}
+
+static void
 test_sparse_tree_errors(void)
 {
     int ret;
@@ -3073,6 +3088,7 @@ test_tree_sequence_iter_failure(void)
             MSP_ERR_BAD_COALESCENCE_RECORDS);
     verify_diff_iter_fails(num_records, records, 0,
             MSP_ERR_BAD_COALESCENCE_RECORDS);
+    verify_subset_fails(num_records, records, MSP_ERR_BAD_COALESCENCE_RECORDS);
     records[5].left = 0;
     verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
 
@@ -3118,6 +3134,7 @@ test_tree_sequence_iter_failure(void)
             MSP_ERR_BAD_COALESCENCE_RECORDS);
     verify_diff_iter_fails(num_records, records, 0,
             MSP_ERR_BAD_COALESCENCE_RECORDS);
+    verify_subset_fails(num_records, records, MSP_ERR_BAD_COALESCENCE_RECORDS);
     records[0].left = 2;
     verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
 
@@ -3126,6 +3143,7 @@ test_tree_sequence_iter_failure(void)
             MSP_ERR_BAD_COALESCENCE_RECORDS);
     verify_diff_iter_fails(num_records - 1, records, 0,
             MSP_ERR_BAD_COALESCENCE_RECORDS);
+    verify_subset_fails(num_records - 1, records, MSP_ERR_BAD_COALESCENCE_RECORDS);
     verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
 
     free_local_records(num_records, records);
