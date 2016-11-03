@@ -1275,7 +1275,6 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertIn(unique[0], [0, 1])
             j += 1
 
-    @unittest.skip("Skipping until bug found")
     def test_subset(self):
         num_mutations = 0
         for ts in self.get_example_tree_sequences():

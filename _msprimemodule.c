@@ -2932,6 +2932,10 @@ TreeSequence_get_subset(TreeSequence *self, PyObject *args, PyObject *kwds)
     err = tree_sequence_get_subset(
         self->tree_sequence, samples, (uint32_t) num_samples, subset_ts);
     if (err != 0) {
+        /* We must free the memory for subset_ts, but not all tree_sequence_free
+         * as it has already been called. */
+        PyMem_Free(subset_ts);
+        subset_ts = NULL;
         handle_library_error(err);
         goto out;
     }
