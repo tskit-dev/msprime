@@ -1291,6 +1291,29 @@ class TestTreeSequence(HighLevelTestCase):
                     self.verify_subset_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
+    def test_apis(self):
+        for ts in self.get_example_tree_sequences():
+            self.assertEqual(ts.get_ll_tree_sequence(), ts.ll_tree_sequence)
+            self.assertEqual(ts.get_provenance(), ts.provenance)
+            self.assertEqual(ts.get_sample_size(), ts.sample_size)
+            self.assertEqual(ts.get_sequence_length(), ts.sequence_length)
+            self.assertEqual(ts.get_num_records(), ts.num_records)
+            self.assertEqual(ts.get_num_trees(), ts.num_trees)
+            self.assertEqual(ts.get_num_mutations(), ts.num_mutations)
+            self.assertEqual(ts.get_num_nodes(), ts.num_nodes)
+
+            self.assertEqual(ts.get_pairwise_diversity(),
+                             ts.pairwise_diversity())
+            samples = range(ts.get_sample_size() // 2 + 1)
+            self.assertEqual(ts.get_pairwise_diversity(samples),
+                             ts.pairwise_diversity(samples))
+            for s in samples:
+                self.assertEqual(ts.get_time(s), ts.time(s))
+                p = ts.get_population(s)
+                self.assertEqual(p, ts.population(s))
+                self.assertEqual(ts.get_samples(p), ts.samples(p))
+            self.assertEqual(ts.get_samples(), ts.samples())
+
 
 class TestSparseTree(HighLevelTestCase):
     """
@@ -1369,6 +1392,37 @@ class TestSparseTree(HighLevelTestCase):
                 bl += t1.get_branch_length(node)
         self.assertGreater(bl, 0)
         self.assertEqual(t1.get_total_branch_length(), bl)
+
+    def test_apis(self):
+        # tree properties
+        t1 = self.get_tree()
+        self.assertEqual(t1.get_root(), t1.root)
+        self.assertEqual(t1.get_index(), t1.index)
+        self.assertEqual(t1.get_interval(), t1.interval)
+        self.assertEqual(t1.get_length(), t1.length)
+        self.assertEqual(t1.get_sample_size(), t1.sample_size)
+        self.assertEqual(t1.get_num_mutations(), t1.num_mutations)
+        self.assertEqual(t1.get_parent_dict(), t1.parent_dict)
+        self.assertEqual(t1.get_time_dict(), t1.time_dict)
+        self.assertEqual(t1.get_total_branch_length(), t1.total_branch_length)
+        # node properties
+        root = t1.get_root()
+        for node in t1.nodes():
+            if node != root:
+                self.assertEqual(t1.get_time(node), t1.time(node))
+                self.assertEqual(t1.get_parent(node), t1.parent(node))
+                self.assertEqual(t1.get_children(node), t1.children(node))
+                self.assertEqual(t1.get_population(node), t1.population(node))
+                self.assertEqual(t1.get_num_leaves(node), t1.num_leaves(node))
+                self.assertEqual(t1.get_branch_length(node),
+                                 t1.branch_length(node))
+                self.assertEqual(t1.get_num_tracked_leaves(node),
+                                 t1.num_tracked_leaves(node))
+
+        pairs = itertools.islice(itertools.combinations(t1.nodes(), 2), 50)
+        for pair in pairs:
+            self.assertEqual(t1.get_mrca(*pair), t1.mrca(*pair))
+            self.assertEqual(t1.get_tmrca(*pair), t1.tmrca(*pair))
 
 
 class TestRecombinationMap(unittest.TestCase):

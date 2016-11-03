@@ -212,6 +212,9 @@ class SparseTree(object):
     def __init__(self, ll_sparse_tree):
         self._ll_sparse_tree = ll_sparse_tree
 
+    def branch_length(self, u):
+        return self.get_branch_length(u)
+
     def get_branch_length(self, u):
         """
         Returns the length of the branch (in generations) joining the
@@ -229,6 +232,10 @@ class SparseTree(object):
         """
         return self.get_time(self.get_parent(u)) - self.get_time(u)
 
+    @property
+    def total_branch_length(self):
+        return self.get_total_branch_length()
+
     def get_total_branch_length(self):
         """
         Returns the sum of all the branch lengths in this tree (in
@@ -244,6 +251,9 @@ class SparseTree(object):
         return sum(
             self.get_branch_length(u) for u in self.nodes() if u != root)
 
+    def mrca(self, u, v):
+        return self.get_mrca(u, v)
+
     def get_mrca(self, u, v):
         """
         Returns the most recent common ancestor of the specified nodes.
@@ -254,6 +264,9 @@ class SparseTree(object):
         :rtype: int
         """
         return self._ll_sparse_tree.get_mrca(u, v)
+
+    def tmrca(self, u, v):
+        return self.get_tmrca(u, v)
 
     def get_tmrca(self, u, v):
         """
@@ -269,6 +282,9 @@ class SparseTree(object):
         """
         return self.get_time(self.get_mrca(u, v))
 
+    def parent(self, u):
+        return self.get_parent(u)
+
     def get_parent(self, u):
         """
         Returns the parent of the specified node. Returns
@@ -280,6 +296,9 @@ class SparseTree(object):
         :rtype: int
         """
         return self._ll_sparse_tree.get_parent(u)
+
+    def children(self, u):
+        return self.get_children(u)
 
     def get_children(self, u):
         """
@@ -294,6 +313,9 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_children(u)
 
+    def time(self, u):
+        return self.get_time(u)
+
     def get_time(self, u):
         """
         Returns the time of the specified node in generations. Returns 0 if u
@@ -304,6 +326,9 @@ class SparseTree(object):
         :rtype: float
         """
         return self._ll_sparse_tree.get_time(u)
+
+    def population(self, u):
+        return self.get_population(u)
 
     def get_population(self, u):
         """
@@ -341,6 +366,10 @@ class SparseTree(object):
         """
         return 0 <= u < self.get_sample_size()
 
+    @property
+    def root(self):
+        return self.get_root()
+
     def get_root(self):
         """
         Returns the root of this tree.
@@ -349,6 +378,10 @@ class SparseTree(object):
         :rtype: int
         """
         return self._ll_sparse_tree.get_root()
+
+    @property
+    def index(self):
+        return self.get_index()
 
     def get_index(self):
         """
@@ -360,6 +393,10 @@ class SparseTree(object):
         :rtype: int
         """
         return self._ll_sparse_tree.get_index()
+
+    @property
+    def interval(self):
+        return self.get_interval()
 
     def get_interval(self):
         """
@@ -379,6 +416,10 @@ class SparseTree(object):
             self._ll_sparse_tree.get_left(), self._ll_sparse_tree.get_right()
         )
 
+    @property
+    def length(self):
+        return self.get_length()
+
     def get_length(self):
         """
         Returns the length of the genomic interval that this tree represents.
@@ -390,6 +431,10 @@ class SparseTree(object):
         """
         l, r = self.get_interval()
         return r - l
+
+    @property
+    def sample_size(self):
+        return self.get_sample_size()
 
     def get_sample_size(self):
         """
@@ -417,6 +462,10 @@ class SparseTree(object):
                 "svgwrite is not installed. try `pip install svgwrite`")
         td = TreeDrawer(self, width, height, show_times)
         td.write(path)
+
+    @property
+    def num_mutations(self):
+        return self.get_num_mutations()
 
     def get_num_mutations(self):
         """
@@ -474,6 +523,9 @@ class SparseTree(object):
         else:
             return self._leaf_generator(u)
 
+    def num_leaves(self, u):
+        return self.get_num_leaves(u)
+
     def get_num_leaves(self, u):
         """
         Returns the number of leaves in this tree underneath the specified
@@ -488,6 +540,9 @@ class SparseTree(object):
         :rtype: int
         """
         return self._ll_sparse_tree.get_num_leaves(u)
+
+    def num_tracked_leaves(self, u):
+        return self.get_num_tracked_leaves(u)
 
     def get_num_tracked_leaves(self, u):
         """
@@ -535,6 +590,10 @@ class SparseTree(object):
             raise ValueError(
                 "Traversal ordering '{}' not supported".format(order))
 
+    @property
+    def parent_dict(self):
+        return self.get_parent_dict()
+
     def get_parent_dict(self):
         pi = {}
         for j in range(self.get_sample_size()):
@@ -543,6 +602,10 @@ class SparseTree(object):
                 pi[u] = self.get_parent(u)
                 u = pi[u]
         return pi
+
+    @property
+    def time_dict(self):
+        return self.get_time_dict()
 
     def get_time_dict(self):
         tau = {}
@@ -1252,6 +1315,10 @@ class TreeSequence(object):
     def __init__(self, ll_tree_sequence):
         self._ll_tree_sequence = ll_tree_sequence
 
+    @property
+    def ll_tree_sequence(self):
+        return self.get_ll_tree_sequence()
+
     def get_ll_tree_sequence(self):
         return self._ll_tree_sequence
 
@@ -1304,6 +1371,10 @@ class TreeSequence(object):
                 mutations.append(self.parse_mutation(line))
         self.set_mutations(mutations)
 
+    @property
+    def provenance(self):
+        return self.get_provenance()
+
     def get_provenance(self):
         return self._ll_tree_sequence.get_provenance_strings()
 
@@ -1341,6 +1412,10 @@ class TreeSequence(object):
         """
         self._ll_tree_sequence.dump(path, zlib_compression)
 
+    @property
+    def sample_size(self):
+        return self.get_sample_size()
+
     def get_sample_size(self):
         """
         Returns the sample size for this tree sequence. This is the number
@@ -1350,6 +1425,10 @@ class TreeSequence(object):
         :rtype: int
         """
         return self._ll_tree_sequence.get_sample_size()
+
+    @property
+    def sequence_length(self):
+        return self.get_sequence_length()
 
     def get_sequence_length(self):
         """
@@ -1365,6 +1444,10 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_sequence_length()
 
+    @property
+    def num_records(self):
+        return self.get_num_records()
+
     def get_num_records(self):
         """
         Returns the number of coalescence records in this tree sequence.
@@ -1375,6 +1458,10 @@ class TreeSequence(object):
         :rtype: int
         """
         return self._ll_tree_sequence.get_num_records()
+
+    @property
+    def num_trees(self):
+        return self.get_num_trees()
 
     def get_num_trees(self):
         """
@@ -1387,6 +1474,10 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_num_trees()
 
+    @property
+    def num_mutations(self):
+        return self.get_num_mutations()
+
     def get_num_mutations(self):
         """
         Returns the number of mutations in this tree sequence. See
@@ -1397,6 +1488,10 @@ class TreeSequence(object):
         :rtype: int
         """
         return self._ll_tree_sequence.get_num_mutations()
+
+    @property
+    def num_nodes(self):
+        return self.get_num_nodes()
 
     def get_num_nodes(self):
         """
@@ -1658,6 +1753,9 @@ class TreeSequence(object):
         """
         self._ll_tree_sequence.set_mutations(mutations)
 
+    def pairwise_diversity(self, samples=None):
+        return self.get_pairwise_diversity(samples)
+
     def get_pairwise_diversity(self, samples=None):
         """
         Returns the value of pi, the pairwise nucleotide site diversity.
@@ -1675,6 +1773,9 @@ class TreeSequence(object):
             leaves = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(leaves)
 
+    def time(self, sample):
+        return self.get_time(sample)
+
     def get_time(self, sample):
         """
         Returns the time that the specified sample ID was sampled at.
@@ -1687,6 +1788,9 @@ class TreeSequence(object):
             raise ValueError("Sample ID out of bounds")
         _, time = self._ll_tree_sequence.get_sample(sample)
         return time
+
+    def population(self, sample):
+        return self.get_population(sample)
 
     def get_population(self, sample):
         """
@@ -1702,6 +1806,9 @@ class TreeSequence(object):
             raise ValueError("Sample ID out of bounds")
         population, _ = self._ll_tree_sequence.get_sample(sample)
         return population
+
+    def samples(self, population_id=None):
+        return self.get_samples(population_id)
 
     def get_samples(self, population_id=None):
         """
