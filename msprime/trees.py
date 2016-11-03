@@ -570,7 +570,7 @@ class SparseTree(object):
             if self.is_internal(v):
                 stack.extend(reversed(self.get_children(v)))
             yield v
-    
+
     def _postorder_traversal(self, u):
         stack = [u]
         k = NULL_NODE
@@ -594,7 +594,7 @@ class SparseTree(object):
             else:
                 k = self.get_parent(v)
                 yield v
-    
+
     def _levelorder_traversal(self, u):
         queue = collections.deque([u])
         while queue:
@@ -602,7 +602,7 @@ class SparseTree(object):
             if self.is_internal(v):
                 queue.extend(self.get_children(v))
             yield v
-    
+
     def nodes(self, root=None, order="preorder"):
         """
         Returns an iterator over the nodes in this tree. If the root parameter

@@ -86,14 +86,45 @@ class PythonSparseTree(object):
             for c in self.children[u]:
                 self._preorder_nodes(c, l)
 
+    def _postorder_nodes(self, u, l):
+        if u in self.children:
+            for c in self.children[u]:
+                self._postorder_nodes(c, l)
+        l.append(u)
+
+    def _inorder_nodes(self, u, l):
+        if u in self.children:
+            self._inorder_nodes(self.children[u][0], l)
+            l.append(u)
+            self._inorder_nodes(self.children[u][1], l)
+        else:
+            l.append(u)
+
+    def _levelorder_nodes(self, u, l, level):
+        l[level].append(u) if level < len(l) else l.append([u])
+        if u in self.children:
+            for c in self.children[u]:
+                self._levelorder_nodes(c, l, level + 1)
+
     def nodes(self, root=None, order="preorder"):
         u = root
+        l = []
         if root is None:
             u = self.root
         if order == "preorder":
-            l = []
             self._preorder_nodes(u, l)
             return iter(l)
+        elif order == "inorder":
+            self._inorder_nodes(u, l)
+            return iter(l)
+        elif order == "postorder":
+            self._postorder_nodes(u, l)
+            return iter(l)
+        elif order == "levelorder" or order == "breadthfirst":
+            # Returns nodes in their respective levels
+            # Nested list comprehension flattens l in order
+            self._levelorder_nodes(u, l, 0)
+            return iter([i for level in l for i in level])
         else:
             raise ValueError("order not supported")
 

@@ -1380,7 +1380,21 @@ class TestSparseTree(HighLevelTestCase):
             list(t1.nodes()),
             list(t1.nodes(t1.get_root(), "preorder")))
         for u in t1.nodes():
-            self.assertEqual(list(t1.nodes(u)), list(t2.nodes(u)))
+            self.assertEqual(list(t1.nodes(u)),
+                             list(t2.nodes(u)))
+        orders = ["inorder", "postorder", "levelorder", "breadthfirst"]
+        for test_order in orders:
+            self.assertEqual(
+                list(t1.nodes(order=test_order)),
+                list(t1.nodes(t1.get_root(), order=test_order)))
+            self.assertEqual(
+                list(t1.nodes(order=test_order)),
+                list(t1.nodes(t1.get_root(), test_order)))
+            self.assertEqual(list(t1.nodes(order=test_order)),
+                             list(t2.nodes(order=test_order)))
+            for u in t1.nodes():
+                self.assertEqual(list(t1.nodes(u, test_order)),
+                                 list(t2.nodes(u, test_order)))
         self.assertRaises(ValueError, t1.nodes, None, "bad order")
 
     def test_total_branch_length(self):
