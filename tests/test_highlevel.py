@@ -1409,6 +1409,7 @@ class TestSparseTree(HighLevelTestCase):
         root = t1.get_root()
         for node in t1.nodes():
             if node != root:
+                self.assertEqual(t1.get_time(node), t1.time(node))
                 self.assertEqual(t1.get_parent(node), t1.parent(node))
                 self.assertEqual(t1.get_children(node), t1.children(node))
                 self.assertEqual(t1.get_population(node), t1.population(node))
