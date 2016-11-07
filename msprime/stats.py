@@ -22,6 +22,7 @@ Module responsible for computing various statistics on tree sequences.
 from __future__ import division
 from __future__ import print_function
 
+import threading
 import struct
 import sys
 
@@ -65,6 +66,9 @@ class LdCalculator(object):
         item_size = struct.calcsize('d')
         self._buffer = bytearray(
             tree_sequence.get_num_mutations() * item_size)
+        # To protect low-level C code, only one method may execute on the
+        # low-level objects at one time.
+        self._instance_lock = threading.Lock()
 
     def get_r2(self, a, b):
         """
@@ -79,7 +83,8 @@ class LdCalculator(object):
             ``a`` and ``b``.
         :rtype: float
         """
-        return self._ll_ld_calculator.get_r2(a, b)
+        with self._instance_lock:
+            return self._ll_ld_calculator.get_r2(a, b)
 
     def get_r2_array(
             self, a, direction=1, max_mutations=None, max_distance=None):
@@ -127,9 +132,10 @@ class LdCalculator(object):
             max_mutations = -1
         if max_distance is None:
             max_distance = sys.float_info.max
-        num_values = self._ll_ld_calculator.get_r2_array(
-            self._buffer, a, direction=direction,
-            max_mutations=max_mutations, max_distance=max_distance)
+        with self._instance_lock:
+            num_values = self._ll_ld_calculator.get_r2_array(
+                self._buffer, a, direction=direction,
+                max_mutations=max_mutations, max_distance=max_distance)
         return np.frombuffer(self._buffer, "d", num_values)
 
     def get_r2_matrix(self):
