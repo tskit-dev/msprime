@@ -20,6 +20,7 @@ import matplotlib.collections
 
 import tqdm
 import threading
+import multiprocessing
 
 
 def segregating_sites_example(n, theta, num_replicates):
@@ -294,6 +295,48 @@ def threads_example():
         "Found LD sites for", len(results), "doubleton mutations out of",
         ts.get_num_mutations())
 
+
+def simulation_threads_example(n, num_replicates):
+    t_mrca = np.zeros(num_replicates)
+    num_threads = min(num_replicates, multiprocessing.cpu_count())
+    seeds = np.random.randint(0, 2**32 - 1, num_threads)
+    chunk_size = num_replicates // num_threads
+    progress_bar = tqdm.tqdm(total=num_replicates, ncols=90, smoothing=0, unit_scale=True)
+
+    def thread_worker(thread_index):
+        start = thread_index * chunk_size
+        remainder = 0
+        if thread_index == num_threads - 1:
+            remainder = num_replicates % num_threads
+        replicates = msprime.simulate(
+            Ne=0.5,
+            sample_size=n,
+            num_replicates=chunk_size + remainder,
+            random_seed=seeds[thread_index])
+        for j, tree_sequence in enumerate(replicates, start):
+            tree = next(tree_sequence.trees())
+            t_mrca[j] = tree.get_time(tree.get_root())
+            progress_bar.update()
+
+    threads = [
+        threading.Thread(target=thread_worker, args=(j,))
+        for j in range(num_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    progress_bar.close()
+
+    t_mrca_mean_a = 2 * (1 - 1 / n)
+    t_mrca_var_a = (
+        8 * np.sum(1 / np.arange(2, n + 1)**2) - 4 * (1 - 1 / n)**2)
+    print("              mean              variance")
+    print("Observed      {:.5f}\t\t{:.5f}".format(
+        np.mean(t_mrca), np.var(t_mrca)))
+    print("Analytical    {:.5f}\t\t{:.5f}".format(
+        t_mrca_mean_a, t_mrca_var_a))
+
+
 def set_mutations_example():
     tree_sequence = msprime.simulate(
         sample_size=10000, Ne=1e4, length=1e7, recombination_rate=2e-8,
@@ -345,10 +388,11 @@ if __name__ == "__main__":
     # set_mutations_example()
     # variants_example()
     # variant_matrix_example()
-    historical_samples_example()
+    # historical_samples_example()
     # segregating_sites_example(10, 5, 100000)
     # migration_example()
     # out_of_africa()
     # variable_recomb_example()
     # ld_matrix_example()
     # threads_example()
+    simulation_threads_example(10**4, 1000000)

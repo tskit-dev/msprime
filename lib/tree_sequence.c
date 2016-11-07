@@ -330,7 +330,7 @@ tree_sequence_free(tree_sequence_t *self)
 int
 tree_sequence_increment_refcount(tree_sequence_t *self)
 {
-    /* TODO make this threadsafe. */
+    /* We are depending on higher level code to ensure this is threadsafe */
     self->refcount++;
     return 0;
 }
@@ -338,8 +338,9 @@ tree_sequence_increment_refcount(tree_sequence_t *self)
 int
 tree_sequence_decrement_refcount(tree_sequence_t *self)
 {
-    /* TODO make this threadsafe. */
+    /* We are depending on higher level code to ensure this is threadsafe */
     self->refcount--;
+    assert(self->refcount >= 0);
     return 0;
 }
 

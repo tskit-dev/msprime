@@ -1153,7 +1153,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+    Py_BEGIN_ALLOW_THREADS
     sim_ret = msp_initialise(self->sim);
+    Py_END_ALLOW_THREADS
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -1817,7 +1819,9 @@ Simulator_reset(Simulator *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
+    Py_BEGIN_ALLOW_THREADS
     status = msp_reset(self->sim);
+    Py_END_ALLOW_THREADS
     if (status < 0) {
         handle_library_error(status);
         goto out;
@@ -2378,8 +2382,10 @@ TreeSequence_create(TreeSequence *self, PyObject *args)
         goto out;
     }
     memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
+    Py_BEGIN_ALLOW_THREADS
     err = tree_sequence_create(self->tree_sequence, sim->sim,
             recomb_map->recomb_map, Ne);
+    Py_END_ALLOW_THREADS
     if (err != 0) {
         PyMem_Free(self->tree_sequence);
         self->tree_sequence = NULL;
@@ -2572,19 +2578,23 @@ TreeSequence_generate_mutations(TreeSequence *self,
         PyErr_NoMemory();
         goto out;
     }
+    Py_BEGIN_ALLOW_THREADS
     err = mutgen_alloc(mutgen, self->tree_sequence, mutation_rate,
             random_generator->rng);
     if (err != 0) {
+        Py_BLOCK_THREADS
         handle_library_error(err);
         goto out;
     }
     err = mutgen_generate(mutgen);
     if (err != 0) {
+        Py_BLOCK_THREADS
         handle_library_error(err);
         goto out;
     }
     err = tree_sequence_set_mutations(self->tree_sequence, mutgen->num_mutations,
             mutgen->mutations);
+    Py_END_ALLOW_THREADS
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2885,8 +2895,10 @@ TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args,
     if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
         goto out;
     }
+    Py_BEGIN_ALLOW_THREADS
     err = tree_sequence_get_pairwise_diversity(
         self->tree_sequence, samples, (uint32_t) num_samples, &pi);
+    Py_END_ALLOW_THREADS
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2929,8 +2941,10 @@ TreeSequence_get_subset(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     memset(subset_ts, 0, sizeof(tree_sequence_t));
+    Py_BEGIN_ALLOW_THREADS
     err = tree_sequence_get_subset(
         self->tree_sequence, samples, (uint32_t) num_samples, subset_ts);
+    Py_END_ALLOW_THREADS
     if (err != 0) {
         /* We must free the memory for subset_ts, but not all tree_sequence_free
          * as it has already been called. */
@@ -3174,15 +3188,19 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
+    Py_BEGIN_ALLOW_THREADS
     err = sparse_tree_alloc(self->sparse_tree, tree_sequence->tree_sequence,
            flags);
+    Py_END_ALLOW_THREADS
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     if (flags & MSP_LEAF_COUNTS) {
+        Py_BEGIN_ALLOW_THREADS
         err = sparse_tree_set_tracked_leaves(self->sparse_tree, num_tracked_leaves,
                 tracked_leaves);
+        Py_END_ALLOW_THREADS
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -3427,8 +3445,10 @@ SparseTree_get_mrca(SparseTree *self, PyObject *args)
     if (SparseTree_check_bounds(self, v)) {
         goto out;
     }
+    Py_BEGIN_ALLOW_THREADS
     err = sparse_tree_get_mrca(self->sparse_tree, (uint32_t) u,
             (uint32_t) v, &mrca);
+    Py_END_ALLOW_THREADS
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3985,12 +4005,15 @@ SparseTreeIterator_next(SparseTreeIterator  *self)
         goto out;
     }
 
+    Py_BEGIN_ALLOW_THREADS
     if (self->first) {
         err = sparse_tree_first(self->sparse_tree->sparse_tree);
         self->first = 0;
     } else {
         err = sparse_tree_next(self->sparse_tree->sparse_tree);
     }
+    Py_END_ALLOW_THREADS
+
     if (err < 0) {
         handle_library_error(err);
         goto out;
