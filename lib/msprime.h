@@ -27,7 +27,6 @@
 #include <stdio.h>
 
 #include <gsl/gsl_rng.h>
-#include <pthread.h>
 
 #include "err.h"
 #include "avl.h"
@@ -410,8 +409,6 @@ typedef struct {
     size_t num_mutations;
     int tree_changed;
     tree_sequence_t *tree_sequence;
-    /* Only one method on a ld_calc can be in use at a given time */
-    pthread_mutex_t work_mutex;
 } ld_calc_t;
 
 typedef struct {
