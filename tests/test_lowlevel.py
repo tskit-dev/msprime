@@ -1921,6 +1921,27 @@ class TestTreeSequence(LowLevelTestCase):
         ts.set_mutations([])
         self.assertEqual(ts.get_mutations(), [])
 
+    def test_refcounts(self):
+        ts = self.get_tree_sequence()
+        self.assertEqual(ts.get_reference_count(), 0)
+        classes = [
+            (_msprime.SparseTree, [], 1),
+            (_msprime.HaplotypeGenerator, [], 1),
+            (_msprime.VariantGenerator, [bytearray(ts.get_sample_size())], 1),
+            (_msprime.VcfConverter, [], 1),
+            (_msprime.LdCalculator, [], 2),
+        ]
+        for cls, args, num_trees in classes:
+            objs = []
+            n = 10
+            for j in range(n):
+                objs.append(cls(ts, *args))
+                self.assertEqual(ts.get_reference_count(), num_trees * (j + 1))
+            for j in range(n):
+                objs[j] = None
+                self.assertEqual(ts.get_reference_count(), num_trees * (n - j - 1))
+            self.assertEqual(ts.get_reference_count(), 0)
+
     def test_constructor_interface(self):
         tree_sequence = _msprime.TreeSequence()
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))

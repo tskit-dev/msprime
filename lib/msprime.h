@@ -270,9 +270,7 @@ typedef struct {
     size_t num_mutations;
     coalescence_record_t returned_record;
     /* The number of trees referencing this tree sequence.
-     * This is NOT threadsafe! TODO when we want to have trees
-     * in many threads referencing a single tree sequence we will
-     * need to place a mutex of some sort around this.
+     * This is NOT threadsafe!
      */
     int refcount;
 } tree_sequence_t;
@@ -499,6 +497,7 @@ int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_increment_refcount(tree_sequence_t *self);
 int tree_sequence_decrement_refcount(tree_sequence_t *self);
+int tree_sequence_get_refcount(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);

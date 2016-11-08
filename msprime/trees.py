@@ -28,6 +28,7 @@ import json
 import math
 import random
 import sys
+import threading
 
 try:
     import svgwrite
@@ -1352,6 +1353,9 @@ class TreeSequence(object):
 
     def __init__(self, ll_tree_sequence):
         self._ll_tree_sequence = ll_tree_sequence
+        # We must grab this instance lock any time we write to the underlying
+        # low-level object and where we allow threads to execute.
+        self._instance_lock = threading.Lock()
 
     @property
     def ll_tree_sequence(self):
@@ -1685,14 +1689,18 @@ class TreeSequence(object):
         kwargs = {"flags": flags}
         if tracked_leaves is not None:
             kwargs["tracked_leaves"] = tracked_leaves
-        ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence, **kwargs)
+        # We need to grab an instance lock here because the low-level C code
+        # increments a reference counter on the tree sequence object.
+        with self._instance_lock:
+            ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence, **kwargs)
         iterator = _msprime.SparseTreeIterator(ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree)
         for _ in iterator:
             yield sparse_tree
         # Free up the underlying tree to so that we can call set_mutations.
         # Any attempts to access the tree outside of the loop will fail.
-        ll_sparse_tree.free()
+        with self._instance_lock:
+            ll_sparse_tree.free()
 
     def haplotypes(self):
         """

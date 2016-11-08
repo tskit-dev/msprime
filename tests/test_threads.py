@@ -29,17 +29,31 @@ import random
 import numpy as np
 
 import msprime
+import _msprime
 
 
 def run_threads(worker, num_threads):
+    _exception_occured = [False for _ in range(num_threads)]
+
+    def local_worker(thread_index, results):
+        try:
+            worker(thread_index, results)
+        except Exception as e:
+            _exception_occured[thread_index] = True
+            raise e
+
+    # TODO remove the mandatory results array here and just use local
+    # variables instead.
     results = [None for _ in range(num_threads)]
     threads = [
-        threading.Thread(target=worker, args=(j, results))
+        threading.Thread(target=local_worker, args=(j, results))
         for j in range(num_threads)]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
+    if any(_exception_occured):
+        raise Exception("Error occured in tests!!")
     return results
 
 
@@ -170,3 +184,145 @@ class TestLdCalculatorReplicates(unittest.TestCase):
         results = run_threads(worker, m)
         for j in range(m):
             self.assertEqual(results[j][0], m - j - 1)
+
+
+class TestTreeSequenceThreads(unittest.TestCase):
+    """
+    Tests to ensure that we obtain consistent results when running tree
+    sequence methods with many threads.
+    """
+    num_threads = 15
+
+    def get_tree_sequence(self):
+        ts = msprime.simulate(
+            50, mutation_rate=10, recombination_rate=5, random_seed=10)
+        self.assertGreater(ts.num_mutations, 0)
+        self.assertGreater(ts.num_trees, 1)
+        return ts
+
+    def test_set_mutations(self):
+        ts = msprime.simulate(10)
+        new_mutations = [(j / ts.sample_size, j) for j in range(ts.sample_size)]
+
+        def worker(thread_index, unused_arg=None):
+            ts.set_mutations(new_mutations)
+        run_threads(worker, self.num_threads)
+        self.assertEqual(
+            [(mut.position, mut.node) for mut in ts.mutations()], new_mutations)
+
+    def test_haplotypes(self):
+        ts = self.get_tree_sequence()
+        H = list(ts.haplotypes())
+
+        def worker(thread_index, results):
+            results[thread_index] = list(ts.haplotypes())
+
+        results = run_threads(worker, self.num_threads)
+        self.assertEqual(len(H), ts.sample_size)
+        self.assertEqual(len(H[0]), ts.num_mutations)
+        for result in results:
+            self.assertEqual(H, result)
+
+    def test_trees(self):
+        ts = self.get_tree_sequence()
+        T = []
+        for t in ts.trees():
+            T.append(t.parent_dict)
+
+        def worker(thread_index, results):
+            trees = []
+            for t in ts.trees():
+                trees.append(t.parent_dict)
+            results[thread_index] = trees
+
+        results = run_threads(worker, self.num_threads)
+        for result in results:
+            self.assertEqual(T, result)
+
+    def test_variants(self):
+        ts = self.get_tree_sequence()
+        V = np.zeros((ts.num_mutations, ts.sample_size), dtype=int)
+        for variant in ts.variants():
+            V[variant.index] = variant.genotypes
+
+        def worker(thread_index, results):
+            variants = np.zeros((ts.num_mutations, ts.sample_size), dtype=int)
+            for variant in ts.variants():
+                variants[variant.index] = variant.genotypes
+            results[thread_index] = variants
+
+        results = run_threads(worker, self.num_threads)
+        for result in results:
+            self.assertTrue(np.all(result == V))
+
+
+class TestSparseTreeThreads(unittest.TestCase):
+    """
+    Test that the sparse tree can be used across multiple threads.
+    """
+    num_threads = 20
+
+    def test_getters(self):
+        ts = msprime.simulate(10, mutation_rate=5)
+        t1 = next(ts.trees())
+
+        def worker(thread_index, results):
+            t2 = next(ts.trees())
+            # t2 is a thread private copy of the same tree.
+            self.assertIsNot(t1, t2)
+            self.assertEqual(t1.root, t2.root)
+            self.assertEqual(t1.time(t1.root), t2.time(t2.root))
+            self.assertEqual(list(t1.nodes()), list(t2.nodes()))
+            for j in range(ts.sample_size):
+                self.assertEqual(t1.mrca(0, j), t2.mrca(0, j))
+                self.assertEqual(t1.tmrca(0, j), t2.tmrca(0, j))
+
+        run_threads(worker, self.num_threads)
+
+    def test_set_mutations(self):
+        ts = msprime.simulate(10, recombination_rate=5, mutation_rate=5)
+        self.assertGreater(ts.num_trees, 2)
+        tree = next(ts.trees())
+
+        def worker(thread_index, results):
+            mutations = [(j * 0.1, j) for j in range(5)]
+            self.assertRaises(_msprime.LibraryError, ts.set_mutations, mutations)
+            j = 0
+            for t in ts.trees():
+                j += 1
+            self.assertEqual(j, ts.num_trees)
+
+        run_threads(worker, self.num_threads)
+
+        del tree
+        mutations = [(j * 0.1, j) for j in range(5)]
+        ts.set_mutations(mutations)
+        self.assertEqual(
+            mutations, [(mut.position, mut.node) for mut in ts.mutations()])
+
+    def test_refcounts(self):
+        ts = msprime.simulate(10, recombination_rate=5, mutation_rate=5)
+        self.assertGreater(ts.num_trees, 2)
+        ll_ts = ts.get_ll_tree_sequence()
+        self.assertEqual(ll_ts.get_reference_count(), 0)
+        num_loops = 100
+
+        def worker(thread_index, results):
+            n = 10
+            for _ in range(num_loops):
+                trees = [next(ts.trees()) for _ in range(n)]
+                ld_calcs = [msprime.LdCalculator(ts) for _ in range(n)]
+                ld_calcs = []
+                j = 0
+                for t in ts.trees():
+                    j += 1
+                self.assertEqual(j, ts.num_trees)
+                for u in ts.trees():
+                    if u.index == 2:
+                        break
+                del trees
+                del ld_calcs
+                del t
+                del u
+        run_threads(worker, self.num_threads)
+        self.assertEqual(ll_ts.get_reference_count(), 0)
