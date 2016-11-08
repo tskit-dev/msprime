@@ -2334,7 +2334,9 @@ static void
 TreeSequence_dealloc(TreeSequence* self)
 {
     if (self->tree_sequence != NULL) {
+        Py_BEGIN_ALLOW_THREADS
         tree_sequence_free(self->tree_sequence);
+        Py_END_ALLOW_THREADS
         PyMem_Free(self->tree_sequence);
         self->tree_sequence = NULL;
     }
@@ -3123,7 +3125,9 @@ static void
 SparseTree_dealloc(SparseTree* self)
 {
     if (self->sparse_tree != NULL) {
+        Py_BEGIN_ALLOW_THREADS
         sparse_tree_free(self->sparse_tree);
+        Py_END_ALLOW_THREADS
         PyMem_Free(self->sparse_tree);
         self->sparse_tree = NULL;
     }
