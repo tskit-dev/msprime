@@ -344,6 +344,12 @@ tree_sequence_decrement_refcount(tree_sequence_t *self)
     return 0;
 }
 
+int
+tree_sequence_get_refcount(tree_sequence_t *self)
+{
+    return self->refcount;
+}
+
 int WARN_UNUSED
 tree_sequence_add_provenance_string(tree_sequence_t *self,
         const char *provenance_string)

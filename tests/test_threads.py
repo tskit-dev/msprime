@@ -29,17 +29,31 @@ import random
 import numpy as np
 
 import msprime
+import _msprime
 
 
 def run_threads(worker, num_threads):
+    _exception_occured = [False for _ in range(num_threads)]
+
+    def local_worker(thread_index, results):
+        try:
+            worker(thread_index, results)
+        except Exception as e:
+            _exception_occured[thread_index] = True
+            raise e
+
+    # TODO remove the mandatory results array here and just use local
+    # variables instead.
     results = [None for _ in range(num_threads)]
     threads = [
-        threading.Thread(target=worker, args=(j, results))
+        threading.Thread(target=local_worker, args=(j, results))
         for j in range(num_threads)]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
+    if any(_exception_occured):
+        raise Exception("Error occured in tests!!")
     return results
 
 
@@ -264,3 +278,51 @@ class TestSparseTreeThreads(unittest.TestCase):
                 self.assertEqual(t1.tmrca(0, j), t2.tmrca(0, j))
 
         run_threads(worker, self.num_threads)
+
+    def test_set_mutations(self):
+        ts = msprime.simulate(10, recombination_rate=5, mutation_rate=5)
+        self.assertGreater(ts.num_trees, 2)
+        tree = next(ts.trees())
+
+        def worker(thread_index, results):
+            mutations = [(j * 0.1, j) for j in range(5)]
+            self.assertRaises(_msprime.LibraryError, ts.set_mutations, mutations)
+            j = 0
+            for t in ts.trees():
+                j += 1
+            self.assertEqual(j, ts.num_trees)
+
+        run_threads(worker, self.num_threads)
+
+        del tree
+        mutations = [(j * 0.1, j) for j in range(5)]
+        ts.set_mutations(mutations)
+        self.assertEqual(
+            mutations, [(mut.position, mut.node) for mut in ts.mutations()])
+
+    def test_refcounts(self):
+        ts = msprime.simulate(10, recombination_rate=5, mutation_rate=5)
+        self.assertGreater(ts.num_trees, 2)
+        ll_ts = ts.get_ll_tree_sequence()
+        self.assertEqual(ll_ts.get_reference_count(), 0)
+        num_loops = 100
+
+        def worker(thread_index, results):
+            n = 10
+            for _ in range(num_loops):
+                trees = [next(ts.trees()) for _ in range(n)]
+                ld_calcs = [msprime.LdCalculator(ts) for _ in range(n)]
+                ld_calcs = []
+                j = 0
+                for t in ts.trees():
+                    j += 1
+                self.assertEqual(j, ts.num_trees)
+                for u in ts.trees():
+                    if u.index == 2:
+                        break
+                del trees
+                del ld_calcs
+                del t
+                del u
+        run_threads(worker, self.num_threads)
+        self.assertEqual(ll_ts.get_reference_count(), 0)

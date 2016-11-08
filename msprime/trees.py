@@ -1699,7 +1699,8 @@ class TreeSequence(object):
             yield sparse_tree
         # Free up the underlying tree to so that we can call set_mutations.
         # Any attempts to access the tree outside of the loop will fail.
-        ll_sparse_tree.free()
+        with self._instance_lock:
+            ll_sparse_tree.free()
 
     def haplotypes(self):
         """

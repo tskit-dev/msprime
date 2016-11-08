@@ -2833,6 +2833,21 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_reference_count(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    int refcount;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    refcount = tree_sequence_get_refcount(self->tree_sequence);
+    ret = Py_BuildValue("i", refcount);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_num_nodes(TreeSequence  *self)
 {
     PyObject *ret = NULL;
@@ -3029,6 +3044,8 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
         "Returns the sample size" },
+    {"get_reference_count", (PyCFunction) TreeSequence_get_reference_count, METH_NOARGS,
+        "Returns the number of extant trees referencing this tree sequence." },
     {"get_sample", (PyCFunction) TreeSequence_get_sample, METH_VARARGS,
         "Returns a dictionary describing the specified sample." },
     {"get_pairwise_diversity",
@@ -3125,9 +3142,11 @@ static void
 SparseTree_dealloc(SparseTree* self)
 {
     if (self->sparse_tree != NULL) {
-        Py_BEGIN_ALLOW_THREADS
+        /* Cannot allow threads here because we need to decrement the
+         * reference count in the parent tree sequence. We cannot
+         * protect this with an instance lock from the high-level
+         * API. */
         sparse_tree_free(self->sparse_tree);
-        Py_END_ALLOW_THREADS
         PyMem_Free(self->sparse_tree);
         self->sparse_tree = NULL;
     }
@@ -4733,6 +4752,9 @@ LdCalculator_init(LdCalculator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     memset(self->ld_calc, 0, sizeof(ld_calc_t));
+    /* Cannot allow threads here because we are updating the
+     * tree sequence referenc count
+     */
     err = ld_calc_alloc(self->ld_calc, self->tree_sequence->tree_sequence);
     if (err != 0) {
         handle_library_error(err);
@@ -5116,5 +5138,3 @@ init_msprime(void)
     return module;
 #endif
 }
-
-
