@@ -1006,6 +1006,9 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
             goto out;
         }
         status = H5Dclose(dataset_id);
+        if (status < 0) {
+            goto out;
+        }
     }
     status = H5Tclose(vlen_str);
     if (status < 0) {

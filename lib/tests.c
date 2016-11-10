@@ -212,6 +212,7 @@ get_example_tree_sequence(uint32_t sample_size,
         } else if(bottlenecks[j].type == INSTANTANEOUS_BOTTLENECK) {
             ret = msp_add_instantaneous_bottleneck(msp, bottlenecks[j].time,
                     bottlenecks[j].population_id, bottlenecks[j].parameter);
+            CU_ASSERT_EQUAL(ret, 0);
         } else {
             CU_ASSERT_FATAL(0 == 1);
         }
@@ -1336,7 +1337,7 @@ test_large_bottleneck_simulation(void)
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_bottlenecks; j++) {
-        msp_add_simple_bottleneck(msp, bottlenecks[j].time, 0,
+        ret = msp_add_simple_bottleneck(msp, bottlenecks[j].time, 0,
                 bottlenecks[j].parameter);
         CU_ASSERT_EQUAL(ret, 0);
     }
@@ -4056,6 +4057,7 @@ test_records_equivalent(void)
     free_local_records(num_records, records);
 }
 
+
 static void
 test_strerror(void)
 {
@@ -4084,7 +4086,7 @@ test_strerror(void)
     CU_ASSERT(strlen(msg) > 0);
     /* Provoke an IO error */
     f = fopen("/file/does/not/exist", "r");
-    CU_ASSERT_EQUAL(f, NULL);
+    CU_ASSERT_EQUAL_FATAL(f, NULL);
     msg = msp_strerror(MSP_ERR_IO);
     CU_ASSERT_FATAL(msg != NULL);
     CU_ASSERT_STRING_EQUAL(msg, strerror(errno));
