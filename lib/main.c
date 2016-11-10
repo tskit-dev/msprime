@@ -457,11 +457,14 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (strcmp(model, "hudson") == 0) {
         ret = msp_set_model(msp, MSP_MODEL_HUDSON);
     } else if (strcmp(model, "smc") == 0) {
-        msp_set_model(msp, MSP_MODEL_SMC);
+        ret = msp_set_model(msp, MSP_MODEL_SMC);
     } else if (strcmp(model, "smc_prime") == 0) {
-        msp_set_model(msp, MSP_MODEL_SMC_PRIME);
+        ret = msp_set_model(msp, MSP_MODEL_SMC_PRIME);
     } else {
         fatal_error("Unknown simulation model '%s'", model);
+    }
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
     }
     ret = read_population_configuration(msp, config);
     if (ret != 0) {

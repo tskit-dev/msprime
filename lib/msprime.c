@@ -62,88 +62,121 @@ msp_strerror(int err)
 {
     const char *ret = "Unknown error";
 
-    if (err == MSP_ERR_NO_MEMORY) {
-        ret = "Out of memory.";
-    } else if (err == MSP_ERR_GENERIC) {
-        ret = "Generic error; please file a bug report";
-    } else if (err == MSP_ERR_FILE_FORMAT) {
-        ret = "File format error";
-    } else if (err == MSP_ERR_BAD_STATE) {
-        ret = "Bad simulator state. initialise or reset must be called.";
-    } else if (err == MSP_ERR_NEWICK_OVERFLOW) {
-        ret = "Newick string generation overflow.";
-    } else if (err == MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS) {
-        ret = "Demographic events must be time sorted.";
-    } else if (err == MSP_ERR_POPULATION_OVERFLOW) {
-        ret = "Population Overflow occured.";
-    } else if (err == MSP_ERR_LINKS_OVERFLOW) {
-        ret = "Links Overflow occured.";
-    } else if (err == MSP_ERR_OUT_OF_BOUNDS) {
-        ret = "Array index out of bounds";
-    } else if (err == MSP_ERR_BAD_ORDERING) {
-        ret = "Bad record ordering requested";
-    } else if (err == MSP_ERR_BAD_MUTATION) {
-        ret = "Bad mutation provided";
-    } else if (err == MSP_ERR_BAD_PARAM_VALUE) {
-        ret = "Bad parameter value provided";
-    } else if (err == MSP_ERR_UNSUPPORTED_OPERATION) {
-        ret = "Operation cannot be performed in current configuration";
-    } else if (err == MSP_ERR_BAD_POPULATION_CONFIGURATION) {
-        ret = "Bad population configuration provided.";
-    } else if (err == MSP_ERR_BAD_POPULATION_ID) {
-        ret = "Bad population id provided.";
-    } else if (err == MSP_ERR_BAD_MIGRATION_MATRIX) {
-        ret = "Bad migration matrix provided.";
-    } else if (err == MSP_ERR_BAD_MIGRATION_MATRIX_INDEX) {
-        ret = "Bad migration matrix index provided.";
-    } else if (err == MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX) {
-        ret = "Cannot set diagonal migration matrix elements.";
-    } else if (err == MSP_ERR_INFINITE_WAITING_TIME) {
-        ret = "Infinite waiting time until next simulation event.";
-    } else if (err == MSP_ERR_ASSERTION_FAILED) {
-        ret = "Internal error; please file a bug report.";
-    } else if (err == MSP_ERR_SOURCE_DEST_EQUAL) {
-        ret = "Source and destination populations equal.";
-    } else if (err == MSP_ERR_BAD_RECOMBINATION_MAP) {
-        ret = "Bad recombination map provided.";
-    } else if (err == MSP_ERR_BAD_COALESCENCE_RECORDS) {
-        ret = "Bad coalescence records in file.";
-    } else if (err == MSP_ERR_BAD_SAMPLES) {
-        ret = "Bad sample configuration provided.";
-    } else if (err == MSP_ERR_NONBINARY_NEWICK) {
-        ret = "Newick export not supported for non binary trees.";
-    } else if (err == MSP_ERR_FILE_VERSION_TOO_OLD) {
-        ret = "HDF5 file version too old. Please upgrade using the "
-            "'msp upgrade' command";
-    } else if (err == MSP_ERR_FILE_VERSION_TOO_NEW) {
-        ret = "HDF5 file version is too new for this version of msprime. "
-            "Please upgrade msprime to the latest version.";
-    } else if (err == MSP_ERR_NONBINARY_NEWICK) {
-        ret = "Newick export not supported for non binary trees.";
-    } else if (err == MSP_ERR_DUPLICATE_SAMPLE) {
-        ret = "Duplicate value provided in tracked leaf list.";
-    } else if (err == MSP_ERR_REFCOUNT_NONZERO) {
-        ret = "Cannot change the state of the tree sequence when "
-            "other objects reference it. Make sure all trees are freed first.";
-    } else if (err == MSP_ERR_PTHREAD) {
-        ret = "Pthread error. Please file a bug report.";
-    } else if (err == MSP_ERR_BAD_MODEL) {
-        ret = "Model error. Either a bad model, or the requested operation "
-            "is not supported for the current model";
-    } else if (err == MSP_ERR_IO) {
-        if (errno != 0) {
-            ret = strerror(errno);
-        } else {
-            ret = "Unspecified IO error";
-        }
-    } else if (err == MSP_ERR_HDF5) {
-        _hdf5_error[0] = '\0';
-        if (H5Ewalk2(H5E_DEFAULT, H5E_WALK_UPWARD, hdf5_error_walker, NULL)
-                != 0) {
-            ret = "Eek! Error handling HDF5 error.";
-            goto out;
-        }
-        ret = _hdf5_error;
+    switch (err) {
+        case MSP_ERR_NO_MEMORY:
+            ret = "Out of memory.";
+            break;
+        case MSP_ERR_GENERIC:
+            ret = "Generic error; please file a bug report";
+            break;
+        case MSP_ERR_FILE_FORMAT:
+            ret = "File format error";
+            break;
+        case MSP_ERR_BAD_STATE:
+            ret = "Bad simulator state. initialise or reset must be called.";
+            break;
+        case MSP_ERR_NEWICK_OVERFLOW:
+            ret = "Newick string generation overflow.";
+            break;
+        case MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS:
+            ret = "Demographic events must be time sorted.";
+            break;
+        case MSP_ERR_POPULATION_OVERFLOW:
+            ret = "Population Overflow occured.";
+            break;
+        case MSP_ERR_LINKS_OVERFLOW:
+            ret = "Links Overflow occured.";
+            break;
+        case MSP_ERR_OUT_OF_BOUNDS:
+            ret = "Array index out of bounds";
+            break;
+        case MSP_ERR_BAD_ORDERING:
+            ret = "Bad record ordering requested";
+            break;
+        case MSP_ERR_BAD_MUTATION:
+            ret = "Bad mutation provided";
+            break;
+        case MSP_ERR_BAD_PARAM_VALUE:
+            ret = "Bad parameter value provided";
+            break;
+        case MSP_ERR_UNSUPPORTED_OPERATION:
+            ret = "Operation cannot be performed in current configuration";
+            break;
+        case MSP_ERR_BAD_POPULATION_CONFIGURATION:
+            ret = "Bad population configuration provided.";
+            break;
+        case MSP_ERR_BAD_POPULATION_ID:
+            ret = "Bad population id provided.";
+            break;
+        case MSP_ERR_BAD_MIGRATION_MATRIX:
+            ret = "Bad migration matrix provided.";
+            break;
+        case MSP_ERR_BAD_MIGRATION_MATRIX_INDEX:
+            ret = "Bad migration matrix index provided.";
+            break;
+        case MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX:
+            ret = "Cannot set diagonal migration matrix elements.";
+            break;
+        case MSP_ERR_INFINITE_WAITING_TIME:
+            ret = "Infinite waiting time until next simulation event.";
+            break;
+        case MSP_ERR_ASSERTION_FAILED:
+            ret = "Internal error; please file a bug report.";
+            break;
+        case MSP_ERR_SOURCE_DEST_EQUAL:
+            ret = "Source and destination populations equal.";
+            break;
+        case MSP_ERR_BAD_RECOMBINATION_MAP:
+            ret = "Bad recombination map provided.";
+            break;
+        case MSP_ERR_BAD_COALESCENCE_RECORDS:
+            ret = "Bad coalescence records in file.";
+            break;
+        case MSP_ERR_BAD_SAMPLES:
+            ret = "Bad sample configuration provided.";
+            break;
+        case MSP_ERR_NONBINARY_NEWICK:
+            ret = "Newick export not supported for non binary trees.";
+            break;
+        case MSP_ERR_FILE_VERSION_TOO_OLD:
+            ret = "HDF5 file version too old. Please upgrade using the "
+                "'msp upgrade' command";
+            break;
+        case MSP_ERR_FILE_VERSION_TOO_NEW:
+            ret = "HDF5 file version is too new for this version of msprime. "
+                "Please upgrade msprime to the latest version.";
+            break;
+        case MSP_ERR_DUPLICATE_SAMPLE:
+            ret = "Duplicate value provided in tracked leaf list.";
+            break;
+        case MSP_ERR_REFCOUNT_NONZERO:
+            ret = "Cannot change the state of the tree sequence when "
+                "other objects reference it. Make sure all trees are freed first.";
+            break;
+        case MSP_ERR_BAD_MODEL:
+            ret = "Model error. Either a bad model, or the requested operation "
+                "is not supported for the current model";
+            break;
+        case MSP_ERR_IO:
+            if (errno != 0) {
+                ret = strerror(errno);
+            } else {
+                ret = "Unspecified IO error";
+            }
+            break;
+        case MSP_ERR_HDF5:
+            _hdf5_error[0] = '\0';
+            if (H5Ewalk2(H5E_DEFAULT, H5E_WALK_UPWARD, hdf5_error_walker, NULL)
+                    != 0) {
+                ret = "Eek! Error handling HDF5 error.";
+                goto out;
+            }
+            ret = _hdf5_error;
+            break;
+        default:
+            ret = "Error occured generating error string. Please file a bug "
+                "report!";
+            break;
     }
 out:
     return ret;
@@ -909,7 +942,9 @@ msp_verify_segments(msp_t *self)
                 ss = fenwick_get_value(&self->links, u->id);
                 total_links += ss;
                 assert(s == ss);
-                ss = s; /* just to keep compiler happy - see below also */
+                if (s == ss) {
+                    /* do nothing; just to keep compiler happy - see below also */
+                }
                 right = u->right;
                 u = u->next;
             }
@@ -2459,6 +2494,7 @@ msp_add_demographic_event(msp_t *self, double time, demographic_event_t **event)
         self->demographic_events_head = ret_event;
         self->demographic_events_tail = ret_event;
     } else {
+        assert(self->demographic_events_tail != NULL);
         self->demographic_events_tail->next = ret_event;
         self->demographic_events_tail = ret_event;
     }
