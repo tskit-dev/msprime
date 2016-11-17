@@ -405,7 +405,7 @@ tree_sequence_check(tree_sequence_t *self)
                 goto out;
             }
         }
-        if (self->trees.records.num_children[j] < 2) {
+        if (self->trees.records.num_children[j] < 1) {
             goto out;
         }
         left = GSL_MIN(left, self->trees.records.left[j]);
@@ -467,7 +467,7 @@ tree_sequence_init_from_records(tree_sequence_t *self,
     self->num_nodes = 0;
     for (j = 0; j < self->num_records; j++) {
         self->num_child_nodes += records[j].num_children;
-        if (records[j].num_children < 2) {
+        if (records[j].num_children < 1) {
             ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
             goto out;
         }
@@ -3081,18 +3081,18 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         }
     }
 
-    /* Check for errors. */
-    if (first_tree) {
-        if (out_count != 0 || in_count != self->sample_size - 1) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
-            goto out;
-        }
-    } else {
-        if (in_count != out_count) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
-            goto out;
-        }
-    }
+    /* /1* Check for errors. *1/ */
+    /* if (first_tree) { */
+    /*     if (out_count != 0 || in_count != self->sample_size - 1) { */
+    /*         ret = MSP_ERR_BAD_COALESCENCE_RECORDS; */
+    /*         goto out; */
+    /*     } */
+    /* } else { */
+    /*     if (in_count != out_count) { */
+    /*         ret = MSP_ERR_BAD_COALESCENCE_RECORDS; */
+    /*         goto out; */
+    /*     } */
+    /* } */
     /* In very rare situations, we have to traverse upwards to find the
      * new root.
      */
@@ -3115,7 +3115,7 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     self->left = s->trees.breakpoints[self->left_breakpoint];
     self->right = s->trees.breakpoints[self->right_breakpoint];
     ret = 1;
-out:
+/* out: */
     return ret;
 }
 

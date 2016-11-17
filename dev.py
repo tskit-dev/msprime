@@ -933,6 +933,40 @@ def subset_samples(n, samples):
             if full_tree is None:
                 break
 
+def check_single_records(records_file, mutations_file):
+    ts = msprime.load_txt(records_file, mutations_file)
+    for t in ts.trees():
+        print(t, list(t.nodes()))
+    # for h in ts.variants():
+    #     print(h)
+
+    # for t in ts.trees():
+    #     print(t)
+    # tss = ts.subset(list(range(10)))
+
+    # with open(filename) as input_file:
+    #     records = []
+    #     line = next(input_file, None)
+    #     for line in input_file:
+    #         tokens = line.split()
+    #         left = float(tokens[0])
+    #         right = float(tokens[1])
+    #         node = int(tokens[2])
+    #         children = tuple(map(int, tokens[3].split(",")))
+    #         time = float(tokens[4])
+    #         population = int(tokens[5])
+    #         r = msprime.CoalescenceRecord(
+    #             left, right, node, children, time, population)
+    #         records.append(r)
+    # for pi in trees(records):
+    #     print(pi)
+    #     for j in range(10):
+    #         u = j
+    #         print(u)
+    #         while u != -1:
+    #             u = pi[u]
+    #             print("\t", u)
+
 
 if __name__ == "__main__":
     # mutations()
@@ -969,7 +1003,8 @@ if __name__ == "__main__":
     #     subset_samples(30000, list(range(k)))
 
     # subset_samples(30000, [5, 7, 8,9, 10, 11])
-    subset_samples(300, list(range(20)))
+    # subset_samples(300, list(range(20)))
+    check_single_records("inferred_records.txt", "inferred_mutations.txt")
 
     # for n in [100, 1000, 10000]:
     #     for k in [2, 10, 50, n - 1, n]:
