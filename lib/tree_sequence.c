@@ -1905,13 +1905,13 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
         /* Check for errors. */
         if (first_tree) {
             if (out_count != 0 || in_count != self->sample_size - 1) {
-                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                ret = MSP_ERR_INCOMPLETE_TREE;
                 goto out;
             }
             first_tree = 0;
         } else {
             if (in_count != out_count) {
-                ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+                ret = MSP_ERR_INCOMPLETE_TREE;
                 goto out;
             }
         }
@@ -2219,12 +2219,12 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
     }
     if (first_tree) {
         if (in_count != self->sample_size - 1 || out_count != 0) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            ret = MSP_ERR_INCOMPLETE_TREE;
             goto out;
         }
     } else {
         if (in_count != out_count) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            ret = MSP_ERR_INCOMPLETE_TREE;
             goto out;
         }
     }
@@ -3081,18 +3081,18 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         }
     }
 
-    /* /1* Check for errors. *1/ */
-    /* if (first_tree) { */
-    /*     if (out_count != 0 || in_count != self->sample_size - 1) { */
-    /*         ret = MSP_ERR_BAD_COALESCENCE_RECORDS; */
-    /*         goto out; */
-    /*     } */
-    /* } else { */
-    /*     if (in_count != out_count) { */
-    /*         ret = MSP_ERR_BAD_COALESCENCE_RECORDS; */
-    /*         goto out; */
-    /*     } */
-    /* } */
+    /* Check for errors. */
+    if (first_tree) {
+        if (out_count != 0 || in_count != self->sample_size - 1) {
+            ret = MSP_ERR_INCOMPLETE_TREE;
+            goto out;
+        }
+    } else {
+        if (in_count != out_count) {
+            ret = MSP_ERR_INCOMPLETE_TREE;
+            goto out;
+        }
+    }
     /* In very rare situations, we have to traverse upwards to find the
      * new root.
      */
@@ -3115,7 +3115,7 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     self->left = s->trees.breakpoints[self->left_breakpoint];
     self->right = s->trees.breakpoints[self->right_breakpoint];
     ret = 1;
-/* out: */
+out:
     return ret;
 }
 

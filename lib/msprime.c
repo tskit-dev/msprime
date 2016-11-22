@@ -132,6 +132,9 @@ msp_strerror(int err)
         case MSP_ERR_BAD_COALESCENCE_RECORDS:
             ret = "Bad coalescence records in file.";
             break;
+        case MSP_ERR_INCOMPLETE_TREE:
+            ret = "The tree is not complete (several roots)";
+            break;
         case MSP_ERR_BAD_SAMPLES:
             ret = "Bad sample configuration provided.";
             break;

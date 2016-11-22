@@ -935,14 +935,31 @@ def subset_samples(n, samples):
 
 def check_single_records(records_file, mutations_file):
     ts = msprime.load_txt(records_file, mutations_file)
+    for r in ts.records():
+        print(r)
+    for m in ts.mutations():
+        print(m)
     for t in ts.trees():
-        print(t, list(t.nodes()))
-    # for h in ts.variants():
-    #     print(h)
+        print(t.interval, t)
+    for t in trees(list(ts.records())):
+        print(t)
+    # for v in ts.variants():
+    #     print(v)
+    for h in ts.haplotypes():
+        print(h)
 
     # for t in ts.trees():
     #     print(t)
-    # tss = ts.subset(list(range(10)))
+    print("subset")
+    tss = ts.subset(list(range(4)))
+    for t in tss.trees():
+        print(t)
+    for r in tss.records():
+        print(r)
+    for h in tss.haplotypes():
+        print(h)
+    for v in tss.variants():
+        print(v)
 
     # with open(filename) as input_file:
     #     records = []
