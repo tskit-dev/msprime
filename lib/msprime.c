@@ -132,6 +132,21 @@ msp_strerror(int err)
         case MSP_ERR_BAD_COALESCENCE_RECORDS:
             ret = "Bad coalescence records in file.";
             break;
+        case MSP_ERR_ZERO_CHILDREN:
+            ret = "Zero children in coalescence record.";
+            break;
+        case MSP_ERR_UNSORTED_CHILDREN:
+            ret = "Unsorted children in coalescence record.";
+            break;
+        case MSP_ERR_NULL_NODE_IN_RECORD:
+            ret = "Null node in coalescence record.";
+            break;
+        case MSP_ERR_BAD_NODE_TIME_ORDERING:
+            ret = "Node times must be stictly increasing within a tree.";
+            break;
+        case MSP_ERR_RECORDS_NOT_TIME_SORTED:
+            ret = "Records must be sorted in nondecreasing time order.";
+            break;
         case MSP_ERR_INCOMPLETE_TREE:
             ret = "The tree is not complete (several roots)";
             break;

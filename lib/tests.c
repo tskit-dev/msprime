@@ -1517,22 +1517,22 @@ test_simplest_bad_records(void)
     /* Equal nodes in the children */
     records[0].children[0] = 1;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
     tree_sequence_free(&ts);
     records[0].children[0] = 0;
 
-    /* children node >= parent */
-    records[0].children[0] = 2;
+    /* children node == parent */
+    records[0].children[1] = 2;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING);
     tree_sequence_free(&ts);
-    records[0].children[0] = 0;
+    records[0].children[1] = 1;
 
     /* Unsorted nodes in the children */
     records[0].children[0] = 1;
     records[0].children[1] = 0;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
     tree_sequence_free(&ts);
     records[0].children[0] = 0;
     records[0].children[1] = 1;
@@ -1540,21 +1540,21 @@ test_simplest_bad_records(void)
     /* Null parent */
     records[0].node = MSP_NULL_NODE;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_NODE_IN_RECORD);
     tree_sequence_free(&ts);
     records[0].node = 2;
 
     /* Null child */
-    records[0].children[0] = MSP_NULL_NODE;
+    records[0].children[1] = MSP_NULL_NODE;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_NODE_IN_RECORD);
     tree_sequence_free(&ts);
-    records[0].children[0] = 0;
+    records[0].children[1] = 1;
 
     /* 0 children */
     records[0].num_children = 0;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_ZERO_CHILDREN);
     tree_sequence_free(&ts);
     records[0].num_children = 2;
 
@@ -1595,8 +1595,8 @@ test_single_nonbinary_tree_good_records(void)
     int ret = 0;
     const char * text_records =
         "0 1 7 0,1,2,3 1.0 0\n"
-        "0 1 8 4,5     1.0 0\n"
-        "0 1 9 6,7,8   1.0 0";
+        "0 1 8 4,5     2.0 0\n"
+        "0 1 9 6,7,8   3.0 0";
     coalescence_record_t *records = NULL;
     size_t num_records;
     tree_sequence_t ts;
@@ -1632,7 +1632,7 @@ test_single_tree_bad_records(void)
     /* Not sorted in time order */
     records[2].time = 0.5;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_RECORDS_NOT_TIME_SORTED);
     tree_sequence_free(&ts);
     records[2].time = 3;
 
@@ -1827,8 +1827,8 @@ test_single_nonbinary_tree_iter(void)
     int ret = 0;
     const char * text_records =
         "0 1 7 0,1,2,3 1.0 0\n"
-        "0 1 8 4,5     1.0 0\n"
-        "0 1 9 6,7,8   1.0 0";
+        "0 1 8 4,5     2.0 0\n"
+        "0 1 9 6,7,8   3.0 0";
     coalescence_record_t *records = NULL;
     uint32_t parents[] = {7, 7, 7, 7, 8, 8, 9, 9, 9, MSP_NULL_NODE};
     size_t num_records;
@@ -3047,7 +3047,7 @@ test_tree_sequence_bad_records(void)
     /* Children equal */
     records[3].children[1] = 0;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
     tree_sequence_free(&ts);
     records[3].children[1] = 5;
 
@@ -3055,7 +3055,7 @@ test_tree_sequence_bad_records(void)
     records[3].children[0] = 5;
     records[3].children[1] = 0;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
     tree_sequence_free(&ts);
     records[3].children[0] = 0;
     records[3].children[1] = 5;

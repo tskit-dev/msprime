@@ -394,30 +394,44 @@ static int
 tree_sequence_check(tree_sequence_t *self)
 {
     int ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
-    uint32_t j, k, left;
+    uint32_t j, k, child, node, left;
 
     left = UINT32_MAX;
     for (j = 0; j < self->num_records; j++) {
+        node = self->trees.records.node[j];
+        if (node == MSP_NULL_NODE) {
+            ret = MSP_ERR_NULL_NODE_IN_RECORD;
+            goto out;
+        }
+        if (self->trees.records.num_children[j] < 1) {
+            ret = MSP_ERR_ZERO_CHILDREN;
+            goto out;
+        }
         if (j > 0) {
             /* Input data must be time sorted. */
-            if (self->trees.nodes.time[self->trees.records.node[j]]
+            if (self->trees.nodes.time[node]
                     < self->trees.nodes.time[self->trees.records.node[j - 1]]) {
+                ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
                 goto out;
             }
         }
-        if (self->trees.records.num_children[j] < 1) {
-            goto out;
-        }
         left = GSL_MIN(left, self->trees.records.left[j]);
-        /* Ensure that children are non-null and in ascending order */
         for (k = 0; k < self->trees.records.num_children[j]; k++) {
+            child = self->trees.records.children[j][k];
+            if (child == MSP_NULL_NODE) {
+                ret = MSP_ERR_NULL_NODE_IN_RECORD;
+                goto out;
+            }
+            /* Children must be in ascending order */
             if (k < self->trees.records.num_children[j] - 1) {
-                if (self->trees.records.children[j][k]
-                        >= self->trees.records.children[j][k + 1]) {
+                if (child >= self->trees.records.children[j][k + 1]) {
+                    ret = MSP_ERR_UNSORTED_CHILDREN;
                     goto out;
                 }
             }
-            if (self->trees.records.children[j][k] == MSP_NULL_NODE) {
+            /* time[child] must be < time[parent] */
+            if (self->trees.nodes.time[child] >= self->trees.nodes.time[node]) {
+                ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
                 goto out;
             }
         }
@@ -467,8 +481,8 @@ tree_sequence_init_from_records(tree_sequence_t *self,
     self->num_nodes = 0;
     for (j = 0; j < self->num_records; j++) {
         self->num_child_nodes += records[j].num_children;
-        if (records[j].num_children < 1) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        if (records[j].node == MSP_NULL_NODE) {
+            ret = MSP_ERR_NULL_NODE_IN_RECORD;
             goto out;
         }
         self->sample_size = GSL_MIN(self->sample_size, records[j].node);
@@ -477,8 +491,7 @@ tree_sequence_init_from_records(tree_sequence_t *self,
                 records[j].right);
         left[j] = records[j].left;
     }
-
-    if (self->sample_size < 2 || self->sample_size == MSP_NULL_NODE) {
+    if (self->sample_size < 2) {
         ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
         goto out;
     }

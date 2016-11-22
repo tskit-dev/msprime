@@ -62,5 +62,10 @@
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
 #define MSP_ERR_INCOMPLETE_TREE                                     -32
 #define MSP_ERR_BAD_MODEL                                           -33
+#define MSP_ERR_ZERO_CHILDREN                                       -34
+#define MSP_ERR_UNSORTED_CHILDREN                                   -35
+#define MSP_ERR_NULL_NODE_IN_RECORD                                 -36
+#define MSP_ERR_BAD_NODE_TIME_ORDERING                              -37
+#define MSP_ERR_RECORDS_NOT_TIME_SORTED                             -38
 
 #endif /*__ERR_H__*/

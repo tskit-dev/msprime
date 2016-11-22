@@ -103,6 +103,7 @@ class DefineMacros(object):
         ]
         return l[index]
 
+
 configurator = PathConfigurator()
 d = "lib/"
 _msprime_module = Extension(
