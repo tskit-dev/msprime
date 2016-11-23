@@ -299,6 +299,7 @@ typedef struct {
     tree_sequence_t *tree_sequence;
     size_t insertion_index;
     size_t removal_index;
+    size_t tree_index;
     node_record_t *node_records;
 } tree_diff_iterator_t;
 

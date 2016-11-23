@@ -147,6 +147,15 @@ msp_strerror(int err)
         case MSP_ERR_RECORDS_NOT_TIME_SORTED:
             ret = "Records must be sorted in nondecreasing time order.";
             break;
+        case MSP_ERR_INCONSISTENT_NODE_TIMES:
+            ret = "Times associated with nodes not consistent between records";
+            break;
+        case MSP_ERR_INCONSISTENT_POPULATION_IDS:
+            ret = "Population associated with nodes not consistent between records";
+            break;
+        case MSP_ERR_BAD_RECORD_INTERVAL:
+            ret = "Bad record interval where right <= left";
+            break;
         case MSP_ERR_INCOMPLETE_TREE:
             ret = "The tree is not complete (several roots)";
             break;

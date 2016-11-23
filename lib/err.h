@@ -67,5 +67,8 @@
 #define MSP_ERR_NULL_NODE_IN_RECORD                                 -36
 #define MSP_ERR_BAD_NODE_TIME_ORDERING                              -37
 #define MSP_ERR_RECORDS_NOT_TIME_SORTED                             -38
+#define MSP_ERR_INCONSISTENT_NODE_TIMES                             -39
+#define MSP_ERR_INCONSISTENT_POPULATION_IDS                         -40
+#define MSP_ERR_BAD_RECORD_INTERVAL                                 -41
 
 #endif /*__ERR_H__*/

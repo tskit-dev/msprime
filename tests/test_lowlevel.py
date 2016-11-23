@@ -2035,21 +2035,6 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertEqual(s1.get_num_mutations(), s2.get_num_mutations())
             self.assertEqual(s1.get_num_trees(), s2.get_num_trees())
 
-    def test_subset_errors(self):
-        for ts in self.get_example_tree_sequences():
-            records = [ts.get_record(j) for j in range(ts.get_num_records())]
-            # Create a topologically impossible tree sequence by adding
-            # another identical record.
-            records = [records[0]] + records
-            other_ts = _msprime.TreeSequence()
-            other_ts.load_records(records[:1] + records)
-            # Verify that we get an error when we try to look at the trees.
-            st = _msprime.SparseTree(other_ts)
-            iterator = _msprime.SparseTreeIterator(st)
-            self.assertRaises(_msprime.LibraryError, list, iterator)
-            # Verify that subset also raises an error here.
-            self.assertRaises(_msprime.LibraryError, other_ts.get_subset, [0, 1])
-
     def test_load_records_equality(self):
         for ts1 in self.get_example_tree_sequences():
             records = [ts1.get_record(j) for j in range(ts1.get_num_records())]

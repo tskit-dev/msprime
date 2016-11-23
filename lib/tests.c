@@ -100,7 +100,7 @@ parse_text_records(const char *text_records, size_t *num_records,
             }
             q++;
         }
-        CU_ASSERT_FATAL(num_children >= 2);
+        CU_ASSERT_FATAL(num_children >= 1);
         records[j].children = malloc(num_children * sizeof(uint32_t));
         records[j].num_children = num_children;
         CU_ASSERT_FATAL(records[j].children != NULL);
@@ -306,30 +306,50 @@ get_test_data_tree_sequences(void)
     size_t max_examples = 1024;
     tree_sequence_t **ret = malloc(max_examples * sizeof(tree_sequence_t *));
     const char *filename = "../tests/data/unary/01_records.txt";
+    coalescence_record_t *records = NULL;
     char *buff = NULL;
-    size_t size, read;
+    size_t size, read, num_records;
+    uint32_t j, n;
+    uint32_t *samples;
+    tree_sequence_t ts;
+    tree_sequence_t *subset = malloc(sizeof(tree_sequence_t));
+    int err;
     FILE *f;
 
     f = fopen(filename, "r");
     CU_ASSERT_FATAL(f != NULL);
     fseek(f, 0, SEEK_END);
     size = ftell(f) + 1;
-    /* printf("filename = %s: %d\n", filename, (int) size); */
     buff = malloc(size * sizeof(char));
     CU_ASSERT_FATAL(buff != NULL);
     fseek(f, 0, SEEK_SET);
     read = fread(buff, sizeof(char), size - 1, f);
     CU_ASSERT_FATAL(read == size - 1);
     buff[size - 1] = '\0';
-    /* printf("buff = %s", buff); */
-    /* parse_text_records(text_records, &num_records, &records); */
+    parse_text_records(buff, &num_records, &records);
+    CU_ASSERT_FATAL(num_records > 0);
+
+    err = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL_FATAL(err, 0);
+    tree_sequence_print_state(&ts, _devnull);
+    /* allocate the samples for this tree sequence so we can
+     * subset() it */
+    n = tree_sequence_get_sample_size(&ts);
+    samples = malloc(n * sizeof(uint32_t));
+    CU_ASSERT_FATAL(samples != NULL);
+    for (j = 0; j < n; j++) {
+        samples[j] = j;
+    }
+    err = tree_sequence_get_subset(&ts, samples, n, subset);
+    ret[0] = subset;
 
     fclose(f);
     free(buff);
+    free(samples);
+    tree_sequence_free(&ts);
+    free_local_records(num_records, records);
 
-    /* ret = tree_sequence_load_records(&ts, num_records, records); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    ret[0] = NULL;
+    ret[1] = NULL;
     return ret;
 }
 
@@ -1481,6 +1501,30 @@ test_simplest_nonbinary_records(void)
 }
 
 static void
+test_simplest_unary_records(void)
+{
+    int ret;
+    uint32_t c1[] = {0};
+    uint32_t c2[] = {1};
+    uint32_t c3[] = {2, 3};
+    coalescence_record_t records[] = {
+        {0, 1, 2, 0.0, 1.0, 1.0, c1},
+        {0, 1, 3, 0.0, 1.0, 1.0, c2},
+        {0, 2, 4, 0.0, 1.0, 2.0, c3},
+    };
+    tree_sequence_t ts;
+
+    ret = tree_sequence_load_records(&ts, 3, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
+    tree_sequence_free(&ts);
+}
+
+static void
 test_simplest_bad_records(void)
 {
     int ret = 0;
@@ -1636,10 +1680,10 @@ test_single_tree_bad_records(void)
     tree_sequence_free(&ts);
     records[2].time = 3;
 
-    /* Left value greater than sequence length */
+     /* Left value greater than sequence right */
     records[2].left = 2.0;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_RECORD_INTERVAL);
     tree_sequence_free(&ts);
     records[2].left = 0.0;
 
@@ -2037,6 +2081,62 @@ test_single_tree_hapgen(void)
 }
 
 static void
+test_single_unary_tree_hapgen(void)
+{
+    int ret = 0;
+    const char * text_records =
+        "0 1 2 0   1.0 0\n"
+        "0 1 3 1   1.0 0\n"
+        "0 1 4 2,3 2.0 0\n"
+        "0 1 5 4   3.0 0\n"
+        "0 1 6 5   4.0 0";
+    mutation_t mutations[] = {{0, 0}, {0.1, 1}, {0.2, 4}, {0.2, 5}};
+    size_t sample_size = 2;
+    size_t num_mutations = 4;
+    char *haplotype;
+    size_t j;
+    size_t num_records;
+    tree_sequence_t ts;
+    coalescence_record_t *records;
+    hapgen_t hapgen;
+
+    parse_text_records(text_records, &num_records, &records);
+    CU_ASSERT_EQUAL_FATAL(num_records, 5);
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    hapgen_print_state(&hapgen, _devnull);
+    for (j = 0; j < sample_size; j++) {
+        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_STRING_EQUAL(haplotype, "");
+    }
+    ret = hapgen_free(&hapgen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    hapgen_print_state(&hapgen, _devnull);
+
+    ret = hapgen_get_haplotype(&hapgen, 0, &haplotype);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(haplotype, "1011");
+    ret = hapgen_get_haplotype(&hapgen, 1, &haplotype);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(haplotype, "0111");
+
+    ret = hapgen_free(&hapgen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tree_sequence_free(&ts);
+    free_local_records(num_records, records);
+}
+
+static void
 test_single_tree_mutgen(void)
 {
     int ret = 0;
@@ -2209,7 +2309,7 @@ verify_trees_consistent(tree_sequence_t *ts)
                     ret = sparse_tree_get_children(&tree, v,
                             &num_children, &children);
                     CU_ASSERT_EQUAL(ret, 0);
-                    CU_ASSERT(num_children >= 2);
+                    CU_ASSERT(num_children >= 1);
                     found = 0;
                     for (k = 0; k < num_children; k++) {
                         if (children[k] == u) {
@@ -2222,80 +2322,10 @@ verify_trees_consistent(tree_sequence_t *ts)
             CU_ASSERT_EQUAL(u, root);
         }
     }
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(ts), num_trees);
 
     sparse_tree_free(&tree);
-}
-
-static void
-verify_tree_iter_fails(size_t num_records, coalescence_record_t *records,
-        size_t num_mutations, mutation_t *mutations,
-        uint32_t tree_index, int error_code)
-{
-    int ret;
-    uint32_t index = 0;
-    tree_sequence_t ts;
-    sparse_tree_t tree;
-
-    ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = sparse_tree_alloc(&tree, &ts, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-
-    for (ret = sparse_tree_first(&tree); ret == 1;
-            ret = sparse_tree_next(&tree)) {
-        index++;
-    }
-    CU_ASSERT_EQUAL(index, tree_index);
-    CU_ASSERT_EQUAL(ret, error_code);
-
-    sparse_tree_free(&tree);
-    tree_sequence_free(&ts);
-}
-
-static void
-verify_diff_iter_fails(size_t num_records, coalescence_record_t *records,
-        uint32_t tree_index, int error_code)
-{
-    int ret;
-    uint32_t index = 0;
-    tree_sequence_t ts;
-    tree_diff_iterator_t iter;
-    node_record_t *records_out, *records_in;
-    double length;
-
-    ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_diff_iterator_alloc(&iter, &ts);
-    CU_ASSERT_EQUAL(ret, 0);
-
-    while ((ret = tree_diff_iterator_next(
-            &iter, &length, &records_out, &records_in)) == 1) {
-        index++;
-    }
-    CU_ASSERT_EQUAL(index, tree_index);
-    CU_ASSERT_EQUAL(ret, error_code);
-
-    tree_diff_iterator_free(&iter);
-    tree_sequence_free(&ts);
-}
-
-static void
-verify_subset_fails(size_t num_records, coalescence_record_t *records, int error_code)
-{
-    int ret;
-    uint32_t samples[] = {0, 1};
-    tree_sequence_t ts, subset;
-
-    ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_get_subset(&ts, samples, 2, &subset);
-    CU_ASSERT_EQUAL_FATAL(ret, error_code);
-
-    tree_sequence_free(&ts);
 }
 
 static void
@@ -2405,6 +2435,38 @@ test_tree_sequence_iter(void)
 
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 6);
+    verify_trees(num_records, records, num_trees, num_nodes, parents,
+            num_mutations, mutations);
+    free_local_records(num_records, records);
+}
+
+static void
+test_unary_tree_sequence_iter(void)
+{
+    const char * text_records =
+        "2 10 4 2,3 0.071 0\n"
+        "0 2  5 1,3 0.090 0\n"
+        "2 10 5 1,4 0.090 0\n"
+        "0 7  6 0,5 0.170 0\n"
+        "7 10 7 0,5 0.202 0\n"
+        "0 2  7 2   0.202 0\n"
+        "0 2  8 6,7 0.253 0\n"
+        "2 7  8 6   0.253 0";
+    /* We make one mutation for each tree, over unary nodes if this exist */
+    mutation_t mutations[] = {{1.0, 2}, {4.5, 6}, {8.5, 5}};
+    uint32_t parents[] = {
+        6, 5, 7, 5, MSP_NULL_NODE, 6, 8, 8, MSP_NULL_NODE,
+        6, 5, 4, 4, 5, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
+        7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+    };
+    size_t num_records;
+    uint32_t num_nodes = 9;
+    uint32_t num_trees = 3;
+    uint32_t num_mutations = 3;
+    coalescence_record_t *records;
+
+    parse_text_records(text_records, &num_records, &records);
+    CU_ASSERT_EQUAL_FATAL(num_records, 8);
     verify_trees(num_records, records, num_trees, num_nodes, parents,
             num_mutations, mutations);
     free_local_records(num_records, records);
@@ -3024,25 +3086,42 @@ test_tree_sequence_bad_records(void)
         "7 10 7 0,5 0.202 0\n"
         "0 2  8 2,6 0.253 0";
     size_t num_records;
+    size_t num_trees = 3;
+    size_t num_nodes = 9;
     tree_sequence_t ts;
     coalescence_record_t *records;
+    uint32_t parents[] = {
+        6, 5, 8, 5, MSP_NULL_NODE, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
+        6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+        7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+    };
 
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 6);
 
-    /* Not sorted in time order */
+    /* Inconsistent times for nodes */
     records[2].time = 0.5;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_INCONSISTENT_NODE_TIMES);
     tree_sequence_free(&ts);
     records[2].time = 0.090;
+    verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
+
+    /* Inconsistent population IDs for nodes */
+    records[2].population_id = 1;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_INCONSISTENT_POPULATION_IDS);
+    tree_sequence_free(&ts);
+    records[2].population_id = 0;
+    verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
 
     /* Left value greater than right */
     records[0].left = 10.0;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_RECORD_INTERVAL);
     tree_sequence_free(&ts);
     records[0].left = 2.0;
+    verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
 
     /* Children equal */
     records[3].children[1] = 0;
@@ -3050,6 +3129,7 @@ test_tree_sequence_bad_records(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
     tree_sequence_free(&ts);
     records[3].children[1] = 5;
+    verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
 
     /* Children not sorted */
     records[3].children[0] = 5;
@@ -3059,87 +3139,6 @@ test_tree_sequence_bad_records(void)
     tree_sequence_free(&ts);
     records[3].children[0] = 0;
     records[3].children[1] = 5;
-
-    ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, 0);
-    tree_sequence_free(&ts);
-
-    free_local_records(num_records, records);
-}
-
-static void
-test_single_tree_iter_failure(void)
-{
-    int ret = 0;
-    const char * text_records =
-        "0 1 4 0,1 1.0 0\n"
-        "0 1 5 2,3 2.0 0\n"
-        "0 1 6 4,5 3.0 0";
-    size_t num_records;
-    tree_sequence_t ts;
-    sparse_tree_t tree;
-    tree_diff_iterator_t diff_iter;
-    coalescence_record_t *records;
-    node_record_t *records_out, *records_in;
-    double length;
-
-    parse_text_records(text_records, &num_records, &records);
-    CU_ASSERT_EQUAL_FATAL(num_records, 3);
-
-    /* change the left coordinate of one record so we can't build the tree */
-    records[0].left = 0.5;
-    ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = sparse_tree_alloc(&tree, &ts, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-
-    ret = sparse_tree_first(&tree);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_INCOMPLETE_TREE);
-
-    ret = tree_diff_iterator_alloc(&diff_iter, &ts);
-    CU_ASSERT_EQUAL(ret, 0);
-
-    ret = tree_diff_iterator_next(&diff_iter, &length, &records_out,
-            &records_in);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_INCOMPLETE_TREE);
-
-    tree_diff_iterator_free(&diff_iter);
-    sparse_tree_free(&tree);
-    tree_sequence_free(&ts);
-    free_local_records(num_records, records);
-}
-
-static void
-test_tree_sequence_iter_failure(void)
-{
-    const char * text_records =
-        "2 10 4 2,3 0.071 0\n"
-        "0 2  5 1,3 0.090 0\n"
-        "2 10 5 1,4 0.090 0\n"
-        "0 7  6 0,5 0.170 0\n"
-        "7 10 7 0,5 0.202 0\n"
-        "0 2  8 2,6 0.253 0";
-    uint32_t parents[] = {
-        6, 5, 8, 5, MSP_NULL_NODE, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
-        6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
-        7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
-    };
-    size_t num_records;
-    uint32_t num_nodes = 9;
-    uint32_t num_trees = 3;
-    coalescence_record_t *records;
-    tree_sequence_t ts;
-    int ret;
-
-    parse_text_records(text_records, &num_records, &records);
-    CU_ASSERT_EQUAL_FATAL(num_records, 6);
-
-    /* The first tree is missing a record */
-    records[5].left = 1;
-    verify_tree_iter_fails(num_records, records, 0, NULL, 0, MSP_ERR_INCOMPLETE_TREE);
-    verify_diff_iter_fails(num_records, records, 0, MSP_ERR_INCOMPLETE_TREE);
-    verify_subset_fails(num_records, records, MSP_ERR_INCOMPLETE_TREE);
-    records[5].left = 0;
     verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
 
     /* Make a gap between adjacent records */
@@ -3178,19 +3177,9 @@ test_tree_sequence_iter_failure(void)
     records[4].left = 7;
     verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
 
-    /* Add an extra record to the second tree */
-    records[0].left = 0;
-    verify_tree_iter_fails(num_records, records, 0, NULL, 0, MSP_ERR_INCOMPLETE_TREE);
-    verify_diff_iter_fails(num_records, records, 0, MSP_ERR_INCOMPLETE_TREE);
-    verify_subset_fails(num_records, records, MSP_ERR_INCOMPLETE_TREE);
-    records[0].left = 2;
-    verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
-
-    /* Remove the last record */
-    verify_tree_iter_fails(num_records - 1, records, 0, NULL, 0, MSP_ERR_INCOMPLETE_TREE);
-    verify_diff_iter_fails(num_records - 1, records, 0, MSP_ERR_INCOMPLETE_TREE);
-    verify_subset_fails(num_records - 1, records, MSP_ERR_INCOMPLETE_TREE);
-    verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    tree_sequence_free(&ts);
 
     free_local_records(num_records, records);
 }
@@ -4199,6 +4188,7 @@ main(void)
         {"Recombination map examples", test_recomb_map_examples},
         {"Simplest records", test_simplest_records},
         {"Simplest nonbinary records", test_simplest_nonbinary_records},
+        {"Simplest unary records", test_simplest_unary_records},
         {"Simplest bad records", test_simplest_bad_records},
         {"Single tree good records", test_single_tree_good_records},
         {"Single nonbinary tree good records",
@@ -4210,18 +4200,18 @@ main(void)
         {"Single nonbinary tree iterator", test_single_nonbinary_tree_iter},
         {"Single tree iterator times", test_single_tree_iter_times},
         {"Single tree hapgen", test_single_tree_hapgen},
+        {"Single unary tree hapgen", test_single_unary_tree_hapgen},
         {"Single tree mutgen", test_single_tree_mutgen},
         {"Sparse tree errors", test_sparse_tree_errors},
         {"Tree sequence iterator", test_tree_sequence_iter},
         {"Leaf sets", test_leaf_sets},
         {"Nonbinary leaf sets", test_nonbinary_leaf_sets},
         {"Tree nonbinary sequence iterator", test_nonbinary_tree_sequence_iter},
+        {"Tree unary sequence iterator", test_unary_tree_sequence_iter},
         {"Left-to-right tree sequence iterator",
             test_left_to_right_tree_sequence_iter},
         {"Tree sequence bad records", test_tree_sequence_bad_records},
         {"Set mutations", test_tree_sequence_set_mutations},
-        {"Single tree iterator failure", test_single_tree_iter_failure},
-        {"Tree sequence iterator failure", test_tree_sequence_iter_failure},
         {"Tree sequence diff iter", test_tree_sequence_diff_iter},
         {"Nonbinary Tree sequence diff iter",
             test_nonbinary_tree_sequence_diff_iter},

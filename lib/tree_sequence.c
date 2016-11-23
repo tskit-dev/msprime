@@ -137,7 +137,7 @@ tree_sequence_check_state(tree_sequence_t *self)
     size_t j;
 
     for (j = 0; j < self->num_records; j++) {
-        assert(self->trees.records.num_children[j] >= 2);
+        assert(self->trees.records.num_children[j] >= 1);
     }
 }
 
@@ -436,6 +436,7 @@ tree_sequence_check(tree_sequence_t *self)
             }
         }
         if (self->trees.records.left[j] >= self->trees.records.right[j]) {
+            ret = MSP_ERR_BAD_RECORD_INTERVAL;
             goto out;
         }
     }
@@ -532,13 +533,13 @@ tree_sequence_init_from_records(tree_sequence_t *self,
         if (self->trees.nodes.time[node] == 0.0) {
             self->trees.nodes.time[node] = records[j].time;
         } else if (self->trees.nodes.time[node] != records[j].time) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            ret = MSP_ERR_INCONSISTENT_NODE_TIMES;
             goto out;
         }
         if (self->trees.nodes.population[node] == MSP_NULL_POPULATION_ID) {
             self->trees.nodes.population[node] = records[j].population_id;
         } else if (self->trees.nodes.population[node] != records[j].population_id) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            ret = MSP_ERR_INCONSISTENT_POPULATION_IDS;
             goto out;
         }
         self->trees.records.node[j] = records[j].node;
@@ -1705,8 +1706,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     uint32_t *I = self->trees.indexes.insertion_order;
     uint32_t *O = self->trees.indexes.removal_order;
     size_t M = self->num_records;
-    size_t j, k, l, h, num_start_records, num_end_records, num_squashed_records,
-           in_count, out_count;
+    size_t j, k, l, h, num_start_records, num_end_records, num_squashed_records;
     uint32_t u, v, w, x, c, num_mapped_children, subset_root;
     size_t max_subset_child_nodes, max_subset_records;
     size_t mapped_children_mem_offset = 0;
@@ -1716,7 +1716,6 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     coalescence_record_t *cr;
     mutation_t *mut;
     double right;
-    int first_tree;
 
     if (num_samples < 2) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -1777,20 +1776,16 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     j = 0;
     k = 0;
     l = 0;
-    first_tree = 1;
     while (j < M) {
         x = self->trees.records.left[I[j]];
         num_start_records = 0;
         num_end_records = 0;
-        out_count = 0;
-        in_count = 0;
 
         /* Records out */
         while (self->trees.records.right[O[k]] == x) {
             h = O[k];
             k++;
             u = self->trees.records.node[h];
-            out_count += num_children[u] - 1;
             for (c = 0; c < num_children[u]; c++) {
                 parent[children[u][c]] = MSP_NULL_NODE;
             }
@@ -1866,7 +1861,6 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
             u = self->trees.records.node[h];
             num_children[u] = self->trees.records.num_children[h];
             children[u] = self->trees.records.children[h];
-            in_count += num_children[u] - 1;
             w = MSP_NULL_NODE;
             for (c = 0; c < num_children[u]; c++) {
                 v = children[u][c];
@@ -1912,20 +1906,6 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
                         num_start_records++;
                     }
                 }
-            }
-        }
-
-        /* Check for errors. */
-        if (first_tree) {
-            if (out_count != 0 || in_count != self->sample_size - 1) {
-                ret = MSP_ERR_INCOMPLETE_TREE;
-                goto out;
-            }
-            first_tree = 0;
-        } else {
-            if (in_count != out_count) {
-                ret = MSP_ERR_INCOMPLETE_TREE;
-                goto out;
             }
         }
 
@@ -2119,15 +2099,13 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
     memset(self, 0, sizeof(tree_diff_iterator_t));
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->num_nodes = tree_sequence_get_num_nodes(tree_sequence);
-    self->num_records = tree_sequence_get_num_coalescence_records(
-            tree_sequence);
+    self->num_records = tree_sequence_get_num_coalescence_records(tree_sequence);
     self->tree_sequence = tree_sequence;
     self->insertion_index = 0;
     self->removal_index = 0;
     self->tree_left = 0;
-    /* The maximum number of records is to remove and insert all n - 1
-     * records */
-    self->node_records = malloc(2 * self->sample_size * sizeof(node_record_t));
+    self->tree_index = (size_t) -1;
+    self->node_records = malloc(self->num_nodes * sizeof(node_record_t));
     if (self->node_records == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -2154,6 +2132,7 @@ tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out)
     fprintf(out, "insertion_index = %d\n", (int) self->insertion_index);
     fprintf(out, "removal_index = %d\n", (int) self->removal_index);
     fprintf(out, "tree_left = %d\n", self->tree_left);
+    fprintf(out, "tree_index = %d\n", (int) self->tree_index);
 }
 
 int WARN_UNUSED
@@ -2170,19 +2149,17 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
     node_record_t *in_head = NULL;
     node_record_t *in_tail = NULL;
     node_record_t *w = NULL;
-    int first_tree = self->insertion_index == 0;
-    size_t in_count = 0;
-    size_t out_count = 0;
+    size_t num_trees = tree_sequence_get_num_trees(s);
 
     assert(s != NULL);
-    if (self->insertion_index < self->num_records) {
+
+    if (self->tree_index + 1 < num_trees) {
         /* First we remove the stale records */
-        out_count = 0;
         while (s->trees.records.right[
                 s->trees.indexes.removal_order[self->removal_index]]
                     == self->tree_left) {
             k = s->trees.indexes.removal_order[self->removal_index];
-            assert(next_node_record < 2 * self->sample_size);
+            assert(next_node_record < self->num_nodes);
             w = &self->node_records[next_node_record];
             next_node_record++;
             w->node = s->trees.records.node[k];
@@ -2198,10 +2175,9 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
                 out_tail = w;
             }
             self->removal_index++;
-            out_count += w->num_children - 1;
         }
+
         /* Now insert the new records */
-        in_count = 0;
         while (self->insertion_index < self->num_records &&
                 s->trees.records.left[
                     s->trees.indexes.insertion_order[self->insertion_index]]
@@ -2223,29 +2199,16 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
                 in_tail = w;
             }
             self->insertion_index++;
-            in_count += w->num_children - 1;
         }
         /* Update the left coordinate */
         self->tree_left = s->trees.records.right[
             s->trees.indexes.removal_order[self->removal_index]];
+        self->tree_index++;
         ret = 1;
-    }
-    if (first_tree) {
-        if (in_count != self->sample_size - 1 || out_count != 0) {
-            ret = MSP_ERR_INCOMPLETE_TREE;
-            goto out;
-        }
-    } else {
-        if (in_count != out_count) {
-            ret = MSP_ERR_INCOMPLETE_TREE;
-            goto out;
-        }
     }
     *nodes_out = out_head;
     *nodes_in = in_head;
-    *length = s->trees.breakpoints[self->tree_left]
-        - s->trees.breakpoints[last_left];
-out:
+    *length = s->trees.breakpoints[self->tree_left] - s->trees.breakpoints[last_left];
     return ret;
 }
 
@@ -2318,10 +2281,10 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
             || self->num_children == NULL || self->population == NULL) {
         goto out;
     }
-    /* the maximum possible height of the tree is n + 1, including
+    /* the maximum possible height of the tree is num_nodes + 1, including
      * the null value. */
-    self->stack1 = malloc((sample_size + 1) * sizeof(uint32_t));
-    self->stack2 = malloc((sample_size + 1) * sizeof(uint32_t));
+    self->stack1 = malloc((num_nodes + 1) * sizeof(uint32_t));
+    self->stack2 = malloc((num_nodes + 1) * sizeof(uint32_t));
     if (self->stack1 == NULL || self->stack2 == NULL) {
         goto out;
     }
@@ -3029,13 +2992,10 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     double oldest_child_time;
     tree_sequence_t *s = self->tree_sequence;
     ssize_t R = (ssize_t) s->num_records;
-    size_t in_count = 0;
-    size_t out_count = 0;
 
     while (out_breakpoints[out_order[out]] == x) {
         k = out_order[out];
         u = s->trees.records.node[k];
-        out_count += self->num_children[u] - 1;
         oldest_child_time = -1;
         oldest_child = 0;
         for (j = 0; j < self->num_children[u]; j++) {
@@ -3070,7 +3030,6 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
             self->parent[s->trees.records.children[k][j]] = u;
         }
         self->num_children[u] = s->trees.records.num_children[k];
-        in_count += self->num_children[u] - 1;
         self->children[u] = s->trees.records.children[k];
         self->time[u] = s->trees.nodes.time[u];
         self->population[u] = s->trees.nodes.population[u];
@@ -3094,18 +3053,6 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         }
     }
 
-    /* Check for errors. */
-    if (first_tree) {
-        if (out_count != 0 || in_count != self->sample_size - 1) {
-            ret = MSP_ERR_INCOMPLETE_TREE;
-            goto out;
-        }
-    } else {
-        if (in_count != out_count) {
-            ret = MSP_ERR_INCOMPLETE_TREE;
-            goto out;
-        }
-    }
     /* In very rare situations, we have to traverse upwards to find the
      * new root.
      */
@@ -3128,7 +3075,6 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     self->left = s->trees.breakpoints[self->left_breakpoint];
     self->right = s->trees.breakpoints[self->right_breakpoint];
     ret = 1;
-out:
     return ret;
 }
 
