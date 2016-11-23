@@ -4180,6 +4180,7 @@ handle_cunit_error()
 int
 main(void)
 {
+    int ret;
     CU_TestInfo tests[] = {
         {"Fenwick tree", test_fenwick},
         {"VCF", test_vcf},
@@ -4255,6 +4256,7 @@ main(void)
         },
         CU_SUITE_INFO_NULL,
     };
+
     /* initialize the CUnit test registry */
     if (CUE_SUCCESS != CU_initialize_registry()) {
         handle_cunit_error();
@@ -4265,6 +4267,11 @@ main(void)
     /* Run all tests using the CUnit Basic interface */
     CU_basic_set_mode(CU_BRM_VERBOSE);
     CU_basic_run_tests();
+    ret = EXIT_SUCCESS;
+    if (CU_get_number_of_tests_failed() != 0) {
+        printf("Test failed!\n");
+        ret = EXIT_FAILURE;
+    }
     CU_cleanup_registry();
-    return EXIT_SUCCESS;
+    return ret;
 }
