@@ -945,8 +945,8 @@ def check_single_records(records_file, mutations_file):
         print(t)
     # for v in ts.variants():
     #     print(v)
-    for h in ts.haplotypes():
-        print(h)
+    # for h in ts.haplotypes():
+    #     print(h)
 
     # for t in ts.trees():
     #     print(t)

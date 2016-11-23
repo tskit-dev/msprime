@@ -35,6 +35,7 @@
 /* Global variables used for test in state in the test suite */
 
 char * _tmp_file_name;
+char * _test_data_dir;
 FILE * _devnull;
 
 #define SIMPLE_BOTTLENECK 0
@@ -304,8 +305,10 @@ tree_sequence_t **
 get_test_data_tree_sequences(void)
 {
     size_t max_examples = 1024;
+    size_t max_path = 1024;
     tree_sequence_t **ret = malloc(max_examples * sizeof(tree_sequence_t *));
-    const char *filename = "../tests/data/unary/01_records.txt";
+    char *full_path = malloc(max_path);
+    const char *filename = "unary/01_records.txt";
     coalescence_record_t *records = NULL;
     char *buff = NULL;
     size_t size, read, num_records;
@@ -316,7 +319,12 @@ get_test_data_tree_sequences(void)
     int err;
     FILE *f;
 
-    f = fopen(filename, "r");
+    CU_ASSERT_FATAL(ret != NULL);
+    CU_ASSERT_FATAL(full_path != NULL);
+    CU_ASSERT_FATAL(subset != NULL);
+
+    snprintf(full_path, max_path, "%s/%s", _test_data_dir, filename);
+    f = fopen(full_path, "r");
     CU_ASSERT_FATAL(f != NULL);
     fseek(f, 0, SEEK_END);
     size = ftell(f) + 1;
@@ -342,14 +350,14 @@ get_test_data_tree_sequences(void)
     }
     err = tree_sequence_get_subset(&ts, samples, n, subset);
     ret[0] = subset;
+    ret[1] = NULL;
 
     fclose(f);
     free(buff);
     free(samples);
+    free(full_path);
     tree_sequence_free(&ts);
     free_local_records(num_records, records);
-
-    ret[1] = NULL;
     return ret;
 }
 
@@ -4178,7 +4186,7 @@ handle_cunit_error()
 }
 
 int
-main(void)
+main(int argc, char **argv)
 {
     int ret;
     CU_TestInfo tests[] = {
@@ -4256,6 +4264,11 @@ main(void)
         },
         CU_SUITE_INFO_NULL,
     };
+    if (argc == 1) {
+        _test_data_dir = "../tests/data";
+    } else {
+        _test_data_dir = argv[1];
+    }
 
     /* initialize the CUnit test registry */
     if (CUE_SUCCESS != CU_initialize_registry()) {
