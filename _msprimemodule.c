@@ -193,8 +193,8 @@ parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
         PyErr_SetString(PyExc_TypeError, "children must be a tuple.");
         goto out;
     }
-    if (PyTuple_Size(children) < 2) {
-        PyErr_SetString(PyExc_ValueError, "Must be >= 2 children");
+    if (PyTuple_Size(children) < 1) {
+        PyErr_SetString(PyExc_ValueError, "Must be >= 1 children");
         goto out;
     }
     cr->num_children = PyTuple_Size(children);

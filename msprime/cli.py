@@ -37,6 +37,7 @@ def set_sigpipe_handler():
         # Set signal handler for SIGPIPE to quietly kill the program.
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
+
 #######################################################
 # mspms: the ms compatible interface
 #######################################################

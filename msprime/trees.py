@@ -57,6 +57,7 @@ def check_numpy():
     if not _numpy_imported:
         raise RuntimeError("numpy is required for this operation.")
 
+
 CoalescenceRecord = collections.namedtuple(
     "CoalescenceRecord",
     ["left", "right", "node", "children", "time", "population"])

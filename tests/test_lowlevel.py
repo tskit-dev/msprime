@@ -2035,21 +2035,6 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertEqual(s1.get_num_mutations(), s2.get_num_mutations())
             self.assertEqual(s1.get_num_trees(), s2.get_num_trees())
 
-    def test_subset_errors(self):
-        for ts in self.get_example_tree_sequences():
-            records = [ts.get_record(j) for j in range(ts.get_num_records())]
-            # Create a topologically impossible tree sequence by adding
-            # another identical record.
-            records = [records[0]] + records
-            other_ts = _msprime.TreeSequence()
-            other_ts.load_records(records[:1] + records)
-            # Verify that we get an error when we try to look at the trees.
-            st = _msprime.SparseTree(other_ts)
-            iterator = _msprime.SparseTreeIterator(st)
-            self.assertRaises(_msprime.LibraryError, list, iterator)
-            # Verify that subset also raises an error here.
-            self.assertRaises(_msprime.LibraryError, other_ts.get_subset, [0, 1])
-
     def test_load_records_equality(self):
         for ts1 in self.get_example_tree_sequences():
             records = [ts1.get_record(j) for j in range(ts1.get_num_records())]
@@ -2069,38 +2054,32 @@ class TestTreeSequence(LowLevelTestCase):
         ts = _msprime.TreeSequence()
         for bad_type in [None, {}, 1234]:
             ts = _msprime.TreeSequence()
-            self.assertRaises(
-                TypeError, ts.load_records, bad_type)
-            self.assertRaises(
-                TypeError, ts.load_records, [bad_type])
+            self.assertRaises(TypeError, ts.load_records, bad_type)
+            self.assertRaises(TypeError, ts.load_records, [bad_type])
         ts = _msprime.TreeSequence()
         record = (0, 1, 2, (0, 1), 1, 0)
         for j in range(len(record)):
             ts = _msprime.TreeSequence()
             sub_record = record[:j]
-            self.assertRaises(
-                ValueError, ts.load_records, [tuple(sub_record)])
+            self.assertRaises(ValueError, ts.load_records, [tuple(sub_record)])
         for bad_type in [None, {}, ts]:
             for j in range(len(record)):
                 r = list(record)
                 r[j] = bad_type
                 ts = _msprime.TreeSequence()
-                self.assertRaises(
-                    TypeError, ts.load_records, [tuple(r)])
+                self.assertRaises(TypeError, ts.load_records, [tuple(r)])
         ts = _msprime.TreeSequence()
-        # < 2 children is an error
+        # zero children is an error
         r = list(record)
-        r[3] = 1,
-        self.assertRaises(
-            ValueError, ts.load_records, [tuple(r)])
+        r[3] = tuple([])
+        self.assertRaises(ValueError, ts.load_records, [tuple(r)])
         for bad_type in ["sdf", {}, ts, None]:
             for j in range(2):
                 r = list(record)
                 r[3] = list(r[3])
                 r[3][j] = bad_type
                 ts = _msprime.TreeSequence()
-                self.assertRaises(
-                    TypeError, ts.load_records, [tuple(r)])
+                self.assertRaises(TypeError, ts.load_records, [tuple(r)])
 
     def test_load_records_bad_samples(self):
         ts = next(self.get_example_tree_sequences())
