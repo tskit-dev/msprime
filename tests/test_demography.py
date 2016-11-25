@@ -590,6 +590,41 @@ class TestCoalescenceLocations(unittest.TestCase):
                 self.assertEqual(tree.get_population(v), pop)
 
 
+class TestMigrationRecords(unittest.TestCase):
+    """
+    Tests that migrations happen where they should for simple models.
+    """
+    def test_two_pops_single_sample(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(0),
+        ]
+        t = 5
+        demographic_events = [
+            msprime.MassMigration(time=t, source=0, destination=2),
+            msprime.MassMigration(time=t, source=1, destination=2),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1, record_migrations=True)
+        migrations = list(ts.migrations())
+        self.assertEqual(len(migrations), 2)
+        m0 = migrations[0]
+        m1 = migrations[1]
+        self.assertEqual(m0.left, 0)
+        self.assertEqual(m0.right, 1)
+        self.assertEqual(m0.source, 0)
+        self.assertEqual(m0.dest, 2)
+        self.assertEqual(m0.time, t)
+        self.assertEqual(m1.left, 0)
+        self.assertEqual(m1.right, 1)
+        self.assertEqual(m1.source, 1)
+        self.assertEqual(m1.dest, 2)
+        self.assertEqual(m1.time, t)
+
+
 class TestTimeUnits(unittest.TestCase):
     """
     Tests for time conversion between generations and coalescent
@@ -614,8 +649,12 @@ class TestTimeUnits(unittest.TestCase):
             Ne=Ne,
             population_configurations=population_configurations,
             demographic_events=demographic_events,
-            random_seed=1, num_replicates=10)
+            random_seed=1, num_replicates=10, record_migrations=True)
         for ts in reps:
+            migrations = list(ts.migrations())
+            self.assertGreater(len(migrations), 0)
+            for mr in migrations:
+                self.assertAlmostEqual(g, mr.time)
             tree = next(ts.trees())
             u = tree.get_mrca(0, 1)
             self.assertEqual(u, 2)

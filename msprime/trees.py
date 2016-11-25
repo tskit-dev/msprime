@@ -63,6 +63,10 @@ CoalescenceRecord = collections.namedtuple(
     ["left", "right", "node", "children", "time", "population"])
 
 
+MigrationRecord = collections.namedtuple(
+    "MigrationRecord",
+    ["left", "right", "node", "source", "dest", "time"])
+
 Mutation = collections.namedtuple(
     "Mutation",
     ["position", "node", "index"])
@@ -720,7 +724,8 @@ def simulator_factory(
         migration_matrix=None,
         samples=None,
         demographic_events=[],
-        model=None):
+        model=None,
+        record_migrations=False):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -778,6 +783,7 @@ def simulator_factory(
         recomb_map = recombination_map
 
     sim = TreeSimulator(the_samples, recomb_map)
+    sim.set_store_migration_records(record_migrations)
     sim.set_effective_population_size(Ne)
     if model is not None:
         sim.set_model(model.lower())
@@ -806,6 +812,7 @@ def simulate(
         demographic_events=[],
         samples=None,
         model=None,
+        record_migrations=False,
         random_seed=None,
         num_replicates=None):
     """
@@ -893,7 +900,7 @@ def simulate(
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
         demographic_events=demographic_events,
-        samples=samples, model=model)
+        samples=samples, model=model, record_migrations=record_migrations)
     # The provenance API is very tentative, and only included now as a
     # pre-alpha feature.
     parameters = {"TODO": "encode simulation parameters"}
@@ -1028,6 +1035,7 @@ class TreeSimulator(object):
         self._population_configurations = [PopulationConfiguration()]
         self._migration_matrix = [[0]]
         self._demographic_events = []
+        self._store_migration_records = False
         # Set default block sizes to 64K objects.
         # TODO does this give good performance in a range of scenarios?
         block_size = 64 * 1024
@@ -1037,6 +1045,7 @@ class TreeSimulator(object):
         self._avl_node_block_size = block_size
         self._node_mapping_block_size = block_size
         self._coalescence_record_block_size = block_size
+        self._migration_record_block_size = block_size
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
         self._max_memory = sys.maxsize
@@ -1183,6 +1192,9 @@ class TreeSimulator(object):
             raise ValueError("Cannot set Ne to a non-positive value.")
         self._effective_population_size = effective_population_size
 
+    def set_store_migration_records(self, store_migration_records):
+        self._store_migration_records = store_migration_records
+
     def set_migration_matrix(self, migration_matrix):
         err = (
             "migration matrix must be a N x N square matrix encoded "
@@ -1267,12 +1279,14 @@ class TreeSimulator(object):
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
             model=self._model,
+            store_migration_records=self._store_migration_records,
             scaled_recombination_rate=ll_recombination_rate,
             max_memory=self._max_memory,
             segment_block_size=self._segment_block_size,
             avl_node_block_size=self._avl_node_block_size,
             node_mapping_block_size=self._node_mapping_block_size,
-            coalescence_record_block_size=self._coalescence_record_block_size)
+            coalescence_record_block_size=self._coalescence_record_block_size,
+            migration_record_block_size=self._migration_record_block_size)
         return ll_sim
 
     def run(self):
@@ -1571,6 +1585,10 @@ class TreeSequence(object):
         """
         for j in range(self.get_num_records()):
             yield CoalescenceRecord(*self._ll_tree_sequence.get_record(j))
+
+    def migrations(self):
+        for j in range(self._ll_tree_sequence.get_num_migration_records()):
+            yield MigrationRecord(*self._ll_tree_sequence.get_migration_record(j))
 
     def diffs(self):
         """
