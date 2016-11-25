@@ -253,6 +253,8 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = msp_set_migration_matrix(msp, num_populations * num_populations,
             migration_matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_store_migration_records(msp, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
@@ -268,10 +270,6 @@ get_example_tree_sequence(uint32_t sample_size,
      * We want to use coalescent time here, so use an Ne of 1/4
      * to cancel scaling factor. */
     ret = tree_sequence_create(tree_seq, msp, recomb_map, 0.25);
-    if (ret != 0) {
-        printf("ret = %s\n", msp_strerror(ret));
-
-    }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_num_coalescence_records(tree_seq),
@@ -279,6 +277,9 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_sample_size(tree_seq),
             msp_get_sample_size(msp));
+    CU_ASSERT_EQUAL_FATAL(
+            tree_sequence_get_num_migration_records(tree_seq),
+            msp_get_num_migration_records(msp));
     CU_ASSERT_FATAL(
             tree_sequence_get_num_nodes(tree_seq) >= sample_size);
     ret = msp_get_coalescence_records(msp, &sim_records);
@@ -926,6 +927,8 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_scaled_recombination_rate(&msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_store_migration_records(&msp, true);
+    CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -944,6 +947,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(population->growth_rate, 0.5);
     CU_ASSERT_EQUAL(population->start_time, 0.0);
 
+    CU_ASSERT_TRUE(msp_get_store_migration_records(&msp));
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_node_mapping_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_segment_blocks(&msp), 1);

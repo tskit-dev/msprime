@@ -25,6 +25,7 @@
 #endif
 
 #include <stdio.h>
+#include <stdbool.h>
 
 #include <gsl/gsl_rng.h>
 
@@ -134,6 +135,7 @@ typedef struct {
     gsl_rng *rng;
     /* input parameters */
     int model;
+    bool store_migration_records;
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
@@ -456,6 +458,7 @@ typedef struct {
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
 int msp_set_model(msp_t *self, int model);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
+int msp_set_store_migration_records(msp_t *self, bool store_migration_records);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_scaled_recombination_rate(msp_t *self,
         double scaled_recombination_rate);
@@ -506,6 +509,7 @@ int msp_is_completed(msp_t *self);
 
 int msp_get_model(msp_t *self);
 const char * msp_get_model_str(msp_t *self);
+bool msp_get_store_migration_records(msp_t *self);
 size_t msp_get_sample_size(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);
@@ -534,6 +538,7 @@ int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_increment_refcount(tree_sequence_t *self);
 int tree_sequence_decrement_refcount(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
+size_t tree_sequence_get_num_migration_records(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);

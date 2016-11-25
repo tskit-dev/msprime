@@ -569,6 +569,18 @@ out:
     return ret;
 }
 
+static PyObject *
+make_migration_record(migration_record_t *r)
+{
+    int source = r->source == MSP_NULL_POPULATION_ID ? -1: r->source;
+    int dest = r->dest == MSP_NULL_POPULATION_ID ? -1: r->dest;
+    PyObject *ret = NULL;
+
+    ret = Py_BuildValue("ddIiid",
+            r->left, r->right, (unsigned int) r->node, source, dest, r->time);
+    return ret;
+}
+
 /*===================================================================
  * RandomGenerator
  *===================================================================
@@ -1025,7 +1037,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "num_loci", "scaled_recombination_rate",
         "population_configuration", "migration_matrix", "demographic_events",
         "model", "max_memory", "avl_node_block_size", "segment_block_size",
-        "node_mapping_block_size", "coalescence_record_block_size", NULL};
+        "node_mapping_block_size", "coalescence_record_block_size",
+        "migration_record_block_size", "store_migration_records", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -1043,10 +1056,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
     Py_ssize_t coalescence_record_block_size = 10;
+    Py_ssize_t migration_record_block_size = 10;
+    int store_migration_records = 0;
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!snnnnn", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!snnnnnni", kwlist,
             &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
             &num_loci, &scaled_recombination_rate,
@@ -1054,7 +1069,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
             &model_str, &max_memory, &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size, &coalescence_record_block_size)) {
+            &node_mapping_block_size, &coalescence_record_block_size,
+            &migration_record_block_size, &store_migration_records)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -1082,6 +1098,11 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         }
     }
     sim_ret = msp_set_model(self->sim, model);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_store_migration_records(self->sim, (bool) store_migration_records);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -1122,6 +1143,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     sim_ret = msp_set_coalescence_record_block_size(self->sim,
             (size_t) coalescence_record_block_size);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_migration_record_block_size(self->sim,
+            (size_t) migration_record_block_size);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -1191,6 +1218,18 @@ Simulator_get_num_loci(Simulator *self)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_loci(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_store_migration_records(Simulator *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", (Py_ssize_t) msp_get_store_migration_records(self->sim));
 out:
     return ret;
 }
@@ -1292,6 +1331,20 @@ Simulator_get_coalescence_record_block_size(Simulator  *self)
 out:
     return ret;
 }
+
+static PyObject *
+Simulator_get_migration_record_block_size(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+            (Py_ssize_t) self->sim->migration_record_block_size);
+out:
+    return ret;
+}
+
 
 static PyObject *
 Simulator_get_time(Simulator  *self)
@@ -1450,6 +1503,19 @@ out:
 }
 
 static PyObject *
+Simulator_get_num_migration_record_blocks(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+            (Py_ssize_t) msp_get_num_migration_record_blocks(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_get_used_memory(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -1483,6 +1549,19 @@ Simulator_get_num_coalescence_records(Simulator  *self)
     }
     ret = Py_BuildValue("n",
             (Py_ssize_t) msp_get_num_coalescence_records(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_num_migration_records(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+            (Py_ssize_t) msp_get_num_migration_records(self->sim));
 out:
     return ret;
 }
@@ -1660,6 +1739,44 @@ Simulator_get_coalescence_records(Simulator *self)
             goto out;
         }
         PyList_SET_ITEM(l, j, py_cr);
+    }
+    ret = l;
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_migration_records(Simulator *self)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_mr = NULL;
+    migration_record_t *migration_records = NULL;
+    migration_record_t *mr;
+    size_t num_migration_records, j;
+    int err;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    num_migration_records = msp_get_num_migration_records(self->sim);
+    err = msp_get_migration_records(self->sim, &migration_records);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    l = PyList_New(num_migration_records);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_migration_records; j++) {
+        mr = &migration_records[j];
+        py_mr = make_migration_record(mr);
+        if (py_mr == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_mr);
     }
     ret = l;
 out:
@@ -1853,6 +1970,9 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the simulation model" },
     {"get_num_loci", (PyCFunction) Simulator_get_num_loci, METH_NOARGS,
             "Returns the number of loci" },
+    {"get_store_migration_records",
+            (PyCFunction) Simulator_get_store_migration_records, METH_NOARGS,
+            "Returns True if the simulator should store migration records." },
     {"get_sample_size", (PyCFunction) Simulator_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
     {"get_num_populations", (PyCFunction) Simulator_get_num_populations, METH_NOARGS,
@@ -1874,6 +1994,9 @@ static PyMethodDef Simulator_methods[] = {
     {"get_coalescence_record_block_size",
             (PyCFunction) Simulator_get_coalescence_record_block_size,
             METH_NOARGS, "Returns the coalescent record block size" },
+    {"get_migration_record_block_size",
+            (PyCFunction) Simulator_get_migration_record_block_size,
+            METH_NOARGS, "Returns the migration record block size" },
     {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS,
             "Returns the current simulation time" },
     {"get_num_ancestors", (PyCFunction) Simulator_get_num_ancestors, METH_NOARGS,
@@ -1907,11 +2030,17 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_coalescence_record_blocks",
             (PyCFunction) Simulator_get_num_coalescence_record_blocks, METH_NOARGS,
             "Returns the number of coalescence record memory blocks"},
+    {"get_num_migration_record_blocks",
+            (PyCFunction) Simulator_get_num_migration_record_blocks, METH_NOARGS,
+            "Returns the number of coalescence record memory blocks"},
     {"get_num_breakpoints", (PyCFunction) Simulator_get_num_breakpoints,
             METH_NOARGS, "Returns the number of recombination breakpoints" },
     {"get_num_coalescence_records",
             (PyCFunction) Simulator_get_num_coalescence_records,
             METH_NOARGS, "Returns the number of coalescence records" },
+    {"get_num_migration_records",
+            (PyCFunction) Simulator_get_num_migration_records,
+            METH_NOARGS, "Returns the number of migration records" },
     {"get_used_memory", (PyCFunction) Simulator_get_used_memory,
             METH_NOARGS, "Returns the approximate amount of memory used." },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
@@ -1922,6 +2051,8 @@ static PyMethodDef Simulator_methods[] = {
             METH_NOARGS, "Returns the migration matrix." },
     {"get_coalescence_records", (PyCFunction) Simulator_get_coalescence_records,
             METH_NOARGS, "Returns the coalescence records." },
+    {"get_migration_records", (PyCFunction) Simulator_get_migration_records,
+            METH_NOARGS, "Returns the migration records." },
     {"get_population_configuration",
             (PyCFunction) Simulator_get_population_configuration, METH_NOARGS,
             "Returns the population configurations"},
@@ -2740,6 +2871,37 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_migration_record(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    migration_record_t mr;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_migration_records(
+        self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_migration_record(self->tree_sequence,
+            (size_t) record_index, &mr);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_migration_record(&mr);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_mutations(TreeSequence *self)
 {
     PyObject *ret = NULL;
@@ -2775,6 +2937,23 @@ TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
 out:
     return ret;
 }
+
+static PyObject *
+TreeSequence_get_num_migration_records(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_records;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_records = tree_sequence_get_num_migration_records(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_records);
+out:
+    return ret;
+}
+
+
 
 static PyObject *
 TreeSequence_get_num_trees(TreeSequence *self, PyObject *args)
@@ -3006,8 +3185,13 @@ static PyMethodDef TreeSequence_methods[] = {
         METH_NOARGS, "Returns the list of mutations"},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
         "Returns the record at the specified index."},
+    {"get_migration_record",
+        (PyCFunction) TreeSequence_get_migration_record, METH_VARARGS,
+        "Returns the migration record at the specified index."},
     {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
         METH_NOARGS, "Returns the number of coalescence records." },
+    {"get_num_migration_records", (PyCFunction) TreeSequence_get_num_migration_records,
+        METH_NOARGS, "Returns the number of migration records." },
     {"get_num_trees", (PyCFunction) TreeSequence_get_num_trees,
         METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,

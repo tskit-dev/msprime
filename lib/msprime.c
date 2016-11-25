@@ -364,6 +364,13 @@ out:
 }
 
 int
+msp_set_store_migration_records(msp_t *self, bool store_migration_records)
+{
+    self->store_migration_records = store_migration_records;
+    return 0;
+}
+
+int
 msp_set_num_loci(msp_t *self, size_t num_loci)
 {
     int ret = 0;
@@ -650,6 +657,7 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng)
     /* Set sensible defaults for the sample_config and migration matrix */
     self->initial_migration_matrix[0] = 0.0;
     /* Set the memory defaults */
+    self->store_migration_records = false;
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
@@ -1268,12 +1276,14 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     /* Need to set the population_id for each segment. */
     x = ind;
     while (x != NULL) {
-        x->population_id = dest_pop;
-        ret = msp_record_migration(self, x->left, x->right, x->value,
-                x->population_id, dest_pop);
-        if (ret != 0) {
-            goto out;
+        if (self->store_migration_records) {
+            ret = msp_record_migration(self, x->left, x->right, x->value,
+                    x->population_id, dest_pop);
+            if (ret != 0) {
+                goto out;
+            }
         }
+        x->population_id = dest_pop;
         x = x->next;
     }
     ret = msp_insert_individual(self, ind);
@@ -2444,6 +2454,12 @@ size_t
 msp_get_num_loci(msp_t *self)
 {
     return (size_t) self->num_loci;
+}
+
+bool
+msp_get_store_migration_records(msp_t *self)
+{
+    return self->store_migration_records;
 }
 
 size_t

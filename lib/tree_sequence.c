@@ -763,10 +763,14 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     }
     assert(self->migrations.num_records == num_migration_records);
 
-    /* Rescale node times into generations */
+    /* Rescale times into generations */
     for (j = 0; j < self->num_nodes; j++) {
         self->trees.nodes.time[j] *= 4 * Ne;
     }
+    for (j = 0; j < self->migrations.num_records; j++) {
+        self->migrations.time[j] *= 4 * Ne;
+    }
+    /* Remap coordinates into physical coordinates */
     self->sequence_length = recomb_map_get_sequence_length(recomb_map);
     ret = recomb_map_genetic_to_phys_bulk(
         recomb_map, self->trees.breakpoints, self->trees.num_breakpoints);
@@ -1577,6 +1581,12 @@ size_t
 tree_sequence_get_num_coalescence_records(tree_sequence_t *self)
 {
     return self->trees.num_records;
+}
+
+size_t
+tree_sequence_get_num_migration_records(tree_sequence_t *self)
+{
+    return self->migrations.num_records;
 }
 
 size_t
