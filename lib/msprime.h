@@ -254,6 +254,7 @@ typedef struct {
     uint32_t sample_size;
     double sequence_length;
     struct {
+        size_t num_records;
         double *breakpoints;
         size_t num_breakpoints;
         struct {
@@ -274,6 +275,7 @@ typedef struct {
         } indexes;
     } trees;
     struct {
+        size_t num_records;
         uint32_t *node;
         double *position;
         size_t *num_tree_mutations;
@@ -284,8 +286,6 @@ typedef struct {
     size_t num_provenance_strings;
     size_t num_nodes;
     size_t num_child_nodes;
-    size_t num_records;
-    size_t num_mutations;
     coalescence_record_t returned_record;
     /* The number of trees referencing this tree sequence.
      * This is NOT threadsafe! TODO when we want to have trees

@@ -506,7 +506,7 @@ print_variants(tree_sequence_t *ts)
     if (genotypes == NULL) {
         fatal_error("no memory");
     }
-    printf("variants (%d) \n", (int) ts->num_mutations);
+    printf("variants (%d) \n", (int) ts->mutations.num_records);
     ret = vargen_alloc(&vg, ts, 0);
     if (ret != 0) {
         fatal_library_error(ret, "vargen_alloc");
@@ -523,8 +523,8 @@ print_variants(tree_sequence_t *ts)
     if (ret != 0) {
         fatal_library_error(ret, "vargen_next");
     }
-    if (j != ts->num_mutations) {
-        printf("ERROR!! missing variants %d %d\n", j, (int) ts->num_mutations);
+    if (j != ts->mutations.num_records) {
+        printf("ERROR!! missing variants %d %d\n", j, (int) ts->mutations.num_records);
     }
 
     while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) {
