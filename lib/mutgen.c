@@ -179,15 +179,15 @@ mutgen_generate(mutgen_t *self)
 {
     int ret = -1;
     tree_sequence_t *ts = self->tree_sequence;
-    coalescence_record_t *cr = NULL;
+    coalescence_record_t cr;
     size_t j;
 
     for (j = 0; j < tree_sequence_get_num_coalescence_records(ts); j++) {
-        ret = tree_sequence_get_record(ts, j, &cr, MSP_ORDER_TIME);
+        ret = tree_sequence_get_coalescence_record(ts, j, &cr, MSP_ORDER_TIME);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_generate_record_mutations(self, cr);
+        ret = mutgen_generate_record_mutations(self, &cr);
         if (ret != 0) {
             goto out;
         }

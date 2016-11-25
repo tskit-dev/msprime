@@ -110,13 +110,13 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
         fprintf(out, "\t'%s'\n", self->provenance_strings[j]);
     }
     fprintf(out, "sequence_length = %f\n", self->sequence_length);
-    fprintf(out, "nodes (%d)\n", (int) self->num_nodes);
+    fprintf(out, "tree.nodes (%d)\n", (int) self->num_nodes);
     for (j = 0; j < self->num_nodes; j++) {
         fprintf(out, "\t%d\t%d\t%f\n", (int) j,
                 (int) self->trees.nodes.population[j],
                 self->trees.nodes.time[j]);
     }
-    fprintf(out, "breakpoints (%d)\n", (int) self->trees.num_breakpoints);
+    fprintf(out, "tree.breakpoints (%d)\n", (int) self->trees.num_breakpoints);
     for (j = 0; j < self->trees.num_breakpoints; j++) {
         fprintf(out, "\t%d\t%f\n", (int) j,
                 self->trees.breakpoints[j]);
@@ -154,6 +154,22 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
                         self->mutations.tree_mutations[j][k].node);
             }
         }
+    }
+    fprintf(out, "migrations.breakpoints (%d)\n",
+            (int) self->migrations.num_breakpoints);
+    for (j = 0; j < self->migrations.num_breakpoints; j++) {
+        fprintf(out, "\t%d\t%f\n", (int) j, self->migrations.breakpoints[j]);
+    }
+    fprintf(out, "migrations.records = (%d records)\n",
+            (int) self->migrations.num_records);
+    for (j = 0; j < self->migrations.num_records; j++) {
+        fprintf(out, "\t%d\t%d\t%d\t%d\t%d\t%d\t%f\n", (int) j,
+                self->migrations.left[j],
+                self->migrations.right[j],
+                self->migrations.node[j],
+                self->migrations.source[j],
+                self->migrations.dest[j],
+                self->migrations.time[j]);
     }
     tree_sequence_check_state(self);
 }
@@ -279,6 +295,27 @@ tree_sequence_free(tree_sequence_t *self)
     }
     if (self->mutations.num_tree_mutations != NULL) {
         free(self->mutations.num_tree_mutations);
+    }
+    if (self->migrations.breakpoints != NULL) {
+        free(self->migrations.breakpoints);
+    }
+    if (self->migrations.node != NULL) {
+        free(self->migrations.node);
+    }
+    if (self->migrations.source != NULL) {
+        free(self->migrations.source);
+    }
+    if (self->migrations.dest != NULL) {
+        free(self->migrations.dest);
+    }
+    if (self->migrations.left != NULL) {
+        free(self->migrations.left);
+    }
+    if (self->migrations.right != NULL) {
+        free(self->migrations.right);
+    }
+    if (self->migrations.time != NULL) {
+        free(self->migrations.time);
     }
     return 0;
 }
@@ -581,6 +618,93 @@ out:
     return ret;
 }
 
+static int
+tree_sequence_init_migrations(tree_sequence_t *self,
+      size_t num_records, migration_record_t *records)
+{
+    int ret = MSP_ERR_GENERIC;
+    double *coordinates = NULL;
+    double *ptr;
+    double last_breakpoint;
+    size_t j, k;
+
+    coordinates = malloc((2 * num_records) * sizeof(double));
+    if (coordinates == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    self->migrations.num_records = num_records;
+    self->migrations.node = malloc(self->migrations.num_records * sizeof(uint32_t));
+    self->migrations.source = malloc(self->migrations.num_records * sizeof(uint32_t));
+    self->migrations.dest = malloc(self->migrations.num_records * sizeof(uint32_t));
+    self->migrations.left = malloc(self->migrations.num_records * sizeof(uint32_t));
+    self->migrations.right = malloc(self->migrations.num_records * sizeof(uint32_t));
+    self->migrations.time = malloc(self->migrations.num_records * sizeof(double));
+
+    if (self->migrations.node == NULL
+            || self->migrations.source == NULL
+            || self->migrations.dest == NULL
+            || self->migrations.left == NULL
+            || self->migrations.right == NULL
+            || self->migrations.time == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < num_records; j++) {
+        self->migrations.node[j] = records[j].node;
+        self->migrations.source[j] = records[j].source;
+        self->migrations.dest[j] = records[j].dest;
+        self->migrations.time[j] = records[j].time;
+        coordinates[2 * j] = records[j].left;
+        coordinates[2 * j + 1] = records[j].right;
+    }
+    qsort(coordinates, 2 * num_records, sizeof(double), cmp_double);
+    self->migrations.num_breakpoints = 0;
+    last_breakpoint = -1.0;
+    for (j = 0; j < 2 * num_records; j++) {
+        if (coordinates[j] != last_breakpoint) {
+            self->migrations.num_breakpoints++;
+            last_breakpoint = coordinates[j];
+        }
+    }
+    self->migrations.breakpoints = malloc(self->migrations.num_breakpoints
+            * sizeof(double));
+    if (self->migrations.breakpoints == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* Fill in the breakpoints */
+    last_breakpoint = -1.0;
+    k = 0;
+    for (j = 0; j < 2 * num_records; j++) {
+        if (coordinates[j] != last_breakpoint) {
+            self->migrations.breakpoints[k] = coordinates[j];
+            last_breakpoint = coordinates[j];
+            k++;
+        }
+    }
+    /* For each record, find the corresponding breakpoints */
+    for (j = 0; j < num_records; j++) {
+        ptr = bsearch(&records[j].left, self->migrations.breakpoints,
+                self->migrations.num_breakpoints, sizeof(double), cmp_double);
+        assert(ptr != NULL);
+        self->migrations.left[j] = (uint32_t) (ptr - self->migrations.breakpoints);
+        assert(self->migrations.left[j] < self->migrations.num_breakpoints);
+        ptr = bsearch(&records[j].right, self->migrations.breakpoints,
+                self->migrations.num_breakpoints, sizeof(double), cmp_double);
+        assert(ptr != NULL);
+        self->migrations.right[j] = (uint32_t) (ptr - self->migrations.breakpoints);
+        assert(self->migrations.right[j] < self->migrations.num_breakpoints);
+    }
+    ret = 0;
+out:
+    if (coordinates != NULL) {
+        free(coordinates);
+    }
+    return ret;
+}
+
 
 int WARN_UNUSED
 tree_sequence_load_records(tree_sequence_t *self,
@@ -602,16 +726,17 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
         recomb_map_t *recomb_map, double Ne)
 {
     int ret = MSP_ERR_GENERIC;
-    size_t j, num_coalesence_records;
+    size_t j, num_coalescence_records, num_migration_records;
     coalescence_record_t *coalescence_records = NULL;
+    migration_record_t *migration_records = NULL;
     sample_t *samples = NULL;
 
     ret = msp_get_coalescence_records(sim, &coalescence_records);
     if (ret != 0) {
         goto out;
     }
-    num_coalesence_records = msp_get_num_coalescence_records(sim);
-    ret = tree_sequence_init_from_records(self, num_coalesence_records,
+    num_coalescence_records = msp_get_num_coalescence_records(sim);
+    ret = tree_sequence_init_from_records(self, num_coalescence_records,
             coalescence_records);
     if (ret != 0) {
         goto out;
@@ -619,7 +744,6 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     assert(self->sample_size == msp_get_sample_size(sim));
     assert(self->sequence_length == (double) msp_get_num_loci(sim));
     assert(self->trees.num_records == msp_get_num_coalescence_records(sim));
-
     ret = msp_get_samples(sim, &samples);
     if (ret != 0) {
         goto out;
@@ -628,6 +752,17 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     if (ret != 0) {
         goto out;
     }
+    ret = msp_get_migration_records(sim, &migration_records);
+    if (ret != 0) {
+        goto out;
+    }
+    num_migration_records = msp_get_num_migration_records(sim);
+    ret = tree_sequence_init_migrations(self, num_migration_records, migration_records);
+    if (ret != 0) {
+        goto out;
+    }
+    assert(self->migrations.num_records == num_migration_records);
+
     /* Rescale node times into generations */
     for (j = 0; j < self->num_nodes; j++) {
         self->trees.nodes.time[j] *= 4 * Ne;
@@ -635,6 +770,12 @@ tree_sequence_create(tree_sequence_t *self, msp_t *sim,
     self->sequence_length = recomb_map_get_sequence_length(recomb_map);
     ret = recomb_map_genetic_to_phys_bulk(
         recomb_map, self->trees.breakpoints, self->trees.num_breakpoints);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = recomb_map_genetic_to_phys_bulk(
+        recomb_map, self->migrations.breakpoints, self->migrations.num_breakpoints);
+
 out:
     return ret;
 }
@@ -1451,8 +1592,8 @@ tree_sequence_get_num_trees(tree_sequence_t *self)
 }
 
 int WARN_UNUSED
-tree_sequence_get_record(tree_sequence_t *self, size_t index,
-        coalescence_record_t **record, int order)
+tree_sequence_get_coalescence_record(tree_sequence_t *self, size_t index,
+        coalescence_record_t *record, int order)
 {
     int ret = 0;
     size_t j;
@@ -1475,17 +1616,33 @@ tree_sequence_get_record(tree_sequence_t *self, size_t index,
             ret = MSP_ERR_BAD_ORDERING;
             goto out;
     }
-    self->returned_record.left = self->trees.breakpoints[
-        self->trees.records.left[j]];
-    self->returned_record.right = self->trees.breakpoints[
-        self->trees.records.right[j]];
-    self->returned_record.node = self->trees.records.node[j];
-    self->returned_record.num_children = self->trees.records.num_children[j];
-    self->returned_record.children = self->trees.records.children[j];
-    self->returned_record.time = self->trees.nodes.time[self->trees.records.node[j]];
-    self->returned_record.population_id = self->trees.nodes.population[
-        self->trees.records.node[j]];
-    *record = &self->returned_record;
+    record->left = self->trees.breakpoints[self->trees.records.left[j]];
+    record->right = self->trees.breakpoints[self->trees.records.right[j]];
+    record->node = self->trees.records.node[j];
+    record->num_children = self->trees.records.num_children[j];
+    record->children = self->trees.records.children[j];
+    record->time = self->trees.nodes.time[self->trees.records.node[j]];
+    record->population_id = self->trees.nodes.population[self->trees.records.node[j]];
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_get_migration_record(tree_sequence_t *self, size_t index,
+        migration_record_t *record)
+{
+    int ret = 0;
+
+    if (index >= self->migrations.num_records) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    record->node = self->migrations.node[index];
+    record->source = self->migrations.source[index];
+    record->dest = self->migrations.dest[index];
+    record->left = self->migrations.breakpoints[self->migrations.left[index]];
+    record->right = self->migrations.breakpoints[self->migrations.right[index]];
+    record->time = self->migrations.time[index];
 out:
     return ret;
 }

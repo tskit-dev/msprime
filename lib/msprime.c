@@ -1204,7 +1204,7 @@ msp_print_state(msp_t *self, FILE *out)
     for (j = 0; j < self->num_migration_records; j++) {
         mr = &self->migration_records[j];
         fprintf(out, "\t%f\t%f\t%d\t%f\t%d\t%d\n", mr->left, mr->right,
-                mr->node, mr->time, mr->source_pop, mr->dest_pop);
+                mr->node, mr->time, mr->source, mr->dest);
     }
     fprintf(out, "Memory heaps\n");
     fprintf(out, "avl_node_heap:");
@@ -1248,8 +1248,8 @@ msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
     mr->right = (double) right;
     mr->node = node;
     mr->time = self->time;
-    mr->source_pop = (uint8_t) source_pop;
-    mr->dest_pop = (uint8_t) dest_pop;
+    mr->source = source_pop;
+    mr->dest = dest_pop;
     self->num_migration_records++;
 out:
     return ret;

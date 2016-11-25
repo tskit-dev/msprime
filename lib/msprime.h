@@ -88,8 +88,8 @@ typedef struct {
 } coalescence_record_t;
 
 typedef struct {
-    uint8_t source_pop;
-    uint8_t dest_pop;
+    uint32_t source;
+    uint32_t dest;
     uint32_t node;
     double left;
     double right;
@@ -282,6 +282,17 @@ typedef struct {
         mutation_t *tree_mutations_mem;
         mutation_t **tree_mutations;
     } mutations;
+    struct {
+        size_t num_records;
+        double *breakpoints;
+        size_t num_breakpoints;
+        uint32_t *node;
+        uint32_t *source;
+        uint32_t *dest;
+        uint32_t *left;
+        uint32_t *right;
+        double *time;
+    } migrations;
     char **provenance_strings;
     size_t num_provenance_strings;
     size_t num_nodes;
@@ -529,8 +540,10 @@ uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 
-int tree_sequence_get_record(tree_sequence_t *self, size_t index,
-        coalescence_record_t **record, int order);
+int tree_sequence_get_coalescence_record(tree_sequence_t *self, size_t index,
+        coalescence_record_t *record, int order);
+int tree_sequence_get_migration_record(tree_sequence_t *self, size_t index,
+        migration_record_t *record);
 int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t **mutations);
 int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u,
         sample_t *sample);
