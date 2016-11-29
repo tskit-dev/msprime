@@ -2963,7 +2963,7 @@ sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
     j = u;
     l1 = 0;
     while (j != MSP_NULL_NODE) {
-        assert(l1 < (int) self->sample_size);
+        assert(l1 < (int) self->num_nodes);
         s1[l1] = j;
         l1++;
         j = self->parent[j];
@@ -2972,7 +2972,7 @@ sparse_tree_get_mrca(sparse_tree_t *self, uint32_t u, uint32_t v,
     j = v;
     l2 = 0;
     while (j != MSP_NULL_NODE) {
-        assert(l2 < (int) self->sample_size);
+        assert(l2 < (int) self->num_nodes);
         s2[l2] = j;
         l2++;
         j = self->parent[j];

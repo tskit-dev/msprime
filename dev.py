@@ -1058,13 +1058,16 @@ def simplify(ts, samples):
 
 def subset_error(infile):
     ts = msprime.load(infile)
-    ts_new = simplify(ts, list(range(ts.sample_size)))
-    print("old")
-    for t in ts.subset(list(range(ts.sample_size))).trees():
-        print(t)
-    print("new")
+    samples = list(range(ts.sample_size))
+    # ts_new = simplify(ts, samples)
+    ts_new = ts.subset(samples)
+    # print("old")
+    # for t in ts.subset(samples).trees():
+    #     print(t)
+    # print("new")
     for t in ts_new.trees():
-        print(t)
+        pass
+        # print(t)
 
 
 if __name__ == "__main__":
@@ -1102,7 +1105,7 @@ if __name__ == "__main__":
     #     print(k)
     #     subset_samples(30000, list(range(k)))
 
-    subset_samples(30000, [5, 7, 8,9, 10, 11])
+    # subset_samples(30000, [5, 7, 8,9, 10, 11])
 
     # subset_samples(300, list(range(20)))
     # subset_samples(30, list(range(3)))
@@ -1116,4 +1119,4 @@ if __name__ == "__main__":
     #     for k in [2, 10, 50, n - 1, n]:
     #         print(n, k, file=sys.stderr)
     #         subset_samples(n, range(k))
-    # subset_error("subset-error-many-roots.hdf5")
+    subset_error(sys.argv[1])
