@@ -1275,7 +1275,6 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertIn(unique[0], [0, 1])
             j += 1
 
-    @unittest.skip("Disabled until subset bug fixed")
     def test_subset(self):
         num_mutations = 0
         for ts in self.get_example_tree_sequences():
@@ -1290,6 +1289,29 @@ class TestTreeSequence(HighLevelTestCase):
                     self.verify_subset_equality(ts, subset)
                     self.verify_subset_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
+
+    def test_subset_bugs(self):
+        pass
+        # prefix = "tests/data/simplify-bugs/"
+        # j = 1
+        # while True:
+        #     records_file = os.path.join(prefix, "{:02d}_records.txt".format(j))
+        #     if not os.path.exists(records_file):
+        #         break
+
+        #     mutations_file = os.path.join(prefix, "{:02d}_mutations.txt".format(j))
+        #     ts = msprime.load_txt(records_file, mutations_file)
+        #     print("records_file = ", records_file)
+        #     for t in ts.trees():
+        #         print(t)
+        #     samples = list(range(ts.sample_size))
+        #     self.verify_subset_equality(ts, samples)
+        #     self.verify_subset_topology(ts, samples)
+        #     # self.verify_subset_mutations(ts, samples)
+        #     # self.verify_subset_variants(ts, samples)
+
+        #     j += 1
+        # self.assertGreater(j, 1)
 
     def test_apis(self):
         for ts in self.get_example_tree_sequences():

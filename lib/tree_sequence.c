@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <stdbool.h>
 
 #include <hdf5.h>
 
@@ -1682,6 +1683,390 @@ out:
 
 int WARN_UNUSED
 tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
+        uint32_t num_samples, tree_sequence_t *output)
+{
+
+    typedef struct {
+        bool active;
+        uint32_t left;
+        uint32_t *mapped_children;
+        uint32_t num_mapped_children;
+    } active_record_t;
+
+    int ret = MSP_ERR_GENERIC;
+    uint32_t *parent = NULL;
+    uint32_t *num_children = NULL;
+    uint32_t **children = NULL;
+    uint32_t *mapping = NULL;
+    uint32_t *mapped_children = NULL;
+    uint32_t *mapped_children_mem = NULL;
+    sample_t *sample_objects = NULL;
+    active_record_t *active_records = NULL;
+    coalescence_record_t *output_records = NULL;
+    mutation_t *output_mutations = NULL;
+    uint32_t *I = self->trees.indexes.insertion_order;
+    uint32_t *O = self->trees.indexes.removal_order;
+    size_t M = self->num_records;
+    size_t j, k, h, next_avl_node, mapped_children_mem_offset, num_output_records,
+           num_squashed_records, num_output_mutations;
+    uint32_t u, v, w, x, c, l, subset_root, num_mapped_children;
+    avl_tree_t visited_nodes;
+    avl_node_t *avl_node_mem = NULL;
+    uint32_t *avl_node_value_mem = NULL;
+    avl_node_t *avl_node;
+    active_record_t *ar;
+    coalescence_record_t *cr;
+    mutation_t *mut;
+    bool equal, activate_record;
+    double right;
+
+    if (num_samples < 2) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    parent = malloc(self->num_nodes * sizeof(uint32_t));
+    children = malloc(self->num_nodes * sizeof(uint32_t *));
+    num_children = malloc(self->num_nodes * sizeof(uint32_t));
+    mapping = malloc(self->num_nodes * sizeof(uint32_t));
+    sample_objects = malloc(num_samples * sizeof(sample_t));
+    avl_node_mem = malloc(self->num_nodes * sizeof(avl_node_t));
+    avl_node_value_mem = malloc(self->num_nodes * sizeof(uint32_t));
+    active_records = malloc(self->num_nodes * sizeof(active_record_t));
+    mapped_children = malloc(self->num_nodes * sizeof(uint32_t));
+    mapped_children_mem = malloc(self->num_child_nodes * sizeof(uint32_t));
+    output_records = malloc(self->num_records * sizeof(coalescence_record_t));
+    output_mutations = malloc(self->num_mutations * sizeof(mutation_t));
+    if (parent == NULL || children == NULL || num_children == NULL
+            || mapping == NULL || sample_objects == NULL
+            || avl_node_mem == NULL || avl_node_value_mem == NULL
+            || mapped_children == NULL || active_records == NULL
+            || mapped_children_mem == NULL || output_records == NULL
+            || output_mutations == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    /* Initialise the mapping and tree structures */
+    for (u = 0; u < self->num_nodes; u++) {
+        parent[u] = MSP_NULL_NODE;
+        children[u] = NULL;
+        num_children[u] = 0;
+        mapping[u] = MSP_NULL_NODE;
+        avl_node_mem[u].item = avl_node_value_mem + u;
+        active_records[u].active = false;
+    }
+    for (c = 0; c < num_samples; c++) {
+        u = samples[c];
+        if (u >= self->sample_size) {
+            ret = MSP_ERR_BAD_SAMPLES;
+            goto out;
+        }
+        if (mapping[u] != MSP_NULL_NODE) {
+            ret = MSP_ERR_DUPLICATE_SAMPLE;
+            goto out;
+        }
+        mapping[u] = u;
+        sample_objects[c].population_id = self->trees.nodes.population[u];
+        sample_objects[c].time = self->trees.nodes.time[u];
+    }
+    avl_init_tree(&visited_nodes, cmp_uint32_t, NULL);
+    mapped_children_mem_offset = 0;
+    num_output_records = 0;
+    num_output_mutations = 0;
+
+    j = 0;
+    k = 0;
+    l = 0;
+    while (j < M) {
+        x = self->trees.records.left[I[j]];
+        next_avl_node = 0;
+        avl_clear_tree(&visited_nodes);
+
+        /* Records out */
+        while (self->trees.records.right[O[k]] == x) {
+            h = O[k];
+            k++;
+            u = self->trees.records.node[h];
+            for (c = 0; c < num_children[u]; c++) {
+                parent[children[u][c]] = MSP_NULL_NODE;
+            }
+            num_children[u] = 0;
+            children[u] = NULL;
+            /* Propagate up to the root and save visited nodes */
+            while (u != MSP_NULL_NODE) {
+                if (avl_search(&visited_nodes, &u) == NULL) {
+                    assert(next_avl_node < self->num_nodes);
+                    avl_node = &avl_node_mem[next_avl_node];
+                    next_avl_node++;
+                    *((uint32_t *) avl_node->item) = u;
+                    avl_node = avl_insert_node(&visited_nodes, avl_node);
+                    assert(avl_node != NULL);
+                }
+
+                w = MSP_NULL_NODE;
+                for (c = 0; c < num_children[u]; c++) {
+                    v = children[u][c];
+                    if (mapping[v] != MSP_NULL_NODE) {
+                        w = w == MSP_NULL_NODE ? mapping[v]: u;
+                    }
+                }
+                mapping[u] = w;
+                u = parent[u];
+            }
+        }
+
+        /* Records in */
+        while (j < M && self->trees.records.left[I[j]] == x) {
+            h = I[j];
+            j++;
+            u = self->trees.records.node[h];
+            num_children[u] = self->trees.records.num_children[h];
+            children[u] = self->trees.records.children[h];
+            for (c = 0; c < num_children[u]; c++) {
+                v = children[u][c];
+                parent[v] = u;
+            }
+            /* Propagate up to the root and save visited nodes */
+            while (u != MSP_NULL_NODE) {
+                if (avl_search(&visited_nodes, &u) == NULL) {
+                    assert(next_avl_node < self->num_nodes);
+                    avl_node = &avl_node_mem[next_avl_node];
+                    next_avl_node++;
+                    *((uint32_t *) avl_node->item) = u;
+                    avl_node = avl_insert_node(&visited_nodes, avl_node);
+                    assert(avl_node != NULL);
+                }
+
+                w = MSP_NULL_NODE;
+                for (c = 0; c < num_children[u]; c++) {
+                    v = children[u][c];
+                    if (mapping[v] != MSP_NULL_NODE) {
+                        w = w == MSP_NULL_NODE ? mapping[v]: u;
+                    }
+                }
+                mapping[u] = w;
+                u = parent[u];
+            }
+        }
+
+        /* Examine the visited nodes and update the active records */
+        for (avl_node = visited_nodes.head; avl_node != NULL;
+                avl_node = avl_node->next) {
+            u = *((uint32_t *) avl_node->item);
+            ar = &active_records[u];
+            activate_record = false;
+            /* printf("visited node : %d, active = %d\n", u, active_records[u].active); */
+            if (ar->active) {
+                /* Compare the mapped children at this node to the record. */
+                num_mapped_children = 0;
+                for (c = 0; c < num_children[u]; c++) {
+                    v = children[u][c];
+                    if (mapping[v] != MSP_NULL_NODE) {
+                        assert(num_mapped_children < self->num_nodes);
+                        mapped_children[num_mapped_children] = mapping[v];
+                        num_mapped_children++;
+                    }
+                }
+                equal = false;
+                if (num_mapped_children == ar->num_mapped_children) {
+                    qsort(mapped_children, num_mapped_children, sizeof(uint32_t), cmp_uint32_t);
+                    equal = memcmp(ar->mapped_children, mapped_children,
+                            num_mapped_children * sizeof(uint32_t)) == 0;
+                }
+                /* printf("equal = %d\n", equal); */
+                if (!equal) {
+                    ar->active = false;
+                    assert(num_output_records < self->num_records);
+                    cr = &output_records[num_output_records];
+                    num_output_records++;
+                    cr->left = self->trees.breakpoints[ar->left];
+                    cr->right = self->trees.breakpoints[x];
+                    cr->node = u;
+                    cr->num_children = ar->num_mapped_children;
+                    cr->children = ar->mapped_children;
+                    cr->time = self->trees.nodes.time[u];
+                    cr->population_id = self->trees.nodes.population[u];
+                    if (u == mapping[u]) {
+                        activate_record = true;
+                    }
+                }
+            } else {
+                if (u == mapping[u]) {
+                    activate_record = true;
+                }
+            }
+            if (activate_record) {
+                ar->active = true;
+                ar->left = x;
+                ar->num_mapped_children = 0;
+                ar->mapped_children = mapped_children_mem + mapped_children_mem_offset;
+                for (c = 0; c < num_children[u]; c++) {
+                    v = children[u][c];
+                    if (mapping[v] != MSP_NULL_NODE) {
+                        assert(mapped_children_mem_offset < self->num_child_nodes);
+                        mapped_children_mem_offset++;
+                        ar->mapped_children[ar->num_mapped_children] = mapping[v];
+                        ar->num_mapped_children++;
+                    }
+                }
+                qsort(ar->mapped_children, ar->num_mapped_children, sizeof(uint32_t),
+                        cmp_uint32_t);
+            }
+        }
+        /* Find the root of the subset tree.
+         * TODO What happens here when we have multiple roots??
+         */
+        subset_root = MSP_NULL_NODE;
+        u = samples[0];
+        while (u != MSP_NULL_NODE) {
+            if (mapping[u] == u) {
+                subset_root = u;
+            }
+            u = parent[u];
+        }
+        assert(subset_root != MSP_NULL_NODE);
+        /* Update the mutations for this tree */
+        right = self->trees.breakpoints[self->trees.records.right[O[k]]];
+        while (l < self->num_mutations && self->mutations.position[l] < right) {
+            u = self->mutations.node[l];
+            if (mapping[u] != MSP_NULL_NODE && mapping[u] != subset_root) {
+                assert(num_output_mutations < self->num_mutations);
+                mut = &output_mutations[num_output_mutations];
+                num_output_mutations++;
+                mut->node = mapping[u];
+                mut->position = self->mutations.position[l];
+            }
+            l++;
+        }
+
+        /* printf("EOL\n"); */
+        /* printf("x  = %d\n", x); */
+        /* for (u = 0; u < self->num_nodes; u++) { */
+        /*     printf("%d\t%d\t%d:\t%d:\t", u, parent[u], mapping[u], active_records[u].active); */
+        /*     if (active_records[u].active) { */
+        /*         printf("left=%d, mc=[", active_records[u].left); */
+        /*         for (c = 0; c < active_records[u].num_mapped_children; c++) { */
+        /*             printf("%d ", active_records[u].mapped_children[c]); */
+        /*         } */
+        /*         printf("]"); */
+        /*     } */
+        /*     printf("\n"); */
+        /* } */
+        /* printf("Visited nodes [%d] = ", avl_count(&visited_nodes)); */
+        /* for (avl_node = visited_nodes.head; avl_node != NULL; */
+        /*         avl_node = avl_node->next) { */
+        /*     printf("%d ", *((uint32_t *) avl_node->item)); */
+        /* } */
+        /* printf("\n"); */
+
+    }
+
+    /* After the main loop has completed, find all the records that have not
+     * been finished and terminate them.
+     */
+    x = (uint32_t) self->trees.num_breakpoints - 1;
+    for (u = 0; u < self->num_nodes; u++) {
+        ar = &active_records[u];
+        if (ar->active) {
+            assert(num_output_records < self->num_records);
+            cr = &output_records[num_output_records];
+            num_output_records++;
+            cr->left = self->trees.breakpoints[ar->left];
+            cr->right = self->trees.breakpoints[x];
+            cr->node = u;
+            cr->time = self->trees.nodes.time[u];
+            cr->population_id = self->trees.nodes.population[u];
+            cr->num_children = ar->num_mapped_children;
+            cr->children = ar->mapped_children;
+        }
+    }
+
+/*     fprintf(stdout, "Coalescence records = %ld\n", (long) num_output_records); */
+/*     for (j = 0; j < num_output_records; j++) { */
+/*         cr = &output_records[j]; */
+/*         fprintf(stdout, "\t%f\t%f\t%d\t(", cr->left, cr->right, */
+/*                 cr->node); */
+/*         for (k = 0; k < cr->num_children; k++) { */
+/*             fprintf(stdout, "%d", cr->children[k]); */
+/*             if (k < cr->num_children - 1) { */
+/*                 fprintf(stdout, ", "); */
+/*             } */
+/*         } */
+/*         fprintf(stdout, ")\t%f\t%d\n", cr->time, cr->population_id); */
+/*     } */
+
+    /* TODO get rid of squashing --- we just need to sort */
+    ret = squash_records(output_records, num_output_records, &num_squashed_records);
+    if (ret != 0) {
+        goto out;
+    }
+    assert(num_squashed_records == num_output_records);
+
+    ret = tree_sequence_compress_nodes(self, samples, num_samples,
+            output_records, num_output_records, output_mutations,
+            num_output_mutations);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Alloc a new tree sequence for these records. */
+    ret = tree_sequence_load_records(output, num_output_records, output_records);
+    if (ret != 0) {
+        tree_sequence_free(output);
+        goto out;
+    }
+    ret = tree_sequence_set_mutations(output, num_output_mutations, output_mutations);
+    if (ret != 0) {
+        tree_sequence_free(output);
+        goto out;
+    }
+    ret = tree_sequence_set_samples(output, num_samples, sample_objects);
+    if (ret != 0) {
+        tree_sequence_free(output);
+        goto out;
+    }
+out:
+    if (parent != NULL) {
+        free(parent);
+    }
+    if (children != NULL) {
+        free(children);
+    }
+    if (num_children != NULL) {
+        free(num_children);
+    }
+    if (mapping != NULL) {
+        free(mapping);
+    }
+    if (sample_objects != NULL) {
+        free(sample_objects);
+    }
+    if (avl_node_value_mem != NULL) {
+        free(avl_node_value_mem);
+    }
+    if (avl_node_mem != NULL) {
+        free(avl_node_mem);
+    }
+    if (active_records != NULL) {
+        free(active_records);
+    }
+    if (mapped_children != NULL) {
+        free(mapped_children);
+    }
+    if (mapped_children_mem != NULL) {
+        free(mapped_children_mem);
+    }
+    if (output_records != NULL) {
+        free(output_records);
+    }
+    if (output_mutations != NULL) {
+        free(output_mutations);
+    }
+    return ret;
+}
+
+#if 0
+int WARN_UNUSED
+tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
         uint32_t num_samples, tree_sequence_t *subset)
 {
     typedef struct {
@@ -2084,6 +2469,7 @@ out:
     }
     return ret;
 }
+#endif
 
 /* ======================================================== *
  * Tree diff iterator.

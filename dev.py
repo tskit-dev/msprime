@@ -912,8 +912,8 @@ def subset_samples(n, samples, random_seed=5):
         demographic_events=demographic_events)
     # ts = msprime.load(sys.argv[1])
 
-    # subset = ts.subset(samples)
-    subset = simplify(ts, samples)
+    subset = ts.subset(samples)
+    # subset = simplify(ts, samples)
 
 #     print("starting subsetting", len(samples))
 #     before = time.clock()
@@ -928,20 +928,12 @@ def subset_samples(n, samples, random_seed=5):
             # print(full_tree.get_interval(), subset_tree.get_interval())
             for u, v in itertools.combinations(range(len(samples)), 2):
                 # print(u, v, samples[u], samples[v])
-                # t_mrca1 = full_tree.get_tmrca(samples[u], samples[v])
-                # # t_mrca2 = subset_tree.get_tmrca(u, v)
-                # t_mrca2 = subset_tree.get_tmrca(samples[u], samples[v])
-                # assert t_mrca1 == t_mrca2
-
-                mrca1 = full_tree.get_mrca(samples[u], samples[v])
-                mrca2 = subset_tree.get_mrca(samples[u], samples[v])
-                # print("MRCA", mrca1, mrca2)
-                assert mrca1 == mrca2
+                t_mrca1 = full_tree.get_tmrca(samples[u], samples[v])
+                t_mrca2 = subset_tree.get_tmrca(u, v)
+                assert t_mrca1 == t_mrca2
             full_tree = next(all_trees, None)
             if full_tree is None:
                 break
-
-
 
 def simplify(ts, samples):
     """
@@ -976,26 +968,14 @@ def simplify(ts, samples):
             chi[u] = []
             for q in records[h].children:
                 pi[q] = -1
-            if mu[u] != -1:
-                v = mu[u]
-                while u != -1 and mu[u] == v:
-                    mu[u] = -1
-                    nodes.add(u)
-                    u = pi[u]
-                if u != -1:
-                    w = -1
-                    for v in chi[u]:
-                        if mu[v] != -1:
-                            w = mu[v] if w == -1 else u
-                    if w != u:
-                        v = mu[u]
-                        while u != -1 and mu[u] == v:
-                            nodes.add(u)
-                            mu[u] = w
-                            u = pi[u]
-                    while u != -1:
-                        nodes.add(u)
-                        u = pi[u]
+            while u != -1:
+                w = -1
+                for v in chi[u]:
+                    if mu[v] != -1:
+                        w = mu[v] if w == -1 else u
+                mu[u] = w
+                nodes.add(u)
+                u = pi[u]
 
         while j < M and records[I[j]].left == x:
             h = I[j]
@@ -1003,26 +983,16 @@ def simplify(ts, samples):
             # print("\tin:", records[h])
             u = records[h].node
             chi[u] = records[h].children
-            w = -1
             for v in records[h].children:
                 pi[v] = u
-                if mu[v] != -1:
-                    w = mu[v] if w == -1 else u
-            if w != -1:
-                while u != -1 and mu[u] == -1:
-                    mu[u] = w
-                    nodes.add(u)
-                    u = pi[u]
-                if u != -1:
-                    v = mu[u]
-                    w = u
-                    while u != -1 and mu[u] == v:
-                        mu[u] = w
-                        nodes.add(u)
-                        u = pi[u]
-                    while u != -1:
-                        nodes.add(u)
-                        u = pi[u]
+            while u != -1:
+                w = -1
+                for v in chi[u]:
+                    if mu[v] != -1:
+                        w = mu[v] if w == -1 else u
+                mu[u] = w
+                nodes.add(u)
+                u = pi[u]
 
         mup = get_subset_mapping(pi, samples)
         # print("x = ", x)
@@ -1059,22 +1029,42 @@ def simplify(ts, samples):
             left=left, right=ts.sequence_length, node=u, children=tuple(children),
             time=tau[u], population=0))
     subset_records.sort(key=lambda r: r.time)
+    # TODO mutations.
+
+    # Now compress the nodes.
+    node_map = [-1 for _ in range(len(pi))]
+    for j, u in enumerate(samples):
+        node_map[u] = j
+    compressed_records = []
+    next_node = len(samples)
+    for record in subset_records:
+        for node in list(record.children) + [record.node]:
+            if node_map[node] == msprime.NULL_NODE:
+                node_map[node] = next_node
+                next_node += 1
+        children = tuple(sorted(node_map[c] for c in record.children))
+        compressed_records.append(msprime.CoalescenceRecord(
+            left=record.left, right=record.right, node=node_map[record.node],
+            children=children, time=record.time, population=record.population))
+
     # for r in subset_records:
     #     print(r)
     # for t in trees(subset_records):
     #     print(t)
     ll_ts = _msprime.TreeSequence()
-    ll_ts.load_records(subset_records)
+    ll_ts.load_records(compressed_records)
     return msprime.TreeSequence(ll_ts)
-
 
 
 def subset_error(infile):
     ts = msprime.load(infile)
-    simplify(ts, list(range(ts.sample_size)))
-    # for t in ts.trees():
-    #     print(t)
-
+    ts_new = simplify(ts, list(range(ts.sample_size)))
+    print("old")
+    for t in ts.subset(list(range(ts.sample_size))).trees():
+        print(t)
+    print("new")
+    for t in ts_new.trees():
+        print(t)
 
 
 if __name__ == "__main__":
@@ -1108,11 +1098,12 @@ if __name__ == "__main__":
     # simple_kingman()
     # instantaneous_bottleneck_example()
     # smc_check()
-    for k in [2, 10, 50, 100, 200]:
-        print(k)
-        subset_samples(30000, list(range(k)))
+    # for k in [2, 10, 50, 100, 200]:
+    #     print(k)
+    #     subset_samples(30000, list(range(k)))
 
-    # subset_samples(30000, [5, 7, 8,9, 10, 11])
+    subset_samples(30000, [5, 7, 8,9, 10, 11])
+
     # subset_samples(300, list(range(20)))
     # subset_samples(30, list(range(3)))
     # for j in range(1, 100):
