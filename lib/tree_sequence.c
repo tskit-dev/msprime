@@ -1708,7 +1708,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     uint32_t *O = self->trees.indexes.removal_order;
     size_t M = self->num_records;
     size_t j, k, h, next_avl_node, mapped_children_mem_offset, num_output_records,
-           num_squashed_records, num_output_mutations;
+           num_squashed_records, num_output_mutations, max_num_child_nodes;
     uint32_t u, v, w, x, c, l, subset_root, num_mapped_children;
     avl_tree_t visited_nodes;
     avl_node_t *avl_node_mem = NULL;
@@ -1733,7 +1733,9 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
     avl_node_value_mem = malloc(self->num_nodes * sizeof(uint32_t));
     active_records = malloc(self->num_nodes * sizeof(active_record_t));
     mapped_children = malloc(self->num_nodes * sizeof(uint32_t));
-    mapped_children_mem = malloc(self->num_child_nodes * sizeof(uint32_t));
+    /* TODO work out a better bound for this */
+    max_num_child_nodes = 2 * self->num_child_nodes;
+    mapped_children_mem = malloc(max_num_child_nodes * sizeof(uint32_t));
     output_records = malloc(self->num_records * sizeof(coalescence_record_t));
     output_mutations = malloc(self->num_mutations * sizeof(mutation_t));
     if (parent == NULL || children == NULL || num_children == NULL
@@ -1903,7 +1905,7 @@ tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
                 for (c = 0; c < num_children[u]; c++) {
                     v = children[u][c];
                     if (mapping[v] != MSP_NULL_NODE) {
-                        assert(mapped_children_mem_offset < self->num_child_nodes);
+                        assert(mapped_children_mem_offset < max_num_child_nodes);
                         mapped_children_mem_offset++;
                         ar->mapped_children[ar->num_mapped_children] = mapping[v];
                         ar->num_mapped_children++;
