@@ -2903,7 +2903,7 @@ out:
 /* Forward declaration */
 static PyObject * build_TreeSequence(tree_sequence_t *ts);
 static PyObject *
-TreeSequence_get_subset(TreeSequence *self, PyObject *args, PyObject *kwds)
+TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     PyObject *py_samples = NULL;
@@ -2929,7 +2929,7 @@ TreeSequence_get_subset(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     memset(subset_ts, 0, sizeof(tree_sequence_t));
-    err = tree_sequence_get_subset(
+    err = tree_sequence_simplify(
         self->tree_sequence, samples, (uint32_t) num_samples, subset_ts);
     if (err != 0) {
         /* We must free the memory for subset_ts, but not all tree_sequence_free
@@ -3018,8 +3018,9 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
-    {"get_subset", (PyCFunction) TreeSequence_get_subset,
-        METH_VARARGS|METH_KEYWORDS, "Returns a subset of this TreeSequence." },
+    {"simplify", (PyCFunction) TreeSequence_simplify,
+        METH_VARARGS|METH_KEYWORDS,
+        "Returns a simplified version of this tree sequence."},
     {NULL}  /* Sentinel */
 };
 

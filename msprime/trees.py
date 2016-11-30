@@ -1976,15 +1976,17 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def subset(self, samples):
-        ll_subset = self._ll_tree_sequence.get_subset(samples)
-        subset = msprime.TreeSequence(ll_subset)
+    def simplify(self, samples=None):
+        if samples is None:
+            samples = self.get_samples()
+        ll_ts = self._ll_tree_sequence.simplify(samples)
+        new_ts = msprime.TreeSequence(ll_ts)
         for provenance in self.get_provenance():
-            subset.add_provenance(provenance)
+            new_ts.add_provenance(provenance)
         parameters = {"TODO": "encode subset parameters"}
-        subset_provenance = get_provenance_dict("subset", parameters)
-        subset.add_provenance(json.dumps(subset_provenance))
-        return subset
+        new_ts_provenance = get_provenance_dict("simplify", parameters)
+        new_ts.add_provenance(json.dumps(new_ts_provenance))
+        return new_ts
 
 
 class HaplotypeGenerator(object):

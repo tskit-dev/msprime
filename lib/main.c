@@ -921,7 +921,7 @@ run_stats(char *filename)
 }
 
 static void
-run_subset(char *input_filename, char *output_filename, char **samples,
+run_simplify(char *input_filename, char *output_filename, char **samples,
         int num_samples)
 {
     tree_sequence_t ts, subset;
@@ -935,7 +935,7 @@ run_subset(char *input_filename, char *output_filename, char **samples,
         parsed_samples[j] = (uint32_t) atoi(samples[j]);
     }
     load_tree_sequence(&ts, input_filename);
-    ret = tree_sequence_get_subset(&ts, parsed_samples, (uint32_t) num_samples,
+    ret = tree_sequence_simplify(&ts, parsed_samples, (uint32_t) num_samples,
             &subset);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
@@ -1003,7 +1003,7 @@ main(int argc, char** argv)
             fatal_error("usage: %s subset INPUT_FILE OUTPUT_FILE s1 s2 <s3 s4 ... sk>",
                     argv[0]);
         }
-        run_subset(argv[2], argv[3], argv + 4, argc - 4);
+        run_simplify(argv[2], argv[3], argv + 4, argc - 4);
     } else {
         fatal_error("Unknown command '%s'", cmd);
     }

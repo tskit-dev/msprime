@@ -2019,16 +2019,16 @@ class TestTreeSequence(LowLevelTestCase):
             pi1 = ts.get_pairwise_diversity(samples)
             self.assertGreaterEqual(pi1, 0)
 
-    def test_subset(self):
+    def test_simplify(self):
         for ts in self.get_example_tree_sequences():
             for bad_type in ["", None, {}]:
-                self.assertRaises(TypeError, ts.get_subset, bad_type)
-            self.assertRaises(ValueError, ts.get_subset, [])
-            self.assertRaises(ValueError, ts.get_subset, [0])
-            self.assertRaises(ValueError, ts.get_subset, [0, ts.get_sample_size()])
-            self.assertRaises(_msprime.LibraryError, ts.get_subset, [0, 0])
-            s1 = ts.get_subset([0, 1])
-            s2 = ts.get_subset([1, 0])
+                self.assertRaises(TypeError, ts.simplify, bad_type)
+            self.assertRaises(ValueError, ts.simplify, [])
+            self.assertRaises(ValueError, ts.simplify, [0])
+            self.assertRaises(ValueError, ts.simplify, [0, ts.get_sample_size()])
+            self.assertRaises(_msprime.LibraryError, ts.simplify, [0, 0])
+            s1 = ts.simplify([0, 1])
+            s2 = ts.simplify([1, 0])
             self.assertEqual(ts.get_sequence_length(), s1.get_sequence_length())
             self.assertEqual(s1.get_sample_size(), s2.get_sample_size())
             self.assertEqual(s1.get_num_records(), s2.get_num_records())
