@@ -21,3 +21,7 @@ docs: ext2 figs
 	
 tags:
 	ctags -f TAGS *.c lib/*.[c,h] msprime/*.py tests/*.py
+
+clean:
+	rm -fR build
+	rm *.o *.so
