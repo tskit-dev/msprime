@@ -368,6 +368,11 @@ class SparseTree(object):
         return 0 <= u < self.get_sample_size()
 
     @property
+    def num_nodes(self):
+        # TODO documnent
+        return self._ll_sparse_tree.get_num_nodes()
+
+    @property
     def root(self):
         return self.get_root()
 
@@ -634,12 +639,9 @@ class SparseTree(object):
         return self.get_parent_dict()
 
     def get_parent_dict(self):
-        pi = {}
-        for j in range(self.get_sample_size()):
-            u = j
-            while u != NULL_NODE and u not in pi:
-                pi[u] = self.get_parent(u)
-                u = pi[u]
+        pi = {
+            u: self.parent(u) for u in range(self.num_nodes)
+            if self.parent(u) != NULL_NODE}
         return pi
 
     @property
@@ -647,13 +649,9 @@ class SparseTree(object):
         return self.get_time_dict()
 
     def get_time_dict(self):
-        tau = {}
-        for j in range(self.get_sample_size()):
-            u = j
-            while u != NULL_NODE and u not in tau:
-                tau[u] = self.get_time(u)
-                u = self.get_parent(u)
-        return tau
+        return {
+            u: self.time(u) for u in range(self.num_nodes)
+            if len(self.children(u)) != 0 or self.parent(u) != NULL_NODE}
 
     def __str__(self):
         return str(self.get_parent_dict())

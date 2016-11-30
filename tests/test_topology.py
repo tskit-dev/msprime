@@ -53,7 +53,24 @@ def insert_redundant_breakpoints(ts):
     return new_ts
 
 
-class TestRecordSquashing(unittest.TestCase):
+class TopologyTestCase(unittest.TestCase):
+    """
+    Superclass of test cases containing common utilities.
+    """
+    random_seed = 123456
+
+    def assert_haplotypes_equal(self, ts1, ts2):
+        h1 = list(ts1.haplotypes())
+        h2 = list(ts2.haplotypes())
+        self.assertEqual(h1, h2)
+
+    def assert_variants_equal(self, ts1, ts2):
+        v1 = list(ts1.variants(as_bytes=True))
+        v2 = list(ts2.variants(as_bytes=True))
+        self.assertEqual(v1, v2)
+
+
+class TestRecordSquashing(TopologyTestCase):
     """
     Tests that we correctly squash adjacent equal records together.
     """
@@ -74,26 +91,26 @@ class TestRecordSquashing(unittest.TestCase):
         self.assertEqual(r.right, 2)
 
     def test_single_tree(self):
-        ts = msprime.simulate(10)
+        ts = msprime.simulate(10, random_seed=self.random_seed)
         ts_redundant = insert_redundant_breakpoints(ts)
         tss = ts_redundant.simplify()
         self.assertEqual(list(tss.records()), list(ts.records()))
 
     def test_many_trees(self):
-        ts = msprime.simulate(20, recombination_rate=5)
+        ts = msprime.simulate(20, recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_redundant = insert_redundant_breakpoints(ts)
         tss = ts_redundant.simplify()
         self.assertEqual(list(tss.records()), list(ts.records()))
 
 
-class TestRedundantBreakpoints(unittest.TestCase):
+class TestRedundantBreakpoints(TopologyTestCase):
     """
     Tests for dealing with redundant breakpoints within the tree sequence.
     These are records that may be squashed together into a single record.
     """
     def test_single_tree(self):
-        ts = msprime.simulate(10)
+        ts = msprime.simulate(10, random_seed=self.random_seed)
         ts_redundant = insert_redundant_breakpoints(ts)
         self.assertEqual(ts.sample_size, ts_redundant.sample_size)
         self.assertEqual(ts.sequence_length, ts_redundant.sequence_length)
@@ -104,7 +121,7 @@ class TestRedundantBreakpoints(unittest.TestCase):
         self.assertEqual([t.parent_dict for t in ts.trees()][0], trees[0])
 
     def test_many_trees(self):
-        ts = msprime.simulate(20, recombination_rate=5)
+        ts = msprime.simulate(20, recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_redundant = insert_redundant_breakpoints(ts)
         self.assertEqual(ts.sample_size, ts_redundant.sample_size)
@@ -122,7 +139,7 @@ class TestRedundantBreakpoints(unittest.TestCase):
         self.assertEqual(comparisons, ts_redundant.num_trees)
 
 
-class TestUnaryNodes(unittest.TestCase):
+class TestUnaryNodes(TopologyTestCase):
     """
     Tests for situations in which we have unary nodes in the tree sequence.
     """
@@ -145,7 +162,7 @@ class TestUnaryNodes(unittest.TestCase):
         self.assertEqual(ts.num_trees, 1)
         t = next(ts.trees())
         self.assertEqual(
-            t.parent_dict, {0: 2, 1: 3, 2: 4, 3: 4, 4: 5, 5: msprime.NULL_NODE})
+            t.parent_dict, {0: 2, 1: 3, 2: 4, 3: 4, 4: 5})
         self.assertEqual(t.mrca(0, 1), 4)
         self.assertEqual(t.mrca(0, 2), 2)
         self.assertEqual(t.mrca(0, 4), 4)
@@ -182,3 +199,72 @@ class TestUnaryNodes(unittest.TestCase):
         t = next(ts_simplified.trees())
         self.assertEqual(t.mrca(0, 1), 2)
         self.assertEqual(t.tmrca(0, 1), root_time)
+
+    def verify_unary_tree_sequence(self, ts):
+        """
+        Take the specified tree sequence and produce an equivalent in which
+        unary records have been interspersed.
+        """
+        self.assertGreater(ts.num_trees, 2)
+        self.assertGreater(ts.num_mutations, 2)
+        new_records = []
+        next_node = ts.num_nodes
+        for r in ts.records():
+            u = r.node
+            t = r.time - 1e-14  # Arbitrary small value.
+            children = []
+            for v in r.children:
+                new_records.append(msprime.CoalescenceRecord(
+                    left=r.left, right=r.right, population=r.population,
+                    node=next_node, children=(v,), time=t))
+                children.append(next_node)
+                next_node += 1
+            new_records.append(msprime.CoalescenceRecord(
+                left=r.left, right=r.right, population=r.population,
+                node=u, children=tuple(children), time=r.time))
+        new_records.sort(key=lambda r: r.time)
+        ts_new = build_tree_sequence(new_records, list(ts.mutations()))
+        self.assertGreater(ts_new.num_records, ts.num_records)
+        self.assert_haplotypes_equal(ts, ts_new)
+        self.assert_variants_equal(ts, ts_new)
+        ts_simplified = ts_new.simplify()
+        self.assertEqual(list(ts_simplified.records()), list(ts.records()))
+        self.assert_haplotypes_equal(ts, ts_simplified)
+        self.assert_variants_equal(ts, ts_simplified)
+
+    def test_binary_tree_sequence_unary_nodes(self):
+        ts = msprime.simulate(
+            20, recombination_rate=5, mutation_rate=5, random_seed=self.random_seed)
+        self.verify_unary_tree_sequence(ts)
+
+    def test_nonbinary_tree_sequence_unary_nodes(self):
+        demographic_events = [
+            msprime.SimpleBottleneck(time=1.0, proportion=0.95)]
+        ts = msprime.simulate(
+            20, recombination_rate=10, mutation_rate=5,
+            demographic_events=demographic_events, random_seed=self.random_seed)
+        found = False
+        for r in ts.records():
+            if len(r.children) > 2:
+                found = True
+        self.assertTrue(found)
+        self.verify_unary_tree_sequence(ts)
+
+
+class TestNonSampleExternalNodes(TopologyTestCase):
+    """
+    Tests for situations in which we have unary nodes in the tree sequence.
+    """
+    @unittest.skip("Skipping until edge case fixed")
+    def test_simple_case(self):
+        # Simplest case where we have n = 2 and an external non-sample node.
+        records = [
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=2, children=(0, 1, 3, 4), time=1, population=0),
+        ]
+        ts = build_tree_sequence(records)
+        self.assertEqual(ts.sample_size, 2)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_nodes, 5)
+        t = next(ts.trees())
+        self.assertEqual(t.parent_dict, {0: 2, 1: 2, 3: 2, 4: 2})

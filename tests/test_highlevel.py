@@ -402,7 +402,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         # Check the parent dict
         pi = st.get_parent_dict()
         self.assertLessEqual(len(pi), 2 * st.get_sample_size() - 1)
-        self.assertEqual(pi[st.get_root()], msprime.NULL_NODE)
+        self.assertNotIn(st.get_root(), pi)
         for k, v in pi.items():
             self.assertEqual(st.get_parent(k), v)
 
