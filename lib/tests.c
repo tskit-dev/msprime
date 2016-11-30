@@ -1533,6 +1533,26 @@ test_simplest_unary_records(void)
 }
 
 static void
+test_simplest_non_sample_leaf_records(void)
+{
+    int ret;
+    uint32_t c1[] = {0, 1, 3, 4};
+    coalescence_record_t records[] = {
+        {0, 4, 2, 0.0, 1.0, 1.0, c1},
+    };
+    tree_sequence_t ts;
+
+    ret = tree_sequence_load_records(&ts, 1, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
+    tree_sequence_free(&ts);
+}
+
+static void
 test_simplest_bad_records(void)
 {
     int ret = 0;
@@ -4198,6 +4218,7 @@ main(int argc, char **argv)
         {"Simplest records", test_simplest_records},
         {"Simplest nonbinary records", test_simplest_nonbinary_records},
         {"Simplest unary records", test_simplest_unary_records},
+        {"Simplest non-sample leaf records", test_simplest_non_sample_leaf_records},
         {"Simplest bad records", test_simplest_bad_records},
         {"Single tree good records", test_single_tree_good_records},
         {"Single nonbinary tree good records",

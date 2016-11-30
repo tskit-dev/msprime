@@ -255,9 +255,8 @@ class TestNonSampleExternalNodes(TopologyTestCase):
     """
     Tests for situations in which we have unary nodes in the tree sequence.
     """
-    @unittest.skip("Skipping until edge case fixed")
     def test_simple_case(self):
-        # Simplest case where we have n = 2 and an external non-sample node.
+        # Simplest case where we have n = 2 and external non-sample nodes.
         records = [
             msprime.CoalescenceRecord(
                 left=0, right=1, node=2, children=(0, 1, 3, 4), time=1, population=0),
@@ -268,3 +267,40 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assertEqual(ts.num_nodes, 5)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 2, 1: 2, 3: 2, 4: 2})
+        self.assertEqual(t.time_dict, {0: 0, 1: 0, 3: 0, 4: 0, 2: 1})
+        self.assertEqual(t.root, 2)
+        ts_simplified = ts.simplify()
+        self.assertEqual(ts_simplified.num_nodes, 3)
+        self.assertEqual(ts_simplified.num_trees, 1)
+        t = next(ts_simplified.trees())
+        self.assertEqual(t.parent_dict, {0: 2, 1: 2})
+        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 1})
+        self.assertEqual(t.root, 2)
+
+    def test_unary_non_sample_external_nodes(self):
+        # Take an ordinary tree sequence and put a bunch of external non
+        # sample nodes on it.
+        ts = msprime.simulate(
+            15, recombination_rate=5, random_seed=self.random_seed, mutation_rate=5)
+        self.assertGreater(ts.num_trees, 2)
+        self.assertGreater(ts.num_mutations, 2)
+        new_records = []
+        next_node = ts.num_nodes
+        for r in ts.records():
+            children = tuple(list(r.children) + [next_node])
+            new_records.append(msprime.CoalescenceRecord(
+                left=r.left, right=r.right, node=r.node, time=r.time,
+                population=r.population, children=children))
+            next_node += 1
+        ts_new = build_tree_sequence(new_records, list(ts.mutations()))
+        self.assertEqual(ts_new.num_nodes, next_node)
+        self.assertEqual(ts_new.sample_size, ts.sample_size)
+        # FIXME disabled until leaf-lists on these nodes is fixed.
+        # self.assert_haplotypes_equal(ts, ts_new)
+        # self.assert_variants_equal(ts, ts_new)
+        ts_simplified = ts_new.simplify()
+        self.assertEqual(ts_simplified.num_nodes, ts.num_nodes)
+        self.assertEqual(ts_simplified.sample_size, ts.sample_size)
+        self.assertEqual(list(ts_simplified.records()), list(ts.records()))
+        self.assert_haplotypes_equal(ts, ts_simplified)
+        self.assert_variants_equal(ts, ts_simplified)

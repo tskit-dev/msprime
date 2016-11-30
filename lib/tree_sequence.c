@@ -487,6 +487,13 @@ tree_sequence_init_from_records(tree_sequence_t *self,
             ret = MSP_ERR_NULL_NODE_IN_RECORD;
             goto out;
         }
+        for (k = 0; k < records[j].num_children; k++) {
+            if (records[j].children[k] == MSP_NULL_NODE) {
+                ret = MSP_ERR_NULL_NODE_IN_RECORD;
+                goto out;
+            }
+            self->num_nodes = GSL_MAX(self->num_nodes, records[j].children[k]);
+        }
         self->sample_size = GSL_MIN(self->sample_size, records[j].node);
         self->num_nodes = GSL_MAX(self->num_nodes, records[j].node);
         self->sequence_length = GSL_MAX(self->sequence_length,
