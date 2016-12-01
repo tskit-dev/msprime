@@ -903,15 +903,17 @@ def get_subset_children(pi, samples):
                 v = pi[v]
     return chi
 
-def subset_samples(n, samples):
+def subset_samples(n, samples, random_seed=5):
     demographic_events=[msprime.SimpleBottleneck(1000, 0.15)]
     demographic_events = []
     ts = msprime.simulate(
         sample_size=n, Ne=1e4, length=1e4, recombination_rate=5e-8,
-        mutation_rate=2e-8, random_seed=5, demographic_events=demographic_events)
+        mutation_rate=2e-8, random_seed=random_seed,
+        demographic_events=demographic_events)
     # ts = msprime.load(sys.argv[1])
 
     subset = ts.subset(samples)
+    # subset = simplify(ts, samples)
 
 #     print("starting subsetting", len(samples))
 #     before = time.clock()
@@ -933,56 +935,139 @@ def subset_samples(n, samples):
             if full_tree is None:
                 break
 
-def check_single_records(records_file, mutations_file):
-    ts = msprime.load_txt(records_file, mutations_file)
-    for r in ts.records():
-        print(r)
-    for m in ts.mutations():
-        print(m)
-    for t in ts.trees():
-        print(t.interval, t)
-    for t in trees(list(ts.records())):
-        print(t)
-    # for v in ts.variants():
-    #     print(v)
-    # for h in ts.haplotypes():
-    #     print(h)
+def simplify(ts, samples):
+    """
+    Implementation of the simplify algorithm to take a given tree sequence
+    and derive a topologically equivalent tree sequence with all unary
+    and redundant nodes removed.
+    """
+    records = list(ts.records())
+    M = len(records)
+    I = sorted(range(M), key=lambda j: (records[j].left, records[j].time))
+    O = sorted(range(M), key=lambda j: (records[j].right, -records[j].time))
+    pi = [-1 for j in range(max(r.node for r in records) + 1)]
+    tau = [-1 for j in range(max(r.node for r in records) + 1)]
+    chi = [[] for j in range(max(r.node for r in records) + 1)]
+    mu = [-1 for j in range(max(r.node for r in records) + 1)]
+    for r in records:
+        tau[r.node] = r.time
+    active_records = {}
+    subset_records = []
+    for u in samples:
+        mu[u] = u
+    j = 0
+    k = 0
+    while j < M:
+        x = records[I[j]].left
+        nodes = set()
+        while records[O[k]].right == x:
+            h = O[k]
+            k += 1
+            # print("\tout:", records[h])
+            u = records[h].node
+            chi[u] = []
+            for q in records[h].children:
+                pi[q] = -1
+            while u != -1:
+                w = -1
+                for v in chi[u]:
+                    if mu[v] != -1:
+                        w = mu[v] if w == -1 else u
+                mu[u] = w
+                nodes.add(u)
+                u = pi[u]
 
-    # for t in ts.trees():
+        while j < M and records[I[j]].left == x:
+            h = I[j]
+            j += 1
+            # print("\tin:", records[h])
+            u = records[h].node
+            chi[u] = records[h].children
+            for v in records[h].children:
+                pi[v] = u
+            while u != -1:
+                w = -1
+                for v in chi[u]:
+                    if mu[v] != -1:
+                        w = mu[v] if w == -1 else u
+                mu[u] = w
+                nodes.add(u)
+                u = pi[u]
+
+        mup = get_subset_mapping(pi, samples)
+        # print("x = ", x)
+        # print("pi = ", pi)
+        # print("chi = ", chi)
+        # print("mu  = ", {u: mu[u] for u in range(len(mu)) if mu[u] != -1})
+        # print("mup  = ", {u: mup[u] for u in range(len(mu)) if mup[u] != -1})
+        # # print("mup = ", mup)
+        # print("active_records")
+        # for u, v in active_records.items():
+        #     print("\t", u, "->", v)
+        # print("tree")
+        # for u, children in enumerate(chi):
+        #     if len(children) > 0:
+        #         print("\t", u, children)
+        assert mu == mup
+        # print("NODES = ", nodes)
+        for u in nodes:
+            mc = sorted([mu[v] for v in chi[u] if mu[v] != -1])
+            if u in active_records:
+                left, children = active_records[u]
+                if children != mc:
+                    del active_records[u]
+                    subset_records.append(msprime.CoalescenceRecord(
+                        left=left, right=x, node=u, children=tuple(children),
+                        time=tau[u], population=0))
+                    if u == mu[u]:
+                        active_records[u] = (x, mc)
+            else:
+                if u == mu[u]:
+                    active_records[u] = (x, mc)
+    for u, (left, children) in active_records.items():
+        subset_records.append(msprime.CoalescenceRecord(
+            left=left, right=ts.sequence_length, node=u, children=tuple(children),
+            time=tau[u], population=0))
+    subset_records.sort(key=lambda r: r.time)
+    # TODO mutations.
+
+    # Now compress the nodes.
+    node_map = [-1 for _ in range(len(pi))]
+    for j, u in enumerate(samples):
+        node_map[u] = j
+    compressed_records = []
+    next_node = len(samples)
+    for record in subset_records:
+        for node in list(record.children) + [record.node]:
+            if node_map[node] == msprime.NULL_NODE:
+                node_map[node] = next_node
+                next_node += 1
+        children = tuple(sorted(node_map[c] for c in record.children))
+        compressed_records.append(msprime.CoalescenceRecord(
+            left=record.left, right=record.right, node=node_map[record.node],
+            children=children, time=record.time, population=record.population))
+
+    # for r in subset_records:
+    #     print(r)
+    # for t in trees(subset_records):
     #     print(t)
-    print("subset")
-    tss = ts.subset(list(range(4)))
-    for t in tss.trees():
-        print(t)
-    for r in tss.records():
-        print(r)
-    for h in tss.haplotypes():
-        print(h)
-    for v in tss.variants():
-        print(v)
+    ll_ts = _msprime.TreeSequence()
+    ll_ts.load_records(compressed_records)
+    return msprime.TreeSequence(ll_ts)
 
-    # with open(filename) as input_file:
-    #     records = []
-    #     line = next(input_file, None)
-    #     for line in input_file:
-    #         tokens = line.split()
-    #         left = float(tokens[0])
-    #         right = float(tokens[1])
-    #         node = int(tokens[2])
-    #         children = tuple(map(int, tokens[3].split(",")))
-    #         time = float(tokens[4])
-    #         population = int(tokens[5])
-    #         r = msprime.CoalescenceRecord(
-    #             left, right, node, children, time, population)
-    #         records.append(r)
-    # for pi in trees(records):
-    #     print(pi)
-    #     for j in range(10):
-    #         u = j
-    #         print(u)
-    #         while u != -1:
-    #             u = pi[u]
-    #             print("\t", u)
+
+def subset_error(infile):
+    ts = msprime.load(infile)
+    samples = list(range(ts.sample_size))
+    # ts_new = simplify(ts, samples)
+    ts_new = ts.subset(samples)
+    # print("old")
+    # for t in ts.subset(samples).trees():
+    #     print(t)
+    # print("new")
+    for t in ts_new.trees():
+        pass
+        # print(t)
 
 
 if __name__ == "__main__":
@@ -1017,13 +1102,21 @@ if __name__ == "__main__":
     # instantaneous_bottleneck_example()
     # smc_check()
     # for k in [2, 10, 50, 100, 200]:
+    #     print(k)
     #     subset_samples(30000, list(range(k)))
 
     # subset_samples(30000, [5, 7, 8,9, 10, 11])
-    # subset_samples(300, list(range(20)))
-    check_single_records("inferred_records.txt", "inferred_mutations.txt")
 
+    # subset_samples(300, list(range(20)))
+    # subset_samples(30, list(range(3)))
+    # for j in range(1, 100):
+    #     print("SEED = ", j)
+    #     # subset_samples(10, list(range(3)), j)
+    #     subset_samples(10, list(range(3)), j)
+
+    # check_single_records("inferred_records.txt", "inferred_mutations.txt")
     # for n in [100, 1000, 10000]:
     #     for k in [2, 10, 50, n - 1, n]:
     #         print(n, k, file=sys.stderr)
     #         subset_samples(n, range(k))
+    subset_error(sys.argv[1])

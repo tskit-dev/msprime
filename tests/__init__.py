@@ -76,7 +76,6 @@ class PythonSparseTree(object):
                 for child in c:
                     ret.parent[child] = u
                 ret.children[u] = c
-        ret.parent[sparse_tree.get_root()] = NULL_NODE
         assert ret == sparse_tree
         return ret
 
@@ -228,7 +227,6 @@ class PythonTreeSequence(object):
             root = 0
             while root in st.parent:
                 root = st.parent[root]
-            st.parent[root] = NULL_NODE
             st.root = root
             st.index += 1
             st.right += length
@@ -238,7 +236,6 @@ class PythonTreeSequence(object):
                 if st.left <= p < st.right
             ]
             yield st
-            del st.parent[root]
             st.left = st.right
 
 

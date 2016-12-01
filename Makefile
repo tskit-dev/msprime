@@ -24,4 +24,4 @@ tags:
 
 clean:
 	rm -fR build
-	rm *.o *.so
+	rm -f *.o *.so

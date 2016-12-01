@@ -38,6 +38,9 @@
 #define MSP_FILE_FORMAT_VERSION_MAJOR 3
 #define MSP_FILE_FORMAT_VERSION_MINOR 2
 
+/* Flags for simplify() */
+#define MSP_FILTER_ROOT_MUTATIONS 1
+
 #define MSP_ORDER_TIME 0
 #define MSP_ORDER_LEFT 1
 #define MSP_ORDER_RIGHT 2
@@ -522,8 +525,8 @@ int tree_sequence_add_provenance_string(tree_sequence_t *self,
         const char *provenance_string);
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);
-int tree_sequence_get_subset(tree_sequence_t *self, uint32_t *samples,
-        uint32_t sample_size, tree_sequence_t *subset);
+int tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
+        uint32_t sample_size, int flags, tree_sequence_t *output);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence);

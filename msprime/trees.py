@@ -368,6 +368,11 @@ class SparseTree(object):
         return 0 <= u < self.get_sample_size()
 
     @property
+    def num_nodes(self):
+        # TODO documnent
+        return self._ll_sparse_tree.get_num_nodes()
+
+    @property
     def root(self):
         return self.get_root()
 
@@ -634,12 +639,9 @@ class SparseTree(object):
         return self.get_parent_dict()
 
     def get_parent_dict(self):
-        pi = {}
-        for j in range(self.get_sample_size()):
-            u = j
-            while u != NULL_NODE and u not in pi:
-                pi[u] = self.get_parent(u)
-                u = pi[u]
+        pi = {
+            u: self.parent(u) for u in range(self.num_nodes)
+            if self.parent(u) != NULL_NODE}
         return pi
 
     @property
@@ -647,13 +649,9 @@ class SparseTree(object):
         return self.get_time_dict()
 
     def get_time_dict(self):
-        tau = {}
-        for j in range(self.get_sample_size()):
-            u = j
-            while u != NULL_NODE and u not in tau:
-                tau[u] = self.get_time(u)
-                u = self.get_parent(u)
-        return tau
+        return {
+            u: self.time(u) for u in range(self.num_nodes)
+            if len(self.children(u)) != 0 or self.parent(u) != NULL_NODE}
 
     def __str__(self):
         return str(self.get_parent_dict())
@@ -1976,15 +1974,17 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def subset(self, samples):
-        ll_subset = self._ll_tree_sequence.get_subset(samples)
-        subset = msprime.TreeSequence(ll_subset)
+    def simplify(self, samples=None, filter_root_mutations=True):
+        if samples is None:
+            samples = self.get_samples()
+        ll_ts = self._ll_tree_sequence.simplify(samples, filter_root_mutations)
+        new_ts = msprime.TreeSequence(ll_ts)
         for provenance in self.get_provenance():
-            subset.add_provenance(provenance)
+            new_ts.add_provenance(provenance)
         parameters = {"TODO": "encode subset parameters"}
-        subset_provenance = get_provenance_dict("subset", parameters)
-        subset.add_provenance(json.dumps(subset_provenance))
-        return subset
+        new_ts_provenance = get_provenance_dict("simplify", parameters)
+        new_ts.add_provenance(json.dumps(new_ts_provenance))
+        return new_ts
 
 
 class HaplotypeGenerator(object):
