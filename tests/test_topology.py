@@ -304,9 +304,8 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         ts_new = build_tree_sequence(new_records, list(ts.mutations()))
         self.assertEqual(ts_new.num_nodes, next_node)
         self.assertEqual(ts_new.sample_size, ts.sample_size)
-        # FIXME disabled until leaf-lists on these nodes is fixed.
-        # self.assert_haplotypes_equal(ts, ts_new)
-        # self.assert_variants_equal(ts, ts_new)
+        self.assert_haplotypes_equal(ts, ts_new)
+        self.assert_variants_equal(ts, ts_new)
         ts_simplified = ts_new.simplify()
         self.assertEqual(ts_simplified.num_nodes, ts.num_nodes)
         self.assertEqual(ts_simplified.sample_size, ts.sample_size)
@@ -410,11 +409,10 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(
             t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1, 6: 2, 7: 3, 8: 0})
         self.assertEqual(list(t.mutations()), mutations)
-        # TODO enable this when leaf-lists has been fixed.
-        # self.assertEqual(list(ts.haplotypes()), ["1000", "0100", "0010", "0001"])
-        # self.assertEqual(
-        #     [v.genotypes for v in ts.variants(as_bytes=True)],
-        #     ["1000", "0100", "0010", "0001"])
+        self.assertEqual(list(ts.haplotypes()), ["10000", "01000", "00100", "00010"])
+        self.assertEqual(
+            [v.genotypes for v in ts.variants(as_bytes=True)],
+            [b"1000", b"0100", b"0010", b"0001", b"0000"])
         self.assertEqual(t.mrca(0, 1), 6)
         self.assertEqual(t.mrca(2, 3), 7)
         self.assertEqual(t.mrca(2, 8), 7)
@@ -500,7 +498,28 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(
             [v.genotypes for v in ts_simplified.variants(as_bytes=True)], variants)
         ts_simplified = ts.simplify(filter_root_mutations=True)
-        # self.assertEqual(list(ts_simplified.haplotypes()), ["10", "01", "00"])
-        # self.assertEqual(
-        #     [v.genotypes for v in ts_simplified.variants(as_bytes=True)],
-        #     ["100", "010", "000"])
+        self.assertEqual(list(ts_simplified.haplotypes()), ["10", "01", "00"])
+        self.assertEqual(
+            [v.genotypes for v in ts_simplified.variants(as_bytes=True)],
+            [b"100", b"010"])
+
+    def test_break_single_tree(self):
+        # Take a single largish tree from msprime, and remove the oldest record.
+        # This breaks it into two subtrees.
+        ts = msprime.simulate(20, random_seed=self.random_seed, mutation_rate=4)
+        self.assertGreater(ts.num_mutations, 5)
+        records = list(ts.records())
+        ts_new = build_tree_sequence(records[:-1], list(ts.mutations()))
+        self.assertEqual(ts.sample_size, ts_new.sample_size)
+        self.assertEqual(ts.num_records, ts_new.num_records + 1)
+        self.assertEqual(ts.num_trees, ts_new.num_trees)
+        self.assert_haplotypes_equal(ts, ts_new)
+        self.assert_variants_equal(ts, ts_new)
+        roots = set()
+        t_new = next(ts_new.trees())
+        for u in ts_new.samples():
+            while t_new.parent(u) != msprime.NULL_NODE:
+                u = t_new.parent(u)
+            roots.add(u)
+        self.assertEqual(len(roots), 2)
+        self.assertIn(t_new.root, roots)

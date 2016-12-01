@@ -937,50 +937,32 @@ class LeafListNode(object):
         next = -1 if self.next is None else self.next.value
         return "{}->{}".format(self.value, next)
 
+
 def propagate_leaf_loss(u, pi, xi, head, tail):
     # Invalidate the head and tail pointers above u that depend
     # on this node.
+    non_null = [v for v in xi[u] if head[v] is not None]
+    num_children = len(non_null)
+    print("\tu = ", u, "non_null = ", non_null)
+    for j in range(1, num_children):
+        tail[non_null[j - 1]].next = None
     head[u] = None
     tail[u] = None
 
 
-def propagate_leaf_gain(u, pi, xi, head, tail):
-    num_children = len(xi[u])
-    for j in range(1, num_children):
-        tail[xi[u][j - 1]].next = head[xi[u][j]]
-    head[u] = head[xi[u][0]]
-    tail[u] = tail[xi[u][-1]]
-
-    v = u
-    w = pi[v]
-    while w != -1:
-        j = xi[w].index(v)
-        if j != 0:
-            break
-        head[w] = head[u]
-        v = w
-        w = pi[w]
-    v = u
-    w = pi[v]
-    while w != -1:
-        j = xi[w].index(v)
-        if j !=len(xi[w]) - 1:
-            break
-        tail[w] = tail[u]
-        v = w
-        w = pi[w]
-
-def post_propagate_leaf_gain(u, pi, xi, head, tail):
-    v = u
-    w = pi[v]
-    while w != -1:
-        j = xi[w].index(v)
-        if j < len(xi[w]) - 1:
-            tail[v].next = head[xi[w][j + 1]]
-        if j > 0:
-            tail[xi[w][j - 1]].next = head[v]
-        v = w
-        w = pi[w]
+def update_leaf_lists(u, pi, xi, head, tail):
+    while u != -1:
+        head[u] = None
+        tail[u] = None
+        for v in xi[u]:
+            if head[v] is not None:
+                if head[u] is None:
+                    head[u] = head[v]
+                    tail[u] = tail[v]
+                else:
+                    tail[u].next = head[v]
+                    tail[u] = tail[v]
+        u = pi[u]
 
 
 def leaf_sets(l, r, u, c, t, S):
@@ -1007,58 +989,59 @@ def leaf_sets(l, r, u, c, t, S):
         x = l[I[j]]
         while r[O[k]] == x:
             h = O[k]
-            propagate_leaf_loss(u[h], pi, xi, head, tail)
+            xi[u[h]] = []
             for q in c[h]:
                 pi[q] = -1
-            xi[u[h]] = []
+            update_leaf_lists(u[h], pi, xi, head, tail)
             k += 1
-        before = j
         while j < M and l[I[j]] == x:
             h = I[j]
             for q in c[h]:
                 pi[q] = u[h]
             xi[u[h]] = c[h]
-            propagate_leaf_gain(u[h], pi, xi, head, tail)
-            j += 1
-        j = before
-        while j < M and l[I[j]] == x:
-            h = I[j]
-            post_propagate_leaf_gain(u[h], pi, xi, head, tail)
+            update_leaf_lists(u[h], pi, xi, head, tail)
             j += 1
         yield pi, xi, head, tail
 
 
-def check_consistency(n, pi, xi, head, tail):
+def check_consistency(n, pi, xi, head, tail, S):
     """
     Checks the consistency of the specified parent list, child list
     and head and tail leaf list pointers.
     """
-    root = 0
-    while pi[root] != -1:
-        root = pi[root]
-    all_leaves = list(leaves(root, xi))
+    all_leaves = set()
+    for sample in S:
+        root = sample
+        while pi[root] != -1:
+            root = pi[root]
+        for leaf in leaves(root, xi):
+            all_leaves.add(leaf)
     assert set(all_leaves) == set(range(n))
     for u in nodes(root, xi):
-        node_leaves = list(leaves(u, xi))
-        if node_leaves[0] != head[u].value:
-            print("HERROR: head incorrect:", head[u].value)
-        if node_leaves[-1] != tail[u].value:
-            print("TERROR: tail incorrect:", tail[u].value)
-        list_leaves = []
-        x = head[u]
-        while True:
-            if x.value in list_leaves:
-                print("ERROR!!!", x.value, "already in leaf list at index",
-                        list_leaves.index(x.value), "len = ", len(list_leaves))
-                break
-            list_leaves.append(x.value)
-            if x == tail[u]:
-                break
-            x = x.next
-        if list_leaves != node_leaves:
-            print("ERROR")
-            print(list_leaves)
-            print(node_leaves)
+        node_leaves = [v for v in leaves(u, xi) if v in S]
+        if len(node_leaves) == 0:
+            assert head[u] is None
+            assert tail[u] is None
+        else:
+            if node_leaves[0] != head[u].value:
+                print("HERROR: head incorrect:", head[u].value)
+            if node_leaves[-1] != tail[u].value:
+                print("TERROR: tail incorrect:", tail[u].value)
+            list_leaves = []
+            x = head[u]
+            while True:
+                if x.value in list_leaves:
+                    print("ERROR!!!", x.value, "already in leaf list at index",
+                            list_leaves.index(x.value), "len = ", len(list_leaves))
+                    break
+                list_leaves.append(x.value)
+                if x == tail[u]:
+                    break
+                x = x.next
+            if list_leaves != node_leaves:
+                print("ERROR")
+                print(list_leaves)
+                print(node_leaves)
         # assert list_leaves == node_leaves
         # print(list_leaves)
         # print(list_leaves == node_leaves)
@@ -1120,62 +1103,21 @@ def process_trees(records_file):
             c.append(children)
             t.append(float(toks[4]))
     # N = len(l)
-    print("Trees:")
-    forward = []
-    for pi in generate_trees(l, r, u, c, t):
-        forward.append(list(pi))
-    T = len(forward)
-    print("START")
-    tree = Tree(l, r, u, c, t)
-    tree.first()
-    for j in range(T):
-        assert tree.index == j
-        assert tree.parent == forward[j]
-        if j < T - 1:
-            tree.next()
+    # print("Trees:")
+    # for pi in generate_trees(l, r, u, c, t):
+    #     print(pi)
 
-    tree = Tree(l, r, u, c, t)
-    tree.last()
-    for j in range(T):
-        print(j, tree.index, T)
-        assert tree.index == T - j - 1
-        assert tree.parent == forward[T - j - 1]
-        if j < T - 1:
-            tree.prev()
-
-    tree = Tree(l, r, u, c, t)
-    tree.first()
-    print("first done")
-    assert tree.parent == forward[0]
-    assert tree.index == 0
-    for _ in range(1):
-        for _ in range(T // 2):
-            tree.next()
-            print("\t", tree.index)
-            assert tree.parent == forward[tree.index]
-        for j in range(10):
-            print("Reverse")
-            for _ in range(T // 3):
-                tree.prev()
-                print("\t", tree.index)
-                assert tree.parent == forward[tree.index]
-            print("Forward")
-            for _ in range(T // 3):
-                tree.next()
-                print("\t", tree.index)
-                assert tree.parent == forward[tree.index]
-
-
-    # n = min(u)
+    n = min(u)
     # S = set(range(n))
+    S = set([1, 2, 3])
     # # print("Counts:")
     # # for pi, beta in count_leaves(l, r, u, c, t, S):
     # #     print("\t", beta)
     # print("Counts:")
-    # for pi, xi, head, tail in leaf_sets(l, r, u, c, t, S):
-    #     check_consistency(n, pi, xi, head, tail)
-    #     print(pi)
-    #     print(xi)
+    for pi, xi, head, tail in leaf_sets(l, r, u, c, t, S):
+        check_consistency(n, pi, xi, head, tail, S)
+        # print(pi)
+        # print(xi)
 
 def run_simulate(args):
     """

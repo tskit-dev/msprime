@@ -89,24 +89,21 @@ vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
-    uint32_t parent;
     int not_done = 1;
     char one = self->flags & MSP_GENOTYPES_AS_CHAR? '1': 1;
 
-    ret = sparse_tree_get_parent(&self->tree, mut->node, &parent);
-    if (ret != 0) {
-        goto out;
-    }
     ret = sparse_tree_get_leaf_list(&self->tree, mut->node, &w, &tail);
     if (ret != 0) {
         goto out;
     }
-    while (not_done) {
-        assert(w != NULL);
-        assert(w->node < self->sample_size);
-        genotypes[w->node] = one;
-        not_done = w != tail;
-        w = w->next;
+    if (w != NULL) {
+        while (not_done) {
+            assert(w != NULL);
+            assert(w->node < self->sample_size);
+            genotypes[w->node] = one;
+            not_done = w != tail;
+            w = w->next;
+        }
     }
 out:
     return ret;

@@ -1550,25 +1550,69 @@ test_simplest_non_sample_leaf_records(void)
     int ret;
     uint32_t c1[] = {0, 1, 3, 4};
     uint32_t samples[] = {0, 1};
+    char *haplotype;
+    char genotypes[3];
+    mutation_t *mut;
     coalescence_record_t records[] = {
         {0, 4, 2, 0.0, 1.0, 1.0, c1},
     };
+    mutation_t mutations[] = {
+        {.position=0.1, .node=0},
+        {.position=0.2, .node=1},
+        {.position=0.3, .node=3},
+        {.position=0.4, .node=4},
+    };
     tree_sequence_t ts, simplified;
+    hapgen_t hapgen;
+    vargen_t vargen;
 
     ret = tree_sequence_load_records(&ts, 1, records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_set_mutations(&ts, 4, mutations);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
+
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = hapgen_get_haplotype(&hapgen, 0, &haplotype);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(haplotype, "1000");
+    ret = hapgen_get_haplotype(&hapgen, 1, &haplotype);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(haplotype, "0100");
+    hapgen_free(&hapgen);
+
+    genotypes[2] = '\0';
+    ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    vargen_print_state(&vargen, _devnull);
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_STRING_EQUAL(genotypes, "10");
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_STRING_EQUAL(genotypes, "01");
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_STRING_EQUAL(genotypes, "00");
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_STRING_EQUAL(genotypes, "00");
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    vargen_free(&vargen);
 
     ret = tree_sequence_simplify(&ts, samples, 2, 0, &simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 3);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&simplified), 1);
 
     tree_sequence_free(&ts);
@@ -1631,6 +1675,7 @@ test_simplest_multiple_root_records(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
 
     tree_sequence_free(&ts);
+    tree_sequence_free(&simplified);
 }
 
 static void
@@ -1639,14 +1684,15 @@ test_simplest_root_mutations(void)
     int ret;
     uint32_t j;
     uint32_t c1[] = {0, 1};
-    /* uint32_t samples[] = {0, 1}; */
+    uint32_t samples[] = {0, 1};
     coalescence_record_t records[] = {
-        {0, 1, 2, 0.0, 1.0, 1.0, c1},
+        {0, 2, 2, 0.0, 1.0, 1.0, c1},
     };
     mutation_t mutations[] = {{0.1, 2, 0}};
     hapgen_t hapgen;
     char *haplotype;
-    tree_sequence_t ts;
+    int flags = 0;
+    tree_sequence_t ts, simplified;
 
     ret = tree_sequence_load_records(&ts, 1, records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1661,18 +1707,34 @@ test_simplest_root_mutations(void)
     ret = hapgen_alloc(&hapgen, &ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     hapgen_print_state(&hapgen, _devnull);
-
     for (j = 0; j < 2; j++) {
         ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
         CU_ASSERT_EQUAL(ret, 0);
-        printf("FIXME: leaf lists\n");
-        /* CU_ASSERT_STRING_EQUAL(haplotype, "1"); */
+        CU_ASSERT_STRING_EQUAL(haplotype, "1");
     }
     hapgen_free(&hapgen);
+
+    ret = tree_sequence_simplify(&ts, samples, 2, flags, &simplified);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 1);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&simplified), 1);
+    tree_sequence_free(&simplified);
+
+    flags = MSP_FILTER_ROOT_MUTATIONS;
+    ret = tree_sequence_simplify(&ts, samples, 2, flags, &simplified);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&simplified), 1);
+    tree_sequence_free(&simplified);
+
     tree_sequence_free(&ts);
 }
-
-
 
 static void
 test_simplest_bad_records(void)
@@ -2895,7 +2957,9 @@ verify_leaf_sets_for_tree(sparse_tree_t *tree)
     for (u = 0; u < num_nodes; u++) {
         if (tree->num_children[u] == 0 && u >= n) {
             ret = sparse_tree_get_leaf_list(tree, u, &head, &tail);
-            CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL(head, NULL);
+            CU_ASSERT_EQUAL(tail, NULL);
         } else {
             stack_top = 0;
             num_leaves = 0;

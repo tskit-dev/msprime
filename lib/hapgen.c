@@ -76,11 +76,13 @@ hapgen_apply_tree_mutation(hapgen_t *self, mutation_t mut)
     if (ret != 0) {
         goto out;
     }
-    while (not_done) {
-        assert(w != NULL);
-        hapgen_set_bit(self, w->node, mut.index);
-        not_done = w != tail;
-        w = w->next;
+    if (w != NULL) {
+        while (not_done) {
+            assert(w != NULL);
+            hapgen_set_bit(self, w->node, mut.index);
+            not_done = w != tail;
+            w = w->next;
+        }
     }
 out:
     return ret;

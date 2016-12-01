@@ -1864,7 +1864,6 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
             u = *((uint32_t *) avl_node->item);
             ar = &active_records[u];
             activate_record = false;
-            /* printf("visited node : %d, active = %d\n", u, active_records[u].active); */
             if (ar->active) {
                 /* Compare the mapped children at this node to the record. */
                 num_mapped_children = 0;
@@ -1878,11 +1877,11 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
                 }
                 equal = false;
                 if (num_mapped_children == ar->num_mapped_children) {
-                    qsort(mapped_children, num_mapped_children, sizeof(uint32_t), cmp_uint32_t);
+                    qsort(mapped_children, num_mapped_children, sizeof(uint32_t),
+                            cmp_uint32_t);
                     equal = memcmp(ar->mapped_children, mapped_children,
                             num_mapped_children * sizeof(uint32_t)) == 0;
                 }
-                /* printf("equal = %d\n", equal); */
                 if (!equal) {
                     ar->active = false;
                     assert(num_output_records < self->num_records);
@@ -1947,27 +1946,6 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
             }
             l++;
         }
-
-        /* printf("EOL\n"); */
-        /* printf("x  = %d\n", x); */
-        /* for (u = 0; u < self->num_nodes; u++) { */
-        /*     printf("%d\t%d\t%d:\t%d:\t", u, parent[u], mapping[u], active_records[u].active); */
-        /*     if (active_records[u].active) { */
-        /*         printf("left=%d, mc=[", active_records[u].left); */
-        /*         for (c = 0; c < active_records[u].num_mapped_children; c++) { */
-        /*             printf("%d ", active_records[u].mapped_children[c]); */
-        /*         } */
-        /*         printf("]"); */
-        /*     } */
-        /*     printf("\n"); */
-        /* } */
-        /* printf("Visited nodes [%d] = ", avl_count(&visited_nodes)); */
-        /* for (avl_node = visited_nodes.head; avl_node != NULL; */
-        /*         avl_node = avl_node->next) { */
-        /*     printf("%d ", *((uint32_t *) avl_node->item)); */
-        /* } */
-        /* printf("\n"); */
-
     }
 
     /* After the main loop has completed, find all the records that have not
@@ -1990,19 +1968,6 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
         }
     }
 
-    /* fprintf(stdout, "Coalescence records = %ld\n", (long) num_output_records); */
-    /* for (j = 0; j < num_output_records; j++) { */
-    /*     cr = &output_records[j]; */
-    /*     fprintf(stdout, "\t%f\t%f\t%d\t(", cr->left, cr->right, */
-    /*             cr->node); */
-    /*     for (k = 0; k < cr->num_children; k++) { */
-    /*         fprintf(stdout, "%d", cr->children[k]); */
-    /*         if (k < cr->num_children - 1) { */
-    /*             fprintf(stdout, ", "); */
-    /*         } */
-    /*     } */
-    /*     fprintf(stdout, ")\t%f\t%d\n", cr->time, cr->population_id); */
-    /* } */
     if (num_output_records == 0) {
         ret = MSP_ERR_CANNOT_SIMPLIFY;
         goto out;
@@ -2670,14 +2635,6 @@ sparse_tree_get_leaf_list(sparse_tree_t *self, uint32_t u,
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
-    if (self->leaf_list_head[u] == NULL ||
-            self->leaf_list_tail[u] == NULL) {
-        /* This sigifies that we're trying to get the leaf list
-         * for a node that is not in the current tree.
-         */
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
     *head = self->leaf_list_head[u];
     *tail = self->leaf_list_tail[u];
 out:
@@ -2868,18 +2825,6 @@ sparse_tree_propagate_leaf_count_loss(sparse_tree_t *self,
     }
 }
 
-/* Returns the index of child u in the parent v */
-static inline uint32_t
-sparse_tree_get_child_index(sparse_tree_t *self, uint32_t v,
-        uint32_t u)
-{
-    uint32_t j;
-
-    for (j = 0; j < self->num_children[v] && self->children[v][j] != u; j++);
-    assert(j != self->num_children[v]);
-    return j;
-}
-
 static inline void
 sparse_tree_propagate_leaf_count_gain(sparse_tree_t *self, uint32_t u)
 {
@@ -2905,62 +2850,30 @@ sparse_tree_propagate_leaf_count_gain(sparse_tree_t *self, uint32_t u)
 }
 
 static inline void
-sparse_tree_propagate_leaf_list_gain(sparse_tree_t *self,
-        uint32_t u)
+sparse_tree_update_leaf_lists(sparse_tree_t *self, uint32_t node)
 {
-    uint32_t j, k, v, w, *c;
+    uint32_t u, v, c;
+    leaf_list_node_t **head = self->leaf_list_head;
+    leaf_list_node_t **tail = self->leaf_list_tail;
 
-    c = self->children[u];
-    k = self->num_children[u];
-    for (j = 1; j < k; j++) {
-        assert(self->leaf_list_tail[c[j]] != NULL);
-        self->leaf_list_tail[c[j - 1]]->next = self->leaf_list_head[c[j]];
-    }
-    self->leaf_list_head[u] = self->leaf_list_head[c[0]];
-    self->leaf_list_tail[u] = self->leaf_list_tail[c[k - 1]];
-
-    v = u;
-    w = self->parent[v];
-    while (w != MSP_NULL_NODE) {
-        j = sparse_tree_get_child_index(self, w, v);
-        if (j != 0) {
-            break;
+    u = node;
+    while (u != MSP_NULL_NODE) {
+        head[u] = NULL;
+        tail[u] = NULL;
+        for (c = 0; c < self->num_children[u]; c++) {
+            v = self->children[u][c];
+            if (head[v] != NULL) {
+                assert(tail[v] != NULL);
+                if (head[u] == NULL) {
+                    head[u] = head[v];
+                    tail[u] = tail[v];
+                } else {
+                    tail[u]->next = head[v];
+                    tail[u] = tail[v];
+                }
+            }
         }
-        self->leaf_list_head[w] = self->leaf_list_head[u];
-        v = w;
-        w = self->parent[w];
-    }
-
-    v = u;
-    w = self->parent[v];
-    while (w != MSP_NULL_NODE) {
-        j = sparse_tree_get_child_index(self, w, v);
-        if (j != self->num_children[w] - 1) {
-            break;
-        }
-        self->leaf_list_tail[w] = self->leaf_list_tail[u];
-        v = w;
-        w = self->parent[w];
-    }
-}
-
-static inline void
-sparse_tree_post_propagate_leaf_list_gain(sparse_tree_t *self, uint32_t u)
-{
-    uint32_t v, w, j;
-
-    v = u;
-    w = self->parent[v];
-    while (w != MSP_NULL_NODE) {
-        j = sparse_tree_get_child_index(self, w, v);
-        if (j > 0) {
-            self->leaf_list_tail[self->children[w][j - 1]]->next = self->leaf_list_head[v];
-        }
-        if (j < self->num_children[w] - 1) {
-            self->leaf_list_tail[v]->next = self->leaf_list_head[self->children[w][j + 1]];
-        }
-        v = w;
-        w = self->parent[w];
+        u = self->parent[u];
     }
 }
 
@@ -2974,7 +2887,6 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     int direction_change = direction * (direction != self->direction);
     ssize_t in = (ssize_t) *in_index + direction_change;
     ssize_t out = (ssize_t) *out_index + direction_change;
-    ssize_t h;
     uint32_t j, k, u, oldest_child;
     uint32_t x = in_breakpoints[in_order[in]];
     double oldest_child_time;
@@ -3004,13 +2916,11 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
             sparse_tree_propagate_leaf_count_loss(self, u);
         }
         if (self->flags & MSP_LEAF_LISTS) {
-            self->leaf_list_head[u] = NULL;
-            self->leaf_list_tail[u] = NULL;
+            sparse_tree_update_leaf_lists(self, u);
         }
         out += direction;
     }
 
-    h = in;
     while (in >= 0 && in < R && in_breakpoints[in_order[in]] == x) {
         k = in_order[in];
         u = s->trees.records.node[k];
@@ -3028,19 +2938,10 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
             sparse_tree_propagate_leaf_count_gain(self, u);
         }
         if (self->flags & MSP_LEAF_LISTS) {
-            sparse_tree_propagate_leaf_list_gain(self, u);
+            sparse_tree_update_leaf_lists(self, u);
         }
         in += direction;
     }
-    if (self->flags & MSP_LEAF_LISTS) {
-        while (h >= 0 && h < R && in_breakpoints[in_order[h]] == x) {
-            k = in_order[h];
-            u = s->trees.records.node[k];
-            sparse_tree_post_propagate_leaf_list_gain(self, u);
-            h += direction;
-        }
-    }
-
     /* In very rare situations, we have to traverse upwards to find the
      * new root.
      */

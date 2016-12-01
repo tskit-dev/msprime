@@ -1304,10 +1304,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.verify_simplify_equality(ts, samples)
             self.verify_simplify_topology(ts, samples)
             self.verify_simplify_mutations(ts, samples)
-            # TODO enable this when we have fixed variants() on tree sequences
-            # with non-sample leaves.
-            # self.verify_subset_variants(ts, samples)
-
+            self.verify_simplify_variants(ts, samples)
             j += 1
         self.assertGreater(j, 1)
 
