@@ -253,7 +253,7 @@ class TestUnaryNodes(TopologyTestCase):
 
 class TestNonSampleExternalNodes(TopologyTestCase):
     """
-    Tests for situations in which we have unary nodes in the tree sequence.
+    Tests for situations in which we have tips that are not samples.
     """
     def test_simple_case(self):
         # Simplest case where we have n = 2 and external non-sample nodes.
@@ -523,3 +523,48 @@ class TestMultipleRoots(TopologyTestCase):
             roots.add(u)
         self.assertEqual(len(roots), 2)
         self.assertIn(t_new.root, roots)
+
+    def test_partial_non_sample_external_nodes(self):
+        # A somewhat more complicated test case with a partially specified,
+        # non-sampled tip.
+        # 
+        # Here is the situation:
+        #
+        # 1.0             7
+        # 0.7            / \                                                                     6
+        #               /   \                                                                   / \
+        # 0.5          /     5                           5                                     /   5
+        #             /     / \                         / \                                   /   / \
+        # 0.4        /     /   4                       /   4                                 /   /   4
+        #           /     /   / \                     /   / \                               /   /   / \
+        #          /     /   3   \                   /   /   \                             /   /   3   \
+        #         /     /         \                 /   /     \                           /   /         \
+        # 0.0    0     1           2               1   0       2                         0   1           2
+        #
+        #          (0.0, 0.2),                   (0.2, 0.8),                             (0.8, 1.0)
+
+        records = [
+            msprime.CoalescenceRecord(
+                left=0.0,  right=0.2,  node=4,  children=(2,  3),  time=0.4,  population=0),
+            msprime.CoalescenceRecord(
+                left=0.2,  right=0.8,  node=4,  children=(0,  2),  time=0.4,  population=0),
+            msprime.CoalescenceRecord(
+                left=0.8,  right=1.0,  node=4,  children=(2,  3),  time=0.4,  population=0),
+            msprime.CoalescenceRecord(
+                left=0.0,  right=1.0,  node=5,  children=(1,  4),  time=0.5,  population=0),
+            msprime.CoalescenceRecord(
+                left=0.8,  right=1.0,  node=6,  children=(0,  5),  time=0.7,  population=0),
+            msprime.CoalescenceRecord(
+                left=0.0,  right=0.2,  node=7,  children=(0,  5),  time=1.0,  population=0),
+            ]
+        # list of (parent, time) dicts
+        true_trees = [ {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6:-1, 7:-1},
+                       {0: 4, 1: 5, 2: 4, 3:-1, 4: 5, 5:-1, 6:-1, 7:-1},
+                       {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6:-1, 7:-1}]
+        ts = build_tree_sequence(records)
+        self.assertEqual(ts.sample_size, 3)
+        self.assertEqual(ts.num_trees, 3)
+        self.assertEqual(ts.num_nodes, 8)
+        for a,t in zip(true_trees,ts.trees()):
+            self.assertEqual(t.parent_dict,a)
+
