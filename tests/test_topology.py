@@ -261,11 +261,18 @@ class TestNonSampleExternalNodes(TopologyTestCase):
             msprime.CoalescenceRecord(
                 left=0, right=1, node=2, children=(0, 1, 3, 4), time=1, population=0),
         ]
-        ts = build_tree_sequence(records)
+        mutations = [
+            msprime.Mutation(index=0, position=0.1, node=0),
+            msprime.Mutation(index=1, position=0.2, node=1),
+            msprime.Mutation(index=2, position=0.3, node=3),
+            msprime.Mutation(index=3, position=0.4, node=4),
+        ]
+        ts = build_tree_sequence(records, mutations)
         self.assertEqual(ts.sample_size, 2)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 5)
         t = next(ts.trees())
+        self.assertEqual(list(t.mutations()), mutations)
         self.assertEqual(t.parent_dict, {0: 2, 1: 2, 3: 2, 4: 2})
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 3: 0, 4: 0, 2: 1})
         self.assertEqual(t.root, 2)
@@ -276,6 +283,8 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assertEqual(t.parent_dict, {0: 2, 1: 2})
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 1})
         self.assertEqual(t.root, 2)
+        # We should have removed the two non-sample mutations.
+        self.assertEqual(list(t.mutations()), mutations[:-2])
 
     def test_unary_non_sample_external_nodes(self):
         # Take an ordinary tree sequence and put a bunch of external non
@@ -304,3 +313,187 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assertEqual(list(ts_simplified.records()), list(ts.records()))
         self.assert_haplotypes_equal(ts, ts_simplified)
         self.assert_variants_equal(ts, ts_simplified)
+
+class TestMultipleRoots(TopologyTestCase):
+    """
+    Tests for situations where we have multiple roots for the samples.
+    """
+    def test_simplest_degenerate_case(self):
+        # Simplest case where we have n = 2 and two unary records.
+        # This cannot be simplified, since there are no trees to recover.
+        records = [
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=2, children=(0,), time=1, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=3, children=(1,), time=1, population=0),
+        ]
+        mutations = [
+            msprime.Mutation(index=0, position=0.1, node=0),
+            msprime.Mutation(index=1, position=0.2, node=1),
+        ]
+        ts = build_tree_sequence(records, mutations)
+        self.assertEqual(ts.num_nodes, 4)
+        self.assertEqual(ts.num_trees, 1)
+        t = next(ts.trees())
+        self.assertEqual(t.parent_dict, {0: 2, 1: 3})
+        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 1, 3: 1})
+        self.assertEqual(list(t.mutations()), mutations)
+        self.assertEqual(list(ts.haplotypes()), ["10", "01"])
+        self.assertEqual([v.genotypes for v in ts.variants(as_bytes=True)], ["10", "01"])
+        self.assertRaises(_msprime.LibraryError, ts.simplify)
+
+    def test_simplest_non_degenerate_case(self):
+        # Simplest case where we have n = 4 and two trees.
+        records = [
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=4, children=(0, 1), time=1, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=5, children=(2, 3), time=1, population=0),
+        ]
+        mutations = [
+            msprime.Mutation(index=0, position=0.1, node=0),
+            msprime.Mutation(index=1, position=0.2, node=1),
+            msprime.Mutation(index=2, position=0.3, node=2),
+            msprime.Mutation(index=3, position=0.4, node=3),
+        ]
+        ts = build_tree_sequence(records, mutations)
+        self.assertEqual(ts.num_nodes, 6)
+        self.assertEqual(ts.num_trees, 1)
+        t = next(ts.trees())
+        self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
+        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1})
+        self.assertEqual(list(t.mutations()), mutations)
+        self.assertEqual(list(ts.haplotypes()), ["1000", "0100", "0010", "0001"])
+        self.assertEqual(
+            [v.genotypes for v in ts.variants(as_bytes=True)],
+            ["1000", "0100", "0010", "0001"])
+        self.assertEqual(t.mrca(0, 1), 4)
+        self.assertEqual(t.mrca(0, 4), 4)
+        self.assertEqual(t.mrca(2, 3), 5)
+        self.assertEqual(t.mrca(0, 2), msprime.NULL_NODE)
+        self.assertEqual(t.mrca(0, 3), msprime.NULL_NODE)
+        self.assertEqual(t.mrca(2, 4), msprime.NULL_NODE)
+        ts_simplified = ts.simplify()
+        self.assertEqual(ts_simplified.num_nodes, 6)
+        self.assertEqual(ts_simplified.num_trees, 1)
+        t = next(ts_simplified.trees())
+        self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
+        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1})
+        self.assertEqual(list(t.mutations()), mutations)
+
+    def test_two_reducable_trees(self):
+        # We have n = 4 and two trees, with some unary nodes and non-sample leaves
+        records = [
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=4, children=(0,), time=1, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=5, children=(1,), time=1, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=6, children=(4, 5), time=2, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=7, children=(2, 3, 8), time=3, population=0),
+        ]
+        mutations = [
+            msprime.Mutation(index=0, position=0.1, node=0),
+            msprime.Mutation(index=1, position=0.2, node=1),
+            msprime.Mutation(index=2, position=0.3, node=2),
+            msprime.Mutation(index=3, position=0.4, node=3),
+            msprime.Mutation(index=4, position=0.5, node=8),
+        ]
+        ts = build_tree_sequence(records, mutations)
+        self.assertEqual(ts.num_nodes, 9)
+        self.assertEqual(ts.num_trees, 1)
+        t = next(ts.trees())
+        self.assertEqual(t.parent_dict, {0: 4, 1: 5, 2: 7, 3: 7, 4: 6, 5: 6, 8: 7})
+        self.assertEqual(
+            t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1, 6: 2, 7: 3, 8: 0})
+        self.assertEqual(list(t.mutations()), mutations)
+        # TODO enable this when leaf-lists has been fixed.
+        # self.assertEqual(list(ts.haplotypes()), ["1000", "0100", "0010", "0001"])
+        # self.assertEqual(
+        #     [v.genotypes for v in ts.variants(as_bytes=True)],
+        #     ["1000", "0100", "0010", "0001"])
+        self.assertEqual(t.mrca(0, 1), 6)
+        self.assertEqual(t.mrca(2, 3), 7)
+        self.assertEqual(t.mrca(2, 8), 7)
+        self.assertEqual(t.mrca(0, 2), msprime.NULL_NODE)
+        self.assertEqual(t.mrca(0, 3), msprime.NULL_NODE)
+        self.assertEqual(t.mrca(0, 8), msprime.NULL_NODE)
+        ts_simplified = ts.simplify()
+        self.assertEqual(ts_simplified.num_nodes, 6)
+        self.assertEqual(ts_simplified.num_trees, 1)
+        t = next(ts_simplified.trees())
+        self.assertEqual(
+            list(ts_simplified.haplotypes()), ["1000", "0100", "0010", "0001"])
+        self.assertEqual(
+            [v.genotypes for v in ts_simplified.variants(as_bytes=True)],
+            ["1000", "0100", "0010", "0001"])
+        # The mutation over the non-sample external node should have been discarded.
+        self.assertEqual(list(t.mutations()), mutations[:-1])
+        self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
+        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 2, 5: 3})
+
+    def test_one_reducable_tree(self):
+        # We have n = 3 and two trees. One tree is reducable and the other isn't.
+        records = [
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=4, children=(0,), time=1, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=5, children=(1,), time=1, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=6, children=(4, 5), time=2, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=7, children=(2, 3, 8), time=3, population=0),
+        ]
+        ts = build_tree_sequence(records)
+        self.assertEqual(ts.num_nodes, 9)
+        self.assertEqual(ts.num_trees, 1)
+        t = next(ts.trees())
+        self.assertEqual(t.parent_dict, {0: 4, 1: 5, 2: 7, 3: 7, 4: 6, 5: 6, 8: 7})
+        self.assertEqual(
+            t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1, 6: 2, 7: 3, 8: 0})
+        self.assertEqual(t.mrca(0, 1), 6)
+        self.assertEqual(t.mrca(2, 3), 7)
+        self.assertEqual(t.mrca(2, 8), 7)
+        self.assertEqual(t.mrca(0, 2), msprime.NULL_NODE)
+        self.assertEqual(t.mrca(0, 3), msprime.NULL_NODE)
+        self.assertEqual(t.mrca(0, 8), msprime.NULL_NODE)
+        ts_simplified = ts.simplify()
+        self.assertEqual(ts_simplified.num_nodes, 6)
+        self.assertEqual(ts_simplified.num_trees, 1)
+        t = next(ts_simplified.trees())
+        self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
+        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 2, 5: 3})
+
+    def test_mutations_over_roots(self):
+        # Mutations over root nodes should be ok when we have multiple roots.
+        records = [
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=3, children=(0, 1), time=1, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=4, children=(3,), time=2, population=0),
+            msprime.CoalescenceRecord(
+                left=0, right=1, node=5, children=(2,), time=2, population=0),
+        ]
+        mutations = [
+            msprime.Mutation(index=0, position=0.1, node=0),
+            msprime.Mutation(index=1, position=0.2, node=1),
+            msprime.Mutation(index=2, position=0.3, node=3),
+            msprime.Mutation(index=3, position=0.4, node=4),
+            msprime.Mutation(index=4, position=0.5, node=2),
+            msprime.Mutation(index=5, position=0.6, node=5),
+        ]
+        ts = build_tree_sequence(records, mutations)
+        self.assertEqual(ts.num_nodes, 6)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(list(ts.mutations()), mutations)
+        t = next(ts.trees())
+        self.assertEqual(list(t.mutations()), mutations)
+        haplotypes = ["101100", "011100", "000011"]
+        variants = ["100", "010", "110", "110", "001", "001"]
+        self.assertEqual(list(ts.haplotypes()), haplotypes)
+        self.assertEqual([v.genotypes for v in ts.variants(as_bytes=True)], variants)
+        ts_simplified = ts.simplify()
+        self.assertEqual(list(ts_simplified.haplotypes()), haplotypes)
+        self.assertEqual(
+            [v.genotypes for v in ts_simplified.variants(as_bytes=True)], variants)
