@@ -2907,21 +2907,26 @@ TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     PyObject *py_samples = NULL;
-    static char *kwlist[] = {"samples", NULL};
+    static char *kwlist[] = {"samples", "filter_root_mutations", NULL};
     uint32_t *samples = NULL;
     size_t num_samples = 0;
     tree_sequence_t *subset_ts = NULL;
+    int filter_root_mutations = 1;
+    int flags = 0;
     int err;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &PyList_Type, &py_samples)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
+            &PyList_Type, &py_samples, &filter_root_mutations)) {
         goto out;
     }
     if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
         goto out;
+    }
+    if (filter_root_mutations) {
+        flags |= MSP_FILTER_ROOT_MUTATIONS;
     }
     subset_ts = PyMem_Malloc(sizeof(tree_sequence_t));
     if (subset_ts == NULL) {
@@ -2930,9 +2935,9 @@ TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
     }
     memset(subset_ts, 0, sizeof(tree_sequence_t));
     err = tree_sequence_simplify(
-        self->tree_sequence, samples, (uint32_t) num_samples, subset_ts);
+        self->tree_sequence, samples, (uint32_t) num_samples, flags, subset_ts);
     if (err != 0) {
-        /* We must free the memory for subset_ts, but not all tree_sequence_free
+        /* We must free the memory for subset_ts, but not call tree_sequence_free
          * as it has already been called. */
         PyMem_Free(subset_ts);
         subset_ts = NULL;

@@ -132,6 +132,9 @@ msp_strerror(int err)
         case MSP_ERR_BAD_COALESCENCE_RECORDS:
             ret = "Bad coalescence records in file.";
             break;
+        case MSP_ERR_ZERO_RECORDS:
+            ret = "At least one record must be supplied";
+            break;
         case MSP_ERR_ZERO_CHILDREN:
             ret = "Zero children in coalescence record.";
             break;
@@ -156,8 +159,8 @@ msp_strerror(int err)
         case MSP_ERR_BAD_RECORD_INTERVAL:
             ret = "Bad record interval where right <= left";
             break;
-        case MSP_ERR_INCOMPLETE_TREE:
-            ret = "The tree is not complete (several roots)";
+        case MSP_ERR_CANNOT_SIMPLIFY:
+            ret = "Cannot simplify the tree sequence; no output records.";
             break;
         case MSP_ERR_BAD_SAMPLES:
             ret = "Bad sample configuration provided.";

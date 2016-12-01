@@ -60,7 +60,7 @@
 #define MSP_ERR_NONBINARY_NEWICK                                    -29
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
-#define MSP_ERR_INCOMPLETE_TREE                                     -32
+#define MSP_ERR_CANNOT_SIMPLIFY                                     -32
 #define MSP_ERR_BAD_MODEL                                           -33
 #define MSP_ERR_ZERO_CHILDREN                                       -34
 #define MSP_ERR_UNSORTED_CHILDREN                                   -35
@@ -70,5 +70,6 @@
 #define MSP_ERR_INCONSISTENT_NODE_TIMES                             -39
 #define MSP_ERR_INCONSISTENT_POPULATION_IDS                         -40
 #define MSP_ERR_BAD_RECORD_INTERVAL                                 -41
+#define MSP_ERR_ZERO_RECORDS                                        -42
 
 #endif /*__ERR_H__*/

@@ -97,10 +97,6 @@ vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes)
     if (ret != 0) {
         goto out;
     }
-    if (parent == MSP_NULL_NODE) {
-        ret = MSP_ERR_BAD_MUTATION;
-        goto out;
-    }
     ret = sparse_tree_get_leaf_list(&self->tree, mut->node, &w, &tail);
     if (ret != 0) {
         goto out;

@@ -926,6 +926,7 @@ run_simplify(char *input_filename, char *output_filename, char **samples,
 {
     tree_sequence_t ts, subset;
     uint32_t *parsed_samples = malloc((size_t) num_samples * sizeof(uint32_t));
+    int flags = 0;
     int ret, j;
 
     if (parsed_samples == NULL) {
@@ -936,7 +937,7 @@ run_simplify(char *input_filename, char *output_filename, char **samples,
     }
     load_tree_sequence(&ts, input_filename);
     ret = tree_sequence_simplify(&ts, parsed_samples, (uint32_t) num_samples,
-            &subset);
+            flags, &subset);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
     }

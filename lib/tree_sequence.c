@@ -101,10 +101,10 @@ squash_records(coalescence_record_t *records, size_t num_records,
     size_t j;
     size_t k = 0;
 
+    assert(num_records > 0);
     /* First sort the records by time and left coordinate */
     qsort(records, num_records, sizeof(coalescence_record_t),
             cmp_record_time_left);
-
     lcr = records;
     assert(lcr->num_children > 1);
     for (j = 1; j < num_records; j++) {
@@ -462,7 +462,7 @@ tree_sequence_init_from_records(tree_sequence_t *self,
 
     memset(self, 0, sizeof(tree_sequence_t));
     if (num_records == 0) {
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        ret = MSP_ERR_ZERO_RECORDS;
         goto out;
     }
     left = malloc((num_records + 1) * sizeof(double));
@@ -1690,7 +1690,7 @@ out:
 
 int WARN_UNUSED
 tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
-        uint32_t num_samples, tree_sequence_t *output)
+        uint32_t num_samples, int flags, tree_sequence_t *output)
 {
     typedef struct {
         bool active;
@@ -1715,7 +1715,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     size_t M = self->num_records;
     size_t j, k, h, next_avl_node, mapped_children_mem_offset, num_output_records,
            num_squashed_records, num_output_mutations, max_num_child_nodes;
-    uint32_t u, v, w, x, c, l, subset_root, num_mapped_children;
+    uint32_t u, v, w, x, c, l, num_mapped_children;
     avl_tree_t visited_nodes;
     avl_node_t *avl_node_mem = NULL;
     uint32_t *avl_node_value_mem = NULL;
@@ -1723,8 +1723,9 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     active_record_t *ar;
     coalescence_record_t *cr;
     mutation_t *mut;
-    bool equal, activate_record;
+    bool equal, activate_record, keep;
     double right;
+    bool filter_root_mutations = flags & MSP_FILTER_ROOT_MUTATIONS;
 
     if (num_samples < 2) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -1921,28 +1922,28 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
                         cmp_uint32_t);
             }
         }
-        /* Find the root of the subset tree.
-         * TODO What happens here when we have multiple roots??
-         */
-        subset_root = MSP_NULL_NODE;
-        u = samples[0];
-        while (u != MSP_NULL_NODE) {
-            if (mapping[u] == u) {
-                subset_root = u;
-            }
-            u = parent[u];
-        }
-        assert(subset_root != MSP_NULL_NODE);
         /* Update the mutations for this tree */
         right = self->trees.breakpoints[self->trees.records.right[O[k]]];
         while (l < self->num_mutations && self->mutations.position[l] < right) {
             u = self->mutations.node[l];
-            if (mapping[u] != MSP_NULL_NODE && mapping[u] != subset_root) {
-                assert(num_output_mutations < self->num_mutations);
-                mut = &output_mutations[num_output_mutations];
-                num_output_mutations++;
-                mut->node = mapping[u];
-                mut->position = self->mutations.position[l];
+            if (mapping[u] != MSP_NULL_NODE) {
+                keep = true;
+                if (filter_root_mutations) {
+                    /* Traverse up the tree until we find either another node in
+                     * the subset tree or the root */
+                    v = parent[u];
+                    while (v != MSP_NULL_NODE && mapping[v] != v) {
+                        v = parent[v];
+                    }
+                    keep = v != MSP_NULL_NODE;
+                }
+                if (keep) {
+                    assert(num_output_mutations < self->num_mutations);
+                    mut = &output_mutations[num_output_mutations];
+                    num_output_mutations++;
+                    mut->node = mapping[u];
+                    mut->position = self->mutations.position[l];
+                }
             }
             l++;
         }
@@ -1989,20 +1990,23 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
         }
     }
 
-/*     fprintf(stdout, "Coalescence records = %ld\n", (long) num_output_records); */
-/*     for (j = 0; j < num_output_records; j++) { */
-/*         cr = &output_records[j]; */
-/*         fprintf(stdout, "\t%f\t%f\t%d\t(", cr->left, cr->right, */
-/*                 cr->node); */
-/*         for (k = 0; k < cr->num_children; k++) { */
-/*             fprintf(stdout, "%d", cr->children[k]); */
-/*             if (k < cr->num_children - 1) { */
-/*                 fprintf(stdout, ", "); */
-/*             } */
-/*         } */
-/*         fprintf(stdout, ")\t%f\t%d\n", cr->time, cr->population_id); */
-/*     } */
-
+    /* fprintf(stdout, "Coalescence records = %ld\n", (long) num_output_records); */
+    /* for (j = 0; j < num_output_records; j++) { */
+    /*     cr = &output_records[j]; */
+    /*     fprintf(stdout, "\t%f\t%f\t%d\t(", cr->left, cr->right, */
+    /*             cr->node); */
+    /*     for (k = 0; k < cr->num_children; k++) { */
+    /*         fprintf(stdout, "%d", cr->children[k]); */
+    /*         if (k < cr->num_children - 1) { */
+    /*             fprintf(stdout, ", "); */
+    /*         } */
+    /*     } */
+    /*     fprintf(stdout, ")\t%f\t%d\n", cr->time, cr->population_id); */
+    /* } */
+    if (num_output_records == 0) {
+        ret = MSP_ERR_CANNOT_SIMPLIFY;
+        goto out;
+    }
     ret = squash_records(output_records, num_output_records, &num_squashed_records);
     if (ret != 0) {
         goto out;

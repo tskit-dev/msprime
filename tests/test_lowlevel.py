@@ -2774,25 +2774,6 @@ class TestSparseTree(LowLevelTestCase):
         for bad_node in [u, u + 1, 2 * u, -1]:
             self.assertRaises(
                 _msprime.LibraryError, ts.set_mutations, [(0.1, bad_node)])
-        # We shouldn't be able to assign mutations to the root node
-        st = _msprime.SparseTree(ts)
-        for st in _msprime.SparseTreeIterator(st):
-            x = st.get_left()
-            # For more subtle issues where we put mutations on nodes not in
-            # the tree, we have to wait until later to detect it.
-            other_ts = self.get_tree_sequence(2, num_loci=200, random_seed=1)
-            for u in range(ts.get_num_nodes()):
-                if st.get_parent(u) == NULL_NODE:
-                    other_ts.set_mutations([(x, u)])
-                    self.assertRaises(
-                        _msprime.LibraryError, _msprime.HaplotypeGenerator,
-                        other_ts)
-                    buff = bytearray(other_ts.get_sample_size())
-                    vg = _msprime.VariantGenerator(other_ts, buff)
-                    self.assertRaises(_msprime.LibraryError, list, vg)
-                    # We must free the variant generator to decrement the
-                    # refcount on other_ts
-                    del vg
 
     def test_free(self):
         ts = self.get_tree_sequence()

@@ -1974,10 +1974,10 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def simplify(self, samples=None):
+    def simplify(self, samples=None, filter_root_mutations=True):
         if samples is None:
             samples = self.get_samples()
-        ll_ts = self._ll_tree_sequence.simplify(samples)
+        ll_ts = self._ll_tree_sequence.simplify(samples, filter_root_mutations)
         new_ts = msprime.TreeSequence(ll_ts)
         for provenance in self.get_provenance():
             new_ts.add_provenance(provenance)

@@ -70,17 +70,8 @@ hapgen_apply_tree_mutation(hapgen_t *self, mutation_t mut)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
-    uint32_t parent;
     int not_done = 1;
 
-    ret = sparse_tree_get_parent(&self->tree, mut.node, &parent);
-    if (ret != 0) {
-        goto out;
-    }
-    if (parent == MSP_NULL_NODE) {
-        ret = MSP_ERR_BAD_MUTATION;
-        goto out;
-    }
     ret = sparse_tree_get_leaf_list(&self->tree, mut.node, &w, &tail);
     if (ret != 0) {
         goto out;

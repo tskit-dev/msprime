@@ -314,6 +314,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assert_haplotypes_equal(ts, ts_simplified)
         self.assert_variants_equal(ts, ts_simplified)
 
+
 class TestMultipleRoots(TopologyTestCase):
     """
     Tests for situations where we have multiple roots for the samples.
@@ -339,7 +340,8 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 1, 3: 1})
         self.assertEqual(list(t.mutations()), mutations)
         self.assertEqual(list(ts.haplotypes()), ["10", "01"])
-        self.assertEqual([v.genotypes for v in ts.variants(as_bytes=True)], ["10", "01"])
+        self.assertEqual(
+            [v.genotypes for v in ts.variants(as_bytes=True)], [b"10", b"01"])
         self.assertRaises(_msprime.LibraryError, ts.simplify)
 
     def test_simplest_non_degenerate_case(self):
@@ -366,7 +368,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(list(ts.haplotypes()), ["1000", "0100", "0010", "0001"])
         self.assertEqual(
             [v.genotypes for v in ts.variants(as_bytes=True)],
-            ["1000", "0100", "0010", "0001"])
+            [b"1000", b"0100", b"0010", b"0001"])
         self.assertEqual(t.mrca(0, 1), 4)
         self.assertEqual(t.mrca(0, 4), 4)
         self.assertEqual(t.mrca(2, 3), 5)
@@ -427,7 +429,7 @@ class TestMultipleRoots(TopologyTestCase):
             list(ts_simplified.haplotypes()), ["1000", "0100", "0010", "0001"])
         self.assertEqual(
             [v.genotypes for v in ts_simplified.variants(as_bytes=True)],
-            ["1000", "0100", "0010", "0001"])
+            [b"1000", b"0100", b"0010", b"0001"])
         # The mutation over the non-sample external node should have been discarded.
         self.assertEqual(list(t.mutations()), mutations[:-1])
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
@@ -490,10 +492,15 @@ class TestMultipleRoots(TopologyTestCase):
         t = next(ts.trees())
         self.assertEqual(list(t.mutations()), mutations)
         haplotypes = ["101100", "011100", "000011"]
-        variants = ["100", "010", "110", "110", "001", "001"]
+        variants = [b"100", b"010", b"110", b"110", b"001", b"001"]
         self.assertEqual(list(ts.haplotypes()), haplotypes)
         self.assertEqual([v.genotypes for v in ts.variants(as_bytes=True)], variants)
-        ts_simplified = ts.simplify()
+        ts_simplified = ts.simplify(filter_root_mutations=False)
         self.assertEqual(list(ts_simplified.haplotypes()), haplotypes)
         self.assertEqual(
             [v.genotypes for v in ts_simplified.variants(as_bytes=True)], variants)
+        ts_simplified = ts.simplify(filter_root_mutations=True)
+        # self.assertEqual(list(ts_simplified.haplotypes()), ["10", "01", "00"])
+        # self.assertEqual(
+        #     [v.genotypes for v in ts_simplified.variants(as_bytes=True)],
+        #     ["100", "010", "000"])
