@@ -545,31 +545,138 @@ class TestMultipleRoots(TopologyTestCase):
 
         records = [
             msprime.CoalescenceRecord(
-                left=0.0,  right=0.2,  node=4,  children=(2,  3),  time=0.4,  population=0),
+                left=0.0, right=0.2, node=4, children=(2, 3), time=0.4, population=0),
             msprime.CoalescenceRecord(
-                left=0.2,  right=0.8,  node=4,  children=(0,  2),  time=0.4,  population=0),
+                left=0.2, right=0.8, node=4, children=(0, 2), time=0.4, population=0),
             msprime.CoalescenceRecord(
-                left=0.8,  right=1.0,  node=4,  children=(2,  3),  time=0.4,  population=0),
+                left=0.8, right=1.0, node=4, children=(2, 3), time=0.4, population=0),
             msprime.CoalescenceRecord(
-                left=0.0,  right=1.0,  node=5,  children=(1,  4),  time=0.5,  population=0),
+                left=0.0, right=1.0, node=5, children=(1, 4), time=0.5, population=0),
             msprime.CoalescenceRecord(
-                left=0.8,  right=1.0,  node=6,  children=(0,  5),  time=0.7,  population=0),
+                left=0.8, right=1.0, node=6, children=(0, 5), time=0.7, population=0),
             msprime.CoalescenceRecord(
-                left=0.0,  right=0.2,  node=7,  children=(0,  5),  time=1.0,  population=0),
+                left=0.0, right=0.2, node=7, children=(0, 5), time=1.0, population=0),
             ]
-        # list of (parent, time) dicts
         true_trees = [ {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6:-1, 7:-1},
                        {0: 4, 1: 5, 2: 4, 3:-1, 4: 5, 5:-1, 6:-1, 7:-1},
                        {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6:-1, 7:-1}]
         ts = build_tree_sequence(records)
-        trees = [t.parent_dict for t in ts.trees()]
+        tree_dicts = [t.parent_dict for t in ts.trees()]
+        print("Skipping test of sample size.")
         # self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, 3)
         self.assertEqual(ts.num_nodes, 8)
-        for a,t in zip(true_trees,trees):
+        # check topologies agree:
+        for a,t in zip(true_trees,tree_dicts):
             for k in a.keys():
                 if k in t.keys():
                     self.assertEqual(t[k],a[k])
                 else:
                     self.assertEqual(a[k],-1)
+
+    def test_partial_non_sample_external_nodes_2(self):
+        # The same situation as above, but partial tip is labeled '7' not '3':
+        #
+        # 1.0          6
+        # 0.7         / \                                                                     5
+        #            /   \                                                                   / \
+        # 0.5       /     4                           4                                     /   4
+        #          /     / \                         / \                                   /   / \
+        # 0.4     /     /   3                       /   3                                 /   /   3
+        #        /     /   / \                     /   / \                               /   /   / \
+        #       /     /   7   \                   /   /   \                             /   /   7   \
+        #      /     /         \                 /   /     \                           /   /         \
+        # 0.0 0     1           2               1   0       2                         0   1           2
+        #
+        #          (0.0, 0.2),                   (0.2, 0.8),                             (0.8, 1.0)
+
+        records = [
+            msprime.CoalescenceRecord(
+                left=0.0, right=0.2, node=3, children=(2, 7), time=0.4, population=0),
+            msprime.CoalescenceRecord(
+                left=0.2, right=0.8, node=3, children=(0, 2), time=0.4, population=0),
+            msprime.CoalescenceRecord(
+                left=0.8, right=1.0, node=3, children=(2, 7), time=0.4, population=0),
+            msprime.CoalescenceRecord(
+                left=0.0, right=0.2, node=4, children=(1, 3), time=0.5, population=0),
+            msprime.CoalescenceRecord(
+                left=0.2, right=0.8, node=4, children=(1, 3), time=0.5, population=0),
+            msprime.CoalescenceRecord(
+                left=0.8, right=1.0, node=4, children=(1, 3), time=0.5, population=0),
+            msprime.CoalescenceRecord(
+                left=0.8, right=1.0, node=5, children=(0, 4), time=0.7, population=0),
+            msprime.CoalescenceRecord(
+                left=0.0, right=0.2, node=6, children=(0, 4), time=1.0, population=0),
+            ]
+        true_trees = [ {0: 6, 1: 4, 2: 3, 3: 4, 4: 6, 5:-1, 6:-1, 7: 3},
+                         {0: 3, 1: 4, 2: 3, 3: 4, 4:-1, 5:-1, 6:-1, 7:-1},
+                         {0: 5, 1: 4, 2: 3, 3: 4, 4: 5, 5:-1, 6:-1, 7: 3}]
+        ts = build_tree_sequence(records)
+        tree_dicts = [t.parent_dict for t in ts.trees()]
+        # sample size check works here since 7 > 3
+        self.assertEqual(ts.sample_size, 3)
+        self.assertEqual(ts.num_trees, 3)
+        self.assertEqual(ts.num_nodes, 8)
+        # check topologies agree:
+        for a,t in zip(true_trees,tree_dicts):
+            for k in a.keys():
+                if k in t.keys():
+                    self.assertEqual(t[k],a[k])
+                else:
+                    self.assertEqual(a[k],-1)
+        ## FAILS:
+        # # check can draw trees
+        # trees=ts.trees()
+        # for x in trees:
+        #   x.draw(path='test.svg')
+
+
+    def test_single_offspring_records(self):
+        # Here we have inserted a single-offspring record
+        # (for 6 on the left segment):
+        #
+        # 1.0             7
+        # 0.7            / 6                                                                     6
+        #               /   \                                                                   / \
+        # 0.5          /     5                           5                                     /   5
+        #             /     / \                         / \                                   /   / \
+        # 0.4        /     /   4                       /   4                                 /   /   4
+        # 0.3       /     /   / \                     /   / \                               /   /   / \
+        #          /     /   3   \                   /   /   \                             /   /   3   \
+        #         /     /         \                 /   /     \                           /   /         \
+        # 0.0    0     1           2               1   0       2                         0   1           2
+        #
+        #          (0.0, 0.2),                   (0.2, 0.8),                             (0.8, 1.0)
+        records = [
+            msprime.CoalescenceRecord(
+                left=0.0, right=0.2, node=4, children=(2, 3), time=0.4, population=0),
+            msprime.CoalescenceRecord(
+                left=0.2, right=0.8, node=4, children=(0, 2), time=0.4, population=0),
+            msprime.CoalescenceRecord(
+                left=0.8, right=1.0, node=4, children=(2, 3), time=0.4, population=0),
+            msprime.CoalescenceRecord(
+                left=0.0, right=1.0, node=5, children=(1, 4), time=0.5, population=0),
+            msprime.CoalescenceRecord(
+                left=0.8, right=1.0, node=6, children=(0, 5), time=0.7, population=0),
+            msprime.CoalescenceRecord(
+                left=0.0, right=0.2, node=6, children=(5, ), time=0.7, population=0),
+            msprime.CoalescenceRecord(
+                left=0.0, right=0.2, node=7, children=(0, 6), time=1.0, population=0),
+            ]
+        true_trees = [ {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: 7, 7:-1},
+                       {0: 4, 1: 5, 2: 4, 3:-1, 4: 5, 5:-1, 6:-1, 7:-1},
+                       {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6:-1, 7:-1}]
+        ts = build_tree_sequence(records)
+        tree_dicts = [t.parent_dict for t in ts.trees()]
+        # self.assertEqual(ts.sample_size, 3)
+        self.assertEqual(ts.num_trees, 3)
+        self.assertEqual(ts.num_nodes, 8)
+        # check topologies agree:
+        for a,t in zip(true_trees,tree_dicts):
+            for k in a.keys():
+                if k in t.keys():
+                    self.assertEqual(t[k],a[k])
+                else:
+                    self.assertEqual(a[k],-1)
+
 
