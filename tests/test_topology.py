@@ -679,4 +679,75 @@ class TestMultipleRoots(TopologyTestCase):
                 else:
                     self.assertEqual(a[k],-1)
 
+    def test_many_single_offspring(self):
+        # a more complex test with single offspring
+        # With `(i,j,x)->k` denoting that individual `k` inherits from `i` on `[0,x)` and from `j` on `[x,1)`:
+        # 1. Begin with an individual `3` (and another anonymous one) at `t=0`.
+        # 2. `(3,?,1.0)->4` and `(3,?,1.0)->5` at `t=1`
+        # 3. `(4,3,0.9)->6` and `(3,5,0.1)->7` and then `3` dies at `t=2`
+        # 4. `(6,7,0.7)->8` at `t=3`
+        # 5. `(8,6,0.8)->9` and `(7,8,0.2)->10` at `t=4`.
+        # 6. `(3,9,0.6)->0` and `(9,10,0.5)->1` and `(10,4,0.4)->2` at `t=5`.
+        # 7. We sample `0`, `1`, and `2`.
+        # Here are the trees:
+        # t                  |              |              |             |             |             |             |             |             |            
+        #                                                                                                                                                   
+        # 0       --3--      |     --3--    |     --3--    |    --3--    |    --3--    |    --3--    |    --3--    |    --3--    |    --3--    |    --3--   
+        #        /  |  \     |    /  |  \   |    /     \   |   /     \   |   /     \   |   /     \   |   /     \   |   /     \   |   /     \   |   /  |  \  
+        # 1     4   |   5    |   4   |   5  |   4       5  |  4       5  |  4       5  |  4       5  |  4       5  |  4       5  |  4       5  |  4   |   5 
+        #       |\ / \ /|    |   |\   \     |   |\     /   |  |\     /   |  |\     /|  |  |\     /|  |   \     /|  |   \     /|  |   \     /|  |     /   /| 
+        # 2     | 6   7 |    |   | 6   7    |   | 6   7    |  | 6   7    |  | 6   7 |  |  | 6   7 |  |    6   7 |  |    6   7 |  |    6   7 |  |    6   7 | 
+        #       | |\ /| |    |   |  \  |    |   |  \  |    |  |  \       |  |  \    |  |  |  \    |  |     \    |  |       /  |  |    |  /  |  |    |  /  | 
+        # 3     | | 8 | |    |   |   8 |    |   |   8 |    |  |   8      |  |   8   |  |  |   8   |  |      8   |  |      8   |  |    | 8   |  |    | 8   | 
+        #       | |/ \| |    |   |  /  |    |   |  /  |    |  |  / \     |  |  / \  |  |  |  / \  |  |     / \  |  |     / \  |  |    |  \  |  |    |  \  | 
+        # 4     | 9  10 |    |   | 9  10    |   | 9  10    |  | 9  10    |  | 9  10 |  |  | 9  10 |  |    9  10 |  |    9  10 |  |    9  10 |  |    9  10 | 
+        #       |/ \ / \|    |   |  \   \   |   |  \   \   |  |  \   \   |  |  \    |  |  |    /  |  |   /   /  |  |   /   /  |  |   /   /  |  |   /   /  | 
+        # 5     0   1   2    |   0   1   2  |   0   1   2  |  0   1   2  |  0   1   2  |  0   1   2  |  0   1   2  |  0   1   2  |  0   1   2  |  0   1   2 
+        #                                                                                                                                                   
+        #                    |   0.0 - 0.1  |   0.1 - 0.2  |  0.2 - 0.4  |  0.4 - 0.5  |  0.5 - 0.6  |  0.6 - 0.7  |  0.7 - 0.8  |  0.8 - 0.9  |  0.9 - 1.0 
+
+        true_trees = [
+                { 0:4, 1:9, 2:10, 3:-1, 4:3, 5:3, 6:4, 7:3, 8:6, 9:8, 10:7 },
+                { 0:4, 1:9, 2:10, 3:-1, 4:3, 5:3, 6:4, 7:5, 8:6, 9:8, 10:7 },
+                { 0:4, 1:9, 2:10, 3:-1, 4:3, 5:3, 6:4, 7:5, 8:6, 9:8, 10:8 },
+                { 0:4, 1:9, 2:5, 3:-1, 4:3, 5:3, 6:4, 7:5, 8:6, 9:8, 10:8 },
+                { 0:4, 1:10, 2:5, 3:-1, 4:3, 5:3, 6:4, 7:5, 8:6, 9:8, 10:8 },
+                { 0:9, 1:10, 2:5, 3:-1, 4:3, 5:3, 6:4, 7:5, 8:6, 9:8, 10:8 },
+                { 0:9, 1:10, 2:5, 3:-1, 4:3, 5:3, 6:4, 7:5, 8:7, 9:8, 10:8 },
+                { 0:9, 1:10, 2:5, 3:-1, 4:3, 5:3, 6:4, 7:5, 8:7, 9:6, 10:8 },
+                { 0:9, 1:10, 2:5, 3:-1, 4:3, 5:3, 6:3, 7:5, 8:7, 9:6, 10:8 }
+            ]
+
+        records= [ msprime.CoalescenceRecord( left=0.5, right=1.0,  node=10, children=   (1,),  time=5.0-4.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.0, right=0.4,  node=10, children=   (2,),  time=5.0-4.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.6, right=1.0,  node=9,  children=   (0,),  time=5.0-4.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.0, right=0.5,  node=9,  children=   (1,),  time=5.0-4.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.8, right=1.0,  node=8,  children=  (10,),  time=5.0-3.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.2, right=0.8,  node=8,  children= (9,10),  time=5.0-3.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.0, right=0.2,  node=8,  children=   (9,),  time=5.0-3.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.7, right=1.0,  node=7,  children=   (8,),  time=5.0-2.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.0, right=0.2,  node=7,  children=  (10,),  time=5.0-2.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.8, right=1.0,  node=6,  children=   (9,),  time=5.0-2.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.0, right=0.7,  node=6,  children=   (8,),  time=5.0-2.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.4, right=1.0,  node=5,  children=  (2,7),  time=5.0-1.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.1, right=0.4,  node=5,  children=   (7,),  time=5.0-1.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.6, right=0.9,  node=4,  children=   (6,),  time=5.0-1.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.0, right=0.6,  node=4,  children=  (0,6),  time=5.0-1.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.9, right=1.0,  node=3,  children=(4,5,6),  time=5.0-0.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.1, right=0.9,  node=3,  children=  (4,5),  time=5.0-0.0, population=0 ),
+                   msprime.CoalescenceRecord( left=0.0, right=0.1,  node=3,  children=(4,5,7),  time=5.0-0.0, population=0 ),
+                   ]
+
+        ts = build_tree_sequence(records)
+        tree_dicts = [t.parent_dict for t in ts.trees()]
+        # self.assertEqual(ts.sample_size, 3)
+        self.assertEqual(ts.num_trees, len(true_trees))
+        self.assertEqual(ts.num_nodes, 11)
+        # check topologies agree:
+        for a,t in zip(true_trees,tree_dicts):
+            for k in a.keys():
+                if k in t.keys():
+                    self.assertEqual(t[k],a[k])
+                else:
+                    self.assertEqual(a[k],-1)
 
