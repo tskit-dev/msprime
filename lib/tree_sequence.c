@@ -87,51 +87,6 @@ cmp_record_time_left(const void *a, const void *b) {
     return ret;
 }
 
-/* Squash the specified set of records so that there are no adjacent records
- * that can be merged into each other without loss of information.
- */
-static int
-squash_records(coalescence_record_t *records, size_t num_records,
-        size_t *num_squashed_records)
-{
-    int ret = MSP_ERR_GENERIC;
-    coalescence_record_t *cr, *lcr;
-    int squashable;
-    uint32_t c;
-    size_t j;
-    size_t k = 0;
-
-    assert(num_records > 0);
-    /* First sort the records by time and left coordinate */
-    qsort(records, num_records, sizeof(coalescence_record_t),
-            cmp_record_time_left);
-    lcr = records;
-    assert(lcr->num_children > 1);
-    for (j = 1; j < num_records; j++) {
-        cr = &records[j];
-        lcr = &records[k];
-        assert(cr->num_children > 1);
-        squashable = 0;
-        if (lcr->right == cr->left && lcr->num_children == cr->num_children
-                && lcr->node == cr->node) {
-            /* Compare the children */
-            squashable = 1;
-            for (c = 0; squashable && c < cr->num_children; c++) {
-                squashable = squashable && (cr->children[c] == lcr->children[c]);
-            }
-        }
-        if (squashable) {
-            lcr->right = cr->right;
-        } else {
-            k++;
-            records[k] = records[j];
-        }
-    }
-    *num_squashed_records = k + 1;
-    ret = 0;
-    return ret;
-}
-
 static void
 tree_sequence_check_state(tree_sequence_t *self)
 {
@@ -1714,7 +1669,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     uint32_t *O = self->trees.indexes.removal_order;
     size_t M = self->num_records;
     size_t j, k, h, next_avl_node, mapped_children_mem_offset, num_output_records,
-           num_squashed_records, num_output_mutations, max_num_child_nodes;
+           num_output_mutations, max_num_child_nodes, max_num_records;
     uint32_t u, v, w, x, c, l, num_mapped_children;
     avl_tree_t visited_nodes;
     avl_node_t *avl_node_mem = NULL;
@@ -1740,10 +1695,11 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     avl_node_value_mem = malloc(self->num_nodes * sizeof(uint32_t));
     active_records = malloc(self->num_nodes * sizeof(active_record_t));
     mapped_children = malloc(self->num_nodes * sizeof(uint32_t));
-    /* TODO work out a better bound for this */
+    /* TODO work out better bounds for these values */
     max_num_child_nodes = 2 * self->num_child_nodes;
+    max_num_records = 2 * self->num_records;
     mapped_children_mem = malloc(max_num_child_nodes * sizeof(uint32_t));
-    output_records = malloc(self->num_records * sizeof(coalescence_record_t));
+    output_records = malloc(max_num_records * sizeof(coalescence_record_t));
     output_mutations = malloc(self->num_mutations * sizeof(mutation_t));
     if (parent == NULL || children == NULL || num_children == NULL
             || mapping == NULL || sample_objects == NULL
@@ -1884,7 +1840,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
                 }
                 if (!equal) {
                     ar->active = false;
-                    assert(num_output_records < self->num_records);
+                    assert(num_output_records < max_num_records);
                     cr = &output_records[num_output_records];
                     num_output_records++;
                     cr->left = self->trees.breakpoints[ar->left];
@@ -1955,7 +1911,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     for (u = 0; u < self->num_nodes; u++) {
         ar = &active_records[u];
         if (ar->active) {
-            assert(num_output_records < self->num_records);
+            assert(num_output_records < max_num_records);
             cr = &output_records[num_output_records];
             num_output_records++;
             cr->left = self->trees.breakpoints[ar->left];
@@ -1972,18 +1928,17 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
         ret = MSP_ERR_CANNOT_SIMPLIFY;
         goto out;
     }
-    ret = squash_records(output_records, num_output_records, &num_squashed_records);
-    if (ret != 0) {
-        goto out;
-    }
+    /* Sort the records by time and left coordinate */
+    qsort(output_records, num_output_records, sizeof(coalescence_record_t),
+            cmp_record_time_left);
     ret = tree_sequence_compress_nodes(self, samples, num_samples,
-            output_records, num_squashed_records, output_mutations,
+            output_records, num_output_records, output_mutations,
             num_output_mutations);
     if (ret != 0) {
         goto out;
     }
     /* Alloc a new tree sequence for these records. */
-    ret = tree_sequence_load_records(output, num_squashed_records, output_records);
+    ret = tree_sequence_load_records(output, num_output_records, output_records);
     if (ret != 0) {
         tree_sequence_free(output);
         goto out;
