@@ -40,7 +40,8 @@ script:
   - nosetests -v --with-coverage --cover-package msprime
       --cover-branches --cover-erase --cover-xml
       --cover-inclusive --cover-min-percentage 90 tests
-  - make -C docs
+  # Only make the docs on a recent version of Python to avoid problems with Sphinx.
+  - if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then make -C docs; fi
   # Make sure we can install successfully.
   - python setup.py sdist
   - pip install dist/msprime*.tar.gz --no-cache-dir
