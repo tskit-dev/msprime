@@ -572,7 +572,7 @@ class TestMultipleRoots(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k],a[k])
                 else:
-                    self.assertEqual(a[k],-1)
+                    self.assertEqual(a[k],msprime.NULL_NODE)
 
     def test_partial_non_sample_external_nodes_2(self):
         # The same situation as above, but partial tip is labeled '7' not '3':
@@ -623,7 +623,7 @@ class TestMultipleRoots(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k],a[k])
                 else:
-                    self.assertEqual(a[k],-1)
+                    self.assertEqual(a[k],msprime.NULL_NODE)
         ## FAILS:
         # # check can draw trees
         # trees=ts.trees()
@@ -677,7 +677,7 @@ class TestMultipleRoots(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k],a[k])
                 else:
-                    self.assertEqual(a[k],-1)
+                    self.assertEqual(a[k],msprime.NULL_NODE)
 
     def test_many_single_offspring(self):
         # a more complex test with single offspring
@@ -749,5 +749,5 @@ class TestMultipleRoots(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k],a[k])
                 else:
-                    self.assertEqual(a[k],-1)
+                    self.assertEqual(a[k],msprime.NULL_NODE)
 
