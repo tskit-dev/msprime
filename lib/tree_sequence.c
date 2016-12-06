@@ -1412,13 +1412,13 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
         for (j = 0; j < tree->num_mutations; j++) {
             node = tree->mutations[j].node;
             count = (double) tree->num_tracked_leaves[node];
-            result += count * (num_samples - count) / denom;
+            result += count * (num_samples - count);
         }
     }
     if (ret != 0) {
         goto out;
     }
-    *pi = result;
+    *pi = result/denom;
 out:
     if (tree != NULL) {
         sparse_tree_free(tree);
