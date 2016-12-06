@@ -617,8 +617,9 @@ class SparseTree(object):
         is provided, iterate over the nodes in required tree traversal order.
 
         :param int root: The root of the subtree we are traversing.
-        :param str order: The traversal ordering. Currently 'preorder', 'inorder',
-            'postorder' and 'levelorder' ('breadthfirst') are supported.
+        :param str order: The traversal ordering. Currently 'preorder',
+            'inorder', 'postorder' and 'levelorder' ('breadthfirst')
+            are supported.
         :rtype: iterator
         """
         u = self.get_root() if root is None else root
@@ -1795,8 +1796,10 @@ class TreeSequence(object):
 
     def get_pairwise_diversity(self, samples=None):
         """
-        Returns the value of pi, the pairwise nucleotide site diversity.
-        If `samples` is specified, calculate the diversity within this set.
+        Returns the value of pi, the pairwise nucleotide site diversity,
+        which is the average number of mutations that differ between a randomly
+        chosen pair of samples.  If `samples` is specified, calculate the
+        diversity within this set.
 
         :param iterable samples: The set of samples within which we calculate
             the diversity. If None, calculate diversity within the entire
