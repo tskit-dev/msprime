@@ -1391,6 +1391,10 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     sparse_tree_t *tree = NULL;
     double result, denom, count;
 
+    if (num_samples < 2 || num_samples > self->sample_size) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     tree = malloc(sizeof(sparse_tree_t));
     if (tree == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -1405,10 +1409,8 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
         goto out;
     }
     /* Allocation done; move onto main algorithm. */
-    denom = (num_samples * ((double) num_samples - 1)) / 2.0;
     result = 0.0;
-    for (ret = sparse_tree_first(tree); ret == 1;
-            ret = sparse_tree_next(tree)) {
+    for (ret = sparse_tree_first(tree); ret == 1; ret = sparse_tree_next(tree)) {
         for (j = 0; j < tree->num_mutations; j++) {
             node = tree->mutations[j].node;
             count = (double) tree->num_tracked_leaves[node];
@@ -1418,7 +1420,8 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     if (ret != 0) {
         goto out;
     }
-    *pi = result/denom;
+    denom = (num_samples * ((double) num_samples - 1)) / 2.0;
+    *pi = result / denom;
 out:
     if (tree != NULL) {
         sparse_tree_free(tree);

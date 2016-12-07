@@ -453,7 +453,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         pi2 = simple_get_pairwise_diversity(haplotypes)
         pi3 = get_pairwise_diversity(ts)
         self.assertAlmostEqual(pi1, pi2)
-        self.assertEqual(pi1, pi3)
+        self.assertAlmostEqual(pi1, pi3)
         self.assertGreaterEqual(pi1, 0.0)
         self.assertFalse(math.isnan(pi1))
         # Check for a subsample.
@@ -462,7 +462,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         pi2 = simple_get_pairwise_diversity([haplotypes[j] for j in samples])
         pi3 = get_pairwise_diversity(ts, samples)
         self.assertAlmostEqual(pi1, pi2)
-        self.assertEqual(pi1, pi3)
+        self.assertAlmostEqual(pi1, pi3)
         self.assertGreaterEqual(pi1, 0.0)
         self.assertFalse(math.isnan(pi1))
 

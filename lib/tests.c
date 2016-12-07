@@ -3864,6 +3864,35 @@ verify_vargen(tree_sequence_t *ts)
 }
 
 static void
+verify_stats(tree_sequence_t *ts)
+{
+    int ret;
+    uint32_t sample_size = tree_sequence_get_sample_size(ts);
+    uint32_t *samples = malloc(sample_size * sizeof(uint32_t));
+    uint32_t j;
+    double pi;
+
+    CU_ASSERT_FATAL(samples != NULL);
+
+    ret = tree_sequence_get_pairwise_diversity(ts, NULL, 0, &pi);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = tree_sequence_get_pairwise_diversity(ts, NULL, 1, &pi);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = tree_sequence_get_pairwise_diversity(ts, NULL, sample_size + 1, &pi);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    for (j = 0; j < sample_size; j++) {
+        samples[j] = j;
+    }
+    for (j = 2; j < sample_size; j++) {
+        ret = tree_sequence_get_pairwise_diversity(ts, samples, j, &pi);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_TRUE(pi >= 0);
+    }
+    free(samples);
+}
+
+static void
 test_vargen_from_examples(void)
 {
     tree_sequence_t **examples = get_example_tree_sequences(1);
@@ -3872,6 +3901,21 @@ test_vargen_from_examples(void)
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         verify_vargen(examples[j]);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
+static void
+test_stats_from_examples(void)
+{
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    uint32_t j;
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        verify_stats(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -4444,6 +4488,7 @@ main(int argc, char **argv)
         {"Test hapgen from examples", test_hapgen_from_examples},
         {"Test vargen from examples", test_vargen_from_examples},
         {"Test newick from examples", test_newick_from_examples},
+        {"Test stats from examples", test_stats_from_examples},
         {"Test ld from examples", test_ld_from_examples},
         {"Test simplify from examples", test_simplify_from_examples},
         {"Test records equivalent after import", test_records_equivalent},
