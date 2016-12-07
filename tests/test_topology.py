@@ -77,9 +77,9 @@ class TestRecordSquashing(TopologyTestCase):
     def test_single_record(self):
         records = [
             msprime.CoalescenceRecord(
-                left=0, right=1, node=2, children=(0, 1), time=1, population=0),
+               left=0, right=1, node=2, children=(0, 1), time=1, population=0),
             msprime.CoalescenceRecord(
-                left=1, right=2, node=2, children=(0, 1), time=1, population=0),
+               left=1, right=2, node=2, children=(0, 1), time=1, population=0),
         ]
         ts = build_tree_sequence(records)
         self.assertEqual(list(ts.records()), records)
@@ -97,7 +97,8 @@ class TestRecordSquashing(TopologyTestCase):
         self.assertEqual(list(tss.records()), list(ts.records()))
 
     def test_many_trees(self):
-        ts = msprime.simulate(20, recombination_rate=5, random_seed=self.random_seed)
+        ts = msprime.simulate(20,
+                            recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_redundant = insert_redundant_breakpoints(ts)
         tss = ts_redundant.simplify()
@@ -121,7 +122,8 @@ class TestRedundantBreakpoints(TopologyTestCase):
         self.assertEqual([t.parent_dict for t in ts.trees()][0], trees[0])
 
     def test_many_trees(self):
-        ts = msprime.simulate(20, recombination_rate=5, random_seed=self.random_seed)
+        ts = msprime.simulate(20,
+                recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_redundant = insert_redundant_breakpoints(ts)
         self.assertEqual(ts.sample_size, ts_redundant.sample_size)
@@ -527,7 +529,7 @@ class TestMultipleRoots(TopologyTestCase):
     def test_partial_non_sample_external_nodes(self):
         # A somewhat more complicated test case with a partially specified,
         # non-sampled tip.
-        # 
+        #
         # Here is the situation:
         #
         # 1.0             7
@@ -578,17 +580,17 @@ class TestMultipleRoots(TopologyTestCase):
         # The same situation as above, but partial tip is labeled '7' not '3':
         #
         # 1.0          6
-        # 0.7         / \                                                                     5
-        #            /   \                                                                   / \
-        # 0.5       /     4                           4                                     /   4
-        #          /     / \                         / \                                   /   / \
-        # 0.4     /     /   3                       /   3                                 /   /   3
-        #        /     /   / \                     /   / \                               /   /   / \
-        #       /     /   7   \                   /   /   \                             /   /   7   \
-        #      /     /         \                 /   /     \                           /   /         \
-        # 0.0 0     1           2               1   0       2                         0   1           2
+        # 0.7         / \                                       5
+        #            /   \                                     / \
+        # 0.5       /     4                 4                 /   4
+        #          /     / \               / \               /   / \
+        # 0.4     /     /   3             /   3             /   /   3
+        #        /     /   / \           /   / \           /   /   / \
+        #       /     /   7   \         /   /   \         /   /   7   \
+        #      /     /         \       /   /     \       /   /         \
+        # 0.0 0     1           2     1   0       2     0   1           2
         #
-        #          (0.0, 0.2),                   (0.2, 0.8),                             (0.8, 1.0)
+        #          (0.0, 0.2),         (0.2, 0.8),         (0.8, 1.0)
 
         records = [
             msprime.CoalescenceRecord(
@@ -690,7 +692,7 @@ class TestMultipleRoots(TopologyTestCase):
         # 6. `(3,9,0.6)->0` and `(9,10,0.5)->1` and `(10,4,0.4)->2` at `t=5`.
         # 7. We sample `0`, `1`, and `2`.
         # Here are the trees:
-        # t                  |              |              |             |             |             |             |             |             |            
+        # t                  |              |              |             |             |             |             |             |             |           
         #                                                                                                                                                   
         # 0       --3--      |     --3--    |     --3--    |    --3--    |    --3--    |    --3--    |    --3--    |    --3--    |    --3--    |    --3--   
         #        /  |  \     |    /  |  \   |    /     \   |   /     \   |   /     \   |   /     \   |   /     \   |   /     \   |   /     \   |   /  |  \  
