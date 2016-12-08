@@ -25,6 +25,7 @@
 #endif
 
 #include <stdio.h>
+#include <stdbool.h>
 
 #include <gsl/gsl_rng.h>
 
@@ -88,6 +89,15 @@ typedef struct {
 } coalescence_record_t;
 
 typedef struct {
+    uint32_t source;
+    uint32_t dest;
+    uint32_t node;
+    double left;
+    double right;
+    double time;
+} migration_record_t;
+
+typedef struct {
     uint32_t left; /* TODO CHANGE THIS - not a good name! */
     uint32_t value;
 } node_mapping_t;
@@ -125,6 +135,7 @@ typedef struct {
     gsl_rng *rng;
     /* input parameters */
     int model;
+    bool store_migration_records;
     uint32_t sample_size;
     uint32_t num_loci;
     double scaled_recombination_rate;
@@ -173,6 +184,12 @@ typedef struct {
     size_t max_coalescence_records;
     size_t coalescence_record_block_size;
     size_t num_coalescence_record_blocks;
+    /* migration records are stored in a flat array */
+    migration_record_t *migration_records;
+    size_t num_migration_records;
+    size_t max_migration_records;
+    size_t migration_record_block_size;
+    size_t num_migration_record_blocks;
 } msp_t;
 
 /* Demographic events */
@@ -239,6 +256,7 @@ typedef struct {
     uint32_t sample_size;
     double sequence_length;
     struct {
+        size_t num_records;
         double *breakpoints;
         size_t num_breakpoints;
         struct {
@@ -259,18 +277,28 @@ typedef struct {
         } indexes;
     } trees;
     struct {
+        size_t num_records;
         uint32_t *node;
         double *position;
         size_t *num_tree_mutations;
         mutation_t *tree_mutations_mem;
         mutation_t **tree_mutations;
     } mutations;
+    struct {
+        size_t num_records;
+        double *breakpoints;
+        size_t num_breakpoints;
+        uint32_t *node;
+        uint32_t *source;
+        uint32_t *dest;
+        uint32_t *left;
+        uint32_t *right;
+        double *time;
+    } migrations;
     char **provenance_strings;
     size_t num_provenance_strings;
     size_t num_nodes;
     size_t num_child_nodes;
-    size_t num_records;
-    size_t num_mutations;
     coalescence_record_t returned_record;
     /* The number of trees referencing this tree sequence.
      * This is NOT threadsafe! TODO when we want to have trees
@@ -430,6 +458,7 @@ typedef struct {
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
 int msp_set_model(msp_t *self, int model);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
+int msp_set_store_migration_records(msp_t *self, bool store_migration_records);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_scaled_recombination_rate(msp_t *self,
         double scaled_recombination_rate);
@@ -438,6 +467,7 @@ int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
 int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size);
+int msp_set_migration_record_block_size(msp_t *self, size_t block_size);
 int msp_set_sample_configuration(msp_t *self, size_t num_populations,
         size_t *sample_configuration);
 int msp_set_migration_matrix(msp_t *self, size_t size,
@@ -469,6 +499,7 @@ int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
 int msp_get_coalescence_records(msp_t *self, coalescence_record_t **records);
+int msp_get_migration_records(msp_t *self, migration_record_t **records);
 int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         double *initial_size, double *growth_rate);
@@ -478,16 +509,19 @@ int msp_is_completed(msp_t *self);
 
 int msp_get_model(msp_t *self);
 const char * msp_get_model_str(msp_t *self);
+bool msp_get_store_migration_records(msp_t *self);
 size_t msp_get_sample_size(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
 size_t msp_get_num_coalescence_records(msp_t *self);
+size_t msp_get_num_migration_records(msp_t *self);
 size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_coalescence_record_blocks(msp_t *self);
+size_t msp_get_num_migration_record_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
@@ -504,14 +538,17 @@ int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_increment_refcount(tree_sequence_t *self);
 int tree_sequence_decrement_refcount(tree_sequence_t *self);
 size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
+size_t tree_sequence_get_num_migration_records(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 
-int tree_sequence_get_record(tree_sequence_t *self, size_t index,
-        coalescence_record_t **record, int order);
+int tree_sequence_get_coalescence_record(tree_sequence_t *self, size_t index,
+        coalescence_record_t *record, int order);
+int tree_sequence_get_migration_record(tree_sequence_t *self, size_t index,
+        migration_record_t *record);
 int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t **mutations);
 int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u,
         sample_t *sample);

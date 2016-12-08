@@ -1070,6 +1070,26 @@ def subset_error(infile):
         # print(t)
 
 
+# def migration_records_example():
+
+    population_configurations = [
+        msprime.PopulationConfiguration(1),
+        msprime.PopulationConfiguration(1),
+        msprime.PopulationConfiguration(0),
+    ]
+    demographic_events = [
+        msprime.MassMigration(time=5, source=0, destination=2),
+        msprime.MassMigration(time=6, source=1, destination=2),
+    ]
+    ts = msprime.simulate(
+        Ne=0.25, population_configurations=population_configurations,
+        demographic_events=demographic_events,
+        random_seed=1, length=10, recombination_rate=0.5,
+        record_migrations=True)
+    for mr in ts.migrations():
+        print(mr)
+
+
 if __name__ == "__main__":
     # mutations()
 
@@ -1108,15 +1128,10 @@ if __name__ == "__main__":
     # subset_samples(30000, [5, 7, 8,9, 10, 11])
 
     # subset_samples(300, list(range(20)))
-    # subset_samples(30, list(range(3)))
-    # for j in range(1, 100):
-    #     print("SEED = ", j)
-    #     # subset_samples(10, list(range(3)), j)
-    #     subset_samples(10, list(range(3)), j)
-
     # check_single_records("inferred_records.txt", "inferred_mutations.txt")
     # for n in [100, 1000, 10000]:
     #     for k in [2, 10, 50, n - 1, n]:
     #         print(n, k, file=sys.stderr)
     #         subset_samples(n, range(k))
-    subset_error(sys.argv[1])
+    # subset_error(sys.argv[1])
+    migration_records_example()

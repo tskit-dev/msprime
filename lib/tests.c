@@ -164,10 +164,6 @@ verify_coalescence_records_equal(coalescence_record_t *r1,
     uint32_t j;
     double eps = 1e-6;
 
-    /* if (r1->left * scale != r2->left) { */
-    /*     printf("error: %f %f, %f %f\n", r1->left * scale, r2->left, r1->right, r2->right); */
-    /*     printf("%d\n, ", r1->left * scale == r2->left); */
-    /* } */
     CU_ASSERT_DOUBLE_EQUAL_FATAL(r1->left * scale, r2->left, eps);
     CU_ASSERT_DOUBLE_EQUAL_FATAL(r1->right * scale, r2->right, eps);
     CU_ASSERT_EQUAL_FATAL(r1->num_children, r2->num_children);
@@ -176,6 +172,19 @@ verify_coalescence_records_equal(coalescence_record_t *r1,
     }
     CU_ASSERT_EQUAL(r1->time, r2->time);
     CU_ASSERT_EQUAL(r1->population_id, r2->population_id);
+}
+
+static void
+verify_migration_records_equal(migration_record_t *r1, migration_record_t *r2, double scale)
+{
+    double eps = 1e-6;
+
+    CU_ASSERT_DOUBLE_EQUAL_FATAL(r1->left * scale, r2->left, eps);
+    CU_ASSERT_DOUBLE_EQUAL_FATAL(r1->right * scale, r2->right, eps);
+    CU_ASSERT_DOUBLE_EQUAL_FATAL(r1->time, r2->time, eps);
+    CU_ASSERT_EQUAL_FATAL(r1->node, r2->node);
+    CU_ASSERT_EQUAL_FATAL(r1->source, r2->source);
+    CU_ASSERT_EQUAL_FATAL(r1->dest, r2->dest);
 }
 
 /* Utility function to return a tree sequence for testing. It is the
@@ -195,9 +204,16 @@ get_example_tree_sequence(uint32_t sample_size,
     tree_sequence_t *tree_seq = malloc(sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = malloc(sizeof(recomb_map_t));
     mutgen_t *mutgen = malloc(sizeof(mutgen_t));
-    coalescence_record_t *sim_records, *ts_record;
+    coalescence_record_t *sim_records, ts_record;
+    migration_record_t *sim_mig_records, ts_mig_record;
     uint32_t j;
-    size_t num_records;
+    size_t num_coalescence_records, num_migration_records;
+    size_t num_populations = 3;
+    double migration_matrix[] = {
+        0.0, 1.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 1.0, 0.0
+    };
     sample_t sample;
     double positions[] = {0.0, 0.0};
     double rates[] = {0.0, 0.0};
@@ -232,10 +248,17 @@ get_example_tree_sequence(uint32_t sample_size,
             CU_ASSERT_FATAL(0 == 1);
         }
     }
+    ret = msp_set_num_populations(msp, num_populations);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_migration_matrix(msp, num_populations * num_populations,
+            migration_matrix);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_store_migration_records(msp, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     rates[0] = scaled_recombination_rate;
     positions[1] = sequence_length;
@@ -254,23 +277,41 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_sample_size(tree_seq),
             msp_get_sample_size(msp));
+    CU_ASSERT_EQUAL_FATAL(
+            tree_sequence_get_num_migration_records(tree_seq),
+            msp_get_num_migration_records(msp));
     CU_ASSERT_FATAL(
             tree_sequence_get_num_nodes(tree_seq) >= sample_size);
     ret = msp_get_coalescence_records(msp, &sim_records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    num_records = msp_get_num_coalescence_records(msp);
-    for (j = 0; j < num_records; j++) {
-        ret = tree_sequence_get_record(tree_seq, j, &ts_record,
+    num_coalescence_records = msp_get_num_coalescence_records(msp);
+    for (j = 0; j < num_coalescence_records; j++) {
+        ret = tree_sequence_get_coalescence_record(tree_seq, j, &ts_record,
                 MSP_ORDER_TIME);
         CU_ASSERT_EQUAL(ret, 0);
-        verify_coalescence_records_equal(&sim_records[j], ts_record,
+        verify_coalescence_records_equal(&sim_records[j], &ts_record,
                 sequence_length / num_loci);
     }
-    for (j = num_records; j < num_records + 10; j++) {
-        ret = tree_sequence_get_record(tree_seq, j, &ts_record,
+    for (j = num_coalescence_records; j < num_coalescence_records + 10; j++) {
+        ret = tree_sequence_get_coalescence_record(tree_seq, j, &ts_record,
                 MSP_ORDER_TIME);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     }
+
+    ret = msp_get_migration_records(msp, &sim_mig_records);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    num_migration_records = msp_get_num_migration_records(msp);
+    for (j = 0; j < num_migration_records; j++) {
+        ret = tree_sequence_get_migration_record(tree_seq, j, &ts_mig_record);
+        CU_ASSERT_EQUAL(ret, 0);
+        verify_migration_records_equal(&sim_mig_records[j], &ts_mig_record,
+                sequence_length / num_loci);
+    }
+    for (j = num_migration_records; j < num_migration_records + 10; j++) {
+        ret = tree_sequence_get_migration_record(tree_seq, j, &ts_mig_record);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+    }
+
     for (j = 0; j < sample_size; j++) {
         ret = tree_sequence_get_sample(tree_seq, j, &sample);
         CU_ASSERT_EQUAL(ret, 0);
@@ -289,6 +330,7 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
             mutgen->mutations);
     CU_ASSERT_EQUAL(ret, 0);
+    tree_sequence_print_state(tree_seq, _devnull);
 
     gsl_rng_free(rng);
     free(samples);
@@ -374,7 +416,7 @@ get_example_nonbinary_tree_sequences(void)
     };
     bottleneck_desc_t other_bottlenecks[] = {
         {SIMPLE_BOTTLENECK, 0.1, 0, 0.1},
-        {SIMPLE_BOTTLENECK, 0.1, 0, 0.75},
+        {SIMPLE_BOTTLENECK, 0.15, 0, 0.75},
         {INSTANTANEOUS_BOTTLENECK, 0.2, 0, 0.1},
     };
 
@@ -675,9 +717,13 @@ test_single_locus_two_populations(void)
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = {{0, 0.0}, {0, 0.0}, {1, 40.0}};
-    coalescence_record_t *records;
-    size_t num_records;
+    coalescence_record_t *coalescence_records;
+    migration_record_t *migration_records;
+    size_t num_coalescence_records, num_migration_records;
     uint32_t n = 3;
+    double t0 = 30.0;
+    double t1 = 30.5;
+    double t2 = 40.5;
 
     CU_ASSERT_FATAL(rng != NULL);
 
@@ -685,11 +731,13 @@ test_single_locus_two_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_mass_migration(&msp, 30.0, 0, 1, 1.0);
+    ret = msp_set_store_migration_records(&msp, true);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_mass_migration(&msp, 30.5, 1, 0, 1.0);
+    ret = msp_add_mass_migration(&msp, t0, 0, 1, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_mass_migration(&msp, 40.5, 1, 0, 1.0);
+    ret = msp_add_mass_migration(&msp, t1, 1, 0, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_mass_migration(&msp, t2, 1, 0, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -699,16 +747,28 @@ test_single_locus_two_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(&msp);
     msp_print_state(&msp, _devnull);
-    num_records = msp_get_num_coalescence_records(&msp);
-    CU_ASSERT_EQUAL_FATAL(num_records, 2);
-    ret = msp_get_coalescence_records(&msp, &records);
+    num_coalescence_records = msp_get_num_coalescence_records(&msp);
+    CU_ASSERT_EQUAL_FATAL(num_coalescence_records, 2);
+    ret = msp_get_coalescence_records(&msp, &coalescence_records);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(records[0].node, 3);
-    CU_ASSERT_TRUE(records[0].time < 40.0);
-    CU_ASSERT_EQUAL(records[0].population_id, 0);
-    CU_ASSERT_EQUAL(records[1].node, 4);
-    CU_ASSERT_TRUE(records[1].time > 40.5);
-    CU_ASSERT_EQUAL(records[1].population_id, 0);
+    CU_ASSERT_EQUAL(coalescence_records[0].node, 3);
+    CU_ASSERT_TRUE(coalescence_records[0].time < 40.0);
+    CU_ASSERT_EQUAL(coalescence_records[0].population_id, 0);
+    CU_ASSERT_EQUAL(coalescence_records[1].node, 4);
+    CU_ASSERT_TRUE(coalescence_records[1].time > 40.5);
+    CU_ASSERT_EQUAL(coalescence_records[1].population_id, 0);
+    num_migration_records = msp_get_num_migration_records(&msp);
+    CU_ASSERT_EQUAL_FATAL(num_migration_records, 3);
+    ret = msp_get_migration_records(&msp, &migration_records);
+    CU_ASSERT_EQUAL(migration_records[0].time, t0)
+    CU_ASSERT_EQUAL(migration_records[0].source, 0);
+    CU_ASSERT_EQUAL(migration_records[0].dest, 1);
+    CU_ASSERT_EQUAL(migration_records[1].time, t1);
+    CU_ASSERT_EQUAL(migration_records[1].source, 1);
+    CU_ASSERT_EQUAL(migration_records[1].dest, 0);
+    CU_ASSERT_EQUAL(migration_records[2].time, t2);
+    CU_ASSERT_EQUAL(migration_records[2].source, 1);
+    CU_ASSERT_EQUAL(migration_records[2].dest, 0);
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -837,6 +897,8 @@ test_simulator_getters_setters(void)
             MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_coalescence_record_block_size(&msp, 0),
             MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_migration_record_block_size(&msp, 0),
+            MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_num_loci(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_num_populations(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(
@@ -884,6 +946,8 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_scaled_recombination_rate(&msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_store_migration_records(&msp, true);
+    CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -902,10 +966,12 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(population->growth_rate, 0.5);
     CU_ASSERT_EQUAL(population->start_time, 0.0);
 
+    CU_ASSERT_TRUE(msp_get_store_migration_records(&msp));
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_node_mapping_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_segment_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_coalescence_record_blocks(&msp), 1);
+    CU_ASSERT_EQUAL(msp_get_num_migration_record_blocks(&msp), 1);
     CU_ASSERT(msp_get_used_memory(&msp) > 0);
     CU_ASSERT_EQUAL(msp_get_num_populations(&msp), 2);
 
@@ -1227,6 +1293,8 @@ test_multi_locus_simulation(void)
     long seed = 10;
     int model;
     int models[] = {MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
+    double migration_matrix[] = {0, 1, 1, 0};
+    size_t migration_events[4];
     const char *model_strs[] = {"hudson", "smc", "smc_prime"};
     const char *model_str;
     size_t j;
@@ -1239,10 +1307,15 @@ test_multi_locus_simulation(void)
         CU_ASSERT_FATAL(msp != NULL);
         CU_ASSERT_FATAL(samples != NULL);
         CU_ASSERT_FATAL(rng != NULL);
-
         gsl_rng_set(rng, seed);
         memset(samples, 0, n * sizeof(sample_t));
         ret = msp_alloc(msp, n, samples, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_num_populations(msp, 2);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_migration_matrix(msp, 4, migration_matrix);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_store_migration_records(msp, true);
         CU_ASSERT_EQUAL(ret, 0);
         /* set all the block sizes to something small to provoke the memory
          * expansions. */
@@ -1253,6 +1326,8 @@ test_multi_locus_simulation(void)
         ret = msp_set_segment_block_size(msp, 1);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_coalescence_record_block_size(msp, 1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_migration_record_block_size(msp, 1);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_num_loci(msp, m);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1270,8 +1345,12 @@ test_multi_locus_simulation(void)
         }
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(msp);
+        ret = msp_get_num_migration_events(msp, migration_events);
+        CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT(num_events > n - 1);
         CU_ASSERT_EQUAL(1 + num_events,
+                /* diagonals must be zero here */
+                migration_events[1] + migration_events[2] +
                 msp_get_num_recombination_events(msp) +
                 msp_get_num_common_ancestor_events(msp) +
                 msp_get_num_rejected_common_ancestor_events(msp));
@@ -1287,7 +1366,10 @@ test_multi_locus_simulation(void)
             num_events++;
         }
         CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_get_num_migration_events(msp, migration_events);
+        CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(1 + num_events,
+                migration_events[1] + migration_events[2] +
                 msp_get_num_recombination_events(msp) +
                 msp_get_num_common_ancestor_events(msp) +
                 msp_get_num_rejected_common_ancestor_events(msp));
@@ -4128,7 +4210,7 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
     int ret, err1, err2;
     size_t j, nps1, nps2;
     sample_t sample1, sample2;
-    coalescence_record_t *r1, *r2;
+    coalescence_record_t r1, r2;
     char **ps1, **ps2;
     size_t num_mutations = tree_sequence_get_num_mutations(ts1);
     mutation_t *mutations_1, *mutations_2;
@@ -4154,21 +4236,21 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
         tree_sequence_get_num_trees(ts2));
 
     for (j = 0; j < tree_sequence_get_num_coalescence_records(ts1); j++) {
-        ret = tree_sequence_get_record(ts1, j, &r1, MSP_ORDER_TIME);
+        ret = tree_sequence_get_coalescence_record(ts1, j, &r1, MSP_ORDER_TIME);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = tree_sequence_get_record(ts2, j, &r2, MSP_ORDER_TIME);
+        ret = tree_sequence_get_coalescence_record(ts2, j, &r2, MSP_ORDER_TIME);
         CU_ASSERT_EQUAL(ret, 0);
-        verify_coalescence_records_equal(r1, r2, 1.0);
-        ret = tree_sequence_get_record(ts1, j, &r1, MSP_ORDER_LEFT);
+        verify_coalescence_records_equal(&r1, &r2, 1.0);
+        ret = tree_sequence_get_coalescence_record(ts1, j, &r1, MSP_ORDER_LEFT);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = tree_sequence_get_record(ts2, j, &r2, MSP_ORDER_LEFT);
+        ret = tree_sequence_get_coalescence_record(ts2, j, &r2, MSP_ORDER_LEFT);
         CU_ASSERT_EQUAL(ret, 0);
-        verify_coalescence_records_equal(r1, r2, 1.0);
-        ret = tree_sequence_get_record(ts1, j, &r1, MSP_ORDER_RIGHT);
+        verify_coalescence_records_equal(&r1, &r2, 1.0);
+        ret = tree_sequence_get_coalescence_record(ts1, j, &r1, MSP_ORDER_RIGHT);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = tree_sequence_get_record(ts2, j, &r2, MSP_ORDER_RIGHT);
+        ret = tree_sequence_get_coalescence_record(ts2, j, &r2, MSP_ORDER_RIGHT);
         CU_ASSERT_EQUAL(ret, 0);
-        verify_coalescence_records_equal(r1, r2, 1.0);
+        verify_coalescence_records_equal(&r1, &r2, 1.0);
     }
 
     ret = tree_sequence_get_mutations(ts1, &mutations_1);
@@ -4260,7 +4342,7 @@ test_save_records_hdf5(void)
     int ret;
     size_t j, k, num_records, num_mutations;
     uint32_t sample_size;
-    coalescence_record_t *r, *records;
+    coalescence_record_t r, *records;
     sample_t *samples;
     mutation_t *mutations;
     tree_sequence_t *ts1, ts2, ts3, **examples;
@@ -4274,9 +4356,9 @@ test_save_records_hdf5(void)
         records = malloc(num_records * sizeof(coalescence_record_t));
         CU_ASSERT_FATAL(records != NULL);
         for (j = 0; j < num_records; j++) {
-            ret = tree_sequence_get_record(ts1, j, &r, MSP_ORDER_TIME);
+            ret = tree_sequence_get_coalescence_record(ts1, j, &r, MSP_ORDER_TIME);
             CU_ASSERT_EQUAL(ret, 0);
-            copy_record(&records[j], r);
+            copy_record(&records[j], &r);
         }
         samples = malloc(sample_size * sizeof(sample_t));
         CU_ASSERT_FATAL(samples != NULL);
@@ -4317,7 +4399,7 @@ test_records_equivalent(void)
     tree_sequence_t *ts1 = get_example_tree_sequence(10, 0, 100, 10.0, 1.0,
             1.0, 0, NULL);
     tree_sequence_t ts2;
-    coalescence_record_t *records, *r1, *r2;
+    coalescence_record_t *records, r1, r2;
     size_t j, num_records;
 
     CU_ASSERT_FATAL(ts1 != NULL);
@@ -4325,9 +4407,9 @@ test_records_equivalent(void)
     records = malloc(num_records * sizeof(coalescence_record_t));
     CU_ASSERT_FATAL(records != NULL);
     for (j = 0; j < num_records; j++) {
-        ret = tree_sequence_get_record(ts1, j, &r1, MSP_ORDER_TIME);
+        ret = tree_sequence_get_coalescence_record(ts1, j, &r1, MSP_ORDER_TIME);
         CU_ASSERT_EQUAL(ret, 0);
-        copy_record(&records[j], r1);
+        copy_record(&records[j], &r1);
     }
     ret = tree_sequence_load_records(&ts2, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4338,11 +4420,11 @@ test_records_equivalent(void)
         tree_sequence_get_sequence_length(ts1),
         tree_sequence_get_sequence_length(&ts2));
     for (j = 0; j < num_records; j++) {
-        ret = tree_sequence_get_record(ts1, j, &r1, MSP_ORDER_TIME);
+        ret = tree_sequence_get_coalescence_record(ts1, j, &r1, MSP_ORDER_TIME);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = tree_sequence_get_record(&ts2, j, &r2, MSP_ORDER_TIME);
+        ret = tree_sequence_get_coalescence_record(&ts2, j, &r2, MSP_ORDER_TIME);
         CU_ASSERT_EQUAL(ret, 0);
-        verify_coalescence_records_equal(r1, r2, 1.0);
+        verify_coalescence_records_equal(&r1, &r2, 1.0);
     }
     tree_sequence_free(&ts2);
     tree_sequence_free(ts1);
@@ -4494,8 +4576,7 @@ main(int argc, char **argv)
         {"Test records equivalent after import", test_records_equivalent},
         {"Test saving to HDF5", test_save_hdf5},
         {"Test saving records to HDF5", test_save_records_hdf5},
-        {"Historical samples two populations",
-            test_single_locus_two_populations},
+        {"Single locus two populations", test_single_locus_two_populations},
         {"Many populations", test_single_locus_many_populations},
         {"Historical samples", test_single_locus_historical_sample},
         {"Simulator getters/setters", test_simulator_getters_setters},

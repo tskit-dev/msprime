@@ -314,6 +314,12 @@ msp_get_num_coalescence_record_blocks(msp_t *self)
 }
 
 size_t
+msp_get_num_migration_record_blocks(msp_t *self)
+{
+    return self->num_migration_record_blocks;
+}
+
+size_t
 msp_get_used_memory(msp_t *self)
 {
     return self->used_memory;
@@ -355,6 +361,13 @@ msp_set_model(msp_t *self, int model)
     self->model = model;
 out:
     return ret;
+}
+
+int
+msp_set_store_migration_records(msp_t *self, bool store_migration_records)
+{
+    self->store_migration_records = store_migration_records;
+    return 0;
 }
 
 int
@@ -560,6 +573,20 @@ out:
     return ret;
 }
 
+int
+msp_set_migration_record_block_size(msp_t *self, size_t block_size)
+{
+    int ret = 0;
+
+    if (block_size < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->migration_record_block_size = block_size;
+out:
+    return ret;
+}
+
 /* Top level allocators and initialisation */
 
 int
@@ -630,11 +657,13 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng)
     /* Set sensible defaults for the sample_config and migration matrix */
     self->initial_migration_matrix[0] = 0.0;
     /* Set the memory defaults */
+    self->store_migration_records = false;
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
     self->max_memory = 1024 * 1024 * 1024; /* 1MiB */
     self->coalescence_record_block_size = 1024;
+    self->migration_record_block_size = 1024;
     /* set up the AVL trees */
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
     avl_init_tree(&self->overlap_counts, cmp_node_mapping, NULL);
@@ -691,6 +720,15 @@ msp_alloc_memory_blocks(msp_t *self)
     self->max_coalescence_records = self->coalescence_record_block_size;
     self->num_coalescence_record_blocks = 1;
     if (self->coalescence_records == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* Allocate the migration records */
+    self->migration_records = malloc(
+            self->migration_record_block_size * sizeof(migration_record_t));
+    self->max_migration_records = self->migration_record_block_size;
+    self->num_migration_record_blocks = 1;
+    if (self->migration_records == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -800,6 +838,9 @@ msp_free(msp_t *self)
     fenwick_free(&self->links);
     if (self->coalescence_records != NULL) {
         free(self->coalescence_records);
+    }
+    if (self->migration_records != NULL) {
+        free(self->migration_records);
     }
     ret = 0;
     return ret;
@@ -1064,6 +1105,7 @@ msp_print_state(msp_t *self, FILE *out)
     node_mapping_t *nm;
     segment_t *u;
     coalescence_record_t *cr;
+    migration_record_t *mr;
     demographic_event_t *de;
     sampling_event_t *se;
     int64_t v;
@@ -1165,6 +1207,13 @@ msp_print_state(msp_t *self, FILE *out)
         }
         fprintf(out, ")\t%f\t%d\n", cr->time, cr->population_id);
     }
+    fprintf(out, "Migration records = %ld\n",
+            (long) self->num_migration_records);
+    for (j = 0; j < self->num_migration_records; j++) {
+        mr = &self->migration_records[j];
+        fprintf(out, "\t%f\t%f\t%d\t%f\t%d\t%d\n", mr->left, mr->right,
+                mr->node, mr->time, mr->source, mr->dest);
+    }
     fprintf(out, "Memory heaps\n");
     fprintf(out, "avl_node_heap:");
     object_heap_print_state(&self->avl_node_heap, out);
@@ -1182,6 +1231,38 @@ out:
     return ret;
 }
 
+
+static int WARN_UNUSED
+msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
+        uint32_t node, uint32_t source_pop, uint32_t dest_pop)
+{
+    int ret = 0;
+    migration_record_t *mr;
+
+    if (self->num_migration_records == self->max_migration_records - 1) {
+        /* Grow the array */
+        self->max_migration_records += self->migration_record_block_size;;
+        mr = realloc(self->migration_records,
+                self->max_migration_records * sizeof(migration_record_t));
+        if (mr == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        self->migration_records = mr;
+        self->num_migration_record_blocks++;
+    }
+    mr = &self->migration_records[self->num_migration_records];
+    mr->left = (double) left;
+    mr->right = (double) right;
+    mr->node = node;
+    mr->time = self->time;
+    mr->source = source_pop;
+    mr->dest = dest_pop;
+    self->num_migration_records++;
+out:
+    return ret;
+}
+
 static int WARN_UNUSED
 msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         uint32_t dest_pop)
@@ -1195,10 +1276,18 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     /* Need to set the population_id for each segment. */
     x = ind;
     while (x != NULL) {
+        if (self->store_migration_records) {
+            ret = msp_record_migration(self, x->left, x->right, x->value,
+                    x->population_id, dest_pop);
+            if (ret != 0) {
+                goto out;
+            }
+        }
         x->population_id = dest_pop;
         x = x->next;
     }
     ret = msp_insert_individual(self, ind);
+out:
     return ret;
 }
 
@@ -1919,8 +2008,7 @@ msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
     avl_node_t *node;
     avl_tree_t *source = &self->populations[source_pop].ancestors;
 
-    self->num_migration_events[
-        source_pop * self->num_populations + dest_pop]++;
+    self->num_migration_events[source_pop * self->num_populations + dest_pop]++;
     j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
     node = avl_at(source, j);
     assert(node != NULL);
@@ -2367,6 +2455,12 @@ msp_get_num_loci(msp_t *self)
     return (size_t) self->num_loci;
 }
 
+bool
+msp_get_store_migration_records(msp_t *self)
+{
+    return self->store_migration_records;
+}
+
 size_t
 msp_get_num_populations(msp_t *self)
 {
@@ -2395,6 +2489,12 @@ size_t
 msp_get_num_coalescence_records(msp_t *self)
 {
     return self->num_coalescence_records;
+}
+
+size_t
+msp_get_num_migration_records(msp_t *self)
+{
+    return self->num_migration_records;
 }
 
 int WARN_UNUSED
@@ -2448,8 +2548,7 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
 {
     size_t N = self->num_populations;
 
-    memcpy(num_migration_events, self->num_migration_events,
-        N * N * sizeof(size_t));
+    memcpy(num_migration_events, self->num_migration_events, N * N * sizeof(size_t));
     return 0;
 }
 
@@ -2457,6 +2556,13 @@ int WARN_UNUSED
 msp_get_coalescence_records(msp_t *self, coalescence_record_t **coalescence_records)
 {
     *coalescence_records = self->coalescence_records;
+    return 0;
+}
+
+int WARN_UNUSED
+msp_get_migration_records(msp_t *self, migration_record_t **migration_records)
+{
+    *migration_records = self->migration_records;
     return 0;
 }
 

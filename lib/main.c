@@ -506,7 +506,7 @@ print_variants(tree_sequence_t *ts)
     if (genotypes == NULL) {
         fatal_error("no memory");
     }
-    printf("variants (%d) \n", (int) ts->num_mutations);
+    printf("variants (%d) \n", (int) ts->mutations.num_records);
     ret = vargen_alloc(&vg, ts, 0);
     if (ret != 0) {
         fatal_library_error(ret, "vargen_alloc");
@@ -523,8 +523,8 @@ print_variants(tree_sequence_t *ts)
     if (ret != 0) {
         fatal_library_error(ret, "vargen_next");
     }
-    if (j != ts->num_mutations) {
-        printf("ERROR!! missing variants %d %d\n", j, (int) ts->num_mutations);
+    if (j != ts->mutations.num_records) {
+        printf("ERROR!! missing variants %d %d\n", j, (int) ts->mutations.num_records);
     }
 
     while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) {
@@ -685,17 +685,17 @@ print_tree_sequence(tree_sequence_t *ts)
     size_t j;
     size_t num_records = tree_sequence_get_num_coalescence_records(ts);
     sparse_tree_t tree;
-    coalescence_record_t *cr;
+    coalescence_record_t cr;
 
     // TODO tidy this up to make it more specific to the task of examining the
     // tree sequence itself.
     printf("Records:\n");
     for (j = 0; j < num_records; j++) {
-        if (tree_sequence_get_record(ts, j, &cr, MSP_ORDER_TIME) != 0) {
+        if (tree_sequence_get_coalescence_record(ts, j, &cr, MSP_ORDER_TIME) != 0) {
             fatal_error("tree sequence out of bounds\n");
         }
-        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr->left, cr->right, cr->children[0],
-                cr->children[1], cr->node, cr->time);
+        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
+                cr.children[1], cr.node, cr.time);
     }
 
     tree_sequence_print_state(ts, stdout);
@@ -742,13 +742,12 @@ run_simulate(char *conf_file, char *output_file)
     if (ret != 0) {
         goto out;
     }
-    /* recomb_map_print_state(recomb_map); */
     ret = msp_initialise(msp);
     if (ret != 0) {
         goto out;
     }
     if (0) {
-        /* print out the demographic event debug state */
+        /* recomb_map_print_state(recomb_map); */
         start_time = 0;
         do {
 
@@ -793,7 +792,6 @@ run_simulate(char *conf_file, char *output_file)
     if (ret != 0) {
         goto out;
     }
-
     ret = tree_sequence_add_provenance_string(tree_seq, "Tree Provenance!!!");
     if (ret != 0) {
         goto out;
@@ -815,7 +813,8 @@ run_simulate(char *conf_file, char *output_file)
     if (ret != 0) {
         goto out;
     }
-
+    printf("================\n");
+    tree_sequence_print_state(tree_seq, stdout);
 out:
     if (msp != NULL) {
         msp_free(msp);
