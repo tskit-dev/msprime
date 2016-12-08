@@ -330,6 +330,7 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
             mutgen->mutations);
     CU_ASSERT_EQUAL(ret, 0);
+    tree_sequence_print_state(tree_seq, _devnull);
 
     gsl_rng_free(rng);
     free(samples);
@@ -716,9 +717,13 @@ test_single_locus_two_populations(void)
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = {{0, 0.0}, {0, 0.0}, {1, 40.0}};
-    coalescence_record_t *records;
-    size_t num_records;
+    coalescence_record_t *coalescence_records;
+    migration_record_t *migration_records;
+    size_t num_coalescence_records, num_migration_records;
     uint32_t n = 3;
+    double t0 = 30.0;
+    double t1 = 30.5;
+    double t2 = 40.5;
 
     CU_ASSERT_FATAL(rng != NULL);
 
@@ -726,11 +731,13 @@ test_single_locus_two_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_mass_migration(&msp, 30.0, 0, 1, 1.0);
+    ret = msp_set_store_migration_records(&msp, true);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_mass_migration(&msp, 30.5, 1, 0, 1.0);
+    ret = msp_add_mass_migration(&msp, t0, 0, 1, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_mass_migration(&msp, 40.5, 1, 0, 1.0);
+    ret = msp_add_mass_migration(&msp, t1, 1, 0, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_mass_migration(&msp, t2, 1, 0, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -740,16 +747,28 @@ test_single_locus_two_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(&msp);
     msp_print_state(&msp, _devnull);
-    num_records = msp_get_num_coalescence_records(&msp);
-    CU_ASSERT_EQUAL_FATAL(num_records, 2);
-    ret = msp_get_coalescence_records(&msp, &records);
+    num_coalescence_records = msp_get_num_coalescence_records(&msp);
+    CU_ASSERT_EQUAL_FATAL(num_coalescence_records, 2);
+    ret = msp_get_coalescence_records(&msp, &coalescence_records);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(records[0].node, 3);
-    CU_ASSERT_TRUE(records[0].time < 40.0);
-    CU_ASSERT_EQUAL(records[0].population_id, 0);
-    CU_ASSERT_EQUAL(records[1].node, 4);
-    CU_ASSERT_TRUE(records[1].time > 40.5);
-    CU_ASSERT_EQUAL(records[1].population_id, 0);
+    CU_ASSERT_EQUAL(coalescence_records[0].node, 3);
+    CU_ASSERT_TRUE(coalescence_records[0].time < 40.0);
+    CU_ASSERT_EQUAL(coalescence_records[0].population_id, 0);
+    CU_ASSERT_EQUAL(coalescence_records[1].node, 4);
+    CU_ASSERT_TRUE(coalescence_records[1].time > 40.5);
+    CU_ASSERT_EQUAL(coalescence_records[1].population_id, 0);
+    num_migration_records = msp_get_num_migration_records(&msp);
+    CU_ASSERT_EQUAL_FATAL(num_migration_records, 3);
+    ret = msp_get_migration_records(&msp, &migration_records);
+    CU_ASSERT_EQUAL(migration_records[0].time, t0)
+    CU_ASSERT_EQUAL(migration_records[0].source, 0);
+    CU_ASSERT_EQUAL(migration_records[0].dest, 1);
+    CU_ASSERT_EQUAL(migration_records[1].time, t1);
+    CU_ASSERT_EQUAL(migration_records[1].source, 1);
+    CU_ASSERT_EQUAL(migration_records[1].dest, 0);
+    CU_ASSERT_EQUAL(migration_records[2].time, t2);
+    CU_ASSERT_EQUAL(migration_records[2].source, 1);
+    CU_ASSERT_EQUAL(migration_records[2].dest, 0);
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1274,6 +1293,8 @@ test_multi_locus_simulation(void)
     long seed = 10;
     int model;
     int models[] = {MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
+    double migration_matrix[] = {0, 1, 1, 0};
+    size_t migration_events[4];
     const char *model_strs[] = {"hudson", "smc", "smc_prime"};
     const char *model_str;
     size_t j;
@@ -1290,6 +1311,12 @@ test_multi_locus_simulation(void)
         memset(samples, 0, n * sizeof(sample_t));
         ret = msp_alloc(msp, n, samples, rng);
         CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_num_populations(msp, 2);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_migration_matrix(msp, 4, migration_matrix);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_store_migration_records(msp, true);
+        CU_ASSERT_EQUAL(ret, 0);
         /* set all the block sizes to something small to provoke the memory
          * expansions. */
         ret = msp_set_avl_node_block_size(msp, 1);
@@ -1299,6 +1326,8 @@ test_multi_locus_simulation(void)
         ret = msp_set_segment_block_size(msp, 1);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_coalescence_record_block_size(msp, 1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_migration_record_block_size(msp, 1);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_num_loci(msp, m);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1316,8 +1345,12 @@ test_multi_locus_simulation(void)
         }
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(msp);
+        ret = msp_get_num_migration_events(msp, migration_events);
+        CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT(num_events > n - 1);
         CU_ASSERT_EQUAL(1 + num_events,
+                /* diagonals must be zero here */
+                migration_events[1] + migration_events[2] +
                 msp_get_num_recombination_events(msp) +
                 msp_get_num_common_ancestor_events(msp) +
                 msp_get_num_rejected_common_ancestor_events(msp));
@@ -1333,7 +1366,10 @@ test_multi_locus_simulation(void)
             num_events++;
         }
         CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_get_num_migration_events(msp, migration_events);
+        CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(1 + num_events,
+                migration_events[1] + migration_events[2] +
                 msp_get_num_recombination_events(msp) +
                 msp_get_num_common_ancestor_events(msp) +
                 msp_get_num_rejected_common_ancestor_events(msp));
@@ -4540,8 +4576,7 @@ main(int argc, char **argv)
         {"Test records equivalent after import", test_records_equivalent},
         {"Test saving to HDF5", test_save_hdf5},
         {"Test saving records to HDF5", test_save_records_hdf5},
-        {"Historical samples two populations",
-            test_single_locus_two_populations},
+        {"Single locus two populations", test_single_locus_two_populations},
         {"Many populations", test_single_locus_many_populations},
         {"Historical samples", test_single_locus_historical_sample},
         {"Simulator getters/setters", test_simulator_getters_setters},

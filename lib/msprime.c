@@ -2008,8 +2008,7 @@ msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
     avl_node_t *node;
     avl_tree_t *source = &self->populations[source_pop].ancestors;
 
-    self->num_migration_events[
-        source_pop * self->num_populations + dest_pop]++;
+    self->num_migration_events[source_pop * self->num_populations + dest_pop]++;
     j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
     node = avl_at(source, j);
     assert(node != NULL);
@@ -2549,8 +2548,7 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
 {
     size_t N = self->num_populations;
 
-    memcpy(num_migration_events, self->num_migration_events,
-        N * N * sizeof(size_t));
+    memcpy(num_migration_events, self->num_migration_events, N * N * sizeof(size_t));
     return 0;
 }
 
