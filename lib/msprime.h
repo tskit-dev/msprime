@@ -282,7 +282,10 @@ typedef struct {
     } trees;
     struct {
         size_t num_records;
-        uint32_t *node;
+        size_t total_nodes;
+        uint32_t *nodes_mem;
+        uint32_t **nodes;
+        uint32_t *num_nodes;
         double *position;
         size_t *num_tree_mutations;
         mutation_t *tree_mutations_mem;

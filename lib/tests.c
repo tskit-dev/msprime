@@ -35,7 +35,6 @@
 /* Global variables used for test in state in the test suite */
 
 char * _tmp_file_name;
-char * _test_data_dir;
 FILE * _devnull;
 
 #define SIMPLE_BOTTLENECK 0
@@ -422,68 +421,6 @@ get_example_tree_sequence(uint32_t sample_size,
 }
 
 tree_sequence_t **
-get_test_data_tree_sequences(void)
-{
-    size_t max_examples = 1024;
-    size_t max_path = 1024;
-    tree_sequence_t **ret = malloc(max_examples * sizeof(tree_sequence_t *));
-    char *full_path = malloc(max_path);
-    const char *filename = "unary/01_records.txt";
-    coalescence_record_t *records = NULL;
-    char *buff = NULL;
-    size_t size, read, num_records;
-    uint32_t j, n;
-    uint32_t *samples;
-    tree_sequence_t ts;
-    tree_sequence_t *subset = malloc(sizeof(tree_sequence_t));
-    int flags = MSP_FILTER_ROOT_MUTATIONS;
-    int err;
-    FILE *f;
-
-    CU_ASSERT_FATAL(ret != NULL);
-    CU_ASSERT_FATAL(full_path != NULL);
-    CU_ASSERT_FATAL(subset != NULL);
-
-    snprintf(full_path, max_path, "%s/%s", _test_data_dir, filename);
-    f = fopen(full_path, "r");
-    CU_ASSERT_FATAL(f != NULL);
-    fseek(f, 0, SEEK_END);
-    size = ftell(f) + 1;
-    buff = malloc(size * sizeof(char));
-    CU_ASSERT_FATAL(buff != NULL);
-    fseek(f, 0, SEEK_SET);
-    read = fread(buff, sizeof(char), size - 1, f);
-    CU_ASSERT_FATAL(read == size - 1);
-    buff[size - 1] = '\0';
-    parse_text_records(buff, &num_records, &records);
-    CU_ASSERT_FATAL(num_records > 0);
-
-    err = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL_FATAL(err, 0);
-    tree_sequence_print_state(&ts, _devnull);
-    /* allocate the samples for this tree sequence so we can
-     * simplify() it */
-    n = tree_sequence_get_sample_size(&ts);
-    samples = malloc(n * sizeof(uint32_t));
-    CU_ASSERT_FATAL(samples != NULL);
-    for (j = 0; j < n; j++) {
-        samples[j] = j;
-    }
-    err = tree_sequence_simplify(&ts, samples, n, flags, subset);
-    ret[0] = subset;
-    ret[1] = NULL;
-
-    fclose(f);
-    free(buff);
-    free(samples);
-    free(full_path);
-    tree_sequence_free(&ts);
-    free_local_records(num_records, records);
-    return ret;
-}
-
-
-tree_sequence_t **
 get_example_nonbinary_tree_sequences(void)
 {
     size_t max_examples = 1024;
@@ -528,12 +465,6 @@ get_example_tree_sequences(int include_nonbinary)
     k = 4;
     if (include_nonbinary) {
         nonbinary = get_example_nonbinary_tree_sequences();
-        for (j = 0; nonbinary[j] != NULL; j++) {
-            ret[k] = nonbinary[j];
-            k++;
-        }
-        free(nonbinary);
-        nonbinary = get_test_data_tree_sequences();
         for (j = 0; nonbinary[j] != NULL; j++) {
             ret[k] = nonbinary[j];
             k++;
@@ -1805,6 +1736,7 @@ test_simplest_non_sample_leaf_records(void)
     hapgen_t hapgen;
     vargen_t vargen;
 
+    CU_ASSERT_EQUAL_FATAL(0, 4);
     parse_text_mutations(text_mutations, &num_mutations, &mutations);
     CU_ASSERT_EQUAL_FATAL(num_mutations, 4);
     ret = tree_sequence_load_records(&ts, 1, records);
@@ -1956,6 +1888,7 @@ test_simplest_root_mutations(void)
     }
     hapgen_free(&hapgen);
 
+    CU_ASSERT_EQUAL_FATAL(0, 1);
     ret = tree_sequence_simplify(&ts, samples, 2, flags, &simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
@@ -2243,6 +2176,7 @@ test_single_tree_bad_mutations(void)
     mutations[0].position = 1.1;
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(0, 1);
     ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
@@ -2684,6 +2618,7 @@ test_single_tree_mutgen(void)
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    CU_ASSERT_EQUAL_FATAL(0, 1);
     /* before and after should be identical */
     for (j = 0; j < num_mutations; j++) {
         CU_ASSERT_EQUAL(before[j].position, after[j].position);
@@ -3032,6 +2967,7 @@ test_tree_sequence_set_mutations(void)
     sparse_tree_t trees[num_trees];
     int ret;
 
+    CU_ASSERT_EQUAL_FATAL(0, 1);
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 6);
 
@@ -4361,6 +4297,7 @@ test_simplify_from_examples(void)
     tree_sequence_t **examples = get_example_tree_sequences(1);
     uint32_t j;
 
+    CU_ASSERT_EQUAL_FATAL(0, 1);
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         verify_simplify(examples[j]);
@@ -4566,6 +4503,7 @@ test_save_records_hdf5(void)
     mutation_t *mutations;
     tree_sequence_t *ts1, ts2, ts3, **examples;
 
+    CU_ASSERT_FATAL(0 == 1);
     examples = get_example_tree_sequences(1);
     for (k = 0; examples[k] != NULL; k++) {
         ts1 = examples[k];
@@ -4741,75 +4679,78 @@ int
 main(int argc, char **argv)
 {
     int ret;
+    CU_pTest test;
+    CU_pSuite suite;
     CU_TestInfo tests[] = {
-        {"Parse text mutations", test_parse_text_mutations},
-        {"Fenwick tree", test_fenwick},
-        {"VCF", test_vcf},
-        {"VCF no mutations", test_vcf_no_mutations},
-        {"Simple recombination map", test_simple_recomb_map},
-        {"Recombination map errors", test_recomb_map_errors},
-        {"Recombination map examples", test_recomb_map_examples},
-        {"Simplest records", test_simplest_records},
-        {"Simplest nonbinary records", test_simplest_nonbinary_records},
-        {"Simplest unary records", test_simplest_unary_records},
-        {"Simplest non-sample leaf records", test_simplest_non_sample_leaf_records},
-        {"Simplest degenerate multiple root records",
+        {"parse_text_mutations", test_parse_text_mutations},
+        {"fenwick_tree", test_fenwick},
+        {"vcf", test_vcf},
+        {"vcf_no_mutations", test_vcf_no_mutations},
+        {"simple_recombination_map", test_simple_recomb_map},
+        {"recombination_map_errors", test_recomb_map_errors},
+        {"recombination_map_examples", test_recomb_map_examples},
+        {"simplest_records", test_simplest_records},
+        {"simplest_nonbinary_records", test_simplest_nonbinary_records},
+        {"simplest_unary_records", test_simplest_unary_records},
+        {"simplest_non-sample_leaf_records", test_simplest_non_sample_leaf_records},
+        {"simplest_degenerate_multiple_root_records",
             test_simplest_degenerate_multiple_root_records},
-        {"Simplest multiple root records", test_simplest_multiple_root_records},
-        {"Simplest root mutations", test_simplest_root_mutations},
-        {"Simplest bad records", test_simplest_bad_records},
-        {"Single tree good records", test_single_tree_good_records},
-        {"Single nonbinary tree good records",
+        {"simplest_multiple_root_records", test_simplest_multiple_root_records},
+        {"simplest_root_mutations", test_simplest_root_mutations},
+        {"simplest_bad_records", test_simplest_bad_records},
+        {"single_tree_good_records", test_single_tree_good_records},
+        {"single_nonbinary_tree_good_records",
             test_single_nonbinary_tree_good_records},
-        {"Single tree bad records", test_single_tree_bad_records},
-        {"Single tree good mutations", test_single_tree_good_mutations},
-        {"Single tree bad mutations", test_single_tree_bad_mutations},
-        {"Single tree iterator", test_single_tree_iter},
-        {"Single nonbinary tree iterator", test_single_nonbinary_tree_iter},
-        {"Single tree iterator times", test_single_tree_iter_times},
-        {"Single tree hapgen", test_single_tree_hapgen},
-        {"Single unary tree hapgen", test_single_unary_tree_hapgen},
-        {"Single tree mutgen", test_single_tree_mutgen},
-        {"Sparse tree errors", test_sparse_tree_errors},
-        {"Tree sequence iterator", test_tree_sequence_iter},
-        {"Leaf sets", test_leaf_sets},
-        {"Nonbinary leaf sets", test_nonbinary_leaf_sets},
-        {"Tree nonbinary sequence iterator", test_nonbinary_tree_sequence_iter},
-        {"Tree unary sequence iterator", test_unary_tree_sequence_iter},
-        {"Left-to-right tree sequence iterator",
+        {"single_tree_bad_records", test_single_tree_bad_records},
+        {"single_tree_good_mutations", test_single_tree_good_mutations},
+        {"single_tree_bad_mutations", test_single_tree_bad_mutations},
+        {"single_tree_iterator", test_single_tree_iter},
+        {"single_nonbinary_tree_iterator", test_single_nonbinary_tree_iter},
+        {"single_tree_iterator_times", test_single_tree_iter_times},
+        {"single_tree_hapgen", test_single_tree_hapgen},
+        {"single_unary_tree_hapgen", test_single_unary_tree_hapgen},
+        {"single_tree_mutgen", test_single_tree_mutgen},
+        {"sparse_tree_errors", test_sparse_tree_errors},
+        {"tree_sequence_iterator", test_tree_sequence_iter},
+        {"leaf_sets", test_leaf_sets},
+        {"nonbinary_leaf_sets", test_nonbinary_leaf_sets},
+        {"tree_nonbinary_sequence_iterator", test_nonbinary_tree_sequence_iter},
+        {"tree_unary_sequence_iterator", test_unary_tree_sequence_iter},
+        {"left-to-right_tree_sequence_iterator",
             test_left_to_right_tree_sequence_iter},
-        {"Tree sequence bad records", test_tree_sequence_bad_records},
-        {"Set mutations", test_tree_sequence_set_mutations},
-        {"Tree sequence diff iter", test_tree_sequence_diff_iter},
-        {"Nonbinary Tree sequence diff iter",
+        {"tree_sequence_bad_records", test_tree_sequence_bad_records},
+        {"set_mutations", test_tree_sequence_set_mutations},
+        {"tree_sequence_diff_iter", test_tree_sequence_diff_iter},
+        {"nonbinary_tree_sequence_diff_iter",
             test_nonbinary_tree_sequence_diff_iter},
-        {"Unary Tree sequence diff iter", test_unary_tree_sequence_diff_iter},
-        {"diff iter from examples", test_diff_iter_from_examples},
-        {"tree iter from examples", test_tree_iter_from_examples},
-        {"tree equals from examples", test_tree_equals_from_examples},
-        {"tree next and prev from examples", test_next_prev_from_examples},
-        {"leaf sets from examples", test_leaf_sets_from_examples},
-        {"Test hapgen from examples", test_hapgen_from_examples},
-        {"Test vargen from examples", test_vargen_from_examples},
-        {"Test newick from examples", test_newick_from_examples},
-        {"Test stats from examples", test_stats_from_examples},
-        {"Test ld from examples", test_ld_from_examples},
-        {"Test simplify from examples", test_simplify_from_examples},
-        {"Test records equivalent after import", test_records_equivalent},
-        {"Test saving to HDF5", test_save_hdf5},
-        {"Test saving records to HDF5", test_save_records_hdf5},
-        {"Single locus two populations", test_single_locus_two_populations},
-        {"Many populations", test_single_locus_many_populations},
-        {"Historical samples", test_single_locus_historical_sample},
-        {"Simulator getters/setters", test_simulator_getters_setters},
-        {"Model errors", test_simulator_model_errors},
-        {"Demographic events", test_simulator_demographic_events},
-        {"Single locus simulation", test_single_locus_simulation},
-        {"Simulation memory limit", test_simulation_memory_limit},
-        {"Multi locus simulation", test_multi_locus_simulation},
-        {"Bottleneck simulation", test_bottleneck_simulation},
-        {"Large bottleneck simulation", test_large_bottleneck_simulation},
-        {"Test error messages", test_strerror},
+        {"unary_tree_sequence_diff_iter",
+            test_unary_tree_sequence_diff_iter},
+        {"diff_iter_from_examples", test_diff_iter_from_examples},
+        {"tree_iter_from_examples", test_tree_iter_from_examples},
+        {"tree_equals_from_examples", test_tree_equals_from_examples},
+        {"tree_next_and_prev_from_examples", test_next_prev_from_examples},
+        {"leaf_sets_from_examples", test_leaf_sets_from_examples},
+        {"test_hapgen_from_examples", test_hapgen_from_examples},
+        {"test_vargen_from_examples", test_vargen_from_examples},
+        {"test_newick_from_examples", test_newick_from_examples},
+        {"test_stats_from_examples", test_stats_from_examples},
+        {"test_ld_from_examples", test_ld_from_examples},
+        {"test_simplify_from_examples", test_simplify_from_examples},
+        {"test_records_equivalent_after_import", test_records_equivalent},
+        {"test_saving_to_hdf5", test_save_hdf5},
+        {"test_saving_records_to_hdf5", test_save_records_hdf5},
+        {"single_locus_two_populations", test_single_locus_two_populations},
+        {"many_populations", test_single_locus_many_populations},
+        {"historical_samples", test_single_locus_historical_sample},
+        {"simulator_getters/setters", test_simulator_getters_setters},
+        {"model_errors", test_simulator_model_errors},
+        {"demographic_events", test_simulator_demographic_events},
+        {"single_locus_simulation", test_single_locus_simulation},
+        {"simulation_memory_limit", test_simulation_memory_limit},
+        {"multi_locus_simulation", test_multi_locus_simulation},
+        {"bottleneck_simulation", test_bottleneck_simulation},
+        {"large_bottleneck_simulation", test_large_bottleneck_simulation},
+        {"test_error_messages", test_strerror},
         CU_TEST_INFO_NULL,
     };
 
@@ -4824,22 +4765,33 @@ main(int argc, char **argv)
         },
         CU_SUITE_INFO_NULL,
     };
-    if (argc == 1) {
-        _test_data_dir = "../tests/data";
-    } else {
-        _test_data_dir = argv[1];
-    }
-
-    /* initialize the CUnit test registry */
     if (CUE_SUCCESS != CU_initialize_registry()) {
         handle_cunit_error();
     }
     if (CUE_SUCCESS != CU_register_suites(suites)) {
         handle_cunit_error();
     }
-    /* Run all tests using the CUnit Basic interface */
     CU_basic_set_mode(CU_BRM_VERBOSE);
-    CU_basic_run_tests();
+
+    if (argc == 1) {
+        CU_basic_run_tests();
+    } else if (argc == 2) {
+        suite = CU_get_suite("msprime");
+        if (suite == NULL) {
+            printf("Suite not found\n");
+            return EXIT_FAILURE;
+        }
+        test = CU_get_test(suite, argv[1]);
+        if (test == NULL) {
+            printf("Test '%s' not found\n", argv[1]);
+            return EXIT_FAILURE;
+        }
+        CU_basic_run_test(suite, test);
+    } else {
+        printf("usage: ./tests <test_name>\n");
+        return EXIT_FAILURE;
+    }
+
     ret = EXIT_SUCCESS;
     if (CU_get_number_of_tests_failed() != 0) {
         printf("Test failed!\n");

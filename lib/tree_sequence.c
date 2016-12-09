@@ -52,20 +52,6 @@ cmp_double(const void *a, const void *b) {
 }
 
 static int
-cmp_mutation(const void *a, const void *b) {
-    const mutation_t *ia = (const mutation_t *) a;
-    const mutation_t *ib = (const mutation_t *) b;
-    return (ia->position > ib->position) - (ia->position < ib->position);
-}
-
-static int
-cmp_mutation_pointer(const void *a, const void *b) {
-    mutation_t *const*ia = (mutation_t *const*) a;
-    mutation_t *const*ib = (mutation_t *const*) b;
-    return cmp_mutation(*ia, *ib);
-}
-
-static int
 cmp_index_sort(const void *a, const void *b) {
     const index_sort_t *ca = (const index_sort_t *) a;
     const index_sort_t *cb = (const index_sort_t *) b;
@@ -141,8 +127,11 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     }
     fprintf(out, "mutations = (%d records)\n", (int) self->mutations.num_records);
     for (j = 0; j < self->mutations.num_records; j++) {
-        fprintf(out, "\t%d\t%f\t%d\n", (int) j, self->mutations.position[j],
-               (int) self->mutations.node[j]);
+        fprintf(out, "\t%d\t%f\t", (int) j, self->mutations.position[j]);
+        for (k = 0; k < self->mutations.num_nodes[j]; k++) {
+            fprintf(out, "\t%d,", self->mutations.nodes[j][k]);
+        }
+        fprintf(out, "\n");
     }
     if (self->mutations.num_records > 0) {
         fprintf(out, "tree_mutations\n");
@@ -222,10 +211,17 @@ tree_sequence_alloc(tree_sequence_t *self)
         self->trees.nodes.time[j] = 0.0;
     }
     if (self->mutations.num_records > 0) {
-        self->mutations.node = malloc(self->mutations.num_records * sizeof(uint32_t));
+        self->mutations.nodes_mem = malloc(
+                self->mutations.total_nodes * sizeof(uint32_t));
+        self->mutations.nodes = malloc(self->mutations.num_records * sizeof(uint32_t *));
+        self->mutations.num_nodes = malloc(
+                self->mutations.num_records * sizeof(uint32_t));
         self->mutations.position = malloc(
                 self->mutations.num_records * sizeof(double));
-        if (self->mutations.node == NULL || self->mutations.position == NULL) {
+        if (self->mutations.nodes == NULL
+                || self->mutations.num_nodes == NULL
+                || self->mutations.position == NULL
+                || self->mutations.nodes == NULL) {
             goto out;
         }
     }
@@ -284,11 +280,17 @@ tree_sequence_free(tree_sequence_t *self)
     if (self->trees.indexes.removal_order != NULL) {
         free(self->trees.indexes.removal_order);
     }
-    if (self->mutations.node != NULL) {
-        free(self->mutations.node);
+    if (self->mutations.nodes != NULL) {
+        free(self->mutations.nodes);
+    }
+    if (self->mutations.num_nodes != NULL) {
+        free(self->mutations.num_nodes);
     }
     if (self->mutations.position != NULL) {
         free(self->mutations.position);
+    }
+    if (self->mutations.nodes_mem != NULL) {
+        free(self->mutations.nodes_mem);
     }
     if (self->mutations.tree_mutations_mem != NULL) {
         free(self->mutations.tree_mutations_mem);
@@ -814,8 +816,8 @@ tree_sequence_init_tree_mutations(tree_sequence_t *self)
         mut = &self->mutations.tree_mutations_mem[j];
         mut->index = j;
         mut->position = self->mutations.position[j];
-        mut->num_nodes = 1;
-        mut->nodes[0] = self->mutations.node[j];
+        mut->num_nodes = self->mutations.num_nodes[j];
+        mut->nodes = self->mutations.nodes[j];
         assert(tree_index < self->trees.num_breakpoints - 1);
         while (mut->position >= self->trees.breakpoints[tree_index + 1]) {
             tree_index++;
@@ -905,7 +907,8 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         int required;
     };
     struct _dimension_check fields[] = {
-        {"/mutations/node", 1, self->mutations.num_records, 1},
+        {"/mutations/nodes", 1, self->mutations.total_nodes, 1},
+        {"/mutations/num_nodes", 1, self->mutations.num_records, 1},
         {"/mutations/position", 1, self->mutations.num_records, 1},
         {"/trees/nodes/population", 1, self->trees.num_nodes, 1},
         {"/trees/nodes/time", 1, self->trees.num_nodes, 1},
@@ -981,7 +984,8 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         int included;
     };
     struct _dimension_read fields[] = {
-        {"/mutations/node", &self->mutations.num_records, 0},
+        {"/mutations/num_nodes", &self->mutations.num_records, 0},
+        {"/mutations/nodes", &self->mutations.total_nodes, 0},
         {"/provenance", &self->num_provenance_strings, 0},
         {"/trees/breakpoints", &self->trees.num_breakpoints, 1},
         {"/trees/nodes/time", &self->trees.num_nodes, 1},
@@ -1064,22 +1068,16 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     };
     struct _hdf5_field_read fields[] = {
         {"/provenance", 0, 0, 0, self->provenance_strings},
-        {"/mutations/node", H5T_NATIVE_UINT32, 0, 1,
-            self->mutations.node},
-        {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1,
-            self->mutations.position},
+        {"/mutations/nodes", H5T_NATIVE_UINT32, 0, 1, self->mutations.nodes_mem},
+        {"/mutations/num_nodes", H5T_NATIVE_UINT32, 0, 1, self->mutations.num_nodes},
+        {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1, self->mutations.position},
         {"/trees/nodes/population", H5T_NATIVE_UINT32, 0, 1,
             self->trees.nodes.population},
-        {"/trees/nodes/time", H5T_NATIVE_DOUBLE, 0, 1,
-            self->trees.nodes.time},
-        {"/trees/breakpoints", H5T_NATIVE_DOUBLE, 0, 1,
-            self->trees.breakpoints},
-        {"/trees/records/left", H5T_NATIVE_UINT32, 0, 1,
-            self->trees.records.left},
-        {"/trees/records/right", H5T_NATIVE_UINT32, 0, 1,
-            self->trees.records.right},
-        {"/trees/records/node", H5T_NATIVE_UINT32, 0, 1,
-            self->trees.records.node},
+        {"/trees/nodes/time", H5T_NATIVE_DOUBLE, 0, 1, self->trees.nodes.time},
+        {"/trees/breakpoints", H5T_NATIVE_DOUBLE, 0, 1, self->trees.breakpoints},
+        {"/trees/records/left", H5T_NATIVE_UINT32, 0, 1, self->trees.records.left},
+        {"/trees/records/right", H5T_NATIVE_UINT32, 0, 1, self->trees.records.right},
+        {"/trees/records/node", H5T_NATIVE_UINT32, 0, 1, self->trees.records.node},
         {"/trees/records/num_children", H5T_NATIVE_UINT32, 0, 1,
             self->trees.records.num_children},
         {"/trees/records/children", H5T_NATIVE_UINT32, 0, 1,
@@ -1147,14 +1145,18 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     offset = 0;
     for (j = 0; j < self->trees.num_records; j++) {
         assert(offset < self->trees.total_child_nodes);
-        self->trees.records.children[j] =
-            &self->trees.records.children_mem[offset];
+        self->trees.records.children[j] = &self->trees.records.children_mem[offset];
         offset += self->trees.records.num_children[j];
-        self->sample_size = GSL_MIN(self->sample_size,
-                self->trees.records.node[j]);
+        self->sample_size = GSL_MIN(self->sample_size, self->trees.records.node[j]);
     }
-    self->sequence_length = self->trees.breakpoints[
-        self->trees.num_breakpoints - 1];
+    self->sequence_length = self->trees.breakpoints[self->trees.num_breakpoints - 1];
+    /* Set up the pointers for the mutation nodes */
+    offset = 0;
+    for (j = 0; j < self->mutations.num_records; j++) {
+        assert(offset < self->mutations.total_nodes);
+        self->mutations.nodes[j] = &self->mutations.nodes_mem[offset];
+        offset += self->mutations.num_nodes[j];
+    }
     ret = tree_sequence_init_tree_mutations(self);
     if (ret != 0) {
         goto out;
@@ -1252,9 +1254,12 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/trees/breakpoints",
             H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
             self->trees.num_breakpoints, self->trees.breakpoints},
-        {"/mutations/node",
+        {"/mutations/nodes",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
-            self->mutations.num_records, self->mutations.node},
+            self->mutations.total_nodes, self->mutations.nodes_mem},
+        {"/mutations/num_nodes",
+            H5T_STD_U32LE, H5T_NATIVE_UINT32,
+            self->mutations.num_records, self->mutations.num_nodes},
         {"/mutations/position",
             H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
             self->mutations.num_records, self->mutations.position},
@@ -1699,46 +1704,23 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
         mutation_t *mutations)
 {
     int ret = -1;
-    size_t j;
-    mutation_t **mutation_ptrs = NULL;
+    size_t j, k, offset;
 
-    /* TODO make this threadsafe! */
-    if (self->refcount != 0) {
-        ret = MSP_ERR_REFCOUNT_NONZERO;
-        goto out;
+    assert(self->mutations.num_records == 0);
+    self->mutations.total_nodes = 0;
+    for (j = 0; j < num_mutations; j++) {
+        self->mutations.total_nodes += mutations[j].num_nodes;
     }
-    if (self->mutations.num_records > 0) {
-        /* any mutations that were there previously are overwritten. */
-        if (self->mutations.node != NULL) {
-            free(self->mutations.node);
-            self->mutations.node = NULL;
-        }
-        if (self->mutations.position != NULL) {
-            free(self->mutations.position);
-            self->mutations.position = NULL;
-        }
-        if (self->mutations.tree_mutations_mem != NULL) {
-            free(self->mutations.tree_mutations_mem);
-            self->mutations.tree_mutations_mem = NULL;
-        }
-        if (self->mutations.tree_mutations != NULL) {
-            free(self->mutations.tree_mutations);
-            self->mutations.tree_mutations = NULL;
-        }
-        if (self->mutations.num_tree_mutations != NULL) {
-            free(self->mutations.num_tree_mutations);
-            self->mutations.num_tree_mutations = NULL;
-        }
-    }
-    self->mutations.num_records = 0;
-    self->mutations.position = NULL;
-    self->mutations.node = NULL;
     if (num_mutations > 0) {
         /* Allocate the storage we need to keep the mutations. */
-        mutation_ptrs = malloc(num_mutations * sizeof(mutation_t *));
-        self->mutations.node = malloc(num_mutations * sizeof(uint32_t));
+        self->mutations.num_nodes = malloc(num_mutations * sizeof(uint32_t));
+        self->mutations.nodes = malloc(num_mutations * sizeof(uint32_t *));
         self->mutations.position = malloc(num_mutations * sizeof(double));
-        if (mutation_ptrs == NULL || self->mutations.node == NULL
+        self->mutations.nodes_mem = malloc(
+                self->mutations.total_nodes * sizeof(uint32_t));
+        if (self->mutations.nodes == NULL
+                || self->mutations.num_nodes == NULL
+                || self->mutations.nodes_mem == NULL
                 || self->mutations.position == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -1754,13 +1736,16 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
         /*         goto out; */
         /*     } */
         /* } */
-        /* Mutations are required to be sorted in position order. */
-        qsort(mutation_ptrs, num_mutations, sizeof(mutation_t *),
-                cmp_mutation_pointer);
         self->mutations.num_records = num_mutations;
+        offset = 0;
         for (j = 0; j < num_mutations; j++) {
-            self->mutations.node[j] = mutation_ptrs[j]->nodes[0];
-            self->mutations.position[j] = mutation_ptrs[j]->position;
+            self->mutations.position[j] = mutations[j].position;
+            self->mutations.num_nodes[j] = mutations[j].num_nodes;
+            self->mutations.nodes[j] = self->mutations.nodes_mem + offset;
+            offset += mutations[j].num_nodes;
+            for (k = 0; k < mutations[j].num_nodes; k++) {
+                self->mutations.nodes[j][k] = mutations[j].nodes[k];
+            }
         }
         ret = tree_sequence_init_tree_mutations(self);
         if (ret != 0) {
@@ -1769,9 +1754,6 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
     }
     ret = 0;
 out:
-    if (mutation_ptrs != NULL) {
-        free(mutation_ptrs);
-    }
     return ret;
 
 }
@@ -2064,7 +2046,8 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
         /* Update the mutations for this tree */
         right = self->trees.breakpoints[self->trees.records.right[O[k]]];
         while (l < self->mutations.num_records && self->mutations.position[l] < right) {
-            u = self->mutations.node[l];
+            // FIXME for multiple mutaitons
+            u = self->mutations.nodes[l][0];
             if (mapping[u] != MSP_NULL_NODE) {
                 keep = true;
                 if (filter_root_mutations) {

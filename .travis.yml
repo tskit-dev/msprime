@@ -47,7 +47,7 @@ script:
   - pip install dist/msprime*.tar.gz --no-cache-dir
   # Now run the low-level tests.
   - make -C lib travis-tests
-  - ./lib/tests tests/data
+  - ./lib/tests 
   - cd docs/ && doxygen > /dev/null && cd ..
 
 after_success:
