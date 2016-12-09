@@ -162,18 +162,18 @@ ld_calc_overlap_within_tree(ld_calc_t *self, mutation_t mA, mutation_t mB)
     sparse_tree_t *t = self->inner_tree;
     uint32_t u, v, nAB;
 
-    u = mA.node;
-    v = mB.node;
+    u = mA.nodes[0];
+    v = mB.nodes[0];
     if (t->time[u] > t->time[v]) {
-        v = mA.node;
-        u = mB.node;
+        v = mA.nodes[0];
+        u = mB.nodes[0];
     }
     while (u != v && u != MSP_NULL_NODE) {
         u = t->parent[u];
     }
     nAB = 0;
     if (u == v) {
-        nAB = GSL_MIN(t->num_leaves[mA.node], t->num_leaves[mB.node]);
+        nAB = GSL_MIN(t->num_leaves[mA.nodes[0]], t->num_leaves[mB.nodes[0]]);
     }
     return nAB;
 }
@@ -184,7 +184,7 @@ ld_calc_set_tracked_leaves(ld_calc_t *self, mutation_t mA)
     int ret = 0;
     leaf_list_node_t *head, *tail;
 
-    ret = sparse_tree_get_leaf_list(self->outer_tree, mA.node, &head, &tail);
+    ret = sparse_tree_get_leaf_list(self->outer_tree, mA.nodes[0], &head, &tail);
     if (ret != 0) {
         goto out;
     }
@@ -211,8 +211,8 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
     tA = self->outer_tree;
     tB = self->inner_tree;
     mA = self->mutations[source_index];
-    assert(tA->parent[mA.node] != MSP_NULL_NODE);
-    fA = tA->num_leaves[mA.node] / n;
+    assert(tA->parent[mA.nodes[0]] != MSP_NULL_NODE);
+    fA = tA->num_leaves[mA.nodes[0]] / n;
     assert(fA > 0);
     tB->mark = 1;
     for (j = 0; j < max_mutations; j++) {
@@ -230,13 +230,13 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
             }
             assert(ret == 1);
         }
-        assert(tB->parent[mB.node] != MSP_NULL_NODE);
-        fB = tB->num_leaves[mB.node] / n;
+        assert(tB->parent[mB.nodes[0]] != MSP_NULL_NODE);
+        fB = tB->num_leaves[mB.nodes[0]] / n;
         assert(fB > 0);
         if (mB.position < tA->right) {
             nAB = ld_calc_overlap_within_tree(self, mA, mB);
         } else {
-            if (!tracked_leaves_set && tB->marked[mA.node] == 1) {
+            if (!tracked_leaves_set && tB->marked[mA.nodes[0]] == 1) {
                 tracked_leaves_set = 1;
                 ret = ld_calc_set_tracked_leaves(self, mA);
                 if (ret != 0) {
@@ -244,7 +244,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
                 }
             }
             if (tracked_leaves_set) {
-                nAB = tB->num_tracked_leaves[mB.node];
+                nAB = tB->num_tracked_leaves[mB.nodes[0]];
             } else {
                 nAB = ld_calc_overlap_within_tree(self, mA, mB);
             }
@@ -288,8 +288,8 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
     tA = self->outer_tree;
     tB = self->inner_tree;
     mA = self->mutations[source_index];
-    assert(tA->parent[mA.node] != MSP_NULL_NODE);
-    fA = tA->num_leaves[mA.node] / n;
+    assert(tA->parent[mA.nodes[0]] != MSP_NULL_NODE);
+    fA = tA->num_leaves[mA.nodes[0]] / n;
     assert(fA > 0);
     tB->mark = 1;
     for (j = 0; j < max_mutations; j++) {
@@ -308,13 +308,13 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
             }
             assert(ret == 1);
         }
-        assert(tB->parent[mB.node] != MSP_NULL_NODE);
-        fB = tB->num_leaves[mB.node] / n;
+        assert(tB->parent[mB.nodes[0]] != MSP_NULL_NODE);
+        fB = tB->num_leaves[mB.nodes[0]] / n;
         assert(fB > 0);
         if (mB.position >= tA->left) {
             nAB = ld_calc_overlap_within_tree(self, mA, mB);
         } else {
-            if (!tracked_leaves_set && tB->marked[mA.node] == 1) {
+            if (!tracked_leaves_set && tB->marked[mA.nodes[0]] == 1) {
                 tracked_leaves_set = 1;
                 ret = ld_calc_set_tracked_leaves(self, mA);
                 if (ret != 0) {
@@ -322,7 +322,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
                 }
             }
             if (tracked_leaves_set) {
-                nAB = tB->num_tracked_leaves[mB.node];
+                nAB = tB->num_tracked_leaves[mB.nodes[0]];
             } else {
                 nAB = ld_calc_overlap_within_tree(self, mA, mB);
             }
@@ -405,8 +405,8 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     tB = self->inner_tree;
     mA = self->mutations[a];
     mB = self->mutations[b];
-    assert(tA->parent[mA.node] != MSP_NULL_NODE);
-    fA = tA->num_leaves[mA.node] / n;
+    assert(tA->parent[mA.nodes[0]] != MSP_NULL_NODE);
+    fA = tA->num_leaves[mA.nodes[0]] / n;
     assert(fA > 0);
     ret = ld_calc_set_tracked_leaves(self, mA);
     if (ret != 0) {
@@ -420,10 +420,10 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
         }
         assert(ret == 1);
     }
-    assert(tB->parent[mB.node] != MSP_NULL_NODE);
-    fB = tB->num_leaves[mB.node] / n;
+    assert(tB->parent[mB.nodes[0]] != MSP_NULL_NODE);
+    fB = tB->num_leaves[mB.nodes[0]] / n;
     assert(fB > 0);
-    nAB = tB->num_tracked_leaves[mB.node];
+    nAB = tB->num_tracked_leaves[mB.nodes[0]];
     fAB = nAB / n;
     D = fAB - fA * fB;
     *r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));

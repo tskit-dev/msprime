@@ -100,7 +100,7 @@ tree_sequence_check_state(tree_sequence_t *self)
 void
 tree_sequence_print_state(tree_sequence_t *self, FILE *out)
 {
-    size_t j, k;
+    size_t j, k, l;
 
     fprintf(out, "tree_sequence state\n");
     fprintf(out, "refcount = %d\n", self->refcount);
@@ -149,9 +149,12 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
         for (j = 0; j < self->trees.num_breakpoints; j++) {
             fprintf(out, "\ttree %d\t%f\n", (int) j, self->trees.breakpoints[j]);
             for (k = 0; k < self->mutations.num_tree_mutations[j]; k++) {
-                fprintf(out, "\t\t%f\t%d\n",
-                        self->mutations.tree_mutations[j][k].position,
-                        self->mutations.tree_mutations[j][k].node);
+                fprintf(out, "\t\t%f\t",
+                        self->mutations.tree_mutations[j][k].position);
+                for (l = 0; l < self->mutations.tree_mutations[j][k].num_nodes; l++) {
+                    fprintf(out, "%d,", self->mutations.tree_mutations[j][k].nodes[l]);
+                }
+                fprintf(out, "\n");
             }
         }
     }
@@ -811,7 +814,8 @@ tree_sequence_init_tree_mutations(tree_sequence_t *self)
         mut = &self->mutations.tree_mutations_mem[j];
         mut->index = j;
         mut->position = self->mutations.position[j];
-        mut->node = self->mutations.node[j];
+        mut->num_nodes = 1;
+        mut->nodes[0] = self->mutations.node[j];
         assert(tree_index < self->trees.num_breakpoints - 1);
         while (mut->position >= self->trees.breakpoints[tree_index + 1]) {
             tree_index++;
@@ -1534,9 +1538,10 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     uint32_t *samples, uint32_t num_samples, double *pi)
 {
     int ret = 0;
-    uint32_t j, node;
+    uint32_t j, k, node;
     sparse_tree_t *tree = NULL;
     double result, denom, count;
+    mutation_t *mut;
 
     if (num_samples < 2 || num_samples > self->sample_size) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -1559,9 +1564,12 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     result = 0.0;
     for (ret = sparse_tree_first(tree); ret == 1; ret = sparse_tree_next(tree)) {
         for (j = 0; j < tree->num_mutations; j++) {
-            node = tree->mutations[j].node;
-            count = (double) tree->num_tracked_leaves[node];
-            result += count * (num_samples - count);
+            mut = &tree->mutations[j];
+            for (k = 0; k < mut->num_nodes; k++) {
+                node = mut->nodes[k];
+                count = (double) tree->num_tracked_leaves[node];
+                result += count * (num_samples - count);
+            }
         }
     }
     if (ret != 0) {
@@ -1735,22 +1743,23 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        for (j = 0; j < num_mutations; j++) {
-            mutation_ptrs[j] = mutations + j;
-            if (mutations[j].position < 0
-                    || mutations[j].position >= self->sequence_length
-                    || mutations[j].node == MSP_NULL_NODE
-                    || mutations[j].node >= self->num_nodes) {
-                ret = MSP_ERR_BAD_MUTATION;
-                goto out;
-            }
-        }
+        // FIXME
+        /* for (j = 0; j < num_mutations; j++) { */
+        /*     mutation_ptrs[j] = mutations + j; */
+        /*     if (mutations[j].position < 0 */
+        /*             || mutations[j].position >= self->sequence_length */
+        /*             || mutations[j].node == MSP_NULL_NODE */
+        /*             || mutations[j].node >= self->num_nodes) { */
+        /*         ret = MSP_ERR_BAD_MUTATION; */
+        /*         goto out; */
+        /*     } */
+        /* } */
         /* Mutations are required to be sorted in position order. */
         qsort(mutation_ptrs, num_mutations, sizeof(mutation_t *),
                 cmp_mutation_pointer);
         self->mutations.num_records = num_mutations;
         for (j = 0; j < num_mutations; j++) {
-            self->mutations.node[j] = mutation_ptrs[j]->node;
+            self->mutations.node[j] = mutation_ptrs[j]->nodes[0];
             self->mutations.position[j] = mutation_ptrs[j]->position;
         }
         ret = tree_sequence_init_tree_mutations(self);
@@ -1764,6 +1773,7 @@ out:
         free(mutation_ptrs);
     }
     return ret;
+
 }
 
 /* Compress the node space in the specified set of records and mutations.
@@ -1776,7 +1786,7 @@ tree_sequence_compress_nodes(tree_sequence_t *self, uint32_t *samples, size_t nu
     int ret = MSP_ERR_GENERIC;
     uint32_t *node_map = NULL;
     uint32_t c, next_node;
-    size_t j;
+    size_t j, k;
     coalescence_record_t *cr;
 
     node_map = malloc(self->num_nodes * sizeof(uint32_t));
@@ -1804,8 +1814,10 @@ tree_sequence_compress_nodes(tree_sequence_t *self, uint32_t *samples, size_t nu
         qsort(cr->children, cr->num_children, sizeof(uint32_t), cmp_uint32_t);
     }
     for (j = 0; j < num_mutations; j++) {
-        mutations[j].node = node_map[mutations[j].node];
-        assert(mutations[j].node != MSP_NULL_NODE);
+        for (k = 0; k < mutations[j].num_nodes; k++) {
+            mutations[j].nodes[k] = node_map[mutations[j].nodes[k]];
+            assert(mutations[j].nodes[k] != MSP_NULL_NODE);
+        }
     }
     ret = 0;
 out:
@@ -2068,7 +2080,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
                     assert(num_output_mutations < self->mutations.num_records);
                     mut = &output_mutations[num_output_mutations];
                     num_output_mutations++;
-                    mut->node = mapping[u];
+                    mut->nodes[0] = mapping[u];
                     mut->position = self->mutations.position[l];
                 }
             }
@@ -2926,8 +2938,11 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
     }
     fprintf(out, "mutations = \n");
     for (j = 0; j < self->num_mutations; j++) {
-        fprintf(out, "\t%d @ %f\n", self->mutations[j].node,
-                self->mutations[j].position);
+        fprintf(out, "\t%f\t", self->mutations[j].position);
+        for (k = 0; k < self->mutations[j].num_nodes; k++) {
+            fprintf(out, "%d,", self->mutations[j].nodes[k]);
+        }
+        fprintf(out, "\n");
     }
     sparse_tree_check_state(self);
 }

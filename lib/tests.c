@@ -140,6 +140,84 @@ free_local_records(size_t num_records, coalescence_record_t *records)
     free(records);
 }
 
+/* Simple utility to parse mutations so we can write declaritive
+ * tests. This is not intended as a robust general input mechanism.
+ */
+static void
+parse_text_mutations(const char *text_mutations, size_t *num_mutations,
+        mutation_t **returned_mutations)
+{
+    size_t c, j, k, num_nodes;
+    size_t MAX_LINE = 1024;
+    size_t MAX_MUTATIONS = 1024;
+    char line[MAX_LINE];
+    char sub_line[MAX_LINE];
+    const char *whitespace = " \t";
+    char *p, *q;
+    mutation_t *mutations = NULL;
+
+    mutations = malloc(MAX_MUTATIONS * sizeof(mutation_t));
+    CU_ASSERT_FATAL(mutations != NULL);
+    c = 0;
+    j = 0;
+    while (text_mutations[c] != '\0') {
+        CU_ASSERT_FATAL(j < MAX_MUTATIONS);
+        /* Fill in the line */
+        k = 0;
+        while (text_mutations[c] != '\n' && text_mutations[c] != '\0') {
+            CU_ASSERT_FATAL(k < MAX_LINE - 1);
+            line[k] = text_mutations[c];
+            c++;
+            k++;
+        }
+        if (text_mutations[c] == '\n') {
+            c++;
+        }
+        line[k] = '\0';
+        p = strtok(line, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        mutations[j].position = atof(p);
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        num_nodes = 1;
+        q = p;
+        while (*q != '\0') {
+            if (*q == ',') {
+                num_nodes++;
+            }
+            q++;
+        }
+        CU_ASSERT_FATAL(num_nodes >= 1);
+        mutations[j].nodes = malloc(num_nodes * sizeof(uint32_t));
+        mutations[j].num_nodes = num_nodes;
+        CU_ASSERT_FATAL(mutations[j].nodes != NULL);
+        strncpy(sub_line, p, MAX_LINE);
+        q = strtok(sub_line, ",");
+        for (k = 0; k < num_nodes; k++) {
+            CU_ASSERT_FATAL(q != NULL);
+            mutations[j].nodes[k] = atoi(q);
+            q = strtok(NULL, ",");
+        }
+        CU_ASSERT_FATAL(q == NULL);
+        j++;
+    }
+    *num_mutations = j;
+    *returned_mutations = mutations;
+}
+
+/* Frees mutations locally alloced by (e.g.) parse_text_records function.
+ */
+static void
+free_local_mutations(size_t num_mutations, mutation_t *mutations)
+{
+    size_t j;
+
+    for (j = 0; j < num_mutations; j++) {
+        free(mutations[j].nodes);
+    }
+    free(mutations);
+}
+
 static void
 copy_record(coalescence_record_t *dest, coalescence_record_t *source)
 {
@@ -470,6 +548,57 @@ get_example_tree_sequences(int include_nonbinary)
         }
     }
     return ret;
+}
+
+static void
+test_parse_text_mutations(void)
+{
+
+    const char *case1 =
+        "0.1    0\n"
+        "0.2    1\n"
+        "0.3    3\n"
+        "0.4    4";
+    const char *case2 =
+        "0      0,1\n"
+        "1      2\n"
+        "2      3,4,5,6";
+    mutation_t *mutations;
+    size_t num_mutations;
+
+    parse_text_mutations(case1, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 4);
+    CU_ASSERT_EQUAL(mutations[0].position, 0.1);
+    CU_ASSERT_EQUAL(mutations[0].num_nodes, 1);
+    CU_ASSERT_EQUAL(mutations[0].nodes[0], 0);
+    CU_ASSERT_EQUAL(mutations[1].position, 0.2);
+    CU_ASSERT_EQUAL(mutations[1].num_nodes, 1);
+    CU_ASSERT_EQUAL(mutations[1].nodes[0], 1);
+    CU_ASSERT_EQUAL(mutations[2].position, 0.3);
+    CU_ASSERT_EQUAL(mutations[2].num_nodes, 1);
+    CU_ASSERT_EQUAL(mutations[2].nodes[0], 3);
+    CU_ASSERT_EQUAL(mutations[3].position, 0.4);
+    CU_ASSERT_EQUAL(mutations[3].num_nodes, 1);
+    CU_ASSERT_EQUAL(mutations[3].nodes[0], 4);
+    free_local_mutations(num_mutations, mutations);
+
+    parse_text_mutations(case2, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 3);
+    CU_ASSERT_EQUAL(mutations[0].position, 0);
+    CU_ASSERT_EQUAL(mutations[0].num_nodes, 2);
+    CU_ASSERT_EQUAL(mutations[0].nodes[0], 0);
+    CU_ASSERT_EQUAL(mutations[0].nodes[1], 1);
+    CU_ASSERT_EQUAL(mutations[1].position, 1);
+    CU_ASSERT_EQUAL(mutations[1].num_nodes, 1);
+    CU_ASSERT_EQUAL(mutations[1].nodes[0], 2);
+    CU_ASSERT_EQUAL(mutations[2].position, 2);
+    CU_ASSERT_EQUAL(mutations[2].num_nodes, 4);
+    CU_ASSERT_EQUAL(mutations[2].nodes[0], 3);
+    CU_ASSERT_EQUAL(mutations[2].nodes[1], 4);
+    CU_ASSERT_EQUAL(mutations[2].nodes[2], 5);
+    CU_ASSERT_EQUAL(mutations[2].nodes[3], 6);
+    free_local_mutations(num_mutations, mutations);
+
 }
 
 /* Simple unit tests for the Fenwick tree API. */
@@ -1665,19 +1794,22 @@ test_simplest_non_sample_leaf_records(void)
     coalescence_record_t records[] = {
         {0, 4, 2, 0.0, 1.0, 1.0, c1},
     };
-    mutation_t mutations[] = {
-        {.position=0.1, .node=0},
-        {.position=0.2, .node=1},
-        {.position=0.3, .node=3},
-        {.position=0.4, .node=4},
-    };
+    const char *text_mutations =
+        "0.1    0\n"
+        "0.2    1\n"
+        "0.3    3\n"
+        "0.4    4";
+    mutation_t *mutations;
+    size_t num_mutations;
     tree_sequence_t ts, simplified;
     hapgen_t hapgen;
     vargen_t vargen;
 
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 4);
     ret = tree_sequence_load_records(&ts, 1, records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_set_mutations(&ts, 4, mutations);
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
@@ -1726,6 +1858,7 @@ test_simplest_non_sample_leaf_records(void)
 
     tree_sequence_free(&ts);
     tree_sequence_free(&simplified);
+    free_local_mutations(num_mutations, mutations);
 }
 
 static void
@@ -2038,7 +2171,10 @@ test_single_tree_good_mutations(void)
     CU_ASSERT_FATAL(mutations != NULL);
     for (j = 0; j < num_mutations; j++) {
         mutations[j].position = (double) j;
-        mutations[j].node = (uint32_t) j;
+        mutations[j].nodes = malloc(sizeof(uint32_t));
+        CU_ASSERT_FATAL(mutations[j].nodes != NULL);
+        mutations[j].nodes[0] = (uint32_t) j;
+        mutations[j].num_nodes = 1;
     }
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2056,11 +2192,12 @@ test_single_tree_good_mutations(void)
     for (j = 0; j < num_mutations; j++) {
         CU_ASSERT_EQUAL(other_mutations[j].index, j);
         CU_ASSERT_EQUAL(mutations[j].position, other_mutations[j].position);
-        CU_ASSERT_EQUAL(mutations[j].node, other_mutations[j].node);
+        CU_ASSERT_EQUAL(mutations[j].nodes[0], other_mutations[j].nodes[0]);
+        CU_ASSERT_EQUAL(mutations[j].num_nodes, other_mutations[j].num_nodes);
     }
-    free(mutations);
     tree_sequence_free(&ts);
     free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
 }
 
 static void
@@ -2071,14 +2208,18 @@ test_single_tree_bad_mutations(void)
         "0 1 4 0,1 1.0 0\n"
         "0 1 5 2,3 2.0 0\n"
         "0 1 6 4,5 3.0 0";
+    const char *text_mutations =
+        "0  0\n"
+        "0.1 1";
     coalescence_record_t *records = NULL;
-    mutation_t mutations[] = {{0, 0}, {0, 1}};
-    size_t num_mutations = 2;
-    size_t num_records;
+    mutation_t *mutations = NULL;
+    size_t num_mutations, num_records;
     tree_sequence_t ts;
 
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 3);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 2);
 
     /* negative coordinate */
     mutations[0].position = -1.0;
@@ -2108,22 +2249,22 @@ test_single_tree_bad_mutations(void)
     mutations[0].position = 0.0;
 
     /* node = NULL */
-    mutations[0].node = MSP_NULL_NODE;
+    mutations[0].nodes[0] = MSP_NULL_NODE;
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
     ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
-    mutations[0].node = 0;
+    mutations[0].nodes[0] = 0;
 
     /* node >= num_nodes */
-    mutations[0].node = 7;
+    mutations[0].nodes[0] = 7;
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
     ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
-    mutations[0].node = 0;
+    mutations[0].nodes[0] = 0;
 
     /* Check to make sure we've maintained legal mutations */
     ret = tree_sequence_load_records(&ts, num_records, records);
@@ -2134,6 +2275,7 @@ test_single_tree_bad_mutations(void)
     tree_sequence_free(&ts);
 
     free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
 }
 
 static void
@@ -2476,7 +2618,7 @@ test_single_tree_mutgen(void)
         "0 1 6 4,5 5.0 0";
     mutation_t *mutations, *before, *after;
 
-    size_t j, num_mutations;
+    size_t j, k, num_mutations;
     size_t num_records;
     tree_sequence_t ts;
     coalescence_record_t *records;
@@ -2513,7 +2655,7 @@ test_single_tree_mutgen(void)
     for (j = 0; j < num_mutations; j++) {
         CU_ASSERT_TRUE(mutations[j].position >= 0.0);
         CU_ASSERT_TRUE(mutations[j].position <= 1.0);
-        CU_ASSERT_TRUE(mutations[j].node < 6);
+        CU_ASSERT_TRUE(mutations[j].nodes[0] < 6);
     }
     before = malloc(num_mutations * sizeof(mutation_t));
     CU_ASSERT_FATAL(before != NULL);
@@ -2545,7 +2687,10 @@ test_single_tree_mutgen(void)
     /* before and after should be identical */
     for (j = 0; j < num_mutations; j++) {
         CU_ASSERT_EQUAL(before[j].position, after[j].position);
-        CU_ASSERT_EQUAL(before[j].node, after[j].node);
+        CU_ASSERT_EQUAL(before[j].num_nodes, after[j].num_nodes);
+        for (k = 0; k < before[j].num_nodes; k++) {
+            CU_ASSERT_EQUAL(before[j].nodes[k], after[j].nodes[k]);
+        }
     }
     free(before);
     free(after);
@@ -2560,7 +2705,7 @@ verify_trees(size_t num_records, coalescence_record_t *records,
         size_t num_mutations, mutation_t *mutations)
 {
     int ret;
-    uint32_t u, v, j, k, mutation_index;
+    uint32_t u, v, j, k, l, mutation_index;
     tree_sequence_t ts;
     sparse_tree_t tree;
     mutation_t *tree_mutations;
@@ -2595,7 +2740,11 @@ verify_trees(size_t num_records, coalescence_record_t *records,
             CU_ASSERT_EQUAL(
                 tree_mutations[k].position, mutations[mutation_index].position);
             CU_ASSERT_EQUAL(
-                tree_mutations[k].node, mutations[mutation_index].node);
+                tree_mutations[k].num_nodes, mutations[mutation_index].num_nodes);
+            for (l = 0; l < tree_mutations[k].num_nodes; l++) {
+                CU_ASSERT_EQUAL(
+                    tree_mutations[k].nodes[l], mutations[mutation_index].nodes[l]);
+            }
             mutation_index++;
         }
         j++;
@@ -4135,9 +4284,11 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
             mut = &subset_tree.mutations[j];
             CU_ASSERT(subset_tree.left <= mut->position);
             CU_ASSERT(mut->position < subset_tree.right);
-            ret = sparse_tree_get_parent(&subset_tree, mut->node, &u);
-            CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_FATAL(u != MSP_NULL_NODE);
+            for (k = 0; k < mut->num_nodes; k++) {
+                ret = sparse_tree_get_parent(&subset_tree, mut->nodes[k], &u);
+                CU_ASSERT_EQUAL(ret, 0);
+                CU_ASSERT_FATAL(u != MSP_NULL_NODE);
+            }
             total_mutations++;
         }
         ret = sparse_tree_next(&subset_tree);
@@ -4273,7 +4424,7 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
         int check_provenance_strings)
 {
     int ret, err1, err2;
-    size_t j, nps1, nps2;
+    size_t j, k, nps1, nps2;
     sample_t sample1, sample2;
     coalescence_record_t r1, r2;
     char **ps1, **ps2;
@@ -4326,7 +4477,10 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
         CU_ASSERT_EQUAL(mutations_1[j].index, j);
         CU_ASSERT_EQUAL(mutations_1[j].index, mutations_2[j].index);
         CU_ASSERT_EQUAL(mutations_1[j].position, mutations_2[j].position);
-        CU_ASSERT_EQUAL(mutations_1[j].node, mutations_2[j].node);
+        CU_ASSERT_EQUAL(mutations_1[j].num_nodes, mutations_2[j].num_nodes);
+        for (k = 0; k < mutations_1[j].num_nodes; k++) {
+            CU_ASSERT_EQUAL(mutations_1[j].nodes[k], mutations_2[j].nodes[k]);
+        }
     }
 
     for (j = 0; j < tree_sequence_get_sample_size(ts1); j++) {
@@ -4588,6 +4742,7 @@ main(int argc, char **argv)
 {
     int ret;
     CU_TestInfo tests[] = {
+        {"Parse text mutations", test_parse_text_mutations},
         {"Fenwick tree", test_fenwick},
         {"VCF", test_vcf},
         {"VCF no mutations", test_vcf_no_mutations},

@@ -804,11 +804,12 @@ run_simulate(char *conf_file, char *output_file)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
-            mutgen->mutations);
-    if (ret != 0) {
-        goto out;
-    }
+    mutgen_print_state(mutgen, stdout);
+    /* ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations, */
+    /*         mutgen->mutations); */
+    /* if (ret != 0) { */
+    /*     goto out; */
+    /* } */
     ret = tree_sequence_dump(tree_seq, output_file, 0);
     if (ret != 0) {
         goto out;

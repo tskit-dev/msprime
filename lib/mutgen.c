@@ -25,6 +25,14 @@
 
 #include "err.h"
 #include "msprime.h"
+#include "object_heap.h"
+
+static int
+cmp_mutation(const void *a, const void *b) {
+    const mutation_t *ia = (const mutation_t *) a;
+    const mutation_t *ib = (const mutation_t *) b;
+    return (ia->position > ib->position) - (ia->position < ib->position);
+}
 
 static void
 mutgen_check_state(mutgen_t *self)
@@ -35,7 +43,7 @@ mutgen_check_state(mutgen_t *self)
 void
 mutgen_print_state(mutgen_t *self, FILE *out)
 {
-    size_t j;
+    size_t j, k;
 
     fprintf(out, "Mutgen state\n");
     fprintf(out, "\tmutation_rate = %f\n", (double) self->mutation_rate);
@@ -44,9 +52,15 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     fprintf(out, "\tmax_num_mutations  = %d\n", (int) self->max_num_mutations);
     fprintf(out, "\tMUTATIONS\t%d\n", (int) self->num_mutations);
     for (j = 0; j < self->num_mutations; j++) {
-        fprintf(out, "\t\t%d\t%f\n", self->mutations[j].node,
-            self->mutations[j].position);
+        fprintf(out, "\t%f\t", self->mutations[j].position);
+        for (k = 0; k < self->mutations[j].num_nodes; k++) {
+            fprintf(out, "%d,", self->mutations[j].nodes[k]);
+        }
+        fprintf(out, "\n");
     }
+    fprintf(out, "\tnode_heap  = \n");
+    object_heap_print_state(&self->node_heap, out);
+
     mutgen_check_state(self);
 }
 
@@ -78,6 +92,11 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    ret = object_heap_init(&self->node_heap, sizeof(uint32_t),
+            self->mutation_block_size, NULL);
+    if (ret != 0) {
+        goto out;
+    }
     self->times = calloc(
         tree_sequence_get_num_nodes(tree_sequence) + 1, sizeof(double));
     if (self->times == NULL) {
@@ -104,6 +123,7 @@ mutgen_free(mutgen_t *self)
     if (self->times != NULL) {
         free(self->times);
     }
+    object_heap_free(&self->node_heap);
     return 0;
 }
 
@@ -125,6 +145,7 @@ mutgen_add_mutation(mutgen_t *self, uint32_t node, double position)
 {
     int ret = 0;
     mutation_t *tmp_buffer;
+    uint32_t *p;
 
     assert(self->num_mutations <= self->max_num_mutations);
 
@@ -138,7 +159,16 @@ mutgen_add_mutation(mutgen_t *self, uint32_t node, double position)
         }
         self->mutations = tmp_buffer;
     }
-    self->mutations[self->num_mutations].node = node;
+    if (object_heap_empty(&self->node_heap)) {
+        ret = object_heap_expand(&self->node_heap);
+        if ( ret != 0) {
+            goto out;
+        }
+    }
+    p = (uint32_t *) object_heap_alloc_object(&self->node_heap);
+    self->mutations[self->num_mutations].nodes = p;
+    self->mutations[self->num_mutations].nodes[0] = node;
+    self->mutations[self->num_mutations].num_nodes = 1;
     self->mutations[self->num_mutations].position = position;
     self->num_mutations++;
 out:
@@ -192,6 +222,8 @@ mutgen_generate(mutgen_t *self)
             goto out;
         }
     }
+    qsort(self->mutations, self->num_mutations, sizeof(mutation_t),
+                cmp_mutation);
     ret = 0;
 out:
     return ret;

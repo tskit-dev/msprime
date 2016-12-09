@@ -66,22 +66,25 @@ hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
 }
 
 static int
-hapgen_apply_tree_mutation(hapgen_t *self, mutation_t mut)
+hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
-    int not_done = 1;
+    bool not_done = true;
+    uint32_t j;
 
-    ret = sparse_tree_get_leaf_list(&self->tree, mut.node, &w, &tail);
-    if (ret != 0) {
-        goto out;
-    }
-    if (w != NULL) {
-        while (not_done) {
-            assert(w != NULL);
-            hapgen_set_bit(self, w->node, mut.index);
-            not_done = w != tail;
-            w = w->next;
+    for (j = 0; j < mut->num_nodes; j++) {
+        ret = sparse_tree_get_leaf_list(&self->tree, mut->nodes[j], &w, &tail);
+        if (ret != 0) {
+            goto out;
+        }
+        if (w != NULL) {
+            while (not_done) {
+                assert(w != NULL);
+                hapgen_set_bit(self, w->node, mut->index);
+                not_done = w != tail;
+                w = w->next;
+            }
         }
     }
 out:
@@ -97,7 +100,7 @@ hapgen_generate_all_haplotypes(hapgen_t *self)
 
     for (ret = sparse_tree_first(t); ret == 1; ret = sparse_tree_next(t)) {
         for (j = 0; j < t->num_mutations; j++) {
-            ret = hapgen_apply_tree_mutation(self, t->mutations[j]);
+            ret = hapgen_apply_tree_mutation(self, &t->mutations[j]);
             if (ret != 0) {
                 goto out;
             }

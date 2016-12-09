@@ -247,8 +247,10 @@ typedef struct {
 
 typedef struct {
     double position;
-    uint32_t node;
+    /* uint32_t node; */
     size_t index;
+    uint32_t num_nodes;
+    uint32_t *nodes;
 } mutation_t;
 
 /* Tree sequences */
@@ -456,6 +458,7 @@ typedef struct {
     size_t max_num_mutations;
     size_t mutation_block_size;
     mutation_t *mutations;
+    object_heap_t node_heap;
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
