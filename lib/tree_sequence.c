@@ -126,6 +126,7 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
                 (int) self->trees.indexes.removal_order[j]);
     }
     fprintf(out, "mutations = (%d records)\n", (int) self->mutations.num_records);
+    fprintf(out, "\ttotal_nodes = %d\n", (int) self->mutations.total_nodes);
     for (j = 0; j < self->mutations.num_records; j++) {
         fprintf(out, "\t%d\t%f\t", (int) j, self->mutations.position[j]);
         for (k = 0; k < self->mutations.num_nodes[j]; k++) {
@@ -924,8 +925,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
 
-    for (j = 0; j < 2; j++) {
-        fields[j].size = self->mutations.num_records;
+    for (j = 0; j < 3; j++) {
         fields[j].required = self->mutations.num_records > 0;
     }
     for (j = 0; j < num_fields; j++) {
@@ -960,6 +960,12 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
                 goto out;
             }
         }
+    }
+    /* Make sure that the total number of nodes makes sense */
+    if (self->mutations.total_nodes < self->mutations.num_records
+            || self->trees.total_child_nodes < self->trees.num_records) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
     }
     ret = 0;
 out:
@@ -1004,6 +1010,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     self->mutations.num_records = 0;
     if (exists) {
         fields[0].included = 1;
+        fields[1].included = 1;
     }
     /* check if provenance exists */
     exists = H5Lexists(file_id, "/provenance", H5P_DEFAULT);
@@ -1012,7 +1019,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     }
     self->num_provenance_strings = 0;
     if (exists) {
-        fields[1].included = 1;
+        fields[2].included = 1;
     }
     for (j = 0; j < num_fields; j++) {
         if (fields[j].included) {
@@ -1110,6 +1117,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     if (self->mutations.num_records == 0) {
         fields[1].empty = 1;
         fields[2].empty = 1;
+        fields[3].empty = 1;
     }
     for (j = 0; j < num_fields; j++) {
         /* Skip any non-required fields that are missing. */
@@ -1827,6 +1835,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     uint32_t *mapping = NULL;
     uint32_t *mapped_children = NULL;
     uint32_t *mapped_children_mem = NULL;
+    uint32_t *output_mutations_nodes_mem = NULL;
     sample_t *sample_objects = NULL;
     active_record_t *active_records = NULL;
     coalescence_record_t *output_records = NULL;
@@ -1835,7 +1844,8 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     uint32_t *O = self->trees.indexes.removal_order;
     size_t M = self->trees.num_records;
     size_t j, k, h, next_avl_node, mapped_children_mem_offset, num_output_records,
-           num_output_mutations, max_num_child_nodes, max_num_records;
+           num_output_mutations, max_num_child_nodes, max_num_records,
+           output_mutations_mem_offset;
     uint32_t u, v, w, x, c, l, num_mapped_children;
     avl_tree_t visited_nodes;
     avl_node_t *avl_node_mem = NULL;
@@ -1867,12 +1877,14 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     mapped_children_mem = malloc(max_num_child_nodes * sizeof(uint32_t));
     output_records = malloc(max_num_records * sizeof(coalescence_record_t));
     output_mutations = malloc(self->mutations.num_records * sizeof(mutation_t));
+    output_mutations_nodes_mem = malloc(self->mutations.total_nodes *
+            sizeof(uint32_t));
     if (parent == NULL || children == NULL || num_children == NULL
             || mapping == NULL || sample_objects == NULL
             || avl_node_mem == NULL || avl_node_value_mem == NULL
             || mapped_children == NULL || active_records == NULL
             || mapped_children_mem == NULL || output_records == NULL
-            || output_mutations == NULL) {
+            || output_mutations == NULL || output_mutations_nodes_mem == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -1902,6 +1914,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     }
     avl_init_tree(&visited_nodes, cmp_uint32_t, NULL);
     mapped_children_mem_offset = 0;
+    output_mutations_mem_offset = 0;
     num_output_records = 0;
     num_output_mutations = 0;
 
@@ -2046,7 +2059,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
         /* Update the mutations for this tree */
         right = self->trees.breakpoints[self->trees.records.right[O[k]]];
         while (l < self->mutations.num_records && self->mutations.position[l] < right) {
-            // FIXME for multiple mutaitons
+            assert(self->mutations.num_nodes[l] == 1);
             u = self->mutations.nodes[l][0];
             if (mapping[u] != MSP_NULL_NODE) {
                 keep = true;
@@ -2063,8 +2076,12 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
                     assert(num_output_mutations < self->mutations.num_records);
                     mut = &output_mutations[num_output_mutations];
                     num_output_mutations++;
+                    assert(output_mutations_mem_offset < self->mutations.total_nodes);
+                    mut->nodes = output_mutations_nodes_mem + output_mutations_mem_offset;
                     mut->nodes[0] = mapping[u];
+                    mut->num_nodes = 1;
                     mut->position = self->mutations.position[l];
+                    output_mutations_mem_offset++;
                 }
             }
             l++;
@@ -2156,6 +2173,9 @@ out:
     }
     if (output_mutations != NULL) {
         free(output_mutations);
+    }
+    if (output_mutations_nodes_mem != NULL) {
+        free(output_mutations_nodes_mem);
     }
     return ret;
 }

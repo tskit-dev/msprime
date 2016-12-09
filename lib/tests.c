@@ -1736,7 +1736,6 @@ test_simplest_non_sample_leaf_records(void)
     hapgen_t hapgen;
     vargen_t vargen;
 
-    CU_ASSERT_EQUAL_FATAL(0, 4);
     parse_text_mutations(text_mutations, &num_mutations, &mutations);
     CU_ASSERT_EQUAL_FATAL(num_mutations, 4);
     ret = tree_sequence_load_records(&ts, 1, records);
@@ -1862,11 +1861,16 @@ test_simplest_root_mutations(void)
     coalescence_record_t records[] = {
         {0, 2, 2, 0.0, 1.0, 1.0, c1},
     };
-    mutation_t mutations[] = {{0.1, 2, 0}};
+    const char *text_mutations = "0.1    2";
+    mutation_t *mutations;
+    size_t num_mutations;
     hapgen_t hapgen;
     char *haplotype;
     int flags = 0;
     tree_sequence_t ts, simplified;
+
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 1);
 
     ret = tree_sequence_load_records(&ts, 1, records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1888,7 +1892,6 @@ test_simplest_root_mutations(void)
     }
     hapgen_free(&hapgen);
 
-    CU_ASSERT_EQUAL_FATAL(0, 1);
     ret = tree_sequence_simplify(&ts, samples, 2, flags, &simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
@@ -1909,6 +1912,7 @@ test_simplest_root_mutations(void)
     tree_sequence_free(&simplified);
 
     tree_sequence_free(&ts);
+    free_local_mutations(num_mutations, mutations);
 }
 
 static void
@@ -2434,18 +2438,22 @@ test_single_tree_hapgen(void)
         "0 1 4 0,1 1.0 0\n"
         "0 1 5 2,3 4.0 0\n"
         "0 1 6 4,5 5.0 0";
-    mutation_t mutations[] = {{0, 0}, {0, 1}};
+    const char *text_mutations =
+        "0  0\n"
+        "0.1 1";
     size_t sample_size = 4;
-    size_t num_mutations = 2;
     char *haplotype;
     size_t j;
-    size_t num_records;
+    size_t num_records, num_mutations;
     tree_sequence_t ts;
     coalescence_record_t *records;
+    mutation_t *mutations;
     hapgen_t hapgen;
 
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 3);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 2);
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -2484,6 +2492,7 @@ test_single_tree_hapgen(void)
 
     tree_sequence_free(&ts);
     free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
 }
 
 static void
@@ -2496,18 +2505,25 @@ test_single_unary_tree_hapgen(void)
         "0 1 4 2,3 2.0 0\n"
         "0 1 5 4   3.0 0\n"
         "0 1 6 5   4.0 0";
-    mutation_t mutations[] = {{0, 0}, {0.1, 1}, {0.2, 4}, {0.2, 5}};
+    /* mutation_t mutations[] = {{0, 0}, {0.1, 1}, {0.2, 4}, {0.2, 5}}; */
+    const char *text_mutations =
+        "0      0\n"
+        "0.1    1\n"
+        "0.2    4\n"
+        "0.3    5\n";
     size_t sample_size = 2;
-    size_t num_mutations = 4;
     char *haplotype;
     size_t j;
-    size_t num_records;
+    size_t num_records, num_mutations;
     tree_sequence_t ts;
     coalescence_record_t *records;
+    mutation_t *mutations;
     hapgen_t hapgen;
 
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 5);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 4);
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -2540,6 +2556,7 @@ test_single_unary_tree_hapgen(void)
 
     tree_sequence_free(&ts);
     free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
 }
 
 static void
@@ -2618,7 +2635,6 @@ test_single_tree_mutgen(void)
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    CU_ASSERT_EQUAL_FATAL(0, 1);
     /* before and after should be identical */
     for (j = 0; j < num_mutations; j++) {
         CU_ASSERT_EQUAL(before[j].position, after[j].position);
@@ -2835,23 +2851,29 @@ test_tree_sequence_iter(void)
         "7 10 7 0,5 0.202 0\n"
         "0 2  8 2,6 0.253 0";
     /* We make one mutation for each tree */
-    mutation_t mutations[] = {{1, 2}, {4.5, 0}, {8.5, 5}};
+    const char *text_mutations =
+        "1      2\n"
+        "4.5    0\n"
+        "8.5    5\n";
     uint32_t parents[] = {
         6, 5, 8, 5, MSP_NULL_NODE, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
         6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
         7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
     };
-    size_t num_records;
+    size_t num_records, num_mutations;
     uint32_t num_nodes = 9;
     uint32_t num_trees = 3;
-    uint32_t num_mutations = 3;
     coalescence_record_t *records;
+    mutation_t *mutations;
 
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 6);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 3);
     verify_trees(num_records, records, num_trees, num_nodes, parents,
             num_mutations, mutations);
     free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
 }
 
 static void
@@ -2867,23 +2889,29 @@ test_unary_tree_sequence_iter(void)
         "0 2  8 6,7 0.253 0\n"
         "2 7  8 6   0.253 0";
     /* We make one mutation for each tree, over unary nodes if this exist */
-    mutation_t mutations[] = {{1.0, 2}, {4.5, 6}, {8.5, 5}};
+    const char *text_mutations =
+        "1.0    2\n"
+        "4.5    6\n"
+        "8.5    5\n";
     uint32_t parents[] = {
         6, 5, 7, 5, MSP_NULL_NODE, 6, 8, 8, MSP_NULL_NODE,
         6, 5, 4, 4, 5, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
         7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
     };
-    size_t num_records;
+    size_t num_records, num_mutations;
     uint32_t num_nodes = 9;
     uint32_t num_trees = 3;
-    uint32_t num_mutations = 3;
     coalescence_record_t *records;
+    mutation_t *mutations;
 
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 8);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 3);
     verify_trees(num_records, records, num_trees, num_nodes, parents,
             num_mutations, mutations);
     free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
 }
 
 static void
@@ -2898,22 +2926,27 @@ test_nonbinary_tree_sequence_iter(void)
         "0	17	12	9,10	0.405   0\n"
         "17	100	12	10,11	0.405   0";
     /* We make one mutation for each tree */
-    mutation_t mutations[] = {{1, 2}, {18, 11}};
+    const char *text_mutations =
+        "1.0    2\n"
+        "18     11";
     uint32_t parents[] = {
         8, 8, 8, 8, 10, 10, 9, 10, 9, 12, 12, MSP_NULL_NODE, MSP_NULL_NODE,
         8, 8, 8, 8, 10, 11, 9, 10, 9, 11, 12, 12, MSP_NULL_NODE,
     };
     uint32_t num_nodes = 13;
     uint32_t num_trees = 2;
-    uint32_t num_mutations = 2;
-    size_t num_records;
+    size_t num_records, num_mutations;
     coalescence_record_t *records;
+    mutation_t *mutations;
 
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 7);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 2);
     verify_trees(num_records, records, num_trees, num_nodes, parents,
             num_mutations, mutations);
     free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
 }
 
 static void
@@ -2927,83 +2960,29 @@ test_left_to_right_tree_sequence_iter(void)
         "7 10 8 0,4 0.202 0\n"
         "0 2  6 2,5 0.253 0";
     /* We make one mutation for each tree */
-    mutation_t mutations[] = {{1, 2}, {4.5, 0}, {8.5, 4}};
+    const char *text_mutations =
+        "1.0    2\n"
+        "4.5    0\n"
+        "8.5    4\n";
     uint32_t parents[] = {
         5, 4, 6, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
         5, 4, 7, 7, 5, MSP_NULL_NODE, MSP_NULL_NODE, 4, MSP_NULL_NODE,
         8, 4, 7, 7, 8, MSP_NULL_NODE, MSP_NULL_NODE, 4, MSP_NULL_NODE,
     };
-    size_t num_records;
+    size_t num_records, num_mutations;
     uint32_t num_nodes = 9;
     uint32_t num_trees = 3;
-    uint32_t num_mutations = 3;
     coalescence_record_t *records;
+    mutation_t *mutations;
 
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 6);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 3);
     verify_trees(num_records, records, num_trees, num_nodes, parents,
             num_mutations, mutations);
     free_local_records(num_records, records);
-}
-
-static void
-test_tree_sequence_set_mutations(void)
-{
-    const char * text_records =
-        "2 10 4 2,3 0.071 0\n"
-        "0 2  5 1,3 0.090 0\n"
-        "2 10 5 1,4 0.090 0\n"
-        "0 7  6 0,5 0.170 0\n"
-        "7 10 7 0,5 0.202 0\n"
-        "0 2  8 2,6 0.253 0";
-    /* We make one mutation for each tree */
-    mutation_t mutations[] = {{1, 2}, {4.5, 0}, {8.5, 5}};
-    tree_sequence_t ts;
-    size_t j;
-    const size_t num_trees = 3;
-    size_t num_records;
-    uint32_t num_mutations = 3;
-    coalescence_record_t *records;
-    sparse_tree_t trees[num_trees];
-    int ret;
-
-    CU_ASSERT_EQUAL_FATAL(0, 1);
-    parse_text_records(text_records, &num_records, &records);
-    CU_ASSERT_EQUAL_FATAL(num_records, 6);
-
-    ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_set_mutations(&ts, 1, mutations);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 1);
-    ret = tree_sequence_set_mutations(&ts, 0, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
-    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), num_mutations);
-
-    for (j = 0; j < num_trees; j++) {
-        ret = sparse_tree_alloc(&trees[j], &ts, 0);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL(ts.refcount, j + 1);
-        ret = tree_sequence_set_mutations(&ts, 1, mutations);
-        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_REFCOUNT_NONZERO);
-
-    }
-    for (j = 0; j < num_trees; j++) {
-        ret = tree_sequence_set_mutations(&ts, 1, mutations);
-        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_REFCOUNT_NONZERO);
-        ret = sparse_tree_free(&trees[j]);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL(ts.refcount, num_trees - j - 1);
-    }
-    ret = tree_sequence_set_mutations(&ts, 1, mutations);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 1);
-
-    tree_sequence_free(&ts);
-    free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
 }
 
 typedef struct {
@@ -4297,7 +4276,6 @@ test_simplify_from_examples(void)
     tree_sequence_t **examples = get_example_tree_sequences(1);
     uint32_t j;
 
-    CU_ASSERT_EQUAL_FATAL(0, 1);
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         verify_simplify(examples[j]);
@@ -4503,7 +4481,6 @@ test_save_records_hdf5(void)
     mutation_t *mutations;
     tree_sequence_t *ts1, ts2, ts3, **examples;
 
-    CU_ASSERT_FATAL(0 == 1);
     examples = get_example_tree_sequences(1);
     for (k = 0; examples[k] != NULL; k++) {
         ts1 = examples[k];
@@ -4692,7 +4669,7 @@ main(int argc, char **argv)
         {"simplest_records", test_simplest_records},
         {"simplest_nonbinary_records", test_simplest_nonbinary_records},
         {"simplest_unary_records", test_simplest_unary_records},
-        {"simplest_non-sample_leaf_records", test_simplest_non_sample_leaf_records},
+        {"simplest_non_sample_leaf_records", test_simplest_non_sample_leaf_records},
         {"simplest_degenerate_multiple_root_records",
             test_simplest_degenerate_multiple_root_records},
         {"simplest_multiple_root_records", test_simplest_multiple_root_records},
@@ -4716,10 +4693,9 @@ main(int argc, char **argv)
         {"nonbinary_leaf_sets", test_nonbinary_leaf_sets},
         {"tree_nonbinary_sequence_iterator", test_nonbinary_tree_sequence_iter},
         {"tree_unary_sequence_iterator", test_unary_tree_sequence_iter},
-        {"left-to-right_tree_sequence_iterator",
+        {"left_to_right_tree_sequence_iterator",
             test_left_to_right_tree_sequence_iter},
         {"tree_sequence_bad_records", test_tree_sequence_bad_records},
-        {"set_mutations", test_tree_sequence_set_mutations},
         {"tree_sequence_diff_iter", test_tree_sequence_diff_iter},
         {"nonbinary_tree_sequence_diff_iter",
             test_nonbinary_tree_sequence_diff_iter},
