@@ -265,6 +265,8 @@ typedef struct {
             double *time;
             uint32_t *population;
         } nodes;
+        size_t num_nodes;
+        size_t total_child_nodes;
         struct {
             uint32_t *left;
             uint32_t *right;
@@ -299,9 +301,6 @@ typedef struct {
     } migrations;
     char **provenance_strings;
     size_t num_provenance_strings;
-    size_t num_nodes;
-    size_t num_child_nodes;
-    coalescence_record_t returned_record;
     /* The number of trees referencing this tree sequence.
      * This is NOT threadsafe! TODO when we want to have trees
      * in many threads referencing a single tree sequence we will
