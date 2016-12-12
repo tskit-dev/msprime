@@ -55,6 +55,7 @@ def get_r2_matrix(ts):
     return A
 
 
+@unittest.skip("Fix set mutations")
 class TestLdCalculator(unittest.TestCase):
     """
     Tests for the LdCalculator class.

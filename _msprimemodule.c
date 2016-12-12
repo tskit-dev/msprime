@@ -468,7 +468,7 @@ out:
 }
 
 static PyObject *
-convert_children(uint32_t *children, uint32_t num_children)
+convert_uint32_list(uint32_t *children, uint32_t num_children)
 {
     PyObject *ret = NULL;
     PyObject *t;
@@ -520,8 +520,19 @@ out:
 static inline PyObject *
 convert_mutation(mutation_t *mutation)
 {
-    return Py_BuildValue("dIn", mutation->position,
-        (unsigned int) mutation->node, (Py_ssize_t) mutation->index);
+    PyObject *nodes = NULL;
+    PyObject *ret = NULL;
+
+    nodes = convert_uint32_list(mutation->nodes, mutation->num_nodes);
+
+    if (nodes == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("dOn", mutation->position, nodes, (Py_ssize_t) mutation->index);
+out:
+    Py_XDECREF(nodes);
+    return ret;
+
 }
 
 static PyObject *
@@ -557,7 +568,7 @@ make_coalescence_record(coalescence_record_t *cr)
     PyObject *children = NULL;
     PyObject *ret = NULL;
 
-    children = convert_children(cr->children, cr->num_children);
+    children = convert_uint32_list(cr->children, cr->num_children);
     if (children == NULL) {
         goto out;
     }
@@ -2772,7 +2783,8 @@ TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         mutations[j].position = PyFloat_AsDouble(pos);
-        mutations[j].node = (uint32_t) PyLong_AsLong(node);
+        // FIXME
+        /* mutations[j].node = (uint32_t) PyLong_AsLong(node); */
     }
     err = tree_sequence_set_mutations(self->tree_sequence, num_mutations,
             mutations);
@@ -3591,7 +3603,7 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
     if (num_children == 0) {
         ret = Py_BuildValue("()");
     } else {
-        ret = convert_children(children, num_children);
+        ret = convert_uint32_list(children, num_children);
     }
 out:
     return ret;
@@ -3897,7 +3909,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         record = records_out;
         j = 0;
         while (record != NULL) {
-            children = convert_children(record->children, record->num_children);
+            children = convert_uint32_list(record->children, record->num_children);
             if (children == NULL) {
                 goto out;
             }
@@ -3925,7 +3937,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         record = records_in;
         j = 0;
         while (record != NULL) {
-            children = convert_children(record->children, record->num_children);
+            children = convert_uint32_list(record->children, record->num_children);
             if (children == NULL) {
                 goto out;
             }

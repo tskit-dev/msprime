@@ -69,12 +69,12 @@ MigrationRecord = collections.namedtuple(
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["position", "node", "index"])
+    ["position", "nodes", "index"])
 
 
 Variant = collections.namedtuple(
     "Variant",
-    ["position", "node", "index", "genotypes"])
+    ["position", "nodes", "index", "genotypes"])
 
 
 Sample = collections.namedtuple(
