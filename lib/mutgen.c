@@ -27,6 +27,7 @@
 #include "msprime.h"
 #include "object_heap.h"
 
+
 static int
 cmp_mutation(const void *a, const void *b) {
     const mutation_t *ia = (const mutation_t *) a;
@@ -47,10 +48,12 @@ mutgen_print_state(mutgen_t *self, FILE *out)
 
     fprintf(out, "Mutgen state\n");
     fprintf(out, "\tmutation_rate = %f\n", (double) self->mutation_rate);
-    fprintf(out, "\tsequence_length = %f\n", (double) self->sequence_length);
     fprintf(out, "\tmutation_block_size = %d\n", (int) self->mutation_block_size);
     fprintf(out, "\tmax_num_mutations  = %d\n", (int) self->max_num_mutations);
-    fprintf(out, "\tMUTATIONS\t%d\n", (int) self->num_mutations);
+    fprintf(out, "\tmax_num_times  = %d\n", (int) self->max_num_times);
+    fprintf(out, "\tnode_heap  = \n");
+    object_heap_print_state(&self->node_heap, out);
+    fprintf(out, "mutations\t%d\n", (int) self->num_mutations);
     for (j = 0; j < self->num_mutations; j++) {
         fprintf(out, "\t%f\t", self->mutations[j].position);
         for (k = 0; k < self->mutations[j].num_nodes; k++) {
@@ -58,27 +61,18 @@ mutgen_print_state(mutgen_t *self, FILE *out)
         }
         fprintf(out, "\n");
     }
-    fprintf(out, "\tnode_heap  = \n");
-    object_heap_print_state(&self->node_heap, out);
-
     mutgen_check_state(self);
 }
 
 
 int WARN_UNUSED
-mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
-        double mutation_rate, gsl_rng *rng)
+mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng)
 {
     int ret = MSP_ERR_NO_MEMORY;
-    uint32_t j;
-    sample_t sample;
 
-    assert(tree_sequence != NULL);
     assert(rng != NULL);
     memset(self, 0, sizeof(mutgen_t));
     self->mutation_rate = mutation_rate;
-    self->tree_sequence = tree_sequence;
-    self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->rng = rng;
     self->num_mutations = 0;
     self->mutation_block_size = 1024 * 1024;
@@ -86,9 +80,11 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
      * by mallocing enough space for 1 mutation initiall. This gives the user
      * control over the overall malloc behavior.
      */
+    self->max_num_times = 1;
     self->max_num_mutations = 1;
-    self->mutations = malloc(sizeof(mutation_t));
-    if (self->mutations == NULL) {
+    self->mutations = malloc(self->max_num_mutations * sizeof(mutation_t));
+    self->times = malloc(self->max_num_times * sizeof(double));
+    if (self->mutations == NULL || self->times == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -96,19 +92,6 @@ mutgen_alloc(mutgen_t *self, tree_sequence_t *tree_sequence,
             self->mutation_block_size, NULL);
     if (ret != 0) {
         goto out;
-    }
-    self->times = calloc(
-        tree_sequence_get_num_nodes(tree_sequence) + 1, sizeof(double));
-    if (self->times == NULL) {
-        goto out;
-    }
-    /* Set the initial times for samples */
-    for (j = 0; j < tree_sequence_get_sample_size(tree_sequence); j++) {
-        ret = tree_sequence_get_sample(tree_sequence, j, &sample);
-        if (ret != 0) {
-            goto out;
-        }
-        self->times[j] = sample.time;
     }
 out:
     return ret;
@@ -205,25 +188,53 @@ out:
 }
 
 int WARN_UNUSED
-mutgen_generate(mutgen_t *self)
+mutgen_generate(mutgen_t *self, msp_t *sim)
 {
     int ret = -1;
-    tree_sequence_t *ts = self->tree_sequence;
-    coalescence_record_t cr;
+    coalescence_record_t *records;
+    sample_t *samples;
+    double *tmp_buffer = NULL;
+    size_t num_records, num_samples;
     size_t j;
 
-    for (j = 0; j < tree_sequence_get_num_coalescence_records(ts); j++) {
-        ret = tree_sequence_get_coalescence_record(ts, j, &cr, MSP_ORDER_TIME);
-        if (ret != 0) {
+    assert(sim != NULL);
+    /* First free up any memory used in previous calls */
+    for (j = 0; j < self->num_mutations; j++) {
+        object_heap_free_object(&self->node_heap, self->mutations[j].nodes);
+    }
+    self->num_mutations = 0;
+
+    num_records = msp_get_num_coalescence_records(sim);
+    num_samples = msp_get_sample_size(sim);
+    ret = msp_get_coalescence_records(sim, &records);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_get_samples(sim, &samples);
+    if (ret != 0) {
+        goto out;
+    }
+    if (records[num_records - 1].node >= self->max_num_times) {
+        self->max_num_times = records[num_records - 1].node + 1;
+        /* Grow the times array */
+        tmp_buffer = realloc(self->times, self->max_num_times * sizeof(double));
+        if (tmp_buffer == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        ret = mutgen_generate_record_mutations(self, &cr);
+        self->times = tmp_buffer;
+    }
+    /* Set the times for the samples */
+    for (j = 0; j < num_samples; j++) {
+        self->times[j] = samples[j].time;
+    }
+    for (j = 0; j < num_records; j++) {
+        ret = mutgen_generate_record_mutations(self, &records[j]);
         if (ret != 0) {
             goto out;
         }
     }
-    qsort(self->mutations, self->num_mutations, sizeof(mutation_t),
-                cmp_mutation);
+    qsort(self->mutations, self->num_mutations, sizeof(mutation_t), cmp_mutation);
     ret = 0;
 out:
     return ret;
@@ -241,4 +252,3 @@ mutgen_get_mutations(mutgen_t *self, mutation_t **mutations)
     *mutations = self->mutations;
     return 0;
 }
-

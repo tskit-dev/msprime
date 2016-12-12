@@ -13,7 +13,9 @@ HEADERS=msprime.h err.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
     hapgen.o recomb_map.o mutgen.o vargen.o vcf.o avl.o ld.o
 
-all: main tests
+# all: main tests
+# TMP disable test for now
+all: main 
 
 # We need a seperate rule for avl.c as it won't pass the strict checks.
 avl.o: avl.c
@@ -30,7 +32,7 @@ tests: tests.c ${COMPILED} ${HEADERS}
 	${CC} ${CFLAGS} -Wall -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit 
 
 tags:
-	etags *.c *.h 
+	etags *
 
 clean:
 	rm -f main tests *.o *.gcda *.gcno

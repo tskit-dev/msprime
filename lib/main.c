@@ -724,8 +724,7 @@ static void
 run_simulate(char *conf_file, char *output_file)
 {
     int ret = -1;
-    int result, j;
-    double start_time, end_time;
+    int j;
     mutation_params_t mutation_params;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     msp_t *msp = calloc(1, sizeof(msp_t));
@@ -742,87 +741,50 @@ run_simulate(char *conf_file, char *output_file)
     if (ret != 0) {
         goto out;
     }
+    ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng);
+    if (ret != 0) {
+        goto out;
+    }
     ret = msp_initialise(msp);
     if (ret != 0) {
         goto out;
     }
-    if (0) {
-        /* recomb_map_print_state(recomb_map); */
-        start_time = 0;
-        do {
-
-            ret = msp_debug_demography(msp, &end_time);
-            printf("interval %f - %f\n", start_time, end_time);
-            msp_print_state(msp, stdout);
-            start_time = end_time;
-        } while (! gsl_isinf(end_time));
-        if (ret != 0) {
-            goto out;
-        }
+    for (j = 0; j < 10; j++) {
         ret = msp_reset(msp);
         if (ret != 0) {
             goto out;
         }
-    }
-    for (j = 0; j < 1; j++) {
-        ret = msp_reset(msp);
-        if (ret != 0) {
+        ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+        if (ret < 0) {
             goto out;
         }
-        printf("Simulation run %d::\n", j);
-        result = 1;
-        while (result == 1) {
-            result = msp_run(msp, DBL_MAX, 1);
-            if (result < 0) {
-                ret = result;
-                goto out;
-            }
-            msp_verify(msp);
-            /* ret = msp_print_state(msp, stdout); */
-        }
+        msp_verify(msp);
         ret = msp_print_state(msp, stdout);
         if (ret != 0) {
             goto out;
         }
+        /* Create the tree_sequence from the state of the simulator.
+         * We want to use coalescent time here, so use an Ne of 1/4
+         * to cancel scaling factor. */
+        ret = msp_get_tree_sequence(msp, NULL, mutgen, 0.25, 0, NULL, tree_seq);
+        if (ret != 0) {
+            goto out;
+        }
+        mutgen_print_state(mutgen, stdout);
+        /* ret = tree_sequence_dump(tree_seq, output_file, 0); */
+        /* if (ret != 0) { */
+        /*     goto out; */
+        /* } */
+        /* printf("================\n"); */
+        tree_sequence_print_state(tree_seq, stdout);
+        tree_sequence_free(tree_seq);
     }
-    /* Create the tree_sequence from the state of the simulator.
-     * We want to use coalescent time here, so use an Ne of 1/4
-     * to cancel scaling factor. */
-    ret = tree_sequence_create(tree_seq, msp, recomb_map, 0.25);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_add_provenance_string(tree_seq, "Tree Provenance!!!");
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutgen_generate(mutgen);
-    if (ret != 0) {
-        goto out;
-    }
-    mutgen_print_state(mutgen, stdout);
-    ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
-            mutgen->mutations);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_dump(tree_seq, output_file, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    printf("================\n");
-    tree_sequence_print_state(tree_seq, stdout);
 out:
     if (msp != NULL) {
         msp_free(msp);
         free(msp);
     }
     if (tree_seq != NULL) {
-        tree_sequence_free(tree_seq);
         free(tree_seq);
     }
     if (recomb_map != NULL) {
