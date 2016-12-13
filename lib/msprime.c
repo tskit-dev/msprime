@@ -2611,32 +2611,12 @@ msp_get_tree_sequence(msp_t *self, recomb_map_t *recomb_map, mutgen_t *mutgen,
         double Ne, size_t num_provenance_strings, const char **provenance_strings,
         tree_sequence_t *tree_sequence)
 {
-    int ret = MSP_ERR_GENERIC;
-    mutation_t *mutations = NULL;
-    size_t num_mutations = 0;
-
-    /* Cannot do this here. We must rescale the coordinates to Physical units
-     * BEFORE generating the mutations. */
-    if (mutgen != NULL) {
-        ret = mutgen_generate(mutgen, self);
-        if (ret != 0) {
-            goto out;
-        }
-        num_mutations = mutgen_get_num_mutations(mutgen);
-        ret = mutgen_get_mutations(mutgen, &mutations);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    ret = tree_sequence_init_rescale(tree_sequence,
+    return tree_sequence_init_rescale(tree_sequence,
         self->sample_size, self->samples,
         self->num_coalescence_records, self->coalescence_records,
-        num_mutations, mutations,
         self->num_migration_records, self->migration_records,
         num_provenance_strings, provenance_strings,
-        recomb_map, Ne);
-out:
-    return ret;
+        recomb_map, Ne, mutgen);
 }
 
 /* Demographic events */

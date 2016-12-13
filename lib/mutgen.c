@@ -50,7 +50,6 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     fprintf(out, "\tmutation_rate = %f\n", (double) self->mutation_rate);
     fprintf(out, "\tmutation_block_size = %d\n", (int) self->mutation_block_size);
     fprintf(out, "\tmax_num_mutations  = %d\n", (int) self->max_num_mutations);
-    fprintf(out, "\tmax_num_times  = %d\n", (int) self->max_num_times);
     fprintf(out, "\tnode_heap  = \n");
     object_heap_print_state(&self->node_heap, out);
     fprintf(out, "mutations\t%d\n", (int) self->num_mutations);
@@ -80,11 +79,9 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng)
      * by mallocing enough space for 1 mutation initiall. This gives the user
      * control over the overall malloc behavior.
      */
-    self->max_num_times = 1;
     self->max_num_mutations = 1;
     self->mutations = malloc(self->max_num_mutations * sizeof(mutation_t));
-    self->times = malloc(self->max_num_times * sizeof(double));
-    if (self->mutations == NULL || self->times == NULL) {
+    if (self->mutations == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -102,9 +99,6 @@ mutgen_free(mutgen_t *self)
 {
     if (self->mutations != NULL) {
         free(self->mutations);
-    }
-    if (self->times != NULL) {
-        free(self->times);
     }
     object_heap_free(&self->node_heap);
     return 0;
@@ -159,18 +153,22 @@ out:
 }
 
 static int WARN_UNUSED
-mutgen_generate_record_mutations(mutgen_t *self, coalescence_record_t *cr)
+mutgen_generate_record_mutations(mutgen_t *self, tree_sequence_t *ts,
+        coalescence_record_t *cr)
 {
     int ret = -1;
     size_t k, l, branch_mutations;
-    double branch_length, position, mu;
+    double branch_length, position, mu, child_time;
     double distance = cr->right - cr->left;
     uint32_t child;
 
-    self->times[cr->node] = cr->time;
     for (k = 0; k < cr->num_children; k++) {
         child = cr->children[k];
-        branch_length = cr->time - self->times[child];
+        ret = tree_sequence_get_time(ts, child, &child_time);
+        if (ret != 0) {
+            goto out;
+        }
+        branch_length = cr->time - child_time;
         mu = branch_length * distance * self->mutation_rate;
         branch_mutations = gsl_ran_poisson(self->rng, mu);
         for (l = 0; l < branch_mutations; l++) {
@@ -188,48 +186,26 @@ out:
 }
 
 int WARN_UNUSED
-mutgen_generate(mutgen_t *self, msp_t *sim)
+mutgen_generate(mutgen_t *self, tree_sequence_t *ts)
 {
     int ret = -1;
-    coalescence_record_t *records;
-    sample_t *samples;
-    double *tmp_buffer = NULL;
-    size_t num_records, num_samples;
-    size_t j;
+    coalescence_record_t cr;
+    size_t j, num_records;
 
-    assert(sim != NULL);
+    assert(ts != NULL);
     /* First free up any memory used in previous calls */
     for (j = 0; j < self->num_mutations; j++) {
         object_heap_free_object(&self->node_heap, self->mutations[j].nodes);
     }
     self->num_mutations = 0;
 
-    num_records = msp_get_num_coalescence_records(sim);
-    num_samples = msp_get_sample_size(sim);
-    ret = msp_get_coalescence_records(sim, &records);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_get_samples(sim, &samples);
-    if (ret != 0) {
-        goto out;
-    }
-    if (records[num_records - 1].node >= self->max_num_times) {
-        self->max_num_times = records[num_records - 1].node + 1;
-        /* Grow the times array */
-        tmp_buffer = realloc(self->times, self->max_num_times * sizeof(double));
-        if (tmp_buffer == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
+    num_records = tree_sequence_get_num_coalescence_records(ts);
+    for (j = 0; j < num_records; j++) {
+        ret = tree_sequence_get_coalescence_record(ts, j, &cr, MSP_ORDER_TIME);
+        if (ret != 0) {
             goto out;
         }
-        self->times = tmp_buffer;
-    }
-    /* Set the times for the samples */
-    for (j = 0; j < num_samples; j++) {
-        self->times[j] = samples[j].time;
-    }
-    for (j = 0; j < num_records; j++) {
-        ret = mutgen_generate_record_mutations(self, &records[j]);
+        ret = mutgen_generate_record_mutations(self, ts, &cr);
         if (ret != 0) {
             goto out;
         }
@@ -242,6 +218,12 @@ out:
 
 size_t
 mutgen_get_num_mutations(mutgen_t *self)
+{
+    return self->num_mutations;
+}
+
+size_t
+mutgen_get_total_nodes(mutgen_t *self)
 {
     return self->num_mutations;
 }

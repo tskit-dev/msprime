@@ -304,12 +304,6 @@ typedef struct {
     } migrations;
     char **provenance_strings;
     size_t num_provenance_strings;
-    /* The number of trees referencing this tree sequence.
-     * This is NOT threadsafe! TODO when we want to have trees
-     * in many threads referencing a single tree sequence we will
-     * need to place a mutex of some sort around this.
-     */
-    int refcount;
 } tree_sequence_t;
 
 typedef struct node_record {
@@ -458,8 +452,6 @@ typedef struct {
     size_t mutation_block_size;
     mutation_t *mutations;
     object_heap_t node_heap;
-    double *times;
-    size_t max_num_times;
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
@@ -541,10 +533,9 @@ void tree_sequence_print_state(tree_sequence_t *self, FILE *out);
 int tree_sequence_init_rescale(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
         size_t num_coalescence_records, coalescence_record_t *coalescence_records,
-        size_t num_mutations, mutation_t *mutations,
         size_t num_migration_records, migration_record_t *migration_records,
         size_t num_provenance_strings, const char **provenance_strings,
-        recomb_map_t *recomb_map, double Ne);
+        recomb_map_t *recomb_map, double Ne, mutgen_t *mutgen);
 int tree_sequence_init(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
         size_t num_coalescence_records, coalescence_record_t *coalescence_records,
@@ -668,9 +659,10 @@ void recomb_map_print_state(recomb_map_t *self, FILE *out);
 
 int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng);
 int mutgen_free(mutgen_t *self);
-int mutgen_generate(mutgen_t *self, msp_t *sim);
+int mutgen_generate(mutgen_t *self, tree_sequence_t *ts);
 int mutgen_set_mutation_block_size(mutgen_t *self, size_t mutation_block_size);
 size_t mutgen_get_num_mutations(mutgen_t *self);
+size_t mutgen_get_total_nodes(mutgen_t *self);
 int mutgen_get_mutations(mutgen_t *self, mutation_t **mutations);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 

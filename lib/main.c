@@ -771,11 +771,11 @@ run_simulate(char *conf_file, char *output_file)
             goto out;
         }
         mutgen_print_state(mutgen, stdout);
-        /* ret = tree_sequence_dump(tree_seq, output_file, 0); */
-        /* if (ret != 0) { */
-        /*     goto out; */
-        /* } */
-        /* printf("================\n"); */
+        ret = tree_sequence_dump(tree_seq, output_file, 0);
+        if (ret != 0) {
+            goto out;
+        }
+        printf("================\n");
         tree_sequence_print_state(tree_seq, stdout);
         tree_sequence_free(tree_seq);
     }
