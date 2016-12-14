@@ -65,6 +65,8 @@
 /* Indicates the that the population ID has not been set. */
 #define MSP_NULL_POPULATION_ID UINT32_MAX
 
+#define MSP_INITIALISED_MAGIC 0x1234567
+
 typedef struct segment_t_t {
     uint32_t population_id;
     /* During simulation we use genetic coordinates */
@@ -255,18 +257,23 @@ typedef struct {
 
 /* Tree sequences */
 typedef struct {
+    uint32_t initialised_magic;
     uint32_t sample_size;
     double sequence_length;
     struct {
         size_t num_records;
-        double *breakpoints;
+        size_t max_num_records;
+        size_t num_nodes;
+        size_t max_num_nodes;
+        size_t total_child_nodes;
+        size_t max_total_child_nodes;
         size_t num_breakpoints;
+        size_t max_num_breakpoints;
+        double *breakpoints;
         struct {
             double *time;
             uint32_t *population;
         } nodes;
-        size_t num_nodes;
-        size_t total_child_nodes;
         struct {
             uint32_t *left;
             uint32_t *right;
@@ -282,7 +289,9 @@ typedef struct {
     } trees;
     struct {
         size_t num_records;
+        size_t max_num_records;
         size_t total_nodes;
+        size_t max_total_nodes;
         uint32_t *nodes_mem;
         uint32_t **nodes;
         uint32_t *num_nodes;
@@ -293,8 +302,10 @@ typedef struct {
     } mutations;
     struct {
         size_t num_records;
-        double *breakpoints;
+        size_t max_num_records;
         size_t num_breakpoints;
+        size_t max_num_breakpoints;
+        double *breakpoints;
         uint32_t *node;
         uint32_t *source;
         uint32_t *dest;
@@ -304,6 +315,7 @@ typedef struct {
     } migrations;
     char **provenance_strings;
     size_t num_provenance_strings;
+    size_t max_num_provenance_strings;
 } tree_sequence_t;
 
 typedef struct node_record {
@@ -669,5 +681,8 @@ int mutgen_get_mutations(mutgen_t *self, mutation_t **mutations);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 const char * msp_strerror(int err);
+void __msp_safe_free(void **ptr);
+
+#define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 
 #endif /*__MSPRIME_H__*/

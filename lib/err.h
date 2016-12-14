@@ -71,5 +71,6 @@
 #define MSP_ERR_INCONSISTENT_POPULATION_IDS                         -40
 #define MSP_ERR_BAD_RECORD_INTERVAL                                 -41
 #define MSP_ERR_ZERO_RECORDS                                        -42
+#define MSP_ERR_NOT_INITIALISED                                     -43
 
 #endif /*__ERR_H__*/

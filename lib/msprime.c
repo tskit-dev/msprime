@@ -187,6 +187,9 @@ msp_strerror(int err)
             ret = "Model error. Either a bad model, or the requested operation "
                 "is not supported for the current model";
             break;
+        case MSP_ERR_NOT_INITIALISED:
+            ret = "object not initialised. Please file a bug report.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
@@ -210,6 +213,16 @@ msp_strerror(int err)
     }
 out:
     return ret;
+}
+
+void
+__msp_safe_free(void **ptr) {
+    if (ptr != NULL) {
+        if (*ptr != NULL) {
+            free(*ptr);
+            *ptr = NULL;
+        }
+    }
 }
 
 static int
@@ -2131,6 +2144,7 @@ msp_reset(msp_t *self)
     self->time = 0.0;
     self->next_sampling_event = 0;
     self->num_coalescence_records = 0;
+    self->num_migration_records = 0;
     self->num_re_events = 0;
     self->num_ca_events = 0;
     self->num_rejected_ca_events = 0;
