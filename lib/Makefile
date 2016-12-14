@@ -11,7 +11,7 @@ LDFLAGS=-lgsl -lgslcblas -lhdf5 -lm
 
 HEADERS=msprime.h err.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
-    hapgen.o recomb_map.o mutgen.o vargen.o vcf.o avl.o ld.o
+    hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o 
 
 all: main tests
 
@@ -19,12 +19,15 @@ all: main tests
 avl.o: avl.c
 	${CC} -Wall -g -O2 -c avl.c
 
+argtable3.o: argtable3.c
+	${CC} -Wall -g -O2 -c argtable3.c
+
 %.o : %.c ${HEADERS}
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 main: CFLAGS+=${EXTRA_CFLAGS}
-main: main.c ${COMPILED} ${HEADERS}
-	${CC} ${CFLAGS} ${EXTRA_CFLAGS} -o main main.c ${COMPILED} ${LDFLAGS} -lconfig 
+main: main.c ${COMPILED} ${HEADERS} argtable3.o
+	${CC} ${CFLAGS} ${EXTRA_CFLAGS} -o main main.c ${COMPILED} argtable3.o ${LDFLAGS} -lconfig 
 
 tests: tests.c ${COMPILED} ${HEADERS}
 	${CC} ${CFLAGS} -Wall -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit 
