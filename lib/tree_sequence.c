@@ -297,6 +297,13 @@ out:
     return ret;
 }
 
+int WARN_UNUSED
+tree_sequence_initialise(tree_sequence_t *self)
+{
+    memset(self, 0, sizeof(tree_sequence_t));
+    return 0;
+}
+
 int
 tree_sequence_free(tree_sequence_t *self)
 {

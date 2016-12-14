@@ -749,7 +749,14 @@ run_simulate(char *conf_file, char *output_file)
     if (ret != 0) {
         goto out;
     }
+    ret = tree_sequence_initialise(tree_seq);
+    if (ret != 0) {
+        goto out;
+    }
     for (j = 0; j < 10; j++) {
+        printf("=====================\n");
+        printf("replicate %d\n", j);
+        printf("=====================\n");
         ret = msp_reset(msp);
         if (ret != 0) {
             goto out;
@@ -766,7 +773,7 @@ run_simulate(char *conf_file, char *output_file)
         /* Create the tree_sequence from the state of the simulator.
          * We want to use coalescent time here, so use an Ne of 1/4
          * to cancel scaling factor. */
-        ret = msp_get_tree_sequence(msp, NULL, mutgen, 0.25, 0, NULL, tree_seq);
+        ret = msp_get_tree_sequence(msp, recomb_map, mutgen, 0.25, 0, NULL, tree_seq);
         if (ret != 0) {
             goto out;
         }
@@ -775,9 +782,8 @@ run_simulate(char *conf_file, char *output_file)
         if (ret != 0) {
             goto out;
         }
-        printf("================\n");
+        printf("-----------------\n");
         tree_sequence_print_state(tree_seq, stdout);
-        tree_sequence_free(tree_seq);
     }
 out:
     if (msp != NULL) {
@@ -785,6 +791,7 @@ out:
         free(msp);
     }
     if (tree_seq != NULL) {
+        tree_sequence_free(tree_seq);
         free(tree_seq);
     }
     if (recomb_map != NULL) {

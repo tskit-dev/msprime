@@ -76,7 +76,7 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng)
     self->num_mutations = 0;
     self->mutation_block_size = 1024 * 1024;
     /* Avoid potential portability issues with realloc(NULL, newsize)
-     * by mallocing enough space for 1 mutation initiall. This gives the user
+     * by mallocing enough space for 1 mutation initially. This gives the user
      * control over the overall malloc behavior.
      */
     self->max_num_mutations = 1;

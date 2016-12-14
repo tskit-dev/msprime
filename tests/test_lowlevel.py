@@ -456,10 +456,11 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         sim.run()
         ts = _msprime.TreeSequence()
         recomb_map = uniform_recombination_map(sim)
-        ts.create(sim, recomb_map)
-        ts.generate_mutations(mutation_rate, rng)
-        for j in range(num_provenance_strings):
-            ts.add_provenance_string("xxxxxxx" * (j + 1))
+        mutgen = _msprime.MutationGenerator(rng, mutation_rate)
+        sim.get_tree_sequence(ts, recomb_map, mutgen)
+        # TODO A
+        # for j in range(num_provenance_strings):
+        #     ts.add_provenance_string("xxxxxxx" * (j + 1))
         return ts
 
     def get_nonbinary_tree_sequence(self):
@@ -2008,9 +2009,9 @@ class TestTreeSequence(LowLevelTestCase):
         tree_sequence = _msprime.TreeSequence()
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
         recomb_map = uniform_recombination_map(sim)
-        for x in [None, "", {}, [], 1]:
-            self.assertRaises(TypeError, tree_sequence.create, x, recomb_map)
-            self.assertRaises(TypeError, tree_sequence.create, sim, x)
+        # for x in [None, "", {}, [], 1]:
+        #     self.assertRaises(TypeError, tree_sequence.create, x, recomb_map)
+        #     self.assertRaises(TypeError, tree_sequence.create, sim, x)
         # Creating iterators or running method should fail as we
         # haven't initialised it.
         self.assertRaises(ValueError, tree_sequence.get_record, 0)
@@ -3095,6 +3096,25 @@ class TestRandomGenerator(unittest.TestCase):
         for s in [1, 10, 2**32 - 1]:
             rng = _msprime.RandomGenerator(s)
             self.assertEqual(rng.get_seed(), s)
+
+
+class TestMutationGenerator(unittest.TestCase):
+    """
+    Tests for the mutation generator class.
+    """
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.MutationGenerator)
+        rng = _msprime.RandomGenerator(1)
+        for bad_type in ["x", {}, None]:
+            self.assertRaises(TypeError, _msprime.MutationGenerator, rng, bad_type)
+        for bad_value in [-1, -1e-3]:
+            self.assertRaises(ValueError, _msprime.MutationGenerator, rng, bad_value)
+
+    def test_mutation_rate(self):
+        rng = _msprime.RandomGenerator(1)
+        for rate in [0, 1e-12, 1e12, 1000, 0.01]:
+            mutgen = _msprime.MutationGenerator(rng, rate)
+            self.assertEqual(mutgen.get_mutation_rate(), rate)
 
 
 class TestDemographyDebugger(unittest.TestCase):
