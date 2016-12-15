@@ -85,6 +85,7 @@ def historical_sample_example():
         samples=[(0, j) for j in range(10)])
 
 
+<<<<<<< HEAD
 class TestHdf5(unittest.TestCase):
     """
     Superclass of HDF5 tests.
@@ -98,6 +99,7 @@ class TestHdf5(unittest.TestCase):
 
 
 class TestRoundTrip(TestHdf5):
+@unittest.skip("load mutations")
     """
     Tests if we can round trip convert a tree sequence in memory
     through a V2 file format and a V3 format.
@@ -187,6 +189,7 @@ class TestRoundTrip(TestHdf5):
         self.verify_round_trip(migration_example())
 
 
+@unittest.skip("load mutations")
 class TestErrors(TestHdf5):
     """
     Test various API errors.
@@ -209,6 +212,7 @@ class TestErrors(TestHdf5):
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
+@unittest.skip("load mutations")
 class TestHdf5Format(TestHdf5):
     """
     Tests on the HDF5 file format.
@@ -348,6 +352,7 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(other_ts.get_provenance(), [])
 
 
+@unittest.skip("load mutations")
 class TestHdf5FormatErrors(TestHdf5):
     """
     Tests for errors in the HDF5 format.

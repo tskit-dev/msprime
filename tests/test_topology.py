@@ -63,6 +63,7 @@ def insert_redundant_breakpoints(ts):
     return new_ts
 
 
+@unittest.skip("load Mutations")
 class TopologyTestCase(unittest.TestCase):
     """
     Superclass of test cases containing common utilities.
@@ -80,6 +81,7 @@ class TopologyTestCase(unittest.TestCase):
         self.assertEqual(v1, v2)
 
 
+@unittest.skip("load Mutations")
 class TestRecordSquashing(TopologyTestCase):
     """
     Tests that we correctly squash adjacent equal records together.
@@ -114,6 +116,7 @@ class TestRecordSquashing(TopologyTestCase):
         self.assertEqual(list(tss.records()), list(ts.records()))
 
 
+@unittest.skip("load Mutations")
 class TestRedundantBreakpoints(TopologyTestCase):
     """
     Tests for dealing with redundant breakpoints within the tree sequence.
@@ -150,6 +153,7 @@ class TestRedundantBreakpoints(TopologyTestCase):
         self.assertEqual(comparisons, ts_redundant.num_trees)
 
 
+@unittest.skip("load Mutations")
 class TestUnaryNodes(TopologyTestCase):
     """
     Tests for situations in which we have unary nodes in the tree sequence.
@@ -253,6 +257,7 @@ class TestUnaryNodes(TopologyTestCase):
         self.verify_unary_tree_sequence(ts)
 
 
+@unittest.skip("load Mutations")
 class TestNonSampleExternalNodes(TopologyTestCase):
     """
     Tests for situations in which we have tips that are not samples.
@@ -313,6 +318,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assert_variants_equal(ts, ts_simplified)
 
 
+@unittest.skip("load Mutations")
 class TestMultipleRoots(TopologyTestCase):
     """
     Tests for situations where we have multiple roots for the samples.

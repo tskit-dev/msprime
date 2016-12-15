@@ -80,6 +80,7 @@ class TestSimulatorThreads(unittest.TestCase):
             self.assertEqual(results[0], result)
 
 
+@unittest.skip("load Mutations")
 class TestLdCalculatorReplicates(unittest.TestCase):
     """
     Tests the LdCalculator object to ensure we get correct results

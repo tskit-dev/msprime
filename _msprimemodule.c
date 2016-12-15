@@ -4909,7 +4909,7 @@ Simulator_populate_tree_sequence(Simulator *self, PyObject *args, PyObject *kwds
         }
         mutgen = mutation_generator->mutgen;
     }
-    if (recomb_map != NULL) {
+    if (recombination_map != NULL) {
         if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
             goto out;
         }

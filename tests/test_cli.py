@@ -1374,6 +1374,7 @@ class TestMspConversionOutput(unittest.TestCase):
             output = f.read().splitlines()
         self.assertEqual(output, output_mutations)
 
+    @unittest.skip("load mutations")
     def test_mutations(self):
         cmd = "mutations"
         stdout, stderr = capture_output(cli.msp_main, [
@@ -1466,6 +1467,7 @@ class TestUpgrade(TestCli):
     Tests the results of the upgrade operation to ensure they are
     correct.
     """
+    @unittest.skip("load mutations")
     def test_conversion(self):
         ts1 = msprime.simulate(10)
         v2_file_name = self.temp_file + ".v2"

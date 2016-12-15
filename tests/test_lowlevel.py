@@ -1739,6 +1739,7 @@ class TestSimulator(LowLevelTestCase):
     def test_populate_tree_sequence_interface(self):
         tree_sequence = _msprime.TreeSequence()
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
+        sim.run()
         mutgen = _msprime.MutationGenerator(_msprime.RandomGenerator(1), 0)
         recomb_map = uniform_recombination_map(sim)
         # First param is mandatory.
@@ -1759,6 +1760,15 @@ class TestSimulator(LowLevelTestCase):
                 mutation_generator=bad_type, recombination_map=recomb_map)
             self.assertRaises(
                 TypeError, sim.populate_tree_sequence, tree_sequence, Ne=bad_type)
+        sim.populate_tree_sequence(tree_sequence)
+        self.assertEqual(sim.get_sample_size(), tree_sequence.get_sample_size())
+        self.assertEqual(sim.get_num_loci(), tree_sequence.get_sequence_length())
+        sim.populate_tree_sequence(
+            tree_sequence, mutation_generator=mutgen, recombination_map=recomb_map,
+            Ne=0.25)
+        self.assertEqual(sim.get_sample_size(), tree_sequence.get_sample_size())
+        self.assertEqual(
+            recomb_map.get_positions()[-1], tree_sequence.get_sequence_length())
 
 
 class TestTreeSequence(LowLevelTestCase):
@@ -2985,24 +2995,17 @@ class TestRecombinationMap(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.RecombinationMap, 1, None, None)
         self.assertRaises(TypeError, _msprime.RecombinationMap, 1, {}, {})
         self.assertRaises(TypeError, _msprime.RecombinationMap, "1", [], [])
+        self.assertRaises(ValueError, _msprime.RecombinationMap, 1, [0, 0.1], [1, 2, 3])
+        self.assertRaises(ValueError, _msprime.RecombinationMap, 1, [], [0, 0])
+        self.assertRaises(_msprime.LibraryError, _msprime.RecombinationMap, 1, [], [])
         self.assertRaises(
-            ValueError, _msprime.RecombinationMap, 1, [0, 0.1], [1, 2, 3])
+            _msprime.LibraryError, _msprime.RecombinationMap, 1, [0, -2], [0, 0])
         self.assertRaises(
-            ValueError, _msprime.RecombinationMap, 1, [], [0, 0])
+            _msprime.LibraryError, _msprime.RecombinationMap, 1, [1, 0], [0, 0])
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, 1, [], [])
+            _msprime.LibraryError, _msprime.RecombinationMap, 1, [0, 1, 0.5], [0, 0, 0])
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap,
-            1, [0, -2], [0, 0])
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap,
-            1, [1, 0], [0, 0])
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap,
-            1, [0, 1, 0.5], [0, 0, 0])
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap,
-            0, [0, 1], [0.1, 0])
+            _msprime.LibraryError, _msprime.RecombinationMap, 0, [0, 1], [0.1, 0])
 
     def verify_random_recomb_map(self, size, num_random_checks):
         positions = [0] + sorted(

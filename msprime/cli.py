@@ -188,7 +188,7 @@ class SimulationRunner(object):
         print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
         for j in range(self._num_replicates):
             self._simulator.run()
-            tree_sequence = self._simulator.get_tree_sequence()
+            tree_sequence = self._simulator.get_tree_sequence(self._mutation_rate)
             breakpoints = self._simulator.get_breakpoints()
             print(file=output)
             print("//", file=output)
@@ -205,8 +205,6 @@ class SimulationRunner(object):
                         print("[{0}]".format(int(l)), end="", file=output)
                         print(ns, file=output)
             if self._mutation_rate > 0:
-                tree_sequence.generate_mutations(
-                    self._mutation_rate, self._random_generator)
                 hg = msprime.HaplotypeGenerator(tree_sequence)
                 s = tree_sequence.get_num_mutations()
                 print("segsites:", s, file=output)
