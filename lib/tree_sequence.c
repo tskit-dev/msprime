@@ -1315,10 +1315,15 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         if (dataset_id < 0) {
             goto out;
         }
-        status = H5Dread(dataset_id, fields[j].type, H5S_ALL,
-                H5S_ALL, H5P_DEFAULT, fields[j].dest);
-        if (status < 0) {
-            goto out;
+        /* Need to check here as older versions of HDF5 fail when we
+         * try to read in 0-sized datasets.
+         */
+        if (H5Dget_storage_size(dataset_id) > 0) {
+            status = H5Dread(dataset_id, fields[j].type, H5S_ALL,
+                    H5S_ALL, H5P_DEFAULT, fields[j].dest);
+            if (status < 0) {
+                goto out;
+            }
         }
         status = H5Dclose(dataset_id);
         if (status < 0) {
@@ -1411,7 +1416,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     herr_t ret = -1;
     herr_t status;
     hid_t group_id, dataset_id, dataspace_id, plist_id;
-    hsize_t dims[1], chunk_size;
+    hsize_t dim, chunk_size, max_dim;
     struct _hdf5_field_write {
         const char *name;
         hid_t storage_type;
@@ -1514,8 +1519,13 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     }
     /* now write the datasets */
     for (j = 0; j < num_fields; j++) {
-        dims[0] = fields[j].size;
-        dataspace_id = H5Screate_simple(1, dims, NULL);
+        dim = fields[j].size;
+        max_dim = dim;
+        if (max_dim == 0) {
+            /* Needed to work around issue in older versions of HDF5 */
+            max_dim = H5S_UNLIMITED;
+        }
+        dataspace_id = H5Screate_simple(1, &dim, &max_dim);
         if (dataspace_id < 0) {
             goto out;
         }
@@ -1560,10 +1570,6 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         dataset_id = H5Dcreate2(file_id, fields[j].name,
                 fields[j].storage_type, dataspace_id, H5P_DEFAULT,
                 plist_id, H5P_DEFAULT);
-        if (dataset_id < 0) {
-            printf("HERE1?: %d\n", dataset_id);
-            goto out;
-        }
         if (fields[j].size > 0) {
             /* Don't write zero sized datasets to work-around problems
              * with older versions of hdf5. */
