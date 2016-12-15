@@ -5136,12 +5136,12 @@ main(int argc, char **argv)
     if (argc == 1) {
         CU_basic_run_tests();
     } else if (argc == 2) {
-        suite = CU_get_suite("msprime");
+        suite = CU_get_suite_by_name("msprime", CU_get_registry());
         if (suite == NULL) {
             printf("Suite not found\n");
             return EXIT_FAILURE;
         }
-        test = CU_get_test(suite, argv[1]);
+        test = CU_get_test_by_name(argv[1], suite);
         if (test == NULL) {
             printf("Test '%s' not found\n", argv[1]);
             return EXIT_FAILURE;
