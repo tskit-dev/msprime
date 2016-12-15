@@ -1202,6 +1202,7 @@ static int
 TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
+    int err;
 
     self->tree_sequence = NULL;
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
@@ -1209,7 +1210,11 @@ TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
+    err = tree_sequence_initialise(self->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
     ret = 0;
 out:
     return ret;

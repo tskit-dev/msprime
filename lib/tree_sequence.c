@@ -666,7 +666,7 @@ out:
 /* Sets up the memory for the mutations associated with each tree.
  */
 static int
-tree_sequence_init_tree_mutations(tree_sequence_t *self)
+tree_sequence_load_records_tree_mutations(tree_sequence_t *self)
 {
     int ret = MSP_ERR_GENERIC;
     size_t j, tree_index;
@@ -724,7 +724,7 @@ tree_sequence_store_mutations(tree_sequence_t *self, size_t num_mutations,
             self->mutations.nodes[j][k] = mutations[j].nodes[k];
         }
     }
-    ret = tree_sequence_init_tree_mutations(self);
+    ret = tree_sequence_load_records_tree_mutations(self);
 out:
     return ret;
 }
@@ -798,7 +798,7 @@ out:
 }
 
 int WARN_UNUSED
-tree_sequence_init(tree_sequence_t *self,
+tree_sequence_load_records(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
         size_t num_coalescence_records, coalescence_record_t *coalescence_records,
         size_t num_mutations, mutation_t *mutations,
@@ -925,7 +925,7 @@ out:
 }
 
 int WARN_UNUSED
-tree_sequence_init_rescale(tree_sequence_t *self,
+tree_sequence_load_records_rescale(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
         size_t num_coalescence_records, coalescence_record_t *coalescence_records,
         size_t num_migration_records, migration_record_t *migration_records,
@@ -936,7 +936,7 @@ tree_sequence_init_rescale(tree_sequence_t *self,
     mutation_t *mutations;
     size_t j, k, offset;
 
-    ret = tree_sequence_init(self,
+    ret = tree_sequence_load_records(self,
             num_samples, samples,
             num_coalescence_records, coalescence_records,
             0, NULL,
@@ -997,7 +997,7 @@ tree_sequence_init_rescale(tree_sequence_t *self,
             self->mutations.nodes[j][k] = mutations[j].nodes[k];
         }
     }
-    ret = tree_sequence_init_tree_mutations(self);
+    ret = tree_sequence_load_records_tree_mutations(self);
     if (ret != 0) {
         goto out;
     }
@@ -1340,7 +1340,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         self->mutations.nodes[j] = &self->mutations.nodes_mem[offset];
         offset += self->mutations.num_nodes[j];
     }
-    ret = tree_sequence_init_tree_mutations(self);
+    ret = tree_sequence_load_records_tree_mutations(self);
     if (ret != 0) {
         goto out;
     }
@@ -2316,7 +2316,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
         goto out;
     }
     /* Alloc a new tree sequence for these records. */
-    ret = tree_sequence_init(output, num_samples, sample_objects,
+    ret = tree_sequence_load_records(output, num_samples, sample_objects,
             num_output_records, output_records,
             num_output_mutations, output_mutations,
             0, NULL,

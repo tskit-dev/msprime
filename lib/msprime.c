@@ -2625,7 +2625,7 @@ msp_get_tree_sequence(msp_t *self, recomb_map_t *recomb_map, mutgen_t *mutgen,
         double Ne, size_t num_provenance_strings, const char **provenance_strings,
         tree_sequence_t *tree_sequence)
 {
-    return tree_sequence_init_rescale(tree_sequence,
+    return tree_sequence_load_records_rescale(tree_sequence,
         self->sample_size, self->samples,
         self->num_coalescence_records, self->coalescence_records,
         self->num_migration_records, self->migration_records,

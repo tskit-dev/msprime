@@ -543,13 +543,13 @@ size_t msp_get_num_recombination_events(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self, FILE *out);
 int tree_sequence_initialise(tree_sequence_t *self);
-int tree_sequence_init_rescale(tree_sequence_t *self,
+int tree_sequence_load_records_rescale(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
         size_t num_coalescence_records, coalescence_record_t *coalescence_records,
         size_t num_migration_records, migration_record_t *migration_records,
         size_t num_provenance_strings, const char **provenance_strings,
         recomb_map_t *recomb_map, double Ne, mutgen_t *mutgen);
-int tree_sequence_init(tree_sequence_t *self,
+int tree_sequence_load_records(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
         size_t num_coalescence_records, coalescence_record_t *coalescence_records,
         size_t num_mutations, mutation_t *mutations,
