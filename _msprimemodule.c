@@ -1344,20 +1344,12 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     static char *kwlist[] = {"path", NULL};
 
-    if (self->tree_sequence != NULL) {
-        PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
+    if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
-                &path)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &path)) {
         goto out;
     }
-    self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
-    if (self->tree_sequence == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
     /* Silence the low-level error reporting HDF5 */
     if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
         PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
@@ -1365,8 +1357,6 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     }
     err = tree_sequence_load(self->tree_sequence, path, flags);
     if (err != 0) {
-        PyMem_Free(self->tree_sequence);
-        self->tree_sequence = NULL;
         handle_library_error(err);
         goto out;
     }
@@ -4926,20 +4916,22 @@ out:
 }
 
 static PyObject *
-Simulator_get_tree_sequence(Simulator *self, PyObject *args, PyObject *kwds)
+Simulator_populate_tree_sequence(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
     TreeSequence *tree_sequence = NULL;
     MutationGenerator *mutation_generator = NULL;
-    RecombinationMap *recomb_map = NULL;
+    RecombinationMap *recombination_map = NULL;
+    mutgen_t *mutgen = NULL;
+    recomb_map_t *recomb_map = NULL;
     double Ne = 0.25; /* default to 1/4 for coalescent time units. */
     static char *kwlist[] = {"tree_sequence", "recombination_map", "mutation_generator",
-        NULL};
+        "Ne", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|d", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!O!d", kwlist,
             &TreeSequenceType, &tree_sequence,
-            &RecombinationMapType, &recomb_map,
+            &RecombinationMapType, &recombination_map,
             &MutationGeneratorType, &mutation_generator, &Ne)){
         goto out;
     }
@@ -4950,17 +4942,23 @@ Simulator_get_tree_sequence(Simulator *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "Simulation not completed");
         goto out;
     }
-    if (MutationGenerator_check_state(mutation_generator) != 0) {
-        goto out;
-    }
-    if (RecombinationMap_check_recomb_map(recomb_map) != 0) {
-        goto out;
-    }
     if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
         goto out;
     }
-    err = msp_get_tree_sequence(self->sim, recomb_map->recomb_map,
-            mutation_generator->mutgen, Ne, 0, NULL, tree_sequence->tree_sequence);
+    if (mutation_generator != NULL) {
+        if (MutationGenerator_check_state(mutation_generator) != 0) {
+            goto out;
+        }
+        mutgen = mutation_generator->mutgen;
+    }
+    if (recomb_map != NULL) {
+        if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
+            goto out;
+        }
+        recomb_map = recombination_map->recomb_map;
+    }
+    err = msp_populate_tree_sequence(self->sim, recomb_map, mutgen, Ne,
+            0, NULL, tree_sequence->tree_sequence);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4969,54 +4967,6 @@ Simulator_get_tree_sequence(Simulator *self, PyObject *args, PyObject *kwds)
 out:
     return ret;
 }
-
-
-/* static PyObject * */
-/* TreeSequence_create(TreeSequence *self, PyObject *args) */
-/* { */
-/*     /1* int err; *1/ */
-/*     PyObject *ret = NULL; */
-/*     Simulator *sim = NULL; */
-/*     RecombinationMap *recomb_map = NULL; */
-/*     double Ne = 0.25; /1* default to 1/4 for coalescent time units. *1/ */
-
-/*     if (self->tree_sequence != NULL) { */
-/*         PyErr_SetString(PyExc_ValueError, "tree_sequence already created"); */
-/*         goto out; */
-/*     } */
-/*     if (!PyArg_ParseTuple(args, "O!O!|d", */
-/*                 &SimulatorType, &sim, */
-/*                 &RecombinationMapType, &recomb_map, &Ne)) { */
-/*         goto out; */
-/*     } */
-/*     if (Simulator_check_sim(sim) != 0) { */
-/*         goto out; */
-/*     } */
-/*     if (!msp_is_completed(sim->sim)) { */
-/*         PyErr_SetString(PyExc_ValueError, "Simulation not completed"); */
-/*         goto out; */
-/*     } */
-/*     if (RecombinationMap_check_recomb_map(recomb_map) != 0) { */
-/*         goto out; */
-/*     } */
-/*     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t)); */
-/*     if (self->tree_sequence == NULL) { */
-/*         PyErr_NoMemory(); */
-/*         goto out; */
-/*     } */
-/*     memset(self->tree_sequence, 0, sizeof(tree_sequence_t)); */
-/*     /1* err = tree_sequence_create(self->tree_sequence, sim->sim, *1/ */
-/*     /1*         recomb_map->recomb_map, Ne); *1/ */
-/*     /1* if (err != 0) { *1/ */
-/*     /1*     PyMem_Free(self->tree_sequence); *1/ */
-/*     /1*     self->tree_sequence = NULL; *1/ */
-/*     /1*     handle_library_error(err); *1/ */
-/*     /1*     goto out; *1/ */
-/*     /1* } *1/ */
-/*     ret = Py_BuildValue(""); */
-/* out: */
-/*     return ret; */
-/* } */
 
 static PyObject *
 Simulator_reset(Simulator *self)
@@ -5157,8 +5107,8 @@ static PyMethodDef Simulator_methods[] = {
             if sample has coalesced and False otherwise." },
     {"reset", (PyCFunction) Simulator_reset, METH_NOARGS,
             "Resets the simulation so it's ready for another replicate."},
-    {"get_tree_sequence",
-        (PyCFunction) Simulator_get_tree_sequence, METH_VARARGS|METH_KEYWORDS,
+    {"populate_tree_sequence",
+        (PyCFunction) Simulator_populate_tree_sequence, METH_VARARGS|METH_KEYWORDS,
         "Updates the specified tree sequence instance to reflect the state of "
         "this simulator"},
     {"run_event", (PyCFunction) Simulator_run_event, METH_NOARGS,

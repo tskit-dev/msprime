@@ -85,12 +85,10 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence)
     if (ret < 0) {
         goto out;
     }
-    assert(ret != 0);
     ret = sparse_tree_first(self->inner_tree);
     if (ret < 0) {
         goto out;
     }
-    assert(ret != 0);
     ret = tree_sequence_get_mutations(self->tree_sequence, &self->mutations);
     if (ret != 0) {
         goto out;

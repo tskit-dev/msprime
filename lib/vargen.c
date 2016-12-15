@@ -71,7 +71,6 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
     if (ret < 0) {
         goto out;
     }
-    assert(ret == 1);
     ret = 0;
 out:
     return ret;

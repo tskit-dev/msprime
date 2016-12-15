@@ -517,7 +517,7 @@ int msp_get_population_configuration(msp_t *self, size_t population_id,
 int msp_get_population(msp_t *self, size_t population_id,
         population_t **population);
 int msp_is_completed(msp_t *self);
-int msp_get_tree_sequence(msp_t *self, recomb_map_t *recomb_map, mutgen_t *mutgen,
+int msp_populate_tree_sequence(msp_t *self, recomb_map_t *recomb_map, mutgen_t *mutgen,
         double Ne, size_t num_provenance_strings, const char **provenance_strings,
         tree_sequence_t *tree_sequence);
 

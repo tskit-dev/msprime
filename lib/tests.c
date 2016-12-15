@@ -413,7 +413,7 @@ get_example_tree_sequence(uint32_t sample_size,
      * to cancel scaling factor. */
     ret = tree_sequence_initialise(tree_seq);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_get_tree_sequence(msp, recomb_map, mutgen, 0.25, 0, NULL, tree_seq);
+    ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 0, NULL, tree_seq);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_simulator_tree_sequence_equality(msp, tree_seq, mutgen,
             sequence_length / num_loci);
@@ -1539,7 +1539,7 @@ test_simulation_replicates(void)
         ret = msp_run(&msp, DBL_MAX, SIZE_MAX);
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(&msp);
-        msp_get_tree_sequence(&msp, NULL, &mutgen, 0.25, 0, NULL, &ts);
+        msp_populate_tree_sequence(&msp, NULL, &mutgen, 0.25, 0, NULL, &ts);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_simulator_tree_sequence_equality(&msp, &ts, &mutgen, 1.0);
         tree_sequence_print_state(&ts, _devnull);
@@ -4608,7 +4608,7 @@ test_simplify_from_examples(void)
 }
 
 static void
-verify_newick(tree_sequence_t *ts, int should_fail)
+verify_newick(tree_sequence_t *ts, bool should_fail)
 {
     newick_converter_t nc;
     double length;
@@ -4640,7 +4640,7 @@ test_newick_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        verify_newick(examples[j], 0);
+        verify_newick(examples[j], false);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -4648,7 +4648,7 @@ test_newick_from_examples(void)
 
     examples = get_example_nonbinary_tree_sequences();
     for (j = 0; examples[j] != NULL; j++) {
-        verify_newick(examples[j], 1);
+        verify_newick(examples[j], true);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -4758,6 +4758,39 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
     }
     sparse_tree_free(&t1);
     sparse_tree_free(&t2);
+}
+
+static void
+verify_empty_tree_sequence(tree_sequence_t *ts)
+{
+    CU_ASSERT_EQUAL(tree_sequence_get_num_coalescence_records(ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_migration_records(ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(ts), 0);
+    verify_trees_consistent(ts);
+    verify_ld(ts);
+    verify_stats(ts);
+    verify_hapgen(ts);
+    verify_vargen(ts);
+    verify_newick(ts, false);
+}
+
+static void
+test_save_empty_hdf5(void)
+{
+    int ret;
+    tree_sequence_t ts1, ts2;
+
+    tree_sequence_initialise(&ts1);
+    tree_sequence_initialise(&ts2);
+    ret = tree_sequence_dump(&ts1, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    verify_empty_tree_sequence(&ts1);
+    ret = tree_sequence_load(&ts2, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    verify_empty_tree_sequence(&ts2);
 }
 
 static void
@@ -5051,6 +5084,7 @@ main(int argc, char **argv)
         {"test_ld_from_examples", test_ld_from_examples},
         {"test_simplify_from_examples", test_simplify_from_examples},
         {"test_records_equivalent_after_import", test_records_equivalent},
+        {"test_save_empty_hdf5", test_save_empty_hdf5},
         {"test_save_hdf5", test_save_hdf5},
         {"test_save_records_hdf5", test_save_records_hdf5},
         {"single_locus_two_populations", test_single_locus_two_populations},

@@ -535,7 +535,8 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
     }
-    if (left != 0) {
+    if (self->trees.num_records > 0 && left != 0) {
+        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
         goto out;
     }
     ret = 0;
@@ -666,7 +667,7 @@ out:
 /* Sets up the memory for the mutations associated with each tree.
  */
 static int
-tree_sequence_load_records_tree_mutations(tree_sequence_t *self)
+tree_sequence_init_tree_mutations(tree_sequence_t *self)
 {
     int ret = MSP_ERR_GENERIC;
     size_t j, tree_index;
@@ -677,7 +678,9 @@ tree_sequence_load_records_tree_mutations(tree_sequence_t *self)
     memset(self->mutations.tree_mutations, 0,
             self->trees.num_breakpoints * sizeof(mutation_t *));
     tree_index = 0;
-    self->mutations.tree_mutations[0] = self->mutations.tree_mutations_mem;
+    if (self->trees.num_records > 0) {
+        self->mutations.tree_mutations[0] = self->mutations.tree_mutations_mem;
+    }
     for (j = 0; j < self->mutations.num_records; j++) {
         mut = &self->mutations.tree_mutations_mem[j];
         mut->index = j;
@@ -724,7 +727,7 @@ tree_sequence_store_mutations(tree_sequence_t *self, size_t num_mutations,
             self->mutations.nodes[j][k] = mutations[j].nodes[k];
         }
     }
-    ret = tree_sequence_load_records_tree_mutations(self);
+    ret = tree_sequence_init_tree_mutations(self);
 out:
     return ret;
 }
@@ -971,35 +974,37 @@ tree_sequence_load_records_rescale(tree_sequence_t *self,
             goto out;
         }
     }
-    /* Once we have rescaled time and mapped to physical coordinates, we can generate
-     * the mutations. */
-    ret = mutgen_generate(mutgen, self);
-    if (ret != 0) {
-        goto out;
-    }
-    self->mutations.num_records = mutgen_get_num_mutations(mutgen);
-    self->mutations.total_nodes = mutgen_get_total_nodes(mutgen);
-    ret = mutgen_get_mutations(mutgen, &mutations);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_alloc_mutations(self);
-    if (ret != 0) {
-        goto out;
-    }
-    offset = 0;
-    for (j = 0; j < self->mutations.num_records; j++) {
-        self->mutations.position[j] = mutations[j].position;
-        self->mutations.num_nodes[j] = mutations[j].num_nodes;
-        self->mutations.nodes[j] = self->mutations.nodes_mem + offset;
-        offset += mutations[j].num_nodes;
-        for (k = 0; k < mutations[j].num_nodes; k++) {
-            self->mutations.nodes[j][k] = mutations[j].nodes[k];
+    if (mutgen != NULL) {
+        /* Once we have rescaled time and mapped to physical coordinates, we can generate
+         * the mutations. */
+        ret = mutgen_generate(mutgen, self);
+        if (ret != 0) {
+            goto out;
         }
-    }
-    ret = tree_sequence_load_records_tree_mutations(self);
-    if (ret != 0) {
-        goto out;
+        self->mutations.num_records = mutgen_get_num_mutations(mutgen);
+        self->mutations.total_nodes = mutgen_get_total_nodes(mutgen);
+        ret = mutgen_get_mutations(mutgen, &mutations);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = tree_sequence_alloc_mutations(self);
+        if (ret != 0) {
+            goto out;
+        }
+        offset = 0;
+        for (j = 0; j < self->mutations.num_records; j++) {
+            self->mutations.position[j] = mutations[j].position;
+            self->mutations.num_nodes[j] = mutations[j].num_nodes;
+            self->mutations.nodes[j] = self->mutations.nodes_mem + offset;
+            offset += mutations[j].num_nodes;
+            for (k = 0; k < mutations[j].num_nodes; k++) {
+                self->mutations.nodes[j][k] = mutations[j].nodes[k];
+            }
+        }
+        ret = tree_sequence_init_tree_mutations(self);
+        if (ret != 0) {
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -1200,6 +1205,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         if (fields[j].included) {
             dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
             if (dataset_id < 0) {
+                ret = MSP_ERR_FILE_FORMAT;
                 goto out;
             }
             dataspace_id = H5Dget_space(dataset_id);
@@ -1332,7 +1338,14 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         offset += self->trees.records.num_children[j];
         self->sample_size = GSL_MIN(self->sample_size, self->trees.records.node[j]);
     }
-    self->sequence_length = self->trees.breakpoints[self->trees.num_breakpoints - 1];
+    /* Handle empty input file cases */
+    self->sequence_length = 0.0;
+    if (self->trees.num_breakpoints > 0) {
+        self->sequence_length = self->trees.breakpoints[self->trees.num_breakpoints - 1];
+    }
+    if (self->sample_size == UINT32_MAX) {
+        self->sample_size = 0;
+    }
     /* Set up the pointers for the mutation nodes */
     offset = 0;
     for (j = 0; j < self->mutations.num_records; j++) {
@@ -1340,7 +1353,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         self->mutations.nodes[j] = &self->mutations.nodes_mem[offset];
         offset += self->mutations.num_nodes[j];
     }
-    ret = tree_sequence_load_records_tree_mutations(self);
+    ret = tree_sequence_init_tree_mutations(self);
     if (ret != 0) {
         goto out;
     }
@@ -1398,7 +1411,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     herr_t ret = -1;
     herr_t status;
     hid_t group_id, dataset_id, dataspace_id, plist_id;
-    hsize_t dims[1];
+    hsize_t dims[1], chunk_size;
     struct _hdf5_field_write {
         const char *name;
         hid_t storage_type;
@@ -1453,14 +1466,13 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
     struct _hdf5_group_write {
         const char *name;
-        int included;
     };
     struct _hdf5_group_write groups[] = {
-        {"/mutations", 1},
-        {"/trees", 1},
-        {"/trees/nodes", 1},
-        {"/trees/records", 1},
-        {"/trees/indexes", 1},
+        {"/mutations"},
+        {"/trees"},
+        {"/trees/nodes"},
+        {"/trees/records"},
+        {"/trees/indexes"},
     };
     size_t num_groups = sizeof(groups) / sizeof(struct _hdf5_group_write);
     size_t j;
@@ -1488,96 +1500,90 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     fields[0].storage_type = filetype_str;
     fields[0].memory_type = memtype_str;
 
-    /* We only create the mutations group if it's non-empty */
-    if (self->mutations.num_records == 0) {
-        groups[0].included = 0;
-    }
     /* Create the groups */
     for (j = 0; j < num_groups; j++) {
-        if (groups[j].included) {
-            group_id = H5Gcreate(file_id, groups[j].name, H5P_DEFAULT, H5P_DEFAULT,
-                    H5P_DEFAULT);
-            if (group_id < 0) {
-                goto out;
-            }
-            status = H5Gclose(group_id);
-            if (status < 0) {
-                goto out;
-            }
+        group_id = H5Gcreate(file_id, groups[j].name, H5P_DEFAULT, H5P_DEFAULT,
+                H5P_DEFAULT);
+        if (group_id < 0) {
+            goto out;
+        }
+        status = H5Gclose(group_id);
+        if (status < 0) {
+            goto out;
         }
     }
     /* now write the datasets */
     for (j = 0; j < num_fields; j++) {
+        dims[0] = fields[j].size;
+        dataspace_id = H5Screate_simple(1, dims, NULL);
+        if (dataspace_id < 0) {
+            goto out;
+        }
+        plist_id = H5Pcreate(H5P_DATASET_CREATE);
+        if (plist_id < 0) {
+            goto out;
+        }
+        /* Set the chunk size to the full size of the dataset since we
+         * always read the full thing.
+         */
+        chunk_size = GSL_MAX(1, fields[j].size);
+        status = H5Pset_chunk(plist_id, 1, &chunk_size);
+        if (status < 0) {
+            goto out;
+        }
+        if (fields[j].memory_type != H5T_NATIVE_DOUBLE &&
+                fields[j].memory_type != memtype_str) {
+            /* For integer types, use the scale offset compression */
+            status = H5Pset_scaleoffset(plist_id, H5Z_SO_INT,
+                     H5Z_SO_INT_MINBITS_DEFAULT);
+            if (status < 0) {
+                goto out;
+            }
+        }
+        if (flags & MSP_ZLIB_COMPRESSION) {
+            /* Turn on byte shuffling to improve compression */
+            status = H5Pset_shuffle(plist_id);
+            if (status < 0) {
+                goto out;
+            }
+            /* Set zlib compression at level 9 (best compression) */
+            status = H5Pset_deflate(plist_id, 9);
+            if (status < 0) {
+                goto out;
+            }
+        }
+        /* Turn on Fletcher32 checksums for integrity checks */
+        status = H5Pset_fletcher32(plist_id);
+        if (status < 0) {
+            goto out;
+        }
+        dataset_id = H5Dcreate2(file_id, fields[j].name,
+                fields[j].storage_type, dataspace_id, H5P_DEFAULT,
+                plist_id, H5P_DEFAULT);
+        if (dataset_id < 0) {
+            printf("HERE1?: %d\n", dataset_id);
+            goto out;
+        }
         if (fields[j].size > 0) {
-            dims[0] = fields[j].size;
-            dataspace_id = H5Screate_simple(1, dims, NULL);
-            if (dataspace_id < 0) {
-                goto out;
-            }
-            plist_id = H5Pcreate(H5P_DATASET_CREATE);
-            if (plist_id < 0) {
-                goto out;
-            }
-            /* Set the chunk size to the full size of the dataset since we
-             * always read the full thing.
-             */
-            status = H5Pset_chunk(plist_id, 1, dims);
+            /* Don't write zero sized datasets to work-around problems
+             * with older versions of hdf5. */
+            status = H5Dwrite(dataset_id, fields[j].memory_type, H5S_ALL,
+                    H5S_ALL, H5P_DEFAULT, fields[j].source);
             if (status < 0) {
                 goto out;
             }
-            if (fields[j].memory_type != H5T_NATIVE_DOUBLE &&
-                    fields[j].memory_type != memtype_str) {
-                /* For integer types, use the scale offset compression */
-                status = H5Pset_scaleoffset(plist_id, H5Z_SO_INT,
-                         H5Z_SO_INT_MINBITS_DEFAULT);
-                if (status < 0) {
-                    goto out;
-                }
-            }
-            if (flags & MSP_ZLIB_COMPRESSION) {
-                /* Turn on byte shuffling to improve compression */
-                status = H5Pset_shuffle(plist_id);
-                if (status < 0) {
-                    goto out;
-                }
-                /* Set zlib compression at level 9 (best compression) */
-                status = H5Pset_deflate(plist_id, 9);
-                if (status < 0) {
-                    goto out;
-                }
-            }
-            /* Turn on Fletcher32 checksums for integrity checks */
-            status = H5Pset_fletcher32(plist_id);
-            if (status < 0) {
-                goto out;
-            }
-            dataset_id = H5Dcreate2(file_id, fields[j].name,
-                    fields[j].storage_type, dataspace_id, H5P_DEFAULT,
-                    plist_id, H5P_DEFAULT);
-            if (dataset_id < 0) {
-                goto out;
-            }
-            if (fields[j].size > 0) {
-                /* Don't write zero sized datasets to work-around problems
-                 * with older versions of hdf5. */
-                status = H5Dwrite(dataset_id, fields[j].memory_type, H5S_ALL,
-                        H5S_ALL, H5P_DEFAULT, fields[j].source);
-                if (status < 0) {
-                    goto out;
-                }
-            }
-            status = H5Dclose(dataset_id);
-            if (status < 0) {
-                goto out;
-            }
-            status = H5Pclose(plist_id);
-            if (status < 0) {
-                goto out;
-            }
-            status = H5Sclose(dataspace_id);
-            if (status < 0) {
-                goto out;
-            }
+        }
+        status = H5Dclose(dataset_id);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Pclose(plist_id);
+        if (status < 0) {
+            goto out;
+        }
+        status = H5Sclose(dataspace_id);
+        if (status < 0) {
+            goto out;
         }
     }
     ret = 0;
@@ -1811,7 +1817,7 @@ tree_sequence_get_num_mutations(tree_sequence_t *self)
 size_t
 tree_sequence_get_num_trees(tree_sequence_t *self)
 {
-    return self->trees.num_breakpoints - 1;
+    return self->trees.num_breakpoints == 0? 0 : self->trees.num_breakpoints - 1;
 }
 
 int WARN_UNUSED
@@ -2491,7 +2497,10 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
     }
     *nodes_out = out_head;
     *nodes_in = in_head;
-    *length = s->trees.breakpoints[self->tree_left] - s->trees.breakpoints[last_left];
+    *length = 0;
+    if (num_trees > 0) {
+        *length = s->trees.breakpoints[self->tree_left] - s->trees.breakpoints[last_left];
+    }
     return ret;
 }
 
@@ -3300,22 +3309,24 @@ sparse_tree_first(sparse_tree_t *self)
     int ret = 0;
     tree_sequence_t *s = self->tree_sequence;
 
-    /* TODO this is redundant if this is the first usage of the tree. We
-     * should add a state machine here so we know what state the tree is
-     * in and can take the appropriate actions.
-     */
-    ret = sparse_tree_clear(self);
-    if (ret != 0) {
-        goto out;
-    }
-    self->left_index = 0;
-    self->right_index = 0;
-    self->direction = MSP_DIR_FORWARD;
+    if (s->trees.num_records > 0) {
+        /* TODO this is redundant if this is the first usage of the tree. We
+         * should add a state machine here so we know what state the tree is
+         * in and can take the appropriate actions.
+         */
+        ret = sparse_tree_clear(self);
+        if (ret != 0) {
+            goto out;
+        }
+        self->left_index = 0;
+        self->right_index = 0;
+        self->direction = MSP_DIR_FORWARD;
 
-    ret = sparse_tree_advance(self, MSP_DIR_FORWARD,
-            s->trees.records.right, s->trees.indexes.removal_order,
-            &self->right_index, s->trees.records.left,
-            s->trees.indexes.insertion_order, &self->left_index, 1);
+        ret = sparse_tree_advance(self, MSP_DIR_FORWARD,
+                s->trees.records.right, s->trees.indexes.removal_order,
+                &self->right_index, s->trees.records.left,
+                s->trees.indexes.insertion_order, &self->left_index, 1);
+    }
 out:
     return ret;
 }
@@ -3326,23 +3337,25 @@ sparse_tree_last(sparse_tree_t *self)
     int ret = 0;
     tree_sequence_t *s = self->tree_sequence;
 
-    /* TODO this is redundant if this is the first usage of the tree. We
-     * should add a state machine here so we know what state the tree is
-     * in and can take the appropriate actions.
-     */
-    ret = sparse_tree_clear(self);
-    if (ret != 0) {
-        goto out;
-    }
-    self->left_index = s->trees.num_records - 1;
-    self->right_index = s->trees.num_records - 1;
-    self->direction = MSP_DIR_REVERSE;
-    self->index = tree_sequence_get_num_trees(s);
+    if (s->trees.num_records > 0) {
+        /* TODO this is redundant if this is the first usage of the tree. We
+         * should add a state machine here so we know what state the tree is
+         * in and can take the appropriate actions.
+         */
+        ret = sparse_tree_clear(self);
+        if (ret != 0) {
+            goto out;
+        }
+        self->left_index = s->trees.num_records - 1;
+        self->right_index = s->trees.num_records - 1;
+        self->direction = MSP_DIR_REVERSE;
+        self->index = tree_sequence_get_num_trees(s);
 
-    ret = sparse_tree_advance(self, MSP_DIR_REVERSE,
-            s->trees.records.left, s->trees.indexes.insertion_order,
-            &self->left_index, s->trees.records.right,
-            s->trees.indexes.removal_order, &self->right_index, 1);
+        ret = sparse_tree_advance(self, MSP_DIR_REVERSE,
+                s->trees.records.left, s->trees.indexes.insertion_order,
+                &self->left_index, s->trees.records.right,
+                s->trees.indexes.removal_order, &self->right_index, 1);
+    }
 out:
     return ret;
 }

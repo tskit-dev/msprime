@@ -455,10 +455,9 @@ class LowLevelTestCase(tests.MsprimeTestCase):
             demographic_events=demographic_events)
         sim.run()
         ts = _msprime.TreeSequence()
-        recomb_map = uniform_recombination_map(sim)
         mutgen = _msprime.MutationGenerator(rng, mutation_rate)
-        sim.get_tree_sequence(ts, recomb_map, mutgen)
-        # TODO A
+        sim.populate_tree_sequence(ts, mutation_generator=mutgen)
+        # FIXME provenance strings
         # for j in range(num_provenance_strings):
         #     ts.add_provenance_string("xxxxxxx" * (j + 1))
         return ts
@@ -484,8 +483,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         ts = _msprime.TreeSequence()
         sim = get_example_simulator(20, num_populations=3, store_migration_records=True)
         sim.run()
-        recomb_map = uniform_recombination_map(sim)
-        ts.create(sim, recomb_map, 0.25)
+        sim.get_tree_sequence(ts)
         self.assertGreater(sim.get_num_migration_records(), 0)
         return ts
 
@@ -618,7 +616,7 @@ class TestSimulationState(LowLevelTestCase):
         corresponds to correct trees for the specified simulation.
         """
         ts = _msprime.TreeSequence()
-        ts.create(sim, uniform_recombination_map(sim))
+        sim.populate_tree_sequence(ts)
         st = _msprime.SparseTree(ts)
         st_iter = _msprime.SparseTreeIterator(st)
         n = sim.get_sample_size()
@@ -735,8 +733,7 @@ class TestSimulationState(LowLevelTestCase):
         # Check the TreeSequence. Ensure we get the records back in the
         # correct orders.
         ts = _msprime.TreeSequence()
-        recomb_map = uniform_recombination_map(sim)
-        ts.create(sim, recomb_map)
+        sim.populate_tree_sequence(ts)
         ts_records = [
             ts.get_record(j, _msprime.MSP_ORDER_TIME)
             for j in range(len(records))]
@@ -930,8 +927,7 @@ class TestSimulationState(LowLevelTestCase):
             self.verify_completed_simulation(sim)
             # Check the tree sequence.
             tree_sequence = _msprime.TreeSequence()
-            recomb_map = uniform_recombination_map(sim)
-            tree_sequence.create(sim, recomb_map)
+            sim.populate_tree_sequence(tree_sequence)
             self.verify_tree_diffs(tree_sequence)
             self.verify_leaf_counts(tree_sequence)
             sim.reset()
@@ -1740,6 +1736,30 @@ class TestSimulator(LowLevelTestCase):
             sim.reset()
             self.assertEqual(sim.get_time(), 0)
 
+    def test_populate_tree_sequence_interface(self):
+        tree_sequence = _msprime.TreeSequence()
+        sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
+        mutgen = _msprime.MutationGenerator(_msprime.RandomGenerator(1), 0)
+        recomb_map = uniform_recombination_map(sim)
+        # First param is mandatory.
+        self.assertRaises(TypeError, sim.populate_tree_sequence)
+        for bad_type in ["", {}, [], None]:
+            self.assertRaises(TypeError, sim.populate_tree_sequence, bad_type)
+            self.assertRaises(
+                TypeError, sim.populate_tree_sequence, tree_sequence,
+                recombination_map=bad_type)
+            self.assertRaises(
+                TypeError, sim.populate_tree_sequence, tree_sequence,
+                recombination_map=bad_type, mutation_generator=mutgen)
+            self.assertRaises(
+                TypeError, sim.populate_tree_sequence, tree_sequence,
+                mutation_generator=bad_type)
+            self.assertRaises(
+                TypeError, sim.populate_tree_sequence, tree_sequence,
+                mutation_generator=bad_type, recombination_map=recomb_map)
+            self.assertRaises(
+                TypeError, sim.populate_tree_sequence, tree_sequence, Ne=bad_type)
+
 
 class TestTreeSequence(LowLevelTestCase):
     """
@@ -1769,19 +1789,18 @@ class TestTreeSequence(LowLevelTestCase):
             sim2 = _msprime.Simulator(**params)
             sim1.run()
             sim2.run()
+            rng1 = _msprime.RandomGenerator(1)
+            rng2 = _msprime.RandomGenerator(1)
+            mutgen1 = _msprime.MutationGenerator(rng1, 1)
+            mutgen2 = _msprime.MutationGenerator(rng2, 1)
             t1 = _msprime.TreeSequence()
             t2 = _msprime.TreeSequence()
-            t1.create(sim1, uniform_recombination_map(sim1))
-            t2.create(sim1, uniform_recombination_map(sim1))
+            sim1.populate_tree_sequence(t1, mutation_generator=mutgen1)
+            sim1.populate_tree_sequence(t2, mutation_generator=mutgen2)
             self.assertEqual(t1.get_num_records(), t2.get_num_records())
             r1 = [t1.get_record(j) for j in range(t1.get_num_records())]
             r2 = [t2.get_record(j) for j in range(t2.get_num_records())]
             self.assertEqual(r1, r2)
-            self.assertEqual(t1.get_mutations(), t2.get_mutations())
-            rng1 = _msprime.RandomGenerator(1)
-            rng2 = _msprime.RandomGenerator(1)
-            t1.generate_mutations(1, rng1)
-            t2.generate_mutations(1, rng2)
             self.assertEqual(t1.get_mutations(), t2.get_mutations())
 
     def test_create_empty_tree_sequence(self):
@@ -1789,14 +1808,12 @@ class TestTreeSequence(LowLevelTestCase):
             samples=get_samples(10),
             random_generator=_msprime.RandomGenerator(10))
         ts = _msprime.TreeSequence()
-        recomb_map = uniform_recombination_map(sim)
-        self.assertRaises(ValueError, ts.create, sim, recomb_map)
+        self.assertRaises(ValueError, sim.populate_tree_sequence, ts)
         sim.run(0.001)
-        self.assertRaises(ValueError, ts.create, sim, recomb_map)
+        self.assertRaises(ValueError, sim.populate_tree_sequence, ts)
         sim.run()
-        ts.create(sim, recomb_map)
-        self.assertEqual(
-            sim.get_num_coalescence_records(), ts.get_num_records())
+        sim.populate_tree_sequence(ts)
+        self.assertEqual(sim.get_num_coalescence_records(), ts.get_num_records())
 
     def test_file_errors(self):
         ts1 = self.get_tree_sequence()
@@ -1828,11 +1845,14 @@ class TestTreeSequence(LowLevelTestCase):
                 self.assertLess(len(message), 1024)
 
     def test_initial_state(self):
-        # Check the initial state for the dump and load operations.
+        # Check the initial state to make sure that it is empty.
         ts = _msprime.TreeSequence()
-        self.assertRaises(ValueError, ts.dump, "/tmp/file")
-        ts = self.get_tree_sequence()
-        self.assertRaises(ValueError, ts.load, "/tmp/file")
+        self.assertEqual(ts.get_num_records(), 0)
+        self.assertEqual(ts.get_num_mutations(), 0)
+        self.assertEqual(ts.get_mutations(), [])
+        self.assertEqual(ts.get_num_migration_records(), 0)
+        with tempfile.NamedTemporaryFile() as f:
+            self.verify_dump_equality(ts, f)
 
     def test_not_initialised_after_init_error(self):
         ts = _msprime.TreeSequence()
@@ -2063,28 +2083,11 @@ class TestTreeSequence(LowLevelTestCase):
         for j in [0, 10, 10**6]:
             self.assertRaises(IndexError, ts.get_migration_record, num_records + j)
 
-    def test_create_interface(self):
-        tree_sequence = _msprime.TreeSequence()
-        sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
-        recomb_map = uniform_recombination_map(sim)
-        # First two params are mandatory.
-        self.assertRaises(TypeError, tree_sequence.create)
-        self.assertRaises(TypeError, tree_sequence.create, sim)
-        self.assertRaises(TypeError, tree_sequence.create, recomb_map, sim)
-        for bad_type in ["", {}, [], None]:
-            self.assertRaises(TypeError, tree_sequence.create, sim, bad_type)
-            self.assertRaises(
-                TypeError, tree_sequence.create, bad_type, recomb_map)
-            # Ne argument is optional, must be a number
-            self.assertRaises(
-                TypeError, tree_sequence.create, sim, recomb_map, bad_type)
-
     def test_migration_records(self):
         ts = _msprime.TreeSequence()
         sim = get_example_simulator(10, num_populations=3, store_migration_records=True)
         sim.run()
-        recomb_map = uniform_recombination_map(sim)
-        ts.create(sim, recomb_map, 0.25)
+        sim.populate_tree_sequence(ts)
         self.assertGreater(sim.get_num_migration_records(), 0)
         self.assertEqual(
             sim.get_num_migration_records(), ts.get_num_migration_records())
@@ -2104,10 +2107,9 @@ class TestTreeSequence(LowLevelTestCase):
     def test_record_scaling(self):
         sim = get_example_simulator(10, num_populations=2, store_migration_records=True)
         sim.run()
-        recomb_map = uniform_recombination_map(sim)
         for Ne in [0.25, 1, 10, 1e6]:
             tree_sequence = _msprime.TreeSequence()
-            tree_sequence.create(sim, recomb_map, Ne)
+            sim.populate_tree_sequence(tree_sequence, Ne=Ne)
             self.assertEqual(
                 sim.get_num_coalescence_records(),
                 tree_sequence.get_num_records())
