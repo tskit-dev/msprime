@@ -567,11 +567,34 @@ test_fenwick(void)
 }
 
 static void
-test_vcf(void)
+verify_vcf_converter(tree_sequence_t *ts, unsigned int ploidy)
 {
     int ret;
     char *str = NULL;
-    unsigned int ploidy, num_variants;
+    vcf_converter_t vc;
+    unsigned int num_variants;
+
+    ret = vcf_converter_alloc(&vc, ts, ploidy);
+    CU_ASSERT_FATAL(ret ==  0);
+    vcf_converter_print_state(&vc, _devnull);
+    ret = vcf_converter_get_header(&vc, &str);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_NSTRING_EQUAL("##", str, 2);
+    num_variants = 0;
+    while ((ret = vcf_converter_next(&vc, &str)) == 1) {
+        CU_ASSERT_NSTRING_EQUAL("1\t", str, 2);
+        num_variants++;
+    }
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_TRUE(num_variants == tree_sequence_get_num_mutations(ts));
+    vcf_converter_free(&vc);
+}
+
+static void
+test_vcf(void)
+{
+    int ret;
+    unsigned int ploidy;
     vcf_converter_t *vc = malloc(sizeof(vcf_converter_t));
     tree_sequence_t *ts = get_example_tree_sequence(10, 0, 100, 100.0, 1.0, 1.0,
             0, NULL);
@@ -587,20 +610,7 @@ test_vcf(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     for (ploidy = 1; ploidy < 3; ploidy++) {
-        ret = vcf_converter_alloc(vc, ts, ploidy);
-        CU_ASSERT_FATAL(ret ==  0);
-        vcf_converter_print_state(vc, _devnull);
-        ret = vcf_converter_get_header(vc, &str);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_NSTRING_EQUAL("##", str, 2);
-        num_variants = 0;
-        while ((ret = vcf_converter_next(vc, &str)) == 1) {
-            CU_ASSERT_NSTRING_EQUAL("1\t", str, 2);
-            num_variants++;
-        }
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(num_variants, tree_sequence_get_num_mutations(ts));
-        vcf_converter_free(vc);
+        verify_vcf_converter(ts, ploidy);
     }
 
     free(vc);
@@ -4775,6 +4785,7 @@ verify_empty_tree_sequence(tree_sequence_t *ts)
     verify_hapgen(ts);
     verify_vargen(ts);
     verify_newick(ts, false);
+    verify_vcf_converter(ts, 1);
 }
 
 static void

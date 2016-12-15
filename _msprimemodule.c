@@ -1258,31 +1258,25 @@ out:
 static PyObject *
 TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
-    /* int err; */
+    int err;
     PyObject *ret = NULL;
     PyObject *py_records = NULL;
     PyObject *py_samples = NULL;
     PyObject *item;
     coalescence_record_t *records = NULL;
     sample_t *samples = NULL;
-    Py_ssize_t sample_size;
+    Py_ssize_t num_samples;
     size_t num_records, j;
-    static char *kwlist[] = {"records", "samples", NULL};
+    static char *kwlist[] = {"samples", "coalescence_records", NULL};
 
-    if (self->tree_sequence != NULL) {
-        PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
+    if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
-                &PyList_Type, &py_records, &PyList_Type, &py_samples)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!", kwlist,
+                &PyList_Type, &py_samples,
+                &PyList_Type, &py_records)) {
         goto out;
     }
-    self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
-    if (self->tree_sequence == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
     num_records = PyList_Size(py_records);
     records = PyMem_Malloc(num_records * sizeof(coalescence_record_t));
     if (records == NULL) {
@@ -1296,22 +1290,22 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    /* err = tree_sequence_load_records( */
-    /*         self->tree_sequence, num_records, records); */
-    /* if (err != 0) { */
-    /*     handle_library_error(err); */
-    /*     goto out; */
-    /* } */
-    if (py_samples != NULL) {
-        if (parse_samples(py_samples, &sample_size, &samples) != 0) {
-            goto out;
-        }
-        /* err = tree_sequence_set_samples( */
-        /*         self->tree_sequence, sample_size, samples); */
-        /* if (err != 0) { */
-        /*     handle_library_error(err); */
-        /*     goto out; */
-        /* } */
+    if (parse_samples(py_samples, &num_samples, &samples) != 0) {
+        goto out;
+    }
+    if (num_samples < 2) {
+        PyErr_SetString(PyExc_ValueError, "At least two samples required.");
+        goto out;
+    }
+    err = tree_sequence_load_records(self->tree_sequence,
+            num_samples, samples,
+            num_records, records,
+            0, NULL,
+            0, NULL,
+            0, NULL);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
     }
     ret = Py_BuildValue("");
 out:
@@ -1325,12 +1319,6 @@ out:
     }
     if (samples != NULL) {
         PyMem_Free(samples);
-    }
-    if (ret == NULL && self->tree_sequence != NULL) {
-        /* Ensure that the state of the tree sequence is consistent */
-        tree_sequence_free(self->tree_sequence);
-        PyMem_Free(self->tree_sequence);
-        self->tree_sequence = NULL;
     }
     return ret;
 }
@@ -1720,16 +1708,16 @@ out:
 }
 
 /* Forward declaration */
-static PyObject * build_TreeSequence(tree_sequence_t *ts);
+static PyTypeObject TreeSequenceType;
 static PyObject *
 TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     PyObject *py_samples = NULL;
-    static char *kwlist[] = {"samples", "filter_root_mutations", NULL};
+    static char *kwlist[] = {"output", "samples", "filter_root_mutations", NULL};
     uint32_t *samples = NULL;
     size_t num_samples = 0;
-    tree_sequence_t *subset_ts = NULL;
+    TreeSequence *output = NULL;
     int filter_root_mutations = 1;
     int flags = 0;
     int err;
@@ -1737,8 +1725,13 @@ TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
-            &PyList_Type, &py_samples, &filter_root_mutations)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|i", kwlist,
+            &TreeSequenceType, &output,
+            &PyList_Type, &py_samples,
+            &filter_root_mutations)) {
+        goto out;
+    }
+    if (TreeSequence_check_tree_sequence(output) != 0) {
         goto out;
     }
     if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
@@ -1747,35 +1740,16 @@ TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (filter_root_mutations) {
         flags |= MSP_FILTER_ROOT_MUTATIONS;
     }
-    subset_ts = PyMem_Malloc(sizeof(tree_sequence_t));
-    if (subset_ts == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(subset_ts, 0, sizeof(tree_sequence_t));
     err = tree_sequence_simplify(
-        self->tree_sequence, samples, (uint32_t) num_samples, flags, subset_ts);
+        self->tree_sequence, samples, (uint32_t) num_samples, flags, output->tree_sequence);
     if (err != 0) {
-        /* We must free the memory for subset_ts, but not call tree_sequence_free
-         * as it has already been called. */
-        PyMem_Free(subset_ts);
-        subset_ts = NULL;
         handle_library_error(err);
         goto out;
     }
-    ret = build_TreeSequence(subset_ts);
-    if (ret != NULL) {
-        /* the new TreeSequence object now has ownership of the tree
-         * sequence so we must not free it */
-        subset_ts = NULL;
-    }
+    ret = Py_BuildValue("");
 out:
     if (samples != NULL) {
         PyMem_Free(samples);
-    }
-    if (subset_ts != NULL) {
-        tree_sequence_free(subset_ts);
-        PyMem_Free(subset_ts);
     }
     return ret;
 }
@@ -1881,22 +1855,6 @@ static PyTypeObject TreeSequenceType = {
     0,                         /* tp_dictoffset */
     (initproc)TreeSequence_init,      /* tp_init */
 };
-
-static PyObject *
-build_TreeSequence(tree_sequence_t *ts)
-{
-    PyObject *ret = NULL;
-    TreeSequence *new_ts = NULL;
-
-    new_ts = (TreeSequence *) PyObject_CallObject((PyObject *) &TreeSequenceType, NULL);
-    if (new_ts == NULL) {
-        goto out;
-    }
-    new_ts->tree_sequence = ts;
-    ret = (PyObject *) new_ts;
-out:
-    return ret;
-}
 
 /*===================================================================
  * SparseTree
