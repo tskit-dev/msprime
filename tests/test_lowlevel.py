@@ -1864,8 +1864,7 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertEqual(ts.get_num_mutations(), 0)
         self.assertEqual(ts.get_mutations(), [])
         self.assertEqual(ts.get_num_migration_records(), 0)
-        with tempfile.NamedTemporaryFile() as f:
-            self.verify_dump_equality(ts, f)
+        self.verify_dump_equality(ts)
 
     def test_num_nodes(self):
         for ts in self.get_example_tree_sequences():

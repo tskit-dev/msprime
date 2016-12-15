@@ -85,7 +85,6 @@ def historical_sample_example():
         samples=[(0, j) for j in range(10)])
 
 
-<<<<<<< HEAD
 class TestHdf5(unittest.TestCase):
     """
     Superclass of HDF5 tests.
@@ -98,8 +97,8 @@ class TestHdf5(unittest.TestCase):
         os.unlink(self.temp_file)
 
 
-class TestRoundTrip(TestHdf5):
 @unittest.skip("load mutations")
+class TestRoundTrip(TestHdf5):
     """
     Tests if we can round trip convert a tree sequence in memory
     through a V2 file format and a V3 format.
