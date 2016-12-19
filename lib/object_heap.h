@@ -16,19 +16,25 @@
 ** You should have received a copy of the GNU General Public License
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+#ifndef OBJECT_HEAP_H
+#define OBJECT_HEAP_H
+
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
 
 #include "msprime.h"
 
-size_t object_heap_get_num_allocated(object_heap_t *self);
-void object_heap_print_state(object_heap_t *self, FILE *out);
-int object_heap_expand(object_heap_t *self);
-void * object_heap_get_object(object_heap_t *self, size_t index);
-int object_heap_empty(object_heap_t *self);
-void * object_heap_alloc_object(object_heap_t *self);
-void object_heap_free_object(object_heap_t *self, void *obj);
-int object_heap_init(object_heap_t *self, size_t object_size, size_t block_size,
+extern size_t object_heap_get_num_allocated(object_heap_t *self);
+extern void object_heap_print_state(object_heap_t *self, FILE *out);
+extern int object_heap_expand(object_heap_t *self);
+extern void * object_heap_get_object(object_heap_t *self, size_t index);
+extern int object_heap_empty(object_heap_t *self);
+extern void * object_heap_alloc_object(object_heap_t *self);
+extern void object_heap_free_object(object_heap_t *self, void *obj);
+extern int object_heap_init(object_heap_t *self, size_t object_size, size_t block_size,
         void (*init_object)(void **, size_t));
-void object_heap_free(object_heap_t *self);
+extern void object_heap_free(object_heap_t *self);
+
+#endif

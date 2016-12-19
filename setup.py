@@ -20,6 +20,9 @@ from __future__ import division
 from __future__ import print_function
 
 import subprocess
+import platform
+
+IS_WINDOWS = platform.system() == "Windows"
 
 # First, we try to use setuptools. If it's not available locally,
 # we fall back on ez_setup.
@@ -93,13 +96,18 @@ class DefineMacros(object):
     def __getitem__(self, index):
         if self._msprime_version is None:
             import setuptools_scm
-            self._msprime_version = setuptools_scm.get_version()
+            version = setuptools_scm.get_version()
+            if IS_WINDOWS:
+                self._msprime_version = '\\"{}\\"'.format(version)
+            else:
+                self._msprime_version = '"{}"'.format(version)
+
         l = [
             # We define this macro to ensure we're using the v18 versions of
             # the HDF5 API and not earlier deprecated versions.
             ("H5_NO_DEPRECATED_SYMBOLS", None),
             # Define the library version
-            ("MSP_LIBRARY_VERSION_STR", '"{}"'.format(self._msprime_version)),
+            ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
         ]
         return l[index]
 
