@@ -891,7 +891,7 @@ class TestTreeSequence(HighLevelTestCase):
             if ts.get_num_mutations() > 0:
                 all_zero = False
                 self.verify_mutations(ts)
-            muts = [[], [(0, 0, 0)], [(0, 0, 0), (0, 1, 1)]]
+            muts = [[], [(0, 0, 0)], [(0, 0, 0), (0.1, 1, 1)]]
             for mutations in muts:
                 ts.set_mutations(mutations)
                 self.assertEqual(ts.get_num_mutations(), len(mutations))
