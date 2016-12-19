@@ -30,7 +30,14 @@ import unittest
 import msprime
 
 import vcf
-import pysam
+# Pysam is not available on windows, so we don't make it mandatory here.
+_pysam_imported = False
+try:
+    import pysam
+    _pysam_imported = True
+except ImportError:
+    pass
+
 
 test_data = []
 
@@ -45,15 +52,13 @@ def setUp():
             for rho in [0, 0.5]:
                 for mu in [0, 1.0]:
                     ts = msprime.simulate(
-                        n * ploidy, length=L, recombination_rate=rho,
-                        mutation_rate=mu)
-                    fd, file_name = tempfile.mkstemp(prefix="msprime_vcf")
+                        n * ploidy, length=L, recombination_rate=rho, mutation_rate=mu)
+                    fd, file_name = tempfile.mkstemp(prefix="msprime_vcf_")
+                    os.close(fd)
                     with open(file_name, "w") as f:
                         ts.write_vcf(f, ploidy)
-                    sample_names = [
-                        "msp_{}".format(j) for j in range(n)]
-                    test_data.append(
-                        Datum(ts, ploidy, file_name, sample_names))
+                    sample_names = ["msp_{}".format(j) for j in range(n)]
+                    test_data.append(Datum(ts, ploidy, file_name, sample_names))
 
 
 def tearDown():
@@ -137,6 +142,7 @@ class TestHeaderParsers(unittest.TestCase):
             self.assertEqual(f.id, "GT")
             self.assertEqual(len(reader.infos), 0)
 
+    @unittest.skipIf(not _pysam_imported, "pysam not available")
     def test_pysam(self):
         for datum in test_data:
             bcf_file = pysam.VariantFile(datum.vcf_file)
@@ -163,6 +169,7 @@ class TestHeaderParsers(unittest.TestCase):
             bcf_file.close()
 
 
+@unittest.skipIf(not _pysam_imported, "pysam not available")
 class TestRecordsEqual(unittest.TestCase):
     """
     Tests where we parse the input using PyVCF and Pysam

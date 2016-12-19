@@ -124,6 +124,18 @@ class TestRandomSeeds(unittest.TestCase):
             seeds.add(s)
 
 
+class TestCli(unittest.TestCase):
+    """
+    Superclass of tests for the CLI needing temp files.
+    """
+    def setUp(self):
+        fd, self.temp_file = tempfile.mkstemp(prefix="msp_cli_testcase_")
+        os.close(fd)
+
+    def tearDown(self):
+        os.unlink(self.temp_file)
+
+
 class TestMspmsRoundTrip(unittest.TestCase):
     """
     Tests the mspms argument parsing to ensure that we correctly round-trip
@@ -290,12 +302,13 @@ class CustomExceptionForTesting(Exception):
     """
 
 
-class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
+class TestMspmsCreateSimulationRunnerErrors(TestCli):
     """
     Tests for errors that can be thrown when creating the simulation runner.
     """
 
     def setUp(self):
+        super(TestMspmsCreateSimulationRunnerErrors, self).setUp()
 
         def error_handler(message):
             raise CustomExceptionForTesting()
@@ -307,14 +320,13 @@ class TestMspmsCreateSimulationRunnerErrors(unittest.TestCase):
         self.assertRaises(
             CustomExceptionForTesting, cli.create_simulation_runner,
             self.parser, split_cmd)
-        with tempfile.NamedTemporaryFile("w+") as f:
+        with open(self.temp_file, "w") as f:
             # We're assuming the first two args are always the sample size
             # and num_replicates here.
             f.write(" ".join(split_cmd[2:]))
-            f.flush()
-            self.assertRaises(
-                CustomExceptionForTesting, cli.create_simulation_runner,
-                self.parser, split_cmd[:2] + ["-f", f.name])
+        self.assertRaises(
+            CustomExceptionForTesting, cli.create_simulation_runner,
+            self.parser, split_cmd[:2] + ["-f", self.temp_file])
 
     def test_trees_or_mutations(self):
         self.assert_parser_error("10 1")
@@ -814,7 +826,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             [(2.2, 0, 2, 0), (3.3, 1, 3, 1.0)])
 
 
-class TestMspmsArgsFromFile(unittest.TestCase):
+class TestMspmsArgsFromFile(TestCli):
     """
     Test that parsing command line arguments from a file results gives
     the same results.
@@ -835,11 +847,11 @@ class TestMspmsArgsFromFile(unittest.TestCase):
         cmd_line_result = vars(parser.parse_args(
             cmd_line_args.split() + file_args.split()))
         parser = cli.get_mspms_parser()
-        with tempfile.NamedTemporaryFile("w+") as f:
+        with open(self.temp_file, "w") as f:
             f.write(file_args)
             f.flush()
-            file_result = vars(parser.parse_args(
-                cmd_line_args.split() + ["-f", f.name]))
+        file_result = vars(
+            parser.parse_args(cmd_line_args.split() + ["-f", self.temp_file]))
         self.assertEqual(cmd_line_result, file_result)
 
     def test_empty_file(self):
@@ -856,7 +868,7 @@ class TestMspmsArgsFromFile(unittest.TestCase):
             self.verify_parsing(" ".join(cmd_line[:k]), " ".join(cmd_line[k:]))
 
 
-class TestMspmsArgsFromFileErrors(unittest.TestCase):
+class TestMspmsArgsFromFileErrors(TestCli):
     """
     Tests for errors that can be thrown when reading arguments from a file.
     """
@@ -872,15 +884,15 @@ class TestMspmsArgsFromFileErrors(unittest.TestCase):
             parser, command_line.split())
 
     def test_file_arg_in_file(self):
-        with tempfile.NamedTemporaryFile("w+") as f:
+        with open(self.temp_file, "w") as f:
             f.write("-f otherfile")
-            self.assert_parser_error("10 1 -f {}".format(f.name))
+        self.assert_parser_error("10 1 -f {}".format(self.temp_file))
 
     def test_missing_file(self):
         self.assert_parser_error("10 1 -f /does/not/exist")
 
 
-class TestMspmsOutput(unittest.TestCase):
+class TestMspmsOutput(TestCli):
     """
     Tests the output of the ms compatible CLI.
     """
@@ -916,7 +928,7 @@ class TestMspmsOutput(unittest.TestCase):
             num_replicates=num_replicates, scaled_mutation_rate=mutation_rate,
             print_trees=print_trees, precision=precision,
             random_seeds=random_seeds)
-        with tempfile.TemporaryFile("w+") as f:
+        with open(self.temp_file, "w+") as f:
             sr.run(f)
             f.seek(0)
             # The first line contains the command line.
@@ -1269,8 +1281,7 @@ class TestMspSimulateOutput(unittest.TestCase):
     Tests the output of msp to ensure it's correct.
     """
     def setUp(self):
-        fd, self._history_file = tempfile.mkstemp(
-            prefix="msp_cli", suffix=".hdf5")
+        fd, self._history_file = tempfile.mkstemp(prefix="msp_cli", suffix=".hdf5")
         os.close(fd)
 
     def tearDown(self):
@@ -1308,8 +1319,7 @@ class TestMspConversionOutput(unittest.TestCase):
         cls._tree_sequence = msprime.simulate(
             10, length=10, recombination_rate=10,
             mutation_rate=10, random_seed=1)
-        fd, cls._history_file = tempfile.mkstemp(
-            prefix="msp_cli", suffix=".hdf5")
+        fd, cls._history_file = tempfile.mkstemp(prefix="msp_cli", suffix=".hdf5")
         os.close(fd)
         cls._tree_sequence.dump(cls._history_file)
 
@@ -1451,19 +1461,23 @@ class TestMspConversionOutput(unittest.TestCase):
                 self.assertEqual(col[j], haplotypes[j][site])
 
 
-class TestUpgrade(unittest.TestCase):
+class TestUpgrade(TestCli):
     """
     Tests the results of the upgrade operation to ensure they are
     correct.
     """
     def test_conversion(self):
         ts1 = msprime.simulate(10)
-        with tempfile.NamedTemporaryFile("w+") as v2_file, \
-                tempfile.NamedTemporaryFile("w+") as v3_file:
-            msprime.dump_legacy(ts1, v2_file.name)
-            stdout, stderr = capture_output(cli.msp_main, [
-                "upgrade", v2_file.name, v3_file.name])
-            ts2 = msprime.load(v3_file.name)
+        v2_file_name = self.temp_file + ".v2"
+        v3_file_name = self.temp_file + ".v3"
+        try:
+            msprime.dump_legacy(ts1, v2_file_name)
+            stdout, stderr = capture_output(
+                cli.msp_main, ["upgrade", v2_file_name, v3_file_name])
+            ts2 = msprime.load(v3_file_name)
+        finally:
+            os.unlink(v2_file_name)
+            os.unlink(v3_file_name)
         self.assertEqual(stdout, "")
         # We get some cruft on stderr that comes from h5py. This only happens
         # because we're mixing h5py and msprime for this test, so we can ignore

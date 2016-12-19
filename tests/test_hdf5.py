@@ -85,25 +85,36 @@ def historical_sample_example():
         samples=[(0, j) for j in range(10)])
 
 
-class TestRoundTrip(unittest.TestCase):
+class TestHdf5(unittest.TestCase):
+    """
+    Superclass of HDF5 tests.
+    """
+    def setUp(self):
+        fd, self.temp_file = tempfile.mkstemp(prefix="msp_hdf5_test_")
+        os.close(fd)
+
+    def tearDown(self):
+        os.unlink(self.temp_file)
+
+
+class TestRoundTrip(TestHdf5):
     """
     Tests if we can round trip convert a tree sequence in memory
     through a V2 file format and a V3 format.
     """
 
     def verify_round_trip(self, ts):
-        with tempfile.NamedTemporaryFile(prefix="msp_ff_") as f:
-            tmp = sys.stderr
-            try:
-                with open("/dev/null", "w") as devnull:
-                    sys.stderr = devnull
-                    # We silence stderr here because h5py dumps out some
-                    # spurious # error messages. See
-                    # https://github.com/h5py/h5py/issues/390
-                    msprime.dump_legacy(ts, f.name)
-                    tsp = msprime.load_legacy(f.name)
-            finally:
-                sys.stderr = tmp
+        tmp = sys.stderr
+        try:
+            with open(os.devnull, "w") as devnull:
+                sys.stderr = devnull
+                # We silence stderr here because h5py dumps out some
+                # spurious # error messages. See
+                # https://github.com/h5py/h5py/issues/390
+                msprime.dump_legacy(ts, self.temp_file)
+                tsp = msprime.load_legacy(self.temp_file)
+        finally:
+            sys.stderr = tmp
         self.assertEqual(ts.get_num_records(), tsp.get_num_records())
         self.assertEqual(ts.get_sample_size(), tsp.get_sample_size())
         self.assertEqual(ts.get_sequence_length(), tsp.get_sequence_length())
@@ -148,7 +159,7 @@ class TestRoundTrip(unittest.TestCase):
         self.verify_round_trip(migration_example())
 
 
-class TestErrors(unittest.TestCase):
+class TestErrors(TestHdf5):
     """
     Test various API errors.
     """
@@ -160,32 +171,28 @@ class TestErrors(unittest.TestCase):
             sample_size=10,
             demographic_events=demographic_events,
             random_seed=1)
-        with tempfile.NamedTemporaryFile() as f:
-            self.assertRaises(
-                ValueError, msprime.dump_legacy, ts, f.name)
+        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file)
 
     def test_unsupported_format(self):
         ts = msprime.simulate(10)
-        with tempfile.NamedTemporaryFile() as f:
-            self.assertRaises(
-                ValueError, msprime.dump_legacy, ts, f.name, version=3)
-            # We refuse to read version 3 also
-            ts.dump(f.name)
-            self.assertRaises(ValueError, msprime.load_legacy, f.name)
+        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, version=3)
+        # We refuse to read version 3 also
+        ts.dump(self.temp_file)
+        self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
-class TestHdf5Format(unittest.TestCase):
+class TestHdf5Format(TestHdf5):
     """
     Tests on the HDF5 file format.
     """
 
-    def verify_tree_dump_format(self, ts, outfile):
+    def verify_tree_dump_format(self, ts):
         uint32 = "<u4"
         float64 = "<f8"
-        ts.dump(outfile.name)
-        self.assertTrue(os.path.exists(outfile.name))
-        self.assertGreater(os.path.getsize(outfile.name), 0)
-        root = h5py.File(outfile.name, "r")
+        ts.dump(self.temp_file)
+        self.assertTrue(os.path.exists(self.temp_file))
+        self.assertGreater(os.path.getsize(self.temp_file), 0)
+        root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
         self.assertEqual(format_version[0], 3)
@@ -285,45 +292,35 @@ class TestHdf5Format(unittest.TestCase):
         root.close()
 
     def test_single_locus_no_mutation(self):
-        with tempfile.NamedTemporaryFile() as f:
-            self.verify_tree_dump_format(
-                single_locus_no_mutation_example(), f)
+        self.verify_tree_dump_format(single_locus_no_mutation_example())
 
     def test_single_locus_with_mutation(self):
-        with tempfile.NamedTemporaryFile() as f:
-            self.verify_tree_dump_format(
-                single_locus_with_mutation_example(), f)
+        self.verify_tree_dump_format(single_locus_with_mutation_example())
 
     def test_multi_locus_with_mutation(self):
-        with tempfile.NamedTemporaryFile() as f:
-            self.verify_tree_dump_format(
-                multi_locus_with_mutation_example(), f)
+        self.verify_tree_dump_format(multi_locus_with_mutation_example())
 
     def test_migration_example(self):
-        with tempfile.NamedTemporaryFile() as f:
-            self.verify_tree_dump_format(migration_example(), f)
+        self.verify_tree_dump_format(migration_example())
 
     def test_bottleneck_example(self):
-        with tempfile.NamedTemporaryFile() as f:
-            self.verify_tree_dump_format(bottleneck_example(), f)
+        self.verify_tree_dump_format(bottleneck_example())
 
     def test_historical_sample_example(self):
-        with tempfile.NamedTemporaryFile() as f:
-            self.verify_tree_dump_format(historical_sample_example(), f)
+        self.verify_tree_dump_format(historical_sample_example())
 
     def test_optional_provenance(self):
         ts = single_locus_no_mutation_example()
-        with tempfile.NamedTemporaryFile() as f:
-            ts.dump(f.name)
-            hfile = h5py.File(f.name, "r+")
-            del hfile["provenance"]
-            hfile.close()
-            del hfile
-            other_ts = msprime.load(f.name)
-            self.assertEqual(other_ts.get_provenance(), [])
+        ts.dump(self.temp_file)
+        hfile = h5py.File(self.temp_file, "r+")
+        del hfile["provenance"]
+        hfile.close()
+        del hfile
+        other_ts = msprime.load(self.temp_file)
+        self.assertEqual(other_ts.get_provenance(), [])
 
 
-class TestHdf5FormatErrors(unittest.TestCase):
+class TestHdf5FormatErrors(TestHdf5):
     """
     Tests for errors in the HDF5 format.
     """
@@ -334,19 +331,17 @@ class TestHdf5FormatErrors(unittest.TestCase):
         def visit(name):
             if name not in ["provenance", "mutations"]:
                 names.append(name)
-        with tempfile.NamedTemporaryFile() as f:
-            ts.dump(f.name)
-            hfile = h5py.File(f.name, "r")
-            hfile.visit(visit)
-            hfile.close()
+        ts.dump(self.temp_file)
+        hfile = h5py.File(self.temp_file, "r")
+        hfile.visit(visit)
+        hfile.close()
         for name in names:
-            with tempfile.NamedTemporaryFile() as f:
-                ts.dump(f.name)
-                hfile = h5py.File(f.name, "r+")
-                del hfile[name]
-                hfile.close()
-                del hfile
-                self.assertRaises(_msprime.LibraryError, msprime.load, f.name)
+            ts.dump(self.temp_file)
+            hfile = h5py.File(self.temp_file, "r+")
+            del hfile[name]
+            hfile.close()
+            del hfile
+            self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
 
     def test_mandatory_fields_no_mutation(self):
         self.verify_fields(single_locus_no_mutation_example())
@@ -355,36 +350,30 @@ class TestHdf5FormatErrors(unittest.TestCase):
         self.verify_fields(single_locus_with_mutation_example())
 
     def test_load_malformed_hdf5(self):
-        with tempfile.NamedTemporaryFile(prefix="malformed_") as f:
-            hfile = h5py.File(f.name, "w")
-            # First try the empty hdf5 file.
-            hfile.close()
-            self.assertRaises(
-                _msprime.LibraryError, msprime.load, f.name)
+        hfile = h5py.File(self.temp_file, "w")
+        # First try the empty hdf5 file.
+        hfile.close()
+        self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
 
     def test_version_load_error(self):
         ts = msprime.simulate(10)
         for bad_version in [(0, 1), (0, 8), (2, 0)]:
-            with tempfile.NamedTemporaryFile() as f:
-                ts.dump(f.name)
-                hfile = h5py.File(f.name, "r+")
-                hfile.attrs['format_version'] = bad_version
-                hfile.close()
-                other_ts = _msprime.TreeSequence()
-                self.assertRaises(
-                    _msprime.LibraryError, other_ts.load, f.name)
+            ts.dump(self.temp_file)
+            hfile = h5py.File(self.temp_file, "r+")
+            hfile.attrs['format_version'] = bad_version
+            hfile.close()
+            other_ts = _msprime.TreeSequence()
+            self.assertRaises(_msprime.LibraryError, other_ts.load, self.temp_file)
 
     def test_load_bad_formats(self):
         # try loading a bunch of files in various formats.
-        with tempfile.NamedTemporaryFile("wb") as f:
-            # First, check the emtpy file.
-            self.assertRaises(_msprime.LibraryError, msprime.load, f.name)
-            # Now some ascii text
+        # First, check the emtpy file.
+        self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
+        # Now some ascii text
+        with open(self.temp_file, "wb") as f:
             f.write(b"Some ASCII text")
-            f.flush()
-            self.assertRaises(_msprime.LibraryError, msprime.load, f.name)
-            f.seek(0)
-            # Now write 8k of random bytes
+        self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
+        # Now write 8k of random bytes
+        with open(self.temp_file, "wb") as f:
             f.write(os.urandom(8192))
-            f.flush()
-            self.assertRaises(_msprime.LibraryError, msprime.load, f.name)
+        self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)

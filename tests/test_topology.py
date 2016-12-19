@@ -349,7 +349,7 @@ class TestMultipleRoots(TopologyTestCase):
             msprime.CoalescenceRecord(
                 left=0, right=1, node=4, children=(0, 1), time=1, population=0),
             msprime.CoalescenceRecord(
-                left=0, right=1, node=5, children=(2, 3), time=1, population=0),
+                left=0, right=1, node=5, children=(2, 3), time=2, population=0),
         ]
         mutations = [
             msprime.Mutation(index=0, position=0.1, node=0),
@@ -362,7 +362,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts.num_trees, 1)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
-        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1})
+        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 2})
         self.assertEqual(list(t.mutations()), mutations)
         self.assertEqual(list(ts.haplotypes()), ["1000", "0100", "0010", "0001"])
         self.assertEqual(
@@ -379,7 +379,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts_simplified.num_trees, 1)
         t = next(ts_simplified.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
-        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1})
+        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 2})
         self.assertEqual(list(t.mutations()), mutations)
 
     def test_two_reducable_trees(self):
