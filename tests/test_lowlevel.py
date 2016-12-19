@@ -27,6 +27,7 @@ import collections
 import heapq
 import itertools
 import math
+import os
 import random
 import sys
 import tempfile
@@ -1743,6 +1744,12 @@ class TestTreeSequence(LowLevelTestCase):
     """
     Tests for the low-level interface for the TreeSequence.
     """
+    def setUp(self):
+        fd, self.temp_file = tempfile.mkstemp(prefix="msp_ll_ts_")
+        os.close(fd)
+
+    def tearDown(self):
+        os.unlink(self.temp_file)
 
     def test_seed_equality(self):
         rng = _msprime.RandomGenerator(10)
@@ -1855,14 +1862,14 @@ class TestTreeSequence(LowLevelTestCase):
                 # tests are done in test_demography.
                 self.assertEqual(ts.get_sample(j), (0.0, 0))
 
-    def verify_dump_equality(self, ts, outfile):
+    def verify_dump_equality(self, ts):
         """
         Verifies that we can dump a copy of the specified tree sequence
         to the specified file, and load an identical copy.
         """
-        ts.dump(outfile.name)
+        ts.dump(self.temp_file)
         ts2 = _msprime.TreeSequence()
-        ts2.load(outfile.name)
+        ts2.load(self.temp_file)
         self.assertEqual(ts.get_sample_size(), ts2.get_sample_size())
         self.assertEqual(ts.get_sequence_length(), ts2.get_sequence_length())
         self.assertEqual(ts.get_num_mutations(), ts2.get_num_mutations())
@@ -1878,8 +1885,7 @@ class TestTreeSequence(LowLevelTestCase):
 
     def test_dump_equality(self):
         for ts in self.get_example_tree_sequences():
-            with tempfile.NamedTemporaryFile() as f:
-                self.verify_dump_equality(ts, f)
+            self.verify_dump_equality(ts)
 
     def test_generate_mutations_interface(self):
         ts = _msprime.TreeSequence()
@@ -1964,8 +1970,7 @@ class TestTreeSequence(LowLevelTestCase):
             ts.set_mutations(mutations)
             self.assertEqual(ts.get_mutations(), mutations)
             # Test dumping the mutations
-            with tempfile.NamedTemporaryFile() as f:
-                self.verify_dump_equality(ts, f)
+            self.verify_dump_equality(ts)
 
     def test_set_mutations_tree_refcount(self):
         ts = self.get_tree_sequence(mutation_rate=0.0)
@@ -2297,11 +2302,10 @@ class TestTreeSequence(LowLevelTestCase):
                 strings.append("x" * (k + 1) * 8192)
                 ts.add_provenance_string(strings[-1])
             self.assertEqual(ts.get_provenance_strings(), strings)
-            with tempfile.NamedTemporaryFile(prefix="msp_ll_test_ps") as f:
-                ts.dump(f.name)
-                ts2 = _msprime.TreeSequence()
-                ts2.load(f.name)
-                self.assertEqual(ts2.get_provenance_strings(), strings)
+            ts.dump(self.temp_file)
+            ts2 = _msprime.TreeSequence()
+            ts2.load(self.temp_file)
+            self.assertEqual(ts2.get_provenance_strings(), strings)
 
 
 class TestNewickConverter(LowLevelTestCase):

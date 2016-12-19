@@ -320,6 +320,13 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests on the high level interface.
     """
+    def setUp(self):
+        fd, self.temp_file = tempfile.mkstemp(prefix="msp_hl_testcase_")
+        os.close(fd)
+
+    def tearDown(self):
+        os.unlink(self.temp_file)
+
     def get_bottleneck_examples(self):
         """
         Returns an iterator of example tree sequences with nonbinary
@@ -563,9 +570,8 @@ class TestTreeSimulator(HighLevelTestCase):
         Dump the tree sequence and verify we can load again from the same
         file.
         """
-        with tempfile.NamedTemporaryFile("w+") as f:
-            tree_sequence.dump(f.name)
-            other = msprime.load(f.name)
+        tree_sequence.dump(self.temp_file)
+        other = msprime.load(self.temp_file)
         records = list(tree_sequence.records())
         other_records = list(other.records())
         self.assertEqual(records, other_records)
@@ -1006,12 +1012,10 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_samples(1), [])
 
     def test_write_vcf_interface(self):
-        with tempfile.TemporaryFile("w") as f:
-            for ts in self.get_example_tree_sequences():
-                n = ts.get_sample_size()
-                for bad_ploidy in [-1, 0, n + 1]:
-                    self.assertRaises(
-                        ValueError, ts.write_vcf, f, bad_ploidy)
+        for ts in self.get_example_tree_sequences():
+            n = ts.get_sample_size()
+            for bad_ploidy in [-1, 0, n + 1]:
+                self.assertRaises(ValueError, ts.write_vcf, self.temp_file, bad_ploidy)
 
     def verify_write_records(self, ts, header, precision):
         """
@@ -1020,7 +1024,7 @@ class TestTreeSequence(HighLevelTestCase):
 
         def convert(v):
             return "{:.{}f}".format(v, precision)
-        with tempfile.TemporaryFile("w+") as f:
+        with open(self.temp_file, "w+") as f:
             ts.write_records(f, header=header, precision=precision)
             f.seek(0)
             output_records = f.read().splitlines()
@@ -1055,7 +1059,7 @@ class TestTreeSequence(HighLevelTestCase):
 
         def convert(v):
             return "{:.{}f}".format(v, precision)
-        with tempfile.TemporaryFile("w+") as f:
+        with open(self.temp_file, "w+") as f:
             ts.write_mutations(f, header=header, precision=precision)
             f.seek(0)
             output_mutations = f.read().splitlines()
@@ -1113,14 +1117,14 @@ class TestTreeSequence(HighLevelTestCase):
     def test_text_record_round_trip(self):
         for ts1 in self.get_example_tree_sequences():
             for header in [True, False]:
-                with tempfile.TemporaryFile("w+") as f:
+                with open(self.temp_file, "w+") as f:
                     ts1.write_records(f, header=header, precision=9)
                     f.seek(0)
                     ts2 = msprime.TreeSequence.load_records(f)
                     self.compare_exported_records(ts1, ts2)
 
     def test_text_records_empty_file(self):
-        with tempfile.TemporaryFile("w+") as f:
+        with open(self.temp_file, "w+") as f:
             self.assertRaises(ValueError, msprime.TreeSequence.load_records, f)
             # Write a fake header.
             f.write("left\tright\n")
@@ -1144,7 +1148,7 @@ class TestTreeSequence(HighLevelTestCase):
             if len(before) > 0:
                 some_mutations = True
                 for header in [True, False]:
-                    with tempfile.TemporaryFile("w+") as f:
+                    with open(self.temp_file, "w+") as f:
                         ts.write_mutations(f, header=header, precision=9)
                         f.seek(0)
                         ts.set_mutations([])
@@ -1158,7 +1162,7 @@ class TestTreeSequence(HighLevelTestCase):
         ts = next(self.get_example_tree_sequences())
         ts.set_mutations([])
         for header in [True, False]:
-            with tempfile.TemporaryFile("w+") as f:
+            with open(self.temp_file, "w+") as f:
                 ts.write_mutations(f, header=header, precision=9)
                 f.seek(0)
                 ts.load_mutations(f)
@@ -1169,24 +1173,26 @@ class TestTreeSequence(HighLevelTestCase):
         Verify that we can dump and load the specified tree sequence in
         text format.
         """
-        with tempfile.NamedTemporaryFile("w+") as r_f, \
-                tempfile.NamedTemporaryFile("w+") as m_f:
-            tree_sequence.write_records(r_f, precision=9)
-            tree_sequence.write_mutations(m_f, precision=9)
-            r_f.flush()
-            m_f.flush()
-            other = msprime.load_txt(r_f.name, m_f.name)
-        self.compare_exported_records(tree_sequence, other)
-        mutations = list(tree_sequence.mutations())
-        other_mutations = list(other.mutations())
-        self.compare_exported_mutations(mutations, other_mutations)
+        records_file = self.temp_file + "_records"
+        mutations_file = self.temp_file + "_mutations"
+        try:
+            with open(records_file, "w+") as r_f, open(mutations_file, "w+") as m_f:
+                tree_sequence.write_records(r_f, precision=9)
+                tree_sequence.write_mutations(m_f, precision=9)
+            other = msprime.load_txt(records_file, mutations_file)
+            self.compare_exported_records(tree_sequence, other)
+            mutations = list(tree_sequence.mutations())
+            other_mutations = list(other.mutations())
+            self.compare_exported_mutations(mutations, other_mutations)
 
-        # Do the same, but just with records.
-        with tempfile.NamedTemporaryFile("w+") as r_f:
-            tree_sequence.write_records(r_f, precision=9)
-            r_f.flush()
-            other = msprime.load_txt(r_f.name)
-        self.compare_exported_records(tree_sequence, other)
+            # Do the same, but just with records.
+            with open(records_file, "w+") as r_f:
+                tree_sequence.write_records(r_f, precision=9)
+            other = msprime.load_txt(records_file)
+            self.compare_exported_records(tree_sequence, other)
+        finally:
+            os.unlink(records_file)
+            os.unlink(mutations_file)
 
     def test_dump_load_txt(self):
         for ts in self.get_example_tree_sequences():
@@ -1374,11 +1380,11 @@ class TestSparseTree(HighLevelTestCase):
 
     def test_draw(self):
         t = self.get_tree()
-        with tempfile.NamedTemporaryFile() as f:
-            w = 123
-            h = 456
-            t.draw(f.name, w, h, show_times=True)
-            self.assertGreater(os.path.getsize(f.name), 0)
+        w = 123
+        h = 456
+        t.draw(self.temp_file, w, h, show_times=True)
+        self.assertGreater(os.path.getsize(self.temp_file), 0)
+        with open(self.temp_file) as f:
             # Check some basic stuff about the SVG output.
             f.seek(0)
             root = xml.etree.ElementTree.fromstring(f.read())
@@ -1456,7 +1462,7 @@ class TestSparseTree(HighLevelTestCase):
             self.assertEqual(t1.get_tmrca(*pair), t1.tmrca(*pair))
 
 
-class TestRecombinationMap(unittest.TestCase):
+class TestRecombinationMap(HighLevelTestCase):
     """
     Tests the code for recombination map.
     """
@@ -1565,15 +1571,14 @@ class TestRecombinationMap(unittest.TestCase):
         self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
 
     def test_read_hapmap(self):
-        with tempfile.NamedTemporaryFile("w+") as f:
+        with open(self.temp_file, "w+") as f:
             print("HEADER", file=f)
             print("chr1 0 1", file=f)
             print("chr1 1 5 x", file=f)
             print("s    2 0 x x x", file=f)
-            f.flush()
-            rm = msprime.RecombinationMap.read_hapmap(f.name)
-            self.assertEqual(rm.get_positions(), [0, 1, 2])
-            self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
+        rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
+        self.assertEqual(rm.get_positions(), [0, 1, 2])
+        self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
 
 
 class TestSimulatorFactory(unittest.TestCase):
@@ -1866,7 +1871,7 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_mutations(), 0)
 
 
-class TestNodeOrdering(unittest.TestCase):
+class TestNodeOrdering(HighLevelTestCase):
     """
     Verify that we can use any node ordering for internal nodes
     and get the same topologies.
@@ -1939,17 +1944,14 @@ class TestNodeOrdering(unittest.TestCase):
             j += 1
         self.assertEqual(j, ts.get_num_trees())
         # Verify we can dump this new tree sequence OK.
-        with tempfile.NamedTemporaryFile("w+") as f:
-            other_ts.dump(f.name)
-            ts3 = msprime.load(f.name)
-            self.verify_tree_sequences_equal(other_ts, ts3)
+        other_ts.dump(self.temp_file)
+        ts3 = msprime.load(self.temp_file)
+        self.verify_tree_sequences_equal(other_ts, ts3)
         # Also verify we can read the text version.
-        with tempfile.NamedTemporaryFile("w+") as f:
+        with open(self.temp_file, "w+") as f:
             other_ts.write_records(f, precision=14)
-            f.seek(0)
-            f.flush()
-            ts3 = msprime.load_txt(f.name)
-            self.verify_tree_sequences_equal(other_ts, ts3, True)
+        ts3 = msprime.load_txt(self.temp_file)
+        self.verify_tree_sequences_equal(other_ts, ts3, True)
 
     def test_single_locus(self):
         ts = msprime.simulate(7)
