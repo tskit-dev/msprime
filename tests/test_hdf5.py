@@ -102,19 +102,7 @@ class TestRoundTrip(TestHdf5):
     Tests if we can round trip convert a tree sequence in memory
     through a V2 file format and a V3 format.
     """
-
-    def verify_round_trip(self, ts):
-        tmp = sys.stderr
-        try:
-            with open(os.devnull, "w") as devnull:
-                sys.stderr = devnull
-                # We silence stderr here because h5py dumps out some
-                # spurious # error messages. See
-                # https://github.com/h5py/h5py/issues/390
-                msprime.dump_legacy(ts, self.temp_file)
-                tsp = msprime.load_legacy(self.temp_file)
-        finally:
-            sys.stderr = tmp
+    def verify_tree_sequences_equal(self, ts, tsp):
         self.assertEqual(ts.get_num_records(), tsp.get_num_records())
         self.assertEqual(ts.get_sample_size(), tsp.get_sample_size())
         self.assertEqual(ts.get_sequence_length(), tsp.get_sequence_length())
@@ -145,6 +133,46 @@ class TestRoundTrip(TestHdf5):
             self.assertEqual(len(provenance), 2)
         for p in provenance:
             self.assertIsInstance(json.loads(p), dict)
+
+    def verify_round_trip(self, ts):
+        tmp = sys.stderr
+        try:
+            with open(os.devnull, "w") as devnull:
+                sys.stderr = devnull
+                # We silence stderr here because h5py dumps out some
+                # spurious # error messages. See
+                # https://github.com/h5py/h5py/issues/390
+                msprime.dump_legacy(ts, self.temp_file)
+                tsp = msprime.load_legacy(self.temp_file)
+        finally:
+            sys.stderr = tmp
+        self.verify_tree_sequences_equal(ts, tsp)
+
+    def verify_malformed_json_v2(self, ts, group_name, attr, bad_json):
+        tmp = sys.stderr
+        try:
+            with open(os.devnull, "w") as devnull:
+                sys.stderr = devnull
+                # We silence stderr here because h5py dumps out some
+                # spurious error messages. See
+                # https://github.com/h5py/h5py/issues/390
+                msprime.dump_legacy(ts, self.temp_file)
+                # Write some bad JSON to the provenance string.
+                root = h5py.File(self.temp_file, "r+")
+                group = root[group_name]
+                group.attrs[attr] = bad_json
+                root.close()
+                tsp = msprime.load_legacy(self.temp_file)
+        finally:
+            sys.stderr = tmp
+        self.verify_tree_sequences_equal(ts, tsp)
+
+    def test_malformed_json_v2(self):
+        ts = multi_locus_with_mutation_example()
+        for group_name in ["trees", "mutations"]:
+            for attr in ["environment", "parameters"]:
+                for bad_json in ["", "{", "{},"]:
+                    self.verify_malformed_json_v2(ts, group_name, attr, bad_json)
 
     def test_single_locus_no_mutation(self):
         self.verify_round_trip(single_locus_no_mutation_example())
