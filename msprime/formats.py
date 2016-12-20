@@ -24,6 +24,7 @@ from __future__ import division
 from __future__ import print_function
 
 import json
+import logging
 
 try:
     import h5py
@@ -43,10 +44,20 @@ def _get_provenance(command, attrs):
     Returns the V2 tree provenance attributes reformatted as a V3
     provenance string.
     """
-    environment = json.loads(attrs["environment"])
-    parameters = json.loads(attrs["parameters"])
+    environment = {}
+    parameters = {}
+    # Try to get the provenance strings. Malformed JSON should not prevent us
+    # from finishing the conversion.
+    try:
+        environment = json.loads(attrs["environment"])
+    except ValueError:
+        logging.warn("Failed to convert environment provenance")
+    try:
+        parameters = json.loads(attrs["parameters"])
+    except ValueError:
+        logging.warn("Failed to convert parameters provenance")
     provenance = msprime.get_provenance_dict(command, parameters)
-    provenance["version"] = environment["msprime_version"]
+    provenance["version"] = environment.get("msprime_version", "Unknown_version")
     provenance["environment"] = environment
     return json.dumps(provenance)
 
