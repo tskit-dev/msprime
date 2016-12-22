@@ -41,13 +41,22 @@ static int WARN_UNUSED
 vcf_converter_make_header(vcf_converter_t *self)
 {
     int ret = MSP_ERR_GENERIC;
-    const char *header_prefix =
+    const char *header_prefix_template =
         "##fileformat=VCFv4.2\n"
         "##source=msprime " MSP_LIBRARY_VERSION_STR "\n"
         "##FILTER=<ID=PASS,Description=\"All filters passed\">\n"
-        "##contig=<ID=1>\n"
+        "##contig=<ID=1,length=%lu>\n"
         "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
+    unsigned long sequence_length = (unsigned long)self->sequence_length;
+    const int sequence_length_size = snprintf(NULL, 0, "%lu", sequence_length);
+    /* %lu -> (number); also add space for terminating \0 */
+    const size_t header_size = sizeof(char) * (
+            strlen(header_prefix_template) - 3 + 1
+            ) + sequence_length_size;
+    char* header_prefix;
+    assert(header_prefix = malloc(header_size));
+    snprintf(header_prefix, header_size, header_prefix_template, sequence_length);
     const char *sample_pattern = "\tmsp_%d";
     size_t buffer_size, offset;
     uint32_t j;
@@ -84,6 +93,7 @@ vcf_converter_make_header(vcf_converter_t *self)
     self->header[buffer_size - 1] = '\0';
     ret = 0;
 out:
+    free(header_prefix);
     return ret;
 }
 
@@ -201,6 +211,7 @@ vcf_converter_alloc(vcf_converter_t *self,
     memset(self, 0, sizeof(vcf_converter_t));
     self->ploidy = ploidy;
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
+    self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     if (ploidy < 1 || self->sample_size % ploidy != 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;

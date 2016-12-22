@@ -79,7 +79,9 @@ def write_vcf(tree_sequence, output, ploidy):
     print(
         '##FILTER=<ID=PASS,Description="All filters passed">',
         file=output)
-    print("##contig=<ID=1>", file=output)
+    print(
+        "##contig=<ID=1,length=%d>" % int(tree_sequence.get_sequence_length()),
+        file=output)
     print(
         '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
         file=output)
