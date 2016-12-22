@@ -430,6 +430,7 @@ typedef struct {
     char *vcf_genotypes;
     size_t vcf_genotypes_size;
     size_t record_size;
+    double sequence_length;
     unsigned long last_position;
     vargen_t *vargen;
 } vcf_converter_t;
