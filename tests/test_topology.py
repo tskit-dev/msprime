@@ -23,6 +23,7 @@ from __future__ import print_function
 from __future__ import division
 
 import unittest
+import itertools
 
 import msprime
 import _msprime
@@ -527,6 +528,37 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(len(roots), 2)
         self.assertIn(t_new.root, roots)
 
+
+class TestWithVisuals(TopologyTestCase):
+    """
+    Some pedantic tests with ascii depictions of what's supposed to happen.
+    """
+
+    def verify_simplify_topology(self, ts, sample):
+        # copies from test_highlevel.py
+        new_ts = ts.simplify(sample)
+        sample_map = {k: j for j, k in enumerate(sample)}
+        old_trees = ts.trees()
+        old_tree = next(old_trees)
+        self.assertGreaterEqual(ts.get_num_trees(), new_ts.get_num_trees())
+        for new_tree in new_ts.trees():
+            new_left, new_right = new_tree.get_interval()
+            old_left, old_right = old_tree.get_interval()
+            # Skip ahead on the old tree until new_left is within its interval
+            while old_right <= new_left:
+                old_tree = next(old_trees)
+                old_left, old_right = old_tree.get_interval()
+            # If the TMRCA of all pairs of samples is the same, then we have the
+            # same information. We limit this to at most 500 pairs
+            pairs = itertools.islice(itertools.combinations(sample, 2), 500)
+            for pair in pairs:
+                mapped_pair = [sample_map[u] for u in pair]
+                mrca1 = old_tree.get_mrca(*pair)
+                mrca2 = new_tree.get_mrca(*mapped_pair)
+                self.assertEqual(old_tree.get_time(mrca1), new_tree.get_time(mrca2))
+                self.assertEqual(
+                    old_tree.get_population(mrca1), new_tree.get_population(mrca2))
+
     def test_partial_non_sample_external_nodes(self):
         # A somewhat more complicated test case with a partially specified,
         # non-sampled tip.
@@ -576,6 +608,8 @@ class TestMultipleRoots(TopologyTestCase):
                     self.assertEqual(t[k], a[k])
                 else:
                     self.assertEqual(a[k], msprime.NULL_NODE)
+        # check .simplify() works here
+        self.verify_simplify_topology(ts, [0, 1, 2])
 
     def test_partial_non_sample_external_nodes_2(self):
         # The same situation as above, but partial tip is labeled '7' not '3':
@@ -632,6 +666,7 @@ class TestMultipleRoots(TopologyTestCase):
         # trees=ts.trees()
         # for x in trees:
         #   x.draw(path='test.svg')
+        self.verify_simplify_topology(ts, [0, 1, 2])
 
     def test_single_offspring_records(self):
         # Here we have inserted a single-offspring record
@@ -680,6 +715,7 @@ class TestMultipleRoots(TopologyTestCase):
                     self.assertEqual(t[k], a[k])
                 else:
                     self.assertEqual(a[k], msprime.NULL_NODE)
+        self.verify_simplify_topology(ts, [0, 1, 2])
 
     def test_many_single_offspring(self):
         # a more complex test with single offspring
@@ -806,3 +842,6 @@ class TestMultipleRoots(TopologyTestCase):
                     self.assertEqual(t[k], a[k])
                 else:
                     self.assertEqual(a[k], msprime.NULL_NODE)
+        self.verify_simplify_topology(ts, [0, 1])
+        self.verify_simplify_topology(ts, [1, 2])
+        self.verify_simplify_topology(ts, [2, 0])
