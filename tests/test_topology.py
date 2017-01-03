@@ -597,8 +597,7 @@ class TestWithVisuals(TopologyTestCase):
                       {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: -1, 7: -1}]
         ts = build_tree_sequence(records)
         tree_dicts = [t.parent_dict for t in ts.trees()]
-        print("Skipping test of sample size.")
-        # self.assertEqual(ts.sample_size, 3)
+        self.assertEqual(ts.sample_size, 4)
         self.assertEqual(ts.num_trees, 3)
         self.assertEqual(ts.num_nodes, 8)
         # check topologies agree:
@@ -661,11 +660,6 @@ class TestWithVisuals(TopologyTestCase):
                     self.assertEqual(t[k], a[k])
                 else:
                     self.assertEqual(a[k], msprime.NULL_NODE)
-        #  FAILS:
-        # # check can draw trees
-        # trees=ts.trees()
-        # for x in trees:
-        #   x.draw(path='test.svg')
         self.verify_simplify_topology(ts, [0, 1, 2])
 
     def test_single_offspring_records(self):
