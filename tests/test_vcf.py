@@ -23,6 +23,7 @@ from __future__ import print_function
 from __future__ import division
 
 import collections
+import math
 import os
 import tempfile
 import unittest
@@ -74,14 +75,23 @@ def write_vcf(tree_sequence, output, ploidy):
         raise ValueError("Sample size must a multiple of ploidy")
     n = tree_sequence.get_sample_size() // ploidy
     sample_names = ["msp_{}".format(j) for j in range(n)]
+    last_pos = 0
+    positions = []
+    for variant in tree_sequence.variants():
+        pos = int(round(variant.position))
+        if pos <= last_pos:
+            pos = last_pos + 1
+        positions.append(pos)
+        last_pos = pos
+    contig_length = int(math.ceil(tree_sequence.get_sequence_length()))
+    if len(positions) > 0:
+        contig_length = max(positions[-1], contig_length)
     print("##fileformat=VCFv4.2", file=output)
     print("##source=msprime {}".format(msprime.__version__), file=output)
     print(
         '##FILTER=<ID=PASS,Description="All filters passed">',
         file=output)
-    print(
-        "##contig=<ID=1,length=%d>" % int(tree_sequence.get_sequence_length()),
-        file=output)
+    print("##contig=<ID=1,length={}>".format(contig_length), file=output)
     print(
         '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
         file=output)
@@ -91,11 +101,8 @@ def write_vcf(tree_sequence, output, ploidy):
     for sample_name in sample_names:
         print("\t", sample_name, sep="", end="", file=output)
     print(file=output)
-    last_pos = 0
     for variant in tree_sequence.variants():
-        pos = int(round(variant.position))
-        if pos <= last_pos:
-            pos = last_pos + 1
+        pos = positions[variant.index]
         print(
             "1", pos, ".", "A", "T", ".", "PASS", ".", "GT",
             sep="\t", end="", file=output)
@@ -105,7 +112,6 @@ def write_vcf(tree_sequence, output, ploidy):
                 variant.genotypes[j * ploidy: j * ploidy + ploidy])
             print("\t", genotype, end="", sep="", file=output)
         print(file=output)
-        last_pos = pos
 
 
 class TestEquality(unittest.TestCase):
@@ -135,6 +141,7 @@ class TestHeaderParsers(unittest.TestCase):
             self.assertEqual(len(reader.contigs), 1)
             contig = reader.contigs["1"]
             self.assertEqual(contig.id, "1")
+            self.assertGreater(contig.length, 0)
             self.assertEqual(len(reader.alts), 0)
             self.assertEqual(len(reader.filters), 1)
             p = reader.filters["PASS"]
@@ -154,6 +161,7 @@ class TestHeaderParsers(unittest.TestCase):
             self.assertEqual(len(header.contigs), 1)
             contig = header.contigs[0]
             self.assertEqual(contig.name, "1")
+            self.assertGreater(contig.length, 0)
             self.assertEqual(len(header.filters), 1)
             p = header.filters["PASS"]
             self.assertEqual(p.name, "PASS")
@@ -205,3 +213,43 @@ class TestRecordsEqual(unittest.TestCase):
             pysam_records = list(bcf_file)
             self.verify_records(datum, pyvcf_records, pysam_records)
             bcf_file.close()
+
+
+class TestContigLengths(unittest.TestCase):
+    """
+    Tests that we create sensible contig lengths under a variety of conditions.
+    """
+    def setUp(self):
+        fd, self.temp_file = tempfile.mkstemp(prefix="msprime_vcf_")
+        os.close(fd)
+
+    def tearDown(self):
+        os.unlink(self.temp_file)
+
+    def get_contig_length(self, ts):
+        with open(self.temp_file, "w") as f:
+            ts.write_vcf(f)
+        reader = vcf.Reader(filename=self.temp_file)
+        contig = reader.contigs["1"]
+        return contig.length
+
+    def test_no_mutations(self):
+        ts = msprime.simulate(10, length=1)
+        self.assertEqual(ts.num_mutations, 0)
+        contig_length = self.get_contig_length(ts)
+        self.assertEqual(contig_length, 1)
+
+    def test_long_sequence(self):
+        # Nominal case where we expect the positions to map within the original
+        # sequence length
+        ts = msprime.simulate(10, length=100, mutation_rate=0.01)
+        self.assertGreater(ts.num_mutations, 0)
+        contig_length = self.get_contig_length(ts)
+        self.assertEqual(contig_length, 100)
+
+    def test_short_sequence(self):
+        # Degenerate case where the positions cannot map into the sequence length
+        ts = msprime.simulate(10, length=1, mutation_rate=10)
+        self.assertGreater(ts.num_mutations, 1)
+        contig_length = self.get_contig_length(ts)
+        self.assertEqual(contig_length, ts.num_mutations)

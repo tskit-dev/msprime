@@ -536,9 +536,36 @@ test_vcf(void)
             num_variants++;
         }
         CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_TRUE(num_variants > 0);
+        CU_ASSERT_EQUAL_FATAL(num_variants, tree_sequence_get_num_mutations(ts));
         vcf_converter_free(vc);
     }
+
+    free(vc);
+    tree_sequence_free(ts);
+    free(ts);
+}
+
+static void
+test_vcf_no_mutations(void)
+{
+    int ret;
+    char *str = NULL;
+    vcf_converter_t *vc = malloc(sizeof(vcf_converter_t));
+    tree_sequence_t *ts = get_example_tree_sequence(100, 0, 1, 1.0, 0.0, 0.0, 0, NULL);
+
+    CU_ASSERT_FATAL(ts != NULL);
+    CU_ASSERT_FATAL(vc != NULL);
+    CU_ASSERT_EQUAL_FATAL(tree_sequence_get_num_mutations(ts), 0);
+
+    ret = vcf_converter_alloc(vc, ts, 1);
+    CU_ASSERT_FATAL(ret ==  0);
+    vcf_converter_print_state(vc, _devnull);
+    ret = vcf_converter_get_header(vc, &str);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_NSTRING_EQUAL("##", str, 2);
+    ret = vcf_converter_next(vc, &str);
+    CU_ASSERT_EQUAL(ret, 0);
+    vcf_converter_free(vc);
 
     free(vc);
     tree_sequence_free(ts);
@@ -4525,6 +4552,7 @@ main(int argc, char **argv)
     CU_TestInfo tests[] = {
         {"Fenwick tree", test_fenwick},
         {"VCF", test_vcf},
+        {"VCF no mutations", test_vcf_no_mutations},
         {"Simple recombination map", test_simple_recomb_map},
         {"Recombination map errors", test_recomb_map_errors},
         {"Recombination map examples", test_recomb_map_examples},

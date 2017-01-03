@@ -21,6 +21,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include <gsl/gsl_math.h>
+
 #include "err.h"
 #include "msprime.h"
 
@@ -30,6 +32,7 @@ vcf_converter_print_state(vcf_converter_t *self, FILE* out)
     fprintf(out, "VCF converter state\n");
     fprintf(out, "ploidy = %d\n", self->ploidy);
     fprintf(out, "sample_size = %d\n", self->sample_size);
+    fprintf(out, "contig_length = %lu\n", self->contig_length);
     fprintf(out, "num_vcf_samples = %d\n", self->num_vcf_samples);
     fprintf(out, "header = %d bytes\n", (int) strlen(self->header));
     fprintf(out, "vcf_genotypes = %d bytes: %s", (int) self->vcf_genotypes_size,
@@ -48,22 +51,30 @@ vcf_converter_make_header(vcf_converter_t *self)
         "##contig=<ID=1,length=%lu>\n"
         "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
-    unsigned long sequence_length = (unsigned long)self->sequence_length;
-    const int sequence_length_size = snprintf(NULL, 0, "%lu", sequence_length);
-    /* %lu -> (number); also add space for terminating \0 */
-    const size_t header_size = sizeof(char) * (
-            strlen(header_prefix_template) - 3 + 1
-            ) + sequence_length_size;
-    char* header_prefix;
-    assert(header_prefix = malloc(header_size));
-    snprintf(header_prefix, header_size, header_prefix_template, sequence_length);
+    char* header_prefix = NULL;
     const char *sample_pattern = "\tmsp_%d";
     size_t buffer_size, offset;
     uint32_t j;
     int written;
 
-    buffer_size = strlen(header_prefix);
-    offset = buffer_size;
+    written = snprintf(NULL, 0, header_prefix_template, self->contig_length);
+    if (written < 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    buffer_size = (size_t) written + 1;
+    header_prefix = malloc(buffer_size);
+    if (header_prefix == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    written = snprintf(header_prefix, buffer_size, header_prefix_template,
+            self->contig_length);
+    if (written < 0) {
+        ret = MSP_ERR_IO;
+        goto out;
+    }
+    offset = buffer_size - 1;
     for (j = 0; j < self->num_vcf_samples; j++) {
         written = snprintf(NULL, 0, sample_pattern, j);
         if (written < 0) {
@@ -72,7 +83,7 @@ vcf_converter_make_header(vcf_converter_t *self)
         }
         buffer_size += (size_t) written;
     }
-    buffer_size += 2; /* make room for \n\0 */
+    buffer_size += 1; /* make room for \n */
     self->header = malloc(buffer_size);
     if (self->header == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -93,7 +104,9 @@ vcf_converter_make_header(vcf_converter_t *self)
     self->header[buffer_size - 1] = '\0';
     ret = 0;
 out:
-    free(header_prefix);
+    if (header_prefix != NULL) {
+        free(header_prefix);
+    }
     return ret;
 }
 
@@ -142,9 +155,9 @@ vcf_converter_write_record(vcf_converter_t *self, unsigned long pos)
     uint32_t j, k;
     size_t offset;
     unsigned int p = self->ploidy;
+    const char *template = "1\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t";
 
-    written = snprintf(self->record, self->record_size,
-            "1\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t", pos);
+    written = snprintf(self->record, self->record_size, template, pos);
     if (written < 0) {
         ret = MSP_ERR_IO;
         goto out;
@@ -163,6 +176,27 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+vcf_converter_convert_positions(vcf_converter_t *self)
+{
+    unsigned long pos;
+    /* VCF is 1-based, so we must make sure we never have a 0 coordinate */
+    unsigned long last_position = 0;
+    size_t j;
+
+    for (j = 0; j < self->num_mutations; j++) {
+        /* update pos. We use a simple algorithm to ensure positions
+         * are unique. */
+        pos = (unsigned long) round(self->mutations[j].position);
+        if (pos <= last_position) {
+            pos = last_position + 1;
+        }
+        last_position = pos;
+        self->positions[j] = pos;
+    }
+    return 0;
+}
+
 int WARN_UNUSED
 vcf_converter_get_header(vcf_converter_t *self, char **header)
 {
@@ -175,7 +209,6 @@ vcf_converter_next(vcf_converter_t *self, char **record)
 {
     int ret = -1;
     int err;
-    unsigned long pos;
     mutation_t *mut;
 
     ret = vargen_next(self->vargen, &mut, self->genotypes);
@@ -183,21 +216,13 @@ vcf_converter_next(vcf_converter_t *self, char **record)
         goto out;
     }
     if (ret == 1) {
-        /* update pos. We use a simple algorithm to ensure positions
-         * are unique. */
-        pos = (unsigned long) round(mut->position);
-        if (pos <= self->last_position) {
-            pos = self->last_position + 1;
-        }
-        err = vcf_converter_write_record(self, pos);
+        err = vcf_converter_write_record(self, self->positions[mut->index]);
         if (err != 0) {
             ret = err;
             goto out;
         }
         *record = self->record;
-        self->last_position = pos;
     }
-
 out:
     return ret;
 }
@@ -211,7 +236,6 @@ vcf_converter_alloc(vcf_converter_t *self,
     memset(self, 0, sizeof(vcf_converter_t));
     self->ploidy = ploidy;
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
-    self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     if (ploidy < 1 || self->sample_size % ploidy != 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -226,6 +250,29 @@ vcf_converter_alloc(vcf_converter_t *self,
     if (ret != 0) {
         goto out;
     }
+    self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
+    /* Note mutations is a borrowed reference from the tree sequence.
+     * Do not free! */
+    ret = tree_sequence_get_mutations(tree_sequence, &self->mutations);
+    if (ret != 0) {
+        goto out;
+    }
+    self->positions = malloc(self->num_mutations * sizeof(unsigned long));
+    if (self->positions == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = vcf_converter_convert_positions(self);
+    if (ret != 0) {
+        goto out;
+    }
+    self->contig_length =
+        (unsigned long) round(tree_sequence_get_sequence_length(tree_sequence));
+    if (self->num_mutations > 0) {
+        self->contig_length = GSL_MAX(
+            self->contig_length,
+            self->positions[self->num_mutations - 1]);
+    }
     ret = vcf_converter_make_header(self);
     if (ret != 0) {
         goto out;
@@ -234,8 +281,6 @@ vcf_converter_alloc(vcf_converter_t *self,
     if (ret != 0) {
         goto out;
     }
-    /* VCF is 1-based, so we must make sure we never have a 0 coordinate */
-    self->last_position = 0;
 out:
     return ret;
 }
@@ -243,7 +288,6 @@ out:
 int
 vcf_converter_free(vcf_converter_t *self)
 {
-
     if (self->genotypes != NULL) {
         free(self->genotypes);
     }
@@ -255,6 +299,9 @@ vcf_converter_free(vcf_converter_t *self)
     }
     if (self->record != NULL) {
         free(self->record);
+    }
+    if (self->positions != NULL) {
+        free(self->positions);
     }
     if (self->vargen != NULL) {
         vargen_free(self->vargen);
