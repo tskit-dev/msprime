@@ -1,6 +1,45 @@
 import msprime
 
 
+def path_length(tr,x,y):
+    L = 0
+    mrca = tr.mrca(x,y)
+    for u in x,y:
+        while u != mrca:
+            L += tr.branch_length(u)
+            u = tr.parent(u)
+    return L
+
+def branch_length_diversity(ts,x,y):
+    S = 0
+    for tr in ts.trees():
+        S += path_length(tr,x,y)*tr.length
+    return S/ts.sequence_length
+
+def branch_length_Y(ts,x,y,z):
+    S = 0
+    for tr in ts.trees():
+        xy_mrca = tr.mrca(x,y)
+        xz_mrca = tr.mrca(x,z)
+        yz_mrca = tr.mrca(y,z)
+        if xy_mrca == xz_mrca:
+            #   /\
+            #  / /\
+            # x y  z
+            S += path_length(tr,x,yz_mrca)*tr.length
+        elif xy_mrca == yz_mrca:
+            #   /\
+            #  / /\
+            # y x  z
+            S += path_length(tr,x,xz_mrca)*tr.length
+        elif xz_mrca == yz_mrca:
+            #   /\
+            #  / /\
+            # z x  y
+            S += path_length(tr,x,xy_mrca)*tr.length
+    return S/ts.sequence_length
+
+
 def branch_stats_node_iter(ts,leaf_sets,condition,method='length'):
     '''
     Here leaf_sets is a list of lists of leaves, and condition is a function
