@@ -69,21 +69,33 @@ def branch_stats(ts,leaf_sets,condition,method='length'):
             for child in children:
                 if condition(X[child]):
                     L -= (node_time[pi[child]] - node_time[child])
+                    # print("\t\tchild:",child,L)
                 pi[child] = -1
             if pi[node] != -1 and condition(X[node]):
                 L -= (node_time[pi[node]] - node_time[node])
+                # print("\t\tnode:",node,L)
             # propagate change up the tree
             u = pi[node]
-            while u != -1:
-                old_f = condition(X[u])
-                for k in range(num_leaf_sets):
-                    X[u][k] -= X[node][k]
-                new_f = condition(X[u])
-                if old_f and not new_f:
-                    L -= (node_time[pi[u]] - node_time[u])
-                if new_f and not old_f:
-                    L += (node_time[pi[u]] - node_time[u])
-                u = pi[u]
+            if u != -1:
+                next_u = pi[u]
+                while u != -1:
+                    old_f = condition(X[u])
+                    for k in range(num_leaf_sets):
+                        X[u][k] -= X[node][k]
+                    new_f = condition(X[u])
+                    # need to update X for the root,
+                    # but the root does not have a branch length
+                    if next_u != -1:
+                        if old_f and not new_f:
+                            L -= (node_time[pi[u]] - node_time[u])
+                            # print("\t\tanc-:",u,L)
+                        if new_f and not old_f:
+                            L += (node_time[pi[u]] - node_time[u])
+                            # print("\t\tanc+:",u,L)
+                    u = next_u
+                    next_u = pi[next_u]
+            for k in range(num_leaf_sets):
+                X[node][k] = 0
             # print("\t",X, "-->", L)
         for node,children,time in records_in:
             # print("In: ",node,children,time)
@@ -93,6 +105,7 @@ def branch_stats(ts,leaf_sets,condition,method='length'):
             for child in children:
                 if condition(X[child]):
                     L += node_time[node] - node_time[child]
+                    # print("\t\tchild:",child,L)
                 pi[child] = node
                 for k in range(num_leaf_sets):
                     dx[k] += X[child][k]
@@ -100,19 +113,30 @@ def branch_stats(ts,leaf_sets,condition,method='length'):
                 X[node][k] = dx[k]
             if pi[node] != -1 and condition(X[node]):
                 L += node_time[pi[node]] - node_time[node]
+                # print("\t\tnode:",node,L)
             # propagate change up the tree
             u = pi[node]
-            while u != -1:
-                for k in range(num_leaf_sets):
-                    X[u][k] += dx[k]
-                new_f = condition(X[u])
-                if old_f and not new_f:
-                    L -= (node_time[pi[u]] - node_time[u])
-                if new_f and not old_f:
-                    L += (node_time[pi[u]] - node_time[u])
-                u = pi[u]
+            if u != -1:
+                next_u = pi[u]
+                while u != -1:
+                    # print("\t\t\tu:",u,next_u)
+                    old_f = condition(X[u])
+                    for k in range(num_leaf_sets):
+                        X[u][k] += dx[k]
+                    new_f = condition(X[u])
+                    # need to update X for the root,
+                    # but the root does not have a branch length
+                    if next_u != -1:
+                        if old_f and not new_f:
+                            L -= (node_time[pi[u]] - node_time[u])
+                            # print("\t\tanc-:",u,L)
+                        if new_f and not old_f:
+                            L += (node_time[pi[u]] - node_time[u])
+                            # print("\t\tanc+:",u,L)
+                    u = next_u
+                    next_u = pi[next_u]
             # print("\t",X, "-->", L)
-        # print(L,length)
+        # print("next tree:",L,length)
         S += L * length
     S /= ts.get_sequence_length()
     return S
