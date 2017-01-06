@@ -829,6 +829,7 @@ class TestWithVisuals(TopologyTestCase):
         # self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, len(true_trees))
         self.assertEqual(ts.num_nodes, 11)
+        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
         # check topologies agree:
         for a, t in zip(true_trees, tree_dicts):
             for k in a.keys():
