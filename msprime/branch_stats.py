@@ -220,6 +220,7 @@ def branch_stats_vector(ts,leaf_sets,weight_fun,method='length'):
     # initialize
     num_leaf_sets = len(leaf_sets)
     n_out = len(weight_fun([0 for a in range(num_leaf_sets)]))
+    # print("n_out:",n_out)
     S = [ 0.0 for j in range(n_out) ]
     L = [ 0.0 for j in range(n_out) ]
     N = ts.num_nodes
@@ -243,7 +244,7 @@ def branch_stats_vector(ts,leaf_sets,weight_fun,method='length'):
                     w = weight_fun(X[child])
                     dt = (node_time[pi[child]] - node_time[child])
                     for j in range(n_out):
-                        L += sign * dt * w[j]
+                        L[j] += sign * dt * w[j]
                     # print("\t\tchild:",child,sign,weight_fun(X[child]),node_time[pi[child]],node_time[child],"-->",L)
                     if sign==-1:
                         pi[child] = -1
@@ -270,7 +271,7 @@ def branch_stats_vector(ts,leaf_sets,weight_fun,method='length'):
                             w = weight_fun(X[u])
                             dt = (node_time[pi[u]] - node_time[u])
                             for j in range(n_out):
-                                L += dt*(w[j] - old_w[j])
+                                L[j] += dt*(w[j] - old_w[j])
                             # print("\t\tanc:",u,weight_fun(X[u]),old_w,"-->",L)
                         u = next_u
                         next_u = pi[next_u]

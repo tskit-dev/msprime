@@ -22,6 +22,10 @@ class BranchStatsTestCase(unittest.TestCase):
     """
     random_seed = 123456
 
+    def assertListAlmostEqual(self,x,y):
+        for a,b in zip(x,y):
+            self.assertAlmostEqual(a,b)
+
     def check_vectorization(self,ts):
         samples = random.sample(ts.samples(),3)
         A = [ [samples[0]], [samples[1]], [samples[2]] ]
@@ -29,17 +33,17 @@ class BranchStatsTestCase(unittest.TestCase):
             return [float((x[0]>0) != (x[1]>0)),
                     float((x[0]>0) != (x[2]>0)),
                     float((x[1]>0) != (x[2]>0))]
-        self.assertAlmostEqual(
+        self.assertListAlmostEqual(
                 msprime.branch_stats_vector_node_iter(ts,A,f,method='mutations'),
                 [ts.pairwise_diversity(samples=[samples[0],samples[1]]),
                  ts.pairwise_diversity(samples=[samples[0],samples[2]]),
                  ts.pairwise_diversity(samples=[samples[1],samples[2]])])
-        self.assertAlmostEqual(
+        self.assertListAlmostEqual(
                 msprime.branch_stats_vector_node_iter(ts,A,f,method='length'),
                 [msprime.branch_length_diversity(ts,A[0],A[1]),
                  msprime.branch_length_diversity(ts,A[0],A[2]),
                  msprime.branch_length_diversity(ts,A[1],A[2])])
-        self.assertAlmostEqual(
+        self.assertListAlmostEqual(
                 msprime.branch_stats_vector(ts,A,f),
                 [msprime.branch_length_diversity(ts,A[0],A[1]),
                  msprime.branch_length_diversity(ts,A[0],A[2]),
