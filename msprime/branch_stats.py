@@ -74,29 +74,7 @@ def branch_stats_node_iter(ts,leaf_sets,weight_fun,method='length'):
 
     This version is inefficient as it iterates over all nodes in each tree.
     '''
-    tr_its = [ ts.trees(tracked_leaves=x,leaf_counts=True,leaf_lists=True) for x in leaf_sets ]
-    S = 0
-    for k in range(ts.num_trees):
-        trs = [ next(x) for x in tr_its ]
-        root = trs[0].root
-        tr_len = trs[0].length
-        if method=='length':
-            for node in trs[0].nodes():
-                if node != root:
-                    x = [ tr.num_tracked_leaves(node) for tr in trs ]
-                    S += weight_fun(x) * trs[0].branch_length(node) * tr_len
-        elif method=='mutations':
-            count_nodes = dict([ 
-                (node,weight_fun([ tr.num_tracked_leaves(node) for tr in trs ])) 
-                for node in trs[0].nodes() if node != root ])
-            # print(count_nodes)
-            for mut in trs[0].mutations():
-                # print(mut)
-                S += count_nodes[mut.node]
-        else:
-            raise(TypeError("Unknown method "+method))
-    S /= ts.get_sequence_length()
-    return S
+    return branch_stats_vector_node_iter(ts,leaf_sets,lambda x: [weight_fun(x)],method)[0]
 
 def branch_stats(ts,leaf_sets,weight_fun,method='length'):
     '''
@@ -109,58 +87,7 @@ def branch_stats(ts,leaf_sets,weight_fun,method='length'):
 
     Doesn't do method='mutations'.
     '''
-    # initialize
-    num_leaf_sets = len(leaf_sets)
-    S = 0.0
-    L = 0.0
-    N = ts.num_nodes
-    X = [ [ int(u in a) for a in leaf_sets] for u in range(N) ]
-    # we will essentially construct the tree
-    pi = [-1 for j in range(N)]
-    node_time = [0.0 for u in range(N)]
-    for length,records_out,records_in in ts.diffs():
-        for sign,records in ((-1,records_out), (+1,records_in)):
-            for node,children,time in records:
-                # print("Record (",sign,"):",node,children,time)
-                # print("\t",X, "-->", L)
-                if sign==+1:
-                    node_time[node] = time
-                dx = [0 for k in range(num_leaf_sets)]
-                for child in children:
-                    if sign==+1:
-                        pi[child] = node
-                    for k in range(num_leaf_sets):
-                        dx[k] += sign * X[child][k]
-                    L += sign * (node_time[pi[child]] - node_time[child]) * weight_fun(X[child])
-                    # print("\t\tchild:",child,sign,weight_fun(X[child]),node_time[pi[child]],node_time[child],"-->",L)
-                    if sign==-1:
-                        pi[child] = -1
-                old_w = weight_fun(X[node])
-                for k in range(num_leaf_sets):
-                    X[node][k] += dx[k]
-                if pi[node] != -1:
-                    L += (node_time[pi[node]] - node_time[node]) * (weight_fun(X[node])-old_w)
-                    # print("\t\tnode:",node,weight_fun(X[node]),old_w,"-->",L)
-                # propagate change up the tree
-                u = pi[node]
-                if u != -1:
-                    next_u = pi[u]
-                    while u != -1:
-                        old_w = weight_fun(X[u])
-                        for k in range(num_leaf_sets):
-                            X[u][k] += dx[k]
-                        # need to update X for the root,
-                        # but the root does not have a branch length
-                        if next_u != -1:
-                            L += (node_time[pi[u]] - node_time[u])*(weight_fun(X[u]) - old_w)
-                            # print("\t\tanc:",u,weight_fun(X[u]),old_w,"-->",L)
-                        u = next_u
-                        next_u = pi[next_u]
-                # print("\t",X, "-->", L)
-        # print("next tree:",L,length)
-        S += L * length
-    S /= ts.get_sequence_length()
-    return S
+    return branch_stats_vector(ts,leaf_sets,lambda x: [weight_fun(x)],method)[0]
 
 def branch_stats_vector_node_iter(ts,leaf_sets,weight_fun,method='length'):
     '''
