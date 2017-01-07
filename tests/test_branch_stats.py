@@ -22,26 +22,49 @@ class BranchStatsTestCase(unittest.TestCase):
     """
     random_seed = 123456
 
+    def check_vectorization(self,ts):
+        samples = random.sample(ts.samples(),3)
+        A = [ [samples[0]], [samples[1]], [samples[2]] ]
+        def f(x):
+            return [float((x[0]>0) != (x[1]>0)),
+                    float((x[0]>0) != (x[2]>0)),
+                    float((x[1]>0) != (x[2]>0))]
+        self.assertAlmostEqual(
+                msprime.branch_stats_vector_node_iter(ts,A,f,method='mutations'),
+                [ts.pairwise_diversity(samples=[samples[0],samples[1]]),
+                 ts.pairwise_diversity(samples=[samples[0],samples[2]]),
+                 ts.pairwise_diversity(samples=[samples[1],samples[2]])])
+        self.assertAlmostEqual(
+                msprime.branch_stats_vector_node_iter(ts,A,f,method='length'),
+                [msprime.branch_length_diversity(ts,A[0],A[1]),
+                 msprime.branch_length_diversity(ts,A[0],A[2]),
+                 msprime.branch_length_diversity(ts,A[1],A[2])])
+        self.assertAlmostEqual(
+                msprime.branch_stats_vector(ts,A,f),
+                [msprime.branch_length_diversity(ts,A[0],A[1]),
+                 msprime.branch_length_diversity(ts,A[0],A[2]),
+                 msprime.branch_length_diversity(ts,A[1],A[2])])
+
     def check_pairwise_diversity(self,ts):
         samples = random.sample(ts.samples(),2)
         A = [ [samples[0]], [samples[1]] ]
         def f(x):
-            return (x[0]>0) != (x[1]>0)
+            return float((x[0]>0) != (x[1]>0))
         self.assertAlmostEqual(
                 msprime.branch_stats_node_iter(ts,A,f,method='mutations'),
                 ts.pairwise_diversity(samples=samples) )
         self.assertAlmostEqual(
                 msprime.branch_stats_node_iter(ts,A,f,method='length'),
-                msprime.branch_length_diversity(ts,samples[0],samples[1]) )
+                msprime.branch_length_diversity(ts,A[0],A[1]) )
         self.assertAlmostEqual(
                 msprime.branch_stats(ts,A,f),
-                msprime.branch_length_diversity(ts,samples[0],samples[1]) )
+                msprime.branch_length_diversity(ts,A[0],A[1]) )
 
     def check_Y_stat(self,ts):
         samples = random.sample(ts.samples(),3)
         A = [ [samples[0]], samples[1:3] ]
         def f(x):
-            return ( (x[0]==1) and (x[1]==0) ) or ( (x[0]==0) and (x[1]==2) )
+            return float(( (x[0]==1) and (x[1]==0) ) or ( (x[0]==0) and (x[1]==2) ))
         self.assertAlmostEqual(
                 msprime.branch_stats(ts,A,f),
                 msprime.branch_length_Y(ts,A[0][0],A[1][0],A[1][1]) )
@@ -56,6 +79,10 @@ class BranchStatsTestCase(unittest.TestCase):
     def test_Y_stat(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_Y_stat(ts)
+
+    def test_Y_stat(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
+        self.check_vectorization(ts)
 
     def test_case_1(self):
         ## With mutations:
@@ -108,6 +135,7 @@ class BranchStatsTestCase(unittest.TestCase):
 
         self.check_pairwise_diversity(ts)
         self.check_Y_stat(ts)
+        self.check_vectorization(ts)
 
         # divergence between 0 and 1
         A = [ [0], [1] ]
@@ -116,7 +144,7 @@ class BranchStatsTestCase(unittest.TestCase):
 
         # branch lengths:
         right_ans = 2*( 1 * (0.2-0) + 0.5 * (0.8-0.2) + 0.7 * (1.0-0.8) )
-        self.assertAlmostEqual(msprime.branch_length_diversity(ts,0,1),right_ans)
+        self.assertAlmostEqual(msprime.branch_length_diversity(ts,[0],[1]),right_ans)
         self.assertAlmostEqual(msprime.branch_stats(ts,A,f),right_ans)
         self.assertAlmostEqual(msprime.branch_stats_node_iter(ts,A,f),right_ans)
 
@@ -232,6 +260,7 @@ class BranchStatsTestCase(unittest.TestCase):
 
         self.check_pairwise_diversity(ts)
         self.check_Y_stat(ts)
+        self.check_vectorization(ts)
 
         # divergence between 0 and 1
         A = [ [0], [1] ]
@@ -239,7 +268,7 @@ class BranchStatsTestCase(unittest.TestCase):
             return (x[0]>0) != (x[1]>0)
 
         # branch lengths:
-        self.assertAlmostEqual(msprime.branch_length_diversity(ts,0,1),true_diversity)
+        self.assertAlmostEqual(msprime.branch_length_diversity(ts,[0],[1]),true_diversity)
         self.assertAlmostEqual(msprime.branch_stats(ts,A,f),true_diversity)
         self.assertAlmostEqual(msprime.branch_stats_node_iter(ts,A,f),true_diversity)
 
