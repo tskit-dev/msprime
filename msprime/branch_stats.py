@@ -48,6 +48,9 @@ def branch_length_Y(ts,x,y,z):
     return S/ts.sequence_length
 
 def branch_length_f4(ts,A,B,C,D):
+    for U in A,B,C,D:
+        if max([U.count(x) for x in set(U)])>1:
+            raise ValueError("A,B,C, and D cannot contain repeated elements.")
     S = 0
     for tr in ts.trees():
         SS = 0
@@ -74,7 +77,10 @@ def branch_stats_node_iter(ts,leaf_sets,weight_fun,method='length'):
 
     This version is inefficient as it iterates over all nodes in each tree.
     '''
-    return branch_stats_vector_node_iter(ts,leaf_sets,lambda x: [weight_fun(x)],method)[0]
+    out = branch_stats_vector_node_iter(ts,leaf_sets,lambda x: [weight_fun(x)],method)
+    if len(out)>1:
+        raise ValueError("Expecting output of length 1.")
+    return out[0]
 
 def branch_stats(ts,leaf_sets,weight_fun,method='length'):
     '''
@@ -87,7 +93,10 @@ def branch_stats(ts,leaf_sets,weight_fun,method='length'):
 
     Doesn't do method='mutations'.
     '''
-    return branch_stats_vector(ts,leaf_sets,lambda x: [weight_fun(x)],method)[0]
+    out = branch_stats_vector(ts,leaf_sets,lambda x: [weight_fun(x)],method)
+    if len(out)>1:
+        raise ValueError("Expecting output of length 1.")
+    return out[0]
 
 def branch_stats_vector_node_iter(ts,leaf_sets,weight_fun,method='length'):
     '''
@@ -104,6 +113,9 @@ def branch_stats_vector_node_iter(ts,leaf_sets,weight_fun,method='length'):
 
     This version is inefficient as it iterates over all nodes in each tree.
     '''
+    for U in leaf_sets:
+        if max([U.count(x) for x in set(U)])>1:
+            raise ValueError("elements of leaf_sets cannot contain repeated elements.")
     tr_its = [ ts.trees(tracked_leaves=x,leaf_counts=True,leaf_lists=True) for x in leaf_sets ]
     n_out = len(weight_fun([0 for a in leaf_sets]))
     S = [ 0.0 for j in range(n_out) ]
@@ -144,9 +156,13 @@ def branch_stats_vector(ts,leaf_sets,weight_fun,method='length'):
 
     Doesn't do method='mutations'.
     '''
+    for U in leaf_sets:
+        if max([U.count(x) for x in set(U)])>1:
+            raise ValueError("elements of leaf_sets cannot contain repeated elements.")
     # initialize
     num_leaf_sets = len(leaf_sets)
     n_out = len(weight_fun([0 for a in range(num_leaf_sets)]))
+    # print("leaf_sets:", leaf_sets)
     # print("n_out:",n_out)
     S = [ 0.0 for j in range(n_out) ]
     L = [ 0.0 for j in range(n_out) ]
@@ -172,7 +188,7 @@ def branch_stats_vector(ts,leaf_sets,weight_fun,method='length'):
                     dt = (node_time[pi[child]] - node_time[child])
                     for j in range(n_out):
                         L[j] += sign * dt * w[j]
-                    # print("\t\tchild:",child,sign,weight_fun(X[child]),node_time[pi[child]],node_time[child],"-->",L)
+                    # print("\t\tchild:",child,"+=",sign,"*",weight_fun(X[child]),"*(",node_time[pi[child]],"-",node_time[child],")","-->",L)
                     if sign==-1:
                         pi[child] = -1
                 old_w = weight_fun(X[node])
@@ -183,7 +199,7 @@ def branch_stats_vector(ts,leaf_sets,weight_fun,method='length'):
                     dt = (node_time[pi[node]] - node_time[node])
                     for j in range(n_out):
                         L[j] += dt * (w[j]-old_w[j])
-                    # print("\t\tnode:",node,weight_fun(X[node]),old_w,"-->",L)
+                    # print("\t\tnode:",node,"+=",dt,"*(",weight_fun(X[node]),"-",old_w,") -->",L)
                 # propagate change up the tree
                 u = pi[node]
                 if u != -1:
@@ -199,7 +215,7 @@ def branch_stats_vector(ts,leaf_sets,weight_fun,method='length'):
                             dt = (node_time[pi[u]] - node_time[u])
                             for j in range(n_out):
                                 L[j] += dt*(w[j] - old_w[j])
-                            # print("\t\tanc:",u,weight_fun(X[u]),old_w,"-->",L)
+                            # print("\t\tanc:",u,"+=",dt,"*(",weight_fun(X[u]),"-",old_w,") -->",L)
                         u = next_u
                         next_u = pi[next_u]
                 # print("\t",X, "-->", L)
