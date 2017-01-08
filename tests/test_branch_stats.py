@@ -76,6 +76,21 @@ class BranchStatsTestCase(unittest.TestCase):
                 msprime.branch_stats_node_iter(ts,A,f,method='length'),
                 msprime.branch_length_Y(ts,A[0][0],A[1][0],A[1][1]) )
 
+    def check_f4_stat(self,ts):
+        samples = random.sample(ts.samples(),4)
+        A_zero = [ [samples[0]], [samples[0]], [samples[1]], [samples[1]] ]
+        A_f1 = [ [samples[0]], [samples[1]], [samples[0]], [samples[1]] ]
+        A_one = [ [samples[0]], [samples[1]], [samples[2]], [samples[3]] ]
+        for A in (A_zero,A_f1,A_one):
+            def f(x):
+                return (float(x[0])/len(A[0])-float(x[1])/len(A[1]))*(float(x[2])/len(A[2])-float(x[3])/len(A[3]))
+            self.assertAlmostEqual(
+                    msprime.branch_stats(ts,A,f),
+                    msprime.branch_length_f4(ts,A[0],A[1],A[2],A[3]))
+            self.assertAlmostEqual(
+                    msprime.branch_stats_node_iter(ts,A,f,method='length'),
+                    msprime.branch_length_f4(ts,A[0],A[1],A[2],A[3]))
+
     def test_pairwise_diversity(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_pairwise_diversity(ts)
@@ -84,7 +99,11 @@ class BranchStatsTestCase(unittest.TestCase):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_Y_stat(ts)
 
-    def test_Y_stat(self):
+    def test_f4(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
+        self.check_f4_stat(ts)
+
+    def test_vectorization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_vectorization(ts)
 
