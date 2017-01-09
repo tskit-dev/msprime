@@ -3666,6 +3666,35 @@ test_nonbinary_tree_sequence_diff_iter(void)
 }
 
 static void
+test_unary_tree_sequence_diff_iter(void)
+{
+    int ret;
+    const char * text_records =
+        "2 10 4 2,3 0.071 0\n"
+        "0 2  5 1,3 0.090 0\n"
+        "2 10 5 1,4 0.090 0\n"
+        "0 7  6 0,5 0.170 0\n"
+        "7 10 7 0,5 0.202 0\n"
+        "0 2  7 2   0.202 0\n"
+        "0 2  8 6,7 0.253 0\n"
+        "2 7  8 6   0.253 0";
+    size_t num_records;
+    coalescence_record_t *records;
+    tree_sequence_t ts;
+
+    parse_text_records(text_records, &num_records, &records);
+    CU_ASSERT_EQUAL_FATAL(num_records, 8);
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    verify_tree_diffs(&ts);
+
+    ret = tree_sequence_free(&ts);
+    CU_ASSERT_EQUAL(ret, 0);
+    free_local_records(num_records, records);
+}
+
+static void
 test_diff_iter_from_examples(void)
 {
     tree_sequence_t **examples = get_example_tree_sequences(1);
@@ -4590,6 +4619,7 @@ main(int argc, char **argv)
         {"Tree sequence diff iter", test_tree_sequence_diff_iter},
         {"Nonbinary Tree sequence diff iter",
             test_nonbinary_tree_sequence_diff_iter},
+        {"Unary Tree sequence diff iter", test_unary_tree_sequence_diff_iter},
         {"diff iter from examples", test_diff_iter_from_examples},
         {"tree iter from examples", test_tree_iter_from_examples},
         {"tree equals from examples", test_tree_equals_from_examples},

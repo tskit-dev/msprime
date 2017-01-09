@@ -29,6 +29,15 @@ import msprime
 import _msprime
 
 
+def cr(left=0, right=1, node=None, children=None, time=None, population=0):
+    """
+    Convenience short-hand function for defining records.
+    """
+    return msprime.CoalescenceRecord(
+        left=left, right=right, node=node, children=children, time=time,
+        population=population)
+
+
 def build_tree_sequence(records, mutations=[]):
     ts = _msprime.TreeSequence()
     ts.load_records(records)
@@ -43,10 +52,10 @@ def insert_redundant_breakpoints(ts):
     new_records = []
     for r in ts.records():
         x = r.left + (r.right - r.left) / 2
-        new_records.append(msprime.CoalescenceRecord(
+        new_records.append(cr(
             left=r.left, right=x, children=r.children, node=r.node,
             population=r.population, time=r.time))
-        new_records.append(msprime.CoalescenceRecord(
+        new_records.append(cr(
             left=x, right=r.right, children=r.children, node=r.node,
             population=r.population, time=r.time))
     new_ts = build_tree_sequence(new_records)
@@ -77,10 +86,8 @@ class TestRecordSquashing(TopologyTestCase):
     """
     def test_single_record(self):
         records = [
-            msprime.CoalescenceRecord(
-               left=0, right=1, node=2, children=(0, 1), time=1, population=0),
-            msprime.CoalescenceRecord(
-               left=1, right=2, node=2, children=(0, 1), time=1, population=0),
+            cr(left=0, right=1, node=2, children=(0, 1), time=1),
+            cr(left=1, right=2, node=2, children=(0, 1), time=1),
         ]
         ts = build_tree_sequence(records)
         self.assertEqual(list(ts.records()), records)
@@ -150,20 +157,17 @@ class TestUnaryNodes(TopologyTestCase):
     def test_simple_case(self):
         # Simple case where we have n = 2 and some unary nodes.
         records = [
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=2, children=(0,), time=1, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=3, children=(1,), time=1, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=4, children=(2, 3), time=2, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=5, children=(4,), time=3, population=0),
+            cr(left=0, right=1, node=2, children=(0,), time=1),
+            cr(left=0, right=1, node=3, children=(1,), time=1),
+            cr(left=0, right=1, node=4, children=(2, 3), time=2),
+            cr(left=0, right=1, node=5, children=(4,), time=3),
         ]
         mutations = [(j * 1 / 5, j) for j in range(5)]
         ts = build_tree_sequence(records, mutations)
         self.assertEqual(ts.sample_size, 2)
         self.assertEqual(ts.num_nodes, 6)
         self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
         t = next(ts.trees())
         self.assertEqual(
             t.parent_dict, {0: 2, 1: 3, 2: 4, 3: 4, 4: 5})
@@ -181,19 +185,12 @@ class TestUnaryNodes(TopologyTestCase):
         num_unary_nodes = 50
         n = 2
         records = [
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=n, children=(0,), time=1, population=0)]
+            cr(left=0, right=1, node=n, children=(0,), time=1)]
         for j in range(num_unary_nodes):
-            records.append(
-                msprime.CoalescenceRecord(
-                    left=0, right=1, node=n + j + 1, children=(n + j,), time=j + 2,
-                    population=0))
+            records.append(cr(node=n + j + 1, children=(n + j,), time=j + 2))
         root = num_unary_nodes + 3
         root_time = num_unary_nodes + 3
-        records.append(
-            msprime.CoalescenceRecord(
-               left=0, right=1, node=root, children=(1, num_unary_nodes + 2),
-               time=root_time, population=0))
+        records.append(cr(node=root, children=(1, num_unary_nodes + 2), time=root_time))
         ts = build_tree_sequence(records)
         t = next(ts.trees())
         self.assertEqual(t.mrca(0, 1), root)
@@ -218,12 +215,12 @@ class TestUnaryNodes(TopologyTestCase):
             t = r.time - 1e-14  # Arbitrary small value.
             children = []
             for v in r.children:
-                new_records.append(msprime.CoalescenceRecord(
+                new_records.append(cr(
                     left=r.left, right=r.right, population=r.population,
                     node=next_node, children=(v,), time=t))
                 children.append(next_node)
                 next_node += 1
-            new_records.append(msprime.CoalescenceRecord(
+            new_records.append(cr(
                 left=r.left, right=r.right, population=r.population,
                 node=u, children=tuple(children), time=r.time))
         new_records.sort(key=lambda r: r.time)
@@ -235,6 +232,7 @@ class TestUnaryNodes(TopologyTestCase):
         self.assertEqual(list(ts_simplified.records()), list(ts.records()))
         self.assert_haplotypes_equal(ts, ts_simplified)
         self.assert_variants_equal(ts, ts_simplified)
+        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
 
     def test_binary_tree_sequence_unary_nodes(self):
         ts = msprime.simulate(
@@ -261,10 +259,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
     """
     def test_simple_case(self):
         # Simplest case where we have n = 2 and external non-sample nodes.
-        records = [
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=2, children=(0, 1, 3, 4), time=1, population=0),
-        ]
+        records = [cr(node=2, children=(0, 1, 3, 4), time=1)]
         mutations = [
             msprime.Mutation(index=0, position=0.1, node=0),
             msprime.Mutation(index=1, position=0.2, node=1),
@@ -301,7 +296,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         next_node = ts.num_nodes
         for r in ts.records():
             children = tuple(list(r.children) + [next_node])
-            new_records.append(msprime.CoalescenceRecord(
+            new_records.append(cr(
                 left=r.left, right=r.right, node=r.node, time=r.time,
                 population=r.population, children=children))
             next_node += 1
@@ -326,10 +321,8 @@ class TestMultipleRoots(TopologyTestCase):
         # Simplest case where we have n = 2 and two unary records.
         # This cannot be simplified, since there are no trees to recover.
         records = [
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=2, children=(0,), time=1, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=3, children=(1,), time=1, population=0),
+            cr(left=0, right=1, node=2, children=(0,), time=1),
+            cr(left=0, right=1, node=3, children=(1,), time=1),
         ]
         mutations = [
             msprime.Mutation(index=0, position=0.1, node=0),
@@ -350,10 +343,8 @@ class TestMultipleRoots(TopologyTestCase):
     def test_simplest_non_degenerate_case(self):
         # Simplest case where we have n = 4 and two trees.
         records = [
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=4, children=(0, 1), time=1, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=5, children=(2, 3), time=2, population=0),
+            cr(left=0, right=1, node=4, children=(0, 1), time=1),
+            cr(left=0, right=1, node=5, children=(2, 3), time=2),
         ]
         mutations = [
             msprime.Mutation(index=0, position=0.1, node=0),
@@ -389,14 +380,10 @@ class TestMultipleRoots(TopologyTestCase):
     def test_two_reducable_trees(self):
         # We have n = 4 and two trees, with some unary nodes and non-sample leaves
         records = [
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=4, children=(0,), time=1, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=5, children=(1,), time=1, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=6, children=(4, 5), time=2, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=7, children=(2, 3, 8), time=3, population=0),
+            cr(left=0, right=1, node=4, children=(0,), time=1),
+            cr(left=0, right=1, node=5, children=(1,), time=1),
+            cr(left=0, right=1, node=6, children=(4, 5), time=2),
+            cr(left=0, right=1, node=7, children=(2, 3, 8), time=3),
         ]
         mutations = [
             msprime.Mutation(index=0, position=0.1, node=0),
@@ -440,14 +427,10 @@ class TestMultipleRoots(TopologyTestCase):
     def test_one_reducable_tree(self):
         # We have n = 3 and two trees. One tree is reducable and the other isn't.
         records = [
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=4, children=(0,), time=1, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=5, children=(1,), time=1, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=6, children=(4, 5), time=2, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=7, children=(2, 3, 8), time=3, population=0),
+            cr(left=0, right=1, node=4, children=(0,), time=1),
+            cr(left=0, right=1, node=5, children=(1,), time=1),
+            cr(left=0, right=1, node=6, children=(4, 5), time=2),
+            cr(left=0, right=1, node=7, children=(2, 3, 8), time=3),
         ]
         ts = build_tree_sequence(records)
         self.assertEqual(ts.num_nodes, 9)
@@ -472,12 +455,9 @@ class TestMultipleRoots(TopologyTestCase):
     def test_mutations_over_roots(self):
         # Mutations over root nodes should be ok when we have multiple roots.
         records = [
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=3, children=(0, 1), time=1, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=4, children=(3,), time=2, population=0),
-            msprime.CoalescenceRecord(
-                left=0, right=1, node=5, children=(2,), time=2, population=0),
+            cr(left=0, right=1, node=3, children=(0, 1), time=1),
+            cr(left=0, right=1, node=4, children=(3,), time=2),
+            cr(left=0, right=1, node=5, children=(2,), time=2),
         ]
         mutations = [
             msprime.Mutation(index=0, position=0.1, node=0),
@@ -579,22 +559,17 @@ class TestWithVisuals(TopologyTestCase):
         #          (0.0, 0.2),                 (0.2, 0.8),         (0.8, 1.0)
 
         records = [
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=4, children=(2, 3), time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.2, right=0.8, node=4, children=(0, 2), time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.8, right=1.0, node=4, children=(2, 3), time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.0, right=1.0, node=5, children=(1, 4), time=0.5, population=0),
-            msprime.CoalescenceRecord(
-                left=0.8, right=1.0, node=6, children=(0, 5), time=0.7, population=0),
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=7, children=(0, 5), time=1.0, population=0),
-            ]
-        true_trees = [{0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6: -1, 7: -1},
-                      {0: 4, 1: 5, 2: 4, 3: -1, 4: 5, 5: -1, 6: -1, 7: -1},
-                      {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: -1, 7: -1}]
+            cr(left=0.0, right=0.2, node=4, children=(2, 3), time=0.4),
+            cr(left=0.2, right=0.8, node=4, children=(0, 2), time=0.4),
+            cr(left=0.8, right=1.0, node=4, children=(2, 3), time=0.4),
+            cr(left=0.0, right=1.0, node=5, children=(1, 4), time=0.5),
+            cr(left=0.8, right=1.0, node=6, children=(0, 5), time=0.7),
+            cr(left=0.0, right=0.2, node=7, children=(0, 5), time=1.0),
+        ]
+        true_trees = [
+            {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6: -1, 7: -1},
+            {0: 4, 1: 5, 2: 4, 3: -1, 4: 5, 5: -1, 6: -1, 7: -1},
+            {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: -1, 7: -1}]
         ts = build_tree_sequence(records)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         self.assertEqual(ts.sample_size, 4)
@@ -627,26 +602,19 @@ class TestWithVisuals(TopologyTestCase):
         #          (0.0, 0.2),         (0.2, 0.8),         (0.8, 1.0)
 
         records = [
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=3, children=(2, 7), time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.2, right=0.8, node=3, children=(0, 2), time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.8, right=1.0, node=3, children=(2, 7), time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=4, children=(1, 3), time=0.5, population=0),
-            msprime.CoalescenceRecord(
-                left=0.2, right=0.8, node=4, children=(1, 3), time=0.5, population=0),
-            msprime.CoalescenceRecord(
-                left=0.8, right=1.0, node=4, children=(1, 3), time=0.5, population=0),
-            msprime.CoalescenceRecord(
-                left=0.8, right=1.0, node=5, children=(0, 4), time=0.7, population=0),
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=6, children=(0, 4), time=1.0, population=0),
-            ]
-        true_trees = [{0: 6, 1: 4, 2: 3, 3: 4, 4: 6, 5: -1, 6: -1, 7: 3},
-                      {0: 3, 1: 4, 2: 3, 3: 4, 4: -1, 5: -1, 6: -1, 7: -1},
-                      {0: 5, 1: 4, 2: 3, 3: 4, 4: 5, 5: -1, 6: -1, 7: 3}]
+            cr(left=0.0, right=0.2, node=3, children=(2, 7), time=0.4),
+            cr(left=0.2, right=0.8, node=3, children=(0, 2), time=0.4),
+            cr(left=0.8, right=1.0, node=3, children=(2, 7), time=0.4),
+            cr(left=0.0, right=0.2, node=4, children=(1, 3), time=0.5),
+            cr(left=0.2, right=0.8, node=4, children=(1, 3), time=0.5),
+            cr(left=0.8, right=1.0, node=4, children=(1, 3), time=0.5),
+            cr(left=0.8, right=1.0, node=5, children=(0, 4), time=0.7),
+            cr(left=0.0, right=0.2, node=6, children=(0, 4), time=1.0),
+        ]
+        true_trees = [
+            {0: 6, 1: 4, 2: 3, 3: 4, 4: 6, 5: -1, 6: -1, 7: 3},
+            {0: 3, 1: 4, 2: 3, 3: 4, 4: -1, 5: -1, 6: -1, 7: -1},
+            {0: 5, 1: 4, 2: 3, 3: 4, 4: 5, 5: -1, 6: -1, 7: 3}]
         ts = build_tree_sequence(records)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         # sample size check works here since 7 > 3
@@ -679,27 +647,21 @@ class TestWithVisuals(TopologyTestCase):
         #
         #          (0.0, 0.2),               (0.2, 0.8),              (0.8, 1.0)
         records = [
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=4, children=(2, 3), time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.2, right=0.8, node=4, children=(0, 2), time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.8, right=1.0, node=4, children=(2, 3), time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.0, right=1.0, node=5, children=(1, 4), time=0.5, population=0),
-            msprime.CoalescenceRecord(
-                left=0.8, right=1.0, node=6, children=(0, 5), time=0.7, population=0),
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=6, children=(5, ), time=0.7, population=0),
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=7, children=(0, 6), time=1.0, population=0),
-            ]
-        true_trees = [{0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: 7, 7: -1},
-                      {0: 4, 1: 5, 2: 4, 3: -1, 4: 5, 5: -1, 6: -1, 7: -1},
-                      {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: -1, 7: -1}]
+            cr(left=0.0, right=0.2, node=4, children=(2, 3), time=0.4),
+            cr(left=0.2, right=0.8, node=4, children=(0, 2), time=0.4),
+            cr(left=0.8, right=1.0, node=4, children=(2, 3), time=0.4),
+            cr(left=0.0, right=1.0, node=5, children=(1, 4), time=0.5),
+            cr(left=0.8, right=1.0, node=6, children=(0, 5), time=0.7),
+            cr(left=0.0, right=0.2, node=6, children=(5,), time=0.7),
+            cr(left=0.0, right=0.2, node=7, children=(0, 6), time=1.0),
+        ]
+        true_trees = [
+            {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: 7, 7: -1},
+            {0: 4, 1: 5, 2: 4, 3: -1, 4: 5, 5: -1, 6: -1, 7: -1},
+            {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: -1, 7: -1}]
         ts = build_tree_sequence(records)
         tree_dicts = [t.parent_dict for t in ts.trees()]
-        # self.assertEqual(ts.sample_size, 3)
+        self.assertEqual(ts.sample_size, 4)
         self.assertEqual(ts.num_trees, 3)
         self.assertEqual(ts.num_nodes, 8)
         # check topologies agree:
@@ -768,67 +730,32 @@ class TestWithVisuals(TopologyTestCase):
             ]
 
         records = [
-                msprime.CoalescenceRecord(
-                    left=0.5, right=1.0, node=10, children=(1,),
-                    time=5.0-4.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.4, node=10, children=(2,),
-                    time=5.0-4.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.6, right=1.0, node=9, children=(0,),
-                    time=5.0-4.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.5, node=9, children=(1,),
-                    time=5.0-4.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.8, right=1.0, node=8, children=(10,),
-                    time=5.0-3.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.2, right=0.8, node=8, children=(9, 10),
-                    time=5.0-3.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.2, node=8, children=(9,),
-                    time=5.0-3.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.7, right=1.0, node=7, children=(8,),
-                    time=5.0-2.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.2, node=7, children=(10,),
-                    time=5.0-2.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.8, right=1.0, node=6, children=(9,),
-                    time=5.0-2.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.7, node=6, children=(8,),
-                    time=5.0-2.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.4, right=1.0, node=5, children=(2, 7),
-                    time=5.0-1.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.1, right=0.4, node=5, children=(7,),
-                    time=5.0-1.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.6, right=0.9, node=4, children=(6,),
-                    time=5.0-1.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.6, node=4, children=(0, 6),
-                    time=5.0-1.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.9, right=1.0, node=3, children=(4, 5, 6),
-                    time=5.0-0.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.1, right=0.9, node=3, children=(4, 5),
-                    time=5.0-0.0, population=0),
-                msprime.CoalescenceRecord(
-                        left=0.0, right=0.1, node=3, children=(4, 5, 7),
-                        time=5.0-0.0, population=0),
-                ]
+            cr(left=0.5, right=1.0, node=10, children=(1,), time=5.0-4.0),
+            cr(left=0.0, right=0.4, node=10, children=(2,), time=5.0-4.0),
+            cr(left=0.6, right=1.0, node=9, children=(0,), time=5.0-4.0),
+            cr(left=0.0, right=0.5, node=9, children=(1,), time=5.0-4.0),
+            cr(left=0.8, right=1.0, node=8, children=(10,), time=5.0-3.0),
+            cr(left=0.2, right=0.8, node=8, children=(9, 10), time=5.0-3.0),
+            cr(left=0.0, right=0.2, node=8, children=(9,), time=5.0-3.0),
+            cr(left=0.7, right=1.0, node=7, children=(8,), time=5.0-2.0),
+            cr(left=0.0, right=0.2, node=7, children=(10,), time=5.0-2.0),
+            cr(left=0.8, right=1.0, node=6, children=(9,), time=5.0-2.0),
+            cr(left=0.0, right=0.7, node=6, children=(8,), time=5.0-2.0),
+            cr(left=0.4, right=1.0, node=5, children=(2, 7), time=5.0-1.0),
+            cr(left=0.1, right=0.4, node=5, children=(7,), time=5.0-1.0),
+            cr(left=0.6, right=0.9, node=4, children=(6,), time=5.0-1.0),
+            cr(left=0.0, right=0.6, node=4, children=(0, 6), time=5.0-1.0),
+            cr(left=0.9, right=1.0, node=3, children=(4, 5, 6), time=5.0-0.0),
+            cr(left=0.1, right=0.9, node=3, children=(4, 5), time=5.0-0.0),
+            cr(left=0.0, right=0.1, node=3, children=(4, 5, 7), time=5.0-0.0),
+        ]
 
         ts = build_tree_sequence(records)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         # self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, len(true_trees))
         self.assertEqual(ts.num_nodes, 11)
+        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
         # check topologies agree:
         for a, t in zip(true_trees, tree_dicts):
             for k in a.keys():
