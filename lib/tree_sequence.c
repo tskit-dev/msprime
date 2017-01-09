@@ -2263,6 +2263,7 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
                     s->trees.indexes.insertion_order[self->insertion_index]]
                         == self->tree_left) {
             k = s->trees.indexes.insertion_order[self->insertion_index];
+            assert(next_node_record < self->num_nodes);
             w = &self->node_records[next_node_record];
             next_node_record++;
             w->node = s->trees.records.node[k];
