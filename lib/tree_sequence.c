@@ -709,7 +709,7 @@ tree_sequence_store_mutations(tree_sequence_t *self, size_t num_mutations,
     offset = 0;
     for (j = 0; j < num_mutations; j++) {
         if (mutations[j].position < 0
-                || mutations[j].position > self->sequence_length
+                || mutations[j].position >= self->sequence_length
                 || mutations[j].num_nodes < 1) {
             ret = MSP_ERR_BAD_MUTATION;
             goto out;

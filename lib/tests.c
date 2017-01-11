@@ -2364,7 +2364,9 @@ test_single_tree_bad_mutations(void)
 
     /* coordinate == sequence length */
     mutations[0].position = 1.0;
-    ret = tree_sequence_init(&ts, num_samples, samples, num_records, records,
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_records(&ts, num_samples, samples, num_records, records,
             num_mutations, mutations, 0, NULL, 0, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
@@ -4082,11 +4084,17 @@ test_unary_tree_sequence_diff_iter(void)
         "2 7  8 6   0.253 0";
     size_t num_records;
     coalescence_record_t *records;
+    size_t num_samples = 4;
+    sample_t samples[num_samples];
     tree_sequence_t ts;
 
+    memset(samples, 0, num_samples * sizeof(sample_t));
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 8);
-    ret = tree_sequence_load_records(&ts, num_records, records);
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_records(&ts, num_samples, samples, num_records, records,
+            0, NULL, 0, NULL, 0, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     verify_tree_diffs(&ts);
