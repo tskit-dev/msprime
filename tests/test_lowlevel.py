@@ -2887,11 +2887,15 @@ class TestSparseTree(LowLevelTestCase):
 
     def test_bad_mutations(self):
         ts = self.get_tree_sequence(2, num_loci=200, random_seed=1)
+        l = ts.get_sequence_length()
         # Anything bigger than num_nodes should be caught immediately.
         u = ts.get_num_nodes()
         for bad_node in [u, u + 1, 2 * u, -1]:
             self.assertRaises(
                 _msprime.LibraryError, ts.set_mutations, [(0.1, bad_node)])
+        for bad_pos in [-1, l, l + 1]:
+            self.assertRaises(
+                _msprime.LibraryError, ts.set_mutations, [(l, 0)])
 
     def test_free(self):
         ts = self.get_tree_sequence()

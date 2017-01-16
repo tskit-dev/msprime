@@ -2089,6 +2089,15 @@ test_single_tree_bad_mutations(void)
     tree_sequence_free(&ts);
     mutations[0].position = 0.0;
 
+    /* coordinate == sequence length */
+    mutations[0].position = 1.0;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tree_sequence_set_mutations(&ts, num_mutations, mutations);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
+    tree_sequence_free(&ts);
+    mutations[0].position = 0.0;
+
     /* coordinate > sequence length */
     mutations[0].position = 1.1;
     ret = tree_sequence_load_records(&ts, num_records, records);
