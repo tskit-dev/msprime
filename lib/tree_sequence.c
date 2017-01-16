@@ -1738,7 +1738,7 @@ tree_sequence_set_mutations(tree_sequence_t *self, size_t num_mutations,
         for (j = 0; j < num_mutations; j++) {
             mutation_ptrs[j] = mutations + j;
             if (mutations[j].position < 0
-                    || mutations[j].position > self->sequence_length
+                    || mutations[j].position >= self->sequence_length
                     || mutations[j].node == MSP_NULL_NODE
                     || mutations[j].node >= self->num_nodes) {
                 ret = MSP_ERR_BAD_MUTATION;
