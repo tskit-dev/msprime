@@ -40,8 +40,11 @@ def cr(left=0, right=1, node=None, children=None, time=None, population=0):
 
 def build_tree_sequence(records, mutations=[]):
     ts = _msprime.TreeSequence()
-    ts.load_records(records)
-    ts.set_mutations(mutations)
+    # FIXME this is a hack to get the sample size. This API will be removed in favour
+    # of specifying nodes, so no point in cleaning it up.
+    n = max(2, min(r[2] for r in records))
+    samples = [(0, 0) for _ in range(n)]
+    ts.load_records(samples, records, mutations)
     return msprime.TreeSequence(ts)
 
 
@@ -63,7 +66,6 @@ def insert_redundant_breakpoints(ts):
     return new_ts
 
 
-@unittest.skip("load Mutations")
 class TopologyTestCase(unittest.TestCase):
     """
     Superclass of test cases containing common utilities.
@@ -81,7 +83,6 @@ class TopologyTestCase(unittest.TestCase):
         self.assertEqual(v1, v2)
 
 
-@unittest.skip("load Mutations")
 class TestRecordSquashing(TopologyTestCase):
     """
     Tests that we correctly squash adjacent equal records together.
@@ -116,7 +117,6 @@ class TestRecordSquashing(TopologyTestCase):
         self.assertEqual(list(tss.records()), list(ts.records()))
 
 
-@unittest.skip("load Mutations")
 class TestRedundantBreakpoints(TopologyTestCase):
     """
     Tests for dealing with redundant breakpoints within the tree sequence.
@@ -153,7 +153,6 @@ class TestRedundantBreakpoints(TopologyTestCase):
         self.assertEqual(comparisons, ts_redundant.num_trees)
 
 
-@unittest.skip("load Mutations")
 class TestUnaryNodes(TopologyTestCase):
     """
     Tests for situations in which we have unary nodes in the tree sequence.
@@ -166,7 +165,7 @@ class TestUnaryNodes(TopologyTestCase):
             cr(left=0, right=1, node=4, children=(2, 3), time=2),
             cr(left=0, right=1, node=5, children=(4,), time=3),
         ]
-        mutations = [(j * 1 / 5, j) for j in range(5)]
+        mutations = [(j * 1 / 5, (j,)) for j in range(5)]
         ts = build_tree_sequence(records, mutations)
         self.assertEqual(ts.sample_size, 2)
         self.assertEqual(ts.num_nodes, 6)
@@ -257,7 +256,6 @@ class TestUnaryNodes(TopologyTestCase):
         self.verify_unary_tree_sequence(ts)
 
 
-@unittest.skip("load Mutations")
 class TestNonSampleExternalNodes(TopologyTestCase):
     """
     Tests for situations in which we have tips that are not samples.
@@ -266,10 +264,10 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         # Simplest case where we have n = 2 and external non-sample nodes.
         records = [cr(node=2, children=(0, 1, 3, 4), time=1)]
         mutations = [
-            msprime.Mutation(index=0, position=0.1, node=0),
-            msprime.Mutation(index=1, position=0.2, node=1),
-            msprime.Mutation(index=2, position=0.3, node=3),
-            msprime.Mutation(index=3, position=0.4, node=4),
+            msprime.Mutation(index=0, position=0.1, nodes=(0,)),
+            msprime.Mutation(index=1, position=0.2, nodes=(1,)),
+            msprime.Mutation(index=2, position=0.3, nodes=(3,)),
+            msprime.Mutation(index=3, position=0.4, nodes=(4,)),
         ]
         ts = build_tree_sequence(records, mutations)
         self.assertEqual(ts.sample_size, 2)
@@ -318,7 +316,6 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assert_variants_equal(ts, ts_simplified)
 
 
-@unittest.skip("load Mutations")
 class TestMultipleRoots(TopologyTestCase):
     """
     Tests for situations where we have multiple roots for the samples.
@@ -331,8 +328,8 @@ class TestMultipleRoots(TopologyTestCase):
             cr(left=0, right=1, node=3, children=(1,), time=1),
         ]
         mutations = [
-            msprime.Mutation(index=0, position=0.1, node=0),
-            msprime.Mutation(index=1, position=0.2, node=1),
+            msprime.Mutation(index=0, position=0.1, nodes=(0,)),
+            msprime.Mutation(index=1, position=0.2, nodes=(1,)),
         ]
         ts = build_tree_sequence(records, mutations)
         self.assertEqual(ts.num_nodes, 4)
@@ -353,10 +350,10 @@ class TestMultipleRoots(TopologyTestCase):
             cr(left=0, right=1, node=5, children=(2, 3), time=2),
         ]
         mutations = [
-            msprime.Mutation(index=0, position=0.1, node=0),
-            msprime.Mutation(index=1, position=0.2, node=1),
-            msprime.Mutation(index=2, position=0.3, node=2),
-            msprime.Mutation(index=3, position=0.4, node=3),
+            msprime.Mutation(index=0, position=0.1, nodes=(0,)),
+            msprime.Mutation(index=1, position=0.2, nodes=(1,)),
+            msprime.Mutation(index=2, position=0.3, nodes=(2,)),
+            msprime.Mutation(index=3, position=0.4, nodes=(3,)),
         ]
         ts = build_tree_sequence(records, mutations)
         self.assertEqual(ts.num_nodes, 6)
@@ -392,11 +389,11 @@ class TestMultipleRoots(TopologyTestCase):
             cr(left=0, right=1, node=7, children=(2, 3, 8), time=3),
         ]
         mutations = [
-            msprime.Mutation(index=0, position=0.1, node=0),
-            msprime.Mutation(index=1, position=0.2, node=1),
-            msprime.Mutation(index=2, position=0.3, node=2),
-            msprime.Mutation(index=3, position=0.4, node=3),
-            msprime.Mutation(index=4, position=0.5, node=8),
+            msprime.Mutation(index=0, position=0.1, nodes=(0,)),
+            msprime.Mutation(index=1, position=0.2, nodes=(1,)),
+            msprime.Mutation(index=2, position=0.3, nodes=(2,)),
+            msprime.Mutation(index=3, position=0.4, nodes=(3,)),
+            msprime.Mutation(index=4, position=0.5, nodes=(8,)),
         ]
         ts = build_tree_sequence(records, mutations)
         self.assertEqual(ts.num_nodes, 9)
@@ -466,12 +463,12 @@ class TestMultipleRoots(TopologyTestCase):
             cr(left=0, right=1, node=5, children=(2,), time=2),
         ]
         mutations = [
-            msprime.Mutation(index=0, position=0.1, node=0),
-            msprime.Mutation(index=1, position=0.2, node=1),
-            msprime.Mutation(index=2, position=0.3, node=3),
-            msprime.Mutation(index=3, position=0.4, node=4),
-            msprime.Mutation(index=4, position=0.5, node=2),
-            msprime.Mutation(index=5, position=0.6, node=5),
+            msprime.Mutation(index=0, position=0.1, nodes=(0,)),
+            msprime.Mutation(index=1, position=0.2, nodes=(1,)),
+            msprime.Mutation(index=2, position=0.3, nodes=(3,)),
+            msprime.Mutation(index=3, position=0.4, nodes=(4,)),
+            msprime.Mutation(index=4, position=0.5, nodes=(2,)),
+            msprime.Mutation(index=5, position=0.6, nodes=(5,)),
         ]
         ts = build_tree_sequence(records, mutations)
         self.assertEqual(ts.num_nodes, 6)

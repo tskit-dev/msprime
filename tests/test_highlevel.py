@@ -869,8 +869,7 @@ class TestTreeSequence(HighLevelTestCase):
         for n in [2, 3, 10, 100]:
             for m in [1, 2, 32]:
                 for rho in [0, 0.1, 0.5]:
-                    recomb_map = msprime.RecombinationMap.uniform_map(
-                        m, rho, num_loci=m)
+                    recomb_map = msprime.RecombinationMap.uniform_map(m, rho, num_loci=m)
                     ts = msprime.simulate(
                         n, recombination_map=recomb_map, mutation_rate=0.1)
                     yield ts
@@ -1312,6 +1311,19 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(p, ts.population(s))
                 self.assertEqual(ts.get_samples(p), ts.samples(p))
             self.assertEqual(ts.get_samples(), ts.samples())
+
+    def test_copy(self):
+        for ts1 in self.get_example_tree_sequences():
+            ts2 = ts1.copy()
+            self.assertNotEqual(id(ts1), id(ts2))
+            self.assertEqual(list(ts1.records()), list(ts2.records()))
+            self.assertEqual(list(ts1.mutations()), list(ts2.mutations()))
+            mutation_lists = [[], list(ts1.mutations())[:-1]]
+            for mutations in mutation_lists:
+                ts2 = ts1.copy(mutations=mutations)
+                self.assertNotEqual(id(ts1), id(ts2))
+                self.assertEqual(list(ts1.records()), list(ts2.records()))
+                self.assertEqual(mutations, list(ts2.mutations()))
 
 
 class TestSparseTree(HighLevelTestCase):
