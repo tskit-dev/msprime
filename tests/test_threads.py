@@ -80,7 +80,6 @@ class TestSimulatorThreads(unittest.TestCase):
             self.assertEqual(results[0], result)
 
 
-@unittest.skip("Threads failing")
 class TestLdCalculatorReplicates(unittest.TestCase):
     """
     Tests the LdCalculator object to ensure we get correct results
@@ -91,7 +90,7 @@ class TestLdCalculatorReplicates(unittest.TestCase):
     def get_tree_sequence(self):
         ts = msprime.simulate(
             20, mutation_rate=10, recombination_rate=10, random_seed=10)
-        mutations = random.sample(list(ts.mutations()), self.num_test_mutations)
+        mutations = sorted(random.sample(list(ts.mutations()), self.num_test_mutations))
         return ts.copy(mutations)
 
     def test_get_r2_multiple_instances(self):
