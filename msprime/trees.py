@@ -1426,6 +1426,21 @@ class TreeSequence(object):
             samples=samples, coalescence_records=records, mutations=mutations)
         return TreeSequence(ts)
 
+    def copy(self, mutations=None):
+        # Experimental API. Return a copy of this tree sequence, optionally with
+        # the mutations set to the specified list.
+
+        # To get the samples we must first get the tree.
+        tree = next(self.trees())
+        samples = [
+            msprime.Sample(tree.population(u), tree.time(u)) for u in self.samples()]
+        if mutations is None:
+            mutations = list(self.mutations())
+        records = list(self.records())
+        new_ll_ts = _msprime.TreeSequence()
+        new_ll_ts.load_records(samples, records, mutations)
+        return TreeSequence(new_ll_ts)
+
     @property
     def provenance(self):
         return self.get_provenance()
@@ -1711,9 +1726,6 @@ class TreeSequence(object):
         sparse_tree = SparseTree(ll_sparse_tree)
         for _ in iterator:
             yield sparse_tree
-        # Free up the underlying tree to so that we can call set_mutations.
-        # Any attempts to access the tree outside of the loop will fail.
-        ll_sparse_tree.free()
 
     def haplotypes(self):
         """
@@ -1783,25 +1795,6 @@ class TreeSequence(object):
             g = np.frombuffer(genotypes_buffer, "u1", n)
             for position, nodes, index in iterator:
                 yield Variant(position=position, nodes=nodes, index=index, genotypes=g)
-
-    def set_mutations(self, mutations):
-        """
-        Sets the mutations in this tree sequence to the specified list of
-        mutations.  Each entry in the list must be either a ``Mutation``
-        named-tuple instance (as returned by the
-        :meth:`.TreeSequence.mutations` method) or tuple of the form :math:`(x,
-        u, ...)`, where :math:`x` is a floating point value defining a genomic
-        position and :math:`u` is an integer defining a tree node. A genomic
-        position :math:`x` must satisfy :math:`0 \leq x < L` where :math:`L` is
-        the sequence length (see :meth:`.get_sequence_length`). A node
-        :math:`u` must satisfy :math:`0 < u < N` where :math:`N` is the number
-        of nodes in the tree sequence (see :meth:`.get_num_nodes`). Values
-        other than ``position`` and ``node`` in the input tuples are ignored.
-
-        :param list mutations: The list of mutations to be assigned to this
-            tree sequence.
-        """
-        self._ll_tree_sequence.set_mutations(mutations)
 
     def pairwise_diversity(self, samples=None):
         return self.get_pairwise_diversity(samples)

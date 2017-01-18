@@ -454,8 +454,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertEqual(ts.get_num_trees(), num_trees)
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
-        # Accessing the trees after iteration is finished gives a RuntimeError
-        self.assertRaises(RuntimeError, st1.get_root)
 
     def verify_haplotype_statistics(self, ts):
         """
