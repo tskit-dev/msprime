@@ -2212,6 +2212,21 @@ class TestTreeSequence(LowLevelTestCase):
         for mutation in invalid_mutations:
             self.assertRaises(TypeError, ts.load_records, samples, records, [mutation])
 
+        # Positions must be provided in sorted order.
+        mutations = [(0.5, (0,)), (0.6, (0,)), (0.1, (0,))]
+        self.assertRaises(
+            _msprime.LibraryError, ts.load_records, samples, records, mutations)
+        ts.load_records(samples, records, sorted(mutations))
+        self.assertEqual(ts.get_num_mutations(), len(mutations))
+
+        # Nodes must be provided in sorted order and be unique
+        mutations = [(0.1, (1, 0))]
+        self.assertRaises(
+            _msprime.LibraryError, ts.load_records, samples, records, mutations)
+        mutations = [(0.1, (0, 0))]
+        self.assertRaises(
+            _msprime.LibraryError, ts.load_records, samples, records, mutations)
+
     def test_load_bad_records(self):
         def f(records):
             # Quick hack to get the samples.

@@ -72,5 +72,8 @@
 #define MSP_ERR_BAD_RECORD_INTERVAL                                 -41
 #define MSP_ERR_ZERO_RECORDS                                        -42
 #define MSP_ERR_NOT_INITIALISED                                     -43
+#define MSP_ERR_MUTATIONS_NOT_POSITION_SORTED                       -44
+#define MSP_ERR_UNSORTED_MUTATION_NODES                             -45
+#define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
 
 #endif /*__ERR_H__*/

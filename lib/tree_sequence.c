@@ -724,7 +724,23 @@ tree_sequence_store_mutations(tree_sequence_t *self, size_t num_mutations,
                 ret = MSP_ERR_BAD_MUTATION;
                 goto out;
             }
+            if (k > 0) {
+                if (mutations[j].nodes[k] < mutations[j].nodes[k - 1]) {
+                    ret = MSP_ERR_UNSORTED_MUTATION_NODES;
+                    goto out;
+                }
+                if (mutations[j].nodes[k] == mutations[j].nodes[k - 1]) {
+                    ret = MSP_ERR_DUPLICATE_MUTATION_NODES;
+                    goto out;
+                }
+            }
             self->mutations.nodes[j][k] = mutations[j].nodes[k];
+        }
+        if (j > 0) {
+            if (mutations[j].position < mutations[j - 1].position) {
+                ret = MSP_ERR_MUTATIONS_NOT_POSITION_SORTED;
+                goto out;
+            }
         }
     }
     ret = tree_sequence_init_tree_mutations(self);

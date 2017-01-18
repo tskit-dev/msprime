@@ -190,6 +190,15 @@ msp_strerror(int err)
         case MSP_ERR_NOT_INITIALISED:
             ret = "object not initialised. Please file a bug report.";
             break;
+        case MSP_ERR_MUTATIONS_NOT_POSITION_SORTED:
+            ret = "Mutations must be sorted by position";
+            break;
+        case MSP_ERR_UNSORTED_MUTATION_NODES:
+            ret = "Mutations nodes must be in sorted order.";
+            break;
+        case MSP_ERR_DUPLICATE_MUTATION_NODES:
+            ret = "Mutations nodes must be unique.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

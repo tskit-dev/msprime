@@ -2337,8 +2337,9 @@ test_single_tree_bad_mutations(void)
         "0 1 5 2,3 2.0 0\n"
         "0 1 6 4,5 3.0 0";
     const char *text_mutations =
-        "0  0\n"
-        "0.1 1";
+        "0   0\n"
+        "0.1 1\n"
+        "0.2 0,1";
     size_t num_samples = 4;
     sample_t samples[num_samples];
     coalescence_record_t *records = NULL;
@@ -2350,7 +2351,7 @@ test_single_tree_bad_mutations(void)
     parse_text_records(text_records, &num_records, &records);
     CU_ASSERT_EQUAL_FATAL(num_records, 3);
     parse_text_mutations(text_mutations, &num_mutations, &mutations);
-    CU_ASSERT_EQUAL_FATAL(num_mutations, 2);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 3);
 
     /* negative coordinate */
     mutations[0].position = -1.0;
@@ -2401,6 +2402,38 @@ test_single_tree_bad_mutations(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
     mutations[0].nodes[0] = 0;
+
+    /* Unsorted positions */
+    mutations[0].position = 0.3;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_records(&ts, num_samples, samples, num_records, records,
+            num_mutations, mutations, 0, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATIONS_NOT_POSITION_SORTED);
+    tree_sequence_free(&ts);
+    mutations[0].position = 0.0;
+
+    /* Unsorted nodes */
+    mutations[2].nodes[0] = 1;
+    mutations[2].nodes[1] = 0;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_records(&ts, num_samples, samples, num_records, records,
+            num_mutations, mutations, 0, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATION_NODES);
+    tree_sequence_free(&ts);
+    mutations[2].nodes[0] = 0;
+    mutations[2].nodes[1] = 1;
+
+    /* Duplicate nodes */
+    mutations[2].nodes[0] = 1;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_records(&ts, num_samples, samples, num_records, records,
+            num_mutations, mutations, 0, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_MUTATION_NODES);
+    tree_sequence_free(&ts);
+    mutations[2].nodes[0] = 0;
 
     /* Check to make sure we've maintained legal mutations */
     ret = tree_sequence_initialise(&ts);

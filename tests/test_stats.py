@@ -135,7 +135,7 @@ class TestLdCalculator(unittest.TestCase):
 
     def test_single_tree_simulated_mutations(self):
         ts = msprime.simulate(20, mutation_rate=10, random_seed=15)
-        mutations = random.sample(list(ts.mutations()), self.num_test_mutations)
+        mutations = sorted(random.sample(list(ts.mutations()), self.num_test_mutations))
         ts = ts.copy(mutations)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
