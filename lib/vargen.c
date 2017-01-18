@@ -88,7 +88,7 @@ vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
-    bool not_done = true;
+    bool not_done;
     char one = self->flags & MSP_GENOTYPES_AS_CHAR? '1': 1;
     uint32_t j;
 
@@ -98,6 +98,7 @@ vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes)
             goto out;
         }
         if (w != NULL) {
+            not_done = true;
             while (not_done) {
                 assert(w != NULL);
                 assert(w->node < self->sample_size);
@@ -115,7 +116,7 @@ int
 vargen_next(vargen_t *self, mutation_t **mutation, char *genotypes)
 {
     int ret = 0;
-    int not_done = 1;
+    bool not_done = true;
     mutation_t *m;
     char zero = self->flags & MSP_GENOTYPES_AS_CHAR? '0': 0;
 

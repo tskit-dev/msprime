@@ -70,7 +70,7 @@ hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
-    bool not_done = true;
+    bool not_done;
     uint32_t j;
 
     for (j = 0; j < mut->num_nodes; j++) {
@@ -79,6 +79,7 @@ hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
             goto out;
         }
         if (w != NULL) {
+            not_done = true;
             while (not_done) {
                 assert(w != NULL);
                 hapgen_set_bit(self, w->node, mut->index);
