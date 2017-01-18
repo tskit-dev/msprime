@@ -34,6 +34,7 @@ import itertools
 import math
 import os
 import random
+import shutil
 import sys
 import tempfile
 import unittest
@@ -163,15 +164,18 @@ def simplify_tree_sequence(ts, samples):
             subset_root = parent[subset_root]
         # Now find the new nodes for all mutations that can be mapped back in
         for mut in tree.mutations():
+            new_nodes = []
             for node in mut.nodes:
                 stack = [node]
                 while not len(stack) == 0:
                     u = stack.pop()
                     if parent[u] != msprime.NULL_NODE or u in children:
                         if u != subset_root:
-                            new_mutations.append((mut.position, u))
+                            new_nodes.append(u)
                         break
                     stack.extend(tree.get_children(u))
+            if len(new_nodes) > 0:
+                new_mutations.append((mut.position, tuple(new_nodes)))
     for record in active_records.values():
         record[1] = ts.get_sequence_length()
         new_records.append(msprime.CoalescenceRecord(*record))
@@ -193,13 +197,13 @@ def simplify_tree_sequence(ts, samples):
             left=record.left, right=record.right, node=node_map[record.node],
             children=children, time=record.time, population=record.population))
     compressed_mutations = []
-    for pos, node in new_mutations:
-        compressed_mutations.append((pos, node_map[node]))
+    for pos, nodes in new_mutations:
+        compressed_mutations.append((pos, tuple(node_map[node] for node in nodes)))
     ll_ts = _msprime.TreeSequence()
     ll_ts.load_records(
-        samples=[(0, 0) for _ in samples], coalescence_records=compressed_records)
-    # FIXME mutations
-    # mutations=compressed_mutations)
+        samples=[(0, 0) for _ in samples],
+        coalescence_records=compressed_records,
+        mutations=compressed_mutations)
     return msprime.TreeSequence(ll_ts)
 
 
@@ -324,11 +328,11 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     Superclass of tests on the high level interface.
     """
     def setUp(self):
-        fd, self.temp_file = tempfile.mkstemp(prefix="msp_hl_testcase_")
-        os.close(fd)
+        self.temp_dir = tempfile.mkdtemp(prefix="msp_hl_testcase_")
+        self.temp_file = os.path.join(self.temp_dir, "generic")
 
     def tearDown(self):
-        os.unlink(self.temp_file)
+        shutil.rmtree(self.temp_dir)
 
     def get_bottleneck_examples(self):
         """
@@ -879,30 +883,6 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in self.get_example_tree_sequences():
             self.verify_sparse_trees(ts)
 
-    @unittest.skip("load Mutations")
-    def test_mutations(self):
-        rng = msprime.RandomGenerator(3)
-        all_zero = True
-        for ts in self.get_example_tree_sequences():
-            ts.generate_mutations(0, rng)
-            self.assertEqual(ts.get_num_mutations(), 0)
-            for st in ts.trees():
-                self.assertEqual(st.get_num_mutations(), 0)
-            # choose a mutation rate that hopefully guarantees mutations,
-            # but not too many.
-            mu = 10 / ts.get_sequence_length()
-            ts.generate_mutations(mu, rng)
-            if ts.get_num_mutations() > 0:
-                all_zero = False
-                self.verify_mutations(ts)
-            muts = [[], [(0, 0, 0)], [(0, 0, 0), (0.1, 1, 1)]]
-            for mutations in muts:
-                ts.set_mutations(mutations)
-                self.assertEqual(ts.get_num_mutations(), len(mutations))
-                self.assertEqual(list(ts.mutations()), mutations)
-                self.verify_mutations(ts)
-        self.assertFalse(all_zero)
-
     def verify_tree_diffs(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
         iter1 = ts.diffs()
@@ -1068,19 +1048,16 @@ class TestTreeSequence(HighLevelTestCase):
             f.seek(0)
             output_mutations = f.read().splitlines()
             mutations = list(ts.mutations())
-            self.assertEqual(
-                len(output_mutations) - int(header), len(mutations))
+            self.assertEqual(len(output_mutations) - int(header), len(mutations))
             if header:
                 self.assertEqual(
                     list(output_mutations[0].split()),
-                    ["position", "node"])
-            for mutation, line in zip(
-                    mutations, output_mutations[int(header):]):
+                    ["position", "nodes"])
+            for mutation, line in zip(mutations, output_mutations[int(header):]):
                 splits = line.split("\t")
                 self.assertEqual(convert(mutation.position), splits[0])
-                self.assertEqual(mutation.node, int(splits[1]))
+                self.assertEqual(",".join(map(str, mutation.nodes)), splits[1])
 
-    @unittest.skip("load Mutations")
     def test_write_mutations(self):
         some_mutations = False
         for ts in self.get_example_tree_sequences():
@@ -1124,84 +1101,75 @@ class TestTreeSequence(HighLevelTestCase):
             for header in [True, False]:
                 with open(self.temp_file, "w+") as f:
                     ts1.write_records(f, header=header, precision=9)
-                    f.seek(0)
-                    ts2 = msprime.TreeSequence.load_records(f)
+                    f.flush()
+                    ts2 = msprime.TreeSequence.load_records(self.temp_file)
                     self.compare_exported_records(ts1, ts2)
 
     def test_text_records_empty_file(self):
         with open(self.temp_file, "w+") as f:
-            self.assertRaises(ValueError, msprime.TreeSequence.load_records, f)
+            f.flush()
+            self.assertRaises(
+                ValueError, msprime.TreeSequence.load_records, self.temp_file)
             # Write a fake header.
             f.write("left\tright\n")
-            f.seek(0)
-            self.assertRaises(ValueError, msprime.TreeSequence.load_records, f)
+            f.flush()
+            self.assertRaises(
+                ValueError, msprime.TreeSequence.load_records, self.temp_file)
 
-    def compare_exported_mutations(self, mutations1, mutations2):
+    def compare_exported_mutations(self, ts1, ts2):
         """
         Compares the specified list of mutations for equality
         after a round trip.
         """
+        mutations1 = list(ts1.mutations())
+        mutations2 = list(ts2.mutations())
         self.assertEqual(len(mutations1), len(mutations2))
         for m1, m2 in zip(mutations1, mutations2):
             self.assertAlmostEqual(m1.position, m2.position)
-            self.assertEqual(m1.node, m2.node)
+            self.assertEqual(m1.nodes, m2.nodes)
 
-    @unittest.skip("load Mutations")
     def test_text_mutation_round_trip(self):
+        records_file = os.path.join(self.temp_dir, "records.txt")
+        mutations_file = os.path.join(self.temp_dir, "mutations.txt")
         some_mutations = False
-        for ts in self.get_example_tree_sequences():
-            before = list(ts.mutations())
-            if len(before) > 0:
+        empty_mutations = False
+        for ts1 in self.get_example_tree_sequences():
+            if ts1.num_mutations > 0:
                 some_mutations = True
-                for header in [True, False]:
-                    with open(self.temp_file, "w+") as f:
-                        ts.write_mutations(f, header=header, precision=9)
-                        f.seek(0)
-                        ts.set_mutations([])
-                        self.assertEqual(ts.get_num_mutations(), 0)
-                        ts.load_mutations(f)
-                        after = list(ts.mutations())
-                        self.compare_exported_mutations(before, after)
+            if ts1.num_mutations == 0:
+                empty_mutations = True
+            for header in [True, False]:
+                with open(records_file, "w+") as f:
+                    ts1.write_records(f, header=header, precision=9)
+                with open(mutations_file, "w+") as f:
+                    ts1.write_mutations(f, header=header, precision=9)
+                ts2 = msprime.TreeSequence.load_records(records_file, mutations_file)
+                self.compare_exported_records(ts1, ts2)
+                self.compare_exported_mutations(ts1, ts2)
         self.assertTrue(some_mutations)
-
-    @unittest.skip("load Mutations")
-    def test_text_mutation_empty_file(self):
-        ts = next(self.get_example_tree_sequences())
-        ts.set_mutations([])
-        for header in [True, False]:
-            with open(self.temp_file, "w+") as f:
-                ts.write_mutations(f, header=header, precision=9)
-                f.seek(0)
-                ts.load_mutations(f)
-                self.assertEqual(ts.get_num_mutations(), 0)
+        self.assertTrue(empty_mutations)
 
     def verify_dump_load_txt(self, tree_sequence):
         """
         Verify that we can dump and load the specified tree sequence in
         text format.
         """
-        records_file = self.temp_file + "_records"
-        mutations_file = self.temp_file + "_mutations"
-        try:
-            with open(records_file, "w+") as r_f, open(mutations_file, "w+") as m_f:
-                tree_sequence.write_records(r_f, precision=9)
-                tree_sequence.write_mutations(m_f, precision=9)
-            other = msprime.load_txt(records_file, mutations_file)
-            self.compare_exported_records(tree_sequence, other)
-            mutations = list(tree_sequence.mutations())
-            other_mutations = list(other.mutations())
-            self.compare_exported_mutations(mutations, other_mutations)
+        records_file = os.path.join(self.temp_dir, "records.txt")
+        mutations_file = os.path.join(self.temp_dir, "mutations.txt")
+        with open(records_file, "w+") as r_f, open(mutations_file, "w+") as m_f:
+            tree_sequence.write_records(r_f, precision=9)
+            tree_sequence.write_mutations(m_f, precision=9)
+        other = msprime.load_txt(records_file, mutations_file)
+        self.compare_exported_records(tree_sequence, other)
+        self.compare_exported_mutations(tree_sequence, other)
 
-            # Do the same, but just with records.
-            with open(records_file, "w+") as r_f:
-                tree_sequence.write_records(r_f, precision=9)
-            other = msprime.load_txt(records_file)
-            self.compare_exported_records(tree_sequence, other)
-        finally:
-            os.unlink(records_file)
-            os.unlink(mutations_file)
+        # Do the same, but just with records.
+        with open(records_file, "w+") as r_f:
+            tree_sequence.write_records(r_f, precision=9)
+        other = msprime.load_txt(records_file)
+        self.compare_exported_records(tree_sequence, other)
+        self.assertEqual(other.num_mutations, 0)
 
-    @unittest.skip("load Mutations")
     def test_dump_load_txt(self):
         for ts in self.get_example_tree_sequences():
             self.verify_dump_load_txt(ts)
@@ -1291,7 +1259,6 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertIn(unique[0], [0, 1])
             j += 1
 
-    @unittest.skip("load Mutations")
     def test_simplify(self):
         num_mutations = 0
         for ts in self.get_example_tree_sequences():
@@ -1307,7 +1274,6 @@ class TestTreeSequence(HighLevelTestCase):
                     self.verify_simplify_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
-    @unittest.skip("load Mutations")
     def test_simplify_bugs(self):
         prefix = "tests/data/simplify-bugs/"
         j = 1

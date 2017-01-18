@@ -508,8 +508,8 @@ class SparseTree(object):
             the mutations in this tree.
         :rtype: iter
         """
-        for position, node, index in self._ll_sparse_tree.get_mutations():
-            yield Mutation(position, node, index)
+        for position, nodes, index in self._ll_sparse_tree.get_mutations():
+            yield Mutation(position, nodes, index)
 
     def _leaf_generator(self, u):
         for v in self.nodes(u):
@@ -1005,12 +1005,7 @@ def load_txt(records_file, mutations_file=None):
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    with open(records_file, "r") as f:
-        ts = TreeSequence.load_records(f)
-    if mutations_file is not None:
-        with open(mutations_file, "r") as f:
-            ts.load_mutations(f)
-    return ts
+    return TreeSequence.load_records(records_file, mutations_file)
 
 
 class TreeSimulator(object):
@@ -1395,38 +1390,41 @@ class TreeSequence(object):
             left, right, node, children, time, population)
 
     @classmethod
-    def load_records(cls, input_file):
+    def parse_mutation(cls, line):
+        tokens = line.split()
+        position = float(tokens[0])
+        nodes = tuple(map(int, tokens[1].split(",")))
+        return Mutation(position=position, nodes=nodes, index=0)
+
+    @classmethod
+    def load_records(cls, records_file_path, mutations_file_path=None):
         records = []
-        line = next(input_file, None)
-        if line is not None:
-            if not line.startswith("left"):
-                records.append(cls.parse_record(line))
-            for line in input_file:
-                records.append(cls.parse_record(line))
+        with open(records_file_path, "r") as records_file:
+            line = next(records_file, None)
+            if line is not None:
+                if not line.startswith("left"):
+                    records.append(cls.parse_record(line))
+                for line in records_file:
+                    records.append(cls.parse_record(line))
         if len(records) == 0:
             raise ValueError("No records in file.")
+        mutations = []
+        if mutations_file_path is not None:
+            with open(mutations_file_path, "r") as mutations_file:
+                line = next(mutations_file, None)
+                if line is not None:
+                    if not line.startswith("position"):
+                        mutations.append(cls.parse_mutation(line))
+                    for line in mutations_file:
+                        mutations.append(cls.parse_mutation(line))
+
         # Get the samples for these records.
         num_samples = min(r.node for r in records)
         samples = [Sample(0, 0) for _ in range(num_samples)]
         ts = _msprime.TreeSequence()
-        ts.load_records(samples=samples, coalescence_records=records)
+        ts.load_records(
+            samples=samples, coalescence_records=records, mutations=mutations)
         return TreeSequence(ts)
-
-    def parse_mutation(self, line):
-        tokens = line.split()
-        position = float(tokens[0])
-        node = int(tokens[1])
-        return Mutation(position=position, node=node, index=0)
-
-    def load_mutations(self, input_file):
-        mutations = []
-        line = next(input_file, None)
-        if line is not None:
-            if not line.startswith("position"):
-                mutations.append(self.parse_mutation(line))
-            for line in input_file:
-                mutations.append(self.parse_mutation(line))
-        self.set_mutations(mutations)
 
     @property
     def provenance(self):
