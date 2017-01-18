@@ -1932,85 +1932,6 @@ class TestTreeSequence(LowLevelTestCase):
         # mutations must be sorted by position order.
         self.assertEqual(mutations, sorted(mutations))
 
-    @unittest.skip("fix mutations")
-    def test_mutations(self):
-        # A mutation rate of 0 should give 0 mutations
-        for ts in self.get_example_tree_sequences():
-            ts.generate_mutations(0.0, _msprime.RandomGenerator(1))
-            self.assertEqual(ts.get_num_mutations(), 0)
-            self.assertEqual(len(ts.get_mutations()), 0)
-            # A non-zero mutation rate will give more than 0 mutations.
-            ts.generate_mutations(10.0, _msprime.RandomGenerator(2))
-            self.verify_mutations(ts)
-
-    @unittest.skip("fix mutations")
-    def test_mutation_persistence(self):
-        ts = self.get_tree_sequence(mutation_rate=0.0)
-        self.assertEqual(ts.get_num_mutations(), 0)
-        last_mutations = ts.get_mutations()
-        # We should be able to over-write mutations as many times as we like.
-        for j in range(10):
-            rng = _msprime.RandomGenerator(j + 1)
-            ts.generate_mutations(10, rng)
-            mutations = ts.get_mutations()
-            self.assertNotEqual(mutations, last_mutations)
-            last_mutations = mutations
-
-    @unittest.skip("fix mutations")
-    def test_set_mutations(self):
-        ts = self.get_tree_sequence(mutation_rate=0.0)
-        for x in [None, "", {}, tuple(), 1]:
-            self.assertRaises(TypeError, ts.set_mutations, x)
-        invalid_mutations = ["", [1, 1], {1, 1}, None]
-        for mutation in invalid_mutations:
-            self.assertRaises(TypeError, ts.set_mutations, [mutation])
-        invalid_mutations = [tuple(), (1,)]
-        for mutation in invalid_mutations:
-            self.assertRaises(ValueError, ts.set_mutations, [mutation])
-        invalid_mutations = [("1", 0), (0, "1"), (None, 0), ([], 0)]
-        for mutation in invalid_mutations:
-            self.assertRaises(TypeError, ts.set_mutations, [mutation])
-        invalid_mutations = [
-            (-1, 1), (ts.get_sequence_length() + 1, 1), (2**32, 1),
-            (0, -1), (0, ts.get_num_nodes())]
-        for mutation in invalid_mutations:
-            self.assertRaises(
-                _msprime.LibraryError, ts.set_mutations, [mutation])
-        valid_mutations = [[], [(0.1, 1, 0)], [(0.1, 1, 0), (0.2, 2, 1)]]
-        for mutations in valid_mutations:
-            ts.set_mutations(mutations)
-            self.assertEqual(ts.get_mutations(), mutations)
-            # Test dumping the mutations
-            self.verify_dump_equality(ts)
-
-    @unittest.skip("fix mutations")
-    def test_set_mutations_tree_refcount(self):
-        ts = self.get_tree_sequence(mutation_rate=0.0)
-        mutations = [(0.1, 1, 0), (0.2, 2, 1)]
-        ts.set_mutations(mutations)
-        tree = _msprime.SparseTree(ts)
-        self.assertRaises(_msprime.LibraryError, ts.set_mutations, [])
-        self.assertEqual(ts.get_mutations(), mutations)
-        del tree
-        ts.set_mutations([])
-        self.assertEqual(ts.get_num_mutations(), 0)
-
-        trees = [_msprime.SparseTree(ts) for _ in range(20)]
-        for j, tree in enumerate(trees):
-            self.assertRaises(
-                _msprime.LibraryError, ts.set_mutations, mutations)
-            trees[j] = None
-            del tree
-        ts.set_mutations(mutations)
-        self.assertEqual(ts.get_mutations(), mutations)
-
-        # We can also use the free_tree method to get rid of the underlying
-        # reference.
-        tree = _msprime.SparseTree(ts)
-        tree.free()
-        ts.set_mutations([])
-        self.assertEqual(ts.get_mutations(), [])
-
     def verify_get_record_interface(self, ts):
         num_records = ts.get_num_records()
         # We don't accept Python negative indexes here.
@@ -2130,17 +2051,19 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertEqual(s1.get_num_mutations(), s2.get_num_mutations())
             self.assertEqual(s1.get_num_trees(), s2.get_num_trees())
 
-    @unittest.skip("load mutations")
     def test_load_records_equality(self):
         for ts1 in self.get_example_tree_sequences():
             records = [ts1.get_record(j) for j in range(ts1.get_num_records())]
             samples = [(0, 0) for _ in range(ts1.get_sample_size())]
+            mutations = list(ts1.get_mutations())
             ts2 = _msprime.TreeSequence()
-            ts2.load_records(samples, records)
+            ts2.load_records(samples, records, mutations)
             new_records = [ts2.get_record(j) for j in range(ts2.get_num_records())]
             self.assertEqual(new_records, records)
             self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
             self.assertEqual(ts1.get_num_mutations(), ts2.get_num_mutations())
+            self.assertEqual(ts1.get_mutations(), ts2.get_mutations())
+            self.assertEqual(len(ts2.get_mutations()), ts1.get_num_mutations())
             self.assertEqual(
                 ts1.get_num_migration_records(), ts2.get_num_migration_records())
             self.assertEqual(ts1.get_sequence_length(), ts2.get_sequence_length())
@@ -2149,13 +2072,16 @@ class TestTreeSequence(LowLevelTestCase):
         ts = next(self.get_example_tree_sequences())
         self.assertRaises(ValueError, ts.load_records, [], [])
         ts = _msprime.TreeSequence()
+        record = (0, 1, 2, (0, 1), 1, 0)
+        samples = [(0, 0), (0, 0)]
         for bad_type in [None, {}, 1234]:
             ts = _msprime.TreeSequence()
             self.assertRaises(TypeError, ts.load_records, bad_type, [])
             self.assertRaises(TypeError, ts.load_records, [], [bad_type])
+            self.assertRaises(TypeError, ts.load_records, [], [], mutations=bad_type)
+            self.assertRaises(
+                TypeError, ts.load_records, samples, [record], mutations=[bad_type])
         ts = _msprime.TreeSequence()
-        record = (0, 1, 2, (0, 1), 1, 0)
-        samples = [(0, 0), (0, 0)]
         for j in range(len(record)):
             ts = _msprime.TreeSequence()
             sub_record = record[:j]
@@ -2247,6 +2173,44 @@ class TestTreeSequence(LowLevelTestCase):
         ts = _msprime.TreeSequence()
         ts.load_records(coalescence_records=records, samples=samples)
         self.assertEqual([ts.get_sample(j) for j in range(n)], samples)
+
+    def test_load_records_bad_mutations(self):
+        ts = _msprime.TreeSequence()
+        self.assertRaises(ValueError, ts.load_records, [], [])
+        records = [(0, 1, 2, (0, 1), 1, 0)]
+        samples = [(0, 0), (0, 0)]
+        for bad_type in [None, [], {}]:
+            self.assertRaises(
+                TypeError, ts.load_records, samples=samples,
+                coalescence_records=records, mutations=[bad_type])
+            self.assertRaises(
+                TypeError, ts.load_records, samples=samples,
+                coalescence_records=records, mutations=[(0, bad_type)])
+            self.assertRaises(
+                TypeError, ts.load_records, samples=samples,
+                coalescence_records=records, mutations=[(bad_type, (0,))])
+        # Zero children is an error
+        self.assertRaises(
+            ValueError, ts.load_records, samples=samples,
+            coalescence_records=records, mutations=[(0, tuple([]))])
+        self.assertRaises(
+            ValueError, ts.load_records, samples=samples,
+            coalescence_records=records, mutations=[(0.1, (0,)), (0, tuple([]))])
+        self.assertRaises(
+            ValueError, ts.load_records, samples=samples,
+            coalescence_records=records, mutations=[(0, (0, 1, -1))])
+        # Miscellaneous bad mutations.
+        for x in [None, "", {}, tuple(), 1]:
+            self.assertRaises(TypeError, ts.load_records, samples, records, x)
+        invalid_mutations = ["", [1, 1], {1, 1}, None]
+        for mutation in invalid_mutations:
+            self.assertRaises(TypeError, ts.load_records, samples, records, [mutation])
+        invalid_mutations = [tuple(), (1,)]
+        for mutation in invalid_mutations:
+            self.assertRaises(ValueError, ts.load_records, samples, records, [mutation])
+        invalid_mutations = [("1", 0), (0, "1"), (None, 0), ([], 0)]
+        for mutation in invalid_mutations:
+            self.assertRaises(TypeError, ts.load_records, samples, records, [mutation])
 
     def test_load_bad_records(self):
         def f(records):
@@ -2886,18 +2850,22 @@ class TestSparseTree(LowLevelTestCase):
             for index, st in enumerate(_msprime.SparseTreeIterator(st)):
                 self.assertEqual(index, st.get_index())
 
-    @unittest.skip("fix mutations")
     def test_bad_mutations(self):
         ts = self.get_tree_sequence(2, num_loci=200, random_seed=1)
+
+        def f(mutations):
+            samples = [(0, 0) for _ in range(ts.get_sample_size())]
+            records = [ts.get_record(j) for j in range(ts.get_num_records())]
+            ts2 = _msprime.TreeSequence()
+            ts2.load_records(
+                samples=samples, coalescence_records=records, mutations=mutations)
+        self.assertRaises(ValueError, f, [(0.1, (-1,))])
         l = ts.get_sequence_length()
-        # Anything bigger than num_nodes should be caught immediately.
         u = ts.get_num_nodes()
-        for bad_node in [u, u + 1, 2 * u, -1]:
-            self.assertRaises(
-                _msprime.LibraryError, ts.set_mutations, [(0.1, bad_node)])
+        for bad_node in [u, u + 1, 2 * u]:
+            self.assertRaises(_msprime.LibraryError, f, [(0.1, (bad_node,))])
         for bad_pos in [-1, l, l + 1]:
-            self.assertRaises(
-                _msprime.LibraryError, ts.set_mutations, [(l, 0)])
+            self.assertRaises(_msprime.LibraryError, f, [(l, (0,))])
 
     def test_free(self):
         ts = self.get_tree_sequence()

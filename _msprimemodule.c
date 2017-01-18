@@ -296,8 +296,7 @@ out:
 }
 
 static int
-parse_samples(PyObject *py_samples, Py_ssize_t *sample_size,
-        sample_t **samples)
+parse_samples(PyObject *py_samples, Py_ssize_t *sample_size, sample_t **samples)
 {
     int ret = -1;
     long tmp_long;
@@ -352,6 +351,76 @@ out:
     if (ret_samples != NULL) {
         PyMem_Free(ret_samples);
     }
+    return ret;
+}
+
+static int
+parse_mutations(PyObject *py_mutations, Py_ssize_t *num_mutations, mutation_t **mutations)
+{
+    int ret = -1;
+    Py_ssize_t j, n;
+    uint32_t k;
+    long tmp_long;
+    PyObject *item, *pos, *nodes, *value;
+    mutation_t *ret_mutations = NULL;
+
+    n = PyList_Size(py_mutations);
+    ret_mutations = PyMem_Malloc(n * sizeof(mutation_t));
+    if (ret_mutations == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < n; j++) {
+        item = PyList_GetItem(py_mutations, j);
+        if (!PyTuple_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "not a tuple");
+            goto out;
+        }
+        if (PyTuple_Size(item) < 2) {
+            PyErr_SetString(PyExc_ValueError, "mutations must (pos, nodes, ...) tuples");
+            goto out;
+        }
+        pos = PyTuple_GetItem(item, 0);
+        ret_mutations[j].position = PyFloat_AsDouble(pos);
+
+        nodes = PyTuple_GetItem(item, 1);
+        if (!PyNumber_Check(pos)) {
+            PyErr_SetString(PyExc_TypeError, "position must be a number");
+            goto out;
+        }
+        if (!PyTuple_Check(nodes)) {
+            PyErr_SetString(PyExc_TypeError, "nodes must be a tuple");
+            goto out;
+        }
+        ret_mutations[j].num_nodes = PyTuple_Size(nodes);
+        if (ret_mutations[j].num_nodes == 0) {
+            PyErr_SetString(PyExc_ValueError, "Must be at least one node.");
+            goto out;
+        }
+        ret_mutations[j].nodes = PyMem_Malloc(
+                ret_mutations[j].num_nodes * sizeof(uint32_t));
+        if (ret_mutations[j].nodes == NULL) {
+            PyErr_NoMemory();
+            goto out;
+        }
+        for (k = 0; k < ret_mutations[j].num_nodes; k++) {
+            value = PyTuple_GetItem(nodes, k);
+            if (!PyNumber_Check(value)) {
+                PyErr_Format(PyExc_TypeError, "nodes item not a number");
+                goto out;
+            }
+            tmp_long = PyLong_AsLong(value);
+            if (tmp_long < 0) {
+                PyErr_SetString(PyExc_ValueError, "negative nodes not valid");
+                goto out;
+            }
+            ret_mutations[j].nodes[k] = (uint32_t) tmp_long;
+        }
+    }
+    *num_mutations = n;
+    *mutations = ret_mutations;
+    ret = 0;
+out:
     return ret;
 }
 
@@ -530,7 +599,6 @@ convert_mutation(mutation_t *mutation)
     PyObject *ret = NULL;
 
     nodes = convert_uint32_list(mutation->nodes, mutation->num_nodes);
-
     if (nodes == NULL) {
         goto out;
     }
@@ -1262,19 +1330,22 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     PyObject *py_records = NULL;
     PyObject *py_samples = NULL;
+    PyObject *py_mutations = NULL;
     PyObject *item;
     coalescence_record_t *records = NULL;
+    mutation_t *mutations = NULL;
     sample_t *samples = NULL;
-    Py_ssize_t num_samples;
+    Py_ssize_t num_samples, num_mutations;
     size_t num_records, j;
-    static char *kwlist[] = {"samples", "coalescence_records", NULL};
+    static char *kwlist[] = {"samples", "coalescence_records", "mutations", NULL};
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!", kwlist,
                 &PyList_Type, &py_samples,
-                &PyList_Type, &py_records)) {
+                &PyList_Type, &py_records,
+                &PyList_Type, &py_mutations)) {
         goto out;
     }
     num_records = PyList_Size(py_records);
@@ -1297,10 +1368,16 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "At least two samples required.");
         goto out;
     }
+    num_mutations = 0;
+    if (py_mutations != NULL) {
+        if (parse_mutations(py_mutations, &num_mutations, &mutations) != 0) {
+            goto out;
+        }
+    }
     err = tree_sequence_load_records(self->tree_sequence,
             num_samples, samples,
             num_records, records,
-            0, NULL,
+            num_mutations, mutations,
             0, NULL,
             0, NULL);
     if (err != 0) {
@@ -1319,6 +1396,14 @@ out:
     }
     if (samples != NULL) {
         PyMem_Free(samples);
+    }
+    if (mutations != NULL) {
+        for (j = 0; j < num_mutations; j++) {
+            if (mutations[j].nodes != NULL) {
+                PyMem_Free(mutations[j].nodes);
+            }
+        }
+        PyMem_Free(mutations);
     }
     return ret;
 }
