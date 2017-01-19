@@ -191,6 +191,13 @@ parse_text_mutations(const char *text_mutations, size_t *num_mutations,
         mutations[j].num_nodes = num_nodes;
         CU_ASSERT_FATAL(mutations[j].nodes != NULL);
         strncpy(sub_line, p, MAX_LINE);
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        mutations[j].ancestral_state = p[0];
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        mutations[j].derived_state = p[0];
+        /* parse the nodes */
         q = strtok(sub_line, ",");
         for (k = 0; k < num_nodes; k++) {
             CU_ASSERT_FATAL(q != NULL);
@@ -487,33 +494,44 @@ get_example_tree_sequences(int include_nonbinary)
 static void
 test_parse_text_mutations(void)
 {
-
     const char *case1 =
-        "0.1    0\n"
-        "0.2    1\n"
-        "0.3    3\n"
-        "0.4    4";
+        "0.1    0   A   T\n"
+        "0.2    1   0   1\n"
+        "0.3    3   X   Y\n"
+        "0.4    4   1   0";
     const char *case2 =
-        "0      0,1\n"
-        "1      2\n"
-        "2      3,4,5,6";
+        "0      0,1     0   1\n"
+        "1      2       1   0\n"
+        "2      3,4,5,6 a   t";
     mutation_t *mutations;
     size_t num_mutations;
 
     parse_text_mutations(case1, &num_mutations, &mutations);
     CU_ASSERT_EQUAL_FATAL(num_mutations, 4);
+
     CU_ASSERT_EQUAL(mutations[0].position, 0.1);
     CU_ASSERT_EQUAL(mutations[0].num_nodes, 1);
     CU_ASSERT_EQUAL(mutations[0].nodes[0], 0);
+    CU_ASSERT_EQUAL(mutations[0].ancestral_state, 'A');
+    CU_ASSERT_EQUAL(mutations[0].derived_state, 'T');
+
     CU_ASSERT_EQUAL(mutations[1].position, 0.2);
     CU_ASSERT_EQUAL(mutations[1].num_nodes, 1);
     CU_ASSERT_EQUAL(mutations[1].nodes[0], 1);
+    CU_ASSERT_EQUAL(mutations[1].ancestral_state, '0');
+    CU_ASSERT_EQUAL(mutations[1].derived_state, '1');
+
     CU_ASSERT_EQUAL(mutations[2].position, 0.3);
     CU_ASSERT_EQUAL(mutations[2].num_nodes, 1);
     CU_ASSERT_EQUAL(mutations[2].nodes[0], 3);
+    CU_ASSERT_EQUAL(mutations[2].ancestral_state, 'X');
+    CU_ASSERT_EQUAL(mutations[2].derived_state, 'Y');
+
     CU_ASSERT_EQUAL(mutations[3].position, 0.4);
     CU_ASSERT_EQUAL(mutations[3].num_nodes, 1);
     CU_ASSERT_EQUAL(mutations[3].nodes[0], 4);
+    CU_ASSERT_EQUAL(mutations[3].ancestral_state, '1');
+    CU_ASSERT_EQUAL(mutations[3].derived_state, '0');
     free_local_mutations(num_mutations, mutations);
 
     parse_text_mutations(case2, &num_mutations, &mutations);
@@ -522,17 +540,25 @@ test_parse_text_mutations(void)
     CU_ASSERT_EQUAL(mutations[0].num_nodes, 2);
     CU_ASSERT_EQUAL(mutations[0].nodes[0], 0);
     CU_ASSERT_EQUAL(mutations[0].nodes[1], 1);
+    CU_ASSERT_EQUAL(mutations[0].ancestral_state, '0');
+    CU_ASSERT_EQUAL(mutations[0].derived_state, '1');
+
     CU_ASSERT_EQUAL(mutations[1].position, 1);
     CU_ASSERT_EQUAL(mutations[1].num_nodes, 1);
     CU_ASSERT_EQUAL(mutations[1].nodes[0], 2);
+    CU_ASSERT_EQUAL(mutations[1].ancestral_state, '1');
+    CU_ASSERT_EQUAL(mutations[1].derived_state, '0');
+
     CU_ASSERT_EQUAL(mutations[2].position, 2);
     CU_ASSERT_EQUAL(mutations[2].num_nodes, 4);
     CU_ASSERT_EQUAL(mutations[2].nodes[0], 3);
     CU_ASSERT_EQUAL(mutations[2].nodes[1], 4);
     CU_ASSERT_EQUAL(mutations[2].nodes[2], 5);
     CU_ASSERT_EQUAL(mutations[2].nodes[3], 6);
-    free_local_mutations(num_mutations, mutations);
+    CU_ASSERT_EQUAL(mutations[2].ancestral_state, 'a');
+    CU_ASSERT_EQUAL(mutations[2].derived_state, 't');
 
+    free_local_mutations(num_mutations, mutations);
 }
 
 /* Simple unit tests for the Fenwick tree API. */
@@ -1835,10 +1861,10 @@ test_simplest_non_sample_leaf_records(void)
         {0, 4, 2, 0.0, 1.0, 1.0, c1},
     };
     const char *text_mutations =
-        "0.1    0\n"
-        "0.2    1\n"
-        "0.3    3\n"
-        "0.4    4";
+        "0.1    0   0   1\n"
+        "0.2    1   0   1\n"
+        "0.3    3   0   1\n"
+        "0.4    4   0   1";
     mutation_t *mutations;
     size_t num_mutations;
     tree_sequence_t ts, simplified;
@@ -1988,7 +2014,7 @@ test_simplest_root_mutations(void)
         {0, 2, 2, 0.0, 1.0, 1.0, c1},
     };
     sample_t samples[2];
-    const char *text_mutations = "0.1    2";
+    const char *text_mutations = "0.1    2  0   1";
     mutation_t *mutations;
     size_t num_mutations;
     hapgen_t hapgen;
@@ -2283,9 +2309,9 @@ test_single_tree_good_mutations(void)
         "0 6 5 2,3 2.0 0\n"
         "0 6 6 4,5 3.0 0";
     const char *text_mutations =
-        "0.1    2\n"
-        "0.2    0,1\n"
-        "2.0    0,1,2,3\n";
+        "0.1    2           0   1\n"
+        "0.2    0,1         0   1\n"
+        "2.0    0,1,2,3     0   1\n";
     coalescence_record_t *records = NULL;
     mutation_t *mutations = NULL;
     mutation_t *other_mutations;
@@ -2334,9 +2360,9 @@ test_single_tree_bad_mutations(void)
         "0 1 5 2,3 2.0 0\n"
         "0 1 6 4,5 3.0 0";
     const char *text_mutations =
-        "0   0\n"
-        "0.1 1\n"
-        "0.2 0,1";
+        "0   0      0   1\n"
+        "0.1 1      0   1\n"
+        "0.2 0,1    0   1\n";
     size_t num_samples = 4;
     sample_t samples[num_samples];
     coalescence_record_t *records = NULL;
@@ -2680,9 +2706,9 @@ test_single_tree_hapgen(void)
         "0 1 5 2,3 4.0 0\n"
         "0 1 6 4,5 5.0 0";
     const char *text_mutations =
-        "0  0\n"
-        "0.1 1\n"
-        "0.2 0,1,2\n";
+        "0  0       0   1\n"
+        "0.1 1      0   1\n"
+        "0.2 0,1,2  0   1\n";
     size_t num_samples = 4;
     sample_t samples[num_samples];
     char *haplotype;
@@ -2755,9 +2781,9 @@ test_single_tree_vargen(void)
         "0 1 5 2,3 4.0 0\n"
         "0 1 6 4,5 5.0 0";
     const char *text_mutations =
-        "0  0\n"
-        "0.1 1\n"
-        "0.2 0,1,2\n";
+        "0  0       0   1\n"
+        "0.1 1      0   1\n"
+        "0.2 0,1,2  0   1\n";
     size_t num_samples = 4;
     sample_t samples[num_samples];
     char genotypes[5];
@@ -2812,6 +2838,139 @@ test_single_tree_vargen(void)
 }
 
 static void
+test_single_tree_nonbinary_mutations(void)
+{
+    int ret = 0;
+    const char * text_records =
+        "0 1 4 0,1 1.0 0\n"
+        "0 1 5 2,3 4.0 0\n"
+        "0 1 6 4,5 5.0 0";
+    const char *text_mutations =
+        "0   0      A   T\n"
+        "0.1 1      C   G\n"
+        "0.2 0,1,2  Z   8\n";
+    size_t num_samples = 4;
+    sample_t samples[num_samples];
+    char genotypes[5];
+    size_t num_records, num_mutations;
+    tree_sequence_t ts;
+    coalescence_record_t *records;
+    mutation_t *mutations, *mut;
+    vargen_t vargen;
+    hapgen_t hapgen;
+
+    memset(samples, 0, num_samples * sizeof(sample_t));
+    parse_text_records(text_records, &num_records, &records);
+    CU_ASSERT_EQUAL_FATAL(num_records, 3);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 3);
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_records(&ts, num_samples, samples, num_records, records,
+            num_mutations, mutations, 0, NULL, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* For now, we don't support nonbinary mutations where we return 0s and 1s
+     * as it's unclear how to handle this case more generally.
+     */
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED);
+    ret = hapgen_free(&hapgen);
+
+    ret = vargen_alloc(&vargen, &ts, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED);
+    ret = vargen_free(&vargen);
+
+    /* When genotypes are chars the semantics are clear */
+    ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    vargen_print_state(&vargen, _devnull);
+
+    genotypes[4] = '\0';
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_STRING_EQUAL(genotypes, "TAAA");
+    CU_ASSERT_EQUAL(mut->index, 0);
+    CU_ASSERT_EQUAL(mut->num_nodes, 1);
+
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_STRING_EQUAL(genotypes, "CGCC");
+    CU_ASSERT_EQUAL(mut->index, 1);
+    CU_ASSERT_EQUAL(mut->num_nodes, 1);
+
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_STRING_EQUAL(genotypes, "888Z");
+    CU_ASSERT_EQUAL(mut->index, 2);
+    CU_ASSERT_EQUAL(mut->num_nodes, 3);
+
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = vargen_free(&vargen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tree_sequence_free(&ts);
+    free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
+}
+
+static void
+test_single_tree_inconsistent_mutations(void)
+{
+    int ret = 0;
+    const char * text_records =
+        "0 1 4 0,1 1.0 0\n"
+        "0 1 5 2,3 4.0 0\n"
+        "0 1 6 4,5 5.0 0";
+    const char *text_mutations =
+        "0   0      0   1\n"
+        "0.1 1      0   1\n"
+        "0.2 0,4    0   1\n";
+    size_t num_samples = 4;
+    sample_t samples[num_samples];
+    char genotypes[5];
+    size_t num_records, num_mutations;
+    tree_sequence_t ts;
+    coalescence_record_t *records;
+    mutation_t *mutations, *mut;
+    vargen_t vargen;
+    hapgen_t hapgen;
+
+    memset(samples, 0, num_samples * sizeof(sample_t));
+    parse_text_records(text_records, &num_records, &records);
+    CU_ASSERT_EQUAL_FATAL(num_records, 3);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 3);
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_records(&ts, num_samples, samples, num_records, records,
+            num_mutations, mutations, 0, NULL, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
+    ret = hapgen_free(&hapgen);
+
+    ret = vargen_alloc(&vargen, &ts, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    ret = vargen_next(&vargen, &mut, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
+
+    ret = vargen_free(&vargen);
+
+    tree_sequence_free(&ts);
+    free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
+}
+
+static void
 test_single_unary_tree_hapgen(void)
 {
     int ret = 0;
@@ -2822,10 +2981,10 @@ test_single_unary_tree_hapgen(void)
         "0 1 5 4   3.0 0\n"
         "0 1 6 5   4.0 0";
     const char *text_mutations =
-        "0      0\n"
-        "0.1    1\n"
-        "0.2    4\n"
-        "0.3    5\n";
+        "0      0   0   1\n"
+        "0.1    1   0   1\n"
+        "0.2    4   0   1\n"
+        "0.3    5   0   1\n";
     size_t num_samples = 2;
     sample_t samples[num_samples];
     char *haplotype;
@@ -2936,6 +3095,8 @@ test_single_tree_mutgen(void)
         CU_ASSERT_TRUE(mutations[j].position >= 0.0);
         CU_ASSERT_TRUE(mutations[j].position <= 1.0);
         CU_ASSERT_TRUE(mutations[j].nodes[0] < 6);
+        CU_ASSERT_EQUAL(mutations[j].ancestral_state, '0');
+        CU_ASSERT_EQUAL(mutations[j].derived_state, '1');
     }
     before = malloc(num_mutations * sizeof(mutation_t));
     CU_ASSERT_FATAL(before != NULL);
@@ -3208,9 +3369,9 @@ test_tree_sequence_iter(void)
         "0 2  8 2,6 0.253 0";
     /* We make one mutation for each tree */
     const char *text_mutations =
-        "1      2\n"
-        "4.5    0\n"
-        "8.5    5\n";
+        "1      2   0   1\n"
+        "4.5    0   0   1\n"
+        "8.5    5   0   1\n";
     uint32_t parents[] = {
         6, 5, 8, 5, MSP_NULL_NODE, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
         6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
@@ -3249,9 +3410,9 @@ test_unary_tree_sequence_iter(void)
         "2 7  8 6   0.253 0";
     /* We make one mutation for each tree, over unary nodes if this exist */
     const char *text_mutations =
-        "1.0    2\n"
-        "4.5    6\n"
-        "8.5    5\n";
+        "1.0    2   0   1\n"
+        "4.5    6   0   1\n"
+        "8.5    5   0   1\n";
     uint32_t parents[] = {
         6, 5, 7, 5, MSP_NULL_NODE, 6, 8, 8, MSP_NULL_NODE,
         6, 5, 4, 4, 5, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
@@ -3289,8 +3450,8 @@ test_nonbinary_tree_sequence_iter(void)
         "17	100	12	10,11	0.405   0";
     /* We make one mutation for each tree */
     const char *text_mutations =
-        "1.0    2\n"
-        "18     11";
+        "1.0    2   0   1\n"
+        "18     11  0   1";
     uint32_t parents[] = {
         8, 8, 8, 8, 10, 10, 9, 10, 9, 12, 12, MSP_NULL_NODE, MSP_NULL_NODE,
         8, 8, 8, 8, 10, 11, 9, 10, 9, 11, 12, 12, MSP_NULL_NODE,
@@ -3326,9 +3487,9 @@ test_left_to_right_tree_sequence_iter(void)
         "0 2  6 2,5 0.253 0";
     /* We make one mutation for each tree */
     const char *text_mutations =
-        "1.0    2\n"
-        "4.5    0\n"
-        "8.5    4\n";
+        "1.0    2   0   1\n"
+        "4.5    0   0   1\n"
+        "8.5    4   0   1\n";
     uint32_t parents[] = {
         5, 4, 6, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
         5, 4, 7, 7, 5, MSP_NULL_NODE, MSP_NULL_NODE, 4, MSP_NULL_NODE,
@@ -4826,6 +4987,8 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
         CU_ASSERT_EQUAL(mutations_1[j].index, j);
         CU_ASSERT_EQUAL(mutations_1[j].index, mutations_2[j].index);
         CU_ASSERT_EQUAL(mutations_1[j].position, mutations_2[j].position);
+        CU_ASSERT_EQUAL(mutations_1[j].ancestral_state, mutations_2[j].ancestral_state);
+        CU_ASSERT_EQUAL(mutations_1[j].derived_state, mutations_2[j].derived_state);
         CU_ASSERT_EQUAL(mutations_1[j].num_nodes, mutations_2[j].num_nodes);
         for (k = 0; k < mutations_1[j].num_nodes; k++) {
             CU_ASSERT_EQUAL(mutations_1[j].nodes[k], mutations_2[j].nodes[k]);
@@ -5172,6 +5335,8 @@ main(int argc, char **argv)
         {"single_tree_iterator_times", test_single_tree_iter_times},
         {"single_tree_hapgen", test_single_tree_hapgen},
         {"single_tree_vargen", test_single_tree_vargen},
+        {"single_tree_nonbinary_mutations", test_single_tree_nonbinary_mutations},
+        {"single_tree_inconsistent_mutations", test_single_tree_inconsistent_mutations},
         {"single_unary_tree_hapgen", test_single_unary_tree_hapgen},
         {"single_tree_mutgen", test_single_tree_mutgen},
         {"sparse_tree_errors", test_sparse_tree_errors},

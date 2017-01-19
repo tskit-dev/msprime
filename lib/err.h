@@ -75,5 +75,7 @@
 #define MSP_ERR_MUTATIONS_NOT_POSITION_SORTED                       -44
 #define MSP_ERR_UNSORTED_MUTATION_NODES                             -45
 #define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
+#define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
+#define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
 
 #endif /*__ERR_H__*/

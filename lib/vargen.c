@@ -84,12 +84,12 @@ vargen_free(vargen_t *self)
 }
 
 static int
-vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes)
+vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes,
+        char ancestral, char derived)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
     bool not_done;
-    char one = self->flags & MSP_GENOTYPES_AS_CHAR? '1': 1;
     uint32_t j;
 
     for (j = 0; j < mut->num_nodes; j++) {
@@ -102,7 +102,11 @@ vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes)
             while (not_done) {
                 assert(w != NULL);
                 assert(w->node < self->sample_size);
-                genotypes[w->node] = one;
+                if (genotypes[w->node] != ancestral) {
+                    ret = MSP_ERR_INCONSISTENT_MUTATIONS;
+                    goto out;
+                }
+                genotypes[w->node] = derived;
                 not_done = w != tail;
                 w = w->next;
             }
@@ -118,7 +122,7 @@ vargen_next(vargen_t *self, mutation_t **mutation, char *genotypes)
     int ret = 0;
     bool not_done = true;
     mutation_t *m;
-    char zero = self->flags & MSP_GENOTYPES_AS_CHAR? '0': 0;
+    char ancestral, derived;
 
     if (!self->finished) {
         while (not_done && self->tree_mutation_index == self->tree.num_mutations) {
@@ -129,9 +133,20 @@ vargen_next(vargen_t *self, mutation_t **mutation, char *genotypes)
             not_done = ret == 1;
         }
         if (not_done) {
-            memset(genotypes, zero, self->sample_size);
             m = &self->tree.mutations[self->tree_mutation_index];
-            ret = vargen_apply_tree_mutation(self, m, genotypes);
+            ancestral = m->ancestral_state;
+            derived = m->derived_state;
+            if (!self->flags & MSP_GENOTYPES_AS_CHAR) {
+                /* TODO how do we gracefully do this for non binary mutations? */
+                if (ancestral != '0' || derived != '1') {
+                    ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
+                    goto out;
+                }
+                ancestral = 0;
+                derived = 1;
+            }
+            memset(genotypes, ancestral, self->sample_size);
+            ret = vargen_apply_tree_mutation(self, m, genotypes, ancestral, derived);
             if (ret != 0) {
                 goto out;
             }

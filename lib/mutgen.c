@@ -54,7 +54,9 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     object_heap_print_state(&self->node_heap, out);
     fprintf(out, "mutations\t%d\n", (int) self->num_mutations);
     for (j = 0; j < self->num_mutations; j++) {
-        fprintf(out, "\t%f\t", self->mutations[j].position);
+        fprintf(out, "\t%f\t%c->%c\t", self->mutations[j].position,
+                self->mutations[j].ancestral_state,
+                self->mutations[j].derived_state);
         for (k = 0; k < self->mutations[j].num_nodes; k++) {
             fprintf(out, "%d,", self->mutations[j].nodes[k]);
         }
@@ -118,7 +120,8 @@ out:
 }
 
 static int WARN_UNUSED
-mutgen_add_mutation(mutgen_t *self, uint32_t node, double position)
+mutgen_add_mutation(mutgen_t *self, uint32_t node, double position,
+        char ancestral_state, char derived_state)
 {
     int ret = 0;
     mutation_t *tmp_buffer;
@@ -147,6 +150,8 @@ mutgen_add_mutation(mutgen_t *self, uint32_t node, double position)
     self->mutations[self->num_mutations].nodes[0] = node;
     self->mutations[self->num_mutations].num_nodes = 1;
     self->mutations[self->num_mutations].position = position;
+    self->mutations[self->num_mutations].ancestral_state = ancestral_state;
+    self->mutations[self->num_mutations].derived_state = derived_state;
     self->num_mutations++;
 out:
     return ret;
@@ -174,7 +179,7 @@ mutgen_generate_record_mutations(mutgen_t *self, tree_sequence_t *ts,
         for (l = 0; l < branch_mutations; l++) {
             position = gsl_ran_flat(self->rng, cr->left, cr->right);
             assert(cr->left <= position && position < cr->right);
-            ret = mutgen_add_mutation(self, child, position);
+            ret = mutgen_add_mutation(self, child, position, '0', '1');
             if (ret != 0) {
                 goto out;
             }

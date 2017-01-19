@@ -823,7 +823,11 @@ out:
 static void
 load_tree_sequence(tree_sequence_t *ts, const char *filename)
 {
-    int ret = tree_sequence_load(ts, filename, 0);
+    int ret = tree_sequence_initialise(ts);
+    if (ret != 0) {
+        fatal_library_error(ret, "Init error");
+    }
+    ret = tree_sequence_load(ts, filename, 0);
     if (ret != 0) {
         fatal_library_error(ret, "Load error");
     }

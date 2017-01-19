@@ -56,13 +56,20 @@ hapgen_print_state(hapgen_t *self, FILE *out)
 static inline int
 hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
 {
+    int ret = 0;
     /* get the word that column falls in */
     size_t word = column / HG_WORD_SIZE;
     size_t bit = column % HG_WORD_SIZE;
+    size_t index = row * self->words_per_row + word;
 
     assert(word < self->words_per_row);
-    self->haplotype_matrix[row * self->words_per_row + word] |= 1ULL << bit;
-    return 0;
+    if ((self->haplotype_matrix[index] & (1ULL << bit)) != 0) {
+        ret = MSP_ERR_INCONSISTENT_MUTATIONS;
+        goto out;
+    }
+    self->haplotype_matrix[index] |= 1ULL << bit;
+out:
+    return ret;
 }
 
 static int
@@ -73,6 +80,10 @@ hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
     bool not_done;
     uint32_t j;
 
+    if (mut->ancestral_state != '0' || mut->derived_state != '1') {
+        ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
+        goto out;
+    }
     for (j = 0; j < mut->num_nodes; j++) {
         ret = sparse_tree_get_leaf_list(&self->tree, mut->nodes[j], &w, &tail);
         if (ret != 0) {
@@ -82,7 +93,10 @@ hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
             not_done = true;
             while (not_done) {
                 assert(w != NULL);
-                hapgen_set_bit(self, w->node, mut->index);
+                ret = hapgen_set_bit(self, w->node, mut->index);
+                if (ret != 0) {
+                    goto out;
+                }
                 not_done = w != tail;
                 w = w->next;
             }
@@ -182,10 +196,4 @@ hapgen_get_haplotype(hapgen_t *self, uint32_t sample_id, char **haplotype)
     *haplotype = self->haplotype;
 out:
     return ret;
-}
-
-size_t
-hapgen_get_num_segregating_sites(hapgen_t *self)
-{
-    return self->num_mutations;
 }

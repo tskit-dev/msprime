@@ -202,13 +202,19 @@ tree_sequence_alloc_mutations(tree_sequence_t *self)
         msp_safe_free(self->mutations.nodes);
         msp_safe_free(self->mutations.num_nodes);
         msp_safe_free(self->mutations.position);
+        msp_safe_free(self->mutations.ancestral_state);
+        msp_safe_free(self->mutations.derived_state);
         msp_safe_free(self->mutations.tree_mutations_mem);
         self->mutations.nodes = malloc(size * sizeof(uint32_t *));
         self->mutations.num_nodes = malloc(size * sizeof(uint32_t));
         self->mutations.position = malloc(size * sizeof(double));
+        self->mutations.ancestral_state = malloc(size * sizeof(char));
+        self->mutations.derived_state = malloc(size * sizeof(char));
         self->mutations.tree_mutations_mem = malloc(size * sizeof(mutation_t));
         if (self->mutations.num_nodes == NULL
                 || self->mutations.position == NULL
+                || self->mutations.ancestral_state == NULL
+                || self->mutations.derived_state == NULL
                 || self->mutations.nodes == NULL
                 || self->mutations.tree_mutations_mem == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -422,6 +428,8 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->mutations.nodes);
     msp_safe_free(self->mutations.num_nodes);
     msp_safe_free(self->mutations.position);
+    msp_safe_free(self->mutations.ancestral_state);
+    msp_safe_free(self->mutations.derived_state);
     msp_safe_free(self->mutations.nodes_mem);
     msp_safe_free(self->mutations.tree_mutations_mem);
     msp_safe_free(self->mutations.tree_mutations);
@@ -685,6 +693,8 @@ tree_sequence_init_tree_mutations(tree_sequence_t *self)
         mut = &self->mutations.tree_mutations_mem[j];
         mut->index = j;
         mut->position = self->mutations.position[j];
+        mut->ancestral_state = self->mutations.ancestral_state[j];
+        mut->derived_state = self->mutations.derived_state[j];
         mut->num_nodes = self->mutations.num_nodes[j];
         mut->nodes = self->mutations.nodes[j];
         assert(tree_index < self->trees.num_breakpoints - 1);
@@ -715,6 +725,8 @@ tree_sequence_store_mutations(tree_sequence_t *self, size_t num_mutations,
             goto out;
         }
         self->mutations.position[j] = mutations[j].position;
+        self->mutations.ancestral_state[j] = mutations[j].ancestral_state;
+        self->mutations.derived_state[j] = mutations[j].derived_state;
         self->mutations.num_nodes[j] = mutations[j].num_nodes;
         self->mutations.nodes[j] = self->mutations.nodes_mem + offset;
         offset += mutations[j].num_nodes;
@@ -1010,6 +1022,8 @@ tree_sequence_load_records_rescale(tree_sequence_t *self,
         offset = 0;
         for (j = 0; j < self->mutations.num_records; j++) {
             self->mutations.position[j] = mutations[j].position;
+            self->mutations.ancestral_state[j] = mutations[j].ancestral_state;
+            self->mutations.derived_state[j] = mutations[j].derived_state;
             self->mutations.num_nodes[j] = mutations[j].num_nodes;
             self->mutations.nodes[j] = self->mutations.nodes_mem + offset;
             offset += mutations[j].num_nodes;
@@ -1275,6 +1289,10 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/mutations/nodes", H5T_NATIVE_UINT32, 0, 1, self->mutations.nodes_mem},
         {"/mutations/num_nodes", H5T_NATIVE_UINT32, 0, 1, self->mutations.num_nodes},
         {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1, self->mutations.position},
+        {"/mutations/ancestral_state", H5T_NATIVE_CHAR, 0, 1,
+            self->mutations.ancestral_state},
+        {"/mutations/derived_state", H5T_NATIVE_CHAR, 0, 1,
+            self->mutations.derived_state},
         {"/trees/nodes/population", H5T_NATIVE_UINT32, 0, 1,
             self->trees.nodes.population},
         {"/trees/nodes/time", H5T_NATIVE_DOUBLE, 0, 1, self->trees.nodes.time},
@@ -1483,6 +1501,12 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/mutations/position",
             H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
             self->mutations.num_records, self->mutations.position},
+        {"/mutations/ancestral_state",
+            H5T_STD_U8LE, H5T_NATIVE_CHAR,
+            self->mutations.num_records, self->mutations.ancestral_state},
+        {"/mutations/derived_state",
+            H5T_STD_U8LE, H5T_NATIVE_CHAR,
+            self->mutations.num_records, self->mutations.derived_state},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
     struct _hdf5_group_write {
@@ -2220,6 +2244,8 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
                     mut->nodes[0] = mapping[u];
                     mut->num_nodes = 1;
                     mut->position = self->mutations.position[l];
+                    mut->ancestral_state = self->mutations.ancestral_state[l];
+                    mut->derived_state = self->mutations.derived_state[l];
                     output_mutations_mem_offset++;
                 }
             }

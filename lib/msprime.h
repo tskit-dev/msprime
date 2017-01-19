@@ -255,10 +255,11 @@ typedef struct {
 
 typedef struct {
     double position;
-    /* uint32_t node; */
     size_t index;
     uint32_t num_nodes;
     uint32_t *nodes;
+    char ancestral_state;
+    char derived_state;
 } mutation_t;
 
 /* Tree sequences */
@@ -302,6 +303,8 @@ typedef struct {
         uint32_t **nodes;
         uint32_t *num_nodes;
         double *position;
+        char *ancestral_state;
+        char *derived_state;
         size_t *num_tree_mutations;
         mutation_t *tree_mutations_mem;
         mutation_t **tree_mutations;
@@ -650,7 +653,6 @@ int ld_calc_get_r2_array(ld_calc_t *self, size_t a, int direction,
 
 int hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence);
 int hapgen_get_haplotype(hapgen_t *self, uint32_t j, char **haplotype);
-size_t hapgen_get_num_segregating_sites(hapgen_t *self);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self, FILE *out);
 

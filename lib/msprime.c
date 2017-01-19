@@ -199,6 +199,13 @@ msp_strerror(int err)
         case MSP_ERR_DUPLICATE_MUTATION_NODES:
             ret = "Mutations nodes must be unique.";
             break;
+        case MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED:
+            ret = "Only binary mutations are supported for this operation.";
+            break;
+        case MSP_ERR_INCONSISTENT_MUTATIONS:
+            ret = "Overlapping subtrees in recurrent mutation: "
+                "ancestral state not consistent";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
