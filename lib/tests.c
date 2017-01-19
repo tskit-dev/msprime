@@ -3504,7 +3504,7 @@ test_tree_sequence_bad_records(void)
     /* Add an extra record to the first tree */
     records[4].left = 2;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT);
     tree_sequence_free(&ts);
     records[4].left = 7;
     verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
