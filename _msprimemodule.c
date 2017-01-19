@@ -382,7 +382,6 @@ parse_mutations(PyObject *py_mutations, Py_ssize_t *num_mutations, mutation_t **
         }
         pos = PyTuple_GetItem(item, 0);
         ret_mutations[j].position = PyFloat_AsDouble(pos);
-
         nodes = PyTuple_GetItem(item, 1);
         if (!PyNumber_Check(pos)) {
             PyErr_SetString(PyExc_TypeError, "position must be a number");
@@ -416,6 +415,9 @@ parse_mutations(PyObject *py_mutations, Py_ssize_t *num_mutations, mutation_t **
             }
             ret_mutations[j].nodes[k] = (uint32_t) tmp_long;
         }
+        /* FIXME */
+        ret_mutations[j].ancestral_state = '0';
+        ret_mutations[j].derived_state = '1';
     }
     *num_mutations = n;
     *mutations = ret_mutations;
