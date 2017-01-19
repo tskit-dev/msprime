@@ -493,11 +493,11 @@ tree_sequence_init_from_records(tree_sequence_t *self,
         left[j] = records[j].left;
     }
     if (self->sample_size < 2) {
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        ret = MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE;
         goto out;
     }
     if (self->sequence_length <= 0) {
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        ret = MSP_ERR_BAD_COALESCENCE_RECORDS_SEQUENCE_LENGTH;
         goto out;
     }
     self->num_nodes++;
@@ -602,7 +602,7 @@ tree_sequence_init_from_records(tree_sequence_t *self,
         /* If we can't find the value in breakpoints, it means that
          * we have right coordinates not matching to a left coord */
         if (self->trees.breakpoints[k] != sort_buff[j].value) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+            ret = MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT;
             goto out;
         }
         self->trees.records.right[sort_buff[j].index] = (uint32_t) k;
