@@ -1923,6 +1923,15 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     records[0].num_children = 2;
 
+    /* sample size of 1 */
+    records[0].num_children = 1;
+    records[0].node = 1;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE);
+    tree_sequence_free(&ts);
+    records[0].num_children = 2;
+    records[0].node = 2;
+
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_load_records(&ts, num_records, records);
     CU_ASSERT_EQUAL(ret, 0);
