@@ -69,12 +69,12 @@ MigrationRecord = collections.namedtuple(
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["position", "node", "index"])
+    ["position", "nodes", "index"])
 
 
 Variant = collections.namedtuple(
     "Variant",
-    ["position", "node", "index", "genotypes"])
+    ["position", "nodes", "index", "genotypes"])
 
 
 Sample = collections.namedtuple(
@@ -132,11 +132,12 @@ class TreeDrawer(object):
         self._assign_x_coordinates(self._tree.get_root())
         self._mutations = []
         for mutation in tree.mutations():
-            x = self._x_coords[mutation.node], self._y_coords[mutation.node]
-            v = tree.get_parent(mutation.node)
-            y = self._x_coords[v], self._y_coords[v]
-            z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
-            self._mutations.append(z)
+            for node in mutation.nodes:
+                x = self._x_coords[node], self._y_coords[node]
+                v = tree.get_parent(node)
+                y = self._x_coords[v], self._y_coords[v]
+                z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
+                self._mutations.append(z)
 
     def write(self, path):
         """
@@ -507,8 +508,8 @@ class SparseTree(object):
             the mutations in this tree.
         :rtype: iter
         """
-        for position, node, index in self._ll_sparse_tree.get_mutations():
-            yield Mutation(position, node, index)
+        for position, nodes, index in self._ll_sparse_tree.get_mutations():
+            yield Mutation(position, nodes, index)
 
     def _leaf_generator(self, u):
         for v in self.nodes(u):
@@ -700,15 +701,14 @@ def _replicate_generator(
     # simulation parameters so that particular simulations can be
     # replicated. This will also involve encoding the state of the
     # random generator.
-    provenance = json.dumps(provenance_dict)
+    # provenance = json.dumps(provenance_dict)
     # Should use range here, but Python 2 makes this awkward...
     j = 0
     while j < num_replicates:
         j += 1
         sim.run()
-        tree_sequence = sim.get_tree_sequence()
-        tree_sequence.generate_mutations(mutation_rate, rng)
-        tree_sequence.add_provenance(provenance)
+        tree_sequence = sim.get_tree_sequence(mutation_rate)
+        # tree_sequence.add_provenance(provenance)
         yield tree_sequence
         sim.reset()
 
@@ -908,9 +908,8 @@ def simulate(
     mu = 0 if mutation_rate is None else mutation_rate
     if num_replicates is None:
         sim.run()
-        tree_sequence = sim.get_tree_sequence()
-        tree_sequence.generate_mutations(mu, rng)
-        tree_sequence.add_provenance(json.dumps(provenance))
+        tree_sequence = sim.get_tree_sequence(mu)
+        # tree_sequence.add_provenance(json.dumps(provenance))
         return tree_sequence
     else:
         return _replicate_generator(sim, rng, mu, num_replicates, provenance)
@@ -1006,12 +1005,7 @@ def load_txt(records_file, mutations_file=None):
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    with open(records_file, "r") as f:
-        ts = TreeSequence.load_records(f)
-    if mutations_file is not None:
-        with open(mutations_file, "r") as f:
-            ts.load_mutations(f)
-    return ts
+    return TreeSequence.load_records(records_file, mutations_file)
 
 
 class TreeSimulator(object):
@@ -1299,14 +1293,17 @@ class TreeSimulator(object):
             self._ll_sim = self.create_ll_instance()
         self._ll_sim.run()
 
-    def get_tree_sequence(self):
+    def get_tree_sequence(self, mutation_rate=0):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
+        ll_mutgen = _msprime.MutationGenerator(self._random_generator, mutation_rate)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_recomb_map = self._recombination_map.get_ll_recombination_map()
         Ne = self.get_effective_population_size()
-        ll_tree_sequence.create(self._ll_sim, ll_recomb_map, Ne)
+        self._ll_sim.populate_tree_sequence(
+            ll_tree_sequence, recombination_map=ll_recomb_map,
+            mutation_generator=ll_mutgen, Ne=Ne)
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
@@ -1393,35 +1390,56 @@ class TreeSequence(object):
             left, right, node, children, time, population)
 
     @classmethod
-    def load_records(cls, input_file):
-        records = []
-        line = next(input_file, None)
-        if line is not None:
-            if not line.startswith("left"):
-                records.append(cls.parse_record(line))
-            for line in input_file:
-                records.append(cls.parse_record(line))
-        if len(records) == 0:
-            raise ValueError("No records in file.")
-        ts = _msprime.TreeSequence()
-        ts.load_records(records)
-        return TreeSequence(ts)
-
-    def parse_mutation(self, line):
+    def parse_mutation(cls, line):
         tokens = line.split()
         position = float(tokens[0])
-        node = int(tokens[1])
-        return Mutation(position=position, node=node, index=0)
+        nodes = tuple(map(int, tokens[1].split(",")))
+        return Mutation(position=position, nodes=nodes, index=0)
 
-    def load_mutations(self, input_file):
+    @classmethod
+    def load_records(cls, records_file_path, mutations_file_path=None):
+        records = []
+        with open(records_file_path, "r") as records_file:
+            line = next(records_file, None)
+            if line is not None:
+                if not line.startswith("left"):
+                    records.append(cls.parse_record(line))
+                for line in records_file:
+                    records.append(cls.parse_record(line))
+        if len(records) == 0:
+            raise ValueError("No records in file.")
         mutations = []
-        line = next(input_file, None)
-        if line is not None:
-            if not line.startswith("position"):
-                mutations.append(self.parse_mutation(line))
-            for line in input_file:
-                mutations.append(self.parse_mutation(line))
-        self.set_mutations(mutations)
+        if mutations_file_path is not None:
+            with open(mutations_file_path, "r") as mutations_file:
+                line = next(mutations_file, None)
+                if line is not None:
+                    if not line.startswith("position"):
+                        mutations.append(cls.parse_mutation(line))
+                    for line in mutations_file:
+                        mutations.append(cls.parse_mutation(line))
+
+        # Get the samples for these records.
+        num_samples = min(r.node for r in records)
+        samples = [Sample(0, 0) for _ in range(num_samples)]
+        ts = _msprime.TreeSequence()
+        ts.load_records(
+            samples=samples, coalescence_records=records, mutations=mutations)
+        return TreeSequence(ts)
+
+    def copy(self, mutations=None):
+        # Experimental API. Return a copy of this tree sequence, optionally with
+        # the mutations set to the specified list.
+
+        # To get the samples we must first get the tree.
+        tree = next(self.trees())
+        samples = [
+            msprime.Sample(tree.population(u), tree.time(u)) for u in self.samples()]
+        if mutations is None:
+            mutations = list(self.mutations())
+        records = list(self.records())
+        new_ll_ts = _msprime.TreeSequence()
+        new_ll_ts.load_records(samples, records, mutations)
+        return TreeSequence(new_ll_ts)
 
     @property
     def provenance(self):
@@ -1708,9 +1726,6 @@ class TreeSequence(object):
         sparse_tree = SparseTree(ll_sparse_tree)
         for _ in iterator:
             yield sparse_tree
-        # Free up the underlying tree to so that we can call set_mutations.
-        # Any attempts to access the tree outside of the loop will fail.
-        ll_sparse_tree.free()
 
     def haplotypes(self):
         """
@@ -1772,42 +1787,14 @@ class TreeSequence(object):
         iterator = _msprime.VariantGenerator(
             self._ll_tree_sequence, genotypes_buffer, as_bytes)
         if as_bytes:
-            for position, node, index in iterator:
+            for position, nodes, index in iterator:
                 g = bytes(genotypes_buffer)
-                yield Variant(
-                    position=position, node=node, index=index, genotypes=g)
+                yield Variant(position=position, nodes=nodes, index=index, genotypes=g)
         else:
             check_numpy()
             g = np.frombuffer(genotypes_buffer, "u1", n)
-            for position, node, index in iterator:
-                yield Variant(
-                    position=position, node=node, index=index, genotypes=g)
-
-    def generate_mutations(self, mutation_rate, random_generator):
-        # TODO document this function when it's ready to be brought back
-        # into the public interface. We would need to document the
-        # RandomGenerator as well.
-        self._ll_tree_sequence.generate_mutations(
-            mutation_rate, random_generator)
-
-    def set_mutations(self, mutations):
-        """
-        Sets the mutations in this tree sequence to the specified list of
-        mutations.  Each entry in the list must be either a ``Mutation``
-        named-tuple instance (as returned by the
-        :meth:`.TreeSequence.mutations` method) or tuple of the form :math:`(x,
-        u, ...)`, where :math:`x` is a floating point value defining a genomic
-        position and :math:`u` is an integer defining a tree node. A genomic
-        position :math:`x` must satisfy :math:`0 \leq x < L` where :math:`L` is
-        the sequence length (see :meth:`.get_sequence_length`). A node
-        :math:`u` must satisfy :math:`0 < u < N` where :math:`N` is the number
-        of nodes in the tree sequence (see :meth:`.get_num_nodes`). Values
-        other than ``position`` and ``node`` in the input tuples are ignored.
-
-        :param list mutations: The list of mutations to be assigned to this
-            tree sequence.
-        """
-        self._ll_tree_sequence.set_mutations(mutations)
+            for position, nodes, index in iterator:
+                yield Variant(position=position, nodes=nodes, index=index, genotypes=g)
 
     def pairwise_diversity(self, samples=None):
         return self.get_pairwise_diversity(samples)
@@ -1954,14 +1941,15 @@ class TreeSequence(object):
             floating point columns.
         """
         if header:
-            print("position", "node", sep="\t", file=output)
+            print("position", "nodes", sep="\t", file=output)
         for mutation in self.mutations():
+            nodes = ",".join(str(u) for u in mutation.nodes)
             row = (
                 "{position:.{precision}f}\t"
-                "{node:}\t").format(
+                "{nodes:}\t").format(
                     precision=precision,
                     position=mutation.position,
-                    node=mutation.node)
+                    nodes=nodes)
             print(row, file=output)
 
     def write_vcf(self, output, ploidy=1):
@@ -1998,13 +1986,15 @@ class TreeSequence(object):
     def simplify(self, samples=None, filter_root_mutations=True):
         if samples is None:
             samples = self.get_samples()
-        ll_ts = self._ll_tree_sequence.simplify(samples, filter_root_mutations)
+        ll_ts = _msprime.TreeSequence()
+        self._ll_tree_sequence.simplify(ll_ts, samples, filter_root_mutations)
         new_ts = msprime.TreeSequence(ll_ts)
-        for provenance in self.get_provenance():
-            new_ts.add_provenance(provenance)
-        parameters = {"TODO": "encode subset parameters"}
-        new_ts_provenance = get_provenance_dict("simplify", parameters)
-        new_ts.add_provenance(json.dumps(new_ts_provenance))
+        # FIXME provenance
+        # for provenance in self.get_provenance():
+        #     new_ts.add_provenance(provenance)
+        # parameters = {"TODO": "encode subset parameters"}
+        # new_ts_provenance = get_provenance_dict("simplify", parameters)
+        # new_ts.add_provenance(json.dumps(new_ts_provenance))
         return new_ts
 
 

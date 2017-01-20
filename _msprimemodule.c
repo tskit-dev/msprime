@@ -47,6 +47,12 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    mutgen_t *mutgen;
+    RandomGenerator *random_generator;
+} MutationGenerator;
+
+typedef struct {
+    PyObject_HEAD
     msp_t *sim;
     RandomGenerator *random_generator;
 } Simulator;
@@ -290,8 +296,7 @@ out:
 }
 
 static int
-parse_samples(PyObject *py_samples, Py_ssize_t *sample_size,
-        sample_t **samples)
+parse_samples(PyObject *py_samples, Py_ssize_t *sample_size, sample_t **samples)
 {
     int ret = -1;
     long tmp_long;
@@ -346,6 +351,78 @@ out:
     if (ret_samples != NULL) {
         PyMem_Free(ret_samples);
     }
+    return ret;
+}
+
+static int
+parse_mutations(PyObject *py_mutations, Py_ssize_t *num_mutations, mutation_t **mutations)
+{
+    int ret = -1;
+    Py_ssize_t j, n;
+    uint32_t k;
+    long tmp_long;
+    PyObject *item, *pos, *nodes, *value;
+    mutation_t *ret_mutations = NULL;
+
+    n = PyList_Size(py_mutations);
+    ret_mutations = PyMem_Malloc(n * sizeof(mutation_t));
+    if (ret_mutations == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < n; j++) {
+        item = PyList_GetItem(py_mutations, j);
+        if (!PyTuple_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "not a tuple");
+            goto out;
+        }
+        if (PyTuple_Size(item) < 2) {
+            PyErr_SetString(PyExc_ValueError, "mutations must (pos, nodes, ...) tuples");
+            goto out;
+        }
+        pos = PyTuple_GetItem(item, 0);
+        ret_mutations[j].position = PyFloat_AsDouble(pos);
+        nodes = PyTuple_GetItem(item, 1);
+        if (!PyNumber_Check(pos)) {
+            PyErr_SetString(PyExc_TypeError, "position must be a number");
+            goto out;
+        }
+        if (!PyTuple_Check(nodes)) {
+            PyErr_SetString(PyExc_TypeError, "nodes must be a tuple");
+            goto out;
+        }
+        ret_mutations[j].num_nodes = PyTuple_Size(nodes);
+        if (ret_mutations[j].num_nodes == 0) {
+            PyErr_SetString(PyExc_ValueError, "Must be at least one node.");
+            goto out;
+        }
+        ret_mutations[j].nodes = PyMem_Malloc(
+                ret_mutations[j].num_nodes * sizeof(uint32_t));
+        if (ret_mutations[j].nodes == NULL) {
+            PyErr_NoMemory();
+            goto out;
+        }
+        for (k = 0; k < ret_mutations[j].num_nodes; k++) {
+            value = PyTuple_GetItem(nodes, k);
+            if (!PyNumber_Check(value)) {
+                PyErr_Format(PyExc_TypeError, "nodes item not a number");
+                goto out;
+            }
+            tmp_long = PyLong_AsLong(value);
+            if (tmp_long < 0) {
+                PyErr_SetString(PyExc_ValueError, "negative nodes not valid");
+                goto out;
+            }
+            ret_mutations[j].nodes[k] = (uint32_t) tmp_long;
+        }
+        /* FIXME */
+        ret_mutations[j].ancestral_state = '0';
+        ret_mutations[j].derived_state = '1';
+    }
+    *num_mutations = n;
+    *mutations = ret_mutations;
+    ret = 0;
+out:
     return ret;
 }
 
@@ -468,7 +545,7 @@ out:
 }
 
 static PyObject *
-convert_children(uint32_t *children, uint32_t num_children)
+convert_uint32_list(uint32_t *children, uint32_t num_children)
 {
     PyObject *ret = NULL;
     PyObject *t;
@@ -520,8 +597,18 @@ out:
 static inline PyObject *
 convert_mutation(mutation_t *mutation)
 {
-    return Py_BuildValue("dIn", mutation->position,
-        (unsigned int) mutation->node, (Py_ssize_t) mutation->index);
+    PyObject *nodes = NULL;
+    PyObject *ret = NULL;
+
+    nodes = convert_uint32_list(mutation->nodes, mutation->num_nodes);
+    if (nodes == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("dOn", mutation->position, nodes, (Py_ssize_t) mutation->index);
+out:
+    Py_XDECREF(nodes);
+    return ret;
+
 }
 
 static PyObject *
@@ -557,7 +644,7 @@ make_coalescence_record(coalescence_record_t *cr)
     PyObject *children = NULL;
     PyObject *ret = NULL;
 
-    children = convert_children(cr->children, cr->num_children);
+    children = convert_uint32_list(cr->children, cr->num_children);
     if (children == NULL) {
         goto out;
     }
@@ -691,6 +778,2954 @@ static PyTypeObject RandomGeneratorType = {
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
     (initproc)RandomGenerator_init,      /* tp_init */
+};
+
+/*===================================================================
+ * MutationGenerator
+ *===================================================================
+ */
+
+static int
+MutationGenerator_check_state(MutationGenerator *self)
+{
+    int ret = 0;
+    if (self->mutgen == NULL) {
+        PyErr_SetString(PyExc_SystemError, "MutationGenerator not initialised");
+        ret = -1;
+        goto out;
+    }
+    ret = RandomGenerator_check_state(self->random_generator);
+out:
+    return ret;
+}
+
+static void
+MutationGenerator_dealloc(MutationGenerator* self)
+{
+    if (self->mutgen != NULL) {
+        mutgen_free(self->mutgen);
+        PyMem_Free(self->mutgen);
+        self->mutgen = NULL;
+    }
+    Py_XDECREF(self->random_generator);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"random_generator", "mutation_rate", NULL};
+    double mutation_rate = 0;
+    RandomGenerator *random_generator = NULL;
+
+    self->mutgen = NULL;
+    self->random_generator = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d", kwlist,
+            &RandomGeneratorType, &random_generator, &mutation_rate)) {
+        goto out;
+    }
+    self->random_generator = random_generator;
+    Py_INCREF(self->random_generator);
+    if (RandomGenerator_check_state(self->random_generator) != 0) {
+        goto out;
+    }
+    if (mutation_rate < 0) {
+        PyErr_Format(PyExc_ValueError, "mutation_rate must be >= 0");
+        goto out;
+    }
+    self->mutgen = PyMem_Malloc(sizeof(mutgen_t));
+    if (self->mutgen == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+MutationGenerator_get_mutation_rate(MutationGenerator *self)
+{
+    PyObject *ret = NULL;
+
+    if (MutationGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->mutgen->mutation_rate);
+out:
+    return ret;
+}
+
+static PyMemberDef MutationGenerator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef MutationGenerator_methods[] = {
+    {"get_mutation_rate", (PyCFunction) MutationGenerator_get_mutation_rate,
+        METH_NOARGS, "Returns the mutation rate for this mutation generator."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject MutationGeneratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.MutationGenerator",             /* tp_name */
+    sizeof(MutationGenerator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)MutationGenerator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "MutationGenerator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    MutationGenerator_methods,             /* tp_methods */
+    MutationGenerator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)MutationGenerator_init,      /* tp_init */
+};
+
+/*===================================================================
+ * RecombinationMap
+ *===================================================================
+ */
+
+static int
+RecombinationMap_check_recomb_map(RecombinationMap *self)
+{
+    int ret = 0;
+    if (self->recomb_map == NULL) {
+        PyErr_SetString(PyExc_ValueError, "recomb_map not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+RecombinationMap_dealloc(RecombinationMap* self)
+{
+    if (self->recomb_map != NULL) {
+        recomb_map_free(self->recomb_map);
+        PyMem_Free(self->recomb_map);
+        self->recomb_map = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"num_loci", "positions", "rates", NULL};
+    Py_ssize_t size, j;
+    PyObject *py_positions = NULL;
+    PyObject *py_rates = NULL;
+    double *positions = NULL;
+    double *rates = NULL;
+    unsigned int num_loci = 0;
+    PyObject *item;
+
+    self->recomb_map = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "IO!O!", kwlist,
+            &num_loci, &PyList_Type, &py_positions, &PyList_Type,
+            &py_rates)) {
+        goto out;
+    }
+    if (PyList_Size(py_positions) != PyList_Size(py_rates)) {
+        PyErr_SetString(PyExc_ValueError,
+            "positions and rates list must be the same length");
+        goto out;
+    }
+    size = PyList_Size(py_positions);
+    positions = PyMem_Malloc(size * sizeof(double));
+    rates = PyMem_Malloc(size * sizeof(double));
+    if (positions == NULL || rates == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        item = PyList_GetItem(py_positions, j);
+        if (!PyNumber_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "position must be a number");
+            goto out;
+        }
+        positions[j] = PyFloat_AsDouble(item);
+        item = PyList_GetItem(py_rates, j);
+        if (!PyNumber_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "rates must be a number");
+            goto out;
+        }
+        rates[j] = PyFloat_AsDouble(item);
+    }
+    self->recomb_map = PyMem_Malloc(sizeof(recomb_map_t));
+    if (self->recomb_map == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = recomb_map_alloc(self->recomb_map, (uint32_t) num_loci,
+            positions[size - 1], positions, rates, size);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    if (positions != NULL) {
+        PyMem_Free(positions);
+    }
+    if (rates != NULL) {
+        PyMem_Free(rates);
+    }
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_genetic_to_physical(RecombinationMap *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double genetic_x, physical_x;
+    uint32_t num_loci;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    num_loci = recomb_map_get_num_loci(self->recomb_map);
+    if (!PyArg_ParseTuple(args, "d", &genetic_x)) {
+        goto out;
+    }
+    if (genetic_x < 0 || genetic_x > num_loci) {
+        PyErr_SetString(PyExc_ValueError,
+                "coordinates must be 0 <= x <= num_loci");
+        goto out;
+    }
+    physical_x = recomb_map_genetic_to_phys(self->recomb_map, genetic_x);
+    ret = Py_BuildValue("d", physical_x);
+out:
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_physical_to_genetic(RecombinationMap *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double genetic_x, physical_x, sequence_length;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    sequence_length = recomb_map_get_sequence_length(self->recomb_map);
+    if (!PyArg_ParseTuple(args, "d", &physical_x)) {
+        goto out;
+    }
+    if (physical_x < 0 || physical_x > sequence_length) {
+        PyErr_SetString(PyExc_ValueError,
+            "coordinates must be 0 <= x <= sequence_length");
+        goto out;
+    }
+    genetic_x = recomb_map_phys_to_genetic(self->recomb_map, physical_x);
+    ret = Py_BuildValue("d", genetic_x);
+out:
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_get_per_locus_recombination_rate(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d",
+        recomb_map_get_per_locus_recombination_rate(self->recomb_map));
+out:
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_get_total_recombination_rate(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d",
+        recomb_map_get_total_recombination_rate(self->recomb_map));
+out:
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_get_num_loci(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) recomb_map_get_num_loci(self->recomb_map));
+out:
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_get_size(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) recomb_map_get_size(self->recomb_map));
+out:
+    return ret;
+}
+
+
+static PyObject *
+RecombinationMap_get_positions(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+    double *positions = NULL;
+    size_t size;
+    int err;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    size = recomb_map_get_size(self->recomb_map);
+    positions = PyMem_Malloc(size * sizeof(double));
+    if (positions == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = recomb_map_get_positions(self->recomb_map, positions);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_float_list(positions, size);
+out:
+    if (positions != NULL) {
+        PyMem_Free(positions);
+    }
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_get_rates(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+    double *rates = NULL;
+    size_t size;
+    int err;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    size = recomb_map_get_size(self->recomb_map);
+    rates = PyMem_Malloc(size * sizeof(double));
+    if (rates == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = recomb_map_get_rates(self->recomb_map, rates);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_float_list(rates, size);
+out:
+    if (rates != NULL) {
+        PyMem_Free(rates);
+    }
+    return ret;
+}
+
+static PyMemberDef RecombinationMap_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef RecombinationMap_methods[] = {
+    {"genetic_to_physical", (PyCFunction) RecombinationMap_genetic_to_physical,
+        METH_VARARGS, "Converts the specified value into physical coordinates."},
+    {"physical_to_genetic", (PyCFunction) RecombinationMap_physical_to_genetic,
+        METH_VARARGS, "Converts the specified value into genetic coordinates."},
+    {"get_total_recombination_rate",
+        (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS,
+        "Returns the total product of physical distance times recombination rate"},
+    {"get_per_locus_recombination_rate",
+        (PyCFunction) RecombinationMap_get_per_locus_recombination_rate,
+        METH_NOARGS,
+        "Returns the recombination rate between loci implied by this map"},
+    {"get_num_loci", (PyCFunction) RecombinationMap_get_num_loci, METH_NOARGS,
+        "Returns the number discrete loci in the genetic map."},
+    {"get_size", (PyCFunction) RecombinationMap_get_size, METH_NOARGS,
+        "Returns the number of physical  positions in this map."},
+    {"get_positions",
+        (PyCFunction) RecombinationMap_get_positions, METH_NOARGS,
+        "Returns the positions in this recombination map."},
+    {"get_rates",
+        (PyCFunction) RecombinationMap_get_rates, METH_NOARGS,
+        "Returns the rates in this recombination map."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject RecombinationMapType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.RecombinationMap",             /* tp_name */
+    sizeof(RecombinationMap),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)RecombinationMap_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "RecombinationMap objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    RecombinationMap_methods,             /* tp_methods */
+    RecombinationMap_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)RecombinationMap_init,      /* tp_init */
+};
+
+/*===================================================================
+ * TreeSequence
+ *===================================================================
+ */
+
+static int
+TreeSequence_check_tree_sequence(TreeSequence *self)
+{
+    int ret = 0;
+    if (self->tree_sequence == NULL) {
+        PyErr_SetString(PyExc_ValueError, "tree_sequence not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+TreeSequence_dealloc(TreeSequence* self)
+{
+    if (self->tree_sequence != NULL) {
+        tree_sequence_free(self->tree_sequence);
+        PyMem_Free(self->tree_sequence);
+        self->tree_sequence = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+
+    self->tree_sequence = NULL;
+    self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
+    if (self->tree_sequence == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = tree_sequence_initialise(self->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    char *path;
+    PyObject *ret = NULL;
+    int zlib_compression = 0;
+    int flags = 0;
+    static char *kwlist[] = {"path", "zlib_compression", NULL};
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
+                &path, &zlib_compression)) {
+        goto out;
+    }
+    if (zlib_compression) {
+        flags = MSP_ZLIB_COMPRESSION;
+    }
+    /* Silence the low-level error reporting HDF5 */
+    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
+        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
+        goto out;
+    }
+    err = tree_sequence_dump(self->tree_sequence, path, flags);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    PyObject *py_records = NULL;
+    PyObject *py_samples = NULL;
+    PyObject *py_mutations = NULL;
+    PyObject *item;
+    coalescence_record_t *records = NULL;
+    mutation_t *mutations = NULL;
+    sample_t *samples = NULL;
+    Py_ssize_t num_samples, num_mutations;
+    size_t num_records, j;
+    static char *kwlist[] = {"samples", "coalescence_records", "mutations", NULL};
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!", kwlist,
+                &PyList_Type, &py_samples,
+                &PyList_Type, &py_records,
+                &PyList_Type, &py_mutations)) {
+        goto out;
+    }
+    num_records = PyList_Size(py_records);
+    records = PyMem_Malloc(num_records * sizeof(coalescence_record_t));
+    if (records == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(records, 0, num_records * sizeof(coalescence_record_t));
+    for (j = 0; j < num_records; j++) {
+        item = PyList_GetItem(py_records, j);
+        if (parse_coalescence_record(item, &records[j]) != 0) {
+            goto out;
+        }
+    }
+    if (parse_samples(py_samples, &num_samples, &samples) != 0) {
+        goto out;
+    }
+    if (num_samples < 2) {
+        PyErr_SetString(PyExc_ValueError, "At least two samples required.");
+        goto out;
+    }
+    num_mutations = 0;
+    if (py_mutations != NULL) {
+        if (parse_mutations(py_mutations, &num_mutations, &mutations) != 0) {
+            goto out;
+        }
+    }
+    err = tree_sequence_load_records(self->tree_sequence,
+            num_samples, samples,
+            num_records, records,
+            num_mutations, mutations,
+            0, NULL,
+            0, NULL);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    if (records != NULL) {
+        for (j = 0; j < num_records; j++) {
+            if (records[j].children != NULL) {
+                PyMem_Free(records[j].children);
+            }
+        }
+        PyMem_Free(records);
+    }
+    if (samples != NULL) {
+        PyMem_Free(samples);
+    }
+    if (mutations != NULL) {
+        for (j = 0; j < num_mutations; j++) {
+            if (mutations[j].nodes != NULL) {
+                PyMem_Free(mutations[j].nodes);
+            }
+        }
+        PyMem_Free(mutations);
+    }
+    return ret;
+}
+
+static PyObject *
+TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    char *path;
+    int flags = 0;
+    PyObject *ret = NULL;
+    static char *kwlist[] = {"path", NULL};
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &path)) {
+        goto out;
+    }
+    /* Silence the low-level error reporting HDF5 */
+    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
+        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
+        goto out;
+    }
+    err = tree_sequence_load(self->tree_sequence, path, flags);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+#if 0
+
+static PyObject *
+TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    size_t j;
+    PyObject *ret = NULL;
+    PyObject *item, *node, *pos;
+    PyObject *py_mutation_list = NULL;
+    static char *kwlist[] = {"mutations", NULL};
+    size_t num_mutations = 0;
+    mutation_t *mutations = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &PyList_Type, &py_mutation_list)) {
+        goto out;
+    }
+    num_mutations = PyList_Size(py_mutation_list);
+    mutations = PyMem_Malloc(num_mutations * sizeof(mutation_t));
+    for (j = 0; j < num_mutations; j++) {
+        item = PyList_GetItem(py_mutation_list, j);
+        if (!PyTuple_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "not a tuple");
+            goto out;
+        }
+        if (PyTuple_Size(item) < 2) {
+            PyErr_SetString(PyExc_ValueError,
+                    "mutations must (node, pos, ...) tuples");
+            goto out;
+        }
+        pos = PyTuple_GetItem(item, 0);
+        node = PyTuple_GetItem(item, 1);
+        if (!PyNumber_Check(pos)) {
+            PyErr_SetString(PyExc_TypeError, "position must be a number");
+            goto out;
+        }
+        if (!PyNumber_Check(node)) {
+            PyErr_SetString(PyExc_TypeError, "node must be a number");
+            goto out;
+        }
+        mutations[j].position = PyFloat_AsDouble(pos);
+        // FIXME
+        /* mutations[j].node = (uint32_t) PyLong_AsLong(node); */
+    }
+    err = tree_sequence_set_mutations(self->tree_sequence, num_mutations,
+            mutations);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    if (mutations != NULL) {
+        PyMem_Free(mutations);
+    }
+    return ret;
+}
+
+static PyObject *
+TreeSequence_add_provenance_string(TreeSequence *self, PyObject *args)
+{
+    int err;
+    char *s;
+    PyObject *ret = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "s", &s)) {
+        goto out;
+    }
+    if (strlen(s) == 0) {
+        PyErr_SetString(PyExc_ValueError,
+                "Empty string is not permitted for provenance.");
+        goto out;
+    }
+    err = tree_sequence_add_provenance_string(self->tree_sequence, s);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+#endif
+
+static PyObject *
+TreeSequence_get_provenance_strings(TreeSequence *self)
+{
+    int err;
+    PyObject *ret = NULL;
+    size_t num_provenance_strings;
+    char **provenance_strings;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    err = tree_sequence_get_provenance_strings(self->tree_sequence,
+            &num_provenance_strings, &provenance_strings);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_string_list(provenance_strings, num_provenance_strings);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_record(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    int order = MSP_ORDER_TIME;
+    Py_ssize_t record_index, num_records;
+    coalescence_record_t cr;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n|i", &record_index, &order)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_coalescence_records(
+        self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_coalescence_record(self->tree_sequence,
+            (size_t) record_index, &cr, order);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_coalescence_record(&cr);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_migration_record(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    migration_record_t mr;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_migration_records(
+        self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_migration_record(self->tree_sequence,
+            (size_t) record_index, &mr);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_migration_record(&mr);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_mutations(TreeSequence *self)
+{
+    PyObject *ret = NULL;
+    mutation_t *mutations;
+    size_t num_mutations;
+    int err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
+    err = tree_sequence_get_mutations(self->tree_sequence, &mutations);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = convert_mutations(mutations, num_mutations);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_records;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_records = tree_sequence_get_num_coalescence_records(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_records);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_num_migration_records(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_records;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_records = tree_sequence_get_num_migration_records(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_records);
+out:
+    return ret;
+}
+
+
+
+static PyObject *
+TreeSequence_get_num_trees(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_trees;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_trees = tree_sequence_get_num_trees(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_trees);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_sequence_length(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d",
+        tree_sequence_get_sequence_length(self->tree_sequence));
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_sample_size(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    size_t sample_size;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    sample_size = tree_sequence_get_sample_size(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) sample_size);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_num_nodes(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    size_t num_nodes;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_nodes = tree_sequence_get_num_nodes(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_nodes);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_sample(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int node;
+    sample_t sample;
+    int population, err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    err = tree_sequence_get_sample(self->tree_sequence, node, &sample);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    population = sample.population_id;
+    if (sample.population_id == MSP_NULL_POPULATION_ID) {
+        population = -1;
+    }
+    ret = Py_BuildValue("id", population, sample.time);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args,
+        PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    PyObject *py_samples = NULL;
+    static char *kwlist[] = {"samples", NULL};
+    uint32_t *samples = NULL;
+    size_t num_samples = 0;
+    double pi;
+    int err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &PyList_Type, &py_samples)) {
+        goto out;
+    }
+    if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
+        goto out;
+    }
+    err = tree_sequence_get_pairwise_diversity(
+        self->tree_sequence, samples, (uint32_t) num_samples, &pi);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("d", pi);
+out:
+    if (samples != NULL) {
+        PyMem_Free(samples);
+    }
+
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject TreeSequenceType;
+static PyObject *
+TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    PyObject *py_samples = NULL;
+    static char *kwlist[] = {"output", "samples", "filter_root_mutations", NULL};
+    uint32_t *samples = NULL;
+    size_t num_samples = 0;
+    TreeSequence *output = NULL;
+    int filter_root_mutations = 1;
+    int flags = 0;
+    int err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|i", kwlist,
+            &TreeSequenceType, &output,
+            &PyList_Type, &py_samples,
+            &filter_root_mutations)) {
+        goto out;
+    }
+    if (TreeSequence_check_tree_sequence(output) != 0) {
+        goto out;
+    }
+    if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
+        goto out;
+    }
+    if (filter_root_mutations) {
+        flags |= MSP_FILTER_ROOT_MUTATIONS;
+    }
+    err = tree_sequence_simplify(
+        self->tree_sequence, samples, (uint32_t) num_samples, flags, output->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    if (samples != NULL) {
+        PyMem_Free(samples);
+    }
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_num_mutations(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    size_t num_mutations;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_mutations);
+out:
+    return ret;
+}
+
+static PyMemberDef TreeSequence_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef TreeSequence_methods[] = {
+    {"dump", (PyCFunction) TreeSequence_dump,
+        METH_VARARGS|METH_KEYWORDS,
+        "Writes the tree sequence out to the specified path."},
+    {"load", (PyCFunction) TreeSequence_load,
+        METH_VARARGS|METH_KEYWORDS,
+        "Loads a tree sequence from the specified path."},
+    {"load_records", (PyCFunction) TreeSequence_load_records,
+        METH_VARARGS|METH_KEYWORDS,
+        "Loads a tree sequence from the specified set of records"},
+    {"get_provenance_strings", (PyCFunction) TreeSequence_get_provenance_strings,
+        METH_NOARGS, "Returns the list of provenance strings."},
+    {"get_mutations", (PyCFunction) TreeSequence_get_mutations,
+        METH_NOARGS, "Returns the list of mutations"},
+    {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
+        "Returns the record at the specified index."},
+    {"get_migration_record",
+        (PyCFunction) TreeSequence_get_migration_record, METH_VARARGS,
+        "Returns the migration record at the specified index."},
+    {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
+        METH_NOARGS, "Returns the number of coalescence records." },
+    {"get_num_migration_records", (PyCFunction) TreeSequence_get_num_migration_records,
+        METH_NOARGS, "Returns the number of migration records." },
+    {"get_num_trees", (PyCFunction) TreeSequence_get_num_trees,
+        METH_NOARGS, "Returns the number of trees in the tree sequence." },
+    {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
+        METH_NOARGS, "Returns the sequence length in bases." },
+    {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
+        "Returns the number of mutations" },
+    {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
+        "Returns the number of unique nodes in the tree sequence." },
+    {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
+        "Returns the sample size" },
+    {"get_sample", (PyCFunction) TreeSequence_get_sample, METH_VARARGS,
+        "Returns a dictionary describing the specified sample." },
+    {"get_pairwise_diversity",
+        (PyCFunction) TreeSequence_get_pairwise_diversity,
+        METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
+    {"simplify", (PyCFunction) TreeSequence_simplify,
+        METH_VARARGS|METH_KEYWORDS,
+        "Returns a simplified version of this tree sequence."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject TreeSequenceType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.TreeSequence",             /* tp_name */
+    sizeof(TreeSequence),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)TreeSequence_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "TreeSequence objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    TreeSequence_methods,             /* tp_methods */
+    TreeSequence_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)TreeSequence_init,      /* tp_init */
+};
+
+/*===================================================================
+ * SparseTree
+ *===================================================================
+ */
+
+static int
+SparseTree_check_sparse_tree(SparseTree *self)
+{
+    int ret = 0;
+    if (self->sparse_tree == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "sparse_tree not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static int
+SparseTree_check_bounds(SparseTree *self, unsigned int node)
+{
+    int ret = 0;
+    if (node >= self->sparse_tree->num_nodes) {
+        PyErr_SetString(PyExc_ValueError, "Node index out of bounds");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+SparseTree_dealloc(SparseTree* self)
+{
+    if (self->sparse_tree != NULL) {
+        sparse_tree_free(self->sparse_tree);
+        PyMem_Free(self->sparse_tree);
+        self->sparse_tree = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", "flags", "tracked_leaves",
+        NULL};
+    PyObject *py_tracked_leaves = NULL;
+    TreeSequence *tree_sequence = NULL;
+    uint32_t *tracked_leaves = NULL;
+    int flags = 0;
+    uint32_t j, n, num_tracked_leaves;
+    PyObject *item;
+
+    self->sparse_tree = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|iO!", kwlist,
+            &TreeSequenceType, &tree_sequence,
+            &flags, &PyList_Type, &py_tracked_leaves)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
+        goto out;
+    }
+    n = tree_sequence_get_sample_size(tree_sequence->tree_sequence);
+    num_tracked_leaves = 0;
+    if (py_tracked_leaves != NULL) {
+        if (!flags & MSP_LEAF_COUNTS) {
+            PyErr_SetString(PyExc_ValueError,
+                "Cannot specified tracked_leaves without count_leaves flag");
+            goto out;
+        }
+        num_tracked_leaves = PyList_Size(py_tracked_leaves);
+    }
+    tracked_leaves = PyMem_Malloc(num_tracked_leaves * sizeof(uint32_t));
+    if (tracked_leaves == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < num_tracked_leaves; j++) {
+        item = PyList_GetItem(py_tracked_leaves, j);
+        if (!PyNumber_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "leaf must be a number");
+            goto out;
+        }
+        tracked_leaves[j] = (uint32_t) PyLong_AsLong(item);
+        if (tracked_leaves[j] >= n) {
+            PyErr_SetString(PyExc_ValueError, "leaves must be < sample_size");
+            goto out;
+        }
+    }
+    self->sparse_tree = PyMem_Malloc(sizeof(sparse_tree_t));
+    if (self->sparse_tree == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = sparse_tree_alloc(self->sparse_tree, tree_sequence->tree_sequence,
+           flags);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (flags & MSP_LEAF_COUNTS) {
+        err = sparse_tree_set_tracked_leaves(self->sparse_tree, num_tracked_leaves,
+                tracked_leaves);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    if (tracked_leaves != NULL) {
+        PyMem_Free(tracked_leaves);
+    }
+    return ret;
+}
+
+static PyObject *
+SparseTree_free(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    /* This method is need because we have dangling references to
+     * trees after a for loop and we can't run set_mutations.
+     */
+    sparse_tree_free(self->sparse_tree);
+    PyMem_Free(self->sparse_tree);
+    self->sparse_tree = NULL;
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_sample_size(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->sample_size);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_num_nodes(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->num_nodes);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_index(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->index);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_root(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", (int) self->sparse_tree->root);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_left(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->sparse_tree->left);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_right(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->sparse_tree->right);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_flags(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", self->sparse_tree->flags);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_parent(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int node;
+    uint32_t parent;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    parent = self->sparse_tree->parent[node];
+    ret = Py_BuildValue("i", (int) parent);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_population(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int node;
+    int population;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    population = self->sparse_tree->population[node];
+    if (population == MSP_NULL_POPULATION_ID) {
+        population = -1;
+    }
+    ret = Py_BuildValue("i", population);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_time(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double time;
+    unsigned int node;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    time = self->sparse_tree->time[node];
+    ret = Py_BuildValue("d", time);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_children(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    uint32_t *children, num_children;
+    unsigned int node;
+    int err;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    err = sparse_tree_get_children(self->sparse_tree,
+            (uint32_t) node, &num_children, &children);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (num_children == 0) {
+        ret = Py_BuildValue("()");
+    } else {
+        ret = convert_uint32_list(children, num_children);
+    }
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_mrca(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int err;
+    uint32_t mrca;
+    unsigned int u, v;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "II", &u, &v)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, u)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, v)) {
+        goto out;
+    }
+    err = sparse_tree_get_mrca(self->sparse_tree, (uint32_t) u,
+            (uint32_t) v, &mrca);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("i", (int) mrca);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_num_leaves(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int node;
+    uint32_t num_leaves;
+    int err;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    err = sparse_tree_get_num_leaves(self->sparse_tree, (uint32_t) node,
+            &num_leaves);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("I", (unsigned int) num_leaves);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_num_tracked_leaves(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned int node;
+    uint32_t num_tracked_leaves;
+    int err;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, node)) {
+        goto out;
+    }
+    err = sparse_tree_get_num_tracked_leaves(self->sparse_tree, (uint32_t) node,
+            &num_tracked_leaves);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("I", (unsigned int) num_tracked_leaves);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_mutations(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = convert_mutations(self->sparse_tree->mutations,
+            self->sparse_tree->num_mutations);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_num_mutations(SparseTree  *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->num_mutations);
+out:
+    return ret;
+}
+
+
+static PyMemberDef SparseTree_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef SparseTree_methods[] = {
+    {"free", (PyCFunction) SparseTree_free, METH_NOARGS,
+            "Frees the underlying tree object." },
+    {"get_num_nodes", (PyCFunction) SparseTree_get_num_nodes, METH_NOARGS,
+            "Returns the number of nodes in the sparse tree." },
+    {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
+            "Returns the sample size" },
+    {"get_index", (PyCFunction) SparseTree_get_index, METH_NOARGS,
+            "Returns the index this tree occupies within the tree sequence." },
+    {"get_root", (PyCFunction) SparseTree_get_root, METH_NOARGS,
+            "Returns the root of the tree." },
+    {"get_left", (PyCFunction) SparseTree_get_left, METH_NOARGS,
+            "Returns the left-most coordinate (inclusive)." },
+    {"get_right", (PyCFunction) SparseTree_get_right, METH_NOARGS,
+            "Returns the right-most coordinate (exclusive)." },
+    {"get_mutations", (PyCFunction) SparseTree_get_mutations, METH_NOARGS,
+            "Returns the list of mutations on this tree." },
+    {"get_flags", (PyCFunction) SparseTree_get_flags, METH_NOARGS,
+            "Returns the value of the flags variable." },
+    {"get_num_mutations", (PyCFunction) SparseTree_get_num_mutations, METH_NOARGS,
+            "Returns the number of mutations on this tree." },
+    {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
+            "Returns the parent of node u" },
+    {"get_time", (PyCFunction) SparseTree_get_time, METH_VARARGS,
+            "Returns the time of node u" },
+    {"get_population", (PyCFunction) SparseTree_get_population, METH_VARARGS,
+            "Returns the population of node u" },
+    {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
+            "Returns the children of node u" },
+    {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
+            "Returns the MRCA of nodes u and v" },
+    {"get_num_leaves", (PyCFunction) SparseTree_get_num_leaves, METH_VARARGS,
+            "Returns the number of leaves below node u." },
+    {"get_num_tracked_leaves", (PyCFunction) SparseTree_get_num_tracked_leaves,
+            METH_VARARGS,
+            "Returns the number of tracked leaves below node u." },
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject SparseTreeType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.SparseTree",             /* tp_name */
+    sizeof(SparseTree),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)SparseTree_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "SparseTree objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    SparseTree_methods,             /* tp_methods */
+    SparseTree_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)SparseTree_init,      /* tp_init */
+};
+
+
+
+/*===================================================================
+ * TreeDiffIterator
+ *===================================================================
+ */
+
+static int
+TreeDiffIterator_check_state(TreeDiffIterator *self)
+{
+    int ret = 0;
+    if (self->tree_diff_iterator == NULL) {
+        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+TreeDiffIterator_dealloc(TreeDiffIterator* self)
+{
+    if (self->tree_diff_iterator != NULL) {
+        tree_diff_iterator_free(self->tree_diff_iterator);
+        PyMem_Free(self->tree_diff_iterator);
+        self->tree_diff_iterator = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+TreeDiffIterator_init(TreeDiffIterator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", NULL};
+    TreeSequence *tree_sequence;
+
+    self->tree_diff_iterator = NULL;
+    self->tree_sequence = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    self->tree_diff_iterator = PyMem_Malloc(sizeof(tree_diff_iterator_t));
+    if (self->tree_diff_iterator == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->tree_diff_iterator, 0, sizeof(tree_diff_iterator_t));
+    err = tree_diff_iterator_alloc(self->tree_diff_iterator,
+            self->tree_sequence->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+TreeDiffIterator_next(TreeDiffIterator  *self)
+{
+    PyObject *ret = NULL;
+    PyObject *out_list = NULL;
+    PyObject *in_list = NULL;
+    PyObject *value = NULL;
+    PyObject *children = NULL;
+    int err;
+    double length;
+    size_t list_size, j;
+    node_record_t *records_out, *records_in, *record;
+
+    if (TreeDiffIterator_check_state(self) != 0) {
+        goto out;
+    }
+    err = tree_diff_iterator_next(self->tree_diff_iterator, &length,
+            &records_out, &records_in);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (err == 1) {
+        /* out records */
+        record = records_out;
+        list_size = 0;
+        while (record != NULL) {
+            list_size++;
+            record = record->next;
+        }
+        out_list = PyList_New(list_size);
+        if (out_list == NULL) {
+            goto out;
+        }
+        record = records_out;
+        j = 0;
+        while (record != NULL) {
+            children = convert_uint32_list(record->children, record->num_children);
+            if (children == NULL) {
+                goto out;
+            }
+            value = Py_BuildValue("IOd", (unsigned int) record->node,
+                    children, record->time);
+            Py_DECREF(children);
+            if (value == NULL) {
+                goto out;
+            }
+            PyList_SET_ITEM(out_list, j, value);
+            record = record->next;
+            j++;
+        }
+        /* in records */
+        record = records_in;
+        list_size = 0;
+        while (record != NULL) {
+            list_size++;
+            record = record->next;
+        }
+        in_list = PyList_New(list_size);
+        if (in_list == NULL) {
+            goto out;
+        }
+        record = records_in;
+        j = 0;
+        while (record != NULL) {
+            children = convert_uint32_list(record->children, record->num_children);
+            if (children == NULL) {
+                goto out;
+            }
+            value = Py_BuildValue("IOd", (unsigned int) record->node,
+                    children, record->time);
+            Py_DECREF(children);
+            if (value == NULL) {
+                goto out;
+            }
+            PyList_SET_ITEM(in_list, j, value);
+            record = record->next;
+            j++;
+        }
+        ret = Py_BuildValue("dOO", length, out_list, in_list);
+    }
+out:
+    Py_XDECREF(out_list);
+    Py_XDECREF(in_list);
+    return ret;
+}
+
+static PyMemberDef TreeDiffIterator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef TreeDiffIterator_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject TreeDiffIteratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.TreeDiffIterator",             /* tp_name */
+    sizeof(TreeDiffIterator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)TreeDiffIterator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "TreeDiffIterator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) TreeDiffIterator_next, /* tp_iternext */
+    TreeDiffIterator_methods,             /* tp_methods */
+    TreeDiffIterator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)TreeDiffIterator_init,      /* tp_init */
+};
+
+/*===================================================================
+ * LeafListIterator
+ *===================================================================
+ */
+
+static int
+LeafListIterator_check_state(LeafListIterator *self)
+{
+    int ret = 0;
+    if (self->sparse_tree == NULL) {
+        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+LeafListIterator_dealloc(LeafListIterator* self)
+{
+    Py_XDECREF(self->sparse_tree);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+LeafListIterator_init(LeafListIterator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"sparse_tree", "node", NULL};
+    unsigned int node = 0;
+    SparseTree *sparse_tree = NULL;
+
+    self->sparse_tree = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!I", kwlist,
+            &SparseTreeType, &sparse_tree, &node)) {
+        goto out;
+    }
+    self->sparse_tree = sparse_tree;
+    Py_INCREF(self->sparse_tree);
+    if (SparseTree_check_sparse_tree(sparse_tree) != 0) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self->sparse_tree, node)) {
+        goto out;
+    }
+    err = sparse_tree_get_leaf_list(self->sparse_tree->sparse_tree,
+            (uint32_t) node, &self->head, &self->tail);
+    self->next = self->head;
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+LeafListIterator_next(LeafListIterator  *self)
+{
+    PyObject *ret = NULL;
+
+    if (LeafListIterator_check_state(self) != 0) {
+        goto out;
+    }
+    if (self->next != NULL) {
+        ret = Py_BuildValue("I", (unsigned int) self->next->node);
+        if (ret == NULL) {
+            goto out;
+        }
+        /* Get the next value */
+        if (self->next == self->tail) {
+            self->next = NULL;
+        } else {
+            self->next = self->next->next;
+        }
+    }
+out:
+    return ret;
+}
+
+static PyMemberDef LeafListIterator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef LeafListIterator_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject LeafListIteratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.LeafListIterator",             /* tp_name */
+    sizeof(LeafListIterator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)LeafListIterator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "LeafListIterator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) LeafListIterator_next, /* tp_iternext */
+    LeafListIterator_methods,             /* tp_methods */
+    LeafListIterator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)LeafListIterator_init,      /* tp_init */
+};
+
+
+/*===================================================================
+ * SparseTreeIterator
+ *===================================================================
+ */
+
+static int
+SparseTreeIterator_check_state(SparseTreeIterator *self)
+{
+    int ret = 0;
+    return ret;
+}
+
+static void
+SparseTreeIterator_dealloc(SparseTreeIterator* self)
+{
+    Py_XDECREF(self->sparse_tree);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+SparseTreeIterator_init(SparseTreeIterator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    static char *kwlist[] = {"sparse_tree", NULL};
+    SparseTree *sparse_tree;
+
+    self->first = 1;
+    self->sparse_tree = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &SparseTreeType, &sparse_tree)) {
+        goto out;
+    }
+    self->sparse_tree = sparse_tree;
+    Py_INCREF(self->sparse_tree);
+    if (SparseTree_check_sparse_tree(self->sparse_tree) != 0) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTreeIterator_next(SparseTreeIterator  *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (SparseTreeIterator_check_state(self) != 0) {
+        goto out;
+    }
+
+    if (self->first) {
+        err = sparse_tree_first(self->sparse_tree->sparse_tree);
+        self->first = 0;
+    } else {
+        err = sparse_tree_next(self->sparse_tree->sparse_tree);
+    }
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (err == 1) {
+        ret = (PyObject *) self->sparse_tree;
+        Py_INCREF(ret);
+    }
+out:
+    return ret;
+}
+
+static PyMemberDef SparseTreeIterator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef SparseTreeIterator_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject SparseTreeIteratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.SparseTreeIterator",             /* tp_name */
+    sizeof(SparseTreeIterator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)SparseTreeIterator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "SparseTreeIterator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) SparseTreeIterator_next, /* tp_iternext */
+    SparseTreeIterator_methods,             /* tp_methods */
+    SparseTreeIterator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)SparseTreeIterator_init,      /* tp_init */
+};
+
+
+/*===================================================================
+ * NewickConverter
+ *===================================================================
+ */
+
+static int
+NewickConverter_check_state(NewickConverter *self)
+{
+    int ret = 0;
+    if (self->newick_converter == NULL) {
+        PyErr_SetString(PyExc_SystemError, "converter not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+NewickConverter_dealloc(NewickConverter* self)
+{
+    if (self->newick_converter != NULL) {
+        newick_converter_free(self->newick_converter);
+        PyMem_Free(self->newick_converter);
+        self->newick_converter = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", "precision", "Ne", NULL};
+    int precision = 3;
+    double Ne = 0.25; /* default to 1/4 for coalescent time units. */
+    TreeSequence *tree_sequence;
+
+    self->newick_converter = NULL;
+    self->tree_sequence = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|id", kwlist,
+            &TreeSequenceType, &tree_sequence, &precision, &Ne)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    if (precision < 0 || precision > 16) {
+        PyErr_SetString(PyExc_ValueError,
+                "precision value out of range (0, 16)");
+        goto out;
+    }
+    self->newick_converter = PyMem_Malloc(sizeof(newick_converter_t));
+    if (self->newick_converter == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->newick_converter, 0, sizeof(newick_converter_t));
+    err = newick_converter_alloc(self->newick_converter,
+            self->tree_sequence->tree_sequence, (size_t) precision, Ne);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+NewickConverter_next(NewickConverter  *self)
+{
+    PyObject *ret = NULL;
+    double length;
+    char *tree;
+    int err;
+
+    if (NewickConverter_check_state(self) != 0) {
+        goto out;
+    }
+    err = newick_converter_next(self->newick_converter, &length, &tree);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (err == 1) {
+        ret = Py_BuildValue("ds", length, tree);
+    }
+out:
+    return ret;
+}
+
+static PyMemberDef NewickConverter_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef NewickConverter_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject NewickConverterType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.NewickConverter",             /* tp_name */
+    sizeof(NewickConverter),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)NewickConverter_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "NewickConverter objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) NewickConverter_next, /* tp_iternext */
+    NewickConverter_methods,             /* tp_methods */
+    NewickConverter_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)NewickConverter_init,      /* tp_init */
+};
+
+/*===================================================================
+ * VcfConverter
+ *===================================================================
+ */
+
+static int
+VcfConverter_check_state(VcfConverter *self)
+{
+    int ret = 0;
+    if (self->vcf_converter == NULL) {
+        PyErr_SetString(PyExc_SystemError, "converter not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+VcfConverter_dealloc(VcfConverter* self)
+{
+    if (self->vcf_converter != NULL) {
+        vcf_converter_free(self->vcf_converter);
+        PyMem_Free(self->vcf_converter);
+        self->vcf_converter = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+VcfConverter_init(VcfConverter *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", "ploidy", NULL};
+    unsigned int ploidy = 1;
+    TreeSequence *tree_sequence;
+
+    self->vcf_converter = NULL;
+    self->tree_sequence = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|I", kwlist,
+            &TreeSequenceType, &tree_sequence, &ploidy)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    if (ploidy < 1) {
+        PyErr_SetString(PyExc_ValueError, "Ploidy must be >= 1");
+        goto out;
+    }
+    self->vcf_converter = PyMem_Malloc(sizeof(vcf_converter_t));
+    if (self->vcf_converter == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = vcf_converter_alloc(self->vcf_converter,
+            self->tree_sequence->tree_sequence, ploidy);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+VcfConverter_next(VcfConverter  *self)
+{
+    PyObject *ret = NULL;
+    char *record;
+    int err;
+
+    if (VcfConverter_check_state(self) != 0) {
+        goto out;
+    }
+    err = vcf_converter_next(self->vcf_converter, &record);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (err == 1) {
+        ret = Py_BuildValue("s", record);
+    }
+out:
+    return ret;
+}
+
+static PyObject *
+VcfConverter_get_header(VcfConverter *self)
+{
+    PyObject *ret = NULL;
+    int err;
+    char *header;
+
+    if (VcfConverter_check_state(self) != 0) {
+        goto out;
+    }
+    err = vcf_converter_get_header(self->vcf_converter, &header);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("s", header);
+out:
+    return ret;
+}
+
+static PyMemberDef VcfConverter_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef VcfConverter_methods[] = {
+    {"get_header", (PyCFunction) VcfConverter_get_header, METH_NOARGS,
+            "Returns the VCF header as plain text." },
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject VcfConverterType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.VcfConverter",             /* tp_name */
+    sizeof(VcfConverter),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)VcfConverter_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "VcfConverter objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) VcfConverter_next, /* tp_iternext */
+    VcfConverter_methods,             /* tp_methods */
+    VcfConverter_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)VcfConverter_init,      /* tp_init */
+};
+
+/*===================================================================
+ * HaplotypeGenerator
+ *===================================================================
+ */
+
+static int
+HaplotypeGenerator_check_state(HaplotypeGenerator *self)
+{
+    int ret = 0;
+    if (self->haplotype_generator == NULL) {
+        PyErr_SetString(PyExc_SystemError, "converter not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+HaplotypeGenerator_dealloc(HaplotypeGenerator* self)
+{
+    if (self->haplotype_generator != NULL) {
+        hapgen_free(self->haplotype_generator);
+        PyMem_Free(self->haplotype_generator);
+        self->haplotype_generator = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", NULL};
+    TreeSequence *tree_sequence;
+
+    self->haplotype_generator = NULL;
+    self->tree_sequence = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    self->haplotype_generator = PyMem_Malloc(sizeof(hapgen_t));
+    if (self->haplotype_generator == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->haplotype_generator, 0, sizeof(hapgen_t));
+    err = hapgen_alloc(self->haplotype_generator,
+            self->tree_sequence->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+HaplotypeGenerator_get_haplotype(HaplotypeGenerator *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    char *haplotype;
+    unsigned int sample_id;
+
+    if (HaplotypeGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &sample_id)) {
+        goto out;
+    }
+    err = hapgen_get_haplotype(self->haplotype_generator,
+            (uint32_t) sample_id, &haplotype);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("s", haplotype);
+out:
+    return ret;
+}
+
+static PyMemberDef HaplotypeGenerator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef HaplotypeGenerator_methods[] = {
+    {"get_haplotype", (PyCFunction) HaplotypeGenerator_get_haplotype,
+        METH_VARARGS, "Returns the haplotype for the specified sample"},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject HaplotypeGeneratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.HaplotypeGenerator",             /* tp_name */
+    sizeof(HaplotypeGenerator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)HaplotypeGenerator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "HaplotypeGenerator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    HaplotypeGenerator_methods,             /* tp_methods */
+    HaplotypeGenerator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)HaplotypeGenerator_init,      /* tp_init */
+};
+
+
+/*===================================================================
+ * VariantGenerator
+ *===================================================================
+ */
+
+static int
+VariantGenerator_check_state(VariantGenerator *self)
+{
+    int ret = 0;
+    if (self->variant_generator == NULL) {
+        PyErr_SetString(PyExc_SystemError, "converter not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+VariantGenerator_dealloc(VariantGenerator* self)
+{
+    if (self->variant_generator != NULL) {
+        vargen_free(self->variant_generator);
+        PyMem_Free(self->variant_generator);
+        self->variant_generator = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_XDECREF(self->genotypes_buffer);
+    if (self->buffer_acquired) {
+        PyBuffer_Release(&self->buffer);
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", "as_char", NULL};
+    TreeSequence *tree_sequence = NULL;
+    PyObject *genotypes_buffer = NULL;
+    int as_char = 0;
+    int flags = 0;
+    size_t sample_size;
+
+    self->variant_generator = NULL;
+    self->tree_sequence = NULL;
+    self->genotypes_buffer = NULL;
+    self->buffer_acquired = 0;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O|i", kwlist,
+            &TreeSequenceType, &tree_sequence, &genotypes_buffer,
+            &as_char)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    self->genotypes_buffer = genotypes_buffer;
+    Py_INCREF(self->genotypes_buffer);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    sample_size = tree_sequence_get_sample_size(
+            self->tree_sequence->tree_sequence);
+    if (!PyObject_CheckBuffer(genotypes_buffer)) {
+        PyErr_SetString(PyExc_TypeError,
+            "genotypes buffer must support the Python buffer protocol.");
+        goto out;
+    }
+    if (PyObject_GetBuffer(genotypes_buffer, &self->buffer,
+                PyBUF_SIMPLE|PyBUF_WRITABLE) != 0) {
+        goto out;
+    }
+    self->buffer_acquired = 1;
+    if (sample_size * sizeof(uint8_t) > self->buffer.len) {
+        PyErr_SetString(PyExc_BufferError, "genotypes buffer is too small");
+        goto out;
+    }
+    self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
+    if (self->variant_generator == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    flags = as_char? MSP_GENOTYPES_AS_CHAR: 0;
+    err = vargen_alloc(self->variant_generator,
+            self->tree_sequence->tree_sequence, flags);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+VariantGenerator_next(VariantGenerator *self)
+{
+    PyObject *ret = NULL;
+    mutation_t *mutation;
+    int err;
+    char *genotypes = (char *) self->buffer.buf;
+
+    if (VariantGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    err = vargen_next(self->variant_generator, &mutation, genotypes);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (err == 1) {
+        ret = convert_mutation(mutation);
+    }
+out:
+    return ret;
+}
+
+static PyMemberDef VariantGenerator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef VariantGenerator_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject VariantGeneratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.VariantGenerator",             /* tp_name */
+    sizeof(VariantGenerator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)VariantGenerator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "VariantGenerator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    PyObject_SelfIter,                    /* tp_iter */
+    (iternextfunc) VariantGenerator_next, /* tp_iternext */
+    VariantGenerator_methods,             /* tp_methods */
+    VariantGenerator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)VariantGenerator_init,      /* tp_init */
+};
+
+/*===================================================================
+ * LdCalculator
+ *===================================================================
+ */
+
+static int
+LdCalculator_check_state(LdCalculator *self)
+{
+    int ret = 0;
+    if (self->ld_calc == NULL) {
+        PyErr_SetString(PyExc_SystemError, "converter not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+LdCalculator_dealloc(LdCalculator* self)
+{
+    if (self->ld_calc != NULL) {
+        ld_calc_free(self->ld_calc);
+        PyMem_Free(self->ld_calc);
+        self->ld_calc = NULL;
+    }
+    Py_XDECREF(self->tree_sequence);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+LdCalculator_init(LdCalculator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"tree_sequence", NULL};
+    TreeSequence *tree_sequence;
+
+    self->ld_calc = NULL;
+    self->tree_sequence = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
+        goto out;
+    }
+    self->tree_sequence = tree_sequence;
+    Py_INCREF(self->tree_sequence);
+    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
+        goto out;
+    }
+    self->ld_calc = PyMem_Malloc(sizeof(ld_calc_t));
+    if (self->ld_calc == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    memset(self->ld_calc, 0, sizeof(ld_calc_t));
+    err = ld_calc_alloc(self->ld_calc, self->tree_sequence->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+LdCalculator_get_r2(LdCalculator *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t a, b;
+    double r2;
+
+    if (LdCalculator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "nn", &a, &b)) {
+        goto out;
+    }
+    Py_BEGIN_ALLOW_THREADS
+    err = ld_calc_get_r2(self->ld_calc, (size_t) a, (size_t) b, &r2);
+    Py_END_ALLOW_THREADS
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("d", r2);
+out:
+    return ret;
+}
+
+static PyObject *
+LdCalculator_get_r2_array(LdCalculator *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    static char *kwlist[] = {
+        "dest", "source_index", "direction", "max_mutations",
+        "max_distance", NULL};
+    PyObject *dest = NULL;
+    Py_buffer buffer;
+    Py_ssize_t source_index;
+    Py_ssize_t max_mutations = -1;
+    double max_distance = DBL_MAX;
+    int direction = MSP_DIR_FORWARD;
+    size_t num_r2_values = 0;
+    int buffer_acquired = 0;
+
+    if (LdCalculator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "On|ind", kwlist,
+            &dest, &source_index, &direction, &max_mutations, &max_distance)) {
+        goto out;
+    }
+    if (direction != MSP_DIR_FORWARD && direction != MSP_DIR_REVERSE) {
+        PyErr_SetString(PyExc_ValueError,
+            "direction must be FORWARD or REVERSE");
+        goto out;
+    }
+    if (max_distance < 0) {
+        PyErr_SetString(PyExc_ValueError, "max_distance must be >= 0");
+        goto out;
+    }
+    if (!PyObject_CheckBuffer(dest)) {
+        PyErr_SetString(PyExc_TypeError,
+            "dest buffer must support the Python buffer protocol.");
+        goto out;
+    }
+    if (PyObject_GetBuffer(dest, &buffer, PyBUF_SIMPLE|PyBUF_WRITABLE) != 0) {
+        goto out;
+    }
+    buffer_acquired = 1;
+    if (max_mutations == -1) {
+        max_mutations = buffer.len / sizeof(double);
+    } else if (max_mutations * sizeof(double) > buffer.len) {
+        PyErr_SetString(PyExc_BufferError,
+            "dest buffer is too small for the results");
+        goto out;
+    }
+
+    Py_BEGIN_ALLOW_THREADS
+    err = ld_calc_get_r2_array(
+        self->ld_calc, (size_t) source_index, direction,
+        (size_t) max_mutations, max_distance,
+        (double *) buffer.buf, &num_r2_values);
+    Py_END_ALLOW_THREADS
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) num_r2_values);
+out:
+    if (buffer_acquired) {
+        PyBuffer_Release(&buffer);
+    }
+    return ret;
+}
+
+static PyMemberDef LdCalculator_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef LdCalculator_methods[] = {
+    {"get_r2", (PyCFunction) LdCalculator_get_r2, METH_VARARGS,
+        "Returns the value of the r2 statistic between the specified pair of "
+        "mutation indexes"},
+    {"get_r2_array", (PyCFunction) LdCalculator_get_r2_array,
+        METH_VARARGS|METH_KEYWORDS,
+        "Returns r2 statistic for a given mutation over specified range"},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject LdCalculatorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.LdCalculator",             /* tp_name */
+    sizeof(LdCalculator),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)LdCalculator_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "LdCalculator objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    LdCalculator_methods,             /* tp_methods */
+    LdCalculator_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)LdCalculator_init,      /* tp_init */
 };
 
 
@@ -1926,6 +4961,59 @@ out:
 }
 
 static PyObject *
+Simulator_populate_tree_sequence(Simulator *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    TreeSequence *tree_sequence = NULL;
+    MutationGenerator *mutation_generator = NULL;
+    RecombinationMap *recombination_map = NULL;
+    mutgen_t *mutgen = NULL;
+    recomb_map_t *recomb_map = NULL;
+    double Ne = 0.25; /* default to 1/4 for coalescent time units. */
+    static char *kwlist[] = {"tree_sequence", "recombination_map", "mutation_generator",
+        "Ne", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!O!d", kwlist,
+            &TreeSequenceType, &tree_sequence,
+            &RecombinationMapType, &recombination_map,
+            &MutationGeneratorType, &mutation_generator, &Ne)){
+        goto out;
+    }
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!msp_is_completed(self->sim)) {
+        PyErr_SetString(PyExc_ValueError, "Simulation not completed");
+        goto out;
+    }
+    if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
+        goto out;
+    }
+    if (mutation_generator != NULL) {
+        if (MutationGenerator_check_state(mutation_generator) != 0) {
+            goto out;
+        }
+        mutgen = mutation_generator->mutgen;
+    }
+    if (recombination_map != NULL) {
+        if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
+            goto out;
+        }
+        recomb_map = recombination_map->recomb_map;
+    }
+    err = msp_populate_tree_sequence(self->sim, recomb_map, mutgen, Ne,
+            0, NULL, tree_sequence->tree_sequence);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_reset(Simulator *self)
 {
     PyObject *ret = NULL;
@@ -2064,9 +5152,13 @@ static PyMethodDef Simulator_methods[] = {
             if sample has coalesced and False otherwise." },
     {"reset", (PyCFunction) Simulator_reset, METH_NOARGS,
             "Resets the simulation so it's ready for another replicate."},
+    {"populate_tree_sequence",
+        (PyCFunction) Simulator_populate_tree_sequence, METH_VARARGS|METH_KEYWORDS,
+        "Updates the specified tree sequence instance to reflect the state of "
+        "this simulator"},
     {"run_event", (PyCFunction) Simulator_run_event, METH_NOARGS,
-            "Simulates exactly one event. Returns True\
-            if sample has coalesced and False otherwise." },
+            "Simulates exactly one event. Returns True "
+            "if sample has coalesced and False otherwise." },
     {"debug_demography", (PyCFunction) Simulator_debug_demography, METH_NOARGS,
             "Runs the state of the simulator forward for one demographic event."},
     {NULL}  /* Sentinel */
@@ -2110,2947 +5202,6 @@ static PyTypeObject SimulatorType = {
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
     (initproc)Simulator_init,      /* tp_init */
-};
-
-/*===================================================================
- * RecombinationMap
- *===================================================================
- */
-
-static int
-RecombinationMap_check_recomb_map(RecombinationMap *self)
-{
-    int ret = 0;
-    if (self->recomb_map == NULL) {
-        PyErr_SetString(PyExc_ValueError, "recomb_map not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-RecombinationMap_dealloc(RecombinationMap* self)
-{
-    if (self->recomb_map != NULL) {
-        recomb_map_free(self->recomb_map);
-        PyMem_Free(self->recomb_map);
-        self->recomb_map = NULL;
-    }
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"num_loci", "positions", "rates", NULL};
-    Py_ssize_t size, j;
-    PyObject *py_positions = NULL;
-    PyObject *py_rates = NULL;
-    double *positions = NULL;
-    double *rates = NULL;
-    unsigned int num_loci = 0;
-    PyObject *item;
-
-    self->recomb_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "IO!O!", kwlist,
-            &num_loci, &PyList_Type, &py_positions, &PyList_Type,
-            &py_rates)) {
-        goto out;
-    }
-    if (PyList_Size(py_positions) != PyList_Size(py_rates)) {
-        PyErr_SetString(PyExc_ValueError,
-            "positions and rates list must be the same length");
-        goto out;
-    }
-    size = PyList_Size(py_positions);
-    positions = PyMem_Malloc(size * sizeof(double));
-    rates = PyMem_Malloc(size * sizeof(double));
-    if (positions == NULL || rates == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    for (j = 0; j < size; j++) {
-        item = PyList_GetItem(py_positions, j);
-        if (!PyNumber_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "position must be a number");
-            goto out;
-        }
-        positions[j] = PyFloat_AsDouble(item);
-        item = PyList_GetItem(py_rates, j);
-        if (!PyNumber_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "rates must be a number");
-            goto out;
-        }
-        rates[j] = PyFloat_AsDouble(item);
-    }
-    self->recomb_map = PyMem_Malloc(sizeof(recomb_map_t));
-    if (self->recomb_map == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = recomb_map_alloc(self->recomb_map, (uint32_t) num_loci,
-            positions[size - 1], positions, rates, size);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    if (positions != NULL) {
-        PyMem_Free(positions);
-    }
-    if (rates != NULL) {
-        PyMem_Free(rates);
-    }
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_genetic_to_physical(RecombinationMap *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    double genetic_x, physical_x;
-    uint32_t num_loci;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    num_loci = recomb_map_get_num_loci(self->recomb_map);
-    if (!PyArg_ParseTuple(args, "d", &genetic_x)) {
-        goto out;
-    }
-    if (genetic_x < 0 || genetic_x > num_loci) {
-        PyErr_SetString(PyExc_ValueError,
-                "coordinates must be 0 <= x <= num_loci");
-        goto out;
-    }
-    physical_x = recomb_map_genetic_to_phys(self->recomb_map, genetic_x);
-    ret = Py_BuildValue("d", physical_x);
-out:
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_physical_to_genetic(RecombinationMap *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    double genetic_x, physical_x, sequence_length;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    sequence_length = recomb_map_get_sequence_length(self->recomb_map);
-    if (!PyArg_ParseTuple(args, "d", &physical_x)) {
-        goto out;
-    }
-    if (physical_x < 0 || physical_x > sequence_length) {
-        PyErr_SetString(PyExc_ValueError,
-            "coordinates must be 0 <= x <= sequence_length");
-        goto out;
-    }
-    genetic_x = recomb_map_phys_to_genetic(self->recomb_map, physical_x);
-    ret = Py_BuildValue("d", genetic_x);
-out:
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_get_per_locus_recombination_rate(RecombinationMap *self)
-{
-    PyObject *ret = NULL;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d",
-        recomb_map_get_per_locus_recombination_rate(self->recomb_map));
-out:
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_get_total_recombination_rate(RecombinationMap *self)
-{
-    PyObject *ret = NULL;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d",
-        recomb_map_get_total_recombination_rate(self->recomb_map));
-out:
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_get_num_loci(RecombinationMap *self)
-{
-    PyObject *ret = NULL;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) recomb_map_get_num_loci(self->recomb_map));
-out:
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_get_size(RecombinationMap *self)
-{
-    PyObject *ret = NULL;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) recomb_map_get_size(self->recomb_map));
-out:
-    return ret;
-}
-
-
-static PyObject *
-RecombinationMap_get_positions(RecombinationMap *self)
-{
-    PyObject *ret = NULL;
-    double *positions = NULL;
-    size_t size;
-    int err;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    size = recomb_map_get_size(self->recomb_map);
-    positions = PyMem_Malloc(size * sizeof(double));
-    if (positions == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = recomb_map_get_positions(self->recomb_map, positions);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = convert_float_list(positions, size);
-out:
-    if (positions != NULL) {
-        PyMem_Free(positions);
-    }
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_get_rates(RecombinationMap *self)
-{
-    PyObject *ret = NULL;
-    double *rates = NULL;
-    size_t size;
-    int err;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    size = recomb_map_get_size(self->recomb_map);
-    rates = PyMem_Malloc(size * sizeof(double));
-    if (rates == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = recomb_map_get_rates(self->recomb_map, rates);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = convert_float_list(rates, size);
-out:
-    if (rates != NULL) {
-        PyMem_Free(rates);
-    }
-    return ret;
-}
-
-static PyMemberDef RecombinationMap_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef RecombinationMap_methods[] = {
-    {"genetic_to_physical", (PyCFunction) RecombinationMap_genetic_to_physical,
-        METH_VARARGS, "Converts the specified value into physical coordinates."},
-    {"physical_to_genetic", (PyCFunction) RecombinationMap_physical_to_genetic,
-        METH_VARARGS, "Converts the specified value into genetic coordinates."},
-    {"get_total_recombination_rate",
-        (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS,
-        "Returns the total product of physical distance times recombination rate"},
-    {"get_per_locus_recombination_rate",
-        (PyCFunction) RecombinationMap_get_per_locus_recombination_rate,
-        METH_NOARGS,
-        "Returns the recombination rate between loci implied by this map"},
-    {"get_num_loci", (PyCFunction) RecombinationMap_get_num_loci, METH_NOARGS,
-        "Returns the number discrete loci in the genetic map."},
-    {"get_size", (PyCFunction) RecombinationMap_get_size, METH_NOARGS,
-        "Returns the number of physical  positions in this map."},
-    {"get_positions",
-        (PyCFunction) RecombinationMap_get_positions, METH_NOARGS,
-        "Returns the positions in this recombination map."},
-    {"get_rates",
-        (PyCFunction) RecombinationMap_get_rates, METH_NOARGS,
-        "Returns the rates in this recombination map."},
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject RecombinationMapType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.RecombinationMap",             /* tp_name */
-    sizeof(RecombinationMap),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)RecombinationMap_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "RecombinationMap objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    0,                     /* tp_iter */
-    0,                     /* tp_iternext */
-    RecombinationMap_methods,             /* tp_methods */
-    RecombinationMap_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)RecombinationMap_init,      /* tp_init */
-};
-
-/*===================================================================
- * TreeSequence
- *===================================================================
- */
-
-static int
-TreeSequence_check_tree_sequence(TreeSequence *self)
-{
-    int ret = 0;
-    if (self->tree_sequence == NULL) {
-        PyErr_SetString(PyExc_ValueError, "tree_sequence not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-TreeSequence_dealloc(TreeSequence* self)
-{
-    if (self->tree_sequence != NULL) {
-        tree_sequence_free(self->tree_sequence);
-        PyMem_Free(self->tree_sequence);
-        self->tree_sequence = NULL;
-    }
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
-{
-    self->tree_sequence = NULL;
-    return 0;
-}
-
-static PyObject *
-TreeSequence_create(TreeSequence *self, PyObject *args)
-{
-    int err;
-    PyObject *ret = NULL;
-    Simulator *sim = NULL;
-    RecombinationMap *recomb_map = NULL;
-    double Ne = 0.25; /* default to 1/4 for coalescent time units. */
-
-    if (self->tree_sequence != NULL) {
-        PyErr_SetString(PyExc_ValueError, "tree_sequence already created");
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "O!O!|d",
-                &SimulatorType, &sim,
-                &RecombinationMapType, &recomb_map, &Ne)) {
-        goto out;
-    }
-    if (Simulator_check_sim(sim) != 0) {
-        goto out;
-    }
-    if (!msp_is_completed(sim->sim)) {
-        PyErr_SetString(PyExc_ValueError, "Simulation not completed");
-        goto out;
-    }
-    if (RecombinationMap_check_recomb_map(recomb_map) != 0) {
-        goto out;
-    }
-    self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
-    if (self->tree_sequence == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
-    err = tree_sequence_create(self->tree_sequence, sim->sim,
-            recomb_map->recomb_map, Ne);
-    if (err != 0) {
-        PyMem_Free(self->tree_sequence);
-        self->tree_sequence = NULL;
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
-{
-    int err;
-    char *path;
-    PyObject *ret = NULL;
-    int zlib_compression = 0;
-    int flags = 0;
-    static char *kwlist[] = {"path", "zlib_compression", NULL};
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
-                &path, &zlib_compression)) {
-        goto out;
-    }
-    if (zlib_compression) {
-        flags = MSP_ZLIB_COMPRESSION;
-    }
-    /* Silence the low-level error reporting HDF5 */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
-        goto out;
-    }
-    err = tree_sequence_dump(self->tree_sequence, path, flags);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
-{
-    int err;
-    PyObject *ret = NULL;
-    PyObject *py_records = NULL;
-    PyObject *py_samples = NULL;
-    PyObject *item;
-    coalescence_record_t *records = NULL;
-    sample_t *samples = NULL;
-    Py_ssize_t sample_size;
-    size_t num_records, j;
-    static char *kwlist[] = {"records", "samples", NULL};
-
-    if (self->tree_sequence != NULL) {
-        PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
-                &PyList_Type, &py_records, &PyList_Type, &py_samples)) {
-        goto out;
-    }
-    self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
-    if (self->tree_sequence == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
-    num_records = PyList_Size(py_records);
-    records = PyMem_Malloc(num_records * sizeof(coalescence_record_t));
-    if (records == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(records, 0, num_records * sizeof(coalescence_record_t));
-    for (j = 0; j < num_records; j++) {
-        item = PyList_GetItem(py_records, j);
-        if (parse_coalescence_record(item, &records[j]) != 0) {
-            goto out;
-        }
-    }
-    err = tree_sequence_load_records(
-            self->tree_sequence, num_records, records);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    if (py_samples != NULL) {
-        if (parse_samples(py_samples, &sample_size, &samples) != 0) {
-            goto out;
-        }
-        err = tree_sequence_set_samples(
-                self->tree_sequence, sample_size, samples);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-    ret = Py_BuildValue("");
-out:
-    if (records != NULL) {
-        for (j = 0; j < num_records; j++) {
-            if (records[j].children != NULL) {
-                PyMem_Free(records[j].children);
-            }
-        }
-        PyMem_Free(records);
-    }
-    if (samples != NULL) {
-        PyMem_Free(samples);
-    }
-    if (ret == NULL && self->tree_sequence != NULL) {
-        /* Ensure that the state of the tree sequence is consistent */
-        tree_sequence_free(self->tree_sequence);
-        PyMem_Free(self->tree_sequence);
-        self->tree_sequence = NULL;
-    }
-    return ret;
-}
-
-static PyObject *
-TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
-{
-    int err;
-    char *path;
-    int flags = 0;
-    PyObject *ret = NULL;
-    static char *kwlist[] = {"path", NULL};
-
-    if (self->tree_sequence != NULL) {
-        PyErr_SetString(PyExc_ValueError, "TreeSequence already initialised");
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
-                &path)) {
-        goto out;
-    }
-    self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
-    if (self->tree_sequence == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(self->tree_sequence, 0, sizeof(tree_sequence_t));
-    /* Silence the low-level error reporting HDF5 */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
-        goto out;
-    }
-    err = tree_sequence_load(self->tree_sequence, path, flags);
-    if (err != 0) {
-        PyMem_Free(self->tree_sequence);
-        self->tree_sequence = NULL;
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_generate_mutations(TreeSequence *self,
-        PyObject *args, PyObject *kwds)
-{
-    int err;
-    PyObject *ret = NULL;
-    static char *kwlist[] = {"mutation_rate", "random_generator", NULL};
-    mutgen_t *mutgen = NULL;
-    double mutation_rate;
-    RandomGenerator *random_generator = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dO!", kwlist,
-            &mutation_rate, &RandomGeneratorType, &random_generator)) {
-        goto out;
-    }
-    if (RandomGenerator_check_state(random_generator) != 0) {
-        goto out;
-    }
-    mutgen = PyMem_Malloc(sizeof(mutgen_t));
-    if (mutgen == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = mutgen_alloc(mutgen, self->tree_sequence, mutation_rate,
-            random_generator->rng);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    err = mutgen_generate(mutgen);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    err = tree_sequence_set_mutations(self->tree_sequence, mutgen->num_mutations,
-            mutgen->mutations);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    if (mutgen != NULL) {
-        mutgen_free(mutgen);
-        PyMem_Free(mutgen);
-    }
-    return ret;
-}
-
-static PyObject *
-TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
-{
-    int err;
-    size_t j;
-    PyObject *ret = NULL;
-    PyObject *item, *node, *pos;
-    PyObject *py_mutation_list = NULL;
-    static char *kwlist[] = {"mutations", NULL};
-    size_t num_mutations = 0;
-    mutation_t *mutations = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &PyList_Type, &py_mutation_list)) {
-        goto out;
-    }
-    num_mutations = PyList_Size(py_mutation_list);
-    mutations = PyMem_Malloc(num_mutations * sizeof(mutation_t));
-    for (j = 0; j < num_mutations; j++) {
-        item = PyList_GetItem(py_mutation_list, j);
-        if (!PyTuple_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "not a tuple");
-            goto out;
-        }
-        if (PyTuple_Size(item) < 2) {
-            PyErr_SetString(PyExc_ValueError,
-                    "mutations must (node, pos, ...) tuples");
-            goto out;
-        }
-        pos = PyTuple_GetItem(item, 0);
-        node = PyTuple_GetItem(item, 1);
-        if (!PyNumber_Check(pos)) {
-            PyErr_SetString(PyExc_TypeError, "position must be a number");
-            goto out;
-        }
-        if (!PyNumber_Check(node)) {
-            PyErr_SetString(PyExc_TypeError, "node must be a number");
-            goto out;
-        }
-        mutations[j].position = PyFloat_AsDouble(pos);
-        mutations[j].node = (uint32_t) PyLong_AsLong(node);
-    }
-    err = tree_sequence_set_mutations(self->tree_sequence, num_mutations,
-            mutations);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    if (mutations != NULL) {
-        PyMem_Free(mutations);
-    }
-    return ret;
-}
-
-static PyObject *
-TreeSequence_add_provenance_string(TreeSequence *self, PyObject *args)
-{
-    int err;
-    char *s;
-    PyObject *ret = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "s", &s)) {
-        goto out;
-    }
-    if (strlen(s) == 0) {
-        PyErr_SetString(PyExc_ValueError,
-                "Empty string is not permitted for provenance.");
-        goto out;
-    }
-    err = tree_sequence_add_provenance_string(self->tree_sequence, s);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_provenance_strings(TreeSequence *self)
-{
-    int err;
-    PyObject *ret = NULL;
-    size_t num_provenance_strings;
-    char **provenance_strings;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    err = tree_sequence_get_provenance_strings(self->tree_sequence,
-            &num_provenance_strings, &provenance_strings);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = convert_string_list(provenance_strings, num_provenance_strings);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_record(TreeSequence *self, PyObject *args)
-{
-    int err;
-    PyObject *ret = NULL;
-    int order = MSP_ORDER_TIME;
-    Py_ssize_t record_index, num_records;
-    coalescence_record_t cr;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "n|i", &record_index, &order)) {
-        goto out;
-    }
-    num_records = (Py_ssize_t) tree_sequence_get_num_coalescence_records(
-        self->tree_sequence);
-    if (record_index < 0 || record_index >= num_records) {
-        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
-        goto out;
-    }
-    err = tree_sequence_get_coalescence_record(self->tree_sequence,
-            (size_t) record_index, &cr, order);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = make_coalescence_record(&cr);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_migration_record(TreeSequence *self, PyObject *args)
-{
-    int err;
-    PyObject *ret = NULL;
-    Py_ssize_t record_index, num_records;
-    migration_record_t mr;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "n", &record_index)) {
-        goto out;
-    }
-    num_records = (Py_ssize_t) tree_sequence_get_num_migration_records(
-        self->tree_sequence);
-    if (record_index < 0 || record_index >= num_records) {
-        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
-        goto out;
-    }
-    err = tree_sequence_get_migration_record(self->tree_sequence,
-            (size_t) record_index, &mr);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = make_migration_record(&mr);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_mutations(TreeSequence *self)
-{
-    PyObject *ret = NULL;
-    mutation_t *mutations;
-    size_t num_mutations;
-    int err;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
-    err = tree_sequence_get_mutations(self->tree_sequence, &mutations);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = convert_mutations(mutations, num_mutations);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    size_t num_records;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    num_records = tree_sequence_get_num_coalescence_records(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) num_records);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_num_migration_records(TreeSequence *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    size_t num_records;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    num_records = tree_sequence_get_num_migration_records(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) num_records);
-out:
-    return ret;
-}
-
-
-
-static PyObject *
-TreeSequence_get_num_trees(TreeSequence *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    size_t num_trees;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    num_trees = tree_sequence_get_num_trees(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) num_trees);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_sequence_length(TreeSequence  *self)
-{
-    PyObject *ret = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d",
-        tree_sequence_get_sequence_length(self->tree_sequence));
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_sample_size(TreeSequence  *self)
-{
-    PyObject *ret = NULL;
-    size_t sample_size;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    sample_size = tree_sequence_get_sample_size(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) sample_size);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_num_nodes(TreeSequence  *self)
-{
-    PyObject *ret = NULL;
-    size_t num_nodes;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    num_nodes = tree_sequence_get_num_nodes(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) num_nodes);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_sample(TreeSequence *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    unsigned int node;
-    sample_t sample;
-    int population, err;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    err = tree_sequence_get_sample(self->tree_sequence, node, &sample);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    population = sample.population_id;
-    if (sample.population_id == MSP_NULL_POPULATION_ID) {
-        population = -1;
-    }
-    ret = Py_BuildValue("id", population, sample.time);
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args,
-        PyObject *kwds)
-{
-    PyObject *ret = NULL;
-    PyObject *py_samples = NULL;
-    static char *kwlist[] = {"samples", NULL};
-    uint32_t *samples = NULL;
-    size_t num_samples = 0;
-    double pi;
-    int err;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &PyList_Type, &py_samples)) {
-        goto out;
-    }
-    if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
-        goto out;
-    }
-    err = tree_sequence_get_pairwise_diversity(
-        self->tree_sequence, samples, (uint32_t) num_samples, &pi);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("d", pi);
-out:
-    if (samples != NULL) {
-        PyMem_Free(samples);
-    }
-
-    return ret;
-}
-
-/* Forward declaration */
-static PyObject * build_TreeSequence(tree_sequence_t *ts);
-static PyObject *
-TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
-{
-    PyObject *ret = NULL;
-    PyObject *py_samples = NULL;
-    static char *kwlist[] = {"samples", "filter_root_mutations", NULL};
-    uint32_t *samples = NULL;
-    size_t num_samples = 0;
-    tree_sequence_t *subset_ts = NULL;
-    int filter_root_mutations = 1;
-    int flags = 0;
-    int err;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
-            &PyList_Type, &py_samples, &filter_root_mutations)) {
-        goto out;
-    }
-    if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
-        goto out;
-    }
-    if (filter_root_mutations) {
-        flags |= MSP_FILTER_ROOT_MUTATIONS;
-    }
-    subset_ts = PyMem_Malloc(sizeof(tree_sequence_t));
-    if (subset_ts == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(subset_ts, 0, sizeof(tree_sequence_t));
-    err = tree_sequence_simplify(
-        self->tree_sequence, samples, (uint32_t) num_samples, flags, subset_ts);
-    if (err != 0) {
-        /* We must free the memory for subset_ts, but not call tree_sequence_free
-         * as it has already been called. */
-        PyMem_Free(subset_ts);
-        subset_ts = NULL;
-        handle_library_error(err);
-        goto out;
-    }
-    ret = build_TreeSequence(subset_ts);
-    if (ret != NULL) {
-        /* the new TreeSequence object now has ownership of the tree
-         * sequence so we must not free it */
-        subset_ts = NULL;
-    }
-out:
-    if (samples != NULL) {
-        PyMem_Free(samples);
-    }
-    if (subset_ts != NULL) {
-        tree_sequence_free(subset_ts);
-        PyMem_Free(subset_ts);
-    }
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_num_mutations(TreeSequence  *self)
-{
-    PyObject *ret = NULL;
-    size_t num_mutations;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) num_mutations);
-out:
-    return ret;
-}
-
-static PyMemberDef TreeSequence_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef TreeSequence_methods[] = {
-    {"create", (PyCFunction) TreeSequence_create, METH_VARARGS,
-        "Creates a new TreeSequence from the specified simulator."},
-    {"dump", (PyCFunction) TreeSequence_dump,
-        METH_VARARGS|METH_KEYWORDS,
-        "Writes the tree sequence out to the specified path."},
-    {"load", (PyCFunction) TreeSequence_load,
-        METH_VARARGS|METH_KEYWORDS,
-        "Loads a tree sequence from the specified path."},
-    {"load_records", (PyCFunction) TreeSequence_load_records,
-        METH_VARARGS|METH_KEYWORDS,
-        "Loads a tree sequence from the specified set of records"},
-    {"generate_mutations", (PyCFunction) TreeSequence_generate_mutations,
-        METH_VARARGS|METH_KEYWORDS,
-        "Generates mutations under the infinite sites model"},
-    {"set_mutations", (PyCFunction) TreeSequence_set_mutations,
-        METH_VARARGS|METH_KEYWORDS,
-        "Sets the mutations to the specified list of tuples."},
-    {"add_provenance_string", (PyCFunction) TreeSequence_add_provenance_string,
-        METH_VARARGS, "Appends a provenance string to the list."},
-    {"get_provenance_strings", (PyCFunction) TreeSequence_get_provenance_strings,
-        METH_NOARGS, "Returns the list of provenance strings."},
-    {"get_mutations", (PyCFunction) TreeSequence_get_mutations,
-        METH_NOARGS, "Returns the list of mutations"},
-    {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
-        "Returns the record at the specified index."},
-    {"get_migration_record",
-        (PyCFunction) TreeSequence_get_migration_record, METH_VARARGS,
-        "Returns the migration record at the specified index."},
-    {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
-        METH_NOARGS, "Returns the number of coalescence records." },
-    {"get_num_migration_records", (PyCFunction) TreeSequence_get_num_migration_records,
-        METH_NOARGS, "Returns the number of migration records." },
-    {"get_num_trees", (PyCFunction) TreeSequence_get_num_trees,
-        METH_NOARGS, "Returns the number of trees in the tree sequence." },
-    {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
-        METH_NOARGS, "Returns the sequence length in bases." },
-    {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
-        "Returns the number of mutations" },
-    {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
-        "Returns the number of unique nodes in the tree sequence." },
-    {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
-        "Returns the sample size" },
-    {"get_sample", (PyCFunction) TreeSequence_get_sample, METH_VARARGS,
-        "Returns a dictionary describing the specified sample." },
-    {"get_pairwise_diversity",
-        (PyCFunction) TreeSequence_get_pairwise_diversity,
-        METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
-    {"simplify", (PyCFunction) TreeSequence_simplify,
-        METH_VARARGS|METH_KEYWORDS,
-        "Returns a simplified version of this tree sequence."},
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject TreeSequenceType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.TreeSequence",             /* tp_name */
-    sizeof(TreeSequence),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)TreeSequence_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "TreeSequence objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    0,                     /* tp_iter */
-    0,                     /* tp_iternext */
-    TreeSequence_methods,             /* tp_methods */
-    TreeSequence_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)TreeSequence_init,      /* tp_init */
-};
-
-static PyObject *
-build_TreeSequence(tree_sequence_t *ts)
-{
-    PyObject *ret = NULL;
-    TreeSequence *new_ts = NULL;
-
-    new_ts = (TreeSequence *) PyObject_CallObject((PyObject *) &TreeSequenceType, NULL);
-    if (new_ts == NULL) {
-        goto out;
-    }
-    new_ts->tree_sequence = ts;
-    ret = (PyObject *) new_ts;
-out:
-    return ret;
-}
-
-/*===================================================================
- * SparseTree
- *===================================================================
- */
-
-static int
-SparseTree_check_sparse_tree(SparseTree *self)
-{
-    int ret = 0;
-    if (self->sparse_tree == NULL) {
-        PyErr_SetString(PyExc_RuntimeError, "sparse_tree not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static int
-SparseTree_check_bounds(SparseTree *self, unsigned int node)
-{
-    int ret = 0;
-    if (node >= self->sparse_tree->num_nodes) {
-        PyErr_SetString(PyExc_ValueError, "Node index out of bounds");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-SparseTree_dealloc(SparseTree* self)
-{
-    if (self->sparse_tree != NULL) {
-        sparse_tree_free(self->sparse_tree);
-        PyMem_Free(self->sparse_tree);
-        self->sparse_tree = NULL;
-    }
-    Py_XDECREF(self->tree_sequence);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"tree_sequence", "flags", "tracked_leaves",
-        NULL};
-    PyObject *py_tracked_leaves = NULL;
-    TreeSequence *tree_sequence = NULL;
-    uint32_t *tracked_leaves = NULL;
-    int flags = 0;
-    uint32_t j, n, num_tracked_leaves;
-    PyObject *item;
-
-    self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|iO!", kwlist,
-            &TreeSequenceType, &tree_sequence,
-            &flags, &PyList_Type, &py_tracked_leaves)) {
-        goto out;
-    }
-    self->tree_sequence = tree_sequence;
-    Py_INCREF(self->tree_sequence);
-    if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
-        goto out;
-    }
-    n = tree_sequence_get_sample_size(tree_sequence->tree_sequence);
-    num_tracked_leaves = 0;
-    if (py_tracked_leaves != NULL) {
-        if (!flags & MSP_LEAF_COUNTS) {
-            PyErr_SetString(PyExc_ValueError,
-                "Cannot specified tracked_leaves without count_leaves flag");
-            goto out;
-        }
-        num_tracked_leaves = PyList_Size(py_tracked_leaves);
-    }
-    tracked_leaves = PyMem_Malloc(num_tracked_leaves * sizeof(uint32_t));
-    if (tracked_leaves == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    for (j = 0; j < num_tracked_leaves; j++) {
-        item = PyList_GetItem(py_tracked_leaves, j);
-        if (!PyNumber_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "leaf must be a number");
-            goto out;
-        }
-        tracked_leaves[j] = (uint32_t) PyLong_AsLong(item);
-        if (tracked_leaves[j] >= n) {
-            PyErr_SetString(PyExc_ValueError, "leaves must be < sample_size");
-            goto out;
-        }
-    }
-    self->sparse_tree = PyMem_Malloc(sizeof(sparse_tree_t));
-    if (self->sparse_tree == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = sparse_tree_alloc(self->sparse_tree, tree_sequence->tree_sequence,
-           flags);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    if (flags & MSP_LEAF_COUNTS) {
-        err = sparse_tree_set_tracked_leaves(self->sparse_tree, num_tracked_leaves,
-                tracked_leaves);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-    ret = 0;
-out:
-    if (tracked_leaves != NULL) {
-        PyMem_Free(tracked_leaves);
-    }
-    return ret;
-}
-
-static PyObject *
-SparseTree_free(SparseTree *self)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    /* This method is need because we have dangling references to
-     * trees after a for loop and we can't run set_mutations.
-     */
-    sparse_tree_free(self->sparse_tree);
-    PyMem_Free(self->sparse_tree);
-    self->sparse_tree = NULL;
-    ret = Py_BuildValue("");
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_sample_size(SparseTree *self)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->sample_size);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_num_nodes(SparseTree *self)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->num_nodes);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_index(SparseTree *self)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->index);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_root(SparseTree *self)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("i", (int) self->sparse_tree->root);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_left(SparseTree *self)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d", self->sparse_tree->left);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_right(SparseTree *self)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d", self->sparse_tree->right);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_flags(SparseTree *self)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("i", self->sparse_tree->flags);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_parent(SparseTree *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    unsigned int node;
-    uint32_t parent;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
-        goto out;
-    }
-    parent = self->sparse_tree->parent[node];
-    ret = Py_BuildValue("i", (int) parent);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_population(SparseTree *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    unsigned int node;
-    int population;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
-        goto out;
-    }
-    population = self->sparse_tree->population[node];
-    if (population == MSP_NULL_POPULATION_ID) {
-        population = -1;
-    }
-    ret = Py_BuildValue("i", population);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_time(SparseTree *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    double time;
-    unsigned int node;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
-        goto out;
-    }
-    time = self->sparse_tree->time[node];
-    ret = Py_BuildValue("d", time);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_children(SparseTree *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    uint32_t *children, num_children;
-    unsigned int node;
-    int err;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
-        goto out;
-    }
-    err = sparse_tree_get_children(self->sparse_tree,
-            (uint32_t) node, &num_children, &children);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    if (num_children == 0) {
-        ret = Py_BuildValue("()");
-    } else {
-        ret = convert_children(children, num_children);
-    }
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_mrca(SparseTree *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    int err;
-    uint32_t mrca;
-    unsigned int u, v;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "II", &u, &v)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, u)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, v)) {
-        goto out;
-    }
-    err = sparse_tree_get_mrca(self->sparse_tree, (uint32_t) u,
-            (uint32_t) v, &mrca);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("i", (int) mrca);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_num_leaves(SparseTree *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    unsigned int node;
-    uint32_t num_leaves;
-    int err;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
-        goto out;
-    }
-    err = sparse_tree_get_num_leaves(self->sparse_tree, (uint32_t) node,
-            &num_leaves);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("I", (unsigned int) num_leaves);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_num_tracked_leaves(SparseTree *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    unsigned int node;
-    uint32_t num_tracked_leaves;
-    int err;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
-        goto out;
-    }
-    err = sparse_tree_get_num_tracked_leaves(self->sparse_tree, (uint32_t) node,
-            &num_tracked_leaves);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("I", (unsigned int) num_tracked_leaves);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_mutations(SparseTree *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    ret = convert_mutations(self->sparse_tree->mutations,
-            self->sparse_tree->num_mutations);
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTree_get_num_mutations(SparseTree  *self)
-{
-    PyObject *ret = NULL;
-
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->num_mutations);
-out:
-    return ret;
-}
-
-
-static PyMemberDef SparseTree_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef SparseTree_methods[] = {
-    {"free", (PyCFunction) SparseTree_free, METH_NOARGS,
-            "Frees the underlying tree object." },
-    {"get_num_nodes", (PyCFunction) SparseTree_get_num_nodes, METH_NOARGS,
-            "Returns the number of nodes in the sparse tree." },
-    {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
-            "Returns the sample size" },
-    {"get_index", (PyCFunction) SparseTree_get_index, METH_NOARGS,
-            "Returns the index this tree occupies within the tree sequence." },
-    {"get_root", (PyCFunction) SparseTree_get_root, METH_NOARGS,
-            "Returns the root of the tree." },
-    {"get_left", (PyCFunction) SparseTree_get_left, METH_NOARGS,
-            "Returns the left-most coordinate (inclusive)." },
-    {"get_right", (PyCFunction) SparseTree_get_right, METH_NOARGS,
-            "Returns the right-most coordinate (exclusive)." },
-    {"get_mutations", (PyCFunction) SparseTree_get_mutations, METH_NOARGS,
-            "Returns the list of mutations on this tree." },
-    {"get_flags", (PyCFunction) SparseTree_get_flags, METH_NOARGS,
-            "Returns the value of the flags variable." },
-    {"get_num_mutations", (PyCFunction) SparseTree_get_num_mutations, METH_NOARGS,
-            "Returns the number of mutations on this tree." },
-    {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
-            "Returns the parent of node u" },
-    {"get_time", (PyCFunction) SparseTree_get_time, METH_VARARGS,
-            "Returns the time of node u" },
-    {"get_population", (PyCFunction) SparseTree_get_population, METH_VARARGS,
-            "Returns the population of node u" },
-    {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
-            "Returns the children of node u" },
-    {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
-            "Returns the MRCA of nodes u and v" },
-    {"get_num_leaves", (PyCFunction) SparseTree_get_num_leaves, METH_VARARGS,
-            "Returns the number of leaves below node u." },
-    {"get_num_tracked_leaves", (PyCFunction) SparseTree_get_num_tracked_leaves,
-            METH_VARARGS,
-            "Returns the number of tracked leaves below node u." },
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject SparseTreeType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.SparseTree",             /* tp_name */
-    sizeof(SparseTree),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)SparseTree_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "SparseTree objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    0,                     /* tp_iter */
-    0,                     /* tp_iternext */
-    SparseTree_methods,             /* tp_methods */
-    SparseTree_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)SparseTree_init,      /* tp_init */
-};
-
-
-
-/*===================================================================
- * TreeDiffIterator
- *===================================================================
- */
-
-static int
-TreeDiffIterator_check_state(TreeDiffIterator *self)
-{
-    int ret = 0;
-    if (self->tree_diff_iterator == NULL) {
-        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-TreeDiffIterator_dealloc(TreeDiffIterator* self)
-{
-    if (self->tree_diff_iterator != NULL) {
-        tree_diff_iterator_free(self->tree_diff_iterator);
-        PyMem_Free(self->tree_diff_iterator);
-        self->tree_diff_iterator = NULL;
-    }
-    Py_XDECREF(self->tree_sequence);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-TreeDiffIterator_init(TreeDiffIterator *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
-    TreeSequence *tree_sequence;
-
-    self->tree_diff_iterator = NULL;
-    self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &tree_sequence)) {
-        goto out;
-    }
-    self->tree_sequence = tree_sequence;
-    Py_INCREF(self->tree_sequence);
-    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
-        goto out;
-    }
-    self->tree_diff_iterator = PyMem_Malloc(sizeof(tree_diff_iterator_t));
-    if (self->tree_diff_iterator == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(self->tree_diff_iterator, 0, sizeof(tree_diff_iterator_t));
-    err = tree_diff_iterator_alloc(self->tree_diff_iterator,
-            self->tree_sequence->tree_sequence);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-TreeDiffIterator_next(TreeDiffIterator  *self)
-{
-    PyObject *ret = NULL;
-    PyObject *out_list = NULL;
-    PyObject *in_list = NULL;
-    PyObject *value = NULL;
-    PyObject *children = NULL;
-    int err;
-    double length;
-    size_t list_size, j;
-    node_record_t *records_out, *records_in, *record;
-
-    if (TreeDiffIterator_check_state(self) != 0) {
-        goto out;
-    }
-    err = tree_diff_iterator_next(self->tree_diff_iterator, &length,
-            &records_out, &records_in);
-    if (err < 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    if (err == 1) {
-        /* out records */
-        record = records_out;
-        list_size = 0;
-        while (record != NULL) {
-            list_size++;
-            record = record->next;
-        }
-        out_list = PyList_New(list_size);
-        if (out_list == NULL) {
-            goto out;
-        }
-        record = records_out;
-        j = 0;
-        while (record != NULL) {
-            children = convert_children(record->children, record->num_children);
-            if (children == NULL) {
-                goto out;
-            }
-            value = Py_BuildValue("IOd", (unsigned int) record->node,
-                    children, record->time);
-            Py_DECREF(children);
-            if (value == NULL) {
-                goto out;
-            }
-            PyList_SET_ITEM(out_list, j, value);
-            record = record->next;
-            j++;
-        }
-        /* in records */
-        record = records_in;
-        list_size = 0;
-        while (record != NULL) {
-            list_size++;
-            record = record->next;
-        }
-        in_list = PyList_New(list_size);
-        if (in_list == NULL) {
-            goto out;
-        }
-        record = records_in;
-        j = 0;
-        while (record != NULL) {
-            children = convert_children(record->children, record->num_children);
-            if (children == NULL) {
-                goto out;
-            }
-            value = Py_BuildValue("IOd", (unsigned int) record->node,
-                    children, record->time);
-            Py_DECREF(children);
-            if (value == NULL) {
-                goto out;
-            }
-            PyList_SET_ITEM(in_list, j, value);
-            record = record->next;
-            j++;
-        }
-        ret = Py_BuildValue("dOO", length, out_list, in_list);
-    }
-out:
-    Py_XDECREF(out_list);
-    Py_XDECREF(in_list);
-    return ret;
-}
-
-static PyMemberDef TreeDiffIterator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef TreeDiffIterator_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject TreeDiffIteratorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.TreeDiffIterator",             /* tp_name */
-    sizeof(TreeDiffIterator),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)TreeDiffIterator_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "TreeDiffIterator objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) TreeDiffIterator_next, /* tp_iternext */
-    TreeDiffIterator_methods,             /* tp_methods */
-    TreeDiffIterator_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)TreeDiffIterator_init,      /* tp_init */
-};
-
-/*===================================================================
- * LeafListIterator
- *===================================================================
- */
-
-static int
-LeafListIterator_check_state(LeafListIterator *self)
-{
-    int ret = 0;
-    if (self->sparse_tree == NULL) {
-        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-LeafListIterator_dealloc(LeafListIterator* self)
-{
-    Py_XDECREF(self->sparse_tree);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-LeafListIterator_init(LeafListIterator *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"sparse_tree", "node", NULL};
-    unsigned int node = 0;
-    SparseTree *sparse_tree = NULL;
-
-    self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!I", kwlist,
-            &SparseTreeType, &sparse_tree, &node)) {
-        goto out;
-    }
-    self->sparse_tree = sparse_tree;
-    Py_INCREF(self->sparse_tree);
-    if (SparseTree_check_sparse_tree(sparse_tree) != 0) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self->sparse_tree, node)) {
-        goto out;
-    }
-    err = sparse_tree_get_leaf_list(self->sparse_tree->sparse_tree,
-            (uint32_t) node, &self->head, &self->tail);
-    self->next = self->head;
-    if (err < 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-LeafListIterator_next(LeafListIterator  *self)
-{
-    PyObject *ret = NULL;
-
-    if (LeafListIterator_check_state(self) != 0) {
-        goto out;
-    }
-    if (self->next != NULL) {
-        ret = Py_BuildValue("I", (unsigned int) self->next->node);
-        if (ret == NULL) {
-            goto out;
-        }
-        /* Get the next value */
-        if (self->next == self->tail) {
-            self->next = NULL;
-        } else {
-            self->next = self->next->next;
-        }
-    }
-out:
-    return ret;
-}
-
-static PyMemberDef LeafListIterator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef LeafListIterator_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject LeafListIteratorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.LeafListIterator",             /* tp_name */
-    sizeof(LeafListIterator),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)LeafListIterator_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "LeafListIterator objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) LeafListIterator_next, /* tp_iternext */
-    LeafListIterator_methods,             /* tp_methods */
-    LeafListIterator_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)LeafListIterator_init,      /* tp_init */
-};
-
-
-/*===================================================================
- * SparseTreeIterator
- *===================================================================
- */
-
-static int
-SparseTreeIterator_check_state(SparseTreeIterator *self)
-{
-    int ret = 0;
-    return ret;
-}
-
-static void
-SparseTreeIterator_dealloc(SparseTreeIterator* self)
-{
-    Py_XDECREF(self->sparse_tree);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-SparseTreeIterator_init(SparseTreeIterator *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    static char *kwlist[] = {"sparse_tree", NULL};
-    SparseTree *sparse_tree;
-
-    self->first = 1;
-    self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &SparseTreeType, &sparse_tree)) {
-        goto out;
-    }
-    self->sparse_tree = sparse_tree;
-    Py_INCREF(self->sparse_tree);
-    if (SparseTree_check_sparse_tree(self->sparse_tree) != 0) {
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-SparseTreeIterator_next(SparseTreeIterator  *self)
-{
-    PyObject *ret = NULL;
-    int err;
-
-    if (SparseTreeIterator_check_state(self) != 0) {
-        goto out;
-    }
-
-    if (self->first) {
-        err = sparse_tree_first(self->sparse_tree->sparse_tree);
-        self->first = 0;
-    } else {
-        err = sparse_tree_next(self->sparse_tree->sparse_tree);
-    }
-    if (err < 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    if (err == 1) {
-        ret = (PyObject *) self->sparse_tree;
-        Py_INCREF(ret);
-    }
-out:
-    return ret;
-}
-
-static PyMemberDef SparseTreeIterator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef SparseTreeIterator_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject SparseTreeIteratorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.SparseTreeIterator",             /* tp_name */
-    sizeof(SparseTreeIterator),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)SparseTreeIterator_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "SparseTreeIterator objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) SparseTreeIterator_next, /* tp_iternext */
-    SparseTreeIterator_methods,             /* tp_methods */
-    SparseTreeIterator_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)SparseTreeIterator_init,      /* tp_init */
-};
-
-
-/*===================================================================
- * NewickConverter
- *===================================================================
- */
-
-static int
-NewickConverter_check_state(NewickConverter *self)
-{
-    int ret = 0;
-    if (self->newick_converter == NULL) {
-        PyErr_SetString(PyExc_SystemError, "converter not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-NewickConverter_dealloc(NewickConverter* self)
-{
-    if (self->newick_converter != NULL) {
-        newick_converter_free(self->newick_converter);
-        PyMem_Free(self->newick_converter);
-        self->newick_converter = NULL;
-    }
-    Py_XDECREF(self->tree_sequence);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-NewickConverter_init(NewickConverter *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"tree_sequence", "precision", "Ne", NULL};
-    int precision = 3;
-    double Ne = 0.25; /* default to 1/4 for coalescent time units. */
-    TreeSequence *tree_sequence;
-
-    self->newick_converter = NULL;
-    self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|id", kwlist,
-            &TreeSequenceType, &tree_sequence, &precision, &Ne)) {
-        goto out;
-    }
-    self->tree_sequence = tree_sequence;
-    Py_INCREF(self->tree_sequence);
-    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
-        goto out;
-    }
-    if (precision < 0 || precision > 16) {
-        PyErr_SetString(PyExc_ValueError,
-                "precision value out of range (0, 16)");
-        goto out;
-    }
-    self->newick_converter = PyMem_Malloc(sizeof(newick_converter_t));
-    if (self->newick_converter == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(self->newick_converter, 0, sizeof(newick_converter_t));
-    err = newick_converter_alloc(self->newick_converter,
-            self->tree_sequence->tree_sequence, (size_t) precision, Ne);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-NewickConverter_next(NewickConverter  *self)
-{
-    PyObject *ret = NULL;
-    double length;
-    char *tree;
-    int err;
-
-    if (NewickConverter_check_state(self) != 0) {
-        goto out;
-    }
-    err = newick_converter_next(self->newick_converter, &length, &tree);
-    if (err < 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    if (err == 1) {
-        ret = Py_BuildValue("ds", length, tree);
-    }
-out:
-    return ret;
-}
-
-static PyMemberDef NewickConverter_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef NewickConverter_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject NewickConverterType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.NewickConverter",             /* tp_name */
-    sizeof(NewickConverter),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)NewickConverter_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "NewickConverter objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) NewickConverter_next, /* tp_iternext */
-    NewickConverter_methods,             /* tp_methods */
-    NewickConverter_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)NewickConverter_init,      /* tp_init */
-};
-
-/*===================================================================
- * VcfConverter
- *===================================================================
- */
-
-static int
-VcfConverter_check_state(VcfConverter *self)
-{
-    int ret = 0;
-    if (self->vcf_converter == NULL) {
-        PyErr_SetString(PyExc_SystemError, "converter not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-VcfConverter_dealloc(VcfConverter* self)
-{
-    if (self->vcf_converter != NULL) {
-        vcf_converter_free(self->vcf_converter);
-        PyMem_Free(self->vcf_converter);
-        self->vcf_converter = NULL;
-    }
-    Py_XDECREF(self->tree_sequence);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-VcfConverter_init(VcfConverter *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"tree_sequence", "ploidy", NULL};
-    unsigned int ploidy = 1;
-    TreeSequence *tree_sequence;
-
-    self->vcf_converter = NULL;
-    self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|I", kwlist,
-            &TreeSequenceType, &tree_sequence, &ploidy)) {
-        goto out;
-    }
-    self->tree_sequence = tree_sequence;
-    Py_INCREF(self->tree_sequence);
-    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
-        goto out;
-    }
-    if (ploidy < 1) {
-        PyErr_SetString(PyExc_ValueError, "Ploidy must be >= 1");
-        goto out;
-    }
-    self->vcf_converter = PyMem_Malloc(sizeof(vcf_converter_t));
-    if (self->vcf_converter == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    err = vcf_converter_alloc(self->vcf_converter,
-            self->tree_sequence->tree_sequence, ploidy);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-VcfConverter_next(VcfConverter  *self)
-{
-    PyObject *ret = NULL;
-    char *record;
-    int err;
-
-    if (VcfConverter_check_state(self) != 0) {
-        goto out;
-    }
-    err = vcf_converter_next(self->vcf_converter, &record);
-    if (err < 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    if (err == 1) {
-        ret = Py_BuildValue("s", record);
-    }
-out:
-    return ret;
-}
-
-static PyObject *
-VcfConverter_get_header(VcfConverter *self)
-{
-    PyObject *ret = NULL;
-    int err;
-    char *header;
-
-    if (VcfConverter_check_state(self) != 0) {
-        goto out;
-    }
-    err = vcf_converter_get_header(self->vcf_converter, &header);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("s", header);
-out:
-    return ret;
-}
-
-static PyMemberDef VcfConverter_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef VcfConverter_methods[] = {
-    {"get_header", (PyCFunction) VcfConverter_get_header, METH_NOARGS,
-            "Returns the VCF header as plain text." },
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject VcfConverterType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.VcfConverter",             /* tp_name */
-    sizeof(VcfConverter),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)VcfConverter_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "VcfConverter objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) VcfConverter_next, /* tp_iternext */
-    VcfConverter_methods,             /* tp_methods */
-    VcfConverter_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)VcfConverter_init,      /* tp_init */
-};
-
-/*===================================================================
- * HaplotypeGenerator
- *===================================================================
- */
-
-static int
-HaplotypeGenerator_check_state(HaplotypeGenerator *self)
-{
-    int ret = 0;
-    if (self->haplotype_generator == NULL) {
-        PyErr_SetString(PyExc_SystemError, "converter not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-HaplotypeGenerator_dealloc(HaplotypeGenerator* self)
-{
-    if (self->haplotype_generator != NULL) {
-        hapgen_free(self->haplotype_generator);
-        PyMem_Free(self->haplotype_generator);
-        self->haplotype_generator = NULL;
-    }
-    Py_XDECREF(self->tree_sequence);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-HaplotypeGenerator_init(HaplotypeGenerator *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
-    TreeSequence *tree_sequence;
-
-    self->haplotype_generator = NULL;
-    self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &tree_sequence)) {
-        goto out;
-    }
-    self->tree_sequence = tree_sequence;
-    Py_INCREF(self->tree_sequence);
-    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
-        goto out;
-    }
-    self->haplotype_generator = PyMem_Malloc(sizeof(hapgen_t));
-    if (self->haplotype_generator == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(self->haplotype_generator, 0, sizeof(hapgen_t));
-    err = hapgen_alloc(self->haplotype_generator,
-            self->tree_sequence->tree_sequence);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-HaplotypeGenerator_get_haplotype(HaplotypeGenerator *self, PyObject *args)
-{
-    int err;
-    PyObject *ret = NULL;
-    char *haplotype;
-    unsigned int sample_id;
-
-    if (HaplotypeGenerator_check_state(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &sample_id)) {
-        goto out;
-    }
-    err = hapgen_get_haplotype(self->haplotype_generator,
-            (uint32_t) sample_id, &haplotype);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("s", haplotype);
-out:
-    return ret;
-}
-
-static PyMemberDef HaplotypeGenerator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef HaplotypeGenerator_methods[] = {
-    {"get_haplotype", (PyCFunction) HaplotypeGenerator_get_haplotype,
-        METH_VARARGS, "Returns the haplotype for the specified sample"},
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject HaplotypeGeneratorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.HaplotypeGenerator",             /* tp_name */
-    sizeof(HaplotypeGenerator),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)HaplotypeGenerator_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "HaplotypeGenerator objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    0,                     /* tp_iter */
-    0,                     /* tp_iternext */
-    HaplotypeGenerator_methods,             /* tp_methods */
-    HaplotypeGenerator_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)HaplotypeGenerator_init,      /* tp_init */
-};
-
-
-/*===================================================================
- * VariantGenerator
- *===================================================================
- */
-
-static int
-VariantGenerator_check_state(VariantGenerator *self)
-{
-    int ret = 0;
-    if (self->variant_generator == NULL) {
-        PyErr_SetString(PyExc_SystemError, "converter not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-VariantGenerator_dealloc(VariantGenerator* self)
-{
-    if (self->variant_generator != NULL) {
-        vargen_free(self->variant_generator);
-        PyMem_Free(self->variant_generator);
-        self->variant_generator = NULL;
-    }
-    Py_XDECREF(self->tree_sequence);
-    Py_XDECREF(self->genotypes_buffer);
-    if (self->buffer_acquired) {
-        PyBuffer_Release(&self->buffer);
-    }
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", "as_char", NULL};
-    TreeSequence *tree_sequence = NULL;
-    PyObject *genotypes_buffer = NULL;
-    int as_char = 0;
-    int flags = 0;
-    size_t sample_size;
-
-    self->variant_generator = NULL;
-    self->tree_sequence = NULL;
-    self->genotypes_buffer = NULL;
-    self->buffer_acquired = 0;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O|i", kwlist,
-            &TreeSequenceType, &tree_sequence, &genotypes_buffer,
-            &as_char)) {
-        goto out;
-    }
-    self->tree_sequence = tree_sequence;
-    Py_INCREF(self->tree_sequence);
-    self->genotypes_buffer = genotypes_buffer;
-    Py_INCREF(self->genotypes_buffer);
-    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
-        goto out;
-    }
-    sample_size = tree_sequence_get_sample_size(
-            self->tree_sequence->tree_sequence);
-    if (!PyObject_CheckBuffer(genotypes_buffer)) {
-        PyErr_SetString(PyExc_TypeError,
-            "genotypes buffer must support the Python buffer protocol.");
-        goto out;
-    }
-    if (PyObject_GetBuffer(genotypes_buffer, &self->buffer,
-                PyBUF_SIMPLE|PyBUF_WRITABLE) != 0) {
-        goto out;
-    }
-    self->buffer_acquired = 1;
-    if (sample_size * sizeof(uint8_t) > self->buffer.len) {
-        PyErr_SetString(PyExc_BufferError, "genotypes buffer is too small");
-        goto out;
-    }
-    self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
-    if (self->variant_generator == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    flags = as_char? MSP_GENOTYPES_AS_CHAR: 0;
-    err = vargen_alloc(self->variant_generator,
-            self->tree_sequence->tree_sequence, flags);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-VariantGenerator_next(VariantGenerator *self)
-{
-    PyObject *ret = NULL;
-    mutation_t *mutation;
-    int err;
-    char *genotypes = (char *) self->buffer.buf;
-
-    if (VariantGenerator_check_state(self) != 0) {
-        goto out;
-    }
-    err = vargen_next(self->variant_generator, &mutation, genotypes);
-    if (err < 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    if (err == 1) {
-        ret = convert_mutation(mutation);
-    }
-out:
-    return ret;
-}
-
-static PyMemberDef VariantGenerator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef VariantGenerator_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject VariantGeneratorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.VariantGenerator",             /* tp_name */
-    sizeof(VariantGenerator),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)VariantGenerator_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "VariantGenerator objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) VariantGenerator_next, /* tp_iternext */
-    VariantGenerator_methods,             /* tp_methods */
-    VariantGenerator_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)VariantGenerator_init,      /* tp_init */
-};
-
-/*===================================================================
- * LdCalculator
- *===================================================================
- */
-
-static int
-LdCalculator_check_state(LdCalculator *self)
-{
-    int ret = 0;
-    if (self->ld_calc == NULL) {
-        PyErr_SetString(PyExc_SystemError, "converter not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-LdCalculator_dealloc(LdCalculator* self)
-{
-    if (self->ld_calc != NULL) {
-        ld_calc_free(self->ld_calc);
-        PyMem_Free(self->ld_calc);
-        self->ld_calc = NULL;
-    }
-    Py_XDECREF(self->tree_sequence);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-LdCalculator_init(LdCalculator *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
-    TreeSequence *tree_sequence;
-
-    self->ld_calc = NULL;
-    self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &tree_sequence)) {
-        goto out;
-    }
-    self->tree_sequence = tree_sequence;
-    Py_INCREF(self->tree_sequence);
-    if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
-        goto out;
-    }
-    self->ld_calc = PyMem_Malloc(sizeof(ld_calc_t));
-    if (self->ld_calc == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(self->ld_calc, 0, sizeof(ld_calc_t));
-    err = ld_calc_alloc(self->ld_calc, self->tree_sequence->tree_sequence);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-LdCalculator_get_r2(LdCalculator *self, PyObject *args)
-{
-    int err;
-    PyObject *ret = NULL;
-    Py_ssize_t a, b;
-    double r2;
-
-    if (LdCalculator_check_state(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "nn", &a, &b)) {
-        goto out;
-    }
-    Py_BEGIN_ALLOW_THREADS
-    err = ld_calc_get_r2(self->ld_calc, (size_t) a, (size_t) b, &r2);
-    Py_END_ALLOW_THREADS
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("d", r2);
-out:
-    return ret;
-}
-
-static PyObject *
-LdCalculator_get_r2_array(LdCalculator *self, PyObject *args, PyObject *kwds)
-{
-    int err;
-    PyObject *ret = NULL;
-    static char *kwlist[] = {
-        "dest", "source_index", "direction", "max_mutations",
-        "max_distance", NULL};
-    PyObject *dest = NULL;
-    Py_buffer buffer;
-    Py_ssize_t source_index;
-    Py_ssize_t max_mutations = -1;
-    double max_distance = DBL_MAX;
-    int direction = MSP_DIR_FORWARD;
-    size_t num_r2_values = 0;
-    int buffer_acquired = 0;
-
-    if (LdCalculator_check_state(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "On|ind", kwlist,
-            &dest, &source_index, &direction, &max_mutations, &max_distance)) {
-        goto out;
-    }
-    if (direction != MSP_DIR_FORWARD && direction != MSP_DIR_REVERSE) {
-        PyErr_SetString(PyExc_ValueError,
-            "direction must be FORWARD or REVERSE");
-        goto out;
-    }
-    if (max_distance < 0) {
-        PyErr_SetString(PyExc_ValueError, "max_distance must be >= 0");
-        goto out;
-    }
-    if (!PyObject_CheckBuffer(dest)) {
-        PyErr_SetString(PyExc_TypeError,
-            "dest buffer must support the Python buffer protocol.");
-        goto out;
-    }
-    if (PyObject_GetBuffer(dest, &buffer, PyBUF_SIMPLE|PyBUF_WRITABLE) != 0) {
-        goto out;
-    }
-    buffer_acquired = 1;
-    if (max_mutations == -1) {
-        max_mutations = buffer.len / sizeof(double);
-    } else if (max_mutations * sizeof(double) > buffer.len) {
-        PyErr_SetString(PyExc_BufferError,
-            "dest buffer is too small for the results");
-        goto out;
-    }
-
-    Py_BEGIN_ALLOW_THREADS
-    err = ld_calc_get_r2_array(
-        self->ld_calc, (size_t) source_index, direction,
-        (size_t) max_mutations, max_distance,
-        (double *) buffer.buf, &num_r2_values);
-    Py_END_ALLOW_THREADS
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) num_r2_values);
-out:
-    if (buffer_acquired) {
-        PyBuffer_Release(&buffer);
-    }
-    return ret;
-}
-
-static PyMemberDef LdCalculator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef LdCalculator_methods[] = {
-    {"get_r2", (PyCFunction) LdCalculator_get_r2, METH_VARARGS,
-        "Returns the value of the r2 statistic between the specified pair of "
-        "mutation indexes"},
-    {"get_r2_array", (PyCFunction) LdCalculator_get_r2_array,
-        METH_VARARGS|METH_KEYWORDS,
-        "Returns r2 statistic for a given mutation over specified range"},
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject LdCalculatorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.LdCalculator",             /* tp_name */
-    sizeof(LdCalculator),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)LdCalculator_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "LdCalculator objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    0,                     /* tp_iter */
-    0,                     /* tp_iternext */
-    LdCalculator_methods,             /* tp_methods */
-    LdCalculator_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)LdCalculator_init,      /* tp_init */
 };
 
 
@@ -5162,6 +5313,13 @@ init_msprime(void)
     }
     Py_INCREF(&RandomGeneratorType);
     PyModule_AddObject(module, "RandomGenerator", (PyObject *) &RandomGeneratorType);
+    /* MutationGenerator type */
+    MutationGeneratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&MutationGeneratorType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&MutationGeneratorType);
+    PyModule_AddObject(module, "MutationGenerator", (PyObject *) &MutationGeneratorType);
     /* Simulator type */
     SimulatorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&SimulatorType) < 0) {

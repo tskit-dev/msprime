@@ -23,8 +23,10 @@
 #include <stdarg.h>
 #include <float.h>
 
+#include <regex.h>
 #include <libconfig.h>
 #include <gsl/gsl_math.h>
+#include "argtable3.h"
 
 #include "msprime.h"
 #include "err.h"
@@ -721,11 +723,10 @@ out:
 }
 
 static void
-run_simulate(char *conf_file, char *output_file)
+run_simulate(const char *conf_file, const char *output_file, int verbose, int num_replicates)
 {
     int ret = -1;
-    int result, j;
-    double start_time, end_time;
+    int j;
     mutation_params_t mutation_params;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     msp_t *msp = calloc(1, sizeof(msp_t));
@@ -733,7 +734,6 @@ run_simulate(char *conf_file, char *output_file)
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
 
-    /* TODO tidy this up a bit and make the behaviour configurable. */
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL) {
         goto out;
@@ -742,79 +742,59 @@ run_simulate(char *conf_file, char *output_file)
     if (ret != 0) {
         goto out;
     }
+    ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng);
+    if (ret != 0) {
+        goto out;
+    }
     ret = msp_initialise(msp);
     if (ret != 0) {
         goto out;
     }
-    if (0) {
-        /* recomb_map_print_state(recomb_map); */
-        start_time = 0;
-        do {
-
-            ret = msp_debug_demography(msp, &end_time);
-            printf("interval %f - %f\n", start_time, end_time);
-            msp_print_state(msp, stdout);
-            start_time = end_time;
-        } while (! gsl_isinf(end_time));
-        if (ret != 0) {
-            goto out;
-        }
-        ret = msp_reset(msp);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = tree_sequence_initialise(tree_seq);
+    if (ret != 0) {
+        goto out;
     }
-    for (j = 0; j < 1; j++) {
+    for (j = 0; j < num_replicates; j++) {
+        if (verbose >= 1) {
+            printf("=====================\n");
+            printf("replicate %d\n", j);
+            printf("=====================\n");
+        }
         ret = msp_reset(msp);
         if (ret != 0) {
             goto out;
         }
-        printf("Simulation run %d::\n", j);
-        result = 1;
-        while (result == 1) {
-            result = msp_run(msp, DBL_MAX, 1);
-            if (result < 0) {
-                ret = result;
+        ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+        if (ret < 0) {
+            goto out;
+        }
+        msp_verify(msp);
+        if (verbose >= 1) {
+            ret = msp_print_state(msp, stdout);
+        }
+        if (ret != 0) {
+            goto out;
+        }
+        /* Create the tree_sequence from the state of the simulator.
+         * We want to use coalescent time here, so use an Ne of 1/4
+         * to cancel scaling factor. */
+        ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 0, NULL, tree_seq);
+        if (ret != 0) {
+            goto out;
+        }
+        if (output_file != NULL) {
+            ret = tree_sequence_dump(tree_seq, output_file, 0);
+            if (ret != 0) {
                 goto out;
             }
-            msp_verify(msp);
-            /* ret = msp_print_state(msp, stdout); */
         }
-        ret = msp_print_state(msp, stdout);
-        if (ret != 0) {
-            goto out;
+        if (verbose >= 1) {
+            printf("-----------------\n");
+            mutgen_print_state(mutgen, stdout);
+            printf("-----------------\n");
+            tree_sequence_print_state(tree_seq, stdout);
         }
     }
-    /* Create the tree_sequence from the state of the simulator.
-     * We want to use coalescent time here, so use an Ne of 1/4
-     * to cancel scaling factor. */
-    ret = tree_sequence_create(tree_seq, msp, recomb_map, 0.25);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_add_provenance_string(tree_seq, "Tree Provenance!!!");
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutgen_alloc(mutgen, tree_seq, mutation_params.mutation_rate, rng);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutgen_generate(mutgen);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_set_mutations(tree_seq, mutgen->num_mutations,
-            mutgen->mutations);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_dump(tree_seq, output_file, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    printf("================\n");
-    tree_sequence_print_state(tree_seq, stdout);
 out:
     if (msp != NULL) {
         msp_free(msp);
@@ -841,16 +821,20 @@ out:
 }
 
 static void
-load_tree_sequence(tree_sequence_t *ts, char *filename)
+load_tree_sequence(tree_sequence_t *ts, const char *filename)
 {
-    int ret = tree_sequence_load(ts, filename, 0);
+    int ret = tree_sequence_initialise(ts);
+    if (ret != 0) {
+        fatal_library_error(ret, "Init error");
+    }
+    ret = tree_sequence_load(ts, filename, 0);
     if (ret != 0) {
         fatal_library_error(ret, "Load error");
     }
 }
 
 static void
-run_ld(char *filename)
+run_ld(const char *filename, int verbose)
 {
     tree_sequence_t ts;
 
@@ -860,7 +844,7 @@ run_ld(char *filename)
 }
 
 static void
-run_haplotypes(char *filename)
+run_haplotypes(const char *filename, int verbose)
 {
     tree_sequence_t ts;
 
@@ -870,7 +854,7 @@ run_haplotypes(char *filename)
 }
 
 static void
-run_variants(char *filename)
+run_variants(const char *filename, int verbose)
 {
     tree_sequence_t ts;
 
@@ -880,7 +864,7 @@ run_variants(char *filename)
 }
 
 static void
-run_vcf(char *filename)
+run_vcf(const char *filename, int verbose)
 {
     tree_sequence_t ts;
 
@@ -890,7 +874,7 @@ run_vcf(char *filename)
 }
 
 static void
-run_print(char *filename)
+run_print(const char *filename, int verbose)
 {
     tree_sequence_t ts;
 
@@ -900,7 +884,7 @@ run_print(char *filename)
 }
 
 static void
-run_newick(char *filename)
+run_newick(const char *filename, int verbose)
 {
     tree_sequence_t ts;
 
@@ -910,7 +894,7 @@ run_newick(char *filename)
 }
 
 static void
-run_stats(char *filename)
+run_stats(const char *filename, int verbose)
 {
     tree_sequence_t ts;
 
@@ -920,22 +904,23 @@ run_stats(char *filename)
 }
 
 static void
-run_simplify(char *input_filename, char *output_filename, char **samples,
-        int num_samples)
+run_simplify(const char *input_filename, const char *output_filename, int verbose)
 {
     tree_sequence_t ts, subset;
-    uint32_t *parsed_samples = malloc((size_t) num_samples * sizeof(uint32_t));
+    uint32_t j, num_samples, *samples;
     int flags = 0;
-    int ret, j;
+    int ret;
 
-    if (parsed_samples == NULL) {
+    load_tree_sequence(&ts, input_filename);
+    num_samples = tree_sequence_get_sample_size(&ts);
+    samples = malloc(num_samples * sizeof(uint32_t));
+    if (samples == NULL) {
         fatal_error("out of memory");
     }
     for (j = 0; j < num_samples; j++) {
-        parsed_samples[j] = (uint32_t) atoi(samples[j]);
+        samples[j] = (uint32_t) j;
     }
-    load_tree_sequence(&ts, input_filename);
-    ret = tree_sequence_simplify(&ts, parsed_samples, (uint32_t) num_samples,
+    ret = tree_sequence_simplify(&ts, samples, num_samples,
             flags, &subset);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
@@ -947,65 +932,187 @@ run_simplify(char *input_filename, char *output_filename, char **samples,
     /* tree_sequence_print_state(&subset, stdout); */
     tree_sequence_free(&ts);
     tree_sequence_free(&subset);
-    free(parsed_samples);
+    free(samples);
 }
 
 int
 main(int argc, char** argv)
 {
-    char *cmd;
-    if (argc < 2) {
-        fatal_error("usage: %s <cmd>", argv[0]);
-    }
-    cmd = argv[1];
-    if (strncmp(cmd, "simulate", strlen(cmd)) == 0) {
-        if (argc < 4) {
-            fatal_error("usage: %s simulate CONFIG_FILE OUTPUT_FILE", argv[0]);
-        }
-        run_simulate(argv[2], argv[3]);
-    } else if (strncmp(cmd, "ld", strlen(cmd)) == 0) {
-        if (argc < 3) {
-            fatal_error("usage: %s ld INPUT_FILE", argv[0]);
-        }
-        run_ld(argv[2]);
-    } else if (strncmp(cmd, "haplotypes", strlen(cmd)) == 0) {
-        if (argc < 3) {
-            fatal_error("usage: %s haplotypes INPUT_FILE", argv[0]);
-        }
-        run_haplotypes(argv[2]);
-    } else if (strncmp(cmd, "variants", strlen(cmd)) == 0) {
-        if (argc < 3) {
-            fatal_error("usage: %s variants INPUT_FILE", argv[0]);
-        }
-        run_variants(argv[2]);
-    } else if (strncmp(cmd, "vcf", strlen(cmd)) == 0) {
-        if (argc < 3) {
-            fatal_error("usage: %s vcf INPUT_FILE", argv[0]);
-        }
-        run_vcf(argv[2]);
-    } else if (strncmp(cmd, "print", strlen(cmd)) == 0) {
-        if (argc < 3) {
-            fatal_error("usage: %s print INPUT_FILE", argv[0]);
-        }
-        run_print(argv[2]);
-    } else if (strncmp(cmd, "newick", strlen(cmd)) == 0) {
-        if (argc < 3) {
-            fatal_error("usage: %s newick INPUT_FILE", argv[0]);
-        }
-        run_newick(argv[2]);
-    } else if (strncmp(cmd, "stats", strlen(cmd)) == 0) {
-        if (argc < 3) {
-            fatal_error("usage: %s stats INPUT_FILE", argv[0]);
-        }
-        run_stats(argv[2]);
-    } else if (strncmp(cmd, "subset", strlen(cmd)) == 0) {
-        if (argc < 6) {
-            fatal_error("usage: %s subset INPUT_FILE OUTPUT_FILE s1 s2 <s3 s4 ... sk>",
-                    argv[0]);
-        }
-        run_simplify(argv[2], argv[3], argv + 4, argc - 4);
+    /* SYNTAX 1: simulate [-v] <config-file> -o <output-file> */
+    struct arg_rex *cmd1 = arg_rex1(NULL, NULL, "simulate", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose1 = arg_lit0("v", "verbose", NULL);
+    struct arg_int *replicates1 = arg_int0("r", "replicates", "<num-replicates>",
+            "number of replicates to run");
+    struct arg_file *infiles1 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_file *output1 = arg_file0("o", "output", "output-file",
+            "Output HDF5 file");
+    struct arg_end *end1 = arg_end(20);
+    void* argtable1[] = {cmd1, verbose1, infiles1, output1, replicates1, end1};
+    int nerrors1;
+
+    /* SYNTAX 2: ld [-v] <input-file> */
+    struct arg_rex *cmd2 = arg_rex1(NULL, NULL, "ld", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose2 = arg_lit0("v", "verbose", NULL);
+    struct arg_file *infiles2 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_end *end2 = arg_end(20);
+    void* argtable2[] = {cmd2, verbose2, infiles2, end2};
+    int nerrors2;
+
+    /* SYNTAX 3: haplotypes [-v] <input-file> */
+    struct arg_rex *cmd3 = arg_rex1(NULL, NULL, "haplotypes", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose3 = arg_lit0("v", "verbose", NULL);
+    struct arg_file *infiles3 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_end *end3 = arg_end(20);
+    void* argtable3[] = {cmd3, verbose3, infiles3, end3};
+    int nerrors3;
+
+    /* SYNTAX 4: variants [-v] <input-file> */
+    struct arg_rex *cmd4 = arg_rex1(NULL, NULL, "variants", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose4 = arg_lit0("v", "verbose", NULL);
+    struct arg_file *infiles4 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_end *end4 = arg_end(20);
+    void* argtable4[] = {cmd4, verbose4, infiles4, end4};
+    int nerrors4;
+
+    /* SYNTAX 5: vcf [-v] <input-file> */
+    struct arg_rex *cmd5 = arg_rex1(NULL, NULL, "vcf", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose5 = arg_lit0("v", "verbose", NULL);
+    struct arg_file *infiles5 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_end *end5 = arg_end(20);
+    void* argtable5[] = {cmd5, verbose5, infiles5, end5};
+    int nerrors5;
+
+    /* SYNTAX 6: print  [-v] <input-file> */
+    struct arg_rex *cmd6 = arg_rex1(NULL, NULL, "print", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose6 = arg_lit0("v", "verbose", NULL);
+    struct arg_file *infiles6 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_end *end6 = arg_end(20);
+    void* argtable6[] = {cmd6, verbose6, infiles6, end6};
+    int nerrors6;
+
+    /* SYNTAX 7: newick [-v] <input-file> */
+    struct arg_rex *cmd7 = arg_rex1(NULL, NULL, "newick", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose7 = arg_lit0("v", "verbose", NULL);
+    struct arg_file *infiles7 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_end *end7 = arg_end(20);
+    void* argtable7[] = {cmd7, verbose7, infiles7, end7};
+    int nerrors7;
+
+    /* SYNTAX 8: stats [-v] <input-file> */
+    struct arg_rex *cmd8 = arg_rex1(NULL, NULL, "stats", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose8 = arg_lit0("v", "verbose", NULL);
+    struct arg_file *infiles8 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_end *end8 = arg_end(20);
+    void* argtable8[] = {cmd8, verbose8, infiles8, end8};
+    int nerrors8;
+
+    /* SYNTAX 9: simplify [-v] <input-file> */
+    struct arg_rex *cmd9 = arg_rex1(NULL, NULL, "simplify", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose9 = arg_lit0("v", "verbose", NULL);
+    struct arg_file *infiles9 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_file *outfiles9 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_end *end9 = arg_end(20);
+    void* argtable9[] = {cmd9, verbose9, infiles9, outfiles9, end9};
+    int nerrors9;
+
+    int exitcode = EXIT_SUCCESS;
+    const char *progname = "main";
+
+    /* Set defaults */
+    replicates1->ival[0] = 1;
+    output1->filename[0] = NULL;
+
+    nerrors1 = arg_parse(argc, argv, argtable1);
+    nerrors2 = arg_parse(argc, argv, argtable2);
+    nerrors3 = arg_parse(argc, argv, argtable3);
+    nerrors4 = arg_parse(argc, argv, argtable4);
+    nerrors5 = arg_parse(argc, argv, argtable5);
+    nerrors6 = arg_parse(argc, argv, argtable6);
+    nerrors7 = arg_parse(argc, argv, argtable7);
+    nerrors8 = arg_parse(argc, argv, argtable8);
+    nerrors9 = arg_parse(argc, argv, argtable9);
+
+    if (nerrors1 == 0) {
+        run_simulate(infiles1->filename[0], output1->filename[0], verbose1->count,
+                replicates1->ival[0]);
+    } else if (nerrors2 == 0) {
+        run_ld(infiles2->filename[0], verbose2->count);
+    } else if (nerrors3 == 0) {
+        run_haplotypes(infiles3->filename[0], verbose3->count);
+    } else if (nerrors4 == 0) {
+        run_variants(infiles4->filename[0], verbose4->count);
+    } else if (nerrors5 == 0) {
+        run_vcf(infiles5->filename[0], verbose5->count);
+    } else if (nerrors6 == 0) {
+        run_print(infiles6->filename[0], verbose6->count);
+    } else if (nerrors7 == 0) {
+        run_newick(infiles7->filename[0], verbose7->count);
+    } else if (nerrors8 == 0) {
+        run_stats(infiles8->filename[0], verbose8->count);
+    } else if (nerrors9 == 0) {
+        run_simplify(infiles9->filename[0], outfiles9->filename[0], verbose9->count);
     } else {
-        fatal_error("Unknown command '%s'", cmd);
+        /* We get here if the command line matched none of the possible syntaxes */
+        if (cmd1->count > 0) {
+            arg_print_errors(stdout, end1, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable1, "\n");
+        } else if (cmd2->count > 0) {
+            arg_print_errors(stdout, end2, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable2, "\n");
+        } else if (cmd3->count > 0) {
+            arg_print_errors(stdout, end3, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable3, "\n");
+        } else if (cmd4->count > 0) {
+            arg_print_errors(stdout, end4, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable4, "\n");
+        } else if (cmd5->count > 0) {
+            arg_print_errors(stdout, end5, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable5, "\n");
+        } else if (cmd6->count > 0) {
+            arg_print_errors(stdout, end6, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable6, "\n");
+        } else if (cmd7->count > 0) {
+            arg_print_errors(stdout, end7, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable7, "\n");
+        } else if (cmd8->count > 0) {
+            arg_print_errors(stdout, end8, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable8, "\n");
+        } else if (cmd9->count > 0) {
+            arg_print_errors(stdout, end9, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable9, "\n");
+        } else {
+            /* no correct cmd literals were given, so we cant presume which syntax was intended */
+            printf("%s: missing command.\n",progname);
+            printf("usage 1: %s ", progname);  arg_print_syntax(stdout, argtable1, "\n");
+            printf("usage 2: %s ", progname);  arg_print_syntax(stdout, argtable2, "\n");
+            printf("usage 3: %s ", progname);  arg_print_syntax(stdout, argtable3, "\n");
+            printf("usage 4: %s ", progname);  arg_print_syntax(stdout, argtable4, "\n");
+            printf("usage 5: %s ", progname);  arg_print_syntax(stdout, argtable5, "\n");
+            printf("usage 6: %s ", progname);  arg_print_syntax(stdout, argtable6, "\n");
+            printf("usage 7: %s ", progname);  arg_print_syntax(stdout, argtable7, "\n");
+            printf("usage 8: %s ", progname);  arg_print_syntax(stdout, argtable8, "\n");
+            printf("usage 9: %s ", progname);  arg_print_syntax(stdout, argtable9, "\n");
+        }
     }
-    return EXIT_SUCCESS;
+
+    arg_freetable(argtable1, sizeof(argtable1) / sizeof(argtable1[0]));
+    arg_freetable(argtable2, sizeof(argtable2) / sizeof(argtable2[0]));
+    arg_freetable(argtable3, sizeof(argtable3) / sizeof(argtable3[0]));
+    arg_freetable(argtable4, sizeof(argtable4) / sizeof(argtable4[0]));
+    arg_freetable(argtable5, sizeof(argtable5) / sizeof(argtable5[0]));
+    arg_freetable(argtable6, sizeof(argtable6) / sizeof(argtable6[0]));
+    arg_freetable(argtable7, sizeof(argtable7) / sizeof(argtable7[0]));
+    arg_freetable(argtable8, sizeof(argtable8) / sizeof(argtable8[0]));
+    arg_freetable(argtable9, sizeof(argtable9) / sizeof(argtable9[0]));
+
+    return exitcode;
 }

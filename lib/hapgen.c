@@ -56,32 +56,50 @@ hapgen_print_state(hapgen_t *self, FILE *out)
 static inline int
 hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
 {
+    int ret = 0;
     /* get the word that column falls in */
     size_t word = column / HG_WORD_SIZE;
     size_t bit = column % HG_WORD_SIZE;
+    size_t index = row * self->words_per_row + word;
 
     assert(word < self->words_per_row);
-    self->haplotype_matrix[row * self->words_per_row + word] |= 1ULL << bit;
-    return 0;
+    if ((self->haplotype_matrix[index] & (1ULL << bit)) != 0) {
+        ret = MSP_ERR_INCONSISTENT_MUTATIONS;
+        goto out;
+    }
+    self->haplotype_matrix[index] |= 1ULL << bit;
+out:
+    return ret;
 }
 
 static int
-hapgen_apply_tree_mutation(hapgen_t *self, mutation_t mut)
+hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
-    int not_done = 1;
+    bool not_done;
+    uint32_t j;
 
-    ret = sparse_tree_get_leaf_list(&self->tree, mut.node, &w, &tail);
-    if (ret != 0) {
+    if (mut->ancestral_state != '0' || mut->derived_state != '1') {
+        ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
         goto out;
     }
-    if (w != NULL) {
-        while (not_done) {
-            assert(w != NULL);
-            hapgen_set_bit(self, w->node, mut.index);
-            not_done = w != tail;
-            w = w->next;
+    for (j = 0; j < mut->num_nodes; j++) {
+        ret = sparse_tree_get_leaf_list(&self->tree, mut->nodes[j], &w, &tail);
+        if (ret != 0) {
+            goto out;
+        }
+        if (w != NULL) {
+            not_done = true;
+            while (not_done) {
+                assert(w != NULL);
+                ret = hapgen_set_bit(self, w->node, mut->index);
+                if (ret != 0) {
+                    goto out;
+                }
+                not_done = w != tail;
+                w = w->next;
+            }
         }
     }
 out:
@@ -97,7 +115,7 @@ hapgen_generate_all_haplotypes(hapgen_t *self)
 
     for (ret = sparse_tree_first(t); ret == 1; ret = sparse_tree_next(t)) {
         for (j = 0; j < t->num_mutations; j++) {
-            ret = hapgen_apply_tree_mutation(self, t->mutations[j]);
+            ret = hapgen_apply_tree_mutation(self, &t->mutations[j]);
             if (ret != 0) {
                 goto out;
             }
@@ -178,10 +196,4 @@ hapgen_get_haplotype(hapgen_t *self, uint32_t sample_id, char **haplotype)
     *haplotype = self->haplotype;
 out:
     return ret;
-}
-
-size_t
-hapgen_get_num_segregating_sites(hapgen_t *self)
-{
-    return self->num_mutations;
 }

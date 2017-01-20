@@ -196,6 +196,25 @@ msp_strerror(int err)
             ret = "Model error. Either a bad model, or the requested operation "
                 "is not supported for the current model";
             break;
+        case MSP_ERR_NOT_INITIALISED:
+            ret = "object not initialised. Please file a bug report.";
+            break;
+        case MSP_ERR_MUTATIONS_NOT_POSITION_SORTED:
+            ret = "Mutations must be sorted by position";
+            break;
+        case MSP_ERR_UNSORTED_MUTATION_NODES:
+            ret = "Mutations nodes must be in sorted order.";
+            break;
+        case MSP_ERR_DUPLICATE_MUTATION_NODES:
+            ret = "Mutations nodes must be unique.";
+            break;
+        case MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED:
+            ret = "Only binary mutations are supported for this operation.";
+            break;
+        case MSP_ERR_INCONSISTENT_MUTATIONS:
+            ret = "Overlapping subtrees in recurrent mutation: "
+                "ancestral state not consistent";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
@@ -219,6 +238,16 @@ msp_strerror(int err)
     }
 out:
     return ret;
+}
+
+void
+__msp_safe_free(void **ptr) {
+    if (ptr != NULL) {
+        if (*ptr != NULL) {
+            free(*ptr);
+            *ptr = NULL;
+        }
+    }
 }
 
 static int
@@ -2140,6 +2169,7 @@ msp_reset(msp_t *self)
     self->time = 0.0;
     self->next_sampling_event = 0;
     self->num_coalescence_records = 0;
+    self->num_migration_records = 0;
     self->num_re_events = 0;
     self->num_ca_events = 0;
     self->num_rejected_ca_events = 0;
@@ -2613,6 +2643,19 @@ msp_get_population(msp_t *self, size_t population_id,
     *population = &self->populations[population_id];
 out:
     return ret;
+}
+
+int WARN_UNUSED
+msp_populate_tree_sequence(msp_t *self, recomb_map_t *recomb_map, mutgen_t *mutgen,
+        double Ne, size_t num_provenance_strings, const char **provenance_strings,
+        tree_sequence_t *tree_sequence)
+{
+    return tree_sequence_load_records_rescale(tree_sequence,
+        self->sample_size, self->samples,
+        self->num_coalescence_records, self->coalescence_records,
+        self->num_migration_records, self->migration_records,
+        num_provenance_strings, provenance_strings,
+        recomb_map, Ne, mutgen);
 }
 
 /* Demographic events */
