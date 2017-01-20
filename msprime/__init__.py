@@ -30,4 +30,3 @@ from msprime.environment import __version__  # NOQA
 from msprime.formats import *  # NOQA
 from msprime.trees import *  # NOQA
 from msprime.stats import *  # NOQA
-from msprime.branch_stats import *  # NOQA
