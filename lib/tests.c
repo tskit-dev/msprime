@@ -1875,7 +1875,7 @@ test_simplest_bad_records(void)
     /* Bad sequence length */
     records[0].right = 0.0;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS_SEQUENCE_LENGTH);
     tree_sequence_free(&ts);
     records[0].right = 1.0;
 
@@ -1922,6 +1922,15 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_ZERO_CHILDREN);
     tree_sequence_free(&ts);
     records[0].num_children = 2;
+
+    /* sample size of 1 */
+    records[0].num_children = 1;
+    records[0].node = 1;
+    ret = tree_sequence_load_records(&ts, num_records, records);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE);
+    tree_sequence_free(&ts);
+    records[0].num_children = 2;
+    records[0].node = 2;
 
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_load_records(&ts, num_records, records);
@@ -3476,7 +3485,7 @@ test_tree_sequence_bad_records(void)
     /* Make a gap between adjacent records */
     records[1].right = 1;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT);
     tree_sequence_free(&ts);
     records[1].right = 2;
     verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
@@ -3486,7 +3495,7 @@ test_tree_sequence_bad_records(void)
     records[2].left = 7;
     records[3].right = 2;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT);
     tree_sequence_free(&ts);
     records[0].left = 2;
     records[2].left = 2;
@@ -3496,7 +3505,7 @@ test_tree_sequence_bad_records(void)
     /* Make a gap before the last tree */
     records[4].left = 8;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT);
     tree_sequence_free(&ts);
     records[4].left = 7;
     verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
@@ -3504,7 +3513,7 @@ test_tree_sequence_bad_records(void)
     /* Add an extra record to the first tree */
     records[4].left = 2;
     ret = tree_sequence_load_records(&ts, num_records, records);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORDS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT);
     tree_sequence_free(&ts);
     records[4].left = 7;
     verify_trees(num_records, records, num_trees, num_nodes, parents, 0, NULL);
