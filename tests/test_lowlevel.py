@@ -979,6 +979,7 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(events, total_events)
 
     def test_demographic_events(self):
+        random.seed(11)
         n = 10
         N = 3
         migration_matrix = [
@@ -1019,7 +1020,8 @@ class TestSimulationState(LowLevelTestCase):
             event_type = event["type"]
             self.assertEqual(next_event_time, t)
             self.assertEqual(sim2.get_migration_matrix(), migration_matrix)
-            sim.run(t)
+            completed = sim.run(t)
+            self.assertFalse(completed)
             self.assertEqual(sim.get_time(), t)
             if event_type == "migration_rate_change":
                 matrix_index = event["matrix_index"]
