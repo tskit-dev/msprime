@@ -77,5 +77,8 @@
 #define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
 #define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
 #define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
+#define MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE                 -49
+#define MSP_ERR_BAD_COALESCENCE_RECORDS_SEQUENCE_LENGTH             -50
+#define MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT            -51
 
 #endif /*__ERR_H__*/

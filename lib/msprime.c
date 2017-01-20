@@ -129,6 +129,15 @@ msp_strerror(int err)
         case MSP_ERR_BAD_RECOMBINATION_MAP:
             ret = "Bad recombination map provided.";
             break;
+        case MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE:
+            ret = "Bad coalescence records in file: Samples must be labeled 0...n-1 and not be internal nodes.";
+            break;
+        case MSP_ERR_BAD_COALESCENCE_RECORDS_SEQUENCE_LENGTH:
+            ret = "Bad coalescence records in file: Sequence length is zero.";
+            break;
+        case MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT:
+            ret = "Bad coalescence records in file: right coordinate not matching any left coordinate.";
+            break;
         case MSP_ERR_BAD_COALESCENCE_RECORDS:
             ret = "Bad coalescence records in file.";
             break;
