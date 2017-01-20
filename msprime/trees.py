@@ -1835,7 +1835,7 @@ class TreeSequence(object):
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
         '''
-        out = branch_stats_vector(self, leaf_sets, lambda x: [weight_fun(x)])
+        out = self.branch_stats_vector(leaf_sets, lambda x: [weight_fun(x)])
         if len(out) > 1:
             raise ValueError("Expecting output of length 1.")
         return out[0]
