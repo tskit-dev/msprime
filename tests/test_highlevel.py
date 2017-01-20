@@ -671,8 +671,7 @@ class TestVariantGenerator(HighLevelTestCase):
             A[variant.index] = variant.genotypes
         for variant in ts.variants(as_bytes=True):
             self.assertIsInstance(variant.genotypes, bytes)
-            B[variant.index] = np.fromstring(
-                variant.genotypes, np.uint8) - ord('0')
+            B[variant.index] = np.fromstring(variant.genotypes, np.uint8) - ord('0')
         self.assertTrue(np.all(A == B))
         bytes_variants = list(ts.variants(as_bytes=True))
         for j, variant in enumerate(bytes_variants):
@@ -693,6 +692,38 @@ class TestVariantGenerator(HighLevelTestCase):
         self.assertEqual(ts.get_num_mutations(), 0)
         variants = list(ts.variants())
         self.assertEqual(len(variants), 0)
+
+    def test_recurrent_mutations_over_leaves(self):
+        ts = self.get_tree_sequence()
+        num_mutations = 5
+        mutations = [
+            msprime.Mutation(
+                index=j,
+                position=ts.sequence_length / num_mutations,
+                nodes=tuple([u for u in range(ts.sample_size)]))
+            for j in range(num_mutations)]
+        ts = ts.copy(mutations)
+        variants = list(ts.variants(as_bytes=True))
+        self.assertEqual(len(variants), num_mutations)
+        for mutation, variant in zip(mutations, variants):
+            self.assertEqual(mutation.position, variant.position)
+            self.assertEqual(mutation.nodes, variant.nodes)
+            self.assertEqual(mutation.index, variant.index)
+            self.assertEqual(variant.genotypes, b'1' * ts.sample_size)
+        # Now try without as_bytes
+        for variant in ts.variants():
+            self.assertTrue(np.all(variant.genotypes == np.ones(ts.sample_size)))
+
+    def test_recurrent_mutations_errors(self):
+        ts = self.get_tree_sequence()
+        tree = next(ts.trees())
+        for u in tree.nodes():
+            for leaf in tree.leaves(u):
+                if leaf != u:
+                    mutations = [
+                        msprime.Mutation(index=0, position=0, nodes=(leaf, u))]
+            ts_new = ts.copy(mutations)
+            self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
 
 
 class TestHaplotypeGenerator(HighLevelTestCase):
@@ -766,6 +797,29 @@ class TestHaplotypeGenerator(HighLevelTestCase):
     def test_nonbinary_trees(self):
         for ts in self.get_bottleneck_examples():
             self.verify_tree_sequence(ts)
+
+    def test_recurrent_mutations_over_leaves(self):
+        for ts in self.get_bottleneck_examples():
+            num_mutations = 5
+            mutations = [
+                msprime.Mutation(
+                    index=j,
+                    position=ts.sequence_length / num_mutations,
+                    nodes=tuple([u for u in range(ts.sample_size)]))
+                for j in range(num_mutations)]
+            ts_new = ts.copy(mutations)
+            ones = "1" * num_mutations
+            for h in ts_new.haplotypes():
+                self.assertEqual(ones, h)
+
+    def test_recurrent_mutations_errors(self):
+        for ts in self.get_bottleneck_examples():
+            tree = next(ts.trees())
+            for u in tree.children(tree.root):
+                mutations = [
+                    msprime.Mutation(index=0, position=0, nodes=(u, tree.root))]
+                ts_new = ts.copy(mutations)
+                self.assertRaises(_msprime.LibraryError, ts_new.haplotypes)
 
 
 class TestNewickConversion(HighLevelTestCase):
