@@ -16,5 +16,7 @@ svgwrite
 pyparsing < 2.1
 
 # We need pysam and PyVCF for testing VCF output.
-pysam
+# Pin pysam at 0.9 version as there are problems with building py33 version
+# on travis.
+pysam==0.9.1.4
 PyVCF
