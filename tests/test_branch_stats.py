@@ -36,9 +36,14 @@ import _msprime
 
 def build_tree_sequence(records, mutations=[]):
     ts = _msprime.TreeSequence()
-    ts.load_records(records)
-    ts.set_mutations(mutations)
+    # quick workaround to get the samples.
+    # NOTE this is a temporary workaround; the planned API will import nodes,
+    # edgesets and mutations.
+    sample_size = min(record.node for record in records)
+    samples = [(0, 0) for _ in range(sample_size)]
+    ts.load_records(samples, records, mutations)
     return msprime.TreeSequence(ts)
+
 
 def path_length(tr, x, y):
     L = 0
@@ -105,6 +110,7 @@ def branch_length_f4(ts, A, B, C, D):
         S += SS*tr.length
     return S/(ts.sequence_length*len(A)*len(B)*len(C)*len(D))
 
+
 def branch_stats_node_iter(ts, leaf_sets, weight_fun, method='length'):
     '''
     Here leaf_sets is a list of lists of leaves, and weight_fun is a function
@@ -168,14 +174,14 @@ def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
             for mut in trs[0].mutations():
                 # print(mut)
                 for j in range(n_out):
-                    S[j] += count_nodes[mut.node][j]
+                    # TODO update for recurrent mutations
+                    assert len(mut.nodes) == 1
+                    S[j] += count_nodes[mut.nodes[0]][j]
         else:
             raise(TypeError("Unknown method "+method))
     for j in range(n_out):
         S[j] /= ts.get_sequence_length()
     return S
-
-
 
 
 class BranchStatsTestCase(unittest.TestCase):
@@ -334,21 +340,18 @@ class BranchStatsTestCase(unittest.TestCase):
                 left=0.0, right=0.2, node=6, children=(0, 4),
                 time=1.0, population=0)]
 
-        ll_ts = _msprime.TreeSequence()
-        ll_ts.load_records(records)
-        ts = msprime.TreeSequence(ll_ts)
-
-        ts.set_mutations([
-            (0.1, 0),
-            (0.15, 0),
-            (0.15, 1),
-            (0.05, 4),
-            (0.1, 2),
-            (0.3, 1),
-            (0.6, 2),
-            (0.9, 0),
-            (0.95, 1),
-            (0.95, 2)])
+        mutations = [
+            (0.05, (4,)),
+            (0.1, (0,)),
+            (0.11, (2,)),
+            (0.15, (0,)),
+            (0.151, (1,)),
+            (0.3, (1,)),
+            (0.6, (2,)),
+            (0.9, (0,)),
+            (0.95, (1,)),
+            (0.951, (2,))]
+        ts = build_tree_sequence(records, mutations)
 
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
@@ -501,9 +504,7 @@ class BranchStatsTestCase(unittest.TestCase):
                         time=5.0-0.0, population=0),
                ]
 
-        ll_ts = _msprime.TreeSequence()
-        ll_ts.load_records(records)
-        ts = msprime.TreeSequence(ll_ts)
+        ts = build_tree_sequence(records)
 
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)

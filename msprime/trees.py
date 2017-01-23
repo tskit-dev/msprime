@@ -1851,7 +1851,8 @@ class TreeSequence(object):
         '''
         for U in leaf_sets:
             if max([U.count(x) for x in set(U)]) > 1:
-                raise ValueError("elements of leaf_sets cannot contain repeated elements.")
+                raise ValueError(
+                    "elements of leaf_sets cannot contain repeated elements.")
         # initialize
         num_leaf_sets = len(leaf_sets)
         n_out = len(weight_fun([0 for a in range(num_leaf_sets)]))
