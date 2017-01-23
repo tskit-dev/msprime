@@ -174,9 +174,10 @@ def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
             for mut in trs[0].mutations():
                 # print(mut)
                 for j in range(n_out):
-                    # TODO update for recurrent mutations
-                    assert len(mut.nodes) == 1
-                    S[j] += count_nodes[mut.nodes[0]][j]
+                    # TODO: this is the theoretical method
+                    # that assumes we can distinguish recurrent mutations
+                    for mn in mut.nodes:
+                        S[j] += count_nodes[mn][j]
         else:
             raise(TypeError("Unknown method "+method))
     for j in range(n_out):
