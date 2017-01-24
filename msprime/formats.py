@@ -323,10 +323,11 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
         num_nodes.append(len(mutation.nodes))
         position.append(mutation.position)
     l = len(position)
-    mutations = root.create_group("mutations")
-    mutations.create_dataset("position", (l, ), data=position, dtype=float)
-    mutations.create_dataset("num_nodes", (l, ), data=num_nodes, dtype="u4")
-    mutations.create_dataset("node", (len(node), ), data=node, dtype="u4")
+    if l > 0:
+        mutations = root.create_group("mutations")
+        mutations.create_dataset("position", (l, ), data=position, dtype=float)
+        mutations.create_dataset("num_nodes", (l, ), data=num_nodes, dtype="u4")
+        mutations.create_dataset("node", (len(node), ), data=node, dtype="u4")
 
     provenance = tree_sequence.get_provenance()
     if len(provenance) > 0:
