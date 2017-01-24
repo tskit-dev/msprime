@@ -139,10 +139,7 @@ class TestRoundTrip(TestHdf5):
         self.assertEqual(num_trees, ts.num_trees)
 
         provenance = tsp.get_provenance()
-        if ts.get_num_mutations() > 0:
-            self.assertEqual(len(provenance), 3)
-        else:
-            self.assertEqual(len(provenance), 2)
+        self.assertGreater(len(provenance), 1)
         for p in provenance:
             self.assertIsInstance(json.loads(p), dict)
 
@@ -251,24 +248,27 @@ class TestHdf5Format(TestHdf5):
         self.assertIn("mutations", keys)
         g = root["mutations"]
         fields = [("nodes", uint32), ("num_nodes", uint32), ("position", float64)]
-        self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
-        for name, dtype in fields:
-            self.assertEqual(len(g[name].shape), 1)
-            self.assertEqual(g[name].shape[0], ts.get_num_mutations())
-            self.assertEqual(g[name].dtype, dtype)
-        flat_nodes = list(g["nodes"])
-        num_nodes = list(g["num_nodes"])
-        position = list(g["position"])
-        nodes = []
-        offset = 0
-        for k in num_nodes:
-            nodes.append(tuple(flat_nodes[offset: offset + k]))
-            offset += k
-        self.assertEqual(len(num_nodes), ts.get_num_mutations())
-        self.assertEqual(len(position), ts.get_num_mutations())
-        for j, mutation in enumerate(ts.mutations()):
-            self.assertEqual(mutation.nodes, nodes[j])
-            self.assertEqual(mutation.position, position[j])
+        if ts.num_mutations > 0:
+            self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
+            for name, dtype in fields:
+                self.assertEqual(len(g[name].shape), 1)
+                self.assertEqual(g[name].shape[0], ts.get_num_mutations())
+                self.assertEqual(g[name].dtype, dtype)
+            flat_nodes = list(g["nodes"])
+            num_nodes = list(g["num_nodes"])
+            position = list(g["position"])
+            nodes = []
+            offset = 0
+            for k in num_nodes:
+                nodes.append(tuple(flat_nodes[offset: offset + k]))
+                offset += k
+            self.assertEqual(len(num_nodes), ts.get_num_mutations())
+            self.assertEqual(len(position), ts.get_num_mutations())
+            for j, mutation in enumerate(ts.mutations()):
+                self.assertEqual(mutation.nodes, nodes[j])
+                self.assertEqual(mutation.position, position[j])
+        else:
+            self.assertEqual(0, len(list(g.keys())))
 
         trees_group = root["trees"]
         self.assertEqual(

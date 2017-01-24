@@ -62,9 +62,23 @@ def _get_provenance(command, attrs):
     return json.dumps(provenance)
 
 
+def _get_upgrade_provenance(root):
+    """
+    Returns the provenance string from upgrading the specified HDF5 file.
+    """
+    # TODO add more parameters here like filename, etc.
+    parameters = {
+        "source_version": tuple(root.attrs["format_version"])
+    }
+    return json.dumps(msprime.get_provenance_dict("upgrade", parameters))
+
+
 def _load_legacy_hdf5_v2(root):
     # Get the coalescence records
     trees_group = root["trees"]
+    provenance = [
+        _get_provenance("generate_trees", trees_group.attrs),
+    ]
     left = np.array(trees_group["left"])
     right = np.array(trees_group["right"])
     node = np.array(trees_group["node"])
@@ -99,6 +113,8 @@ def _load_legacy_hdf5_v2(root):
     mutations = []
     if "mutations" in root:
         mutations_group = root["mutations"]
+        provenance.append(
+            _get_provenance("generate_mutations", mutations_group.attrs))
         position = np.array(mutations_group["position"])
         node = np.array(mutations_group["node"])
         num_mutations = len(node)
@@ -111,11 +127,7 @@ def _load_legacy_hdf5_v2(root):
     if samples is None:
         sample_size = min(record.node for record in records)
         samples = [msprime.Sample(0, 0) for _ in range(sample_size)]
-    provenance = [
-        _get_provenance("generate_trees", trees_group.attrs),
-        _get_provenance("generate_mutations", mutations_group.attrs),
-        json.dumps(msprime.get_provenance_dict("upgrade", {}))
-    ]
+    provenance.append(_get_upgrade_provenance(root))
     ll_ts.load_records(samples, records, mutations, provenance)
     return ll_ts
 
@@ -161,8 +173,12 @@ def _load_legacy_hdf5_v3(root):
             mutations[j] = msprime.Mutation(
                 position=position[j], nodes=(node[j],), index=j)
 
+    provenance = []
+    if "provenance" in root:
+        provenance = list(root["provenance"])
+    provenance.append(_get_upgrade_provenance(root))
     ll_ts = _msprime.TreeSequence()
-    ll_ts.load_records(samples, records, mutations)
+    ll_ts.load_records(samples, records, mutations, provenance)
     return ll_ts
 
 
@@ -310,6 +326,10 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
     mutations.create_dataset("position", (l, ), data=position, dtype=float)
     mutations.create_dataset("num_nodes", (l, ), data=num_nodes, dtype="u4")
     mutations.create_dataset("node", (len(node), ), data=node, dtype="u4")
+
+    provenance = tree_sequence.get_provenance()
+    if len(provenance) > 0:
+        root.create_dataset("provenance", (len(provenance), ), data=provenance)
 
 
 def dump_legacy(tree_sequence, filename, version=3):
