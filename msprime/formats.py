@@ -39,6 +39,11 @@ import msprime
 import _msprime
 
 
+def _check_h5py():
+    if not _h5py_imported:
+        raise RuntimeError("h5py is required for converting HDF5 files.")
+
+
 def _get_v2_provenance(command, attrs):
     """
     Returns the V2 tree provenance attributes reformatted as a V3
@@ -109,6 +114,9 @@ def _load_legacy_hdf5_v2(root):
             if time is not None:
                 t = time[j]
             samples[j] = msprime.Sample(population=population[j], time=t)
+    else:
+        sample_size = min(record.node for record in records)
+        samples = [msprime.Sample(0, 0) for _ in range(sample_size)]
 
     # Get the mutations (if present)
     mutations = []
@@ -125,9 +133,6 @@ def _load_legacy_hdf5_v2(root):
                 position=position[j], nodes=(node[j],), index=j)
 
     ll_ts = _msprime.TreeSequence()
-    if samples is None:
-        sample_size = min(record.node for record in records)
-        samples = [msprime.Sample(0, 0) for _ in range(sample_size)]
     provenance.append(_get_upgrade_provenance(root))
     ll_ts.load_records(samples, records, mutations, provenance)
     return ll_ts
@@ -188,12 +193,11 @@ def load_legacy(filename):
     Reads the specified msprime HDF5 file and returns a tree sequence. This
     method is only intended to be used to read old format HDF5 files.
     """
+    _check_h5py()
     loaders = {
         2: _load_legacy_hdf5_v2,
         3: _load_legacy_hdf5_v3,
     }
-    if not _h5py_imported:
-        raise RuntimeError("h5py is required for converting HDF5 files.")
     root = h5py.File(filename, "r")
     if 'format_version' not in root.attrs:
         raise ValueError("HDF5 file not in msprime format")
@@ -316,18 +320,17 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
     nodes_group.create_dataset("population", (l, ), data=population, dtype="u4")
 
     node = []
-    num_nodes = []
     position = []
     for mutation in tree_sequence.mutations():
-        node.extend(mutation.nodes)
-        num_nodes.append(len(mutation.nodes))
+        if len(mutation.nodes) != 1:
+            raise ValueError("Recurrent mutations not supported")
+        node.append(mutation.nodes[0])
         position.append(mutation.position)
     l = len(position)
     if l > 0:
         mutations = root.create_group("mutations")
         mutations.create_dataset("position", (l, ), data=position, dtype=float)
-        mutations.create_dataset("num_nodes", (l, ), data=num_nodes, dtype="u4")
-        mutations.create_dataset("node", (len(node), ), data=node, dtype="u4")
+        mutations.create_dataset("node", (l, ), data=node, dtype="u4")
 
     provenance = tree_sequence.get_provenance()
     if len(provenance) > 0:
@@ -339,14 +342,13 @@ def dump_legacy(tree_sequence, filename, version=3):
     Writes the specified tree sequence to a HDF5 file in the specified
     legacy file format version.
     """
+    _check_h5py()
     dumpers = {
         2: _dump_legacy_hdf5_v2,
         3: _dump_legacy_hdf5_v3
     }
     if version not in dumpers:
         raise ValueError("Version {} file format is supported".format(version))
-    if not _h5py_imported:
-        raise RuntimeError("h5py is required for converting HDF5 files.")
     root = h5py.File(filename, "w")
     try:
         dumpers[version](tree_sequence, root)

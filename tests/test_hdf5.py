@@ -22,6 +22,7 @@ Test cases for the HDF5 format in msprime.
 from __future__ import print_function
 from __future__ import division
 
+import contextlib
 import json
 import os
 import sys
@@ -39,6 +40,21 @@ import msprime
 import _msprime
 
 
+@contextlib.contextmanager
+def silence_stderr():
+    """
+    Context manager to silence stderr. We do this here because h5py dumps out some
+    spurious error messages. See https://github.com/h5py/h5py/issues/390
+    """
+    tmp = sys.stderr
+    try:
+        with open(os.devnull, "w") as devnull:
+            sys.stderr = devnull
+            yield
+    finally:
+        sys.stderr = tmp
+
+
 def single_locus_no_mutation_example():
     return msprime.simulate(10, random_seed=10)
 
@@ -51,6 +67,15 @@ def multi_locus_with_mutation_example():
     return msprime.simulate(
         10, recombination_rate=1, length=10, mutation_rate=10,
         random_seed=2)
+
+
+def recurrent_mutation_example():
+    ts = msprime.simulate(
+        10, recombination_rate=1, length=10, random_seed=2)
+    mutations = [msprime.Mutation(
+        position=j, nodes=tuple(k for k in range(j + 1)), index=j)
+        for j in range(ts.sample_size)]
+    return ts.copy(mutations)
 
 
 def migration_example():
@@ -144,36 +169,20 @@ class TestRoundTrip(TestHdf5):
             self.assertIsInstance(json.loads(p.decode()), dict)
 
     def verify_round_trip(self, ts, version):
-        tmp = sys.stderr
-        try:
-            with open(os.devnull, "w") as devnull:
-                sys.stderr = devnull
-                # We silence stderr here because h5py dumps out some
-                # spurious # error messages. See
-                # https://github.com/h5py/h5py/issues/390
-                msprime.dump_legacy(ts, self.temp_file, version=version)
-                tsp = msprime.load_legacy(self.temp_file)
-        finally:
-            sys.stderr = tmp
+        msprime.dump_legacy(ts, self.temp_file, version=version)
+        with silence_stderr():
+            tsp = msprime.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
 
     def verify_malformed_json_v2(self, ts, group_name, attr, bad_json):
-        tmp = sys.stderr
-        try:
-            with open(os.devnull, "w") as devnull:
-                sys.stderr = devnull
-                # We silence stderr here because h5py dumps out some
-                # spurious error messages. See
-                # https://github.com/h5py/h5py/issues/390
-                msprime.dump_legacy(ts, self.temp_file, 2)
-                # Write some bad JSON to the provenance string.
-                root = h5py.File(self.temp_file, "r+")
-                group = root[group_name]
-                group.attrs[attr] = bad_json
-                root.close()
-                tsp = msprime.load_legacy(self.temp_file)
-        finally:
-            sys.stderr = tmp
+        msprime.dump_legacy(ts, self.temp_file, 2)
+        # Write some bad JSON to the provenance string.
+        root = h5py.File(self.temp_file, "r+")
+        group = root[group_name]
+        group.attrs[attr] = bad_json
+        root.close()
+        with silence_stderr():
+            tsp = msprime.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
 
     def test_malformed_json_v2(self):
@@ -202,6 +211,22 @@ class TestRoundTrip(TestHdf5):
     def test_bottleneck_example(self):
         self.verify_round_trip(migration_example(), 3)
 
+    def test_recurrent_mutation_example(self):
+        ts = recurrent_mutation_example()
+        for version in [2, 3]:
+            self.assertRaises(
+                ValueError, msprime.dump_legacy, ts, self.temp_file, version)
+
+    def test_v2_no_samples(self):
+        ts = multi_locus_with_mutation_example()
+        msprime.dump_legacy(ts, self.temp_file, version=2)
+        root = h5py.File(self.temp_file, "r+")
+        del root['samples']
+        root.close()
+        with silence_stderr():
+            tsp = msprime.load_legacy(self.temp_file)
+        self.verify_tree_sequences_equal(ts, tsp)
+
 
 class TestErrors(TestHdf5):
     """
@@ -217,11 +242,17 @@ class TestErrors(TestHdf5):
             random_seed=1)
         self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, 2)
 
-    def test_unsupported_format(self):
+    def test_unsupported_version(self):
         ts = msprime.simulate(10)
         self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, version=4)
         # We refuse to read current version also
         ts.dump(self.temp_file)
+        self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
+
+    def test_no_version_number(self):
+        root = h5py.File(self.temp_file, "w")
+        root.attrs["x"] = 0
+        root.close()
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
