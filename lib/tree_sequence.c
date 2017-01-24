@@ -1135,6 +1135,29 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
 
+    /* First make sure that the root number make sense */
+    if (self->trees.num_records > 0) {
+        if (self->trees.num_breakpoints == 0) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        if (self->trees.num_nodes == 0) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        if (self->trees.total_child_nodes == 0) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+    }
+    if (self->mutations.num_records > 0 &&
+            self->mutations.total_nodes < self->mutations.num_records) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    /* Now go though the rest of the fields and make sure they have the
+     * right sizes
+     */
     for (j = 0; j < num_fields; j++) {
         exists = H5Lexists(file_id, fields[j].name, H5P_DEFAULT);
         if (exists < 0) {

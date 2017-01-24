@@ -1892,11 +1892,11 @@ class TestSimulateInterface(unittest.TestCase):
     def test_provenance(self):
         ts = msprime.simulate(10)
         self.assertEqual(len(ts.provenance), 1)
-        d = json.loads(ts.provenance[0])
+        d = json.loads(ts.provenance[0].decode())
         # TODO check the form of the dictionary
         for ts in msprime.simulate(10, num_replicates=10):
             self.assertEqual(len(ts.provenance), 1)
-            d = json.loads(ts.provenance[0])
+            d = json.loads(ts.provenance[0].decode())
             self.assertGreater(len(d), 0)
 
     def test_replicates(self):

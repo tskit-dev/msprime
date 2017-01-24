@@ -565,7 +565,8 @@ convert_string_list(char **list, size_t size)
         goto out;
     }
     for (j = 0; j < size; j++) {
-        py_str = Py_BuildValue("s", list[j]);
+        assert(list[j] != NULL);
+        py_str = PyBytes_FromString(list[j]);
         if (py_str == NULL) {
             Py_DECREF(l);
             goto out;

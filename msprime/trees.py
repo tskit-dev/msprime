@@ -701,7 +701,7 @@ def _replicate_generator(
     # simulation parameters so that particular simulations can be
     # replicated. This will also involve encoding the state of the
     # random generator.
-    provenance = [json.dumps(provenance_dict)]
+    provenance = [json.dumps(provenance_dict).encode()]
     # Should use range here, but Python 2 makes this awkward...
     j = 0
     while j < num_replicates:

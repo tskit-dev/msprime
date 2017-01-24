@@ -141,7 +141,7 @@ class TestRoundTrip(TestHdf5):
         provenance = tsp.get_provenance()
         self.assertGreater(len(provenance), 1)
         for p in provenance:
-            self.assertIsInstance(json.loads(p), dict)
+            self.assertIsInstance(json.loads(p.decode()), dict)
 
     def verify_round_trip(self, ts, version):
         tmp = sys.stderr
@@ -379,12 +379,14 @@ class TestHdf5FormatErrors(TestHdf5):
         names = []
 
         def visit(name):
-            if name not in ["provenance"]:
+            # The only dataset we can delete on its own is provenance
+            if name != "provenance":
                 names.append(name)
         ts.dump(self.temp_file)
         hfile = h5py.File(self.temp_file, "r")
         hfile.visit(visit)
         hfile.close()
+        # Delete each field in turn; this should cause a LibraryError
         for name in names:
             ts.dump(self.temp_file)
             hfile = h5py.File(self.temp_file, "r+")
@@ -393,11 +395,9 @@ class TestHdf5FormatErrors(TestHdf5):
             del hfile
             self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
 
-    @unittest.skip("segfaulting")
     def test_mandatory_fields_no_mutation(self):
         self.verify_fields(single_locus_no_mutation_example())
 
-    @unittest.skip("segfaulting")
     def test_mandatory_fields_with_mutation(self):
         self.verify_fields(single_locus_with_mutation_example())
 

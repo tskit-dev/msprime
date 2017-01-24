@@ -456,7 +456,8 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         sim.run()
         ts = _msprime.TreeSequence()
         mutgen = _msprime.MutationGenerator(rng, mutation_rate)
-        provenance_strings = ["xxxxxxx" * (j + 1) for j in range(num_provenance_strings)]
+        provenance_strings = [
+            b"xxxxxxx" * (j + 1) for j in range(num_provenance_strings)]
         sim.populate_tree_sequence(
             ts, mutation_generator=mutgen, provenance_strings=provenance_strings)
         return ts
@@ -2274,7 +2275,7 @@ class TestTreeSequence(LowLevelTestCase):
             ts = _msprime.TreeSequence()
             for k in range(j):
                 # Use some fairly big strings to stress things out
-                strings.append("x" * (k + 1) * 8192)
+                strings.append(b"x" * (k + 1) * 8192)
             sim.populate_tree_sequence(ts, provenance_strings=strings)
             self.assertEqual(ts.get_provenance_strings(), strings)
             ts.dump(self.temp_file)
@@ -2291,7 +2292,7 @@ class TestTreeSequence(LowLevelTestCase):
             strings = []
             tsp = _msprime.TreeSequence()
             for k in range(j):
-                strings.append("y" * k)
+                strings.append(b"y" * k)
             tsp.load_records(
                 coalescence_records=records, samples=samples,
                 provenance_strings=strings)

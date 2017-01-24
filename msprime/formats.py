@@ -39,7 +39,7 @@ import msprime
 import _msprime
 
 
-def _get_provenance(command, attrs):
+def _get_v2_provenance(command, attrs):
     """
     Returns the V2 tree provenance attributes reformatted as a V3
     provenance string.
@@ -59,7 +59,7 @@ def _get_provenance(command, attrs):
     provenance = msprime.get_provenance_dict(command, parameters)
     provenance["version"] = environment.get("msprime_version", "Unknown_version")
     provenance["environment"] = environment
-    return json.dumps(provenance)
+    return json.dumps(provenance).encode()
 
 
 def _get_upgrade_provenance(root):
@@ -68,16 +68,17 @@ def _get_upgrade_provenance(root):
     """
     # TODO add more parameters here like filename, etc.
     parameters = {
-        "source_version": tuple(root.attrs["format_version"])
+        "source_version": list(map(int, root.attrs["format_version"]))
     }
-    return json.dumps(msprime.get_provenance_dict("upgrade", parameters))
+    s = json.dumps(msprime.get_provenance_dict("upgrade", parameters))
+    return s.encode()
 
 
 def _load_legacy_hdf5_v2(root):
     # Get the coalescence records
     trees_group = root["trees"]
     provenance = [
-        _get_provenance("generate_trees", trees_group.attrs),
+        _get_v2_provenance("generate_trees", trees_group.attrs),
     ]
     left = np.array(trees_group["left"])
     right = np.array(trees_group["right"])
@@ -114,7 +115,7 @@ def _load_legacy_hdf5_v2(root):
     if "mutations" in root:
         mutations_group = root["mutations"]
         provenance.append(
-            _get_provenance("generate_mutations", mutations_group.attrs))
+            _get_v2_provenance("generate_mutations", mutations_group.attrs))
         position = np.array(mutations_group["position"])
         node = np.array(mutations_group["node"])
         num_mutations = len(node)
