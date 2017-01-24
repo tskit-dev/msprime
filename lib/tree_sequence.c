@@ -726,6 +726,9 @@ tree_sequence_store_mutations(tree_sequence_t *self, size_t num_mutations,
         }
         self->mutations.position[j] = mutations[j].position;
         self->mutations.ancestral_state[j] = mutations[j].ancestral_state;
+        assert(mutations[j].ancestral_state == '0');
+        self->mutations.derived_state[j] = mutations[j].derived_state;
+        assert(mutations[j].derived_state == '1');
         self->mutations.derived_state[j] = mutations[j].derived_state;
         self->mutations.num_nodes[j] = mutations[j].num_nodes;
         self->mutations.nodes[j] = self->mutations.nodes_mem + offset;
@@ -1289,10 +1292,6 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/mutations/nodes", H5T_NATIVE_UINT32, 0, 1, self->mutations.nodes_mem},
         {"/mutations/num_nodes", H5T_NATIVE_UINT32, 0, 1, self->mutations.num_nodes},
         {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1, self->mutations.position},
-        {"/mutations/ancestral_state", H5T_NATIVE_CHAR, 0, 1,
-            self->mutations.ancestral_state},
-        {"/mutations/derived_state", H5T_NATIVE_CHAR, 0, 1,
-            self->mutations.derived_state},
         {"/trees/nodes/population", H5T_NATIVE_UINT32, 0, 1,
             self->trees.nodes.population},
         {"/trees/nodes/time", H5T_NATIVE_DOUBLE, 0, 1, self->trees.nodes.time},
@@ -1392,6 +1391,11 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         self->mutations.nodes[j] = &self->mutations.nodes_mem[offset];
         offset += self->mutations.num_nodes[j];
     }
+    /* TODO remove this when we support storing mutation states */
+    memset(self->mutations.ancestral_state, '0',
+            self->mutations.num_records * sizeof(char));
+    memset(self->mutations.derived_state, '1',
+            self->mutations.num_records * sizeof(char));
     ret = tree_sequence_init_tree_mutations(self);
     if (ret != 0) {
         goto out;
@@ -1501,12 +1505,6 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/mutations/position",
             H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
             self->mutations.num_records, self->mutations.position},
-        {"/mutations/ancestral_state",
-            H5T_STD_U8LE, H5T_NATIVE_CHAR,
-            self->mutations.num_records, self->mutations.ancestral_state},
-        {"/mutations/derived_state",
-            H5T_STD_U8LE, H5T_NATIVE_CHAR,
-            self->mutations.num_records, self->mutations.derived_state},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
     struct _hdf5_group_write {
