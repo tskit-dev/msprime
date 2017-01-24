@@ -211,7 +211,6 @@ class TestErrors(TestHdf5):
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
-@unittest.skip("v4 format")
 class TestHdf5Format(TestHdf5):
     """
     Tests on the HDF5 file format.
@@ -226,30 +225,33 @@ class TestHdf5Format(TestHdf5):
         root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 3)
-        self.assertEqual(format_version[1], 2)
+        self.assertEqual(format_version[0], 4)
+        self.assertEqual(format_version[1], 0)
         keys = set(root.keys())
         self.assertLessEqual(keys, set(["mutations", "trees", "provenance"]))
         self.assertIn("trees", keys)
         self.assertIn("provenance", keys)
-        if ts.get_num_mutations() == 0:
-            self.assertNotIn("mutations", keys)
-        else:
-            self.assertIn("mutations", keys)
-            g = root["mutations"]
-            fields = [("node", uint32), ("position", float64)]
-            self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
-            for name, dtype in fields:
-                self.assertEqual(len(g[name].shape), 1)
-                self.assertEqual(g[name].shape[0], ts.get_num_mutations())
-                self.assertEqual(g[name].dtype, dtype)
-            node = list(g["node"])
-            position = list(g["position"])
-            self.assertEqual(len(node), ts.get_num_mutations())
-            self.assertEqual(len(position), ts.get_num_mutations())
-            for j, mutation in enumerate(ts.mutations()):
-                self.assertEqual(mutation.node, node[j])
-                self.assertEqual(mutation.position, position[j])
+        self.assertIn("mutations", keys)
+        g = root["mutations"]
+        fields = [("nodes", uint32), ("num_nodes", uint32), ("position", float64)]
+        self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
+        for name, dtype in fields:
+            self.assertEqual(len(g[name].shape), 1)
+            self.assertEqual(g[name].shape[0], ts.get_num_mutations())
+            self.assertEqual(g[name].dtype, dtype)
+        flat_nodes = list(g["nodes"])
+        num_nodes = list(g["num_nodes"])
+        position = list(g["position"])
+        nodes = []
+        offset = 0
+        for k in num_nodes:
+            nodes.append(tuple(flat_nodes[offset: offset + k]))
+            offset += k
+        self.assertEqual(len(num_nodes), ts.get_num_mutations())
+        self.assertEqual(len(position), ts.get_num_mutations())
+        for j, mutation in enumerate(ts.mutations()):
+            self.assertEqual(mutation.nodes, nodes[j])
+            self.assertEqual(mutation.position, position[j])
 
         trees_group = root["trees"]
         self.assertEqual(
