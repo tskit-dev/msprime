@@ -1,0 +1,9 @@
+coverage:
+  status:
+    project:
+      python:
+        target: 90%
+        flags: python
+      C:
+        target: 80%
+        flags: C
