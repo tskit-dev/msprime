@@ -355,6 +355,7 @@ get_example_tree_sequence(uint32_t sample_size,
     tree_sequence_t *tree_seq = malloc(sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = malloc(sizeof(recomb_map_t));
     mutgen_t *mutgen = malloc(sizeof(mutgen_t));
+    const char *provenance = "get_example_tree_sequence";
     uint32_t j;
     size_t num_populations = 3;
     double migration_matrix[] = {
@@ -420,7 +421,8 @@ get_example_tree_sequence(uint32_t sample_size,
      * to cancel scaling factor. */
     ret = tree_sequence_initialise(tree_seq);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 0, NULL, tree_seq);
+    ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 1, &provenance,
+            tree_seq);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_simulator_tree_sequence_equality(msp, tree_seq, mutgen,
             sequence_length / num_loci);
@@ -5039,11 +5041,12 @@ static void
 test_save_records_hdf5(void)
 {
     int ret;
-    size_t j, k, num_records, num_mutations;
+    size_t j, k, num_records, num_mutations, num_provenance_strings;
     uint32_t sample_size;
     coalescence_record_t r, *records;
     sample_t *samples;
     mutation_t *mutations;
+    char **provenance_strings;
     tree_sequence_t *ts1, ts2, ts3, **examples;
 
     examples = get_example_tree_sequences(1);
@@ -5068,18 +5071,22 @@ test_save_records_hdf5(void)
         num_mutations = tree_sequence_get_num_mutations(ts1);
         ret = tree_sequence_get_mutations(ts1, &mutations);
         CU_ASSERT_EQUAL(ret, 0);
+        ret = tree_sequence_get_provenance_strings(ts1, &num_provenance_strings,
+                &provenance_strings);
+        CU_ASSERT_EQUAL(ret, 0);
 
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_records(&ts2, sample_size, samples, num_records, records,
-            num_mutations, mutations, 0, NULL, 0, NULL);
+            num_mutations, mutations, 0, NULL, num_provenance_strings,
+            (const char **) provenance_strings);
         ret = tree_sequence_dump(&ts2, _tmp_file_name, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_initialise(&ts3);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load(&ts3, _tmp_file_name, 0);
         CU_ASSERT_EQUAL(ret, 0);
-        verify_tree_sequences_equal(ts1, &ts3, 0);
+        verify_tree_sequences_equal(ts1, &ts3, true);
         tree_sequence_print_state(&ts2, _devnull);
 
         tree_sequence_free(&ts2);

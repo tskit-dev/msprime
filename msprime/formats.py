@@ -111,14 +111,12 @@ def _load_legacy_hdf5_v2(root):
     if samples is None:
         sample_size = min(record.node for record in records)
         samples = [msprime.Sample(0, 0) for _ in range(sample_size)]
-    ll_ts.load_records(samples, records, mutations)
-    # FIXME provenance
-    # ll_ts.add_provenance_string(
-    #     _get_provenance("generate_trees", trees_group.attrs))
-    # ll_ts.add_provenance_string(
-    #     _get_provenance("generate_mutations", mutations_group.attrs))
-    # ll_ts.add_provenance_string(
-    #     json.dumps(msprime.get_provenance_dict("upgrade", {})))
+    provenance = [
+        _get_provenance("generate_trees", trees_group.attrs),
+        _get_provenance("generate_mutations", mutations_group.attrs),
+        json.dumps(msprime.get_provenance_dict("upgrade", {}))
+    ]
+    ll_ts.load_records(samples, records, mutations, provenance)
     return ll_ts
 
 

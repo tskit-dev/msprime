@@ -456,10 +456,9 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         sim.run()
         ts = _msprime.TreeSequence()
         mutgen = _msprime.MutationGenerator(rng, mutation_rate)
-        sim.populate_tree_sequence(ts, mutation_generator=mutgen)
-        # FIXME provenance strings
-        # for j in range(num_provenance_strings):
-        #     ts.add_provenance_string("xxxxxxx" * (j + 1))
+        provenance_strings = ["xxxxxxx" * (j + 1) for j in range(num_provenance_strings)]
+        sim.populate_tree_sequence(
+            ts, mutation_generator=mutgen, provenance_strings=provenance_strings)
         return ts
 
     def get_nonbinary_tree_sequence(self):
@@ -2080,9 +2079,16 @@ class TestTreeSequence(LowLevelTestCase):
             ts = _msprime.TreeSequence()
             self.assertRaises(TypeError, ts.load_records, bad_type, [])
             self.assertRaises(TypeError, ts.load_records, [], [bad_type])
-            self.assertRaises(TypeError, ts.load_records, [], [], mutations=bad_type)
+            self.assertRaises(
+                TypeError, ts.load_records, samples, [record], mutations=bad_type)
             self.assertRaises(
                 TypeError, ts.load_records, samples, [record], mutations=[bad_type])
+            self.assertRaises(
+                TypeError, ts.load_records, samples, [record],
+                provenance_strings=bad_type)
+            self.assertRaises(
+                TypeError, ts.load_records, samples, [record],
+                provenance_strings=[bad_type])
         ts = _msprime.TreeSequence()
         for j in range(len(record)):
             ts = _msprime.TreeSequence()
@@ -2252,24 +2258,45 @@ class TestTreeSequence(LowLevelTestCase):
         r = (1, 0, 3, (0, 2, 1), 1, 0)
         self.assertRaises(_msprime.LibraryError, f, [r])
 
-    @unittest.skip("provenance")
-    def test_provenance_strings(self):
-        ts = self.get_tree_sequence(num_provenance_strings=0)
-        for bad_type in [{}, ts, None, 5]:
-            self.assertRaises(TypeError, ts.add_provenance_string, bad_type)
-        # The emtpy string raised a ValueError
-        self.assertRaises(ValueError, ts.add_provenance_string, "")
-        self.assertEqual(ts.get_provenance_strings(), [])
+    def test_provenance_strings_populate(self):
+        rng = _msprime.RandomGenerator(1)
+        sim = _msprime.Simulator(get_samples(10), rng)
+        sim.run()
+        for bad_type in [{}, rng, None, 5]:
+            provenance_strings = [bad_type]
+            ts = _msprime.TreeSequence()
+            self.assertRaises(
+                TypeError, sim.populate_tree_sequence, ts,
+                provenance_strings=provenance_strings)
 
         for j in range(10):
-            ts = self.get_tree_sequence(num_provenance_strings=0)
             strings = []
+            ts = _msprime.TreeSequence()
             for k in range(j):
                 # Use some fairly big strings to stress things out
                 strings.append("x" * (k + 1) * 8192)
-                ts.add_provenance_string(strings[-1])
+            sim.populate_tree_sequence(ts, provenance_strings=strings)
             self.assertEqual(ts.get_provenance_strings(), strings)
             ts.dump(self.temp_file)
+            ts2 = _msprime.TreeSequence()
+            ts2.load(self.temp_file)
+            self.assertEqual(ts2.get_provenance_strings(), strings)
+
+    def test_provenance_strings_load_records(self):
+        ts = next(self.get_example_tree_sequences())
+        n = ts.get_sample_size()
+        records = [ts.get_record(j) for j in range(ts.get_num_records())]
+        samples = [(0, 0) for _ in range(n)]
+        for j in range(10):
+            strings = []
+            tsp = _msprime.TreeSequence()
+            for k in range(j):
+                strings.append("y" * k)
+            tsp.load_records(
+                coalescence_records=records, samples=samples,
+                provenance_strings=strings)
+            self.assertEqual(tsp.get_provenance_strings(), strings)
+            tsp.dump(self.temp_file)
             ts2 = _msprime.TreeSequence()
             ts2.load(self.temp_file)
             self.assertEqual(ts2.get_provenance_strings(), strings)

@@ -356,7 +356,7 @@ tree_sequence_alloc_provenance(tree_sequence_t *self)
 
     if (self->num_provenance_strings > 0) {
         msp_safe_free(self->provenance_strings);
-        self->provenance_strings = malloc(self->num_provenance_strings * sizeof(char *));
+        self->provenance_strings = calloc(self->num_provenance_strings, sizeof(char *));
         if (self->provenance_strings == NULL) {
             goto out;
         }
@@ -443,46 +443,6 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->migrations.time);
     return 0;
 }
-#if 0
-// REMOVE
-int WARN_UNUSED
-tree_sequence_add_provenance_string(tree_sequence_t *self,
-    const char *provenance_string)
-{
-    int ret = MSP_ERR_GENERIC;
-    char **p, *s;
-    size_t size;
-
-    if (provenance_string == NULL) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    size = strlen(provenance_string);
-    if (size == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    p = realloc(self->provenance_strings,
-            (self->num_provenance_strings + 1) * sizeof(char *));
-    if (p == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->provenance_strings = p;
-    size++; /* allow for '/0' */
-    s = malloc((size) * sizeof(char));
-    if (s == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    strncpy(s, provenance_string, size);
-    self->provenance_strings[self->num_provenance_strings] = s;
-    self->num_provenance_strings++;
-    ret = 0;
-out:
-    return ret;
-}
-#endif
 
 int WARN_UNUSED
 tree_sequence_get_provenance_strings(tree_sequence_t *self,
@@ -831,6 +791,38 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+tree_sequence_store_provenance_strings(tree_sequence_t *self,
+        size_t num_provenance_strings, const char**provenance_strings)
+{
+    int ret = MSP_ERR_GENERIC;
+    char *s;
+    size_t j, size;
+
+    ret = tree_sequence_alloc_provenance(self);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_provenance_strings; j++) {
+        if (provenance_strings[j] == NULL) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+        size = strlen(provenance_strings[j]);
+        size++; /* allow for '/0' */
+        s = malloc((size) * sizeof(char));
+        if (s == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        strncpy(s, provenance_strings[j], size);
+        self->provenance_strings[j] = s;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 int WARN_UNUSED
 tree_sequence_load_records(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
@@ -947,6 +939,11 @@ tree_sequence_load_records(tree_sequence_t *self,
     }
     ret = tree_sequence_store_migration_records(self, num_migration_records,
             migration_records);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_store_provenance_strings(self, num_provenance_strings,
+            provenance_strings);
     if (ret != 0) {
         goto out;
     }
