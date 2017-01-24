@@ -40,18 +40,20 @@ script:
   - nosetests -v --with-coverage --cover-package msprime
       --cover-branches --cover-erase --cover-xml
       --cover-inclusive tests
+  - codecov -F python
+  - rm .coverage
+
+  # Now run the low-level tests.
+  - make -C lib travis-tests
+  - ./lib/tests 
+  # Run gcov manually, as the one used in codecov doesn't work here.
+  - gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
+  - find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
+  - codecov -X gcov -F C
+
   # Only make the docs on a recent version of Python to avoid problems with Sphinx.
   - if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then make -C docs; fi
   # Make sure we can install successfully.
   - python setup.py sdist
   - pip install dist/msprime*.tar.gz --no-cache-dir
-  # Now run the low-level tests.
-  - make -C lib travis-tests
-  - ./lib/tests 
   - cd docs/ && doxygen > /dev/null && cd ..
-
-after_success:
-  # Run gcov manually, as the one used in codecov doesn't work here.
-  - gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
-  - find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
-  - codecov -X gcov
