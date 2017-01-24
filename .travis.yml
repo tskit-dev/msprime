@@ -40,7 +40,7 @@ script:
   - nosetests -v --with-coverage --cover-package msprime
       --cover-branches --cover-erase --cover-xml
       --cover-inclusive tests
-  - codecov -F python
+  - codecov -X gcov -F python
   - rm .coverage
 
   # Now run the low-level tests.
