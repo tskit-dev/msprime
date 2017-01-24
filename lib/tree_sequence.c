@@ -1138,9 +1138,6 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
 
-    for (j = 0; j < 3; j++) {
-        fields[j].required = self->mutations.num_records > 0;
-    }
     for (j = 0; j < num_fields; j++) {
         if (fields[j].required) {
             dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);

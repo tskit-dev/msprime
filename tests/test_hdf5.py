@@ -22,7 +22,6 @@ Test cases for the HDF5 format in msprime.
 from __future__ import print_function
 from __future__ import division
 
-import json
 import os
 import sys
 import tempfile
@@ -97,7 +96,6 @@ class TestHdf5(unittest.TestCase):
         os.unlink(self.temp_file)
 
 
-@unittest.skip("v4 format")
 class TestRoundTrip(TestHdf5):
     """
     Tests if we can round trip convert a tree sequence in memory
@@ -122,18 +120,19 @@ class TestRoundTrip(TestHdf5):
         j = 0
         for m1, m2 in zip(ts.mutations(), tsp.mutations()):
             self.assertEqual(m1.position, m2.position)
-            self.assertEqual(m1.node, m2.node)
+            self.assertEqual(m1.nodes, m2.nodes)
             j += 1
         self.assertEqual(ts.get_num_nodes(), tsp.get_num_nodes())
         for u in range(ts.get_sample_size()):
             self.assertEqual(ts.get_population(u), tsp.get_population(u))
-        provenance = tsp.get_provenance()
-        if ts.get_num_mutations() > 0:
-            self.assertEqual(len(provenance), 3)
-        else:
-            self.assertEqual(len(provenance), 2)
-        for p in provenance:
-            self.assertIsInstance(json.loads(p), dict)
+        # FIXME provenance
+        # provenance = tsp.get_provenance()
+        # if ts.get_num_mutations() > 0:
+        #     self.assertEqual(len(provenance), 3)
+        # else:
+        #     self.assertEqual(len(provenance), 2)
+        # for p in provenance:
+        #     self.assertIsInstance(json.loads(p), dict)
 
     def verify_round_trip(self, ts):
         tmp = sys.stderr
@@ -143,7 +142,7 @@ class TestRoundTrip(TestHdf5):
                 # We silence stderr here because h5py dumps out some
                 # spurious # error messages. See
                 # https://github.com/h5py/h5py/issues/390
-                msprime.dump_legacy(ts, self.temp_file)
+                msprime.dump_legacy(ts, self.temp_file, version=2)
                 tsp = msprime.load_legacy(self.temp_file)
         finally:
             sys.stderr = tmp
@@ -157,7 +156,7 @@ class TestRoundTrip(TestHdf5):
                 # We silence stderr here because h5py dumps out some
                 # spurious error messages. See
                 # https://github.com/h5py/h5py/issues/390
-                msprime.dump_legacy(ts, self.temp_file)
+                msprime.dump_legacy(ts, self.temp_file, 2)
                 # Write some bad JSON to the provenance string.
                 root = h5py.File(self.temp_file, "r+")
                 group = root[group_name]
@@ -188,7 +187,6 @@ class TestRoundTrip(TestHdf5):
         self.verify_round_trip(migration_example())
 
 
-@unittest.skip("v4 format")
 class TestErrors(TestHdf5):
     """
     Test various API errors.
@@ -201,12 +199,12 @@ class TestErrors(TestHdf5):
             sample_size=10,
             demographic_events=demographic_events,
             random_seed=1)
-        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file)
+        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, 2)
 
     def test_unsupported_format(self):
         ts = msprime.simulate(10)
-        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, version=3)
-        # We refuse to read version 3 also
+        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, version=4)
+        # We refuse to read current version also
         ts.dump(self.temp_file)
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
@@ -353,7 +351,6 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(other_ts.get_provenance(), [])
 
 
-@unittest.skip("v4 format")
 class TestHdf5FormatErrors(TestHdf5):
     """
     Tests for errors in the HDF5 format.
@@ -363,7 +360,7 @@ class TestHdf5FormatErrors(TestHdf5):
         names = []
 
         def visit(name):
-            if name not in ["provenance", "mutations"]:
+            if name not in ["provenance"]:
                 names.append(name)
         ts.dump(self.temp_file)
         hfile = h5py.File(self.temp_file, "r")
