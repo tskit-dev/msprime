@@ -123,7 +123,49 @@ def _load_legacy_hdf5_v2(root):
 
 
 def _load_legacy_hdf5_v3(root):
-    raise NotImplementedError()
+    # get the trees group for the records and samples
+    trees_group = root["trees"]
+    nodes_group = trees_group["nodes"]
+    time = np.array(nodes_group["time"])
+    population = np.array(nodes_group["population"])
+
+    breakpoints = np.array(trees_group["breakpoints"])
+    records_group = trees_group["records"]
+    left = np.array(records_group["left"])
+    right = np.array(records_group["right"])
+    record_node = np.array(records_group["node"])
+    flat_children = np.array(records_group["children"])
+    num_children = np.array(records_group["num_children"])
+    num_records = left.shape[0]
+    records = [None for _ in range(num_records)]
+    offset = 0
+    for j in range(num_records):
+        children = tuple(flat_children[offset: offset + num_children[j]])
+        offset += num_children[j]
+        u = record_node[j]
+        records[j] = msprime.CoalescenceRecord(
+            left=breakpoints[left[j]], right=breakpoints[right[j]], node=u,
+            children=children, time=time[u], population=population[u])
+
+    sample_size = np.min(record_node)
+    samples = [
+        msprime.Sample(time=time[v], population=population[v])
+        for v in range(sample_size)]
+
+    mutations = []
+    if "mutations" in root:
+        mutations_group = root["mutations"]
+        position = np.array(mutations_group["position"])
+        node = np.array(mutations_group["node"])
+        num_mutations = len(node)
+        mutations = num_mutations * [None]
+        for j in range(num_mutations):
+            mutations[j] = msprime.Mutation(
+                position=position[j], nodes=(node[j],), index=j)
+
+    ll_ts = _msprime.TreeSequence()
+    ll_ts.load_records(samples, records, mutations)
+    return ll_ts
 
 
 def load_legacy(filename):
@@ -206,7 +248,70 @@ def _dump_legacy_hdf5_v2(tree_sequence, root):
 
 
 def _dump_legacy_hdf5_v3(tree_sequence, root):
-    raise NotImplementedError()
+    root.attrs["format_version"] = (3, 999)
+    root.attrs["sample_size"] = 0
+    root.attrs["sequence_length"] = 0
+    trees = root.create_group("trees")
+    # Get the breakpoints from the records.
+    left = [cr.left for cr in tree_sequence.records()]
+    breakpoints = np.unique(left + [tree_sequence.sequence_length])
+    trees.create_dataset(
+        "breakpoints", (len(breakpoints), ), data=breakpoints, dtype=float)
+
+    left = []
+    right = []
+    node = []
+    children = []
+    num_children = []
+    time = []
+    for cr in tree_sequence.records():
+        node.append(cr.node)
+        left.append(np.searchsorted(breakpoints, cr.left))
+        right.append(np.searchsorted(breakpoints, cr.right))
+        children.extend(cr.children)
+        num_children.append(len(cr.children))
+        time.append(cr.time)
+    records_group = trees.create_group("records")
+    l = len(num_children)
+    records_group.create_dataset("left", (l, ), data=left, dtype="u4")
+    records_group.create_dataset("right", (l, ), data=right, dtype="u4")
+    records_group.create_dataset("node", (l, ), data=node, dtype="u4")
+    records_group.create_dataset("num_children", (l, ), data=num_children, dtype="u4")
+    records_group.create_dataset(
+        "children", (len(children), ), data=children, dtype="u4")
+
+    indexes_group = trees.create_group("indexes")
+    I = sorted(range(l), key=lambda j: (left[j], time[j]))
+    O = sorted(range(l), key=lambda j: (right[j], -time[j]))
+    indexes_group.create_dataset("insertion_order", (l, ), data=I, dtype="u4")
+    indexes_group.create_dataset("removal_order", (l, ), data=O, dtype="u4")
+
+    nodes_group = trees.create_group("nodes")
+    population = np.zeros(tree_sequence.num_nodes, dtype="u4")
+    time = np.zeros(tree_sequence.num_nodes, dtype=float)
+    tree = next(tree_sequence.trees())
+    for u in range(tree_sequence.sample_size):
+        population[u] = tree.population(u)
+        time[u] = tree.time(u)
+    for cr in tree_sequence.records():
+        population[cr.node] = cr.population
+        time[cr.node] = cr.time
+    l = tree_sequence.num_nodes
+    nodes_group.create_dataset("time", (l, ), data=time, dtype=float)
+    nodes_group.create_dataset("population", (l, ), data=population, dtype="u4")
+
+    node = []
+    num_nodes = []
+    position = []
+    for mutation in tree_sequence.mutations():
+        node.extend(mutation.nodes)
+        num_nodes.append(len(mutation.nodes))
+        position.append(mutation.position)
+    l = len(position)
+    mutations = root.create_group("mutations")
+    mutations.create_dataset("position", (l, ), data=position, dtype=float)
+    mutations.create_dataset("num_nodes", (l, ), data=num_nodes, dtype="u4")
+    mutations.create_dataset("node", (len(node), ), data=node, dtype="u4")
 
 
 def dump_legacy(tree_sequence, filename, version=3):
@@ -227,3 +332,5 @@ def dump_legacy(tree_sequence, filename, version=3):
         dumpers[version](tree_sequence, root)
     finally:
         root.close()
+    import shutil
+    shutil.copyfile(filename, "tmp.hdf5")

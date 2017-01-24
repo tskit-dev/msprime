@@ -27,6 +27,11 @@ import sys
 import tempfile
 import unittest
 
+try:
+    import itertools.izip as zip
+except ImportError:
+    pass
+
 import h5py
 
 import msprime
@@ -125,6 +130,13 @@ class TestRoundTrip(TestHdf5):
         self.assertEqual(ts.get_num_nodes(), tsp.get_num_nodes())
         for u in range(ts.get_sample_size()):
             self.assertEqual(ts.get_population(u), tsp.get_population(u))
+        self.assertEqual(ts.num_trees, tsp.num_trees)
+        num_trees = 0
+        for t1, t2 in zip(ts.trees(), tsp.trees()):
+            self.assertEqual(t1.parent_dict, t2.parent_dict)
+            num_trees += 1
+        self.assertEqual(num_trees, ts.num_trees)
+
         # FIXME provenance
         # provenance = tsp.get_provenance()
         # if ts.get_num_mutations() > 0:
@@ -134,7 +146,7 @@ class TestRoundTrip(TestHdf5):
         # for p in provenance:
         #     self.assertIsInstance(json.loads(p), dict)
 
-    def verify_round_trip(self, ts):
+    def verify_round_trip(self, ts, version):
         tmp = sys.stderr
         try:
             with open(os.devnull, "w") as devnull:
@@ -142,7 +154,7 @@ class TestRoundTrip(TestHdf5):
                 # We silence stderr here because h5py dumps out some
                 # spurious # error messages. See
                 # https://github.com/h5py/h5py/issues/390
-                msprime.dump_legacy(ts, self.temp_file, version=2)
+                msprime.dump_legacy(ts, self.temp_file, version=version)
                 tsp = msprime.load_legacy(self.temp_file)
         finally:
             sys.stderr = tmp
@@ -175,16 +187,23 @@ class TestRoundTrip(TestHdf5):
                     self.verify_malformed_json_v2(ts, group_name, attr, bad_json)
 
     def test_single_locus_no_mutation(self):
-        self.verify_round_trip(single_locus_no_mutation_example())
+        self.verify_round_trip(single_locus_no_mutation_example(), 2)
+        self.verify_round_trip(single_locus_no_mutation_example(), 3)
 
     def test_single_locus_with_mutation(self):
-        self.verify_round_trip(single_locus_with_mutation_example())
+        self.verify_round_trip(single_locus_with_mutation_example(), 2)
+        self.verify_round_trip(single_locus_with_mutation_example(), 3)
 
     def test_multi_locus_with_mutation(self):
-        self.verify_round_trip(multi_locus_with_mutation_example())
+        self.verify_round_trip(multi_locus_with_mutation_example(), 2)
+        self.verify_round_trip(multi_locus_with_mutation_example(), 3)
 
     def test_migration_example(self):
-        self.verify_round_trip(migration_example())
+        self.verify_round_trip(migration_example(), 2)
+        self.verify_round_trip(migration_example(), 3)
+
+    def test_bottleneck_example(self):
+        self.verify_round_trip(migration_example(), 3)
 
 
 class TestErrors(TestHdf5):
