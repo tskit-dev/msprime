@@ -2,8 +2,16 @@ coverage:
   status:
     project:
       python:
+        target: 85%
+        flags: python
+      C:
+        target: 90%
+        flags: C
+
+    patch:
+      python:
         target: 90%
         flags: python
       C:
-        target: 80%
+        target: 85%
         flags: C
