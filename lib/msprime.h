@@ -36,13 +36,7 @@
 /* Flags for tree sequence dump/load */
 #define MSP_ZLIB_COMPRESSION 1
 
-/* We are transitioning between versions 3 and 4. Version 3 files are
- * not supported because we have multiple mutations, but version 4 has
- * not been defined yet. Therefore, put in a crazy version number to
- * ensure that if any of these transitional files ever end up stored somewhere
- * we can identify them.
- */
-#define MSP_FILE_FORMAT_VERSION_MAJOR UINT32_MAX
+#define MSP_FILE_FORMAT_VERSION_MAJOR 4
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */

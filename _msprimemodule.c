@@ -427,6 +427,39 @@ out:
 }
 
 static int
+parse_provenance_strings(PyObject *py_provenance_strings, Py_ssize_t *num_provenance_strings,
+        char ***provenance_strings)
+{
+
+    int ret = -1;
+    Py_ssize_t j, n;
+    PyObject *item;
+    char *s;
+    char **ret_provenance_strings = NULL;
+
+    n = PyList_Size(py_provenance_strings);
+    ret_provenance_strings = PyMem_Malloc(n * sizeof(char *));
+    if (ret_provenance_strings == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < n; j++) {
+        item = PyList_GetItem(py_provenance_strings, j);
+        assert(item != NULL);
+        s = PyBytes_AsString(item);
+        if (s == NULL) {
+            goto out;
+        }
+        ret_provenance_strings[j] = s;
+    }
+    *num_provenance_strings = n;
+    *provenance_strings = ret_provenance_strings;
+    ret = 0;
+out:
+    return ret;
+}
+
+static int
 parse_model(char *model_str, int *model)
 {
     int ret = -1;
@@ -532,7 +565,8 @@ convert_string_list(char **list, size_t size)
         goto out;
     }
     for (j = 0; j < size; j++) {
-        py_str = Py_BuildValue("s", list[j]);
+        assert(list[j] != NULL);
+        py_str = PyBytes_FromString(list[j]);
         if (py_str == NULL) {
             Py_DECREF(l);
             goto out;
@@ -1333,21 +1367,25 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
     PyObject *py_records = NULL;
     PyObject *py_samples = NULL;
     PyObject *py_mutations = NULL;
+    PyObject *py_provenance_strings = NULL;
     PyObject *item;
     coalescence_record_t *records = NULL;
     mutation_t *mutations = NULL;
     sample_t *samples = NULL;
-    Py_ssize_t num_samples, num_mutations;
+    char **provenance_strings = NULL;
+    Py_ssize_t num_samples, num_mutations, num_provenance_strings;
     size_t num_records, j;
-    static char *kwlist[] = {"samples", "coalescence_records", "mutations", NULL};
+    static char *kwlist[] = {"samples", "coalescence_records", "mutations",
+        "provenance_strings", NULL};
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!", kwlist,
                 &PyList_Type, &py_samples,
                 &PyList_Type, &py_records,
-                &PyList_Type, &py_mutations)) {
+                &PyList_Type, &py_mutations,
+                &PyList_Type, &py_provenance_strings)) {
         goto out;
     }
     num_records = PyList_Size(py_records);
@@ -1376,12 +1414,19 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+    num_provenance_strings = 0;
+    if (py_provenance_strings != NULL) {
+        if (parse_provenance_strings(py_provenance_strings, &num_provenance_strings,
+                    &provenance_strings) != 0) {
+            goto out;
+        }
+    }
     err = tree_sequence_load_records(self->tree_sequence,
             num_samples, samples,
             num_records, records,
             num_mutations, mutations,
             0, NULL,
-            0, NULL);
+            num_provenance_strings, (const char **) provenance_strings);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1406,6 +1451,9 @@ out:
             }
         }
         PyMem_Free(mutations);
+    }
+    if (provenance_strings != NULL) {
+        PyMem_Free(provenance_strings);
     }
     return ret;
 }
@@ -1439,97 +1487,6 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
 out:
     return ret;
 }
-
-#if 0
-
-static PyObject *
-TreeSequence_set_mutations(TreeSequence *self, PyObject *args, PyObject *kwds)
-{
-    int err;
-    size_t j;
-    PyObject *ret = NULL;
-    PyObject *item, *node, *pos;
-    PyObject *py_mutation_list = NULL;
-    static char *kwlist[] = {"mutations", NULL};
-    size_t num_mutations = 0;
-    mutation_t *mutations = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &PyList_Type, &py_mutation_list)) {
-        goto out;
-    }
-    num_mutations = PyList_Size(py_mutation_list);
-    mutations = PyMem_Malloc(num_mutations * sizeof(mutation_t));
-    for (j = 0; j < num_mutations; j++) {
-        item = PyList_GetItem(py_mutation_list, j);
-        if (!PyTuple_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "not a tuple");
-            goto out;
-        }
-        if (PyTuple_Size(item) < 2) {
-            PyErr_SetString(PyExc_ValueError,
-                    "mutations must (node, pos, ...) tuples");
-            goto out;
-        }
-        pos = PyTuple_GetItem(item, 0);
-        node = PyTuple_GetItem(item, 1);
-        if (!PyNumber_Check(pos)) {
-            PyErr_SetString(PyExc_TypeError, "position must be a number");
-            goto out;
-        }
-        if (!PyNumber_Check(node)) {
-            PyErr_SetString(PyExc_TypeError, "node must be a number");
-            goto out;
-        }
-        mutations[j].position = PyFloat_AsDouble(pos);
-        // FIXME
-        /* mutations[j].node = (uint32_t) PyLong_AsLong(node); */
-    }
-    err = tree_sequence_set_mutations(self->tree_sequence, num_mutations,
-            mutations);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    if (mutations != NULL) {
-        PyMem_Free(mutations);
-    }
-    return ret;
-}
-
-static PyObject *
-TreeSequence_add_provenance_string(TreeSequence *self, PyObject *args)
-{
-    int err;
-    char *s;
-    PyObject *ret = NULL;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "s", &s)) {
-        goto out;
-    }
-    if (strlen(s) == 0) {
-        PyErr_SetString(PyExc_ValueError,
-                "Empty string is not permitted for provenance.");
-        goto out;
-    }
-    err = tree_sequence_add_provenance_string(self->tree_sequence, s);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    return ret;
-}
-#endif
 
 static PyObject *
 TreeSequence_get_provenance_strings(TreeSequence *self)
@@ -4968,16 +4925,20 @@ Simulator_populate_tree_sequence(Simulator *self, PyObject *args, PyObject *kwds
     TreeSequence *tree_sequence = NULL;
     MutationGenerator *mutation_generator = NULL;
     RecombinationMap *recombination_map = NULL;
+    PyObject *py_provenance_strings = NULL;
     mutgen_t *mutgen = NULL;
     recomb_map_t *recomb_map = NULL;
     double Ne = 0.25; /* default to 1/4 for coalescent time units. */
+    char **provenance_strings = NULL;
+    Py_ssize_t num_provenance_strings;
     static char *kwlist[] = {"tree_sequence", "recombination_map", "mutation_generator",
-        "Ne", NULL};
+        "Ne", "provenance_strings", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!O!d", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!O!dO!", kwlist,
             &TreeSequenceType, &tree_sequence,
             &RecombinationMapType, &recombination_map,
-            &MutationGeneratorType, &mutation_generator, &Ne)){
+            &MutationGeneratorType, &mutation_generator, &Ne,
+            &PyList_Type, &py_provenance_strings)){
         goto out;
     }
     if (Simulator_check_sim(self) != 0) {
@@ -5002,14 +4963,25 @@ Simulator_populate_tree_sequence(Simulator *self, PyObject *args, PyObject *kwds
         }
         recomb_map = recombination_map->recomb_map;
     }
+    num_provenance_strings = 0;
+    if (py_provenance_strings != NULL) {
+        if (parse_provenance_strings(py_provenance_strings, &num_provenance_strings,
+                    &provenance_strings) != 0) {
+            goto out;
+        }
+    }
     err = msp_populate_tree_sequence(self->sim, recomb_map, mutgen, Ne,
-            0, NULL, tree_sequence->tree_sequence);
+            num_provenance_strings, (const char **) provenance_strings,
+            tree_sequence->tree_sequence);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
+    if (provenance_strings != NULL) {
+        PyMem_Free(provenance_strings);
+    }
     return ret;
 }
 

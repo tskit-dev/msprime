@@ -733,6 +733,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
+    const char *provenance = "main.run_simulate";
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL) {
@@ -778,7 +779,8 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         /* Create the tree_sequence from the state of the simulator.
          * We want to use coalescent time here, so use an Ne of 1/4
          * to cancel scaling factor. */
-        ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 0, NULL, tree_seq);
+        ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 1, &provenance,
+                tree_seq);
         if (ret != 0) {
             goto out;
         }

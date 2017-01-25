@@ -31,6 +31,7 @@ except ImportError:
 
 import collections
 import itertools
+import json
 import math
 import os
 import random
@@ -1886,6 +1887,17 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_trees(), 1)
         self.assertEqual(ts.get_num_mutations(), 0)
         self.assertEqual(ts.get_sequence_length(), 1)
+        self.assertEqual(len(ts.provenance), 1)
+
+    def test_provenance(self):
+        ts = msprime.simulate(10)
+        self.assertEqual(len(ts.provenance), 1)
+        d = json.loads(ts.provenance[0].decode())
+        # TODO check the form of the dictionary
+        for ts in msprime.simulate(10, num_replicates=10):
+            self.assertEqual(len(ts.provenance), 1)
+            d = json.loads(ts.provenance[0].decode())
+            self.assertGreater(len(d), 0)
 
     def test_replicates(self):
         n = 20

@@ -356,7 +356,7 @@ tree_sequence_alloc_provenance(tree_sequence_t *self)
 
     if (self->num_provenance_strings > 0) {
         msp_safe_free(self->provenance_strings);
-        self->provenance_strings = malloc(self->num_provenance_strings * sizeof(char *));
+        self->provenance_strings = calloc(self->num_provenance_strings, sizeof(char *));
         if (self->provenance_strings == NULL) {
             goto out;
         }
@@ -443,46 +443,6 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->migrations.time);
     return 0;
 }
-#if 0
-// REMOVE
-int WARN_UNUSED
-tree_sequence_add_provenance_string(tree_sequence_t *self,
-    const char *provenance_string)
-{
-    int ret = MSP_ERR_GENERIC;
-    char **p, *s;
-    size_t size;
-
-    if (provenance_string == NULL) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    size = strlen(provenance_string);
-    if (size == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    p = realloc(self->provenance_strings,
-            (self->num_provenance_strings + 1) * sizeof(char *));
-    if (p == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->provenance_strings = p;
-    size++; /* allow for '/0' */
-    s = malloc((size) * sizeof(char));
-    if (s == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    strncpy(s, provenance_string, size);
-    self->provenance_strings[self->num_provenance_strings] = s;
-    self->num_provenance_strings++;
-    ret = 0;
-out:
-    return ret;
-}
-#endif
 
 int WARN_UNUSED
 tree_sequence_get_provenance_strings(tree_sequence_t *self,
@@ -726,6 +686,9 @@ tree_sequence_store_mutations(tree_sequence_t *self, size_t num_mutations,
         }
         self->mutations.position[j] = mutations[j].position;
         self->mutations.ancestral_state[j] = mutations[j].ancestral_state;
+        assert(mutations[j].ancestral_state == '0');
+        self->mutations.derived_state[j] = mutations[j].derived_state;
+        assert(mutations[j].derived_state == '1');
         self->mutations.derived_state[j] = mutations[j].derived_state;
         self->mutations.num_nodes[j] = mutations[j].num_nodes;
         self->mutations.nodes[j] = self->mutations.nodes_mem + offset;
@@ -825,6 +788,38 @@ out:
     if (coordinates != NULL) {
         free(coordinates);
     }
+    return ret;
+}
+
+static int WARN_UNUSED
+tree_sequence_store_provenance_strings(tree_sequence_t *self,
+        size_t num_provenance_strings, const char**provenance_strings)
+{
+    int ret = MSP_ERR_GENERIC;
+    char *s;
+    size_t j, size;
+
+    ret = tree_sequence_alloc_provenance(self);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_provenance_strings; j++) {
+        if (provenance_strings[j] == NULL) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+        size = strlen(provenance_strings[j]);
+        size++; /* allow for '/0' */
+        s = malloc((size) * sizeof(char));
+        if (s == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        strncpy(s, provenance_strings[j], size);
+        self->provenance_strings[j] = s;
+    }
+    ret = 0;
+out:
     return ret;
 }
 
@@ -944,6 +939,11 @@ tree_sequence_load_records(tree_sequence_t *self,
     }
     ret = tree_sequence_store_migration_records(self, num_migration_records,
             migration_records);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_store_provenance_strings(self, num_provenance_strings,
+            provenance_strings);
     if (ret != 0) {
         goto out;
     }
@@ -1111,35 +1111,60 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     herr_t status;
     int rank;
     hsize_t dims[2];
+    htri_t exists;
     struct _dimension_check {
         const char *name;
         int check_size;
         size_t size;
-        int required;
     };
     struct _dimension_check fields[] = {
-        {"/mutations/nodes", 1, self->mutations.total_nodes, 1},
-        {"/mutations/num_nodes", 1, self->mutations.num_records, 1},
-        {"/mutations/position", 1, self->mutations.num_records, 1},
-        {"/trees/nodes/population", 1, self->trees.num_nodes, 1},
-        {"/trees/nodes/time", 1, self->trees.num_nodes, 1},
-        {"/trees/breakpoints", 1, self->trees.num_breakpoints, 1},
-        {"/trees/records/left", 1, self->trees.num_records, 1},
-        {"/trees/records/right", 1, self->trees.num_records, 1},
-        {"/trees/records/node", 1, self->trees.num_records, 1},
-        {"/trees/records/num_children", 1, self->trees.num_records, 1},
-        {"/trees/records/children", 0, self->trees.total_child_nodes, 1},
-        {"/trees/indexes/insertion_order", 1, self->trees.num_records, 1},
-        {"/trees/indexes/removal_order", 1, self->trees.num_records, 1},
+        {"/mutations/nodes", 1, self->mutations.total_nodes},
+        {"/mutations/num_nodes", 1, self->mutations.num_records},
+        {"/mutations/position", 1, self->mutations.num_records},
+        {"/trees/nodes/population", 1, self->trees.num_nodes},
+        {"/trees/nodes/time", 1, self->trees.num_nodes},
+        {"/trees/breakpoints", 1, self->trees.num_breakpoints},
+        {"/trees/records/left", 1, self->trees.num_records},
+        {"/trees/records/right", 1, self->trees.num_records},
+        {"/trees/records/node", 1, self->trees.num_records},
+        {"/trees/records/num_children", 1, self->trees.num_records},
+        {"/trees/records/children", 0, self->trees.total_child_nodes},
+        {"/trees/indexes/insertion_order", 1, self->trees.num_records},
+        {"/trees/indexes/removal_order", 1, self->trees.num_records},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
 
-    for (j = 0; j < 3; j++) {
-        fields[j].required = self->mutations.num_records > 0;
+    /* First make sure that the root number make sense */
+    if (self->trees.num_records > 0) {
+        if (self->trees.num_breakpoints == 0) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        if (self->trees.num_nodes == 0) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
+        if (self->trees.total_child_nodes == 0) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
     }
+    if (self->mutations.num_records > 0 &&
+            self->mutations.total_nodes < self->mutations.num_records) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    /* Now go though the rest of the fields and make sure they have the
+     * right sizes
+     */
     for (j = 0; j < num_fields; j++) {
-        if (fields[j].required) {
+        exists = H5Lexists(file_id, fields[j].name, H5P_DEFAULT);
+        if (exists < 0) {
+            goto out;
+        }
+        dims[0] = 0;
+        if (exists) {
             dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
             if (dataset_id < 0) {
                 goto out;
@@ -1157,10 +1182,6 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
             if (status < 0) {
                 goto out;
             }
-            if (fields[j].check_size && dims[0] != fields[j].size) {
-                ret = MSP_ERR_FILE_FORMAT;
-                goto out;
-            }
             status = H5Sclose(dataspace_id);
             if (status < 0) {
                 goto out;
@@ -1170,12 +1191,48 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
                 goto out;
             }
         }
+        if (fields[j].check_size && dims[0] != fields[j].size) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
     }
     /* Make sure that the total number of nodes makes sense */
     if (self->mutations.total_nodes < self->mutations.num_records
             || self->trees.total_child_nodes < self->trees.num_records) {
         ret = MSP_ERR_FILE_FORMAT;
         goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Reads the groups within the HDF5 file to ensure that they exist.
+ */
+static int
+tree_sequence_read_hdf5_groups(tree_sequence_t *self, hid_t file_id)
+{
+    int ret = MSP_ERR_HDF5;
+    htri_t exists;
+    const char* groups[] = {
+        "/trees",
+        "/trees/indexes",
+        "/trees/nodes",
+        "/trees/records",
+        "/mutations"
+    };
+    size_t num_groups = sizeof(groups) / sizeof(const char *);
+    size_t j;
+
+    for (j = 0; j < num_groups; j++) {
+        exists = H5Lexists(file_id, groups[j], H5P_DEFAULT);
+        if (exists < 0) {
+            goto out;
+        }
+        if (! exists) {
+            ret = MSP_ERR_FILE_FORMAT;
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -1193,46 +1250,30 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     herr_t status;
     htri_t exists;
     int rank;
-    hsize_t dims[2];
+    hsize_t dims;
     struct _dimension_read {
         const char *name;
         size_t *dest;
-        int included;
     };
     struct _dimension_read fields[] = {
-        {"/mutations/num_nodes", &self->mutations.num_records, 0},
-        {"/mutations/nodes", &self->mutations.total_nodes, 0},
-        {"/provenance", &self->num_provenance_strings, 0},
-        {"/trees/breakpoints", &self->trees.num_breakpoints, 1},
-        {"/trees/nodes/time", &self->trees.num_nodes, 1},
-        {"/trees/records/left", &self->trees.num_records, 1},
-        {"/trees/records/children", &self->trees.total_child_nodes, 1},
+        {"/mutations/num_nodes", &self->mutations.num_records},
+        {"/mutations/nodes", &self->mutations.total_nodes},
+        {"/provenance", &self->num_provenance_strings},
+        {"/trees/breakpoints", &self->trees.num_breakpoints},
+        {"/trees/nodes/time", &self->trees.num_nodes},
+        {"/trees/records/left", &self->trees.num_records},
+        {"/trees/records/children", &self->trees.total_child_nodes},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_read);
     size_t j;
-    /* check if the mutations group exists. This seems a bit awkward, but it's
-     * an error to call H5Lexists on /mutations/node if /mutations doesn't
-     * exist */
-    exists = H5Lexists(file_id, "/mutations", H5P_DEFAULT);
-    if (exists < 0) {
-        goto out;
-    }
-    self->mutations.num_records = 0;
-    if (exists) {
-        fields[0].included = 1;
-        fields[1].included = 1;
-    }
-    /* check if provenance exists */
-    exists = H5Lexists(file_id, "/provenance", H5P_DEFAULT);
-    if (exists < 0) {
-        goto out;
-    }
-    self->num_provenance_strings = 0;
-    if (exists) {
-        fields[2].included = 1;
-    }
+
     for (j = 0; j < num_fields; j++) {
-        if (fields[j].included) {
+        *fields[j].dest = 0;
+        exists = H5Lexists(file_id, fields[j].name, H5P_DEFAULT);
+        if (exists < 0) {
+            goto out;
+        }
+        if (exists) {
             dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
             if (dataset_id < 0) {
                 ret = MSP_ERR_FILE_FORMAT;
@@ -1247,11 +1288,11 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
                 ret = MSP_ERR_FILE_FORMAT;
                 goto out;
             }
-            status = H5Sget_simple_extent_dims(dataspace_id, dims, NULL);
+            status = H5Sget_simple_extent_dims(dataspace_id, &dims, NULL);
             if (status < 0) {
                 goto out;
             }
-            *fields[j].dest = (size_t) dims[0];
+            *fields[j].dest = (size_t) dims;
             status = H5Sclose(dataspace_id);
             if (status < 0) {
                 goto out;
@@ -1277,36 +1318,31 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     herr_t status;
     int ret = MSP_ERR_HDF5;
     hid_t dataset_id;
+    htri_t exists;
     struct _hdf5_field_read {
         const char *name;
         hid_t type;
-        int empty;
-        int required;
         void *dest;
     };
     struct _hdf5_field_read fields[] = {
-        {"/provenance", 0, 0, 0, self->provenance_strings},
-        {"/mutations/nodes", H5T_NATIVE_UINT32, 0, 1, self->mutations.nodes_mem},
-        {"/mutations/num_nodes", H5T_NATIVE_UINT32, 0, 1, self->mutations.num_nodes},
-        {"/mutations/position", H5T_NATIVE_DOUBLE, 0, 1, self->mutations.position},
-        {"/mutations/ancestral_state", H5T_NATIVE_CHAR, 0, 1,
-            self->mutations.ancestral_state},
-        {"/mutations/derived_state", H5T_NATIVE_CHAR, 0, 1,
-            self->mutations.derived_state},
-        {"/trees/nodes/population", H5T_NATIVE_UINT32, 0, 1,
+        {"/provenance", 0, self->provenance_strings},
+        {"/mutations/nodes", H5T_NATIVE_UINT32, self->mutations.nodes_mem},
+        {"/mutations/num_nodes", H5T_NATIVE_UINT32, self->mutations.num_nodes},
+        {"/mutations/position", H5T_NATIVE_DOUBLE, self->mutations.position},
+        {"/trees/nodes/population", H5T_NATIVE_UINT32,
             self->trees.nodes.population},
-        {"/trees/nodes/time", H5T_NATIVE_DOUBLE, 0, 1, self->trees.nodes.time},
-        {"/trees/breakpoints", H5T_NATIVE_DOUBLE, 0, 1, self->trees.breakpoints},
-        {"/trees/records/left", H5T_NATIVE_UINT32, 0, 1, self->trees.records.left},
-        {"/trees/records/right", H5T_NATIVE_UINT32, 0, 1, self->trees.records.right},
-        {"/trees/records/node", H5T_NATIVE_UINT32, 0, 1, self->trees.records.node},
-        {"/trees/records/num_children", H5T_NATIVE_UINT32, 0, 1,
+        {"/trees/nodes/time", H5T_NATIVE_DOUBLE, self->trees.nodes.time},
+        {"/trees/breakpoints", H5T_NATIVE_DOUBLE, self->trees.breakpoints},
+        {"/trees/records/left", H5T_NATIVE_UINT32, self->trees.records.left},
+        {"/trees/records/right", H5T_NATIVE_UINT32, self->trees.records.right},
+        {"/trees/records/node", H5T_NATIVE_UINT32, self->trees.records.node},
+        {"/trees/records/num_children", H5T_NATIVE_UINT32,
             self->trees.records.num_children},
-        {"/trees/records/children", H5T_NATIVE_UINT32, 0, 1,
+        {"/trees/records/children", H5T_NATIVE_UINT32,
             self->trees.records.children_mem},
-        {"/trees/indexes/insertion_order", H5T_NATIVE_UINT32, 0, 1,
+        {"/trees/indexes/insertion_order", H5T_NATIVE_UINT32,
             self->trees.indexes.insertion_order},
-        {"/trees/indexes/removal_order", H5T_NATIVE_UINT32, 0, 1,
+        {"/trees/indexes/removal_order", H5T_NATIVE_UINT32,
             self->trees.indexes.removal_order},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
@@ -1323,45 +1359,25 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     }
     fields[0].type = vlen_str;
 
-    /* TODO We're sort of doing the same thing twice here as
-     * the mutations _group_ is optional. However, we can't just
-     * mark mutations/node and mutations/position as optional as we
-     * would then allow one or the other. This would be an error.
-     * However, we should improve this logic as it's a bit messy.
-     */
-    if (self->mutations.num_records == 0) {
-        fields[1].empty = 1;
-        fields[2].empty = 1;
-        fields[3].empty = 1;
-    }
     for (j = 0; j < num_fields; j++) {
-        /* Skip any non-required fields that are missing. */
-        if (!fields[j].required
-                && H5Lexists(file_id, fields[j].name, H5P_DEFAULT) <= 0) {
-            continue;
-        }
-        /* Skip any fields that are marked empty */
-        if (fields[j].empty) {
-            continue;
-        }
-        /* If we got this far, read in the field. */
-        dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
-        if (dataset_id < 0) {
+        exists = H5Lexists(file_id, fields[j].name, H5P_DEFAULT);
+        if (exists < 0) {
             goto out;
         }
-        /* Need to check here as older versions of HDF5 fail when we
-         * try to read in 0-sized datasets.
-         */
-        if (H5Dget_storage_size(dataset_id) > 0) {
-            status = H5Dread(dataset_id, fields[j].type, H5S_ALL,
-                    H5S_ALL, H5P_DEFAULT, fields[j].dest);
+        if (exists) {
+            dataset_id = H5Dopen(file_id, fields[j].name, H5P_DEFAULT);
+            if (dataset_id < 0) {
+                goto out;
+            }
+            status = H5Dread(dataset_id, fields[j].type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                    fields[j].dest);
             if (status < 0) {
                 goto out;
             }
-        }
-        status = H5Dclose(dataset_id);
-        if (status < 0) {
-            goto out;
+            status = H5Dclose(dataset_id);
+            if (status < 0) {
+                goto out;
+            }
         }
     }
     status = H5Tclose(vlen_str);
@@ -1392,6 +1408,11 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         self->mutations.nodes[j] = &self->mutations.nodes_mem[offset];
         offset += self->mutations.num_nodes[j];
     }
+    /* TODO remove this when we support storing mutation states */
+    memset(self->mutations.ancestral_state, '0',
+            self->mutations.num_records * sizeof(char));
+    memset(self->mutations.derived_state, '1',
+            self->mutations.num_records * sizeof(char));
     ret = tree_sequence_init_tree_mutations(self);
     if (ret != 0) {
         goto out;
@@ -1418,6 +1439,10 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
         goto out;
     }
     ret = tree_sequence_read_hdf5_metadata(self, file_id);
+    if (ret < 0) {
+        goto out;
+    }
+    ret = tree_sequence_read_hdf5_groups(self, file_id);
     if (ret < 0) {
         goto out;
     }
@@ -1450,7 +1475,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     herr_t ret = -1;
     herr_t status;
     hid_t group_id, dataset_id, dataspace_id, plist_id;
-    hsize_t dim, chunk_size, max_dim;
+    hsize_t dim, chunk_size;
     struct _hdf5_field_write {
         const char *name;
         hid_t storage_type;
@@ -1501,12 +1526,6 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/mutations/position",
             H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
             self->mutations.num_records, self->mutations.position},
-        {"/mutations/ancestral_state",
-            H5T_STD_U8LE, H5T_NATIVE_CHAR,
-            self->mutations.num_records, self->mutations.ancestral_state},
-        {"/mutations/derived_state",
-            H5T_STD_U8LE, H5T_NATIVE_CHAR,
-            self->mutations.num_records, self->mutations.derived_state},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
     struct _hdf5_group_write {
@@ -1560,76 +1579,77 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     /* now write the datasets */
     for (j = 0; j < num_fields; j++) {
         dim = fields[j].size;
-        max_dim = dim;
-        if (max_dim == 0) {
-            /* Needed to work around issue in older versions of HDF5 */
-            max_dim = H5S_UNLIMITED;
-        }
-        dataspace_id = H5Screate_simple(1, &dim, &max_dim);
-        if (dataspace_id < 0) {
-            goto out;
-        }
-        plist_id = H5Pcreate(H5P_DATASET_CREATE);
-        if (plist_id < 0) {
-            goto out;
-        }
-        /* Set the chunk size to the full size of the dataset since we
-         * always read the full thing.
+        /* Never create any 0-sized datasets. This causes all sorts of problems in older
+         * versions of HDF5, and so we adopt the protocol of omitting the dataset if it
+         * is of zero size.
          */
-        chunk_size = GSL_MAX(1, fields[j].size);
-        status = H5Pset_chunk(plist_id, 1, &chunk_size);
-        if (status < 0) {
-            goto out;
-        }
-        if (fields[j].memory_type != H5T_NATIVE_DOUBLE &&
-                fields[j].memory_type != memtype_str) {
-            /* For integer types, use the scale offset compression */
-            status = H5Pset_scaleoffset(plist_id, H5Z_SO_INT,
-                     H5Z_SO_INT_MINBITS_DEFAULT);
+        if (dim > 0) {
+            dataspace_id = H5Screate_simple(1, &dim, &dim);
+            if (dataspace_id < 0) {
+                goto out;
+            }
+            plist_id = H5Pcreate(H5P_DATASET_CREATE);
+            if (plist_id < 0) {
+                goto out;
+            }
+            /* Set the chunk size to the full size of the dataset since we
+             * always read the full thing.
+             */
+            chunk_size = GSL_MAX(1, fields[j].size);
+            status = H5Pset_chunk(plist_id, 1, &chunk_size);
             if (status < 0) {
                 goto out;
             }
-        }
-        if (flags & MSP_ZLIB_COMPRESSION) {
-            /* Turn on byte shuffling to improve compression */
-            status = H5Pset_shuffle(plist_id);
+            if (fields[j].memory_type != H5T_NATIVE_DOUBLE &&
+                    fields[j].memory_type != memtype_str) {
+                /* For integer types, use the scale offset compression */
+                status = H5Pset_scaleoffset(plist_id, H5Z_SO_INT,
+                         H5Z_SO_INT_MINBITS_DEFAULT);
+                if (status < 0) {
+                    goto out;
+                }
+            }
+            if (flags & MSP_ZLIB_COMPRESSION) {
+                /* Turn on byte shuffling to improve compression */
+                status = H5Pset_shuffle(plist_id);
+                if (status < 0) {
+                    goto out;
+                }
+                /* Set zlib compression at level 9 (best compression) */
+                status = H5Pset_deflate(plist_id, 9);
+                if (status < 0) {
+                    goto out;
+                }
+            }
+            /* Turn on Fletcher32 checksums for integrity checks */
+            status = H5Pset_fletcher32(plist_id);
             if (status < 0) {
                 goto out;
             }
-            /* Set zlib compression at level 9 (best compression) */
-            status = H5Pset_deflate(plist_id, 9);
+            dataset_id = H5Dcreate2(file_id, fields[j].name,
+                    fields[j].storage_type, dataspace_id, H5P_DEFAULT,
+                    plist_id, H5P_DEFAULT);
+            if (fields[j].size > 0) {
+                /* Don't write zero sized datasets to work-around problems
+                 * with older versions of hdf5. */
+                status = H5Dwrite(dataset_id, fields[j].memory_type, H5S_ALL,
+                        H5S_ALL, H5P_DEFAULT, fields[j].source);
+                if (status < 0) {
+                    goto out;
+                }
+            }
+            status = H5Dclose(dataset_id);
             if (status < 0) {
                 goto out;
             }
-        }
-        /* Turn on Fletcher32 checksums for integrity checks */
-        status = H5Pset_fletcher32(plist_id);
-        if (status < 0) {
-            goto out;
-        }
-        dataset_id = H5Dcreate2(file_id, fields[j].name,
-                fields[j].storage_type, dataspace_id, H5P_DEFAULT,
-                plist_id, H5P_DEFAULT);
-        if (fields[j].size > 0) {
-            /* Don't write zero sized datasets to work-around problems
-             * with older versions of hdf5. */
-            status = H5Dwrite(dataset_id, fields[j].memory_type, H5S_ALL,
-                    H5S_ALL, H5P_DEFAULT, fields[j].source);
+            status = H5Pclose(plist_id);
             if (status < 0) {
                 goto out;
             }
-        }
-        status = H5Dclose(dataset_id);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Pclose(plist_id);
-        if (status < 0) {
-            goto out;
-        }
-        status = H5Sclose(dataspace_id);
-        if (status < 0) {
-            goto out;
+            status = H5Sclose(dataspace_id);
+            if (status < 0) {
+                goto out;
+            }
         }
     }
     ret = 0;

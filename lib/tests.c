@@ -355,6 +355,7 @@ get_example_tree_sequence(uint32_t sample_size,
     tree_sequence_t *tree_seq = malloc(sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = malloc(sizeof(recomb_map_t));
     mutgen_t *mutgen = malloc(sizeof(mutgen_t));
+    const char *provenance = "get_example_tree_sequence";
     uint32_t j;
     size_t num_populations = 3;
     double migration_matrix[] = {
@@ -420,7 +421,8 @@ get_example_tree_sequence(uint32_t sample_size,
      * to cancel scaling factor. */
     ret = tree_sequence_initialise(tree_seq);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 0, NULL, tree_seq);
+    ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 1, &provenance,
+            tree_seq);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_simulator_tree_sequence_equality(msp, tree_seq, mutgen,
             sequence_length / num_loci);
@@ -2847,85 +2849,7 @@ test_single_tree_vargen(void)
     free_local_mutations(num_mutations, mutations);
 }
 
-static void
-test_single_tree_nonbinary_mutations(void)
-{
-    int ret = 0;
-    const char * text_records =
-        "0 1 4 0,1 1.0 0\n"
-        "0 1 5 2,3 4.0 0\n"
-        "0 1 6 4,5 5.0 0";
-    const char *text_mutations =
-        "0   0      A   T\n"
-        "0.1 1      C   G\n"
-        "0.2 0,1,2  Z   8\n";
-    size_t num_samples = 4;
-    sample_t samples[num_samples];
-    char genotypes[5];
-    size_t num_records, num_mutations;
-    tree_sequence_t ts;
-    coalescence_record_t *records;
-    mutation_t *mutations, *mut;
-    vargen_t vargen;
-    hapgen_t hapgen;
 
-    memset(samples, 0, num_samples * sizeof(sample_t));
-    parse_text_records(text_records, &num_records, &records);
-    CU_ASSERT_EQUAL_FATAL(num_records, 3);
-    parse_text_mutations(text_mutations, &num_mutations, &mutations);
-    CU_ASSERT_EQUAL_FATAL(num_mutations, 3);
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_records(&ts, num_samples, samples, num_records, records,
-            num_mutations, mutations, 0, NULL, 0, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    /* For now, we don't support nonbinary mutations where we return 0s and 1s
-     * as it's unclear how to handle this case more generally.
-     */
-    ret = hapgen_alloc(&hapgen, &ts);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED);
-    ret = hapgen_free(&hapgen);
-
-    ret = vargen_alloc(&vargen, &ts, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = vargen_next(&vargen, &mut, genotypes);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED);
-    ret = vargen_free(&vargen);
-
-    /* When genotypes are chars the semantics are clear */
-    ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    vargen_print_state(&vargen, _devnull);
-
-    genotypes[4] = '\0';
-    ret = vargen_next(&vargen, &mut, genotypes);
-    CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "TAAA");
-    CU_ASSERT_EQUAL(mut->index, 0);
-    CU_ASSERT_EQUAL(mut->num_nodes, 1);
-
-    ret = vargen_next(&vargen, &mut, genotypes);
-    CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "CGCC");
-    CU_ASSERT_EQUAL(mut->index, 1);
-    CU_ASSERT_EQUAL(mut->num_nodes, 1);
-
-    ret = vargen_next(&vargen, &mut, genotypes);
-    CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "888Z");
-    CU_ASSERT_EQUAL(mut->index, 2);
-    CU_ASSERT_EQUAL(mut->num_nodes, 3);
-
-    ret = vargen_next(&vargen, &mut, genotypes);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    ret = vargen_free(&vargen);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tree_sequence_free(&ts);
-    free_local_records(num_records, records);
-    free_local_mutations(num_mutations, mutations);
-}
 
 static void
 test_single_tree_inconsistent_mutations(void)
@@ -5117,11 +5041,12 @@ static void
 test_save_records_hdf5(void)
 {
     int ret;
-    size_t j, k, num_records, num_mutations;
+    size_t j, k, num_records, num_mutations, num_provenance_strings;
     uint32_t sample_size;
     coalescence_record_t r, *records;
     sample_t *samples;
     mutation_t *mutations;
+    char **provenance_strings;
     tree_sequence_t *ts1, ts2, ts3, **examples;
 
     examples = get_example_tree_sequences(1);
@@ -5146,18 +5071,22 @@ test_save_records_hdf5(void)
         num_mutations = tree_sequence_get_num_mutations(ts1);
         ret = tree_sequence_get_mutations(ts1, &mutations);
         CU_ASSERT_EQUAL(ret, 0);
+        ret = tree_sequence_get_provenance_strings(ts1, &num_provenance_strings,
+                &provenance_strings);
+        CU_ASSERT_EQUAL(ret, 0);
 
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_records(&ts2, sample_size, samples, num_records, records,
-            num_mutations, mutations, 0, NULL, 0, NULL);
+            num_mutations, mutations, 0, NULL, num_provenance_strings,
+            (const char **) provenance_strings);
         ret = tree_sequence_dump(&ts2, _tmp_file_name, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_initialise(&ts3);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load(&ts3, _tmp_file_name, 0);
         CU_ASSERT_EQUAL(ret, 0);
-        verify_tree_sequences_equal(ts1, &ts3, 0);
+        verify_tree_sequences_equal(ts1, &ts3, true);
         tree_sequence_print_state(&ts2, _devnull);
 
         tree_sequence_free(&ts2);
@@ -5345,7 +5274,6 @@ main(int argc, char **argv)
         {"single_tree_iterator_times", test_single_tree_iter_times},
         {"single_tree_hapgen", test_single_tree_hapgen},
         {"single_tree_vargen", test_single_tree_vargen},
-        {"single_tree_nonbinary_mutations", test_single_tree_nonbinary_mutations},
         {"single_tree_inconsistent_mutations", test_single_tree_inconsistent_mutations},
         {"single_unary_tree_hapgen", test_single_unary_tree_hapgen},
         {"single_tree_mutgen", test_single_tree_mutgen},

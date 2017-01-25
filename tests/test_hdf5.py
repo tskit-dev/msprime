@@ -22,16 +22,37 @@ Test cases for the HDF5 format in msprime.
 from __future__ import print_function
 from __future__ import division
 
+import contextlib
 import json
 import os
 import sys
 import tempfile
 import unittest
 
+try:
+    import itertools.izip as zip
+except ImportError:
+    pass
+
 import h5py
 
 import msprime
 import _msprime
+
+
+@contextlib.contextmanager
+def silence_stderr():
+    """
+    Context manager to silence stderr. We do this here because h5py dumps out some
+    spurious error messages. See https://github.com/h5py/h5py/issues/390
+    """
+    tmp = sys.stderr
+    try:
+        with open(os.devnull, "w") as devnull:
+            sys.stderr = devnull
+            yield
+    finally:
+        sys.stderr = tmp
 
 
 def single_locus_no_mutation_example():
@@ -46,6 +67,15 @@ def multi_locus_with_mutation_example():
     return msprime.simulate(
         10, recombination_rate=1, length=10, mutation_rate=10,
         random_seed=2)
+
+
+def recurrent_mutation_example():
+    ts = msprime.simulate(
+        10, recombination_rate=1, length=10, random_seed=2)
+    mutations = [msprime.Mutation(
+        position=j, nodes=tuple(k for k in range(j + 1)), index=j)
+        for j in range(ts.sample_size)]
+    return ts.copy(mutations)
 
 
 def migration_example():
@@ -97,7 +127,6 @@ class TestHdf5(unittest.TestCase):
         os.unlink(self.temp_file)
 
 
-@unittest.skip("v4 format")
 class TestRoundTrip(TestHdf5):
     """
     Tests if we can round trip convert a tree sequence in memory
@@ -122,50 +151,38 @@ class TestRoundTrip(TestHdf5):
         j = 0
         for m1, m2 in zip(ts.mutations(), tsp.mutations()):
             self.assertEqual(m1.position, m2.position)
-            self.assertEqual(m1.node, m2.node)
+            self.assertEqual(m1.nodes, m2.nodes)
             j += 1
         self.assertEqual(ts.get_num_nodes(), tsp.get_num_nodes())
         for u in range(ts.get_sample_size()):
             self.assertEqual(ts.get_population(u), tsp.get_population(u))
-        provenance = tsp.get_provenance()
-        if ts.get_num_mutations() > 0:
-            self.assertEqual(len(provenance), 3)
-        else:
-            self.assertEqual(len(provenance), 2)
-        for p in provenance:
-            self.assertIsInstance(json.loads(p), dict)
+        self.assertEqual(ts.num_trees, tsp.num_trees)
+        num_trees = 0
+        for t1, t2 in zip(ts.trees(), tsp.trees()):
+            self.assertEqual(t1.parent_dict, t2.parent_dict)
+            num_trees += 1
+        self.assertEqual(num_trees, ts.num_trees)
 
-    def verify_round_trip(self, ts):
-        tmp = sys.stderr
-        try:
-            with open(os.devnull, "w") as devnull:
-                sys.stderr = devnull
-                # We silence stderr here because h5py dumps out some
-                # spurious # error messages. See
-                # https://github.com/h5py/h5py/issues/390
-                msprime.dump_legacy(ts, self.temp_file)
-                tsp = msprime.load_legacy(self.temp_file)
-        finally:
-            sys.stderr = tmp
+        provenance = tsp.get_provenance()
+        self.assertGreater(len(provenance), 1)
+        for p in provenance:
+            self.assertIsInstance(json.loads(p.decode()), dict)
+
+    def verify_round_trip(self, ts, version):
+        msprime.dump_legacy(ts, self.temp_file, version=version)
+        with silence_stderr():
+            tsp = msprime.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
 
     def verify_malformed_json_v2(self, ts, group_name, attr, bad_json):
-        tmp = sys.stderr
-        try:
-            with open(os.devnull, "w") as devnull:
-                sys.stderr = devnull
-                # We silence stderr here because h5py dumps out some
-                # spurious error messages. See
-                # https://github.com/h5py/h5py/issues/390
-                msprime.dump_legacy(ts, self.temp_file)
-                # Write some bad JSON to the provenance string.
-                root = h5py.File(self.temp_file, "r+")
-                group = root[group_name]
-                group.attrs[attr] = bad_json
-                root.close()
-                tsp = msprime.load_legacy(self.temp_file)
-        finally:
-            sys.stderr = tmp
+        msprime.dump_legacy(ts, self.temp_file, 2)
+        # Write some bad JSON to the provenance string.
+        root = h5py.File(self.temp_file, "r+")
+        group = root[group_name]
+        group.attrs[attr] = bad_json
+        root.close()
+        with silence_stderr():
+            tsp = msprime.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
 
     def test_malformed_json_v2(self):
@@ -176,19 +193,41 @@ class TestRoundTrip(TestHdf5):
                     self.verify_malformed_json_v2(ts, group_name, attr, bad_json)
 
     def test_single_locus_no_mutation(self):
-        self.verify_round_trip(single_locus_no_mutation_example())
+        self.verify_round_trip(single_locus_no_mutation_example(), 2)
+        self.verify_round_trip(single_locus_no_mutation_example(), 3)
 
     def test_single_locus_with_mutation(self):
-        self.verify_round_trip(single_locus_with_mutation_example())
+        self.verify_round_trip(single_locus_with_mutation_example(), 2)
+        self.verify_round_trip(single_locus_with_mutation_example(), 3)
 
     def test_multi_locus_with_mutation(self):
-        self.verify_round_trip(multi_locus_with_mutation_example())
+        self.verify_round_trip(multi_locus_with_mutation_example(), 2)
+        self.verify_round_trip(multi_locus_with_mutation_example(), 3)
 
     def test_migration_example(self):
-        self.verify_round_trip(migration_example())
+        self.verify_round_trip(migration_example(), 2)
+        self.verify_round_trip(migration_example(), 3)
+
+    def test_bottleneck_example(self):
+        self.verify_round_trip(migration_example(), 3)
+
+    def test_recurrent_mutation_example(self):
+        ts = recurrent_mutation_example()
+        for version in [2, 3]:
+            self.assertRaises(
+                ValueError, msprime.dump_legacy, ts, self.temp_file, version)
+
+    def test_v2_no_samples(self):
+        ts = multi_locus_with_mutation_example()
+        msprime.dump_legacy(ts, self.temp_file, version=2)
+        root = h5py.File(self.temp_file, "r+")
+        del root['samples']
+        root.close()
+        with silence_stderr():
+            tsp = msprime.load_legacy(self.temp_file)
+        self.verify_tree_sequences_equal(ts, tsp)
 
 
-@unittest.skip("v4 format")
 class TestErrors(TestHdf5):
     """
     Test various API errors.
@@ -201,17 +240,22 @@ class TestErrors(TestHdf5):
             sample_size=10,
             demographic_events=demographic_events,
             random_seed=1)
-        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file)
+        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, 2)
 
-    def test_unsupported_format(self):
+    def test_unsupported_version(self):
         ts = msprime.simulate(10)
-        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, version=3)
-        # We refuse to read version 3 also
+        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, version=4)
+        # We refuse to read current version also
         ts.dump(self.temp_file)
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
+    def test_no_version_number(self):
+        root = h5py.File(self.temp_file, "w")
+        root.attrs["x"] = 0
+        root.close()
+        self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
-@unittest.skip("v4 format")
+
 class TestHdf5Format(TestHdf5):
     """
     Tests on the HDF5 file format.
@@ -226,30 +270,36 @@ class TestHdf5Format(TestHdf5):
         root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 3)
-        self.assertEqual(format_version[1], 2)
+        self.assertEqual(format_version[0], 4)
+        self.assertEqual(format_version[1], 0)
         keys = set(root.keys())
         self.assertLessEqual(keys, set(["mutations", "trees", "provenance"]))
         self.assertIn("trees", keys)
         self.assertIn("provenance", keys)
-        if ts.get_num_mutations() == 0:
-            self.assertNotIn("mutations", keys)
-        else:
-            self.assertIn("mutations", keys)
-            g = root["mutations"]
-            fields = [("node", uint32), ("position", float64)]
+        self.assertIn("mutations", keys)
+        g = root["mutations"]
+        fields = [("nodes", uint32), ("num_nodes", uint32), ("position", float64)]
+        if ts.num_mutations > 0:
             self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
             for name, dtype in fields:
                 self.assertEqual(len(g[name].shape), 1)
                 self.assertEqual(g[name].shape[0], ts.get_num_mutations())
                 self.assertEqual(g[name].dtype, dtype)
-            node = list(g["node"])
+            flat_nodes = list(g["nodes"])
+            num_nodes = list(g["num_nodes"])
             position = list(g["position"])
-            self.assertEqual(len(node), ts.get_num_mutations())
+            nodes = []
+            offset = 0
+            for k in num_nodes:
+                nodes.append(tuple(flat_nodes[offset: offset + k]))
+                offset += k
+            self.assertEqual(len(num_nodes), ts.get_num_mutations())
             self.assertEqual(len(position), ts.get_num_mutations())
             for j, mutation in enumerate(ts.mutations()):
-                self.assertEqual(mutation.node, node[j])
+                self.assertEqual(mutation.nodes, nodes[j])
                 self.assertEqual(mutation.position, position[j])
+        else:
+            self.assertEqual(0, len(list(g.keys())))
 
         trees_group = root["trees"]
         self.assertEqual(
@@ -351,7 +401,6 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(other_ts.get_provenance(), [])
 
 
-@unittest.skip("v4 format")
 class TestHdf5FormatErrors(TestHdf5):
     """
     Tests for errors in the HDF5 format.
@@ -361,12 +410,14 @@ class TestHdf5FormatErrors(TestHdf5):
         names = []
 
         def visit(name):
-            if name not in ["provenance", "mutations"]:
+            # The only dataset we can delete on its own is provenance
+            if name != "provenance":
                 names.append(name)
         ts.dump(self.temp_file)
         hfile = h5py.File(self.temp_file, "r")
         hfile.visit(visit)
         hfile.close()
+        # Delete each field in turn; this should cause a LibraryError
         for name in names:
             ts.dump(self.temp_file)
             hfile = h5py.File(self.temp_file, "r+")

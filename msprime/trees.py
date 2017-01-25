@@ -701,14 +701,13 @@ def _replicate_generator(
     # simulation parameters so that particular simulations can be
     # replicated. This will also involve encoding the state of the
     # random generator.
-    # provenance = json.dumps(provenance_dict)
+    provenance = [json.dumps(provenance_dict).encode()]
     # Should use range here, but Python 2 makes this awkward...
     j = 0
     while j < num_replicates:
         j += 1
         sim.run()
-        tree_sequence = sim.get_tree_sequence(mutation_rate)
-        # tree_sequence.add_provenance(provenance)
+        tree_sequence = sim.get_tree_sequence(mutation_rate, provenance)
         yield tree_sequence
         sim.reset()
 
@@ -907,10 +906,7 @@ def simulate(
     provenance = get_provenance_dict("simulate", parameters)
     mu = 0 if mutation_rate is None else mutation_rate
     if num_replicates is None:
-        sim.run()
-        tree_sequence = sim.get_tree_sequence(mu)
-        # tree_sequence.add_provenance(json.dumps(provenance))
-        return tree_sequence
+        return next(_replicate_generator(sim, rng, mu, 1, provenance))
     else:
         return _replicate_generator(sim, rng, mu, num_replicates, provenance)
 
@@ -1293,7 +1289,7 @@ class TreeSimulator(object):
             self._ll_sim = self.create_ll_instance()
         self._ll_sim.run()
 
-    def get_tree_sequence(self, mutation_rate=0):
+    def get_tree_sequence(self, mutation_rate=0, provenance_strings=[]):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
@@ -1303,7 +1299,8 @@ class TreeSimulator(object):
         Ne = self.get_effective_population_size()
         self._ll_sim.populate_tree_sequence(
             ll_tree_sequence, recombination_map=ll_recomb_map,
-            mutation_generator=ll_mutgen, Ne=Ne)
+            mutation_generator=ll_mutgen, Ne=Ne,
+            provenance_strings=provenance_strings)
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
