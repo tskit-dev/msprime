@@ -891,11 +891,11 @@ class TestNewickConversion(HighLevelTestCase):
         ]
         for n, m, r, Ne in cases:
             recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-            ts = msprime.simulator_factory(
+            sim = msprime.simulator_factory(
                 n, Ne=Ne, recombination_map=recomb_map)
-            ts.run()
-            tree_sequence = ts.get_tree_sequence()
-            breakpoints = ts.get_breakpoints()
+            sim.run()
+            tree_sequence = sim.get_tree_sequence()
+            breakpoints = sim.get_breakpoints()
             self.verify_trees(tree_sequence, breakpoints, Ne)
             self.verify_all_breakpoints(tree_sequence, breakpoints)
 
@@ -1917,6 +1917,27 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_sample_size(), n)
         self.assertEqual(ts.get_num_trees(), 1)
         self.assertGreater(ts.get_num_mutations(), 0)
+
+    def test_mutation_generator(self):
+        n = 10
+        rng = msprime.RandomGenerator(1)
+        mutgen = msprime.MutationGenerator(rng, 10)
+        ts = msprime.simulate(n, mutation_generator=mutgen)
+        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertEqual(ts.get_sample_size(), n)
+        self.assertEqual(ts.get_num_trees(), 1)
+        self.assertGreater(ts.get_num_mutations(), 0)
+
+    def test_mutation_interface(self):
+        for bad_type in ["x", [], {}]:
+            self.assertRaises(
+                TypeError, msprime.simulate, 10, mutation_generator=bad_type)
+            self.assertRaises(
+                TypeError, msprime.simulate, 10, mutation_rate=bad_type)
+        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 1)
+        self.assertRaises(
+            ValueError, msprime.simulate, 10, mutation_generator=mutgen,
+            mutation_rate=1)
 
     def test_recombination(self):
         n = 10

@@ -158,6 +158,8 @@ class SimulationRunner(object):
         self._random_generator = msprime.RandomGenerator(seed)
         self._ms_random_seeds = ms_seeds
         self._simulator.set_random_generator(self._random_generator)
+        self._mutation_generator = msprime.MutationGenerator(
+            self._random_generator, self._mutation_rate)
 
     def get_num_replicates(self):
         """
@@ -188,7 +190,7 @@ class SimulationRunner(object):
         print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
         for j in range(self._num_replicates):
             self._simulator.run()
-            tree_sequence = self._simulator.get_tree_sequence(self._mutation_rate)
+            tree_sequence = self._simulator.get_tree_sequence(self._mutation_generator)
             breakpoints = self._simulator.get_breakpoints()
             print(file=output)
             print("//", file=output)
