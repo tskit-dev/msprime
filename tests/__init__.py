@@ -23,11 +23,8 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
-import collections
 import random
 import unittest
-
-import _msprime
 
 NULL_NODE = -1
 
@@ -168,26 +165,31 @@ class PythonTreeSequence(object):
         self._breakpoints = breakpoints
         self._mutations = tree_sequence.get_mutations()
 
-    def records(self):
-        for j in range(self._tree_sequence.get_num_records()):
-            yield self._tree_sequence.get_record(j, _msprime.MSP_ORDER_LEFT)
-
     def _diffs(self):
-        left = 0
-        used_records = collections.defaultdict(list)
-        records_in = []
-        for l, r, node, children, t, _ in self.records():
-            if l != left:
-                # Out records must be sorted in reverse time order.
-                records_out = sorted(used_records[left], key=lambda x: -x[2])
-                yield l - left, records_out, records_in
-                del used_records[left]
-                records_in = []
-                left = l
-            used_records[r].append((node, children, t))
-            records_in.append((node, children, t))
-        records_out = sorted(used_records[left], key=lambda x: -x[2])
-        yield r - left, records_out, records_in
+        M = self._tree_sequence.get_num_records()
+        records = [self._tree_sequence.get_record(j) for j in range(M)]
+        l = [record[0] for record in records]
+        r = [record[1] for record in records]
+        u = [record[2] for record in records]
+        c = [record[3] for record in records]
+        t = [record[4] for record in records]
+        I = sorted(range(M), key=lambda j: (l[j], t[j]))
+        O = sorted(range(M), key=lambda j: (r[j], -t[j]))
+        j = 0
+        k = 0
+        while j < M:
+            r_out = []
+            r_in = []
+            x = l[I[j]]
+            while r[O[k]] == x:
+                h = O[k]
+                r_out.append((u[h], c[h], t[h]))
+                k += 1
+            while j < M and l[I[j]] == x:
+                h = I[j]
+                r_in.append((u[h], c[h], t[h]))
+                j += 1
+            yield r[O[k]] - x, r_out, r_in
 
     def _diffs_with_breaks(self):
         k = 1
@@ -208,35 +210,51 @@ class PythonTreeSequence(object):
             return self._diffs()
 
     def trees(self):
+        M = self._tree_sequence.get_num_records()
+        records = [self._tree_sequence.get_record(j) for j in range(M)]
+        l = [record[0] for record in records]
+        r = [record[1] for record in records]
+        u = [record[2] for record in records]
+        c = [record[3] for record in records]
+        t = [record[4] for record in records]
+        I = sorted(range(M), key=lambda j: (l[j], t[j]))
+        O = sorted(range(M), key=lambda j: (r[j], -t[j]))
+        j = 0
+        k = 0
         st = PythonSparseTree()
         st.sample_size = self._tree_sequence.get_sample_size()
         st.left = 0
         st.time = {j: 0 for j in range(st.sample_size)}
-        for length, records_out, records_in in self.diffs():
-            for node, children, t in records_out:
-                del st.time[node]
-                del st.children[node]
-                for c in children:
-                    del st.parent[c]
-            for node, children, t in records_in:
-                st.time[node] = t
-                st.children[node] = children
-                for c in children:
-                    st.parent[c] = node
+        while j < M:
+            x = l[I[j]]
+            while r[O[k]] == x:
+                h = O[k]
+                del st.children[u[h]]
+                del st.time[u[h]]
+                for q in c[h]:
+                    del st.parent[q]
+                k += 1
+            while j < M and l[I[j]] == x:
+                h = I[j]
+                st.children[u[h]] = c[h]
+                st.time[u[h]] = t[h]
+                for q in c[h]:
+                    st.parent[q] = u[h]
+                j += 1
+            st.left = x
+            st.right = r[O[k]]
             # Insert the root
             root = 0
             while root in st.parent:
                 root = st.parent[root]
             st.root = root
             st.index += 1
-            st.right += length
             # Add in all the mutations
             st.mutation_list = [
-                (p, u, j) for (p, u, j) in self._mutations
-                if st.left <= p < st.right
+                (position, node, index) for (position, node, index) in self._mutations
+                if st.left <= position < st.right
             ]
             yield st
-            st.left = st.right
 
 
 class PythonRecombinationMap(object):

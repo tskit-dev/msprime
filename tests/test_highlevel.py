@@ -444,7 +444,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertFalse(st1 != st2)
             l, r = st1.get_interval()
             breakpoints.append(r)
-            self.assertEqual(l, length)
+            self.assertAlmostEqual(l, length)
             self.assertGreaterEqual(l, 0)
             self.assertGreater(r, l)
             self.assertLessEqual(r, ts.get_sequence_length())
@@ -452,7 +452,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.verify_sparse_tree(st1)
             num_trees += 1
         self.assertEqual(breakpoints, list(ts.breakpoints()))
-        self.assertEqual(length, ts.get_sequence_length())
+        self.assertAlmostEqual(length, ts.get_sequence_length())
         self.assertEqual(ts.get_num_trees(), num_trees)
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
