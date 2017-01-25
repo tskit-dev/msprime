@@ -23,6 +23,8 @@ python:
   - "2.7"
   - "3.3"
   - "3.4"
+  - "3.5"
+  - "3.6"
 
 install:
   # Install newer version of pip to take advantage of bdist_wheel cache.
