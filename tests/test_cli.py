@@ -1466,26 +1466,26 @@ class TestUpgrade(TestCli):
     Tests the results of the upgrade operation to ensure they are
     correct.
     """
-    @unittest.skip("v4 format")
     def test_conversion(self):
         ts1 = msprime.simulate(10)
-        v2_file_name = self.temp_file + ".v2"
-        v3_file_name = self.temp_file + ".v3"
-        try:
-            msprime.dump_legacy(ts1, v2_file_name)
-            stdout, stderr = capture_output(
-                cli.msp_main, ["upgrade", v2_file_name, v3_file_name])
-            ts2 = msprime.load(v3_file_name)
-        finally:
-            os.unlink(v2_file_name)
-            os.unlink(v3_file_name)
-        self.assertEqual(stdout, "")
-        # We get some cruft on stderr that comes from h5py. This only happens
-        # because we're mixing h5py and msprime for this test, so we can ignore
-        # it.
-        # self.assertEqual(stderr, "")
-        # Quick checks to ensure we have the right tree sequence.
-        # More thorough checks are done elsewhere.
-        self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
-        self.assertEqual(ts1.get_num_records(), ts2.get_num_records())
-        self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())
+        for version in [2, 3]:
+            legacy_file_name = self.temp_file + ".legacy"
+            current_file_name = self.temp_file + ".current"
+            try:
+                msprime.dump_legacy(ts1, legacy_file_name, version=version)
+                stdout, stderr = capture_output(
+                    cli.msp_main, ["upgrade", legacy_file_name, current_file_name])
+                ts2 = msprime.load(current_file_name)
+            finally:
+                os.unlink(legacy_file_name)
+                os.unlink(current_file_name)
+            self.assertEqual(stdout, "")
+            # We get some cruft on stderr that comes from h5py. This only happens
+            # because we're mixing h5py and msprime for this test, so we can ignore
+            # it.
+            # self.assertEqual(stderr, "")
+            # Quick checks to ensure we have the right tree sequence.
+            # More thorough checks are done elsewhere.
+            self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
+            self.assertEqual(ts1.get_num_records(), ts2.get_num_records())
+            self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())

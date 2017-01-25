@@ -47,6 +47,7 @@ import msprime.environment
 
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
+from _msprime import MutationGenerator
 
 NULL_NODE = -1
 
@@ -692,7 +693,7 @@ def _check_population_configurations(population_configurations):
 
 
 def _replicate_generator(
-        sim, rng, mutation_rate, num_replicates, provenance_dict):
+        sim, mutation_generator, num_replicates, provenance_dict):
     """
     Generator function for the many-replicates case of the simulate
     function.
@@ -707,7 +708,7 @@ def _replicate_generator(
     while j < num_replicates:
         j += 1
         sim.run()
-        tree_sequence = sim.get_tree_sequence(mutation_rate, provenance)
+        tree_sequence = sim.get_tree_sequence(mutation_generator, provenance)
         yield tree_sequence
         sim.reset()
 
@@ -813,6 +814,7 @@ def simulate(
         model=None,
         record_migrations=False,
         random_seed=None,
+        mutation_generator=None,
         num_replicates=None):
     """
     Simulates the coalescent with recombination under the specified model
@@ -904,11 +906,17 @@ def simulate(
     # pre-alpha feature.
     parameters = {"TODO": "encode simulation parameters"}
     provenance = get_provenance_dict("simulate", parameters)
-    mu = 0 if mutation_rate is None else mutation_rate
-    if num_replicates is None:
-        return next(_replicate_generator(sim, rng, mu, 1, provenance))
+    if mutation_generator is None:
+        mu = 0 if mutation_rate is None else mutation_rate
+        mutation_generator = MutationGenerator(rng, mu)
     else:
-        return _replicate_generator(sim, rng, mu, num_replicates, provenance)
+        if mutation_rate is not None:
+            raise ValueError(
+                "Cannot specify both mutation_rate and mutation_generator")
+    if num_replicates is None:
+        return next(_replicate_generator(sim, mutation_generator, 1, provenance))
+    else:
+        return _replicate_generator(sim, mutation_generator, num_replicates, provenance)
 
 
 def load(path):
@@ -1289,17 +1297,18 @@ class TreeSimulator(object):
             self._ll_sim = self.create_ll_instance()
         self._ll_sim.run()
 
-    def get_tree_sequence(self, mutation_rate=0, provenance_strings=[]):
+    def get_tree_sequence(self, mutation_generator=None, provenance_strings=[]):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
-        ll_mutgen = _msprime.MutationGenerator(self._random_generator, mutation_rate)
+        if mutation_generator is None:
+            mutation_generator = MutationGenerator(self._random_generator, 0)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_recomb_map = self._recombination_map.get_ll_recombination_map()
         Ne = self.get_effective_population_size()
         self._ll_sim.populate_tree_sequence(
             ll_tree_sequence, recombination_map=ll_recomb_map,
-            mutation_generator=ll_mutgen, Ne=Ne,
+            mutation_generator=mutation_generator, Ne=Ne,
             provenance_strings=provenance_strings)
         return TreeSequence(ll_tree_sequence)
 
