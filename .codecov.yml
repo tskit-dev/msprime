@@ -2,7 +2,7 @@ coverage:
   status:
     project:
       python:
-        target: 85%
+        target: 95%
         flags: python
       C:
         target: 90%
