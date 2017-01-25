@@ -340,7 +340,7 @@ we can specify the location and time at which all samples are made.
         samples = [
             msprime.Sample(population=0, time=0),
             msprime.Sample(0, 0),  # Or, we can use positional arguments.
-            msprime.Sample(0, 3.0)
+            msprime.Sample(0, 1.0)
         ]
         tree_seq = msprime.simulate(samples=samples)
         tree = next(tree_seq.trees())
