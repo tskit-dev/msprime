@@ -199,7 +199,8 @@ def simplify_tree_sequence(ts, samples):
             children=children, time=record.time, population=record.population))
     compressed_mutations = []
     for pos, nodes in new_mutations:
-        compressed_mutations.append((pos, tuple(node_map[node] for node in nodes)))
+        sorted_nodes = tuple(sorted(node_map[node] for node in nodes))
+        compressed_mutations.append((pos, sorted_nodes))
     ll_ts = _msprime.TreeSequence()
     ll_ts.load_records(
         samples=[(0, 0) for _ in samples],
@@ -930,6 +931,13 @@ class TestTreeSequence(HighLevelTestCase):
                     yield ts
         for ts in self.get_bottleneck_examples():
             yield ts
+        # Make an example with recurrent mutations
+        n = 10
+        ts = msprime.simulate(n, length=n, recombination_rate=1)
+        self.assertGreater(ts.num_trees, 1)
+        mutations = [
+            (j, tuple(u for u in range(j + 1))) for j in range(ts.sample_size)]
+        yield ts.copy(mutations)
 
     def test_sparse_trees(self):
         for ts in self.get_example_tree_sequences():
@@ -1258,7 +1266,7 @@ class TestTreeSequence(HighLevelTestCase):
         for tree in ts.trees(tracked_leaves=sample):
             for mut in tree.mutations():
                 for node in mut.nodes:
-                    allele_counts[mut.position] = tree.get_num_tracked_leaves(node)
+                    allele_counts[mut.position] += tree.get_num_tracked_leaves(node)
                     for u in tree.leaves(node):
                         if u in sample_map:
                             leaves[mut.position].append(sample_map[u])
@@ -1266,11 +1274,13 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertLessEqual(new_ts.get_num_mutations(), ts.get_num_mutations())
         for tree in new_ts.trees():
             for mut in tree.mutations():
+                leaf_count = 0
+                new_leaves = []
                 for node in mut.nodes:
-                    self.assertEqual(
-                        tree.get_num_leaves(node), allele_counts[mut.position])
-                    new_leaves = sorted(tree.leaves(node))
-                    self.assertEqual(sorted(leaves[mut.position]), new_leaves)
+                    leaf_count += tree.get_num_leaves(node)
+                    new_leaves.extend(tree.leaves(node))
+                self.assertEqual(sorted(leaves[mut.position]), sorted(new_leaves))
+                self.assertEqual(leaf_count, allele_counts[mut.position])
 
     def verify_simplify_equality(self, ts, sample):
         s1 = ts.simplify(sample)
