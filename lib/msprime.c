@@ -2460,7 +2460,8 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     /* Add the node definitions for the samples */
     for (j = 0; j < self->sample_size; j++) {
         scaled_time = self->samples[j].time * 4 * Ne;
-        ret = node_table_add_row(nodes, scaled_time, self->samples[j].population_id);
+        ret = node_table_add_row(nodes, MSP_NODE_SAMPLE, scaled_time,
+                self->samples[j].population_id);
         if (ret != 0) {
             goto out;
         }
@@ -2473,7 +2474,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
         if (cr->node != last_node) {
             assert(cr->node == nodes->num_rows);
             scaled_time = cr->time * 4 * Ne;
-            ret = node_table_add_row(nodes, scaled_time, cr->population_id);
+            ret = node_table_add_row(nodes, 0, scaled_time, cr->population_id);
             if (ret != 0) {
                 goto out;
             }
@@ -2487,7 +2488,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             assert(node != NULL);
             nm = (node_mapping_t *) node->item;
             assert(nm->left == (uint32_t) cr->left);
-            left = avl_index(node);
+            left = avl_index(node) + 1;
         }
         if (cr->right == (double) self->num_loci) {
             right = (uint32_t) coordinates->num_rows - 1;
@@ -2497,8 +2498,9 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             assert(node != NULL);
             nm = (node_mapping_t *) node->item;
             assert(nm->left == (uint32_t) cr->right);
-            right = avl_index(node);
+            right = avl_index(node) + 1;
         }
+        assert(left < right);
         ret = edgeset_table_add_row(edgesets, left, right,
             cr->node, cr->num_children, cr->children);
     }

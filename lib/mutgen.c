@@ -221,6 +221,71 @@ out:
     return ret;
 }
 
+/* temporary interface while we're working out the details of passing around
+ * data via tables. */
+int WARN_UNUSED
+mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
+        edgeset_table_t *edgesets)
+{
+    int ret;
+    size_t j, offset, branch_mutations;
+    double left, right, branch_length, distance, mu, position;
+    uint32_t parent, child, k, l;
+    coordinate_table_t *coordinates = edgesets->coordinates;
+
+    /* First free up any memory used in previous calls */
+    for (j = 0; j < self->num_mutations; j++) {
+        object_heap_free_object(&self->node_heap, self->mutations[j].nodes);
+    }
+    self->num_mutations = 0;
+
+    offset = 0;
+    for (j = 0; j < edgesets->num_rows; j++) {
+        left = coordinates->position[edgesets->left[j]];
+        right = coordinates->position[edgesets->right[j]];
+        distance = right - left;
+        parent = edgesets->parent[j];
+        for (k = 0; k < edgesets->num_children[j]; k++) {
+            child = edgesets->children[offset];
+            offset++;
+            branch_length = nodes->time[parent] - nodes->time[child];
+            mu = branch_length * distance * self->mutation_rate;
+            branch_mutations = gsl_ran_poisson(self->rng, mu);
+            for (l = 0; l < branch_mutations; l++) {
+                position = gsl_ran_flat(self->rng, left, right);
+                assert(left <= position && position < right);
+                ret = mutgen_add_mutation(self, child, position, '0', '1');
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+    }
+    qsort(self->mutations, self->num_mutations, sizeof(mutation_t), cmp_mutation);
+    ret = 0;
+out:
+    return ret;
+}
+
+int
+mutgen_populate_tables(mutgen_t *self, mutation_table_t *mutations)
+{
+    int ret = 0;
+    mutation_t *mut;
+    size_t j;
+
+    for (j = 0; j < self->num_mutations; j++) {
+        mut = &self->mutations[j];
+        ret = mutation_table_add_row(mutations, mut->position,
+                mut->num_nodes, mut->nodes);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
 size_t
 mutgen_get_num_mutations(mutgen_t *self)
 {

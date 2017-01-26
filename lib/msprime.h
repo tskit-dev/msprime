@@ -58,6 +58,8 @@
 #define MSP_MODEL_SMC 1
 #define MSP_MODEL_SMC_PRIME 2
 
+#define MSP_NODE_SAMPLE 1
+
 #define MAX_BRANCH_LENGTH_STRING 24
 
 /* The root node indicator */
@@ -79,29 +81,22 @@ typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
-    char *ancestral_state;
-    char *derived_state;
-    char **ancestral_state_mem;
-    char **derived_state_mem;
-} mutation_type_table_t;
-
-typedef struct {
-    size_t num_rows;
-    size_t max_rows;
-    size_t max_rows_increment;
-    uint32_t nodes;
-    uint32_t num_nodes;
-    uint32_t **nodes_mem;
-    uint32_t site;
-    uint32_t type;
-    coordinate_table_t *coordinates;
-    mutation_type_table_t *types;
+    size_t total_nodes;
+    size_t max_total_nodes;
+    size_t max_total_nodes_increment;
+    uint32_t *nodes;
+    uint32_t *num_nodes;
+    /* We will probably want to embed a coordinates table here.
+     * Keep it simple for now. */
+    double *position;
+    /* TODO mutation type table. */
 } mutation_table_t;
 
 typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
+    uint32_t *flags;
     double *time;
     uint32_t *population;
 } node_table_t;
@@ -139,21 +134,17 @@ int coordinate_table_reset(coordinate_table_t *self);
 int coordinate_table_free(coordinate_table_t *self);
 void coordinate_table_print_state(coordinate_table_t *self, FILE *out);
 
-int mutation_type_table_alloc(mutation_type_table_t *self, size_t max_rows_increment);
-int mutation_type_table_add_row(mutation_table_t *self, char *ancestral_state,
-        char *derived_state);
-int mutation_type_table_reset(mutation_type_table_t *self);
-int mutation_type_table_free(mutation_type_table_t *self);
-
 int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        coordinate_table_t *coordinates, mutation_type_table_t *types);
-int mutation_table_add_row(mutation_table_t *self, uint32_t site, uint32_t type,
-        uint32_t num_nodes, uint32_t nodes);
+        size_t max_total_nodes_increment);
+int mutation_table_add_row(mutation_table_t *self, double position,
+        uint32_t num_nodes, uint32_t *nodes);
 int mutation_table_reset(mutation_table_t *self);
 int mutation_table_free(mutation_table_t *self);
+void mutation_table_print_state(mutation_table_t *self, FILE *out);
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment);
-int node_table_add_row(node_table_t *self, double time, uint32_t population);
+int node_table_add_row(node_table_t *self, uint32_t flags, double time,
+        uint32_t population);
 int node_table_reset(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
@@ -662,6 +653,9 @@ int tree_sequence_load_records(tree_sequence_t *self,
         size_t num_mutations, mutation_t *mutations,
         size_t num_migration_records, migration_record_t *migration_records,
         size_t num_provenance_strings, const char **provenance_strings);
+int tree_sequence_load_tables_tmp(tree_sequence_t *self,
+        node_table_t *nodes, edgeset_table_t *edgesets,
+        mutation_table_t *mutations);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
@@ -780,6 +774,9 @@ void recomb_map_print_state(recomb_map_t *self, FILE *out);
 int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng);
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self, tree_sequence_t *ts);
+int mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
+        edgeset_table_t *edgesets);
+int mutgen_populate_tables(mutgen_t *self, mutation_table_t *mutations);
 int mutgen_set_mutation_block_size(mutgen_t *self, size_t mutation_block_size);
 size_t mutgen_get_num_mutations(mutgen_t *self);
 size_t mutgen_get_total_nodes(mutgen_t *self);

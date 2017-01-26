@@ -955,6 +955,134 @@ out:
     return ret;
 }
 
+
+static int WARN_UNUSED
+tree_sequence_build_indexes(tree_sequence_t *self)
+{
+    int ret = MSP_ERR_GENERIC;
+    size_t j;
+    double x;
+    index_sort_t *sort_buff = NULL;
+
+    sort_buff = malloc(self->trees.num_records * sizeof(index_sort_t));
+    if (sort_buff == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* sort by left and increasing time to give us the order in which
+     * records should be inserted */
+    for (j = 0; j < self->trees.num_records; j++) {
+        sort_buff[j].index = (uint32_t ) j;
+        x = self->trees.breakpoints[self->trees.records.left[j]];
+        sort_buff[j].value = x;
+        /* When comparing equal left values, we sort by time. Since we require
+         * that records are provided in sorted order, the index can be
+         * taken as a proxy for time. This avoids issues unstable sort
+         * algorithms when multiple events occur at the same time. We are
+         * actually making the stronger requirement that records must be
+         * provided *in the order they happened*, not just in increasing
+         * time. See also the removal order index below.
+         */
+        sort_buff[j].time = (int64_t ) j;
+    }
+    qsort(sort_buff, self->trees.num_records, sizeof(index_sort_t), cmp_index_sort);
+    for (j = 0; j < self->trees.num_records; j++) {
+        self->trees.indexes.insertion_order[j] = sort_buff[j].index;
+    }
+    /* sort by right and decreasing time to give us the order in which
+     * records should be removed. */
+    for (j = 0; j < self->trees.num_records; j++) {
+        sort_buff[j].index = (uint32_t ) j;
+        x = self->trees.breakpoints[self->trees.records.right[j]];
+        sort_buff[j].value = x;
+        sort_buff[j].time = -1 * (int64_t ) j;
+    }
+    qsort(sort_buff, self->trees.num_records, sizeof(index_sort_t), cmp_index_sort);
+    for (j = 0; j < self->trees.num_records; j++) {
+        self->trees.indexes.removal_order[j] = sort_buff[j].index;
+    }
+    ret = 0;
+out:
+    if (sort_buff != NULL) {
+        free(sort_buff);
+    }
+    return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_load_tables_tmp(tree_sequence_t *self,
+    node_table_t *nodes, edgeset_table_t *edgesets, mutation_table_t *mutations)
+{
+    int ret = 0;
+    size_t j, offset;
+
+    self->trees.num_nodes = nodes->num_rows;
+    self->trees.total_child_nodes = edgesets->total_children;
+    self->trees.num_records = edgesets->num_rows;
+    self->trees.num_breakpoints = edgesets->coordinates->num_rows;
+    self->sequence_length = edgesets->coordinates->position[
+        edgesets->coordinates->num_rows - 1];
+    self->sample_size = 0;
+    for (j = 0; j < nodes->num_rows; j++) {
+        if (nodes->flags[j] & MSP_NODE_SAMPLE) {
+            self->sample_size++;
+        }
+    }
+    self->mutations.num_records = mutations->num_rows;
+    self->mutations.total_nodes = mutations->total_nodes;
+    self->num_provenance_strings = 0;
+    ret = tree_sequence_alloc(self);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->trees.breakpoints, edgesets->coordinates->position,
+            edgesets->coordinates->num_rows * sizeof(double));
+    memcpy(self->trees.nodes.time, nodes->time, nodes->num_rows * sizeof(double));
+    memcpy(self->trees.nodes.population, nodes->population,
+            nodes->num_rows * sizeof(uint32_t));
+    memcpy(self->trees.records.left, edgesets->left,
+            edgesets->num_rows * sizeof(uint32_t));
+    memcpy(self->trees.records.right, edgesets->right,
+            edgesets->num_rows * sizeof(uint32_t));
+    memcpy(self->trees.records.node, edgesets->parent,
+            edgesets->num_rows * sizeof(uint32_t));
+    memcpy(self->trees.records.num_children, edgesets->num_children,
+            edgesets->num_rows * sizeof(uint32_t));
+    memcpy(self->trees.records.children_mem, edgesets->children,
+            edgesets->total_children * sizeof(uint32_t));
+
+    offset = 0;
+    for (j = 0; j < self->trees.num_records; j++) {
+        self->trees.records.children[j] = &self->trees.records.children_mem[offset];
+        offset += self->trees.records.num_children[j];
+    }
+    assert(offset == self->trees.total_child_nodes);
+    ret = tree_sequence_build_indexes(self);
+    if (ret != 0) {
+        goto out;
+    }
+
+    memcpy(self->mutations.position, mutations->position,
+            mutations->num_rows * sizeof(double));
+    memcpy(self->mutations.num_nodes, mutations->num_nodes,
+            mutations->num_rows * sizeof(uint32_t));
+    memcpy(self->mutations.nodes_mem, mutations->nodes,
+            mutations->total_nodes * sizeof(uint32_t));
+
+    offset = 0;
+    for (j = 0; j < mutations->num_rows; j++) {
+        self->mutations.nodes[j] = &self->mutations.nodes_mem[offset];
+        offset += mutations->num_nodes[j];
+    }
+    assert(offset == self->mutations.total_nodes);
+    ret = tree_sequence_init_tree_mutations(self);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
 int WARN_UNUSED
 tree_sequence_load_records_rescale(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
