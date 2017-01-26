@@ -2425,6 +2425,96 @@ out:
     return ret;
 }
 
+int WARN_UNUSED
+msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
+        node_table_t *nodes, edgeset_table_t *edgesets,
+        migration_table_t *migrations)
+{
+    int ret = 0;
+    uint32_t last_node;
+    size_t j;
+    double scaled_time;
+    uint32_t left, right;
+    coalescence_record_t *cr;
+    avl_node_t *node;
+    node_mapping_t search, *nm;
+    coordinate_table_t *coordinates = edgesets->coordinates;
+
+    /* First setup the coordinates for the edgesets. */
+    ret = coordinate_table_add_row(coordinates, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    for (node = (&self->breakpoints)->head; node != NULL; node = node->next) {
+        nm = (node_mapping_t *) node->item;
+        ret = coordinate_table_add_row(coordinates, (double) nm->left);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = coordinate_table_add_row(coordinates, self->num_loci);
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* Add the node definitions for the samples */
+    for (j = 0; j < self->sample_size; j++) {
+        scaled_time = self->samples[j].time * 4 * Ne;
+        ret = node_table_add_row(nodes, scaled_time, self->samples[j].population_id);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
+    /* Now go through the records */
+    last_node = MSP_NULL_NODE;
+    for (j = 0; j < self->num_coalescence_records; j++) {
+        cr = &self->coalescence_records[j];
+        if (cr->node != last_node) {
+            assert(cr->node == nodes->num_rows);
+            scaled_time = cr->time * 4 * Ne;
+            ret = node_table_add_row(nodes, scaled_time, cr->population_id);
+            if (ret != 0) {
+                goto out;
+            }
+            last_node = cr->node;
+        }
+        if (cr->left == 0) {
+            left = 0;
+        } else {
+            search.left = (uint32_t) cr->left;
+            avl_search_closest(&self->breakpoints, &search, &node);
+            assert(node != NULL);
+            nm = (node_mapping_t *) node->item;
+            assert(nm->left == (uint32_t) cr->left);
+            left = avl_index(node);
+        }
+        if (cr->right == (double) self->num_loci) {
+            right = (uint32_t) coordinates->num_rows - 1;
+        } else {
+            search.left = (uint32_t) cr->right;
+            avl_search_closest(&self->breakpoints, &search, &node);
+            assert(node != NULL);
+            nm = (node_mapping_t *) node->item;
+            assert(nm->left == (uint32_t) cr->right);
+            right = avl_index(node);
+        }
+        ret = edgeset_table_add_row(edgesets, left, right,
+            cr->node, cr->num_children, cr->children);
+    }
+    /* TODO migrations */
+
+    if (recomb_map != NULL) {
+        ret = recomb_map_genetic_to_phys_bulk(recomb_map,
+            edgesets->coordinates->position, edgesets->coordinates->num_rows);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
 int
 msp_debug_demography(msp_t *self, double *end_time)
 {

@@ -735,14 +735,35 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
     const char *provenance = "main.run_simulate";
 
+    coordinate_table_t *edgeset_coordinates = malloc(sizeof(coordinate_table_t));
+    node_table_t *nodes = malloc(sizeof(node_table_t));
+    edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
+
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
-            || mutgen == NULL) {
+            || mutgen == NULL || edgeset_coordinates == NULL
+            || nodes == NULL || edgesets == NULL) {
         goto out;
     }
     ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
     if (ret != 0) {
         goto out;
     }
+
+    ret = coordinate_table_alloc(edgeset_coordinates, 10);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_alloc(edgesets, 10, 10);
+    if (ret != 0) {
+        goto out;
+    }
+    // FIXME
+    edgesets->coordinates = edgeset_coordinates;
+    ret = node_table_alloc(nodes, 10);
+    if (ret != 0) {
+        goto out;
+    }
+
     ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng);
     if (ret != 0) {
         goto out;
@@ -796,6 +817,14 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             printf("-----------------\n");
             tree_sequence_print_state(tree_seq, stdout);
         }
+
+        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, NULL);
+        if (ret != 0) {
+            goto out;
+        }
+        coordinate_table_print_state(edgesets->coordinates, stdout);
+        node_table_print_state(nodes, stdout);
+        edgeset_table_print_state(edgesets, stdout);
     }
 out:
     if (msp != NULL) {
@@ -816,6 +845,18 @@ out:
     }
     if (rng != NULL) {
         gsl_rng_free(rng);
+    }
+    if (edgeset_coordinates != NULL) {
+        coordinate_table_free(edgeset_coordinates);
+        free(edgeset_coordinates);
+    }
+    if (edgesets != NULL) {
+        edgeset_table_free(edgesets);
+        free(edgesets);
+    }
+    if (nodes != NULL) {
+        node_table_free(nodes);
+        free(nodes);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));

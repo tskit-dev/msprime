@@ -67,6 +67,107 @@
 
 #define MSP_INITIALISED_MAGIC 0x1234567
 
+/* Start experimental table definitions */
+typedef struct {
+    size_t num_rows;
+    size_t max_rows;
+    size_t max_rows_increment;
+    double *position;
+} coordinate_table_t;
+
+typedef struct {
+    size_t num_rows;
+    size_t max_rows;
+    size_t max_rows_increment;
+    char *ancestral_state;
+    char *derived_state;
+    char **ancestral_state_mem;
+    char **derived_state_mem;
+} mutation_type_table_t;
+
+typedef struct {
+    size_t num_rows;
+    size_t max_rows;
+    size_t max_rows_increment;
+    uint32_t nodes;
+    uint32_t num_nodes;
+    uint32_t **nodes_mem;
+    uint32_t site;
+    uint32_t type;
+    coordinate_table_t *coordinates;
+    mutation_type_table_t *types;
+} mutation_table_t;
+
+typedef struct {
+    size_t num_rows;
+    size_t max_rows;
+    size_t max_rows_increment;
+    double *time;
+    uint32_t *population;
+} node_table_t;
+
+typedef struct {
+    size_t num_rows;
+    size_t max_rows;
+    size_t max_rows_increment;
+    size_t total_children;
+    size_t max_total_children;
+    size_t max_total_children_increment;
+    uint32_t *left;
+    uint32_t *right;
+    uint32_t *parent;
+    uint32_t *num_children;
+    uint32_t *children;
+    coordinate_table_t *coordinates;
+} edgeset_table_t;
+
+typedef struct {
+    size_t num_rows;
+    size_t max_num_rows;
+    uint32_t *source;
+    uint32_t *dest;
+    uint32_t *node;
+    uint32_t *left;
+    uint32_t *right;
+    double *time;
+    coordinate_table_t *coordinates;
+} migration_table_t;
+
+int coordinate_table_alloc(coordinate_table_t *self, size_t max_rows_increment);
+int coordinate_table_add_row(coordinate_table_t *self, double coordinate);
+int coordinate_table_reset(coordinate_table_t *self);
+int coordinate_table_free(coordinate_table_t *self);
+void coordinate_table_print_state(coordinate_table_t *self, FILE *out);
+
+int mutation_type_table_alloc(mutation_type_table_t *self, size_t max_rows_increment);
+int mutation_type_table_add_row(mutation_table_t *self, char *ancestral_state,
+        char *derived_state);
+int mutation_type_table_reset(mutation_type_table_t *self);
+int mutation_type_table_free(mutation_type_table_t *self);
+
+int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
+        coordinate_table_t *coordinates, mutation_type_table_t *types);
+int mutation_table_add_row(mutation_table_t *self, uint32_t site, uint32_t type,
+        uint32_t num_nodes, uint32_t nodes);
+int mutation_table_reset(mutation_table_t *self);
+int mutation_table_free(mutation_table_t *self);
+
+int node_table_alloc(node_table_t *self, size_t max_rows_increment);
+int node_table_add_row(node_table_t *self, double time, uint32_t population);
+int node_table_reset(node_table_t *self);
+int node_table_free(node_table_t *self);
+void node_table_print_state(node_table_t *self, FILE *out);
+
+int edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
+        size_t max_total_children_increment);
+int edgeset_table_add_row(edgeset_table_t *self, uint32_t left, uint32_t right,
+        uint32_t parent, uint32_t num_children, uint32_t *children);
+int edgeset_table_reset(edgeset_table_t *self);
+int edgeset_table_free(edgeset_table_t *self);
+void edgeset_table_print_state(edgeset_table_t *self, FILE *out);
+
+/* END experimental table definitions */
+
 typedef struct segment_t_t {
     uint32_t population_id;
     /* During simulation we use genetic coordinates */
@@ -503,6 +604,9 @@ int msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
+int msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
+        node_table_t *node_table, edgeset_table_t *edgeset_table,
+        migration_table_t *migration_table);
 int msp_reset(msp_t *self);
 int msp_print_state(msp_t *self, FILE *out);
 int msp_free(msp_t *self);
@@ -686,5 +790,6 @@ const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
+
 
 #endif /*__MSPRIME_H__*/
