@@ -1991,6 +1991,7 @@ tree_sequence_compress_nodes(tree_sequence_t *self, uint32_t *samples, size_t nu
             mutations[j].nodes[k] = node_map[mutations[j].nodes[k]];
             assert(mutations[j].nodes[k] != MSP_NULL_NODE);
         }
+        qsort(mutations[j].nodes, mutations[j].num_nodes, sizeof(uint32_t), cmp_uint32_t);
     }
     ret = 0;
 out:
@@ -2029,7 +2030,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     size_t j, k, h, next_avl_node, mapped_children_mem_offset, num_output_records,
            num_output_mutations, max_num_child_nodes, max_num_records,
            output_mutations_mem_offset;
-    uint32_t u, v, w, x, c, l, num_mapped_children;
+    uint32_t u, v, w, x, c, l, num_mapped_children, node_index;
     avl_tree_t visited_nodes;
     avl_node_t *avl_node_mem = NULL;
     uint32_t *avl_node_value_mem = NULL;
@@ -2239,34 +2240,41 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
                         cmp_uint32_t);
             }
         }
+
         /* Update the mutations for this tree */
         right = self->trees.breakpoints[self->trees.records.right[O[k]]];
         while (l < self->mutations.num_records && self->mutations.position[l] < right) {
-            assert(self->mutations.num_nodes[l] == 1);
-            u = self->mutations.nodes[l][0];
-            if (mapping[u] != MSP_NULL_NODE) {
-                keep = true;
-                if (filter_root_mutations) {
-                    /* Traverse up the tree until we find either another node in
-                     * the subset tree or the root */
-                    v = parent[u];
-                    while (v != MSP_NULL_NODE && mapping[v] != v) {
-                        v = parent[v];
+            node_index = 0;
+            mut = NULL;
+            for (h = 0; h < self->mutations.num_nodes[l]; h++) {
+                u = self->mutations.nodes[l][h];
+                if (mapping[u] != MSP_NULL_NODE) {
+                    keep = true;
+                    if (filter_root_mutations) {
+                        /* Traverse up the tree until we find either another node in
+                         * the subset tree or the root */
+                        v = parent[u];
+                        while (v != MSP_NULL_NODE && mapping[v] != v) {
+                            v = parent[v];
+                        }
+                        keep = v != MSP_NULL_NODE;
                     }
-                    keep = v != MSP_NULL_NODE;
-                }
-                if (keep) {
-                    assert(num_output_mutations < self->mutations.num_records);
-                    mut = &output_mutations[num_output_mutations];
-                    num_output_mutations++;
-                    assert(output_mutations_mem_offset < self->mutations.total_nodes);
-                    mut->nodes = output_mutations_nodes_mem + output_mutations_mem_offset;
-                    mut->nodes[0] = mapping[u];
-                    mut->num_nodes = 1;
-                    mut->position = self->mutations.position[l];
-                    mut->ancestral_state = self->mutations.ancestral_state[l];
-                    mut->derived_state = self->mutations.derived_state[l];
-                    output_mutations_mem_offset++;
+                    if (keep) {
+                        if (node_index == 0) {
+                            assert(num_output_mutations < self->mutations.num_records);
+                            mut = &output_mutations[num_output_mutations];
+                            num_output_mutations++;
+                            assert(output_mutations_mem_offset < self->mutations.total_nodes);
+                            mut->nodes = output_mutations_nodes_mem + output_mutations_mem_offset;
+                        }
+                        mut->nodes[node_index] = mapping[u];
+                        node_index++;
+                        output_mutations_mem_offset++;
+                        mut->num_nodes = node_index;
+                        mut->position = self->mutations.position[l];
+                        mut->ancestral_state = self->mutations.ancestral_state[l];
+                        mut->derived_state = self->mutations.derived_state[l];
+                    }
                 }
             }
             l++;

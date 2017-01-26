@@ -272,6 +272,233 @@ verify_migration_records_equal(migration_record_t *r1, migration_record_t *r2, d
 }
 
 static void
+verify_hapgen(tree_sequence_t *ts)
+{
+    int ret;
+    hapgen_t hapgen;
+    char *haplotype;
+    size_t sample_size = tree_sequence_get_sample_size(ts);
+    size_t num_mutations = tree_sequence_get_num_mutations(ts);
+    size_t j;
+
+    ret = hapgen_alloc(&hapgen, ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    hapgen_print_state(&hapgen, _devnull);
+
+    for (j = 0; j < sample_size; j++) {
+        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(strlen(haplotype), num_mutations);
+    }
+    for (j = sample_size; j < sample_size + 10; j++) {
+        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+    }
+    ret = hapgen_free(&hapgen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+}
+
+static void
+verify_vargen(tree_sequence_t *ts)
+{
+    int ret;
+    vargen_t vargen;
+    mutation_t *mut;
+    size_t sample_size = tree_sequence_get_sample_size(ts);
+    size_t num_mutations = tree_sequence_get_num_mutations(ts);
+    char *genotypes = malloc((sample_size + 1) * sizeof(char));
+    size_t j, k;
+
+    CU_ASSERT_FATAL(genotypes != NULL);
+    ret = vargen_alloc(&vargen, ts, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    vargen_print_state(&vargen, _devnull);
+    j = 0;
+    while ((ret = vargen_next(&vargen, &mut, genotypes)) == 1) {
+        CU_ASSERT_EQUAL(mut->index, j);
+        for (k = 0; k < sample_size; k++) {
+            CU_ASSERT(genotypes[k] == 0 || genotypes[k] == 1);
+        }
+        j++;
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(j, num_mutations);
+    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &mut, genotypes), 0);
+    ret = vargen_free(&vargen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = vargen_alloc(&vargen, ts, MSP_GENOTYPES_AS_CHAR);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    vargen_print_state(&vargen, _devnull);
+    j = 0;
+    genotypes[sample_size] = '\0';
+    while ((ret = vargen_next(&vargen, &mut, genotypes)) == 1) {
+        CU_ASSERT_EQUAL(mut->index, j);
+        for (k = 0; k < sample_size; k++) {
+            CU_ASSERT(genotypes[k] == '0' || genotypes[k] == '1');
+        }
+        CU_ASSERT_EQUAL_FATAL(genotypes[sample_size], '\0');
+        j++;
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(j, num_mutations);
+    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &mut, genotypes), 0);
+    ret = vargen_free(&vargen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    free(genotypes);
+}
+
+static void
+verify_stats(tree_sequence_t *ts)
+{
+    int ret;
+    uint32_t sample_size = tree_sequence_get_sample_size(ts);
+    uint32_t *samples = malloc(sample_size * sizeof(uint32_t));
+    uint32_t j;
+    double pi;
+
+    CU_ASSERT_FATAL(samples != NULL);
+
+    ret = tree_sequence_get_pairwise_diversity(ts, NULL, 0, &pi);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = tree_sequence_get_pairwise_diversity(ts, NULL, 1, &pi);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = tree_sequence_get_pairwise_diversity(ts, NULL, sample_size + 1, &pi);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    for (j = 0; j < sample_size; j++) {
+        samples[j] = j;
+    }
+    for (j = 2; j < sample_size; j++) {
+        ret = tree_sequence_get_pairwise_diversity(ts, samples, j, &pi);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_TRUE(pi >= 0);
+    }
+    free(samples);
+}
+
+static void
+verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
+        uint32_t *samples, uint32_t num_samples)
+{
+    int ret;
+    sample_t s1, s2;
+    sparse_tree_t full_tree, subset_tree;
+    mutation_t *mut;
+    uint32_t j, k, u, mrca1, mrca2;
+    double tmrca1, tmrca2;
+    size_t total_mutations;
+
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_sequence_length(ts),
+        tree_sequence_get_sequence_length(subset));
+    CU_ASSERT(
+        tree_sequence_get_num_nodes(ts) >= tree_sequence_get_num_nodes(subset));
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(subset), num_samples);
+
+    /* Check the sample properties */
+    for (j = 0; j < num_samples; j++) {
+        ret = tree_sequence_get_sample(ts, samples[j], &s1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = tree_sequence_get_sample(subset, j, &s2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(s1.population_id, s2.population_id);
+        CU_ASSERT_EQUAL_FATAL(s1.time, s2.time);
+    }
+    /* Check the pairwise MRCAs */
+    ret = sparse_tree_alloc(&full_tree, ts, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_alloc(&subset_tree, subset, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&full_tree);
+    CU_ASSERT_EQUAL(ret, 1);
+    ret = sparse_tree_first(&subset_tree);
+    CU_ASSERT_EQUAL(ret, 1);
+
+    total_mutations = 0;
+    while (1) {
+        while (full_tree.right <= subset_tree.right) {
+            for (j = 0; j < num_samples; j++) {
+                for (k = j + 1; k < num_samples; k++) {
+                    ret = sparse_tree_get_mrca(&full_tree, samples[j], samples[k],
+                            &mrca1);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    ret = sparse_tree_get_time(&full_tree, mrca1, &tmrca1);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    ret = sparse_tree_get_mrca(&subset_tree, j, k, &mrca2);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    ret = sparse_tree_get_time(&subset_tree, mrca2, &tmrca2);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    CU_ASSERT_EQUAL(tmrca1, tmrca2);
+                }
+            }
+            ret = sparse_tree_next(&full_tree);
+            CU_ASSERT_FATAL(ret >= 0);
+            if (ret != 1) {
+                break;
+            }
+        }
+        /* Check the mutations in this tree */
+        for (j = 0; j < subset_tree.num_mutations; j++) {
+            mut = &subset_tree.mutations[j];
+            CU_ASSERT(subset_tree.left <= mut->position);
+            CU_ASSERT(mut->position < subset_tree.right);
+            for (k = 0; k < mut->num_nodes; k++) {
+                if (k > 0) {
+                    CU_ASSERT_TRUE(mut->nodes[k - 1] <  mut->nodes[k]);
+                }
+                ret = sparse_tree_get_parent(&subset_tree, mut->nodes[k], &u);
+                CU_ASSERT_EQUAL(ret, 0);
+                CU_ASSERT_FATAL(u != MSP_NULL_NODE);
+            }
+            total_mutations++;
+        }
+        ret = sparse_tree_next(&subset_tree);
+        if (ret != 1) {
+            break;
+        }
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(subset), total_mutations);
+
+    sparse_tree_free(&subset_tree);
+    sparse_tree_free(&full_tree);
+
+    /* Check some other operations on the subset */
+    verify_vargen(subset);
+    verify_hapgen(subset);
+}
+
+static void
+verify_simplify(tree_sequence_t *ts)
+{
+    int ret;
+    uint32_t n = tree_sequence_get_sample_size(ts);
+    uint32_t sample_sizes[] = {2, 3, n / 2, n - 1, n};
+    size_t j;
+    uint32_t *sample = malloc(n * sizeof(uint32_t));
+    tree_sequence_t subset;
+    int flags = MSP_FILTER_ROOT_MUTATIONS;
+
+    CU_ASSERT_FATAL(sample != NULL);
+    for (j = 0; j < n; j++) {
+        sample[j] = j;
+    }
+    ret = tree_sequence_initialise(&subset);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    for (j = 0; j < sizeof(sample_sizes) / sizeof(uint32_t); j++) {
+        if (sample_sizes[j] > 1 && sample_sizes[j] <= n) {
+            ret = tree_sequence_simplify(ts, sample, sample_sizes[j], flags, &subset);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            verify_simplify_properties(ts, &subset, sample, sample_sizes[j]);
+        }
+    }
+    tree_sequence_free(&subset);
+    free(sample);
+}
+
+static void
 verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
         mutgen_t *mutgen, double scale)
 {
@@ -466,6 +693,55 @@ get_example_nonbinary_tree_sequences(void)
     return ret;
 }
 
+tree_sequence_t *
+make_recurrent_mutations_copy(tree_sequence_t *ts)
+{
+    int ret;
+    uint32_t n = tree_sequence_get_sample_size(ts);
+    size_t num_records = tree_sequence_get_num_coalescence_records(ts);
+    double length = tree_sequence_get_sequence_length(ts);
+    size_t j, k;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    coalescence_record_t *records = malloc(num_records * sizeof(coalescence_record_t));
+    mutation_t *mutations = malloc(n * sizeof(mutation_t));
+    tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(records != NULL);
+    CU_ASSERT_FATAL(mutations != NULL);
+    CU_ASSERT_FATAL(new_ts != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+    for (j = 0; j < num_records; j++) {
+        ret = tree_sequence_get_coalescence_record(ts, j, records + j, MSP_ORDER_TIME);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
+    for (j = 0; j < n; j++) {
+        mutations[j].position = j * (length / n);
+        mutations[j].ancestral_state = '0';
+        mutations[j].derived_state = '1';
+        mutations[j].num_nodes = j + 1;
+        mutations[j].nodes = malloc((j + 1) * sizeof(uint32_t));
+        CU_ASSERT_FATAL(mutations[j].nodes != NULL);
+        for (k = 0; k < j + 1; k++) {
+            mutations[j].nodes[k] = k;
+        }
+    }
+
+    ret = tree_sequence_initialise(new_ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_records(new_ts, n, samples, num_records, records,
+            n, mutations, 0, NULL, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < n; j++) {
+        free(mutations[j].nodes);
+    }
+    free(mutations);
+    free(samples);
+    free(records);
+    return new_ts;
+}
+
 tree_sequence_t **
 get_example_tree_sequences(int include_nonbinary)
 {
@@ -480,7 +756,8 @@ get_example_tree_sequences(int include_nonbinary)
     ret[2] = get_example_tree_sequence(3, 0, 3, 10.0, 10.0, 0.0, 0, NULL);
     ret[3] = get_example_tree_sequence(10, 0, UINT32_MAX, 10.0,
             9.31322575049e-08, 10.0, 0, NULL);
-    k = 4;
+    ret[4] = make_recurrent_mutations_copy(ret[0]);
+    k = 5;
     if (include_nonbinary) {
         nonbinary = get_example_nonbinary_tree_sequences();
         for (j = 0; nonbinary[j] != NULL; j++) {
@@ -2849,7 +3126,42 @@ test_single_tree_vargen(void)
     free_local_mutations(num_mutations, mutations);
 }
 
+static void
+test_single_tree_simplify(void)
+{
+    int ret = 0;
+    const char * text_records =
+        "0 1 4 0,1 1.0 0\n"
+        "0 1 5 2,3 4.0 0\n"
+        "0 1 6 4,5 5.0 0";
+    const char *text_mutations =
+        "0  0       0   1\n"
+        "0.1 1      0   1\n"
+        "0.2 0,1,2  0   1\n";
+    size_t num_samples = 4;
+    sample_t samples[num_samples];
+    size_t num_records, num_mutations;
+    tree_sequence_t ts;
+    coalescence_record_t *records;
+    mutation_t *mutations;
 
+    memset(samples, 0, num_samples * sizeof(sample_t));
+    parse_text_records(text_records, &num_records, &records);
+    CU_ASSERT_EQUAL_FATAL(num_records, 3);
+    parse_text_mutations(text_mutations, &num_mutations, &mutations);
+    CU_ASSERT_EQUAL_FATAL(num_mutations, 3);
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_records(&ts, num_samples, samples, num_records, records,
+            num_mutations, mutations, 0, NULL, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    verify_simplify(&ts);
+
+    tree_sequence_free(&ts);
+    free_local_records(num_records, records);
+    free_local_mutations(num_mutations, mutations);
+}
 
 static void
 test_single_tree_inconsistent_mutations(void)
@@ -4371,32 +4683,6 @@ test_next_prev_from_examples(void)
     free(examples);
 }
 
-static void
-verify_hapgen(tree_sequence_t *ts)
-{
-    int ret;
-    hapgen_t hapgen;
-    char *haplotype;
-    size_t sample_size = tree_sequence_get_sample_size(ts);
-    size_t num_mutations = tree_sequence_get_num_mutations(ts);
-    size_t j;
-
-    ret = hapgen_alloc(&hapgen, ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    hapgen_print_state(&hapgen, _devnull);
-
-    for (j = 0; j < sample_size; j++) {
-        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(strlen(haplotype), num_mutations);
-    }
-    for (j = sample_size; j < sample_size + 10; j++) {
-        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-    }
-    ret = hapgen_free(&hapgen);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-}
 
 static void
 test_hapgen_from_examples(void)
@@ -4543,91 +4829,15 @@ test_ld_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        verify_ld(examples[j]);
+        /* j = 4 corresponds to the recurrent mutation case where we
+         * trigger an assert */
+        if (j != 4) {
+            verify_ld(examples[j]);
+        }
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
     free(examples);
-}
-
-static void
-verify_vargen(tree_sequence_t *ts)
-{
-    int ret;
-    vargen_t vargen;
-    mutation_t *mut;
-    size_t sample_size = tree_sequence_get_sample_size(ts);
-    size_t num_mutations = tree_sequence_get_num_mutations(ts);
-    char *genotypes = malloc((sample_size + 1) * sizeof(char));
-    size_t j, k;
-
-    CU_ASSERT_FATAL(genotypes != NULL);
-    ret = vargen_alloc(&vargen, ts, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    vargen_print_state(&vargen, _devnull);
-    j = 0;
-    while ((ret = vargen_next(&vargen, &mut, genotypes)) == 1) {
-        CU_ASSERT_EQUAL(mut->index, j);
-        for (k = 0; k < sample_size; k++) {
-            CU_ASSERT(genotypes[k] == 0 || genotypes[k] == 1);
-        }
-        j++;
-    }
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(j, num_mutations);
-    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &mut, genotypes), 0);
-    ret = vargen_free(&vargen);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    ret = vargen_alloc(&vargen, ts, MSP_GENOTYPES_AS_CHAR);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    vargen_print_state(&vargen, _devnull);
-    j = 0;
-    genotypes[sample_size] = '\0';
-    while ((ret = vargen_next(&vargen, &mut, genotypes)) == 1) {
-        CU_ASSERT_EQUAL(mut->index, j);
-        for (k = 0; k < sample_size; k++) {
-            CU_ASSERT(genotypes[k] == '0' || genotypes[k] == '1');
-        }
-        CU_ASSERT_EQUAL_FATAL(genotypes[sample_size], '\0');
-        j++;
-    }
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(j, num_mutations);
-    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &mut, genotypes), 0);
-    ret = vargen_free(&vargen);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    free(genotypes);
-}
-
-static void
-verify_stats(tree_sequence_t *ts)
-{
-    int ret;
-    uint32_t sample_size = tree_sequence_get_sample_size(ts);
-    uint32_t *samples = malloc(sample_size * sizeof(uint32_t));
-    uint32_t j;
-    double pi;
-
-    CU_ASSERT_FATAL(samples != NULL);
-
-    ret = tree_sequence_get_pairwise_diversity(ts, NULL, 0, &pi);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = tree_sequence_get_pairwise_diversity(ts, NULL, 1, &pi);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = tree_sequence_get_pairwise_diversity(ts, NULL, sample_size + 1, &pi);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-
-    for (j = 0; j < sample_size; j++) {
-        samples[j] = j;
-    }
-    for (j = 2; j < sample_size; j++) {
-        ret = tree_sequence_get_pairwise_diversity(ts, samples, j, &pi);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_TRUE(pi >= 0);
-    }
-    free(samples);
 }
 
 static void
@@ -4658,123 +4868,6 @@ test_stats_from_examples(void)
         free(examples[j]);
     }
     free(examples);
-}
-
-static void
-verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
-        uint32_t *samples, uint32_t num_samples)
-{
-    int ret;
-    sample_t s1, s2;
-    sparse_tree_t full_tree, subset_tree;
-    mutation_t *mut;
-    uint32_t j, k, u, mrca1, mrca2;
-    double tmrca1, tmrca2;
-    size_t total_mutations;
-
-    CU_ASSERT_EQUAL(
-        tree_sequence_get_sequence_length(ts),
-        tree_sequence_get_sequence_length(subset));
-    CU_ASSERT(
-        tree_sequence_get_num_nodes(ts) >= tree_sequence_get_num_nodes(subset));
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(subset), num_samples);
-
-    /* Check the sample properties */
-    for (j = 0; j < num_samples; j++) {
-        ret = tree_sequence_get_sample(ts, samples[j], &s1);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = tree_sequence_get_sample(subset, j, &s2);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(s1.population_id, s2.population_id);
-        CU_ASSERT_EQUAL_FATAL(s1.time, s2.time);
-    }
-    /* Check the pairwise MRCAs */
-    ret = sparse_tree_alloc(&full_tree, ts, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = sparse_tree_alloc(&subset_tree, subset, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = sparse_tree_first(&full_tree);
-    CU_ASSERT_EQUAL(ret, 1);
-    ret = sparse_tree_first(&subset_tree);
-    CU_ASSERT_EQUAL(ret, 1);
-
-    total_mutations = 0;
-    while (1) {
-        while (full_tree.right <= subset_tree.right) {
-            for (j = 0; j < num_samples; j++) {
-                for (k = j + 1; k < num_samples; k++) {
-                    ret = sparse_tree_get_mrca(&full_tree, samples[j], samples[k],
-                            &mrca1);
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    ret = sparse_tree_get_time(&full_tree, mrca1, &tmrca1);
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    ret = sparse_tree_get_mrca(&subset_tree, j, k, &mrca2);
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    ret = sparse_tree_get_time(&subset_tree, mrca2, &tmrca2);
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    CU_ASSERT_EQUAL(tmrca1, tmrca2);
-                }
-            }
-            ret = sparse_tree_next(&full_tree);
-            CU_ASSERT_FATAL(ret >= 0);
-            if (ret != 1) {
-                break;
-            }
-        }
-        /* Check the mutations in this tree */
-        for (j = 0; j < subset_tree.num_mutations; j++) {
-            mut = &subset_tree.mutations[j];
-            CU_ASSERT(subset_tree.left <= mut->position);
-            CU_ASSERT(mut->position < subset_tree.right);
-            for (k = 0; k < mut->num_nodes; k++) {
-                ret = sparse_tree_get_parent(&subset_tree, mut->nodes[k], &u);
-                CU_ASSERT_EQUAL(ret, 0);
-                CU_ASSERT_FATAL(u != MSP_NULL_NODE);
-            }
-            total_mutations++;
-        }
-        ret = sparse_tree_next(&subset_tree);
-        if (ret != 1) {
-            break;
-        }
-    }
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(subset), total_mutations);
-
-    sparse_tree_free(&subset_tree);
-    sparse_tree_free(&full_tree);
-
-    /* Check some other operations on the subset */
-    verify_vargen(subset);
-    verify_hapgen(subset);
-}
-
-static void
-verify_simplify(tree_sequence_t *ts)
-{
-    int ret;
-    uint32_t n = tree_sequence_get_sample_size(ts);
-    uint32_t sample_sizes[] = {2, 3, n / 2, n - 1, n};
-    size_t j;
-    uint32_t *sample = malloc(n * sizeof(uint32_t));
-    tree_sequence_t subset;
-    int flags = MSP_FILTER_ROOT_MUTATIONS;
-
-    CU_ASSERT_FATAL(sample != NULL);
-    for (j = 0; j < n; j++) {
-        sample[j] = j;
-    }
-    ret = tree_sequence_initialise(&subset);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    for (j = 0; j < sizeof(sample_sizes) / sizeof(uint32_t); j++) {
-        if (sample_sizes[j] > 1 && sample_sizes[j] <= n) {
-            ret = tree_sequence_simplify(ts, sample, sample_sizes[j], flags, &subset);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_simplify_properties(ts, &subset, sample, sample_sizes[j]);
-        }
-    }
-    tree_sequence_free(&subset);
-    free(sample);
 }
 
 static void
@@ -5274,6 +5367,7 @@ main(int argc, char **argv)
         {"single_tree_iterator_times", test_single_tree_iter_times},
         {"single_tree_hapgen", test_single_tree_hapgen},
         {"single_tree_vargen", test_single_tree_vargen},
+        {"single_tree_simplify", test_single_tree_simplify},
         {"single_tree_inconsistent_mutations", test_single_tree_inconsistent_mutations},
         {"single_unary_tree_hapgen", test_single_unary_tree_hapgen},
         {"single_tree_mutgen", test_single_tree_mutgen},

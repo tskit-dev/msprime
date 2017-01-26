@@ -123,7 +123,7 @@ ld_calc_position_trees(ld_calc_t *self, size_t mutation_index)
     sparse_tree_t *tB = self->inner_tree;
 
     assert(tA->index == tB->index);
-    while (x > tA->right) {
+    while (x >= tA->right) {
         ret = sparse_tree_next(tA);
         if (ret < 0) {
             goto out;

@@ -664,6 +664,8 @@ class SparseTree(object):
         return str(self.get_parent_dict())
 
     def __eq__(self, other):
+        # TODO this should really use the semantics of the C-level equality definition.
+        # This is currently only really used for testing AFAIK.
         return (
             self.get_sample_size() == other.get_sample_size() and
             self.get_parent_dict() == other.get_parent_dict() and
