@@ -769,3 +769,67 @@ class TestWithVisuals(TopologyTestCase):
         self.verify_simplify_topology(ts, [0, 1])
         self.verify_simplify_topology(ts, [1, 2])
         self.verify_simplify_topology(ts, [2, 0])
+
+    def test_disconnected(self):
+        
+        # 6     5      7___    .   5       7___    .   5       7___    .   5       7     6 .
+        #       |     / \  \   .   |      / \  \   .   |      / \  \   .   |      / \    | .
+        # 5    12   13   10 11 .  12    13   10 11 .  12    13   10 11 .  12    13   10 11 .
+        #          / |\    \   .   |   / |\    \   .   |\   /|\    \   .   |\   /|\    \   .
+        # 4      14  | \   15  .   | 14  | \   15  .   | |14 | \   15  .   | |14 | \   15  .
+        #        /\  |  \   |  .   |  \  |  \   |  .   | |   |  \   |  .   | |   |  \   |  .
+        # 3    17 16 18  |  |  .  17  16 18  |  |  .  17 16  18  |  |  .  17 16  18  |  |  .
+        #       |        |  |  .   |         |  |  .   |         |  |  .   |         |  |  .
+        # 2    21       20 19  .   21       20 19  .   21       20 19  .   21       20 19  .
+        #      /|        |  |  .   /|        |  |  .   /|        |  |  .   /|        |  |  .
+        # 1  22 |        |  |  . 22 |        |  |  . 22 |        |  |  . 22 |        |  |  .
+        #     | |        |  |  .  | |        |  |  .  | |        |  |  .  | |        |  |  .
+        # 0   2 3        1  0  .  2 3        1  0  .  2 3        1  0  .  2 3        1  0  .
+        #
+        # ... continued:
+        #
+        # 6   .   5      6   7    .       5      6   7    .       5      6   7    .
+        #     .   |     / \  |    .       |     / \  |    .       |     / \  |    .
+        # 5   .  12    13 11 10   .      12    13 11 10   .      12    13 11 10   .
+        #     .   |\   /|\    \   .     / |\   /|\    \   .     / |\   /|     \   .
+        # 4   .   | |14 | \   15  .    /  | |14 | \   15  .    /  | |14 |     15  .
+        #     .   | |   |  \   |  .   /   | |   |  \      .   /   | |   |         .
+        # 3   .  17 16  18  |  |  .  |   17 16  18  |     .  |   17 16  18        .
+        #     .   |         |  |  .  |    |         |     .  |    |\              .
+        # 2   .   21       20 19  . 19    21       20     . 19   21 20            .
+        #     .   /|        |  |  .  |    /|        |     .  |   /|  |            .
+        # 1   . 22 |        |  |  .  |  22 |        |     .  | 22 |  |            .
+        #     .  | |        |  |  .  |   | |        |     .  |  | |  |            .
+        # 0   .  2 3        1  0  .  0   2 3        1     .  0  2 3  1            .
+
+
+        records = [
+            cr(left=0.0, right=1.0, node=22, children=(2,), time=1),
+            cr(left=0.0, right=1.0, node=21, children=(3, 22), time=2),
+            cr(left=0.0, right=1.0, node=20, children=(1,), time=2),
+            cr(left=0.0, right=1.0, node=19, children=(0,), time=2),
+            cr(left=0.0, right=0.34, node=17, children=(21,), time=3),
+            cr(left=0.34, right=0.98, node=17, children=(21,), time=3),
+            cr(left=0.98, right=1.0, node=17, children=(20, 21), time=3),
+            cr(left=0.0, right=0.75, node=15, children=(19,), time=4),
+            cr(left=0.0, right=0.18, node=14, children=(16, 17), time=4),
+            cr(left=0.18, right=0.21, node=14, children=(16,), time=4),
+            cr(left=0.0, right=0.47, node=13, children=(14, 18, 20), time=5),
+            cr(left=0.47, right=0.98, node=13, children=(14, 18, 20), time=5),
+            cr(left=0.98, right=1.0, node=13, children=(14, 18), time=5),
+            cr(left=0.18, right=0.21, node=12, children=(17,), time=5),
+            cr(left=0.21, right=0.75, node=12, children=(16, 17), time=5),
+            cr(left=0.75, right=1.0, node=12, children=(16, 17, 19), time=5),
+            cr(left=0.0, right=1.0, node=10, children=(15,), time=5),
+            cr(left=0.0, right=0.34, node=7, children=(10, 11, 13), time=6),
+            cr(left=0.34, right=0.43, node=7, children=(10, 13), time=6),
+            cr(left=0.43, right=1.0, node=7, children=(10,), time=6),
+            cr(left=0.34, right=0.43, node=6, children=(11,), time=6),
+            cr(left=0.43, right=1.0, node=6, children=(11, 13), time=6),
+            cr(left=0.0, right=1.0, node=5, children=(12,), time=6)
+        ]
+        ts = build_tree_sequence(records)
+        self.verify_simplify_topology(ts, [0, 1, 2, 3, 4])
+        self.verify_simplify_topology(ts, [0, 1])
+        self.verify_simplify_topology(ts, [1, 2])
+        self.verify_simplify_topology(ts, [2, 0])
