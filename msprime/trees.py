@@ -1826,6 +1826,103 @@ class TreeSequence(object):
             leaves = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(leaves)
 
+    def branch_stats(self, leaf_sets, weight_fun):
+        '''
+        Here leaf_sets is a list of lists of leaves, and weight_fun is a function
+        whose argument is a list of integers of the same length as leaf_sets
+        that returns a boolean.  A branch in a tree is weighted by weight_fun(x),
+        where x[i] is the number of leaves in leaf_sets[i] below that
+        branch.  This finds the sum of all counted branches for each tree,
+        and averages this across the tree sequence, weighted by genomic length.
+        '''
+        out = self.branch_stats_vector(leaf_sets, lambda x: [weight_fun(x)])
+        if len(out) > 1:
+            raise ValueError("Expecting output of length 1.")
+        return out[0]
+
+    def branch_stats_vector(self, leaf_sets, weight_fun):
+        '''
+        Here leaf_sets is a list of lists of leaves, and weight_fun is a function
+        whose argument is a list of integers of the same length as leaf_sets
+        that returns a boolean.  A branch in a tree is weighted by weight_fun(x),
+        where x[i] is the number of leaves in leaf_sets[i] below that
+        branch.  This finds the sum of all counted branches for each tree,
+        and averages this across the tree sequence, weighted by genomic length.
+        '''
+        for U in leaf_sets:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError(
+                    "elements of leaf_sets cannot contain repeated elements.")
+        # initialize
+        num_leaf_sets = len(leaf_sets)
+        n_out = len(weight_fun([0 for a in range(num_leaf_sets)]))
+        # print("leaf_sets:", leaf_sets)
+        # print("n_out:",n_out)
+        S = [0.0 for j in range(n_out)]
+        L = [0.0 for j in range(n_out)]
+        N = self.num_nodes
+        X = [[int(u in a) for a in leaf_sets] for u in range(N)]
+        # we will essentially construct the tree
+        pi = [-1 for j in range(N)]
+        node_time = [0.0 for u in range(N)]
+        for length, records_out, records_in in self.diffs():
+            for sign, records in ((-1, records_out), (+1, records_in)):
+                for node, children, time in records:
+                    # print("Record (",sign,"):",node,children,time)
+                    # print("\t",X, "-->", L)
+                    if sign == +1:
+                        node_time[node] = time
+                    dx = [0 for k in range(num_leaf_sets)]
+                    for child in children:
+                        if sign == +1:
+                            pi[child] = node
+                        for k in range(num_leaf_sets):
+                            dx[k] += sign * X[child][k]
+                        w = weight_fun(X[child])
+                        dt = (node_time[pi[child]] - node_time[child])
+                        for j in range(n_out):
+                            L[j] += sign * dt * w[j]
+                        # print("\t\tchild:",child,"+=",sign,"*",weight_fun(X[child]),
+                        #    "*(",node_time[pi[child]],"-",node_time[child],")","-->",L)
+                        if sign == -1:
+                            pi[child] = -1
+                    old_w = weight_fun(X[node])
+                    for k in range(num_leaf_sets):
+                        X[node][k] += dx[k]
+                    if pi[node] != -1:
+                        w = weight_fun(X[node])
+                        dt = (node_time[pi[node]] - node_time[node])
+                        for j in range(n_out):
+                            L[j] += dt * (w[j]-old_w[j])
+                        # print("\t\tnode:",node,"+=",dt,"*(",weight_fun(X[node]),"-",
+                        #   old_w,") -->",L)
+                    # propagate change up the tree
+                    u = pi[node]
+                    if u != -1:
+                        next_u = pi[u]
+                        while u != -1:
+                            old_w = weight_fun(X[u])
+                            for k in range(num_leaf_sets):
+                                X[u][k] += dx[k]
+                            # need to update X for the root,
+                            # but the root does not have a branch length
+                            if next_u != -1:
+                                w = weight_fun(X[u])
+                                dt = (node_time[pi[u]] - node_time[u])
+                                for j in range(n_out):
+                                    L[j] += dt*(w[j] - old_w[j])
+                                # print("\t\tanc:",u,"+=",dt,"*(",weight_fun(X[u]),"-",
+                                #    old_w,") -->",L)
+                            u = next_u
+                            next_u = pi[next_u]
+                    # print("\t",X, "-->", L)
+            # print("next tree:",L,length)
+            for j in range(n_out):
+                S[j] += L[j] * length
+        for j in range(n_out):
+            S[j] /= self.get_sequence_length()
+        return S
+
     def time(self, sample):
         return self.get_time(sample)
 
