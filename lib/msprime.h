@@ -131,6 +131,8 @@ typedef struct {
 int coordinate_table_alloc(coordinate_table_t *self, size_t max_rows_increment);
 int coordinate_table_add_row(coordinate_table_t *self, double coordinate);
 int coordinate_table_reset(coordinate_table_t *self);
+int coordinate_table_sort_unique(coordinate_table_t *self);
+int coordinate_table_get_index(coordinate_table_t *self, double x, uint32_t *index);
 int coordinate_table_free(coordinate_table_t *self);
 void coordinate_table_print_state(coordinate_table_t *self, FILE *out);
 

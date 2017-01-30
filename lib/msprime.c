@@ -215,6 +215,10 @@ msp_strerror(int err)
             ret = "Overlapping subtrees in recurrent mutation: "
                 "ancestral state not consistent";
             break;
+        case MSP_ERR_COORDINATE_NOT_FOUND:
+            ret = "Overlapping subtrees in recurrent mutation: "
+                "ancestral state not consistent";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
@@ -2436,26 +2440,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     double scaled_time;
     uint32_t left, right;
     coalescence_record_t *cr;
-    avl_node_t *node;
-    node_mapping_t search, *nm;
     coordinate_table_t *coordinates = edgesets->coordinates;
-
-    /* First setup the coordinates for the edgesets. */
-    ret = coordinate_table_add_row(coordinates, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    for (node = (&self->breakpoints)->head; node != NULL; node = node->next) {
-        nm = (node_mapping_t *) node->item;
-        ret = coordinate_table_add_row(coordinates, (double) nm->left);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    ret = coordinate_table_add_row(coordinates, self->num_loci);
-    if (ret != 0) {
-        goto out;
-    }
 
     /* Add the node definitions for the samples */
     for (j = 0; j < self->sample_size; j++) {
@@ -2467,6 +2452,22 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
         }
     }
 
+    /* First setup the coordinates for the edgesets. */
+    for (j = 0; j < self->num_coalescence_records; j++) {
+        cr = &self->coalescence_records[j];
+        ret = coordinate_table_add_row(coordinates, cr->left);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = coordinate_table_add_row(coordinates, cr->right);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = coordinate_table_sort_unique(coordinates);
+    if (ret != 0) {
+        goto out;
+    }
     /* Now go through the records */
     last_node = MSP_NULL_NODE;
     for (j = 0; j < self->num_coalescence_records; j++) {
@@ -2480,25 +2481,13 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             }
             last_node = cr->node;
         }
-        if (cr->left == 0) {
-            left = 0;
-        } else {
-            search.left = (uint32_t) cr->left;
-            avl_search_closest(&self->breakpoints, &search, &node);
-            assert(node != NULL);
-            nm = (node_mapping_t *) node->item;
-            assert(nm->left == (uint32_t) cr->left);
-            left = avl_index(node) + 1;
+        ret = coordinate_table_get_index(coordinates, cr->left, &left);
+        if (ret != 0) {
+            goto out;
         }
-        if (cr->right == (double) self->num_loci) {
-            right = (uint32_t) coordinates->num_rows - 1;
-        } else {
-            search.left = (uint32_t) cr->right;
-            avl_search_closest(&self->breakpoints, &search, &node);
-            assert(node != NULL);
-            nm = (node_mapping_t *) node->item;
-            assert(nm->left == (uint32_t) cr->right);
-            right = avl_index(node) + 1;
+        ret = coordinate_table_get_index(coordinates, cr->right, &right);
+        if (ret != 0) {
+            goto out;
         }
         assert(left < right);
         ret = edgeset_table_add_row(edgesets, left, right,

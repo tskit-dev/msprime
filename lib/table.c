@@ -17,6 +17,7 @@
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include <stdio.h>
+#include <stddef.h>
 #include <string.h>
 #include <assert.h>
 #include <stdbool.h>
@@ -24,6 +25,13 @@
 #include "err.h"
 #include "msprime.h"
 
+
+static int
+cmp_double(const void *a, const void *b) {
+    const double *ia = (const double *) a;
+    const double *ib = (const double *) b;
+    return (*ia > *ib) - (*ia < *ib);
+}
 
 static int
 expand_column(void **column, size_t new_max_rows, size_t element_size)
@@ -73,6 +81,50 @@ coordinate_table_add_row(coordinate_table_t *self, double position)
     }
     self->position[self->num_rows] = position;
     self->num_rows++;
+out:
+    return ret;
+}
+
+int
+coordinate_table_sort_unique(coordinate_table_t *self)
+{
+    size_t j, k;
+
+    /* TODO need to write some test cases for this, exploring the edge cases */
+    qsort(self->position, self->num_rows, sizeof(double), cmp_double);
+    /* Now go through the positions and keep the unique values. */
+    k = 0;
+    for (j = 1; j < self->num_rows; j++) {
+        if (self->position[j] != self->position[k]) {
+            k++;
+            self->position[k] = self->position[j];
+        }
+    }
+    if (self->num_rows > 0) {
+        k++;
+        self->position[k] = self->position[self->num_rows - 1];
+    }
+    assert(k <= self->num_rows);
+    self->num_rows = k;
+    return 0;
+}
+
+int
+coordinate_table_get_index(coordinate_table_t *self, double x, uint32_t *index)
+{
+    int ret = MSP_ERR_GENERIC;
+    double *result;
+    ptrdiff_t diff;
+
+    result = bsearch(&x, self->position, self->num_rows, sizeof(double), cmp_double);
+    if (result == NULL) {
+        ret = MSP_ERR_COORDINATE_NOT_FOUND;
+        goto out;
+    }
+    diff = result - self->position;
+    assert(self->position[diff] == x);
+    *index = (uint32_t) diff;
+    ret = 0;
 out:
     return ret;
 }

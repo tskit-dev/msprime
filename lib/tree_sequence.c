@@ -1068,6 +1068,9 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
             mutations->num_rows * sizeof(uint32_t));
     memcpy(self->mutations.nodes_mem, mutations->nodes,
             mutations->total_nodes * sizeof(uint32_t));
+    /* TMP */
+    memset(self->mutations.ancestral_state, '0', mutations->num_rows * sizeof(char));
+    memset(self->mutations.derived_state, '1', mutations->num_rows * sizeof(char));
 
     offset = 0;
     for (j = 0; j < mutations->num_rows; j++) {
