@@ -57,6 +57,7 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     node_table_t *node_table;
+    PyArrayObject *time;
 } NodeTable;
 
 typedef struct {
