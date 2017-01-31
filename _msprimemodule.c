@@ -57,7 +57,6 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     node_table_t *node_table;
-    PyArrayObject *time;
 } NodeTable;
 
 typedef struct {
@@ -946,6 +945,9 @@ NodeTable_set_max_rows_increment(NodeTable *self, PyObject *value, void *closure
     long tmp_long;
     int err;
 
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError, "Cannot delete the max_rows_increment attribute");
         goto out;
@@ -993,12 +995,58 @@ out:
     return ret;
 }
 
+static PyObject *
+NodeTable_get_time(NodeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    PyArrayObject *array;
+    npy_intp num_rows;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    num_rows = self->node_table->num_rows;
+
+    array = (PyArrayObject *) PyArray_EMPTY(1, &num_rows, NPY_FLOAT64, 0);
+    if (array == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(array), self->node_table->time, num_rows * sizeof(double));
+    ret = (PyObject *) array;
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_get_flags(NodeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    PyArrayObject *array;
+    npy_intp num_rows;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    num_rows = self->node_table->num_rows;
+
+    array = (PyArrayObject *) PyArray_EMPTY(1, &num_rows, NPY_UINT32, 0);
+    if (array == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(array), self->node_table->flags, num_rows * sizeof(uint32_t));
+    ret = (PyObject *) array;
+out:
+    return ret;
+}
+
 static PyGetSetDef NodeTable_getsetters[] = {
     {"max_rows_increment",
         (getter) NodeTable_get_max_rows_increment, (setter) NodeTable_set_max_rows_increment,
         "The size increment"},
     {"num_rows", (getter) NodeTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"time", (getter) NodeTable_get_time, NULL, "The time array"},
+    {"flags", (getter) NodeTable_get_flags, NULL, "The flags array"},
     {NULL}  /* Sentinel */
 };
 

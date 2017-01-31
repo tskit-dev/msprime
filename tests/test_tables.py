@@ -25,6 +25,8 @@ from __future__ import division
 
 import unittest
 
+import numpy as np
+
 import msprime
 
 
@@ -34,6 +36,8 @@ class TestTable(unittest.TestCase):
         table = msprime.NodeTable()
         self.assertEqual(table.max_rows_increment, 1024)
         self.assertEqual(table.num_rows, 0)
+        self.assertEqual(table.time.shape, (0,))
+        self.assertEqual(table.flags.shape, (0,))
 
     def test_constructor(self):
         for bad_type in [Exception, msprime]:
@@ -62,11 +66,30 @@ class TestTable(unittest.TestCase):
         table = msprime.NodeTable()
         with self.assertRaises(AttributeError):
             table.num_rows = 10
+        with self.assertRaises(AttributeError):
+            table.time = np.zeros(5)
+        with self.assertRaises(AttributeError):
+            table.flags = np.zeros(5)
         self.assertEqual(table.num_rows, 0)
 
     def test_times(self):
-        time = [0.1, 0.2, 0.3]
+        time = np.array([0.1, 0.2, 0.3])
         flags = [0, 0, 0]
         table = msprime.NodeTable(flags=flags, time=time)
-        self.assertEqual(table.max_rows_increment, len(time))
-        self.assertEqual(table.num_rows, len(time))
+        self.assertEqual(table.max_rows_increment, time.shape[0])
+        self.assertEqual(table.num_rows, time.shape[0])
+        stored_time = table.time
+        self.assertTrue(np.all(time == table.time))
+        # We should have different objects each time we get the array.
+        self.assertNotEqual(id(stored_time), id(table.time))
+
+    def test_flags(self):
+        time = np.array([0.1, 0.2, 0.3])
+        flags = np.array([0, 1, 2], dtype=np.uint32)
+        table = msprime.NodeTable(flags=flags, time=time)
+        self.assertEqual(table.max_rows_increment, flags.shape[0])
+        self.assertEqual(table.num_rows, flags.shape[0])
+        stored_flags = table.flags
+        self.assertTrue(np.all(flags == table.flags))
+        # We should have different objects each flags we get the array.
+        self.assertNotEqual(id(stored_flags), id(table.flags))
