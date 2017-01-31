@@ -613,7 +613,7 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_EQUAL(ret, 0);
     // FIXME
     edgesets->coordinates = edgeset_coordinates;
-    ret = node_table_alloc(nodes, 10);
+    ret = node_table_alloc(nodes);
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutation_table_alloc(mutations, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);

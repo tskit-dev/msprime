@@ -760,7 +760,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     }
     // FIXME
     edgesets->coordinates = edgeset_coordinates;
-    ret = node_table_alloc(nodes, 10);
+    ret = node_table_alloc(nodes);
     if (ret != 0) {
         goto out;
     }
