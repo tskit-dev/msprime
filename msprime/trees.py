@@ -48,6 +48,7 @@ import msprime.environment
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
+from _msprime import NodeTable  # NOQA
 
 NULL_NODE = -1
 

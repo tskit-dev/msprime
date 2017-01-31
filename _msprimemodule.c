@@ -18,9 +18,12 @@
 */
 
 #define PY_SSIZE_T_CLEAN
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
 #include <Python.h>
+#include <numpy/arrayobject.h>
 #include <structmember.h>
+
 #include <float.h>
 
 #include <hdf5.h>
@@ -50,6 +53,11 @@ typedef struct {
     mutgen_t *mutgen;
     RandomGenerator *random_generator;
 } MutationGenerator;
+
+typedef struct {
+    PyObject_HEAD
+    node_table_t *node_table;
+} NodeTable;
 
 typedef struct {
     PyObject_HEAD
@@ -815,6 +823,228 @@ static PyTypeObject RandomGeneratorType = {
 };
 
 /*===================================================================
+ * NodeTable
+ *===================================================================
+ */
+
+static int
+NodeTable_check_state(NodeTable *self)
+{
+    int ret = 0;
+    if (self->node_table == NULL) {
+        PyErr_SetString(PyExc_SystemError, "NodeTable not initialised");
+        ret = -1;
+        goto out;
+    }
+out:
+    return ret;
+}
+
+static void
+NodeTable_dealloc(NodeTable* self)
+{
+    if (self->node_table != NULL) {
+        node_table_free(self->node_table);
+        PyMem_Free(self->node_table);
+        self->node_table = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    npy_intp *shape;
+    size_t num_rows;
+    PyObject *time_input = NULL;
+    PyObject *flags_input = NULL;
+    PyArrayObject *time_array = NULL;
+    PyArrayObject *flags_array = NULL;
+    static char *kwlist[] = {"flags", "time", NULL};
+
+    self->node_table = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OO", kwlist,
+                &flags_input, &time_input)) {
+        goto out;
+    }
+    self->node_table = PyMem_Malloc(sizeof(node_table_t));
+    if (self->node_table == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = node_table_alloc(self->node_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    if (flags_input != NULL) {
+        if (time_input == NULL) {
+            PyErr_Format(PyExc_TypeError, "Must specify both flags and time");
+            goto out;
+        }
+        /* Flags array */
+        flags_array = (PyArrayObject *) PyArray_FROM_OTF(flags_input, NPY_UINT32,
+                NPY_ARRAY_IN_ARRAY);
+        if (flags_array == NULL) {
+            goto out;
+        }
+        if (PyArray_NDIM(flags_array) != 1) {
+            PyErr_SetString(PyExc_ValueError, "Dim != 1");
+            goto out;
+        }
+        shape = PyArray_DIMS(flags_array);
+        num_rows = shape[0];
+
+        /* time array */
+        time_array = (PyArrayObject *) PyArray_FROM_OTF(time_input, NPY_FLOAT64,
+                NPY_ARRAY_IN_ARRAY);
+        if (time_array == NULL) {
+            goto out;
+        }
+        if (PyArray_NDIM(time_array) != 1) {
+            PyErr_SetString(PyExc_ValueError, "Dim != 1");
+            goto out;
+        }
+        shape = PyArray_DIMS(time_array);
+        if (shape[0] != num_rows) {
+            PyErr_SetString(PyExc_ValueError, "Array dimensions must be equal.");
+            goto out;
+        }
+
+        err = node_table_set_max_rows_increment(self->node_table, num_rows);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+        err = node_table_set_columns(self->node_table, num_rows,
+                PyArray_DATA(flags_array), PyArray_DATA(time_array), NULL);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    } else {
+        if (time_input != NULL) {
+            PyErr_Format(PyExc_TypeError, "Flags must be specified");
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    Py_XDECREF(flags_array);
+    Py_XDECREF(time_array);
+    return ret;
+}
+
+
+static int
+NodeTable_set_max_rows_increment(NodeTable *self, PyObject *value, void *closure)
+{
+    int ret = -1;
+    long tmp_long;
+    int err;
+
+    if (value == NULL) {
+        PyErr_SetString(PyExc_TypeError, "Cannot delete the max_rows_increment attribute");
+        goto out;
+    }
+    if (!PyNumber_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "max_rows_increment must be an integer");
+        goto out;
+    }
+    tmp_long = PyLong_AsLong(value);
+    if (tmp_long <= 0) {
+        PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
+        goto out;
+    }
+    err = node_table_set_max_rows_increment(self->node_table, (size_t) tmp_long);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_get_max_rows_increment(NodeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->max_rows_increment);
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_get_num_rows(NodeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->num_rows);
+out:
+    return ret;
+}
+
+static PyGetSetDef NodeTable_getsetters[] = {
+    {"max_rows_increment",
+        (getter) NodeTable_get_max_rows_increment, (setter) NodeTable_set_max_rows_increment,
+        "The size increment"},
+    {"num_rows", (getter) NodeTable_get_num_rows, NULL,
+        "The number of rows in the table."},
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef NodeTable_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject NodeTableType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.NodeTable",             /* tp_name */
+    sizeof(NodeTable),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)NodeTable_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "NodeTable objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    NodeTable_methods,             /* tp_methods */
+    0,                             /* tp_members */
+    NodeTable_getsetters,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)NodeTable_init,      /* tp_init */
+};
+
+/*===================================================================
  * MutationGenerator
  *===================================================================
  */
@@ -945,7 +1175,6 @@ static PyTypeObject MutationGeneratorType = {
     0,                         /* tp_dictoffset */
     (initproc)MutationGenerator_init,      /* tp_init */
 };
-
 /*===================================================================
  * RecombinationMap
  *===================================================================
@@ -5278,6 +5507,7 @@ init_msprime(void)
     if (module == NULL) {
         INITERROR;
     }
+    import_array();
     /* RandomGenerator type */
     RandomGeneratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&RandomGeneratorType) < 0) {
@@ -5285,6 +5515,13 @@ init_msprime(void)
     }
     Py_INCREF(&RandomGeneratorType);
     PyModule_AddObject(module, "RandomGenerator", (PyObject *) &RandomGeneratorType);
+    /* NodeTable type */
+    NodeTableType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&NodeTableType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&NodeTableType);
+    PyModule_AddObject(module, "NodeTable", (PyObject *) &NodeTableType);
     /* MutationGenerator type */
     MutationGeneratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&MutationGeneratorType) < 0) {

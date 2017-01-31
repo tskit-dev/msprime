@@ -22,9 +22,12 @@
 #include <assert.h>
 #include <stdbool.h>
 
+#include <gsl/gsl_math.h>
+
 #include "err.h"
 #include "msprime.h"
 
+#define DEFAULT_MAX_ROWS_INCREMENT 1024
 
 static int
 cmp_double(const void *a, const void *b) {
@@ -256,14 +259,80 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
  *************************/
 
 int
-node_table_alloc(node_table_t *self, size_t max_rows_increment)
+node_table_alloc(node_table_t *self)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(node_table_t));
-    self->max_rows_increment = max_rows_increment;
+    self->max_rows_increment = DEFAULT_MAX_ROWS_INCREMENT;
     self->max_rows = 0;
     self->num_rows = 0;
+    return ret;
+}
+
+int
+node_table_set_max_rows_increment(node_table_t *self, size_t max_rows_increment)
+{
+    int ret = 0;
+
+    if (max_rows_increment == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->max_rows_increment = max_rows_increment;
+out:
+    return ret;
+}
+
+static int
+node_table_expand(node_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    ret = expand_column((void **) &self->flags, new_size, sizeof(uint32_t));
+    if (ret != 0) {
+        goto out;
+    }
+    ret = expand_column((void **) &self->time, new_size, sizeof(double));
+    if (ret != 0) {
+        goto out;
+    }
+    ret = expand_column((void **) &self->population, new_size, sizeof(uint32_t));
+    if (ret != 0) {
+        goto out;
+    }
+    self->max_rows = new_size;
+out:
+    return ret;
+}
+
+int
+node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
+        uint32_t *population)
+{
+    size_t new_size;
+    int ret;
+
+    if (self->max_rows < num_rows) {
+        new_size = GSL_MAX(num_rows, self->max_rows_increment);
+        ret = node_table_expand(self, new_size);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (flags == NULL || time == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    memcpy(self->flags, flags, num_rows * sizeof(uint32_t));
+    memcpy(self->time, time, num_rows * sizeof(double));
+    if (population == NULL) {
+        memset(self->population, 0xff, num_rows * sizeof(uint32_t));
+    } else {
+        memcpy(self->population, population, num_rows * sizeof(uint32_t));
+    }
+    self->num_rows = num_rows;
+out:
     return ret;
 }
 
@@ -275,19 +344,10 @@ node_table_add_row(node_table_t *self, uint32_t flags, double time, uint32_t pop
 
     if (self->num_rows == self->max_rows) {
         new_size = self->max_rows + self->max_rows_increment;
-        ret = expand_column((void **) &self->flags, new_size, sizeof(uint32_t));
+        ret = node_table_expand(self, new_size);
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->time, new_size, sizeof(double));
-        if (ret != 0) {
-            goto out;
-        }
-        ret = expand_column((void **) &self->population, new_size, sizeof(uint32_t));
-        if (ret != 0) {
-            goto out;
-        }
-        self->max_rows = new_size;
     }
     self->flags[self->num_rows] = flags;
     self->time[self->num_rows] = time;

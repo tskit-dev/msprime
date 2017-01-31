@@ -668,8 +668,7 @@ get_example_tree_sequence(uint32_t sample_size,
      * to cancel scaling factor. */
     ret = tree_sequence_initialise(tree_seq);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    /* ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 1, &provenance, */
-    /*         tree_seq); */
+    /* FIXME provenace */
     ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate_tables_tmp(mutgen, nodes, edgesets);
