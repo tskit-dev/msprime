@@ -49,6 +49,7 @@ import msprime.environment
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
 from _msprime import NodeTable  # NOQA
+from _msprime import EdgesetTable  # NOQA
 
 NULL_NODE = -1
 

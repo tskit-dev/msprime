@@ -46,11 +46,6 @@ def main():
     if args.module is not None:
         test_modules = [modules[args.module]]
 
-    testloader = unittest.TestLoader()
-    suite = testloader.loadTestsFromModule(test_modules[0])
-    for mod in test_modules[1:]:
-        l = testloader.loadTestsFromModule(mod)
-        suite.addTests(l)
     print("iter\ttests\terr\tfail\tskip\tRSS\tmin\tmax")
     max_rss = 0
     min_rss = 1e100
@@ -61,6 +56,10 @@ def main():
         # We don't want any random variation in the amount of memory
         # used from test-to-test.
         random.seed(1)
+        testloader = unittest.TestLoader()
+        suite = testloader.loadTestsFromModule(test_modules[0])
+        for mod in test_modules[1:]:
+            suite.addTests(testloader.loadTestsFromModule(mod))
         runner = unittest.TextTestRunner(verbosity=0, stream=devnull)
         result = runner.run(suite)
 

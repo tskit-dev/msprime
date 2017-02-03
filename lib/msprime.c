@@ -2438,9 +2438,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     uint32_t last_node;
     size_t j;
     double scaled_time;
-    uint32_t left, right;
     coalescence_record_t *cr;
-    coordinate_table_t *coordinates = edgesets->coordinates;
 
     /* Add the node definitions for the samples */
     for (j = 0; j < self->sample_size; j++) {
@@ -2455,16 +2453,16 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     /* First setup the coordinates for the edgesets. */
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
-        ret = coordinate_table_add_row(coordinates, cr->left);
+        ret = edgeset_table_add_coordinate(edgesets, cr->left);
         if (ret != 0) {
             goto out;
         }
-        ret = coordinate_table_add_row(coordinates, cr->right);
+        ret = edgeset_table_add_coordinate(edgesets, cr->right);
         if (ret != 0) {
             goto out;
         }
     }
-    ret = coordinate_table_sort_unique(coordinates);
+    ret = edgeset_table_finalise_coordinates(edgesets);
     if (ret != 0) {
         goto out;
     }
@@ -2481,23 +2479,14 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             }
             last_node = cr->node;
         }
-        ret = coordinate_table_get_index(coordinates, cr->left, &left);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = coordinate_table_get_index(coordinates, cr->right, &right);
-        if (ret != 0) {
-            goto out;
-        }
-        assert(left < right);
-        ret = edgeset_table_add_row(edgesets, left, right,
+        ret = edgeset_table_add_row(edgesets, cr->left, cr->right,
             cr->node, cr->num_children, cr->children);
     }
     /* TODO migrations */
 
     if (recomb_map != NULL) {
         ret = recomb_map_genetic_to_phys_bulk(recomb_map,
-            edgesets->coordinates->position, edgesets->coordinates->num_rows);
+            edgesets->coordinates, edgesets->num_coordinates);
         if (ret != 0) {
             goto out;
         }

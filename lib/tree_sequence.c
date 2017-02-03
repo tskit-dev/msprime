@@ -1019,9 +1019,8 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     self->trees.num_nodes = nodes->num_rows;
     self->trees.total_child_nodes = edgesets->total_children;
     self->trees.num_records = edgesets->num_rows;
-    self->trees.num_breakpoints = edgesets->coordinates->num_rows;
-    self->sequence_length = edgesets->coordinates->position[
-        edgesets->coordinates->num_rows - 1];
+    self->trees.num_breakpoints = edgesets->num_coordinates;
+    self->sequence_length = edgesets->coordinates[edgesets->num_coordinates - 1];
     self->sample_size = 0;
     for (j = 0; j < nodes->num_rows; j++) {
         if (nodes->flags[j] & MSP_NODE_SAMPLE) {
@@ -1035,8 +1034,8 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     if (ret != 0) {
         goto out;
     }
-    memcpy(self->trees.breakpoints, edgesets->coordinates->position,
-            edgesets->coordinates->num_rows * sizeof(double));
+    memcpy(self->trees.breakpoints, edgesets->coordinates,
+            edgesets->num_coordinates * sizeof(double));
     memcpy(self->trees.nodes.time, nodes->time, nodes->num_rows * sizeof(double));
     memcpy(self->trees.nodes.population, nodes->population,
             nodes->num_rows * sizeof(uint32_t));

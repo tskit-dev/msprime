@@ -37,6 +37,51 @@ cmp_double(const void *a, const void *b) {
 }
 
 static int
+sort_unique(size_t *num_rows, double *coordinates)
+{
+    size_t j, k;
+
+    /* TODO need to write some test cases for this, exploring the edge cases */
+    qsort(coordinates, *num_rows, sizeof(double), cmp_double);
+    /* Now go through the positions and keep the unique values. */
+    k = 0;
+    for (j = 1; j < *num_rows; j++) {
+        if (coordinates[j] != coordinates[k]) {
+            k++;
+            coordinates[k] = coordinates[j];
+        }
+    }
+    if (*num_rows > 0) {
+        k++;
+        coordinates[k] = coordinates[*num_rows - 1];
+    }
+    assert(k <= *num_rows);
+    *num_rows = k;
+    return 0;
+}
+
+static int
+get_index(size_t num_rows, double *coordinates, double x, uint32_t *index)
+{
+    int ret = MSP_ERR_GENERIC;
+    double *result;
+    ptrdiff_t diff;
+
+    result = bsearch(&x, coordinates, num_rows, sizeof(double), cmp_double);
+    if (result == NULL) {
+        ret = MSP_ERR_COORDINATE_NOT_FOUND;
+        goto out;
+    }
+    diff = result - coordinates;
+    assert(coordinates[diff] == x);
+    *index = (uint32_t) diff;
+    ret = 0;
+out:
+    return ret;
+}
+
+
+static int
 expand_column(void **column, size_t new_max_rows, size_t element_size)
 {
     int ret = 0;
@@ -52,113 +97,6 @@ out:
     return ret;
 }
 
-/*************************
- * Coordinate table
- *************************/
-
-int
-coordinate_table_alloc(coordinate_table_t *self, size_t max_rows_increment)
-{
-    int ret = 0;
-
-    memset(self, 0, sizeof(coordinate_table_t));
-    self->max_rows_increment = max_rows_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    return ret;
-}
-
-int
-coordinate_table_add_row(coordinate_table_t *self, double position)
-{
-    int ret = 0;
-    size_t new_size;
-
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = expand_column((void **) &self->position, new_size, sizeof(double));
-        if (ret != 0) {
-            goto out;
-        }
-        self->max_rows = new_size;
-    }
-    self->position[self->num_rows] = position;
-    self->num_rows++;
-out:
-    return ret;
-}
-
-int
-coordinate_table_sort_unique(coordinate_table_t *self)
-{
-    size_t j, k;
-
-    /* TODO need to write some test cases for this, exploring the edge cases */
-    qsort(self->position, self->num_rows, sizeof(double), cmp_double);
-    /* Now go through the positions and keep the unique values. */
-    k = 0;
-    for (j = 1; j < self->num_rows; j++) {
-        if (self->position[j] != self->position[k]) {
-            k++;
-            self->position[k] = self->position[j];
-        }
-    }
-    if (self->num_rows > 0) {
-        k++;
-        self->position[k] = self->position[self->num_rows - 1];
-    }
-    assert(k <= self->num_rows);
-    self->num_rows = k;
-    return 0;
-}
-
-int
-coordinate_table_get_index(coordinate_table_t *self, double x, uint32_t *index)
-{
-    int ret = MSP_ERR_GENERIC;
-    double *result;
-    ptrdiff_t diff;
-
-    result = bsearch(&x, self->position, self->num_rows, sizeof(double), cmp_double);
-    if (result == NULL) {
-        ret = MSP_ERR_COORDINATE_NOT_FOUND;
-        goto out;
-    }
-    diff = result - self->position;
-    assert(self->position[diff] == x);
-    *index = (uint32_t) diff;
-    ret = 0;
-out:
-    return ret;
-}
-
-int
-coordinate_table_reset(coordinate_table_t *self)
-{
-    self->num_rows = 0;
-    return 0;
-}
-
-int
-coordinate_table_free(coordinate_table_t *self)
-{
-    msp_safe_free(self->position);
-    return 0;
-}
-
-void
-coordinate_table_print_state(coordinate_table_t *self, FILE *out)
-{
-    size_t j;
-
-    printf("coordinate_table: %p:%d\t%d\t%d\n", (void *) self,
-            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    printf("\tindex\tposition\n");
-    for (j = 0; j < self->num_rows; j++) {
-        printf("\t%d\t%f\n", (int) j, self->position[j]);
-    }
-
-}
 /*************************
  * mutation table
  *************************/
@@ -259,27 +197,18 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
  *************************/
 
 int
-node_table_alloc(node_table_t *self)
+node_table_alloc(node_table_t *self, size_t max_rows_increment)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(node_table_t));
-    self->max_rows_increment = DEFAULT_MAX_ROWS_INCREMENT;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    return ret;
-}
-
-int
-node_table_set_max_rows_increment(node_table_t *self, size_t max_rows_increment)
-{
-    int ret = 0;
-
     if (max_rows_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->max_rows_increment = max_rows_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
 out:
     return ret;
 }
@@ -289,19 +218,21 @@ node_table_expand(node_table_t *self, size_t new_size)
 {
     int ret = 0;
 
-    ret = expand_column((void **) &self->flags, new_size, sizeof(uint32_t));
-    if (ret != 0) {
-        goto out;
+    if (new_size > self->max_rows) {
+        ret = expand_column((void **) &self->flags, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->time, new_size, sizeof(double));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->population, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_rows = new_size;
     }
-    ret = expand_column((void **) &self->time, new_size, sizeof(double));
-    if (ret != 0) {
-        goto out;
-    }
-    ret = expand_column((void **) &self->population, new_size, sizeof(uint32_t));
-    if (ret != 0) {
-        goto out;
-    }
-    self->max_rows = new_size;
 out:
     return ret;
 }
@@ -310,15 +241,11 @@ int
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
         uint32_t *population)
 {
-    size_t new_size;
     int ret;
 
-    if (self->max_rows < num_rows) {
-        new_size = GSL_MAX(num_rows, self->max_rows_increment);
-        ret = node_table_expand(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = node_table_expand(self, num_rows);
+    if (ret != 0) {
+        goto out;
     }
     if (flags == NULL || time == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -393,29 +320,29 @@ node_table_print_state(node_table_t *self, FILE *out)
 
 int
 edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
-        size_t max_total_children_increment)
+        size_t max_total_children_increment, size_t max_coordinates_increment)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(edgeset_table_t));
     self->max_rows_increment = max_rows_increment;
     self->max_total_children_increment = max_total_children_increment;
+    self->max_coordinates_increment = max_coordinates_increment;
     self->max_rows = 0;
     self->num_rows = 0;
     self->max_total_children = 0;
     self->total_children = 0;
+    self->max_coordinates = 0;
+    self->num_coordinates = 0;
     return ret;
 }
 
-int
-edgeset_table_add_row(edgeset_table_t *self, uint32_t left, uint32_t right,
-        uint32_t parent, uint32_t num_children, uint32_t *children)
+static int
+edgeset_table_expand_main_columns(edgeset_table_t *self, size_t new_size)
 {
     int ret = 0;
-    size_t new_size;
 
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
+    if (new_size > self->max_rows) {
         ret = expand_column((void **) &self->left, new_size, sizeof(uint32_t));
         if (ret != 0) {
             goto out;
@@ -434,14 +361,100 @@ edgeset_table_add_row(edgeset_table_t *self, uint32_t left, uint32_t right,
         }
         self->max_rows = new_size;
     }
-    if (self->total_children + num_children >= self->max_total_children) {
-        new_size = self->max_total_children + self->max_total_children_increment;
+out:
+    return ret;
+}
+
+static int
+edgeset_table_expand_children(edgeset_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_total_children) {
         ret = expand_column((void **) &self->children, new_size, sizeof(uint32_t));
         if (ret != 0) {
             goto out;
         }
         self->max_total_children = new_size;
     }
+out:
+    return ret;
+}
+
+static int
+edgeset_table_expand_coordinates(edgeset_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_coordinates) {
+        ret = expand_column((void **) &self->coordinates, new_size, sizeof(double));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_coordinates = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+edgeset_table_add_coordinate(edgeset_table_t *self, double coordinate)
+{
+    int ret = 0;
+
+    if (self->num_coordinates == self->max_coordinates) {
+        ret = edgeset_table_expand_coordinates(self,
+                self->max_coordinates + self->max_coordinates_increment);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    self->coordinates[self->num_coordinates] = coordinate;
+    self->num_coordinates++;
+out:
+    return ret;
+}
+
+int
+edgeset_table_finalise_coordinates(edgeset_table_t *self)
+{
+    int ret = 0;
+    ret = sort_unique(&self->num_coordinates, self->coordinates);
+    return ret;
+}
+
+int
+edgeset_table_add_row(edgeset_table_t *self, double left_coordinate,
+        double right_coordinate, uint32_t parent, uint32_t num_children,
+        uint32_t *children)
+{
+    int ret = 0;
+    uint32_t left, right;
+
+    if (self->num_rows == self->max_rows) {
+        ret = edgeset_table_expand_main_columns(self,
+                self->max_rows + self->max_rows_increment);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    /* Need the loop here in case we have a very large number of children */
+    while (self->total_children + num_children >= self->max_total_children) {
+        ret = edgeset_table_expand_children(self,
+            self->max_total_children + self->max_total_children_increment);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = get_index(self->num_coordinates, self->coordinates, left_coordinate, &left);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = get_index(self->num_coordinates, self->coordinates, right_coordinate, &right);
+    if (ret != 0) {
+        goto out;
+    }
+    assert(left < right);
     self->left[self->num_rows] = left;
     self->right[self->num_rows] = right;
     self->parent[self->num_rows] = parent;
@@ -450,6 +463,44 @@ edgeset_table_add_row(edgeset_table_t *self, uint32_t left, uint32_t right,
             num_children * sizeof(uint32_t));
     self->total_children += num_children;
     self->num_rows++;
+out:
+    return ret;
+}
+
+int
+edgeset_table_set_columns(edgeset_table_t *self,
+        size_t num_rows, uint32_t *left, uint32_t *right, uint32_t *parent,
+        uint32_t *num_children, size_t total_children, uint32_t *children,
+        size_t num_coordinates, double *coordinates)
+{
+    int ret;
+
+    if (left == NULL || right == NULL || parent == NULL || num_children == NULL
+            || children == NULL || coordinates == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = edgeset_table_expand_main_columns(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_expand_children(self, total_children);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_expand_coordinates(self, num_coordinates);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->left, left, num_rows * sizeof(uint32_t));
+    memcpy(self->right, right, num_rows * sizeof(uint32_t));
+    memcpy(self->parent, parent, num_rows * sizeof(uint32_t));
+    memcpy(self->num_children, num_children, num_rows * sizeof(uint32_t));
+    memcpy(self->children, children, total_children * sizeof(uint32_t));
+    memcpy(self->coordinates, coordinates, num_coordinates * sizeof(double));
+    self->num_rows = num_rows;
+    self->total_children = total_children;
+    self->num_coordinates = num_coordinates;
 out:
     return ret;
 }
@@ -470,6 +521,7 @@ edgeset_table_free(edgeset_table_t *self)
     msp_safe_free(self->parent);
     msp_safe_free(self->children);
     msp_safe_free(self->num_children);
+    msp_safe_free(self->coordinates);
     return 0;
 }
 
@@ -497,5 +549,9 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
             offset++;
         }
         printf("\n");
+    }
+    printf("\tcoordinates\n");
+    for (j = 0; j < self->num_coordinates; j++) {
+        printf("\t\t%d\t%f\n", (int) j, self->coordinates[j]);
     }
 }

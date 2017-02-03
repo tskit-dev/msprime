@@ -582,7 +582,6 @@ get_example_tree_sequence(uint32_t sample_size,
     tree_sequence_t *tree_seq = malloc(sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = malloc(sizeof(recomb_map_t));
     mutgen_t *mutgen = malloc(sizeof(mutgen_t));
-    coordinate_table_t *edgeset_coordinates = malloc(sizeof(coordinate_table_t));
     node_table_t *nodes = malloc(sizeof(node_table_t));
     edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
@@ -601,19 +600,14 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
     CU_ASSERT_FATAL(recomb_map != NULL);
-    CU_ASSERT_FATAL(edgeset_coordinates != NULL);
     CU_ASSERT_FATAL(nodes != NULL);
     CU_ASSERT_FATAL(edgesets != NULL);
     CU_ASSERT_FATAL(mutations != NULL);
     gsl_rng_set(rng, 1);
 
-    ret = coordinate_table_alloc(edgeset_coordinates, 10);
+    ret = edgeset_table_alloc(edgesets, 10, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = edgeset_table_alloc(edgesets, 10, 10);
-    CU_ASSERT_EQUAL(ret, 0);
-    // FIXME
-    edgesets->coordinates = edgeset_coordinates;
-    ret = node_table_alloc(nodes);
+    ret = node_table_alloc(nodes, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutation_table_alloc(mutations, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
@@ -688,7 +682,6 @@ get_example_tree_sequence(uint32_t sample_size,
     free(recomb_map);
     mutgen_free(mutgen);
     free(mutgen);
-    coordinate_table_free(edgeset_coordinates);
     node_table_free(nodes);
     edgeset_table_free(edgesets);
     mutation_table_free(mutations);

@@ -32,64 +32,164 @@ import msprime
 
 class TestTable(unittest.TestCase):
 
-    def test_defaults(self):
-        table = msprime.NodeTable()
+    columns = None
+    table_class = None
+
+    def verify_defaults(self):
+        table = self.table_class()
         self.assertEqual(table.max_rows_increment, 1024)
         self.assertEqual(table.num_rows, 0)
-        self.assertEqual(table.time.shape, (0,))
-        self.assertEqual(table.flags.shape, (0,))
+        for colname in self.columns:
+            array = getattr(table, colname)
+            self.assertEqual(array.shape, (0,))
 
-    def test_constructor(self):
-        for bad_type in [Exception, msprime]:
-            self.assertRaises(TypeError, msprime.NodeTable, flags=[0], time=bad_type)
-            self.assertRaises(TypeError, msprime.NodeTable, flags=bad_type, time=[0])
-        for bad_value in ["qwer", [0, "sd"]]:
-            self.assertRaises(ValueError, msprime.NodeTable, flags=[0], time=bad_value)
-            self.assertRaises(ValueError, msprime.NodeTable, flags=bad_value, time=[0])
-        # Must specify both time and flags.
-        self.assertRaises(TypeError, msprime.NodeTable, time=[1, 2])
-        self.assertRaises(TypeError, msprime.NodeTable, flags=[1, 2])
-        # Dimensions must be equal
-        self.assertRaises(ValueError, msprime.NodeTable, time=[1, 2], flags=[1])
-        self.assertRaises(ValueError, msprime.NodeTable, time=[1], flags=[1, 2])
-
-    def test_max_rows_increment(self):
-        table = msprime.NodeTable()
+    def verify_max_rows_increment(self):
         for bad_value in [-1, 0, -2**10]:
-            with self.assertRaises(ValueError):
-                table.max_rows_increment = bad_value
+            self.assertRaises(ValueError, self.table_class, max_rows_increment=bad_value)
         for v in [1, 100, 256]:
-            table.max_rows_increment = v
+            table = self.table_class(max_rows_increment=v)
             self.assertEqual(table.max_rows_increment, v)
 
-    def test_set_read_only_attributes(self):
-        table = msprime.NodeTable()
+    def verify_set_columns_interface(self):
+        valid_input = [0]
+        kwargs = {c: valid_input for c in self.columns}
+        # Make sure this works.
+        table = self.table_class()
+        table.set_columns(**kwargs)
+        for focal_col in self.columns:
+            table = self.table_class()
+            for bad_type in [Exception, msprime]:
+                error_kwargs = dict(kwargs)
+                error_kwargs[focal_col] = bad_type
+                self.assertRaises(TypeError, table.set_columns, **error_kwargs)
+            for bad_value in ["qwer", [0, "sd"]]:
+                error_kwargs = dict(kwargs)
+                error_kwargs[focal_col] = bad_value
+                self.assertRaises(ValueError, table.set_columns, **error_kwargs)
+
+    def verify_set_columns_data(self):
+        for num_rows in [0, 10, 100, 1000]:
+            input_data = {
+                col: np.arange(num_rows, dtype=np.uint32) for col in self.columns}
+            table = self.table_class()
+            table.set_columns(**input_data)
+            for col, input_array in input_data.items():
+                output_array = getattr(table, col)
+                self.assertEqual(input_array.shape, output_array.shape)
+                self.assertTrue(np.all(input_array == output_array))
+
+    def verify_set_columns_input_sizes(self, equal_len_cols):
+        num_rows = 100
+        input_data = {col: np.arange(num_rows, dtype=np.uint32) for col in self.columns}
+        table = self.table_class()
+        table.set_columns(**input_data)
+        for col in equal_len_cols:
+            kwargs = dict(input_data)
+            kwargs[col] = np.zeros(1, dtype=np.uint32)
+            self.assertRaises(ValueError, table.set_columns, **kwargs)
+
+    def verify_constructor_interface(self):
+        for bad_type in ["1", None, []]:
+            self.assertRaises(TypeError, self.table_class, max_rows_increment=bad_type)
+
+    def verify_set_read_only_attributes(self):
+        table = self.table_class()
         with self.assertRaises(AttributeError):
             table.num_rows = 10
         with self.assertRaises(AttributeError):
-            table.time = np.zeros(5)
-        with self.assertRaises(AttributeError):
-            table.flags = np.zeros(5)
+            table.max_rows_increment = 2
+        for col in self.columns:
+            with self.assertRaises(AttributeError):
+                setattr(table, col, np.zeros(5))
         self.assertEqual(table.num_rows, 0)
 
-    def test_times(self):
-        time = np.array([0.1, 0.2, 0.3])
-        flags = [0, 0, 0]
-        table = msprime.NodeTable(flags=flags, time=time)
-        self.assertEqual(table.max_rows_increment, time.shape[0])
-        self.assertEqual(table.num_rows, time.shape[0])
-        stored_time = table.time
-        self.assertTrue(np.all(time == table.time))
-        # We should have different objects each time we get the array.
-        self.assertNotEqual(id(stored_time), id(table.time))
 
-    def test_flags(self):
-        time = np.array([0.1, 0.2, 0.3])
-        flags = np.array([0, 1, 2], dtype=np.uint32)
-        table = msprime.NodeTable(flags=flags, time=time)
-        self.assertEqual(table.max_rows_increment, flags.shape[0])
-        self.assertEqual(table.num_rows, flags.shape[0])
-        stored_flags = table.flags
-        self.assertTrue(np.all(flags == table.flags))
-        # We should have different objects each flags we get the array.
-        self.assertNotEqual(id(stored_flags), id(table.flags))
+class TestNodeTable(TestTable):
+
+    columns = ["flags", "time"]
+    table_class = msprime.NodeTable
+
+    def test_defaults(self):
+        self.verify_defaults()
+
+    def test_constructor(self):
+        self.verify_constructor_interface()
+
+    def test_set_read_only_attributes(self):
+        self.verify_set_read_only_attributes()
+
+    def test_set_columns_interface(self):
+        self.verify_set_columns_interface()
+        table = msprime.NodeTable()
+        # Must specify both time and flags.
+        self.assertRaises(TypeError, table.set_columns, time=[1, 2])
+        self.assertRaises(TypeError, table.set_columns, flags=[1, 2])
+        # Dimensions must be equal
+        self.assertRaises(ValueError, table.set_columns, time=[1, 2], flags=[1])
+        self.assertRaises(ValueError, table.set_columns, time=[1], flags=[1, 2])
+
+    def test_set_columns_data(self):
+        self.verify_set_columns_data()
+
+    def test_max_rows_increment(self):
+        self.verify_max_rows_increment()
+
+    def test_set_columns_input_sizes(self):
+        equal_len_cols = ["time", "flags"]
+        self.verify_set_columns_input_sizes(equal_len_cols)
+
+
+class TestEdgesetTable(TestTable):
+    columns = ["left", "right", "parent", "num_children", "children", "coordinates"]
+    table_class = msprime.EdgesetTable
+
+    def test_defaults(self):
+        self.verify_defaults()
+        table = msprime.EdgesetTable()
+        self.assertEqual(table.max_total_children_increment, 1024)
+        self.assertEqual(table.max_coordinates_increment, 1024)
+
+    def test_max_rows_increment(self):
+        self.verify_max_rows_increment()
+
+    def test_increment_values(self):
+        for bad_value in [-1, 0, -2**10]:
+            self.assertRaises(ValueError, self.table_class, max_rows_increment=bad_value)
+            self.assertRaises(
+                ValueError, self.table_class, max_total_children_increment=bad_value)
+            self.assertRaises(
+                ValueError, self.table_class, max_coordinates_increment=bad_value)
+        for v in [1, 100, 256]:
+            table = self.table_class(max_rows_increment=v)
+            self.assertEqual(table.max_rows_increment, v)
+            table = self.table_class(max_total_children_increment=v)
+            self.assertEqual(table.max_total_children_increment, v)
+            table = self.table_class(max_coordinates_increment=v)
+            self.assertEqual(table.max_coordinates_increment, v)
+
+    def test_set_read_only_attributes(self):
+        self.verify_set_read_only_attributes()
+        table = self.table_class()
+        with self.assertRaises(AttributeError):
+            table.max_total_children_increment = 1
+        with self.assertRaises(AttributeError):
+            table.max_coordinates_increment = 1
+
+    def test_constructor(self):
+        for bad_type in ["1", None, []]:
+            self.assertRaises(
+                TypeError, msprime.NodeTable, max_rows_increment=bad_type)
+            self.assertRaises(
+                TypeError, msprime.NodeTable, max_total_children_increment=bad_type)
+            self.assertRaises(
+                TypeError, msprime.NodeTable, max_coordinates_increment=bad_type)
+
+    def test_set_columns_interface(self):
+        self.verify_set_columns_interface()
+
+    def test_set_columns_data(self):
+        self.verify_set_columns_data()
+
+    def test_set_columns_input_sizes(self):
+        equal_len_cols = ["left", "right", "parent", "num_children"]
+        self.verify_set_columns_input_sizes(equal_len_cols)

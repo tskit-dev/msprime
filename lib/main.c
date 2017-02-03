@@ -735,32 +735,24 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
     /* const char *provenance = "main.run_simulate"; */
 
-    coordinate_table_t *edgeset_coordinates = malloc(sizeof(coordinate_table_t));
     node_table_t *nodes = malloc(sizeof(node_table_t));
     edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
-            || mutgen == NULL || edgeset_coordinates == NULL
-            || nodes == NULL || edgesets == NULL || mutations == NULL) {
+            || mutgen == NULL || nodes == NULL || edgesets == NULL
+            || mutations == NULL) {
         goto out;
     }
     ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
     if (ret != 0) {
         goto out;
     }
-
-    ret = coordinate_table_alloc(edgeset_coordinates, 10);
+    ret = edgeset_table_alloc(edgesets, 10, 10, 10);
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_alloc(edgesets, 10, 10);
-    if (ret != 0) {
-        goto out;
-    }
-    // FIXME
-    edgesets->coordinates = edgeset_coordinates;
-    ret = node_table_alloc(nodes);
+    ret = node_table_alloc(nodes, 10);
     if (ret != 0) {
         goto out;
     }
@@ -832,7 +824,6 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             }
         }
         if (verbose >= 1) {
-            coordinate_table_print_state(edgesets->coordinates, stdout);
             node_table_print_state(nodes, stdout);
             edgeset_table_print_state(edgesets, stdout);
             mutation_table_print_state(mutations, stdout);
@@ -861,10 +852,6 @@ out:
     }
     if (rng != NULL) {
         gsl_rng_free(rng);
-    }
-    if (edgeset_coordinates != NULL) {
-        coordinate_table_free(edgeset_coordinates);
-        free(edgeset_coordinates);
     }
     if (edgesets != NULL) {
         edgeset_table_free(edgesets);

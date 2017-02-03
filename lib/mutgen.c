@@ -231,7 +231,6 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
     size_t j, offset, branch_mutations;
     double left, right, branch_length, distance, mu, position;
     uint32_t parent, child, k, l;
-    coordinate_table_t *coordinates = edgesets->coordinates;
 
     /* First free up any memory used in previous calls */
     for (j = 0; j < self->num_mutations; j++) {
@@ -241,8 +240,8 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
 
     offset = 0;
     for (j = 0; j < edgesets->num_rows; j++) {
-        left = coordinates->position[edgesets->left[j]];
-        right = coordinates->position[edgesets->right[j]];
+        left = edgesets->coordinates[edgesets->left[j]];
+        right = edgesets->coordinates[edgesets->right[j]];
         distance = right - left;
         parent = edgesets->parent[j];
         for (k = 0; k < edgesets->num_children[j]; k++) {

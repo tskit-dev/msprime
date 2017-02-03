@@ -69,14 +69,6 @@
 
 #define MSP_INITIALISED_MAGIC 0x1234567
 
-/* Start experimental table definitions */
-typedef struct {
-    size_t num_rows;
-    size_t max_rows;
-    size_t max_rows_increment;
-    double *position;
-} coordinate_table_t;
-
 typedef struct {
     size_t num_rows;
     size_t max_rows;
@@ -108,12 +100,15 @@ typedef struct {
     size_t total_children;
     size_t max_total_children;
     size_t max_total_children_increment;
+    size_t num_coordinates;
+    size_t max_coordinates;
+    size_t max_coordinates_increment;
     uint32_t *left;
     uint32_t *right;
     uint32_t *parent;
     uint32_t *num_children;
     uint32_t *children;
-    coordinate_table_t *coordinates;
+    double *coordinates;
 } edgeset_table_t;
 
 typedef struct {
@@ -125,16 +120,7 @@ typedef struct {
     uint32_t *left;
     uint32_t *right;
     double *time;
-    coordinate_table_t *coordinates;
 } migration_table_t;
-
-int coordinate_table_alloc(coordinate_table_t *self, size_t max_rows_increment);
-int coordinate_table_add_row(coordinate_table_t *self, double coordinate);
-int coordinate_table_reset(coordinate_table_t *self);
-int coordinate_table_sort_unique(coordinate_table_t *self);
-int coordinate_table_get_index(coordinate_table_t *self, double x, uint32_t *index);
-int coordinate_table_free(coordinate_table_t *self);
-void coordinate_table_print_state(coordinate_table_t *self, FILE *out);
 
 int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
         size_t max_total_nodes_increment);
@@ -144,20 +130,25 @@ int mutation_table_reset(mutation_table_t *self);
 int mutation_table_free(mutation_table_t *self);
 void mutation_table_print_state(mutation_table_t *self, FILE *out);
 
-int node_table_alloc(node_table_t *self);
+int node_table_alloc(node_table_t *self, size_t max_rows_increment);
 int node_table_add_row(node_table_t *self, uint32_t flags, double time,
         uint32_t population);
 int node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
         uint32_t *population);
-int node_table_set_max_rows_increment(node_table_t *self, size_t max_rows_increment);
 int node_table_reset(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
 
 int edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
-        size_t max_total_children_increment);
-int edgeset_table_add_row(edgeset_table_t *self, uint32_t left, uint32_t right,
+        size_t max_total_children_increment, size_t max_coordinates_increment);
+int edgeset_table_add_coordinate(edgeset_table_t *self, double coordinate);
+int edgeset_table_finalise_coordinates(edgeset_table_t *edgesets);
+int edgeset_table_add_row(edgeset_table_t *self, double left, double right,
         uint32_t parent, uint32_t num_children, uint32_t *children);
+int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, uint32_t *left,
+        uint32_t *right, uint32_t *parent, uint32_t *num_children,
+        size_t total_children, uint32_t *children,
+        size_t num_coordinates, double *coordinates);
 int edgeset_table_reset(edgeset_table_t *self);
 int edgeset_table_free(edgeset_table_t *self);
 void edgeset_table_print_state(edgeset_table_t *self, FILE *out);
