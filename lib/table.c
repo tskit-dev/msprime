@@ -387,7 +387,7 @@ edgeset_table_expand_coordinates(edgeset_table_t *self, size_t new_size)
     int ret = 0;
 
     if (new_size > self->max_coordinates) {
-        ret = expand_column((void **) &self->coordinates, new_size, sizeof(double));
+        ret = expand_column((void **) &self->coordinate, new_size, sizeof(double));
         if (ret != 0) {
             goto out;
         }
@@ -409,7 +409,7 @@ edgeset_table_add_coordinate(edgeset_table_t *self, double coordinate)
             goto out;
         }
     }
-    self->coordinates[self->num_coordinates] = coordinate;
+    self->coordinate[self->num_coordinates] = coordinate;
     self->num_coordinates++;
 out:
     return ret;
@@ -419,7 +419,7 @@ int
 edgeset_table_finalise_coordinates(edgeset_table_t *self)
 {
     int ret = 0;
-    ret = sort_unique(&self->num_coordinates, self->coordinates);
+    ret = sort_unique(&self->num_coordinates, self->coordinate);
     return ret;
 }
 
@@ -446,11 +446,11 @@ edgeset_table_add_row(edgeset_table_t *self, double left_coordinate,
             goto out;
         }
     }
-    ret = get_index(self->num_coordinates, self->coordinates, left_coordinate, &left);
+    ret = get_index(self->num_coordinates, self->coordinate, left_coordinate, &left);
     if (ret != 0) {
         goto out;
     }
-    ret = get_index(self->num_coordinates, self->coordinates, right_coordinate, &right);
+    ret = get_index(self->num_coordinates, self->coordinate, right_coordinate, &right);
     if (ret != 0) {
         goto out;
     }
@@ -497,7 +497,7 @@ edgeset_table_set_columns(edgeset_table_t *self,
     memcpy(self->parent, parent, num_rows * sizeof(uint32_t));
     memcpy(self->num_children, num_children, num_rows * sizeof(uint32_t));
     memcpy(self->children, children, total_children * sizeof(uint32_t));
-    memcpy(self->coordinates, coordinates, num_coordinates * sizeof(double));
+    memcpy(self->coordinate, coordinates, num_coordinates * sizeof(double));
     self->num_rows = num_rows;
     self->total_children = total_children;
     self->num_coordinates = num_coordinates;
@@ -521,7 +521,7 @@ edgeset_table_free(edgeset_table_t *self)
     msp_safe_free(self->parent);
     msp_safe_free(self->children);
     msp_safe_free(self->num_children);
-    msp_safe_free(self->coordinates);
+    msp_safe_free(self->coordinate);
     return 0;
 }
 
@@ -552,6 +552,6 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
     }
     printf("\tcoordinates\n");
     for (j = 0; j < self->num_coordinates; j++) {
-        printf("\t\t%d\t%f\n", (int) j, self->coordinates[j]);
+        printf("\t\t%d\t%f\n", (int) j, self->coordinate[j]);
     }
 }

@@ -76,12 +76,12 @@ typedef struct {
     size_t total_nodes;
     size_t max_total_nodes;
     size_t max_total_nodes_increment;
-    uint32_t *nodes;
     uint32_t *num_nodes;
-    /* We will probably want to embed a coordinates table here.
-     * Keep it simple for now. */
-    double *position;
-    /* TODO mutation type table. */
+    uint32_t *site;
+    uint32_t *nodes;
+    double *coordinate;
+    double *position; /* REMOVE */
+
 } mutation_table_t;
 
 typedef struct {
@@ -108,7 +108,7 @@ typedef struct {
     uint32_t *parent;
     uint32_t *num_children;
     uint32_t *children;
-    double *coordinates;
+    double *coordinate;
 } edgeset_table_t;
 
 typedef struct {

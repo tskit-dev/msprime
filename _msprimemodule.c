@@ -1375,7 +1375,7 @@ EdgesetTable_get_coordinates(EdgesetTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edgeset_table->num_coordinates, self->edgeset_table->coordinates,
+            self->edgeset_table->num_coordinates, self->edgeset_table->coordinate,
             NPY_FLOAT64, sizeof(double));
 out:
     return ret;
@@ -1496,11 +1496,6 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
                 &max_coordinates_increment)) {
         goto out;
     }
-    self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
-    if (self->mutation_table == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
     if (max_rows_increment <= 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
@@ -1511,6 +1506,11 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
     }
     if (max_coordinates_increment <= 0) {
         PyErr_SetString(PyExc_ValueError, "max_coordinates_increment must be positive");
+        goto out;
+    }
+    self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
+    if (self->mutation_table == NULL) {
+        PyErr_NoMemory();
         goto out;
     }
     err = mutation_table_alloc(self->mutation_table, max_rows_increment,

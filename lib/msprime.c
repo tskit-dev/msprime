@@ -2486,7 +2486,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
 
     if (recomb_map != NULL) {
         ret = recomb_map_genetic_to_phys_bulk(recomb_map,
-            edgesets->coordinates, edgesets->num_coordinates);
+            edgesets->coordinate, edgesets->num_coordinates);
         if (ret != 0) {
             goto out;
         }
