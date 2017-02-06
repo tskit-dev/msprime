@@ -50,6 +50,8 @@ from _msprime import RandomGenerator
 from _msprime import MutationGenerator
 from _msprime import NodeTable  # NOQA
 from _msprime import EdgesetTable  # NOQA
+from _msprime import MigrationTable  # NOQA
+from _msprime import MutationTable  # NOQA
 
 NULL_NODE = -1
 
@@ -1053,6 +1055,12 @@ class TreeSimulator(object):
         self._max_memory = sys.maxsize
         self._ll_sim = None
 
+        # TODO document these public attributes.
+        self.node_table = NodeTable(block_size)
+        self.edgeset_table = EdgesetTable(block_size)
+        self.migration_table = MigrationTable(block_size)
+        self.mutation_table = MutationTable(block_size)
+
     def set_random_generator(self, random_generator):
         """
         Sets the random generator instance for this simulator to the specified
@@ -1305,15 +1313,22 @@ class TreeSimulator(object):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
-        if mutation_generator is None:
-            mutation_generator = MutationGenerator(self._random_generator, 0)
-        ll_tree_sequence = _msprime.TreeSequence()
         ll_recomb_map = self._recombination_map.get_ll_recombination_map()
         Ne = self.get_effective_population_size()
-        self._ll_sim.populate_tree_sequence(
-            ll_tree_sequence, recombination_map=ll_recomb_map,
-            mutation_generator=mutation_generator, Ne=Ne,
-            provenance_strings=provenance_strings)
+        self._ll_sim.populate_tables(
+            self.node_table, self.edgeset_table, self.migration_table,
+            Ne=Ne, recombination_map=ll_recomb_map)
+        # self._ll_sim.populate_tree_sequence(
+        #     ll_tree_sequence, recombination_map=ll_recomb_map,
+        #     mutation_generator=mutation_generator, Ne=Ne,
+        #     provenance_strings=provenance_strings)
+        if mutation_generator is not None:
+            mutation_generator.generate(
+                self.node_table, self.edgeset_table, self.mutation_table)
+        ll_tree_sequence = _msprime.TreeSequence()
+        ll_tree_sequence.load_tables(
+            self.node_table, self.edgeset_table, self.migration_table,
+            self.mutation_table)
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):

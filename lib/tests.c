@@ -584,6 +584,7 @@ get_example_tree_sequence(uint32_t sample_size,
     mutgen_t *mutgen = malloc(sizeof(mutgen_t));
     node_table_t *nodes = malloc(sizeof(node_table_t));
     edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
+    migration_table_t *migrations= malloc(sizeof(migration_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
     /* const char *provenance = "get_example_tree_sequence"; */
     uint32_t j;
@@ -602,12 +603,15 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_FATAL(recomb_map != NULL);
     CU_ASSERT_FATAL(nodes != NULL);
     CU_ASSERT_FATAL(edgesets != NULL);
+    CU_ASSERT_FATAL(migrations != NULL);
     CU_ASSERT_FATAL(mutations != NULL);
     gsl_rng_set(rng, 1);
 
+    ret = node_table_alloc(nodes, 10);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = edgeset_table_alloc(edgesets, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = node_table_alloc(nodes, 10);
+    ret = migration_table_alloc(migrations, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutation_table_alloc(mutations, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
@@ -643,8 +647,7 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = msp_set_migration_matrix(msp, num_populations * num_populations,
             migration_matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    /* FIXME migration records */
-    /* ret = msp_set_store_migration_records(msp, true); */
+    ret = msp_set_store_migration_records(msp, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -663,13 +666,14 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = tree_sequence_initialise(tree_seq);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     /* FIXME provenace */
-    ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, NULL);
+    ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, migrations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate_tables_tmp(mutgen, nodes, edgesets);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_populate_tables(mutgen, mutations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, mutations);
+    ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
+            mutations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_simulator_tree_sequence_equality(msp, tree_seq, mutgen,
             sequence_length / num_loci);
@@ -685,8 +689,10 @@ get_example_tree_sequence(uint32_t sample_size,
     node_table_free(nodes);
     edgeset_table_free(edgesets);
     mutation_table_free(mutations);
+    migration_table_free(migrations);
     free(nodes);
     free(edgesets);
+    free(migrations);
     free(mutations);
     return tree_seq;
 }
@@ -1838,9 +1844,24 @@ test_simulation_replicates(void)
     msp_t msp;
     tree_sequence_t ts;
     mutgen_t mutgen;
+    node_table_t nodes;
+    edgeset_table_t edgesets;
+    mutation_table_t mutations;
+    migration_table_t migrations;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
+
+    /* Set all the table block sizes to 1 to force reallocs */
+    ret = node_table_alloc(&nodes, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edgeset_table_alloc(&edgesets, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(&mutations, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&migrations, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
     ret = msp_alloc(&msp, n, samples, rng);
@@ -1880,7 +1901,14 @@ test_simulation_replicates(void)
         ret = msp_run(&msp, DBL_MAX, SIZE_MAX);
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(&msp);
-        msp_populate_tree_sequence(&msp, NULL, &mutgen, 0.25, 0, NULL, &ts);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = msp_populate_tables(&msp, 0.25, NULL, &nodes, &edgesets, &migrations);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = mutgen_generate_tables_tmp(&mutgen, &nodes, &edgesets);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = mutgen_populate_tables(&mutgen, &mutations);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = tree_sequence_load_tables_tmp(&ts, &nodes, &edgesets, &migrations, &mutations);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_simulator_tree_sequence_equality(&msp, &ts, &mutgen, 1.0);
         tree_sequence_print_state(&ts, _devnull);
@@ -1888,6 +1916,7 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL_FATAL(msp_get_num_coalescence_records(&msp), 0);
         CU_ASSERT_EQUAL_FATAL(msp_get_num_migration_records(&msp), 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
+
     }
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1897,6 +1926,10 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
     free(samples);
+    node_table_free(&nodes);
+    edgeset_table_free(&edgesets);
+    mutation_table_free(&mutations);
+    migration_table_free(&migrations);
 }
 
 static void

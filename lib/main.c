@@ -451,6 +451,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("max_memory is a required parameter");
     }
     msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
+    if (config_lookup_int(config, "store_migrations", &int_tmp) == CONFIG_FALSE) {
+        fatal_error("store_migrations is a required parameter");
+    }
+    msp_set_store_migration_records(msp, (bool) int_tmp);
     t = config_lookup(config, "model");
     if (t == NULL) {
         fatal_error("model not specified");
@@ -738,10 +742,11 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     node_table_t *nodes = malloc(sizeof(node_table_t));
     edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
+    migration_table_t *migrations = malloc(sizeof(migration_table_t));
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL || nodes == NULL || edgesets == NULL
-            || mutations == NULL) {
+            || mutations == NULL || migrations == NULL) {
         goto out;
     }
     ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
@@ -757,6 +762,10 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         goto out;
     }
     ret = mutation_table_alloc(mutations, 10, 10);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = migration_table_alloc(migrations, 10);
     if (ret != 0) {
         goto out;
     }
@@ -796,13 +805,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         /* Create the tree_sequence from the state of the simulator.
          * We want to use coalescent time here, so use an Ne of 1/4
          * to cancel scaling factor. */
-        /* ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 1, &provenance, */
-        /*         tree_seq); */
-        /* if (ret != 0) { */
-        /*     goto out; */
-        /* } */
-
-        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, NULL);
+        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, migrations);
         if (ret != 0) {
             goto out;
         }
@@ -811,9 +814,11 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             goto out;
         }
         ret = mutgen_populate_tables(mutgen, mutations);
-
-
-        ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, mutations);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
+                mutations);
         if (ret != 0) {
             goto out;
         }
@@ -827,6 +832,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             node_table_print_state(nodes, stdout);
             edgeset_table_print_state(edgesets, stdout);
             mutation_table_print_state(mutations, stdout);
+            migration_table_print_state(migrations, stdout);
             printf("-----------------\n");
             mutgen_print_state(mutgen, stdout);
             printf("-----------------\n");
@@ -864,6 +870,10 @@ out:
     if (mutations != NULL) {
         mutation_table_free(mutations);
         free(mutations);
+    }
+    if (migrations != NULL) {
+        migration_table_free(migrations);
+        free(migrations);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));

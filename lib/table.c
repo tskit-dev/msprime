@@ -236,7 +236,7 @@ out:
 int
 node_table_reset(node_table_t *self)
 {
-    self->max_rows = 0;
+    self->num_rows = 0;
     return 0;
 }
 
@@ -435,5 +435,147 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
             offset++;
         }
         printf("\n");
+    }
+}
+
+/*************************
+ * migration table
+ *************************/
+
+int
+migration_table_alloc(migration_table_t *self, size_t max_rows_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(migration_table_t));
+    if (max_rows_increment == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->max_rows_increment = max_rows_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+out:
+    return ret;
+}
+
+static int
+migration_table_expand(migration_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_rows) {
+        ret = expand_column((void **) &self->left, new_size, sizeof(double));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->right, new_size, sizeof(double));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->node, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->source, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->dest, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->time, new_size, sizeof(double));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_rows = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+migration_table_set_columns(migration_table_t *self, size_t num_rows, double *left,
+        double *right, uint32_t *node, uint32_t *source, uint32_t *dest, double *time)
+{
+    int ret;
+
+    ret = migration_table_expand(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    if (left == NULL || right == NULL || node == NULL || source == NULL
+            || dest == NULL || time == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    memcpy(self->left, left, num_rows * sizeof(double));
+    memcpy(self->right, right, num_rows * sizeof(double));
+    memcpy(self->node, node, num_rows * sizeof(uint32_t));
+    memcpy(self->source, right, num_rows * sizeof(uint32_t));
+    memcpy(self->dest, right, num_rows * sizeof(uint32_t));
+    memcpy(self->time, right, num_rows * sizeof(double));
+    self->num_rows = num_rows;
+out:
+    return ret;
+}
+
+int
+migration_table_add_row(migration_table_t *self, double left, double right,
+        uint32_t node, uint32_t source, uint32_t dest, double time)
+{
+    int ret = 0;
+    size_t new_size;
+
+    if (self->num_rows == self->max_rows) {
+        new_size = self->max_rows + self->max_rows_increment;
+        ret = migration_table_expand(self, new_size);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    self->left[self->num_rows] = left;
+    self->right[self->num_rows] = right;
+    self->node[self->num_rows] = node;
+    self->source[self->num_rows] = source;
+    self->dest[self->num_rows] = dest;
+    self->time[self->num_rows] = time;
+    self->num_rows++;
+out:
+    return ret;
+}
+
+int
+migration_table_reset(migration_table_t *self)
+{
+    self->num_rows = 0;
+    return 0;
+}
+
+int
+migration_table_free(migration_table_t *self)
+{
+    msp_safe_free(self->left);
+    msp_safe_free(self->right);
+    msp_safe_free(self->node);
+    msp_safe_free(self->source);
+    msp_safe_free(self->dest);
+    msp_safe_free(self->time);
+    return 0;
+}
+
+void
+migration_table_print_state(migration_table_t *self, FILE *out)
+{
+    size_t j;
+
+    printf("migration_table: %p:%d\t%d\t%d\n", (void *) self,
+            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
+    printf("\tindex\tleft\tright\tnode\tsource\tdest\tpopulation\n");
+    for (j = 0; j < self->num_rows; j++) {
+        printf("\t%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
+                self->right[j], self->node[j], self->source[j], self->dest[j],
+                self->time[j]);
     }
 }

@@ -188,3 +188,19 @@ class TestEdgesetTable(TestTable):
     def test_set_columns_input_sizes(self):
         equal_len_cols = ["left", "right", "parent", "num_children"]
         self.verify_set_columns_input_sizes(equal_len_cols)
+
+
+class TestMigrationsTable(TestTable):
+    columns = []
+    table_class = msprime.MigrationTable
+
+    def test_defaults(self):
+        self.verify_defaults()
+
+
+class TestMutations(TestTable):
+    columns = []
+    table_class = msprime.MutationTable
+
+    def test_defaults(self):
+        self.verify_defaults()

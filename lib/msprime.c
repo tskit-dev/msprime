@@ -2440,7 +2440,21 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     double scaled_time;
     double left, right;
     coalescence_record_t *cr;
+    migration_record_t *mr;
 
+    /* first reset the tables */
+    ret = node_table_reset(nodes);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_reset(edgesets);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = migration_table_reset(migrations);
+    if (ret != 0) {
+        goto out;
+    }
     /* Add the node definitions for the samples */
     for (j = 0; j < self->sample_size; j++) {
         scaled_time = self->samples[j].time * 4 * Ne;
@@ -2472,7 +2486,22 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
         ret = edgeset_table_add_row(edgesets, left, right, cr->node,
                 cr->num_children, cr->children);
     }
-    /* TODO migrations */
+    /* Add in the migration records */
+    for (j = 0; j < self->num_migration_records; j++) {
+        mr = &self->migration_records[j];
+        left = mr->left;
+        right = mr->right;
+        if (recomb_map != NULL) {
+            left = recomb_map_genetic_to_phys(recomb_map, mr->left);
+            right = recomb_map_genetic_to_phys(recomb_map, mr->right);
+        }
+        scaled_time = mr->time * 4 * Ne;
+        ret = migration_table_add_row(migrations, left, right, mr->node,
+                mr->source, mr->dest, scaled_time);
+        if (ret != 0) {
+            goto out;
+        }
+    }
 out:
     return ret;
 }
@@ -2695,19 +2724,6 @@ msp_get_population(msp_t *self, size_t population_id,
     *population = &self->populations[population_id];
 out:
     return ret;
-}
-
-int WARN_UNUSED
-msp_populate_tree_sequence(msp_t *self, recomb_map_t *recomb_map, mutgen_t *mutgen,
-        double Ne, size_t num_provenance_strings, const char **provenance_strings,
-        tree_sequence_t *tree_sequence)
-{
-    return tree_sequence_load_records_rescale(tree_sequence,
-        self->sample_size, self->samples,
-        self->num_coalescence_records, self->coalescence_records,
-        self->num_migration_records, self->migration_records,
-        num_provenance_strings, provenance_strings,
-        recomb_map, Ne, mutgen);
 }
 
 /* Demographic events */

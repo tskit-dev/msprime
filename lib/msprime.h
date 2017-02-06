@@ -106,22 +106,15 @@ typedef struct {
 
 typedef struct {
     size_t num_rows;
-    size_t max_num_rows;
+    size_t max_rows;
+    size_t max_rows_increment;
     uint32_t *source;
     uint32_t *dest;
     uint32_t *node;
-    uint32_t *left;
-    uint32_t *right;
+    double *left;
+    double *right;
     double *time;
 } migration_table_t;
-
-int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        size_t max_total_nodes_increment);
-int mutation_table_add_row(mutation_table_t *self, double position,
-        uint32_t num_nodes, uint32_t *nodes);
-int mutation_table_reset(mutation_table_t *self);
-int mutation_table_free(mutation_table_t *self);
-void mutation_table_print_state(mutation_table_t *self, FILE *out);
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment);
 int node_table_add_row(node_table_t *self, uint32_t flags, double time,
@@ -142,6 +135,24 @@ int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, double *le
 int edgeset_table_reset(edgeset_table_t *self);
 int edgeset_table_free(edgeset_table_t *self);
 void edgeset_table_print_state(edgeset_table_t *self, FILE *out);
+
+int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
+        size_t max_total_nodes_increment);
+int mutation_table_add_row(mutation_table_t *self, double position,
+        uint32_t num_nodes, uint32_t *nodes);
+int mutation_table_reset(mutation_table_t *self);
+int mutation_table_free(mutation_table_t *self);
+void mutation_table_print_state(mutation_table_t *self, FILE *out);
+
+int migration_table_alloc(migration_table_t *self, size_t max_rows_increment);
+int migration_table_add_row(migration_table_t *self, double left, double right,
+        uint32_t source, uint32_t node, uint32_t dest, double time);
+int migration_table_set_columns(migration_table_t *self, size_t num_rows,
+        double *left, double *right, uint32_t *node, uint32_t *source,
+        uint32_t *dest, double *time);
+int migration_table_reset(migration_table_t *self);
+int migration_table_free(migration_table_t *self);
+void migration_table_print_state(migration_table_t *self, FILE *out);
 
 /* END experimental table definitions */
 
@@ -384,14 +395,11 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t num_breakpoints;
-        size_t max_num_breakpoints;
-        double *breakpoints;
         uint32_t *node;
         uint32_t *source;
         uint32_t *dest;
-        uint32_t *left;
-        uint32_t *right;
+        double *left;
+        double *right;
         double *time;
     } migrations;
     char **provenance_strings;
@@ -601,9 +609,6 @@ int msp_get_population_configuration(msp_t *self, size_t population_id,
 int msp_get_population(msp_t *self, size_t population_id,
         population_t **population);
 int msp_is_completed(msp_t *self);
-int msp_populate_tree_sequence(msp_t *self, recomb_map_t *recomb_map, mutgen_t *mutgen,
-        double Ne, size_t num_provenance_strings, const char **provenance_strings,
-        tree_sequence_t *tree_sequence);
 
 int msp_get_model(msp_t *self);
 const char * msp_get_model_str(msp_t *self);
@@ -627,12 +632,6 @@ size_t msp_get_num_recombination_events(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self, FILE *out);
 int tree_sequence_initialise(tree_sequence_t *self);
-int tree_sequence_load_records_rescale(tree_sequence_t *self,
-        size_t num_samples, sample_t *samples,
-        size_t num_coalescence_records, coalescence_record_t *coalescence_records,
-        size_t num_migration_records, migration_record_t *migration_records,
-        size_t num_provenance_strings, const char **provenance_strings,
-        recomb_map_t *recomb_map, double Ne, mutgen_t *mutgen);
 int tree_sequence_load_records(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
         size_t num_coalescence_records, coalescence_record_t *coalescence_records,
@@ -640,7 +639,7 @@ int tree_sequence_load_records(tree_sequence_t *self,
         size_t num_migration_records, migration_record_t *migration_records,
         size_t num_provenance_strings, const char **provenance_strings);
 int tree_sequence_load_tables_tmp(tree_sequence_t *self,
-        node_table_t *nodes, edgeset_table_t *edgesets,
+        node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
         mutation_table_t *mutations);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
