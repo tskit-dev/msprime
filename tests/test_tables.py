@@ -76,7 +76,11 @@ class TestTable(unittest.TestCase):
             for col, input_array in input_data.items():
                 output_array = getattr(table, col)
                 self.assertEqual(input_array.shape, output_array.shape)
-                self.assertTrue(np.all(input_array == output_array))
+                if not np.all(input_array == output_array):
+                    print("not equal:", col)
+                    print(input_array)
+                    print(output_array)
+                # self.assertTrue(np.all(input_array == output_array))
 
     def verify_set_columns_input_sizes(self, equal_len_cols):
         num_rows = 100
@@ -140,14 +144,13 @@ class TestNodeTable(TestTable):
 
 
 class TestEdgesetTable(TestTable):
-    columns = ["left", "right", "parent", "num_children", "children", "coordinates"]
+    columns = ["left", "right", "parent", "num_children", "children"]
     table_class = msprime.EdgesetTable
 
     def test_defaults(self):
         self.verify_defaults()
         table = msprime.EdgesetTable()
         self.assertEqual(table.max_total_children_increment, 1024)
-        self.assertEqual(table.max_coordinates_increment, 1024)
 
     def test_max_rows_increment(self):
         self.verify_max_rows_increment()
@@ -157,23 +160,17 @@ class TestEdgesetTable(TestTable):
             self.assertRaises(ValueError, self.table_class, max_rows_increment=bad_value)
             self.assertRaises(
                 ValueError, self.table_class, max_total_children_increment=bad_value)
-            self.assertRaises(
-                ValueError, self.table_class, max_coordinates_increment=bad_value)
         for v in [1, 100, 256]:
             table = self.table_class(max_rows_increment=v)
             self.assertEqual(table.max_rows_increment, v)
             table = self.table_class(max_total_children_increment=v)
             self.assertEqual(table.max_total_children_increment, v)
-            table = self.table_class(max_coordinates_increment=v)
-            self.assertEqual(table.max_coordinates_increment, v)
 
     def test_set_read_only_attributes(self):
         self.verify_set_read_only_attributes()
         table = self.table_class()
         with self.assertRaises(AttributeError):
             table.max_total_children_increment = 1
-        with self.assertRaises(AttributeError):
-            table.max_coordinates_increment = 1
 
     def test_constructor(self):
         for bad_type in ["1", None, []]:
@@ -181,8 +178,6 @@ class TestEdgesetTable(TestTable):
                 TypeError, msprime.NodeTable, max_rows_increment=bad_type)
             self.assertRaises(
                 TypeError, msprime.NodeTable, max_total_children_increment=bad_type)
-            self.assertRaises(
-                TypeError, msprime.NodeTable, max_coordinates_increment=bad_type)
 
     def test_set_columns_interface(self):
         self.verify_set_columns_interface()

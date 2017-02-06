@@ -77,11 +77,8 @@ typedef struct {
     size_t max_total_nodes;
     size_t max_total_nodes_increment;
     uint32_t *num_nodes;
-    uint32_t *site;
     uint32_t *nodes;
-    double *coordinate;
-    double *position; /* REMOVE */
-
+    double *position;
 } mutation_table_t;
 
 typedef struct {
@@ -100,15 +97,11 @@ typedef struct {
     size_t total_children;
     size_t max_total_children;
     size_t max_total_children_increment;
-    size_t num_coordinates;
-    size_t max_coordinates;
-    size_t max_coordinates_increment;
-    uint32_t *left;
-    uint32_t *right;
+    double *left;
+    double *right;
     uint32_t *parent;
     uint32_t *num_children;
     uint32_t *children;
-    double *coordinate;
 } edgeset_table_t;
 
 typedef struct {
@@ -140,15 +133,12 @@ int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
 
 int edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
-        size_t max_total_children_increment, size_t max_coordinates_increment);
-int edgeset_table_add_coordinate(edgeset_table_t *self, double coordinate);
-int edgeset_table_finalise_coordinates(edgeset_table_t *edgesets);
+        size_t max_total_children_increment);
 int edgeset_table_add_row(edgeset_table_t *self, double left, double right,
         uint32_t parent, uint32_t num_children, uint32_t *children);
-int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, uint32_t *left,
-        uint32_t *right, uint32_t *parent, uint32_t *num_children,
-        size_t total_children, uint32_t *children,
-        size_t num_coordinates, double *coordinates);
+int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, double *left,
+        double *right, uint32_t *parent, uint32_t *num_children,
+        size_t total_children, uint32_t *children);
 int edgeset_table_reset(edgeset_table_t *self);
 int edgeset_table_free(edgeset_table_t *self);
 void edgeset_table_print_state(edgeset_table_t *self, FILE *out);

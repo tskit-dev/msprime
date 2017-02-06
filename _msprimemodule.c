@@ -1127,16 +1127,13 @@ EdgesetTable_init(EdgesetTable *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {
-        "max_rows_increment", "max_total_children_increment",
-        "max_coordinates_increment", NULL};
+        "max_rows_increment", "max_total_children_increment", NULL};
     Py_ssize_t max_rows_increment = 1024;
     Py_ssize_t max_total_children_increment = 1024;
-    Py_ssize_t max_coordinates_increment = 1024;
 
     self->edgeset_table = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nnn", kwlist,
-                &max_rows_increment, &max_total_children_increment,
-                &max_coordinates_increment)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
+                &max_rows_increment, &max_total_children_increment)) {
         goto out;
     }
     if (max_rows_increment <= 0) {
@@ -1147,17 +1144,13 @@ EdgesetTable_init(EdgesetTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_total_children_increment must be positive");
         goto out;
     }
-    if (max_coordinates_increment <= 0) {
-        PyErr_SetString(PyExc_ValueError, "max_coordinates_increment must be positive");
-        goto out;
-    }
     self->edgeset_table = PyMem_Malloc(sizeof(edgeset_table_t));
     if (self->edgeset_table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     err = edgeset_table_alloc(self->edgeset_table, max_rows_increment,
-            max_total_children_increment, max_coordinates_increment);
+            max_total_children_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1174,7 +1167,6 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     int err;
     size_t num_rows = 0;
     size_t total_children = 0;
-    size_t num_coordinates = 0;
     PyObject *left_input = NULL;
     PyArrayObject *left_array = NULL;
     PyObject *right_input = NULL;
@@ -1183,24 +1175,22 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     PyArrayObject *parent_array = NULL;
     PyObject *num_children_input = NULL;
     PyArrayObject *num_children_array = NULL;
-    PyObject *coordinates_input = NULL;
-    PyArrayObject *coordinates_array = NULL;
     PyObject *children_input = NULL;
     PyArrayObject *children_array = NULL;
     static char *kwlist[] = {
-        "left", "right", "parent", "children", "coordinates", "num_children", NULL};
+        "left", "right", "parent", "children", "num_children", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOOOO", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOOO", kwlist,
                 &left_input, &right_input, &parent_input, &children_input,
-                &coordinates_input, &num_children_input)) {
+                &num_children_input)) {
         goto out;
     }
 
-    left_array = table_read_column_array(left_input, NPY_UINT32, &num_rows, false);
+    left_array = table_read_column_array(left_input, NPY_FLOAT64, &num_rows, false);
     if (left_array == NULL) {
         goto out;
     }
-    right_array = table_read_column_array(right_input, NPY_UINT32, &num_rows, true);
+    right_array = table_read_column_array(right_input, NPY_FLOAT64, &num_rows, true);
     if (right_array == NULL) {
         goto out;
     }
@@ -1218,16 +1208,10 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     if (children_array == NULL) {
         goto out;
     }
-    coordinates_array = table_read_column_array(coordinates_input, NPY_FLOAT64,
-            &num_coordinates, false);
-    if (coordinates_array == NULL) {
-        goto out;
-    }
     err = edgeset_table_set_columns(self->edgeset_table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array),
             PyArray_DATA(parent_array), PyArray_DATA(num_children_array),
-            total_children, PyArray_DATA(children_array),
-            num_coordinates, PyArray_DATA(coordinates_array));
+            total_children, PyArray_DATA(children_array));
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1238,7 +1222,6 @@ out:
     Py_XDECREF(right_array);
     Py_XDECREF(parent_array);
     Py_XDECREF(children_array);
-    Py_XDECREF(coordinates_array);
     Py_XDECREF(num_children_array);
     return ret;
 }
@@ -1268,18 +1251,6 @@ out:
 }
 
 static PyObject *
-EdgesetTable_get_max_coordinates_increment(EdgesetTable *self, void *closure)
-{
-    PyObject *ret = NULL;
-    if (EdgesetTable_check_state(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->edgeset_table->max_coordinates_increment);
-out:
-    return ret;
-}
-
-static PyObject *
 EdgesetTable_get_num_rows(EdgesetTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -1300,8 +1271,8 @@ EdgesetTable_get_left(EdgesetTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edgeset_table->num_rows, self->edgeset_table->left, NPY_UINT32,
-            sizeof(uint32_t));
+            self->edgeset_table->num_rows, self->edgeset_table->left, NPY_FLOAT64,
+            sizeof(double));
 out:
     return ret;
 }
@@ -1315,8 +1286,8 @@ EdgesetTable_get_right(EdgesetTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edgeset_table->num_rows, self->edgeset_table->right, NPY_UINT32,
-            sizeof(uint32_t));
+            self->edgeset_table->num_rows, self->edgeset_table->right, NPY_FLOAT64,
+            sizeof(double));
 out:
     return ret;
 }
@@ -1366,30 +1337,12 @@ out:
     return ret;
 }
 
-static PyObject *
-EdgesetTable_get_coordinates(EdgesetTable *self, void *closure)
-{
-    PyObject *ret = NULL;
-
-    if (EdgesetTable_check_state(self) != 0) {
-        goto out;
-    }
-    ret = table_get_column_array(
-            self->edgeset_table->num_coordinates, self->edgeset_table->coordinate,
-            NPY_FLOAT64, sizeof(double));
-out:
-    return ret;
-}
-
 static PyGetSetDef EdgesetTable_getsetters[] = {
     {"max_rows_increment",
         (getter) EdgesetTable_get_max_rows_increment, NULL,
         "The size increment"},
     {"max_total_children_increment",
         (getter) EdgesetTable_get_max_total_children_increment, NULL,
-        "The total children increment"},
-    {"max_coordinates_increment",
-        (getter) EdgesetTable_get_max_coordinates_increment, NULL,
         "The total children increment"},
     {"num_rows", (getter) EdgesetTable_get_num_rows, NULL,
         "The number of rows in the table."},
@@ -1398,8 +1351,6 @@ static PyGetSetDef EdgesetTable_getsetters[] = {
     {"parent", (getter) EdgesetTable_get_parent, NULL, "The parent array"},
     {"num_children", (getter) EdgesetTable_get_num_children, NULL, "The num_children array"},
     {"children", (getter) EdgesetTable_get_children, NULL, "The children array"},
-    {"coordinates", (getter) EdgesetTable_get_coordinates, NULL,
-        "The coordinates referred to in the left and right arrays"},
     {NULL}  /* Sentinel */
 };
 

@@ -73,6 +73,50 @@ cmp_record_time_left(const void *a, const void *b) {
     return ret;
 }
 
+static int
+sort_unique(size_t *num_rows, double *coordinates)
+{
+    size_t j, k;
+
+    /* TODO need to write some test cases for this, exploring the edge cases */
+    qsort(coordinates, *num_rows, sizeof(double), cmp_double);
+    /* Now go through the positions and keep the unique values. */
+    k = 0;
+    for (j = 1; j < *num_rows; j++) {
+        if (coordinates[j] != coordinates[k]) {
+            k++;
+            coordinates[k] = coordinates[j];
+        }
+    }
+    if (*num_rows > 0) {
+        k++;
+        coordinates[k] = coordinates[*num_rows - 1];
+    }
+    assert(k <= *num_rows);
+    *num_rows = k;
+    return 0;
+}
+
+static int
+get_index(size_t num_rows, double *coordinates, double x, uint32_t *index)
+{
+    int ret = MSP_ERR_GENERIC;
+    double *result;
+    ptrdiff_t diff;
+
+    result = bsearch(&x, coordinates, num_rows, sizeof(double), cmp_double);
+    if (result == NULL) {
+        ret = MSP_ERR_COORDINATE_NOT_FOUND;
+        goto out;
+    }
+    diff = result - coordinates;
+    assert(coordinates[diff] == x);
+    *index = (uint32_t) diff;
+    ret = 0;
+out:
+    return ret;
+}
+
 static void
 tree_sequence_check_state(tree_sequence_t *self)
 {
@@ -1014,13 +1058,33 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     node_table_t *nodes, edgeset_table_t *edgesets, mutation_table_t *mutations)
 {
     int ret = 0;
-    size_t j, offset;
+    size_t j, offset, num_coordinates;
+    uint32_t left, right;
+    double *coordinates = NULL;
 
+    /* compute the breakpoints from the input left and right coordinates. */
+    num_coordinates = 2 * edgesets->num_rows;
+    // The +1 here is needed for edge case behaviour in the sort_unique funtion.
+    // Since we'll be removing this code path when removing the breakpoints
+    // array from the file format there's no point in worrying too much about
+    // this.
+    coordinates = malloc((num_coordinates + 1) * sizeof(double));
+    if (coordinates == NULL) {
+        goto out;
+    }
+    for (j = 0; j < edgesets->num_rows; j++) {
+        coordinates[2 * j] = edgesets->left[j];
+        coordinates[2 * j + 1] = edgesets->right[j];
+    }
+    ret = sort_unique(&num_coordinates, coordinates);
+    if (ret != 0) {
+        goto out;
+    }
+    self->trees.num_breakpoints = num_coordinates;
+    self->sequence_length = coordinates[num_coordinates - 1];
     self->trees.num_nodes = nodes->num_rows;
     self->trees.total_child_nodes = edgesets->total_children;
     self->trees.num_records = edgesets->num_rows;
-    self->trees.num_breakpoints = edgesets->num_coordinates;
-    self->sequence_length = edgesets->coordinate[edgesets->num_coordinates - 1];
     self->sample_size = 0;
     for (j = 0; j < nodes->num_rows; j++) {
         if (nodes->flags[j] & MSP_NODE_SAMPLE) {
@@ -1034,15 +1098,10 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     if (ret != 0) {
         goto out;
     }
-    memcpy(self->trees.breakpoints, edgesets->coordinate,
-            edgesets->num_coordinates * sizeof(double));
+    memcpy(self->trees.breakpoints, coordinates, num_coordinates * sizeof(double));
     memcpy(self->trees.nodes.time, nodes->time, nodes->num_rows * sizeof(double));
     memcpy(self->trees.nodes.population, nodes->population,
             nodes->num_rows * sizeof(uint32_t));
-    memcpy(self->trees.records.left, edgesets->left,
-            edgesets->num_rows * sizeof(uint32_t));
-    memcpy(self->trees.records.right, edgesets->right,
-            edgesets->num_rows * sizeof(uint32_t));
     memcpy(self->trees.records.node, edgesets->parent,
             edgesets->num_rows * sizeof(uint32_t));
     memcpy(self->trees.records.num_children, edgesets->num_children,
@@ -1056,6 +1115,22 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
         offset += self->trees.records.num_children[j];
     }
     assert(offset == self->trees.total_child_nodes);
+
+    /* Get the coordinate indexes. */
+    for (j = 0; j < self->trees.num_records; j++) {
+        ret = get_index(num_coordinates, coordinates, edgesets->left[j], &left);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = get_index(num_coordinates, coordinates, edgesets->right[j], &right);
+        if (ret != 0) {
+            goto out;
+        }
+        assert(left < right);
+        self->trees.records.left[j] = left;
+        self->trees.records.right[j] = right;
+    }
+
     ret = tree_sequence_build_indexes(self);
     if (ret != 0) {
         goto out;
@@ -1082,6 +1157,9 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
         goto out;
     }
 out:
+    if (coordinates != NULL) {
+        free(coordinates);
+    }
     return ret;
 }
 

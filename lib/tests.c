@@ -605,7 +605,7 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_FATAL(mutations != NULL);
     gsl_rng_set(rng, 1);
 
-    ret = edgeset_table_alloc(edgesets, 10, 10, 10);
+    ret = edgeset_table_alloc(edgesets, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = node_table_alloc(nodes, 10);
     CU_ASSERT_EQUAL(ret, 0);
@@ -685,6 +685,9 @@ get_example_tree_sequence(uint32_t sample_size,
     node_table_free(nodes);
     edgeset_table_free(edgesets);
     mutation_table_free(mutations);
+    free(nodes);
+    free(edgesets);
+    free(mutations);
     return tree_seq;
 }
 

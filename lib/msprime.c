@@ -2438,6 +2438,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     uint32_t last_node;
     size_t j;
     double scaled_time;
+    double left, right;
     coalescence_record_t *cr;
 
     /* Add the node definitions for the samples */
@@ -2449,24 +2450,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             goto out;
         }
     }
-
-    /* First setup the coordinates for the edgesets. */
-    for (j = 0; j < self->num_coalescence_records; j++) {
-        cr = &self->coalescence_records[j];
-        ret = edgeset_table_add_coordinate(edgesets, cr->left);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = edgeset_table_add_coordinate(edgesets, cr->right);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    ret = edgeset_table_finalise_coordinates(edgesets);
-    if (ret != 0) {
-        goto out;
-    }
-    /* Now go through the records */
+    /* Go through the records to add nodes and edgesets */
     last_node = MSP_NULL_NODE;
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
@@ -2479,18 +2463,16 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             }
             last_node = cr->node;
         }
-        ret = edgeset_table_add_row(edgesets, cr->left, cr->right,
-            cr->node, cr->num_children, cr->children);
+        left = cr->left;
+        right = cr->right;
+        if (recomb_map != NULL) {
+            left = recomb_map_genetic_to_phys(recomb_map, cr->left);
+            right = recomb_map_genetic_to_phys(recomb_map, cr->right);
+        }
+        ret = edgeset_table_add_row(edgesets, left, right, cr->node,
+                cr->num_children, cr->children);
     }
     /* TODO migrations */
-
-    if (recomb_map != NULL) {
-        ret = recomb_map_genetic_to_phys_bulk(recomb_map,
-            edgesets->coordinate, edgesets->num_coordinates);
-        if (ret != 0) {
-            goto out;
-        }
-    }
 out:
     return ret;
 }

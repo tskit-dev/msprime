@@ -240,8 +240,8 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
 
     offset = 0;
     for (j = 0; j < edgesets->num_rows; j++) {
-        left = edgesets->coordinate[edgesets->left[j]];
-        right = edgesets->coordinate[edgesets->right[j]];
+        left = edgesets->left[j];
+        right = edgesets->right[j];
         distance = right - left;
         parent = edgesets->parent[j];
         for (k = 0; k < edgesets->num_children[j]; k++) {
