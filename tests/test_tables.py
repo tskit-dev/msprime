@@ -142,9 +142,8 @@ class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
     table_class = msprime.MutationTable
 
 
-# class TestMigrationsTable(CommonTestsMixin):
-#     columns = []
-#     table_class = msprime.MigrationTable
-
-#     def test_defaults(self):
-#         self.verify_defaults()
+class TestMigrationsTable(unittest.TestCase, CommonTestsMixin):
+    columns = ["left", "right", "node", "source", "dest", "time"]
+    input_parameters = ["max_rows_increment"]
+    equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]
+    table_class = msprime.MigrationTable

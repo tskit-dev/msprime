@@ -570,9 +570,9 @@ migration_table_set_columns(migration_table_t *self, size_t num_rows, double *le
     memcpy(self->left, left, num_rows * sizeof(double));
     memcpy(self->right, right, num_rows * sizeof(double));
     memcpy(self->node, node, num_rows * sizeof(uint32_t));
-    memcpy(self->source, right, num_rows * sizeof(uint32_t));
-    memcpy(self->dest, right, num_rows * sizeof(uint32_t));
-    memcpy(self->time, right, num_rows * sizeof(double));
+    memcpy(self->source, source, num_rows * sizeof(uint32_t));
+    memcpy(self->dest, dest, num_rows * sizeof(uint32_t));
+    memcpy(self->time, time, num_rows * sizeof(double));
     self->num_rows = num_rows;
 out:
     return ret;

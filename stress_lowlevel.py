@@ -46,8 +46,9 @@ def main():
     if args.module is not None:
         test_modules = [modules[args.module]]
 
-    print("iter\ttests\terr\tfail\tskip\tRSS\tmin\tmax")
+    print("iter\ttests\terr\tfail\tskip\tRSS\tmin\tmax\tmax@iter")
     max_rss = 0
+    max_rss_iter = 0
     min_rss = 1e100
     iteration = 0
     last_print = time.time()
@@ -73,6 +74,7 @@ def main():
         rusage = resource.getrusage(resource.RUSAGE_SELF)
         if max_rss < rusage.ru_maxrss:
             max_rss = rusage.ru_maxrss
+            max_rss_iter = iteration
         if min_rss > rusage.ru_maxrss:
             min_rss = rusage.ru_maxrss
 
@@ -81,7 +83,7 @@ def main():
             print(
                 iteration, result.testsRun, len(result.failures),
                 len(result.errors), len(result.skipped),
-                rusage.ru_maxrss, min_rss,  max_rss,
+                rusage.ru_maxrss, min_rss,  max_rss, max_rss_iter,
                 sep="\t", end="\r")
             last_print = time.time()
             sys.stdout.flush()

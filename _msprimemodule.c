@@ -1469,36 +1469,66 @@ static PyObject *
 MigrationTable_set_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
-    /* int err; */
-    /* size_t num_rows; */
-    /* PyObject *time_input = NULL; */
-    /* PyObject *flags_input = NULL; */
-    /* PyArrayObject *time_array = NULL; */
-    /* PyArrayObject *flags_array = NULL; */
-    /* static char *kwlist[] = {"flags", "time", NULL}; */
+    int err;
+    size_t num_rows;
+    PyObject *left_input = NULL;
+    PyArrayObject *left_array = NULL;
+    PyObject *right_input = NULL;
+    PyArrayObject *right_array = NULL;
+    PyObject *node_input = NULL;
+    PyArrayObject *node_array = NULL;
+    PyObject *source_input = NULL;
+    PyArrayObject *source_array = NULL;
+    PyObject *dest_input = NULL;
+    PyArrayObject *dest_array = NULL;
+    PyObject *time_input = NULL;
+    PyArrayObject *time_array = NULL;
+    static char *kwlist[] = {"left", "right", "node", "source", "dest", "time", NULL};
 
-    /* if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO", kwlist, */
-    /*             &flags_input, &time_input)) { */
-    /*     goto out; */
-    /* } */
-    /* flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false); */
-    /* if (flags_array == NULL) { */
-    /*     goto out; */
-    /* } */
-    /* time_array = table_read_column_array(time_input, NPY_FLOAT64, &num_rows, true); */
-    /* if (time_array == NULL) { */
-    /*     goto out; */
-    /* } */
-    /* err = migration_table_set_columns(self->migration_table, num_rows, */
-    /*         PyArray_DATA(flags_array), PyArray_DATA(time_array), NULL); */
-    /* if (err != 0) { */
-    /*     handle_library_error(err); */
-    /*     goto out; */
-    /* } */
-    /* ret = Py_BuildValue(""); */
-/* out: */
-    /* Py_XDECREF(flags_array); */
-    /* Py_XDECREF(time_array); */
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOOOO", kwlist,
+                &left_input, &right_input, &node_input, &source_input, &dest_input,
+                &time_input)) {
+        goto out;
+    }
+    left_array = table_read_column_array(left_input, NPY_FLOAT64, &num_rows, false);
+    if (left_array == NULL) {
+        goto out;
+    }
+    right_array = table_read_column_array(right_input, NPY_FLOAT64, &num_rows, true);
+    if (right_array == NULL) {
+        goto out;
+    }
+    node_array = table_read_column_array(node_input, NPY_UINT32, &num_rows, true);
+    if (node_array == NULL) {
+        goto out;
+    }
+    source_array = table_read_column_array(source_input, NPY_UINT32, &num_rows, true);
+    if (source_array == NULL) {
+        goto out;
+    }
+    dest_array = table_read_column_array(dest_input, NPY_UINT32, &num_rows, true);
+    if (dest_array == NULL) {
+        goto out;
+    }
+    time_array = table_read_column_array(time_input, NPY_FLOAT64, &num_rows, true);
+    if (time_array == NULL) {
+        goto out;
+    }
+    err = migration_table_set_columns(self->migration_table, num_rows,
+            PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
+            PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    Py_XDECREF(left_array);
+    Py_XDECREF(right_array);
+    Py_XDECREF(node_array);
+    Py_XDECREF(source_array);
+    Py_XDECREF(dest_array);
+    Py_XDECREF(time_array);
     return ret;
 }
 
@@ -1526,41 +1556,101 @@ out:
     return ret;
 }
 
-/* static PyObject * */
-/* MigrationTable_get_time(MigrationTable *self, void *closure) */
-/* { */
-/*     PyObject *ret = NULL; */
+static PyObject *
+MigrationTable_get_left(MigrationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
 
-/*     if (MigrationTable_check_state(self) != 0) { */
-/*         goto out; */
-/*     } */
-/*     ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->time, */
-/*             NPY_FLOAT64, sizeof(double)); */
-/* out: */
-/*     return ret; */
-/* } */
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->left,
+            NPY_FLOAT64, sizeof(double));
+out:
+    return ret;
+}
 
-/* static PyObject * */
-/* MigrationTable_get_flags(MigrationTable *self, void *closure) */
-/* { */
-/*     PyObject *ret = NULL; */
+static PyObject *
+MigrationTable_get_right(MigrationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
 
-/*     if (MigrationTable_check_state(self) != 0) { */
-/*         goto out; */
-/*     } */
-/*     ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->flags, */
-/*             NPY_UINT32, sizeof(uint32_t)); */
-/* out: */
-/*     return ret; */
-/* } */
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->right,
+            NPY_FLOAT64, sizeof(double));
+out:
+    return ret;
+}
+
+static PyObject *
+MigrationTable_get_time(MigrationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->time,
+            NPY_FLOAT64, sizeof(double));
+out:
+    return ret;
+}
+
+static PyObject *
+MigrationTable_get_node(MigrationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->node,
+            NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+MigrationTable_get_source(MigrationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->source,
+            NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+MigrationTable_get_dest(MigrationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->dest,
+            NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
 
 static PyGetSetDef MigrationTable_getsetters[] = {
     {"max_rows_increment",
         (getter) MigrationTable_get_max_rows_increment, NULL, "The size increment"},
     {"num_rows", (getter) MigrationTable_get_num_rows, NULL,
         "The number of rows in the table."},
-    /* {"time", (getter) MigrationTable_get_time, NULL, "The time array"}, */
-    /* {"flags", (getter) MigrationTable_get_flags, NULL, "The flags array"}, */
+    {"left", (getter) MigrationTable_get_left, NULL, "The left array"},
+    {"right", (getter) MigrationTable_get_right, NULL, "The right array"},
+    {"node", (getter) MigrationTable_get_node, NULL, "The node array"},
+    {"source", (getter) MigrationTable_get_source, NULL, "The source array"},
+    {"dest", (getter) MigrationTable_get_dest, NULL, "The dest array"},
+    {"time", (getter) MigrationTable_get_time, NULL, "The time array"},
     {NULL}  /* Sentinel */
 };
 
