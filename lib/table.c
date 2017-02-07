@@ -417,7 +417,7 @@ mutation_table_add_row(mutation_table_t *self, double position,
             goto out;
         }
     }
-    if (self->total_nodes + num_nodes >= self->max_total_nodes) {
+    while (self->total_nodes + num_nodes >= self->max_total_nodes) {
         new_size = self->max_total_nodes + self->max_total_nodes_increment;
         ret = mutation_table_expand_nodes(self, new_size);
         if (ret != 0) {
