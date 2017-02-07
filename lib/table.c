@@ -47,101 +47,6 @@ out:
 }
 
 /*************************
- * mutation table
- *************************/
-
-int
-mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        size_t max_total_nodes_increment)
-{
-    int ret = 0;
-
-    memset(self, 0, sizeof(mutation_table_t));
-    self->max_rows_increment = max_rows_increment;
-    self->max_total_nodes_increment = max_total_nodes_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_total_nodes = 0;
-    self->total_nodes = 0;
-    return ret;
-}
-
-int
-mutation_table_add_row(mutation_table_t *self, double position,
-        uint32_t num_nodes, uint32_t *nodes)
-{
-    int ret = 0;
-    size_t new_size;
-
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = expand_column((void **) &self->position, new_size, sizeof(double));
-        if (ret != 0) {
-            goto out;
-        }
-        ret = expand_column((void **) &self->num_nodes, new_size, sizeof(uint32_t));
-        if (ret != 0) {
-            goto out;
-        }
-        self->max_rows = new_size;
-    }
-    if (self->total_nodes + num_nodes >= self->max_total_nodes) {
-        new_size = self->max_total_nodes + self->max_total_nodes_increment;
-        ret = expand_column((void **) &self->nodes, new_size, sizeof(uint32_t));
-        if (ret != 0) {
-            goto out;
-        }
-        self->max_total_nodes = new_size;
-    }
-    self->position[self->num_rows] = position;
-    self->num_nodes[self->num_rows] = num_nodes;
-    memcpy(self->nodes + self->total_nodes, nodes, num_nodes * sizeof(uint32_t));
-    self->total_nodes += num_nodes;
-    self->num_rows++;
-out:
-    return ret;
-}
-
-int
-mutation_table_reset(mutation_table_t *self)
-{
-    self->num_rows = 0;
-    self->total_nodes = 0;
-    return 0;
-}
-
-int
-mutation_table_free(mutation_table_t *self)
-{
-    msp_safe_free(self->position);
-    msp_safe_free(self->num_nodes);
-    msp_safe_free(self->nodes);
-    return 0;
-}
-
-void
-mutation_table_print_state(mutation_table_t *self, FILE *out)
-{
-    size_t j, k, offset;
-
-    printf("mutation_table: %p:%d\t%d\t%d\n", (void *) self,
-            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    printf("\tindex\tposition\tnodes\n");
-    offset = 0;
-    for (j = 0; j < self->num_rows; j++) {
-        printf("\t%d\t%f\t", (int) j, self->position[j]);
-        for (k = 0; k < self->num_nodes[j]; k++) {
-            printf("%d", self->nodes[offset]);
-            offset++;
-            if (k < self->num_nodes[j] - 1) {
-                printf(",");
-            }
-        }
-        printf("\n");
-    }
-}
-
-/*************************
  * node table
  *************************/
 
@@ -192,12 +97,12 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
 {
     int ret;
 
-    ret = node_table_expand(self, num_rows);
-    if (ret != 0) {
-        goto out;
-    }
     if (flags == NULL || time == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = node_table_expand(self, num_rows);
+    if (ret != 0) {
         goto out;
     }
     memcpy(self->flags, flags, num_rows * sizeof(uint32_t));
@@ -433,6 +338,158 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
                 printf(",");
             }
             offset++;
+        }
+        printf("\n");
+    }
+}
+
+/*************************
+ * mutation table
+ *************************/
+
+int
+mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
+        size_t max_total_nodes_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(mutation_table_t));
+    self->max_rows_increment = max_rows_increment;
+    self->max_total_nodes_increment = max_total_nodes_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    self->max_total_nodes = 0;
+    self->total_nodes = 0;
+    return ret;
+}
+
+static int
+mutation_table_expand_main_columns(mutation_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_rows) {
+        ret = expand_column((void **) &self->position, new_size, sizeof(double));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->num_nodes, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_rows = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
+mutation_table_expand_nodes(mutation_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_total_nodes) {
+        ret = expand_column((void **) &self->nodes, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_total_nodes = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+mutation_table_add_row(mutation_table_t *self, double position,
+        uint32_t num_nodes, uint32_t *nodes)
+{
+    int ret = 0;
+    size_t new_size;
+
+    if (self->num_rows == self->max_rows) {
+        new_size = self->max_rows + self->max_rows_increment;
+        ret = mutation_table_expand_main_columns(self, new_size);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (self->total_nodes + num_nodes >= self->max_total_nodes) {
+        new_size = self->max_total_nodes + self->max_total_nodes_increment;
+        ret = mutation_table_expand_nodes(self, new_size);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    self->position[self->num_rows] = position;
+    self->num_nodes[self->num_rows] = num_nodes;
+    memcpy(self->nodes + self->total_nodes, nodes, num_nodes * sizeof(uint32_t));
+    self->total_nodes += num_nodes;
+    self->num_rows++;
+out:
+    return ret;
+}
+
+int
+mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *position,
+        uint32_t *num_nodes, size_t total_nodes, uint32_t *nodes)
+{
+    int ret = 0;
+
+    if (position == NULL || num_nodes == NULL || nodes == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = mutation_table_expand_main_columns(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_expand_nodes(self, total_nodes);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->position, position, num_rows * sizeof(double));
+    memcpy(self->num_nodes, num_nodes, num_rows * sizeof(uint32_t));
+    memcpy(self->nodes, nodes, total_nodes * sizeof(uint32_t));
+    self->num_rows = num_rows;
+    self->total_nodes = total_nodes;
+out:
+    return ret;
+}
+
+int
+mutation_table_reset(mutation_table_t *self)
+{
+    self->num_rows = 0;
+    self->total_nodes = 0;
+    return 0;
+}
+
+int
+mutation_table_free(mutation_table_t *self)
+{
+    msp_safe_free(self->position);
+    msp_safe_free(self->num_nodes);
+    msp_safe_free(self->nodes);
+    return 0;
+}
+
+void
+mutation_table_print_state(mutation_table_t *self, FILE *out)
+{
+    size_t j, k, offset;
+
+    printf("mutation_table: %p:%d\t%d\t%d\n", (void *) self,
+            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
+    printf("\tindex\tposition\tnodes\n");
+    offset = 0;
+    for (j = 0; j < self->num_rows; j++) {
+        printf("\t%d\t%f\t", (int) j, self->position[j]);
+        for (k = 0; k < self->num_nodes[j]; k++) {
+            printf("%d", self->nodes[offset]);
+            offset++;
+            if (k < self->num_nodes[j] - 1) {
+                printf(",");
+            }
         }
         printf("\n");
     }

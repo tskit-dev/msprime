@@ -1682,75 +1682,48 @@ static PyObject *
 MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
-    /* int err; */
-    /* size_t num_rows = 0; */
-    /* size_t total_nodes = 0; */
-    /* size_t num_coordinates = 0; */
-    /* PyObject *left_input = NULL; */
-    /* PyArrayObject *left_array = NULL; */
-    /* PyObject *right_input = NULL; */
-    /* PyArrayObject *right_array = NULL; */
-    /* PyObject *parent_input = NULL; */
-    /* PyArrayObject *parent_array = NULL; */
-    /* PyObject *num_children_input = NULL; */
-    /* PyArrayObject *num_children_array = NULL; */
-    /* PyObject *coordinates_input = NULL; */
-    /* PyArrayObject *coordinates_array = NULL; */
-    /* PyObject *children_input = NULL; */
-    /* PyArrayObject *children_array = NULL; */
-    /* static char *kwlist[] = { */
-    /*     "left", "right", "parent", "children", "coordinates", "num_children", NULL}; */
+    int err;
+    size_t num_rows = 0;
+    size_t total_nodes = 0;
+    PyObject *position_input = NULL;
+    PyArrayObject *position_array = NULL;
+    PyObject *num_nodes_input = NULL;
+    PyArrayObject *num_nodes_array = NULL;
+    PyObject *nodes_input = NULL;
+    PyArrayObject *nodes_array = NULL;
 
-    /* if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOOOO", kwlist, */
-    /*             &left_input, &right_input, &parent_input, &children_input, */
-    /*             &coordinates_input, &num_children_input)) { */
-    /*     goto out; */
-    /* } */
+    static char *kwlist[] = {"position", "num_nodes", "nodes", NULL};
 
-    /* left_array = table_read_column_array(left_input, NPY_UINT32, &num_rows, false); */
-    /* if (left_array == NULL) { */
-    /*     goto out; */
-    /* } */
-    /* right_array = table_read_column_array(right_input, NPY_UINT32, &num_rows, true); */
-    /* if (right_array == NULL) { */
-    /*     goto out; */
-    /* } */
-    /* parent_array = table_read_column_array(parent_input, NPY_UINT32, &num_rows, true); */
-    /* if (parent_array == NULL) { */
-    /*     goto out; */
-    /* } */
-    /* num_children_array = table_read_column_array(num_children_input, NPY_UINT32, */
-    /*         &num_rows, true); */
-    /* if (num_children_array == NULL) { */
-    /*     goto out; */
-    /* } */
-    /* children_array = table_read_column_array(children_input, NPY_UINT32, */
-    /*         &total_nodes, false); */
-    /* if (children_array == NULL) { */
-    /*     goto out; */
-    /* } */
-    /* coordinates_array = table_read_column_array(coordinates_input, NPY_FLOAT64, */
-    /*         &num_coordinates, false); */
-    /* if (coordinates_array == NULL) { */
-    /*     goto out; */
-    /* } */
-    /* err = mutation_table_set_columns(self->mutation_table, num_rows, */
-    /*         PyArray_DATA(left_array), PyArray_DATA(right_array), */
-    /*         PyArray_DATA(parent_array), PyArray_DATA(num_children_array), */
-    /*         total_nodes, PyArray_DATA(children_array), */
-    /*         num_coordinates, PyArray_DATA(coordinates_array)); */
-    /* if (err != 0) { */
-    /*     handle_library_error(err); */
-    /*     goto out; */
-    /* } */
-    /* ret = Py_BuildValue(""); */
-/* out: */
-    /* Py_XDECREF(left_array); */
-    /* Py_XDECREF(right_array); */
-    /* Py_XDECREF(parent_array); */
-    /* Py_XDECREF(children_array); */
-    /* Py_XDECREF(coordinates_array); */
-    /* Py_XDECREF(num_children_array); */
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO", kwlist,
+                &position_input, &num_nodes_input, &nodes_input)) {
+        goto out;
+    }
+
+    position_array = table_read_column_array(position_input, NPY_FLOAT64,
+            &num_rows, false);
+    if (position_array == NULL) {
+        goto out;
+    }
+    num_nodes_array = table_read_column_array(num_nodes_input, NPY_UINT32, &num_rows, true);
+    if (num_nodes_array == NULL) {
+        goto out;
+    }
+    nodes_array = table_read_column_array(nodes_input, NPY_UINT32, &total_nodes, false);
+    if (nodes_array == NULL) {
+        goto out;
+    }
+    err = mutation_table_set_columns(self->mutation_table, num_rows,
+            PyArray_DATA(position_array), PyArray_DATA(num_nodes_array),
+            total_nodes, PyArray_DATA(nodes_array));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    Py_XDECREF(position_array);
+    Py_XDECREF(num_nodes_array);
+    Py_XDECREF(nodes_array);
     return ret;
 }
 
@@ -1767,6 +1740,18 @@ out:
 }
 
 static PyObject *
+MutationTable_get_max_total_nodes_increment(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_total_nodes_increment);
+out:
+    return ret;
+}
+
+static PyObject *
 MutationTable_get_num_rows(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -1778,19 +1763,64 @@ out:
     return ret;
 }
 
+static PyObject *
+MutationTable_get_position(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_table->num_rows, self->mutation_table->position, NPY_FLOAT64,
+            sizeof(double));
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTable_get_num_nodes(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_table->num_rows, self->mutation_table->num_nodes, NPY_UINT32,
+            sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTable_get_nodes(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_table->total_nodes, self->mutation_table->nodes, NPY_UINT32,
+            sizeof(uint32_t));
+out:
+    return ret;
+}
+
 static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows_increment",
         (getter) MutationTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"num_rows", (getter) MutationTable_get_num_rows, NULL,
+    {"max_total_nodes_increment",
+        (getter) MutationTable_get_max_total_nodes_increment, NULL,
+        "The total nodes increment"},
+    {"num_rows",
+        (getter) MutationTable_get_num_rows, NULL,
         "The number of rows in the table."},
-    /* {"left", (getter) MutationTable_get_left, NULL, "The left array"}, */
-    /* {"right", (getter) MutationTable_get_right, NULL, "The right array"}, */
-    /* {"parent", (getter) MutationTable_get_parent, NULL, "The parent array"}, */
-    /* {"num_children", (getter) MutationTable_get_num_children, NULL, "The num_children array"}, */
-    /* {"children", (getter) MutationTable_get_children, NULL, "The children array"}, */
-    /* {"coordinates", (getter) MutationTable_get_coordinates, NULL, */
-    /*     "The coordinates referred to in the left and right arrays"}, */
+    {"position", (getter) MutationTable_get_position, NULL, "The position array"},
+    {"num_nodes", (getter) MutationTable_get_num_nodes, NULL, "The num_nodes array"},
+    {"nodes", (getter) MutationTable_get_nodes, NULL, "The nodes array"},
     {NULL}  /* Sentinel */
 };
 

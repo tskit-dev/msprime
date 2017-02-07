@@ -30,27 +30,35 @@ import numpy as np
 import msprime
 
 
-class TestTable(unittest.TestCase):
+class CommonTestsMixin(object):
+    """
+    Abstract base class for common table tests. Because of the design of unittest,
+    we have to make this a mixin.
+    """
 
-    columns = None
-    table_class = None
-
-    def verify_defaults(self):
-        table = self.table_class()
-        self.assertEqual(table.max_rows_increment, 1024)
-        self.assertEqual(table.num_rows, 0)
-        for colname in self.columns:
-            array = getattr(table, colname)
-            self.assertEqual(array.shape, (0,))
-
-    def verify_max_rows_increment(self):
+    def test_max_rows_increment(self):
         for bad_value in [-1, 0, -2**10]:
             self.assertRaises(ValueError, self.table_class, max_rows_increment=bad_value)
         for v in [1, 100, 256]:
             table = self.table_class(max_rows_increment=v)
             self.assertEqual(table.max_rows_increment, v)
 
-    def verify_set_columns_interface(self):
+    def test_input_parameters_errors(self):
+        self.assertGreater(len(self.input_parameters), 0)
+        for param in self.input_parameters:
+            for bad_value in [-1, 0, -2**10]:
+                self.assertRaises(ValueError, self.table_class, **{param: bad_value})
+            for bad_type in [None, ValueError, "ser"]:
+                self.assertRaises(TypeError, self.table_class, **{param: bad_type})
+
+    def test_input_parameter_values(self):
+        self.assertGreater(len(self.input_parameters), 0)
+        for param in self.input_parameters:
+            for v in [1, 100, 256]:
+                table = self.table_class(**{param: v})
+                self.assertEqual(getattr(table, param), v)
+
+    def test_set_columns_interface(self):
         valid_input = [0]
         kwargs = {c: valid_input for c in self.columns}
         # Make sure this works.
@@ -67,7 +75,39 @@ class TestTable(unittest.TestCase):
                 error_kwargs[focal_col] = bad_value
                 self.assertRaises(ValueError, table.set_columns, **error_kwargs)
 
-    def verify_set_columns_data(self):
+    def test_set_columns_input_sizes(self):
+        num_rows = 100
+        input_data = {col: np.arange(num_rows, dtype=np.uint32) for col in self.columns}
+        table = self.table_class()
+        table.set_columns(**input_data)
+        for equal_len_col_set in self.equal_len_columns:
+            for col in equal_len_col_set:
+                kwargs = dict(input_data)
+                kwargs[col] = np.zeros(1, dtype=np.uint32)
+                self.assertRaises(ValueError, table.set_columns, **kwargs)
+
+    def test_set_read_only_attributes(self):
+        table = self.table_class()
+        with self.assertRaises(AttributeError):
+            table.num_rows = 10
+        for param in self.input_parameters:
+            with self.assertRaises(AttributeError):
+                setattr(table, param, 2)
+        for col in self.columns:
+            with self.assertRaises(AttributeError):
+                setattr(table, col, np.zeros(5))
+        self.assertEqual(table.num_rows, 0)
+
+    def test_defaults(self):
+        table = self.table_class()
+        self.assertEqual(table.num_rows, 0)
+        for param in self.input_parameters:
+            self.assertEqual(getattr(table, param), 1024)
+        for colname in self.columns:
+            array = getattr(table, colname)
+            self.assertEqual(array.shape, (0,))
+
+    def test_set_columns_data(self):
         for num_rows in [0, 10, 100, 1000]:
             input_data = {
                 col: np.arange(num_rows, dtype=np.uint32) for col in self.columns}
@@ -76,131 +116,35 @@ class TestTable(unittest.TestCase):
             for col, input_array in input_data.items():
                 output_array = getattr(table, col)
                 self.assertEqual(input_array.shape, output_array.shape)
-                if not np.all(input_array == output_array):
-                    print("not equal:", col)
-                    print(input_array)
-                    print(output_array)
-                # self.assertTrue(np.all(input_array == output_array))
-
-    def verify_set_columns_input_sizes(self, equal_len_cols):
-        num_rows = 100
-        input_data = {col: np.arange(num_rows, dtype=np.uint32) for col in self.columns}
-        table = self.table_class()
-        table.set_columns(**input_data)
-        for col in equal_len_cols:
-            kwargs = dict(input_data)
-            kwargs[col] = np.zeros(1, dtype=np.uint32)
-            self.assertRaises(ValueError, table.set_columns, **kwargs)
-
-    def verify_constructor_interface(self):
-        for bad_type in ["1", None, []]:
-            self.assertRaises(TypeError, self.table_class, max_rows_increment=bad_type)
-
-    def verify_set_read_only_attributes(self):
-        table = self.table_class()
-        with self.assertRaises(AttributeError):
-            table.num_rows = 10
-        with self.assertRaises(AttributeError):
-            table.max_rows_increment = 2
-        for col in self.columns:
-            with self.assertRaises(AttributeError):
-                setattr(table, col, np.zeros(5))
-        self.assertEqual(table.num_rows, 0)
+                self.assertTrue(np.all(input_array == output_array))
 
 
-class TestNodeTable(TestTable):
+class TestNodeTable(unittest.TestCase, CommonTestsMixin):
 
     columns = ["flags", "time"]
+    input_parameters = ["max_rows_increment"]
+    equal_len_columns = [["time", "flags"]]
     table_class = msprime.NodeTable
 
-    def test_defaults(self):
-        self.verify_defaults()
 
-    def test_constructor(self):
-        self.verify_constructor_interface()
+class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
 
-    def test_set_read_only_attributes(self):
-        self.verify_set_read_only_attributes()
-
-    def test_set_columns_interface(self):
-        self.verify_set_columns_interface()
-        table = msprime.NodeTable()
-        # Must specify both time and flags.
-        self.assertRaises(TypeError, table.set_columns, time=[1, 2])
-        self.assertRaises(TypeError, table.set_columns, flags=[1, 2])
-        # Dimensions must be equal
-        self.assertRaises(ValueError, table.set_columns, time=[1, 2], flags=[1])
-        self.assertRaises(ValueError, table.set_columns, time=[1], flags=[1, 2])
-
-    def test_set_columns_data(self):
-        self.verify_set_columns_data()
-
-    def test_max_rows_increment(self):
-        self.verify_max_rows_increment()
-
-    def test_set_columns_input_sizes(self):
-        equal_len_cols = ["time", "flags"]
-        self.verify_set_columns_input_sizes(equal_len_cols)
-
-
-class TestEdgesetTable(TestTable):
     columns = ["left", "right", "parent", "num_children", "children"]
+    equal_len_columns = [["left", "right", "parent", "num_children"]]
+    input_parameters = ["max_rows_increment", "max_total_children_increment"]
     table_class = msprime.EdgesetTable
 
-    def test_defaults(self):
-        self.verify_defaults()
-        table = msprime.EdgesetTable()
-        self.assertEqual(table.max_total_children_increment, 1024)
 
-    def test_max_rows_increment(self):
-        self.verify_max_rows_increment()
-
-    def test_increment_values(self):
-        for bad_value in [-1, 0, -2**10]:
-            self.assertRaises(ValueError, self.table_class, max_rows_increment=bad_value)
-            self.assertRaises(
-                ValueError, self.table_class, max_total_children_increment=bad_value)
-        for v in [1, 100, 256]:
-            table = self.table_class(max_rows_increment=v)
-            self.assertEqual(table.max_rows_increment, v)
-            table = self.table_class(max_total_children_increment=v)
-            self.assertEqual(table.max_total_children_increment, v)
-
-    def test_set_read_only_attributes(self):
-        self.verify_set_read_only_attributes()
-        table = self.table_class()
-        with self.assertRaises(AttributeError):
-            table.max_total_children_increment = 1
-
-    def test_constructor(self):
-        for bad_type in ["1", None, []]:
-            self.assertRaises(
-                TypeError, msprime.NodeTable, max_rows_increment=bad_type)
-            self.assertRaises(
-                TypeError, msprime.NodeTable, max_total_children_increment=bad_type)
-
-    def test_set_columns_interface(self):
-        self.verify_set_columns_interface()
-
-    def test_set_columns_data(self):
-        self.verify_set_columns_data()
-
-    def test_set_columns_input_sizes(self):
-        equal_len_cols = ["left", "right", "parent", "num_children"]
-        self.verify_set_columns_input_sizes(equal_len_cols)
-
-
-class TestMigrationsTable(TestTable):
-    columns = []
-    table_class = msprime.MigrationTable
-
-    def test_defaults(self):
-        self.verify_defaults()
-
-
-class TestMutations(TestTable):
-    columns = []
+class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
+    columns = ["position", "num_nodes", "nodes"]
+    equal_len_columns = [["position", "num_nodes"]]
+    input_parameters = ["max_rows_increment", "max_total_nodes_increment"]
     table_class = msprime.MutationTable
 
-    def test_defaults(self):
-        self.verify_defaults()
+
+# class TestMigrationsTable(CommonTestsMixin):
+#     columns = []
+#     table_class = msprime.MigrationTable
+
+#     def test_defaults(self):
+#         self.verify_defaults()

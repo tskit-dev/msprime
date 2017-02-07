@@ -140,6 +140,8 @@ int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
         size_t max_total_nodes_increment);
 int mutation_table_add_row(mutation_table_t *self, double position,
         uint32_t num_nodes, uint32_t *nodes);
+int mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *position,
+        uint32_t *num_nodes, size_t total_nodes, uint32_t *nodes);
 int mutation_table_reset(mutation_table_t *self);
 int mutation_table_free(mutation_table_t *self);
 void mutation_table_print_state(mutation_table_t *self, FILE *out);
