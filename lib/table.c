@@ -239,6 +239,10 @@ edgeset_table_add_row(edgeset_table_t *self, double left,
 {
     int ret = 0;
 
+    if (num_children == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     if (self->num_rows == self->max_rows) {
         ret = edgeset_table_expand_main_columns(self,
                 self->max_rows + self->max_rows_increment);

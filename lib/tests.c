@@ -139,6 +139,173 @@ free_local_records(size_t num_records, coalescence_record_t *records)
     free(records);
 }
 
+/* Simple utilities to parse text so we can write declaritive
+ * tests. This is not intended as a robust general input mechanism.
+ */
+
+static void
+parse_nodes(const char *text, node_table_t *node_table)
+{
+    int ret;
+    size_t c, k;
+    size_t MAX_LINE = 1024;
+    char line[MAX_LINE];
+    const char *whitespace = " \t";
+    char *p;
+    double time;
+    int flags, population;
+
+    c = 0;
+    while (text[c] != '\0') {
+        /* Fill in the line */
+        k = 0;
+        while (text[c] != '\n' && text[c] != '\0') {
+            CU_ASSERT_FATAL(k < MAX_LINE - 1);
+            line[k] = text[c];
+            c++;
+            k++;
+        }
+        if (text[c] == '\n') {
+            c++;
+        }
+        line[k] = '\0';
+        p = strtok(line, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        flags = atoi(p);
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        time = atof(p);
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        population = atoi(p);
+        ret = node_table_add_row(node_table, flags, time, population);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
+}
+
+static void
+parse_edgesets(const char *text, edgeset_table_t *edgeset_table)
+{
+    int ret;
+    size_t c, k;
+    size_t MAX_LINE = 1024;
+    size_t MAX_CHILDREN = 1024;
+    char line[MAX_LINE], sub_line[MAX_LINE];
+    const char *whitespace = " \t";
+    char *p, *q;
+    double left, right;
+    uint32_t parent, num_children, children[MAX_CHILDREN];
+
+    c = 0;
+    while (text[c] != '\0') {
+        /* Fill in the line */
+        k = 0;
+        while (text[c] != '\n' && text[c] != '\0') {
+            CU_ASSERT_FATAL(k < MAX_LINE - 1);
+            line[k] = text[c];
+            c++;
+            k++;
+        }
+        if (text[c] == '\n') {
+            c++;
+        }
+        line[k] = '\0';
+        p = strtok(line, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        left = atof(p);
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        right = atof(p);
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        parent = atoi(p);
+        num_children = 0;
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+
+        num_children = 1;
+        q = p;
+        while (*q != '\0') {
+            if (*q == ',') {
+                num_children++;
+            }
+            q++;
+        }
+        CU_ASSERT_FATAL(num_children >= 1);
+        CU_ASSERT_FATAL(num_children < MAX_CHILDREN);
+        strncpy(sub_line, p, MAX_LINE);
+        q = strtok(sub_line, ",");
+        for (k = 0; k < num_children; k++) {
+            CU_ASSERT_FATAL(q != NULL);
+            children[k] = atoi(q);
+            q = strtok(NULL, ",");
+        }
+        CU_ASSERT_FATAL(q == NULL);
+        ret = edgeset_table_add_row(edgeset_table, left, right, parent,
+                num_children, children);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
+}
+
+static void
+parse_mutations(const char *text, mutation_table_t *mutation_table)
+{
+    int ret;
+    size_t c, k;
+    size_t MAX_LINE = 1024;
+    size_t MAX_NODES = 1024;
+    char line[MAX_LINE], sub_line[MAX_LINE];
+    const char *whitespace = " \t";
+    char *p, *q;
+    double position;
+    uint32_t num_nodes, nodes[MAX_NODES];
+
+    c = 0;
+    while (text[c] != '\0') {
+        /* Fill in the line */
+        k = 0;
+        while (text[c] != '\n' && text[c] != '\0') {
+            CU_ASSERT_FATAL(k < MAX_LINE - 1);
+            line[k] = text[c];
+            c++;
+            k++;
+        }
+        if (text[c] == '\n') {
+            c++;
+        }
+        line[k] = '\0';
+        p = strtok(line, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+        position = atof(p);
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
+
+        num_nodes = 1;
+        q = p;
+        while (*q != '\0') {
+            if (*q == ',') {
+                num_nodes++;
+            }
+            q++;
+        }
+        CU_ASSERT_FATAL(num_nodes >= 1);
+        CU_ASSERT_FATAL(num_nodes < MAX_NODES);
+        strncpy(sub_line, p, MAX_LINE);
+        q = strtok(sub_line, ",");
+        for (k = 0; k < num_nodes; k++) {
+            CU_ASSERT_FATAL(q != NULL);
+            nodes[k] = atoi(q);
+            q = strtok(NULL, ",");
+        }
+        CU_ASSERT_FATAL(q == NULL);
+        ret = mutation_table_add_row(mutation_table, position,
+                num_nodes, nodes);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
+}
+
+
+
 /* Simple utility to parse mutations so we can write declaritive
  * tests. This is not intended as a robust general input mechanism.
  */
@@ -222,6 +389,53 @@ free_local_mutations(size_t num_mutations, mutation_t *mutations)
         free(mutations[j].nodes);
     }
     free(mutations);
+}
+
+
+static void
+tree_sequence_from_text(tree_sequence_t *ts, const char *nodes, const char *edgesets,
+        const char *migrations, const char *mutations, const char *provenance)
+{
+    int ret;
+    node_table_t node_table;
+    edgeset_table_t edgeset_table;
+    mutation_table_t mutation_table;
+    migration_table_t migration_table;
+    size_t default_size_increment = 1024;
+
+    CU_ASSERT_FATAL(ts != NULL);
+    CU_ASSERT_FATAL(nodes != NULL);
+    CU_ASSERT_FATAL(edgesets != NULL);
+
+    ret = node_table_alloc(&node_table, default_size_increment);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edgeset_table_alloc(&edgeset_table, default_size_increment,
+            default_size_increment);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(&mutation_table, default_size_increment,
+            default_size_increment);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&migration_table, default_size_increment);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_nodes(nodes, &node_table);
+    parse_edgesets(edgesets, &edgeset_table);
+    if (mutations != NULL) {
+        parse_mutations(mutations, &mutation_table);
+    }
+
+    /* node_table_print_state(&node_table, stdout); */
+    /* edgeset_table_print_state(&edgeset_table, stdout); */
+    /* mutation_table_print_state(&mutation_table, stdout); */
+
+    ret = tree_sequence_initialise(ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(ts, &node_table, &edgeset_table,
+            &migration_table, &mutation_table);
+    node_table_free(&node_table);
+    edgeset_table_free(&edgeset_table);
+    mutation_table_free(&mutation_table);
+    migration_table_free(&migration_table);
 }
 
 static void
@@ -2084,26 +2298,15 @@ test_large_bottleneck_simulation(void)
 static void
 test_simplest_records(void)
 {
-    int ret;
-    uint32_t children[] = {0, 1};
-    coalescence_record_t record;
-    sample_t samples[] = {
-        {.time = 0, .population_id=0},
-        {.time = 0, .population_id=0}};
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edgesets =
+        "0  1   2   0,1\n";
     tree_sequence_t ts;
 
-    record.left = 0.0;
-    record.right = 1.0;
-    record.node = 2;
-    record.num_children = 2;
-    record.children = children;
-    record.population_id = 0;
-    record.time = 1.0;
-
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_records(&ts, 2, samples, 1, &record, 0, NULL, 0, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, 0);
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
@@ -2115,27 +2318,17 @@ test_simplest_records(void)
 static void
 test_simplest_nonbinary_records(void)
 {
-    int ret;
-    uint32_t children[] = {0, 1, 2, 3};
-    coalescence_record_t record;
-    size_t num_samples = 4;
-    sample_t samples[num_samples];
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edgesets =
+        "0  1   2   0,1,2,3\n";
     tree_sequence_t ts;
 
-    record.left = 0.0;
-    record.right = 1.0;
-    record.node = 4;
-    record.num_children = 4;
-    record.children = children;
-    record.population_id = 0;
-    record.time = 1.0;
-
-    memset(samples, 0, num_samples * sizeof(sample_t));
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_records(&ts, num_samples, samples, 1, &record,
-            0, NULL, 0, NULL, 0, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
@@ -2148,23 +2341,20 @@ static void
 test_simplest_unary_records(void)
 {
     int ret;
-    uint32_t c1[] = {0};
-    uint32_t c2[] = {1};
-    uint32_t c3[] = {2, 3};
-    uint32_t sample_ids[] = {0, 1};
-    sample_t samples[2];
-    coalescence_record_t records[] = {
-        {0, 1, 2, 0.0, 1.0, 1.0, c1},
-        {0, 1, 3, 0.0, 1.0, 1.0, c2},
-        {0, 2, 4, 0.0, 1.0, 2.0, c3},
-    };
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n"
+        "0  1   0\n"
+        "0  2   0";
+    const char *edgesets =
+        "0  1   2   0\n"
+        "0  1   3   1\n"
+        "0  1   4   2,3\n";
     tree_sequence_t ts, simplified;
+    uint32_t sample_ids[] = {0, 1};
 
-    memset(samples, 0, 2 * sizeof(sample_t));
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_records(&ts, 2, samples, 3, records, 0, NULL, 0, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, 0);
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
@@ -2189,35 +2379,27 @@ static void
 test_simplest_non_sample_leaf_records(void)
 {
     int ret;
-    uint32_t c1[] = {0, 1, 3, 4};
-    uint32_t sample_ids[] = {0, 1};
-    sample_t samples[2];
-    char *haplotype;
-    char genotypes[3];
-    mutation_t *mut;
-    coalescence_record_t records[] = {
-        {0, 4, 2, 0.0, 1.0, 1.0, c1},
-    };
-    const char *text_mutations =
-        "0.1    0   0   1\n"
-        "0.2    1   0   1\n"
-        "0.3    3   0   1\n"
-        "0.4    4   0   1";
-    mutation_t *mutations;
-    size_t num_mutations;
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n"
+        "0  0   0\n"
+        "0  0   0";
+    const char *edgesets =
+        "0  1   2   0,1,3,4\n";
+    const char *mutations =
+        "0.1    0\n"
+        "0.2    1\n"
+        "0.3    3\n"
+        "0.4    4";
     tree_sequence_t ts, simplified;
+    uint32_t sample_ids[] = {0, 1};
     hapgen_t hapgen;
     vargen_t vargen;
+    char *haplotype, genotypes[64];
+    mutation_t *mut;
 
-    parse_text_mutations(text_mutations, &num_mutations, &mutations);
-    CU_ASSERT_EQUAL_FATAL(num_mutations, 4);
-    memset(samples, 0, 2 * sizeof(sample_t));
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_records(&ts, 2, samples, 1, records, num_mutations, mutations,
-            0, NULL, 0, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, mutations, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
@@ -2266,29 +2448,25 @@ test_simplest_non_sample_leaf_records(void)
 
     tree_sequence_free(&ts);
     tree_sequence_free(&simplified);
-    free_local_mutations(num_mutations, mutations);
 }
 
 static void
 test_simplest_degenerate_multiple_root_records(void)
 {
+
     int ret;
-    uint32_t c1[] = {0};
-    uint32_t c2[] = {1};
-    uint32_t sample_ids[] = {0, 1};
-    sample_t samples[2];
-    coalescence_record_t records[] = {
-        {0, 1, 2, 0.0, 1.0, 1.0, c1},
-        {0, 1, 3, 0.0, 1.0, 1.0, c2},
-    };
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n"
+        "0  1   0\n";
+    const char *edgesets =
+        "0  1   2   0\n"
+        "0  1   3   1\n";
     tree_sequence_t ts, simplified;
+    uint32_t sample_ids[] = {0, 1};
 
-
-    memset(samples, 0, 2 * sizeof(sample_t));
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_records(&ts, 2, samples, 2, records, 0, NULL, 0, NULL, 0, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 4);
@@ -2306,21 +2484,20 @@ static void
 test_simplest_multiple_root_records(void)
 {
     int ret;
-    uint32_t c1[] = {0, 1};
-    uint32_t c2[] = {2, 3};
-    uint32_t sample_ids[] = {0, 1, 2, 3};
-    sample_t samples[4];
-    coalescence_record_t records[] = {
-        {0, 2, 4, 0.0, 1.0, 1.0, c1},
-        {0, 2, 5, 0.0, 1.0, 1.0, c2},
-    };
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n"
+        "0  1   0\n";
+    const char *edgesets =
+        "0  1   4   0,1\n"
+        "0  1   5   2,3\n";
     tree_sequence_t ts, simplified;
+    uint32_t sample_ids[] = {0, 1, 2, 3};
 
-    memset(samples, 0, 4 * sizeof(sample_t));
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_records(&ts, 4, samples, 2, records, 0, NULL, 0, NULL, 0, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 6);
@@ -2346,29 +2523,21 @@ test_simplest_root_mutations(void)
 {
     int ret;
     uint32_t j;
-    uint32_t c1[] = {0, 1};
-    uint32_t sample_ids[] = {0, 1};
-    coalescence_record_t records[] = {
-        {0, 2, 2, 0.0, 1.0, 1.0, c1},
-    };
-    sample_t samples[2];
-    const char *text_mutations = "0.1    2  0   1";
-    mutation_t *mutations;
-    size_t num_mutations;
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n";
+    const char *edgesets =
+        "0  1   2   0,1\n";
+    const char *mutations =
+        "0.1    2";
     hapgen_t hapgen;
     char *haplotype;
     int flags = 0;
+    uint32_t sample_ids[] = {0, 1};
     tree_sequence_t ts, simplified;
 
-    parse_text_mutations(text_mutations, &num_mutations, &mutations);
-    CU_ASSERT_EQUAL_FATAL(num_mutations, 1);
-
-    memset(samples, 0, 2 * sizeof(sample_t));
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_records(&ts, 2, samples, 1, records, num_mutations, mutations,
-            0, NULL, 0, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, mutations, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
@@ -2409,7 +2578,6 @@ test_simplest_root_mutations(void)
     tree_sequence_free(&simplified);
 
     tree_sequence_free(&ts);
-    free_local_mutations(num_mutations, mutations);
 }
 
 static void

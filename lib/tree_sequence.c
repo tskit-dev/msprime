@@ -973,6 +973,9 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     uint32_t left, right;
     double *coordinates = NULL;
 
+    /* TODO need to do a lot of input validation here. What do we allow to be
+     * null? What are the size restrictions on the tables? */
+
     /* compute the breakpoints from the input left and right coordinates. */
     num_coordinates = 2 * edgesets->num_rows;
     // The +1 here is needed for edge case behaviour in the sort_unique funtion.
