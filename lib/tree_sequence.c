@@ -484,7 +484,7 @@ static int
 tree_sequence_check(tree_sequence_t *self)
 {
     int ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
-    uint32_t j, k, child, node, left;
+    uint32_t u, j, k, child, node, left;
 
     left = UINT32_MAX;
     for (j = 0; j < self->trees.num_records; j++) {
@@ -533,6 +533,39 @@ tree_sequence_check(tree_sequence_t *self)
     if (self->trees.num_records > 0 && left != 0) {
         ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
         goto out;
+    }
+
+    /* Check the mutations */
+    for (j = 0; j < self->mutations.num_records; j++) {
+        if (self->mutations.position[j] < 0
+                || self->mutations.position[j] >= self->sequence_length
+                || self->mutations.num_nodes[j] < 1) {
+            ret = MSP_ERR_BAD_MUTATION;
+            goto out;
+        }
+        for (k = 0; k < self->mutations.num_nodes[j]; k++) {
+            u = self->mutations.nodes[j][k];
+            if (u == MSP_NULL_NODE || u >= self->trees.num_nodes) {
+                ret = MSP_ERR_BAD_MUTATION;
+                goto out;
+            }
+            if (k > 0) {
+                if (u < self->mutations.nodes[j][k - 1]) {
+                    ret = MSP_ERR_UNSORTED_MUTATION_NODES;
+                    goto out;
+                }
+                if (u == self->mutations.nodes[j][k - 1]) {
+                    ret = MSP_ERR_DUPLICATE_MUTATION_NODES;
+                    goto out;
+                }
+            }
+        }
+        if (j > 0) {
+            if (self->mutations.position[j] < self->mutations.position[j - 1]) {
+                ret = MSP_ERR_MUTATIONS_NOT_POSITION_SORTED;
+                goto out;
+            }
+        }
     }
     ret = 0;
 out:
@@ -975,6 +1008,10 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
 
     /* TODO need to do a lot of input validation here. What do we allow to be
      * null? What are the size restrictions on the tables? */
+    if (nodes == NULL || edgesets == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
 
     /* compute the breakpoints from the input left and right coordinates. */
     num_coordinates = 2 * edgesets->num_rows;
@@ -1005,9 +1042,16 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
             self->sample_size++;
         }
     }
-    self->mutations.num_records = mutations->num_rows;
-    self->mutations.total_nodes = mutations->total_nodes;
-    self->migrations.num_records = migrations->num_rows;
+    self->mutations.num_records = 0;
+    self->mutations.total_nodes = 0;
+    if (mutations != NULL) {
+        self->mutations.num_records = mutations->num_rows;
+        self->mutations.total_nodes = mutations->total_nodes;
+    }
+    self->migrations.num_records = 0;
+    if (migrations != NULL) {
+        self->migrations.num_records = migrations->num_rows;
+    }
     self->num_provenance_strings = 0;
     ret = tree_sequence_alloc(self);
     if (ret != 0) {
@@ -1033,6 +1077,10 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
 
     /* Get the coordinate indexes. */
     for (j = 0; j < self->trees.num_records; j++) {
+        if (edgesets->left[j] >= edgesets->right[j]) {
+            ret = MSP_ERR_BAD_RECORD_INTERVAL;
+            goto out;
+        }
         ret = get_index(num_coordinates, coordinates, edgesets->left[j], &left);
         if (ret != 0) {
             goto out;
@@ -1051,34 +1099,42 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
         goto out;
     }
 
-    memcpy(self->mutations.position, mutations->position,
-            mutations->num_rows * sizeof(double));
-    memcpy(self->mutations.num_nodes, mutations->num_nodes,
-            mutations->num_rows * sizeof(uint32_t));
-    memcpy(self->mutations.nodes_mem, mutations->nodes,
-            mutations->total_nodes * sizeof(uint32_t));
-    /* TMP */
-    memset(self->mutations.ancestral_state, '0', mutations->num_rows * sizeof(char));
-    memset(self->mutations.derived_state, '1', mutations->num_rows * sizeof(char));
+    if (mutations != NULL) {
+        memcpy(self->mutations.position, mutations->position,
+                mutations->num_rows * sizeof(double));
+        memcpy(self->mutations.num_nodes, mutations->num_nodes,
+                mutations->num_rows * sizeof(uint32_t));
+        memcpy(self->mutations.nodes_mem, mutations->nodes,
+                mutations->total_nodes * sizeof(uint32_t));
+        /* TMP */
+        memset(self->mutations.ancestral_state, '0', mutations->num_rows * sizeof(char));
+        memset(self->mutations.derived_state, '1', mutations->num_rows * sizeof(char));
 
-    offset = 0;
-    for (j = 0; j < mutations->num_rows; j++) {
-        self->mutations.nodes[j] = &self->mutations.nodes_mem[offset];
-        offset += mutations->num_nodes[j];
+        offset = 0;
+        for (j = 0; j < mutations->num_rows; j++) {
+            self->mutations.nodes[j] = &self->mutations.nodes_mem[offset];
+            offset += mutations->num_nodes[j];
+        }
+        assert(offset == self->mutations.total_nodes);
     }
-    assert(offset == self->mutations.total_nodes);
+    if (migrations != NULL) {
+        /* Set up the migrations */
+        memcpy(self->migrations.left, migrations->left, migrations->num_rows * sizeof(double));
+        memcpy(self->migrations.right, migrations->right, migrations->num_rows * sizeof(double));
+        memcpy(self->migrations.node, migrations->node, migrations->num_rows * sizeof(uint32_t));
+        memcpy(self->migrations.source, migrations->source,
+                migrations->num_rows * sizeof(uint32_t));
+        memcpy(self->migrations.dest, migrations->dest, migrations->num_rows * sizeof(uint32_t));
+        memcpy(self->migrations.time, migrations->time, migrations->num_rows * sizeof(double));
+    }
+    ret = tree_sequence_check(self);
+    if (ret != 0) {
+        goto out;
+    }
     ret = tree_sequence_init_tree_mutations(self);
     if (ret != 0) {
         goto out;
     }
-    /* Set up the migrations */
-    memcpy(self->migrations.left, migrations->left, migrations->num_rows * sizeof(double));
-    memcpy(self->migrations.right, migrations->right, migrations->num_rows * sizeof(double));
-    memcpy(self->migrations.node, migrations->node, migrations->num_rows * sizeof(uint32_t));
-    memcpy(self->migrations.source, migrations->source,
-            migrations->num_rows * sizeof(uint32_t));
-    memcpy(self->migrations.dest, migrations->dest, migrations->num_rows * sizeof(uint32_t));
-    memcpy(self->migrations.time, migrations->time, migrations->num_rows * sizeof(double));
 out:
     if (coordinates != NULL) {
         free(coordinates);
