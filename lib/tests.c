@@ -3443,6 +3443,13 @@ test_single_tree_mutgen(void)
             CU_ASSERT_EQUAL(before[j].nodes[k], after[j].nodes[k]);
         }
     }
+    /* Free up alloced memory */
+    for (j = 0; j < num_mutations; j++) {
+        free(before[j].nodes);
+        free(after[j].nodes);
+    }
+    free(before);
+    free(after);
     tree_sequence_free(&ts);
     gsl_rng_free(rng);
 }
@@ -3602,10 +3609,7 @@ test_sparse_tree_errors(void)
     ret = sparse_tree_set_tracked_leaves_from_leaf_list(&t, NULL, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
-    ret = tree_sequence_initialise(&other_ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tree_sequence_from_text(&ts, paper_ex_nodes, paper_ex_edgesets, NULL, NULL, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tree_sequence_from_text(&other_ts, paper_ex_nodes, paper_ex_edgesets, NULL, NULL, NULL);
     ret = sparse_tree_alloc(&other_t, &other_ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_copy(&t, &t);
