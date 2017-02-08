@@ -159,11 +159,11 @@ node_table_print_state(node_table_t *self, FILE *out)
 {
     size_t j;
 
-    printf("node_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, "node_table: %p:%d\t%d\t%d\n", (void *) self,
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    printf("\tindex\tflags\ttime\tpopulation\n");
+    fprintf(out, "\tindex\tflags\ttime\tpopulation\n");
     for (j = 0; j < self->num_rows; j++) {
-        printf("\t%d\t%d\t%f\t%d\n", (int) j, self->flags[j], self->time[j],
+        fprintf(out, "\t%d\t%d\t%f\t%d\n", (int) j, self->flags[j], self->time[j],
                 self->population[j]);
     }
 }
@@ -178,6 +178,10 @@ edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
 {
     int ret = 0;
 
+    if (max_rows_increment == 0 || max_total_children_increment == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     memset(self, 0, sizeof(edgeset_table_t));
     self->max_rows_increment = max_rows_increment;
     self->max_total_children_increment = max_total_children_increment;
@@ -185,6 +189,7 @@ edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
     self->num_rows = 0;
     self->max_total_children = 0;
     self->total_children = 0;
+out:
     return ret;
 }
 
@@ -325,25 +330,25 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
 {
     size_t j, k, offset;
 
-    printf(
+    fprintf(out,
         "edgeset_table: %p:num_rows=%d,max_rows=%d,max_rows_increment%d,"
         "total_children=%d,max_total_children=%d,max_total_children_increment=%d\n",
             (void *) self, (int) self->num_rows, (int) self->max_rows,
             (int) self->max_rows_increment, (int) self->total_children,
             (int) self->max_total_children, (int) self->max_total_children_increment);
-    printf("\tindex\tleft\tright\tparent\tchildren\n");
+    fprintf(out, "\tindex\tleft\tright\tparent\tchildren\n");
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        printf("\t%d\t%.3f\t%.3f\t%d\t", (int) j, self->left[j], self->right[j],
+        fprintf(out, "\t%d\t%.3f\t%.3f\t%d\t", (int) j, self->left[j], self->right[j],
                 self->parent[j]);
         for (k = 0; k < self->num_children[j]; k++) {
-            printf("%d", self->children[offset]);
+            fprintf(out, "%d", self->children[offset]);
             if (k < self->num_children[j] - 1) {
-                printf(",");
+                fprintf(out, ",");
             }
             offset++;
         }
-        printf("\n");
+        fprintf(out, "\n");
     }
 }
 
@@ -357,6 +362,10 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
 {
     int ret = 0;
 
+    if (max_rows_increment == 0 || max_total_nodes_increment == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     memset(self, 0, sizeof(mutation_table_t));
     self->max_rows_increment = max_rows_increment;
     self->max_total_nodes_increment = max_total_nodes_increment;
@@ -364,6 +373,7 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
     self->num_rows = 0;
     self->max_total_nodes = 0;
     self->total_nodes = 0;
+out:
     return ret;
 }
 
@@ -410,6 +420,10 @@ mutation_table_add_row(mutation_table_t *self, double position,
     int ret = 0;
     size_t new_size;
 
+    if (num_nodes == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     if (self->num_rows == self->max_rows) {
         new_size = self->max_rows + self->max_rows_increment;
         ret = mutation_table_expand_main_columns(self, new_size);
@@ -482,20 +496,20 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
 {
     size_t j, k, offset;
 
-    printf("mutation_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, "mutation_table: %p:%d\t%d\t%d\n", (void *) self,
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    printf("\tindex\tposition\tnodes\n");
+    fprintf(out, "\tindex\tposition\tnodes\n");
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        printf("\t%d\t%f\t", (int) j, self->position[j]);
+        fprintf(out, "\t%d\t%f\t", (int) j, self->position[j]);
         for (k = 0; k < self->num_nodes[j]; k++) {
-            printf("%d", self->nodes[offset]);
+            fprintf(out, "%d", self->nodes[offset]);
             offset++;
             if (k < self->num_nodes[j] - 1) {
-                printf(",");
+                fprintf(out, ",");
             }
         }
-        printf("\n");
+        fprintf(out, "\n");
     }
 }
 
@@ -631,11 +645,11 @@ migration_table_print_state(migration_table_t *self, FILE *out)
 {
     size_t j;
 
-    printf("migration_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, "migration_table: %p:%d\t%d\t%d\n", (void *) self,
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    printf("\tindex\tleft\tright\tnode\tsource\tdest\tpopulation\n");
+    fprintf(out, "\tindex\tleft\tright\tnode\tsource\tdest\tpopulation\n");
     for (j = 0; j < self->num_rows; j++) {
-        printf("\t%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
+        fprintf(out, "\t%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
                 self->right[j], self->node[j], self->source[j], self->dest[j],
                 self->time[j]);
     }

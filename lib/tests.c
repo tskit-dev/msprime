@@ -5115,6 +5115,349 @@ test_strerror(void)
     CU_ASSERT_STRING_EQUAL(msg, strerror(errno));
 }
 
+static void
+test_node_table(void)
+{
+    int ret;
+    node_table_t table;
+    size_t num_rows = 100;
+    size_t j;
+    uint32_t *flags, *population;
+    double *time;
+
+    ret = node_table_alloc(&table, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    ret = node_table_alloc(&table, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    node_table_print_state(&table, _devnull);
+
+    for (j = 0; j < num_rows; j++) {
+        ret = node_table_add_row(&table, j, j, j);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(table.flags[j], j);
+        CU_ASSERT_EQUAL(table.time[j], j);
+        CU_ASSERT_EQUAL(table.population[j], j);
+        CU_ASSERT_EQUAL(table.num_rows, j + 1);
+    }
+    node_table_print_state(&table, _devnull);
+    node_table_reset(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
+
+    num_rows *= 2;
+    flags = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(flags != NULL);
+    memset(flags, 1, num_rows * sizeof(uint32_t));
+    population = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(population != NULL);
+    memset(population, 2, num_rows * sizeof(uint32_t));
+    time = malloc(num_rows * sizeof(double));
+    CU_ASSERT_FATAL(time != NULL);
+    memset(time, 0, num_rows * sizeof(double));
+
+    ret = node_table_set_columns(&table, num_rows, flags, time, population);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+
+    /* If population is NULL it should be set the -1 */
+    num_rows = 10;
+    memset(population, 0xff, num_rows * sizeof(uint32_t));
+    ret = node_table_set_columns(&table, num_rows, flags, time, NULL);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+
+    /* flags and time cannot be NULL */
+    ret = node_table_set_columns(&table, num_rows, NULL, time, population);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = node_table_set_columns(&table, num_rows, flags, NULL, population);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    node_table_free(&table);
+    free(flags);
+    free(population);
+    free(time);
+}
+
+static void
+test_edgeset_table(void)
+{
+    int ret;
+    edgeset_table_t table;
+    size_t num_rows = 100;
+    size_t max_children = 10;
+    size_t j, k, total_children;
+    uint32_t *parent, *num_children, *children;
+    double *left, *right;
+    uint32_t c[max_children];
+
+    ret = edgeset_table_alloc(&table, 0, 1);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = edgeset_table_alloc(&table, 1, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    ret = edgeset_table_alloc(&table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    edgeset_table_print_state(&table, _devnull);
+
+    /* Adding 0 children is an error */
+    ret = edgeset_table_add_row(&table, 0, 0, 0, 0, c);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    memset(c, 0, max_children * sizeof(uint32_t));
+
+    total_children = 0;
+    for (j = 0; j < num_rows; j++) {
+        k = GSL_MIN(j + 1, max_children);
+        total_children += k;
+        ret = edgeset_table_add_row(&table, j, j, j, k, c);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(table.left[j], j);
+        CU_ASSERT_EQUAL(table.right[j], j);
+        CU_ASSERT_EQUAL(table.parent[j], j);
+        CU_ASSERT_EQUAL(table.num_children[j], k);
+        CU_ASSERT_EQUAL(table.num_rows, j + 1);
+        CU_ASSERT_EQUAL(table.total_children, total_children);
+    }
+    edgeset_table_print_state(&table, _devnull);
+    edgeset_table_reset(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
+    CU_ASSERT_EQUAL(table.total_children, 0);
+
+    num_rows *= 2;
+    left = malloc(num_rows * sizeof(double));
+    CU_ASSERT_FATAL(left != NULL);
+    memset(left, 0, num_rows * sizeof(double));
+    right = malloc(num_rows * sizeof(double));
+    CU_ASSERT_FATAL(right != NULL);
+    memset(right, 0, num_rows * sizeof(double));
+    parent = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(parent != NULL);
+    memset(parent, 1, num_rows * sizeof(uint32_t));
+    num_children = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(num_children != NULL);
+    children = malloc(2 * num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(num_children != NULL);
+    memset(children, 0, 2 * num_rows * sizeof(uint32_t));
+    for (j = 0; j < num_rows; j++) {
+        num_children[j] = 2;
+    }
+
+    ret = edgeset_table_set_columns(&table, num_rows, left, right, parent, num_children,
+            2 * num_rows, children);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.num_children, num_children,
+                num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.children, children, 2 * num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.total_children, 2 * num_rows);
+
+    /* Inputs cannot be NULL */
+    ret = edgeset_table_set_columns(&table, num_rows, NULL, right, parent, num_children,
+            2 * num_rows, children);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = edgeset_table_set_columns(&table, num_rows, left, NULL, parent, num_children,
+            2 * num_rows, children);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = edgeset_table_set_columns(&table, num_rows, left, right, NULL, num_children,
+            2 * num_rows, children);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = edgeset_table_set_columns(&table, num_rows, left, right, parent, NULL,
+            2 * num_rows, children);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = edgeset_table_set_columns(&table, num_rows, left, right, parent, num_children,
+            2 * num_rows, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    edgeset_table_free(&table);
+    free(left);
+    free(right);
+    free(parent);
+    free(num_children);
+    free(children);
+}
+
+static void
+test_mutation_table(void)
+{
+    int ret;
+    mutation_table_t table;
+    size_t num_rows = 100;
+    size_t max_nodes = 10;
+    size_t j, k, total_nodes;
+    uint32_t *num_nodes, *nodes;
+    double *position;
+    uint32_t c[max_nodes];
+
+    ret = mutation_table_alloc(&table, 0, 1);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = mutation_table_alloc(&table, 1, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    ret = mutation_table_alloc(&table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    mutation_table_print_state(&table, _devnull);
+
+    /* Adding 0 nodes is an error */
+    ret = mutation_table_add_row(&table, 0, 0, c);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    memset(c, 0, max_nodes * sizeof(uint32_t));
+
+    total_nodes = 0;
+    for (j = 0; j < num_rows; j++) {
+        k = GSL_MIN(j + 1, max_nodes);
+        total_nodes += k;
+        ret = mutation_table_add_row(&table, j, k, c);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(table.position[j], j);
+        CU_ASSERT_EQUAL(table.num_nodes[j], k);
+        CU_ASSERT_EQUAL(table.num_rows, j + 1);
+        CU_ASSERT_EQUAL(table.total_nodes, total_nodes);
+    }
+    mutation_table_print_state(&table, _devnull);
+    mutation_table_reset(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
+    CU_ASSERT_EQUAL(table.total_nodes, 0);
+
+    num_rows *= 2;
+    position = malloc(num_rows * sizeof(double));
+    CU_ASSERT_FATAL(position != NULL);
+    memset(position, 0, num_rows * sizeof(double));
+    num_nodes = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(num_nodes != NULL);
+    nodes = malloc(2 * num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(num_nodes != NULL);
+    memset(nodes, 0, 2 * num_rows * sizeof(uint32_t));
+    for (j = 0; j < num_rows; j++) {
+        num_nodes[j] = 2;
+    }
+
+    ret = mutation_table_set_columns(&table, num_rows, position, num_nodes,
+            2 * num_rows, nodes);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.position, position, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.num_nodes, num_nodes, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.nodes, nodes, 2 * num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.total_nodes, 2 * num_rows);
+
+    /* Inputs cannot be NULL */
+    ret = mutation_table_set_columns(&table, num_rows, NULL, num_nodes,
+            2 * num_rows, nodes);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = mutation_table_set_columns(&table, num_rows, position, NULL,
+            2 * num_rows, nodes);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = mutation_table_set_columns(&table, num_rows, position, num_nodes,
+            2 * num_rows, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    mutation_table_free(&table);
+    free(position);
+    free(num_nodes);
+    free(nodes);
+}
+
+static void
+test_migration_table(void)
+{
+    int ret;
+    migration_table_t table;
+    size_t num_rows = 100;
+    size_t j;
+    uint32_t *node, *source, *dest;
+    double *left, *right, *time;
+
+    ret = migration_table_alloc(&table, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    ret = migration_table_alloc(&table, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    migration_table_print_state(&table, _devnull);
+
+    for (j = 0; j < num_rows; j++) {
+        ret = migration_table_add_row(&table, j, j, j, j, j, j);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(table.left[j], j);
+        CU_ASSERT_EQUAL(table.right[j], j);
+        CU_ASSERT_EQUAL(table.node[j], j);
+        CU_ASSERT_EQUAL(table.source[j], j);
+        CU_ASSERT_EQUAL(table.dest[j], j);
+        CU_ASSERT_EQUAL(table.time[j], j);
+        CU_ASSERT_EQUAL(table.num_rows, j + 1);
+    }
+    migration_table_print_state(&table, _devnull);
+    migration_table_reset(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
+
+    num_rows *= 2;
+    left = malloc(num_rows * sizeof(double));
+    CU_ASSERT_FATAL(left != NULL);
+    memset(left, 1, num_rows * sizeof(double));
+    right = malloc(num_rows * sizeof(double));
+    CU_ASSERT_FATAL(right != NULL);
+    memset(right, 2, num_rows * sizeof(double));
+    time = malloc(num_rows * sizeof(double));
+    CU_ASSERT_FATAL(time != NULL);
+    memset(time, 3, num_rows * sizeof(double));
+    node = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(node != NULL);
+    memset(node, 4, num_rows * sizeof(uint32_t));
+    source = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(source != NULL);
+    memset(source, 5, num_rows * sizeof(uint32_t));
+    dest = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(dest != NULL);
+    memset(dest, 6, num_rows * sizeof(uint32_t));
+
+    ret = migration_table_set_columns(&table, num_rows, left, right, node, source,
+            dest, time);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.source, source, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.dest, dest, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+
+    /* inputs cannot be NULL */
+    ret = migration_table_set_columns(&table, num_rows, NULL, right, node, source,
+            dest, time);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = migration_table_set_columns(&table, num_rows, left, NULL, node, source,
+            dest, time);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = migration_table_set_columns(&table, num_rows, left, right, NULL, source,
+            dest, time);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = migration_table_set_columns(&table, num_rows, left, right, node, NULL,
+            dest, time);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = migration_table_set_columns(&table, num_rows, left, right, node, source,
+            NULL, time);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = migration_table_set_columns(&table, num_rows, left, right, node, source,
+            dest, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    migration_table_free(&table);
+    free(left);
+    free(right);
+    free(time);
+    free(node);
+    free(source);
+    free(dest);
+}
+
+
 static int
 msprime_suite_init(void)
 {
@@ -5245,6 +5588,10 @@ main(int argc, char **argv)
         {"bottleneck_simulation", test_bottleneck_simulation},
         {"large_bottleneck_simulation", test_large_bottleneck_simulation},
         {"test_error_messages", test_strerror},
+        {"test_node_table", test_node_table},
+        {"test_edgeset_table", test_edgeset_table},
+        {"test_mutation_table", test_mutation_table},
+        {"test_migration_table", test_migration_table},
         CU_TEST_INFO_NULL,
     };
 
