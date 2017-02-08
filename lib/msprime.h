@@ -85,9 +85,13 @@ typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
+    size_t total_name_length;
+    size_t max_total_name_length;
+    size_t max_total_name_length_increment;
     uint32_t *flags;
     double *time;
     uint32_t *population;
+    char *name;
 } node_table_t;
 
 typedef struct {
@@ -116,11 +120,12 @@ typedef struct {
     double *time;
 } migration_table_t;
 
-int node_table_alloc(node_table_t *self, size_t max_rows_increment);
+int node_table_alloc(node_table_t *self, size_t max_rows_increment,
+        size_t max_total_name_length_increment);
 int node_table_add_row(node_table_t *self, uint32_t flags, double time,
-        uint32_t population);
+        uint32_t population, const char *name);
 int node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        uint32_t *population);
+        uint32_t *population, size_t total_name_length, char *name);
 int node_table_reset(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);

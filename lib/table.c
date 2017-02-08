@@ -51,24 +51,28 @@ out:
  *************************/
 
 int
-node_table_alloc(node_table_t *self, size_t max_rows_increment)
+node_table_alloc(node_table_t *self, size_t max_rows_increment,
+        size_t max_total_name_length_increment)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(node_table_t));
-    if (max_rows_increment == 0) {
+    if (max_rows_increment == 0 || max_total_name_length_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->max_rows_increment = max_rows_increment;
+    self->max_total_name_length_increment = max_total_name_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
+    self->max_total_name_length = 0;
+    self->total_name_length = 0;
 out:
     return ret;
 }
 
 static int
-node_table_expand(node_table_t *self, size_t new_size)
+node_table_expand_fixed_columns(node_table_t *self, size_t new_size)
 {
     int ret = 0;
 
@@ -91,9 +95,25 @@ out:
     return ret;
 }
 
+static int
+node_table_expand_name(node_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_total_name_length) {
+        ret = expand_column((void **) &self->name, new_size, sizeof(char *));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_total_name_length = new_size;
+    }
+out:
+    return ret;
+}
+
 int
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        uint32_t *population)
+        uint32_t *population, size_t total_name_length, char *name)
 {
     int ret;
 
@@ -101,7 +121,11 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    ret = node_table_expand(self, num_rows);
+    if (name == NULL && total_name_length > 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = node_table_expand_fixed_columns(self, num_rows);
     if (ret != 0) {
         goto out;
     }
@@ -113,23 +137,50 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
         memcpy(self->population, population, num_rows * sizeof(uint32_t));
     }
     self->num_rows = num_rows;
+    if (name != NULL) {
+        ret = node_table_expand_name(self, total_name_length);
+        if (ret != 0) {
+            goto out;
+        }
+        memcpy(self->name, name, total_name_length * sizeof(char));
+    }
+    self->total_name_length = total_name_length;
+
 out:
     return ret;
 }
 
 int
-node_table_add_row(node_table_t *self, uint32_t flags, double time, uint32_t population)
+node_table_add_row(node_table_t *self, uint32_t flags, double time,
+        uint32_t population, const char *name)
 {
     int ret = 0;
-    size_t new_size;
+    size_t new_size, name_length;
 
+    if (name == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     if (self->num_rows == self->max_rows) {
         new_size = self->max_rows + self->max_rows_increment;
-        ret = node_table_expand(self, new_size);
+        ret = node_table_expand_fixed_columns(self, new_size);
         if (ret != 0) {
             goto out;
         }
     }
+    /* include the sentinel \0 */
+    name_length = 1 + strlen(name);
+    while (self->total_name_length + name_length
+            >= self->max_total_name_length) {
+        new_size = self->max_total_name_length + self->max_total_name_length_increment;
+        ret = node_table_expand_name(self, new_size);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    memcpy(self->name + self->total_name_length, name, name_length);
+    self->total_name_length += name_length;
+
     self->flags[self->num_rows] = flags;
     self->time[self->num_rows] = time;
     self->population[self->num_rows] = population;
@@ -142,6 +193,7 @@ int
 node_table_reset(node_table_t *self)
 {
     self->num_rows = 0;
+    self->total_name_length = 0;
     return 0;
 }
 
@@ -151,20 +203,33 @@ node_table_free(node_table_t *self)
     msp_safe_free(self->flags);
     msp_safe_free(self->time);
     msp_safe_free(self->population);
+    msp_safe_free(self->name);
     return 0;
 }
 
 void
 node_table_print_state(node_table_t *self, FILE *out)
 {
-    size_t j;
+    size_t j, k;
+    const char *name;
 
     fprintf(out, "node_table: %p:%d\t%d\t%d\n", (void *) self,
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "\tindex\tflags\ttime\tpopulation\n");
+    fprintf(out, "\tindex\tflags\ttime\tpopulation\tname\n");
+    assert(self->total_name_length == 0 || self->total_name_length >= self->num_rows);
+
+    k = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%d\t%f\t%d\n", (int) j, self->flags[j], self->time[j],
+        fprintf(out, "\t%d\t%d\t%f\t%d\t", (int) j, self->flags[j], self->time[j],
                 self->population[j]);
+        if (self->total_name_length == 0) {
+            name = "NULL";
+        } else {
+            assert(k < self->total_name_length);
+            name = self->name + k;
+            k += 1 + strlen(name);
+        }
+        fprintf(out, "%s\n", name);
     }
 }
 

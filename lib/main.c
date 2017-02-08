@@ -757,7 +757,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_alloc(nodes, 10);
+    ret = node_table_alloc(nodes, 10, 10);
     if (ret != 0) {
         goto out;
     }

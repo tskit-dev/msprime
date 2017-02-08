@@ -928,6 +928,7 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 1024;
+    Py_ssize_t max_total_name_length_increment = 1;
 
     self->node_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
@@ -943,7 +944,8 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = node_table_alloc(self->node_table, (size_t) max_rows_increment);
+    err = node_table_alloc(self->node_table, (size_t) max_rows_increment,
+            (size_t) max_total_name_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -958,15 +960,18 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     int err;
-    size_t num_rows;
+    size_t num_rows, total_name_length;
+    char *name_data;
     PyObject *time_input = NULL;
-    PyObject *flags_input = NULL;
     PyArrayObject *time_array = NULL;
+    PyObject *flags_input = NULL;
     PyArrayObject *flags_array = NULL;
-    static char *kwlist[] = {"flags", "time", NULL};
+    PyObject *name_input = NULL;
+    PyArrayObject *name_array = NULL;
+    static char *kwlist[] = {"flags", "time", "name", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO", kwlist,
-                &flags_input, &time_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|O", kwlist,
+                &flags_input, &time_input, &name_input)) {
         goto out;
     }
     flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
@@ -977,8 +982,19 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
     if (time_array == NULL) {
         goto out;
     }
+    total_name_length = 0;
+    name_data = NULL;
+    if (name_input != NULL) {
+        name_array = table_read_column_array(name_input, NPY_INT8,
+                &total_name_length, false);
+        if (name_array == NULL) {
+            goto out;
+        }
+        name_data = PyArray_DATA(name_array);
+    }
     err = node_table_set_columns(self->node_table, num_rows,
-            PyArray_DATA(flags_array), PyArray_DATA(time_array), NULL);
+            PyArray_DATA(flags_array), PyArray_DATA(time_array), NULL,
+            total_name_length, name_data);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1042,6 +1058,22 @@ out:
     return ret;
 }
 
+static PyObject *
+NodeTable_get_name(NodeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->node_table->total_name_length,
+            self->node_table->name, NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+
+
 static PyGetSetDef NodeTable_getsetters[] = {
     {"max_rows_increment",
         (getter) NodeTable_get_max_rows_increment, NULL, "The size increment"},
@@ -1049,6 +1081,7 @@ static PyGetSetDef NodeTable_getsetters[] = {
         "The number of rows in the table."},
     {"time", (getter) NodeTable_get_time, NULL, "The time array"},
     {"flags", (getter) NodeTable_get_flags, NULL, "The flags array"},
+    {"name", (getter) NodeTable_get_name, NULL, "The name array"},
     {NULL}  /* Sentinel */
 };
 

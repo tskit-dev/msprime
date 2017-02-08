@@ -181,7 +181,7 @@ parse_nodes(const char *text, node_table_t *node_table)
         p = strtok(NULL, whitespace);
         CU_ASSERT_FATAL(p != NULL);
         population = atoi(p);
-        ret = node_table_add_row(node_table, flags, time, population);
+        ret = node_table_add_row(node_table, flags, time, population, NULL);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
 }
@@ -323,7 +323,8 @@ tree_sequence_from_text(tree_sequence_t *ts, const char *nodes, const char *edge
     CU_ASSERT_FATAL(nodes != NULL);
     CU_ASSERT_FATAL(edgesets != NULL);
 
-    ret = node_table_alloc(&node_table, default_size_increment);
+    ret = node_table_alloc(&node_table, default_size_increment,
+            default_size_increment);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, default_size_increment,
             default_size_increment);
@@ -739,7 +740,7 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_FATAL(mutations != NULL);
     gsl_rng_set(rng, 1);
 
-    ret = node_table_alloc(nodes, 10);
+    ret = node_table_alloc(nodes, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = edgeset_table_alloc(edgesets, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1970,7 +1971,7 @@ test_simulation_replicates(void)
     CU_ASSERT_FATAL(rng != NULL);
 
     /* Set all the table block sizes to 1 to force reallocs */
-    ret = node_table_alloc(&nodes, 1);
+    ret = node_table_alloc(&nodes, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgesets, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -2497,7 +2498,7 @@ test_simplest_bad_records(void)
     edgeset_table_t edgeset_table;
     int ret;
 
-    ret = node_table_alloc(&node_table, 1);
+    ret = node_table_alloc(&node_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -2674,7 +2675,7 @@ test_single_tree_bad_records(void)
     node_table_t node_table;
     edgeset_table_t edgeset_table;
 
-    ret = node_table_alloc(&node_table, 1);
+    ret = node_table_alloc(&node_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -2765,7 +2766,7 @@ test_single_tree_bad_mutations(void)
     edgeset_table_t edgeset_table;
     mutation_table_t mutation_table;
 
-    ret = node_table_alloc(&node_table, 1);
+    ret = node_table_alloc(&node_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4198,7 +4199,7 @@ test_tree_sequence_bad_records(void)
         7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
     };
 
-    ret = node_table_alloc(&node_table, 1);
+    ret = node_table_alloc(&node_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5128,21 +5129,33 @@ test_node_table(void)
     size_t j;
     uint32_t *flags, *population;
     double *time;
+    char *s, *name;
+    const char *test_name = "test";
+    size_t test_name_length = 4;
 
-    ret = node_table_alloc(&table, 0);
+    ret = node_table_alloc(&table, 0, 1);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = node_table_alloc(&table, 1, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
-    ret = node_table_alloc(&table, 1);
+    ret = node_table_alloc(&table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     node_table_print_state(&table, _devnull);
+    ret = node_table_add_row(&table, 0, 0, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     for (j = 0; j < num_rows; j++) {
-        ret = node_table_add_row(&table, j, j, j);
+        ret = node_table_add_row(&table, j, j, j, test_name);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL(table.flags[j], j);
         CU_ASSERT_EQUAL(table.time[j], j);
         CU_ASSERT_EQUAL(table.population[j], j);
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
+        CU_ASSERT_EQUAL(table.total_name_length, (j + 1) * (test_name_length + 1));
+        /* check the name */
+        s = table.name + table.total_name_length - (j + 1) * (test_name_length + 1);
+        CU_ASSERT_STRING_EQUAL(s, test_name);
+        CU_ASSERT_EQUAL(table.name[table.total_name_length - 1], '\0');
     }
     node_table_print_state(&table, _devnull);
     node_table_reset(&table);
@@ -5158,34 +5171,46 @@ test_node_table(void)
     time = malloc(num_rows * sizeof(double));
     CU_ASSERT_FATAL(time != NULL);
     memset(time, 0, num_rows * sizeof(double));
-
-    ret = node_table_set_columns(&table, num_rows, flags, time, population);
+    name = malloc(2 * num_rows * sizeof(char));
+    for (j = 0; j < num_rows; j++) {
+        name[2 * j] = 'a';
+        name[2 * j + 1] = '\0';
+    }
+    ret = node_table_set_columns(&table, num_rows, flags, time, population,
+            2 * num_rows, name);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.total_name_length, 2 * num_rows);
 
     /* If population is NULL it should be set the -1 */
     num_rows = 10;
     memset(population, 0xff, num_rows * sizeof(uint32_t));
-    ret = node_table_set_columns(&table, num_rows, flags, time, NULL);
+    ret = node_table_set_columns(&table, num_rows, flags, time, NULL, 0, NULL);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.total_name_length, 0);
+    node_table_print_state(&table, _devnull);
 
     /* flags and time cannot be NULL */
-    ret = node_table_set_columns(&table, num_rows, NULL, time, population);
+    ret = node_table_set_columns(&table, num_rows, NULL, time, population, 0, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = node_table_set_columns(&table, num_rows, flags, NULL, population);
+    ret = node_table_set_columns(&table, num_rows, flags, NULL, population, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    /* if name is null, total name length must be 0 */
+    ret = node_table_set_columns(&table, num_rows, flags, time, population, 1, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     node_table_free(&table);
     free(flags);
     free(population);
     free(time);
+    free(name);
 }
 
 static void

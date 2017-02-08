@@ -30,6 +30,26 @@ import numpy as np
 import msprime
 
 
+class Column(object):
+    def __init__(self, name):
+        self.name = name
+
+
+class UInt32Column(Column):
+    def get_input(self, n):
+        return np.arange(n, dtype=np.uint32)
+
+
+class CharColumn(Column):
+    def get_input(self, n):
+        return np.zeros(n, dtype=np.int8)
+
+
+class DoubleColumn(Column):
+    def get_input(self, n):
+        return np.arange(n, dtype=np.float64)
+
+
 class CommonTestsMixin(object):
     """
     Abstract base class for common table tests. Because of the design of unittest,
@@ -59,8 +79,7 @@ class CommonTestsMixin(object):
                 self.assertEqual(getattr(table, param), v)
 
     def test_set_columns_interface(self):
-        valid_input = [0]
-        kwargs = {c: valid_input for c in self.columns}
+        kwargs = {c.name: c.get_input(1) for c in self.columns}
         # Make sure this works.
         table = self.table_class()
         table.set_columns(**kwargs)
@@ -68,16 +87,16 @@ class CommonTestsMixin(object):
             table = self.table_class()
             for bad_type in [Exception, msprime]:
                 error_kwargs = dict(kwargs)
-                error_kwargs[focal_col] = bad_type
+                error_kwargs[focal_col.name] = bad_type
                 self.assertRaises(TypeError, table.set_columns, **error_kwargs)
             for bad_value in ["qwer", [0, "sd"]]:
                 error_kwargs = dict(kwargs)
-                error_kwargs[focal_col] = bad_value
+                error_kwargs[focal_col.name] = bad_value
                 self.assertRaises(ValueError, table.set_columns, **error_kwargs)
 
     def test_set_columns_input_sizes(self):
         num_rows = 100
-        input_data = {col: np.arange(num_rows, dtype=np.uint32) for col in self.columns}
+        input_data = {col.name: col.get_input(num_rows)for col in self.columns}
         table = self.table_class()
         table.set_columns(**input_data)
         for equal_len_col_set in self.equal_len_columns:
@@ -95,7 +114,7 @@ class CommonTestsMixin(object):
                 setattr(table, param, 2)
         for col in self.columns:
             with self.assertRaises(AttributeError):
-                setattr(table, col, np.zeros(5))
+                setattr(table, col.name, np.zeros(5))
         self.assertEqual(table.num_rows, 0)
 
     def test_defaults(self):
@@ -103,47 +122,77 @@ class CommonTestsMixin(object):
         self.assertEqual(table.num_rows, 0)
         for param in self.input_parameters:
             self.assertEqual(getattr(table, param), 1024)
-        for colname in self.columns:
-            array = getattr(table, colname)
+        for col in self.columns:
+            array = getattr(table, col.name)
             self.assertEqual(array.shape, (0,))
 
     def test_set_columns_data(self):
         for num_rows in [0, 10, 100, 1000]:
             input_data = {
-                col: np.arange(num_rows, dtype=np.uint32) for col in self.columns}
+                col.name: col.get_input(num_rows) for col in self.columns}
             table = self.table_class()
             table.set_columns(**input_data)
-            for col, input_array in input_data.items():
-                output_array = getattr(table, col)
+            for colname, input_array in input_data.items():
+                output_array = getattr(table, colname)
                 self.assertEqual(input_array.shape, output_array.shape)
                 self.assertTrue(np.all(input_array == output_array))
 
 
 class TestNodeTable(unittest.TestCase, CommonTestsMixin):
 
-    columns = ["flags", "time"]
+    columns = [
+        UInt32Column("flags"),
+        DoubleColumn("time"),
+        CharColumn("name")]
     input_parameters = ["max_rows_increment"]
     equal_len_columns = [["time", "flags"]]
     table_class = msprime.NodeTable
 
+    def test_variable_stuff(self):
+        flags = np.arange(3, dtype=np.uint32)
+        time = np.arange(3)
+        names = [b"one", b"two", b"three"]
+        packed = np.frombuffer(b'\0'.join(names + [b""]), dtype=np.int8)
+        table = msprime.NodeTable()
+        table.set_columns(flags=flags, time=time, name=packed)
+        self.assertTrue(np.all(table.flags == flags))
+        self.assertTrue(np.all(table.time == time))
+        self.assertTrue(np.all(table.name == packed))
+        unpacked = table.name.tostring().split(b"\0")[:-1]
+        self.assertEqual(unpacked, names)
+
 
 class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
 
-    columns = ["left", "right", "parent", "num_children", "children"]
+    columns = [
+        DoubleColumn("left"),
+        DoubleColumn("right"),
+        UInt32Column("parent"),
+        UInt32Column("num_children"),
+        UInt32Column("children")]
     equal_len_columns = [["left", "right", "parent", "num_children"]]
     input_parameters = ["max_rows_increment", "max_total_children_increment"]
     table_class = msprime.EdgesetTable
 
 
 class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
-    columns = ["position", "num_nodes", "nodes"]
+    columns = [
+        DoubleColumn("position"),
+        UInt32Column("num_nodes"),
+        UInt32Column("nodes")]
     equal_len_columns = [["position", "num_nodes"]]
     input_parameters = ["max_rows_increment", "max_total_nodes_increment"]
     table_class = msprime.MutationTable
 
 
 class TestMigrationsTable(unittest.TestCase, CommonTestsMixin):
-    columns = ["left", "right", "node", "source", "dest", "time"]
+    columns = [
+        DoubleColumn("left"),
+        DoubleColumn("right"),
+        UInt32Column("node"),
+        UInt32Column("source"),
+        UInt32Column("dest"),
+        DoubleColumn("time")]
     input_parameters = ["max_rows_increment"]
     equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]
     table_class = msprime.MigrationTable
