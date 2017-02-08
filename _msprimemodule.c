@@ -928,7 +928,7 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 1024;
-    Py_ssize_t max_total_name_length_increment = 1;
+    Py_ssize_t max_name_length_increment = 1;
 
     self->node_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
@@ -945,7 +945,7 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = node_table_alloc(self->node_table, (size_t) max_rows_increment,
-            (size_t) max_total_name_length_increment);
+            (size_t) max_name_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -960,7 +960,7 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     int err;
-    size_t num_rows, total_name_length;
+    size_t num_rows, name_length;
     char *name_data;
     PyObject *time_input = NULL;
     PyArrayObject *time_array = NULL;
@@ -982,11 +982,11 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
     if (time_array == NULL) {
         goto out;
     }
-    total_name_length = 0;
+    name_length = 0;
     name_data = NULL;
     if (name_input != NULL) {
         name_array = table_read_column_array(name_input, NPY_INT8,
-                &total_name_length, false);
+                &name_length, false);
         if (name_array == NULL) {
             goto out;
         }
@@ -994,7 +994,7 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
     }
     err = node_table_set_columns(self->node_table, num_rows,
             PyArray_DATA(flags_array), PyArray_DATA(time_array), NULL,
-            total_name_length, name_data);
+            name_length, name_data);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1066,7 +1066,7 @@ NodeTable_get_name(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->total_name_length,
+    ret = table_get_column_array(self->node_table->name_length,
             self->node_table->name, NPY_INT8, sizeof(char));
 out:
     return ret;
@@ -1165,21 +1165,21 @@ EdgesetTable_init(EdgesetTable *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {
-        "max_rows_increment", "max_total_children_increment", NULL};
+        "max_rows_increment", "max_children_length_increment", NULL};
     Py_ssize_t max_rows_increment = 1024;
-    Py_ssize_t max_total_children_increment = 1024;
+    Py_ssize_t max_children_length_increment = 1024;
 
     self->edgeset_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
-                &max_rows_increment, &max_total_children_increment)) {
+                &max_rows_increment, &max_children_length_increment)) {
         goto out;
     }
     if (max_rows_increment <= 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    if (max_total_children_increment <= 0) {
-        PyErr_SetString(PyExc_ValueError, "max_total_children_increment must be positive");
+    if (max_children_length_increment <= 0) {
+        PyErr_SetString(PyExc_ValueError, "max_children_length_increment must be positive");
         goto out;
     }
     self->edgeset_table = PyMem_Malloc(sizeof(edgeset_table_t));
@@ -1188,7 +1188,7 @@ EdgesetTable_init(EdgesetTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = edgeset_table_alloc(self->edgeset_table, max_rows_increment,
-            max_total_children_increment);
+            max_children_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1204,23 +1204,19 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     int err;
     size_t num_rows = 0;
-    size_t total_children = 0;
+    size_t children_length = 0;
     PyObject *left_input = NULL;
     PyArrayObject *left_array = NULL;
     PyObject *right_input = NULL;
     PyArrayObject *right_array = NULL;
     PyObject *parent_input = NULL;
     PyArrayObject *parent_array = NULL;
-    PyObject *num_children_input = NULL;
-    PyArrayObject *num_children_array = NULL;
     PyObject *children_input = NULL;
     PyArrayObject *children_array = NULL;
-    static char *kwlist[] = {
-        "left", "right", "parent", "children", "num_children", NULL};
+    static char *kwlist[] = {"left", "right", "parent", "children", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOOO", kwlist,
-                &left_input, &right_input, &parent_input, &children_input,
-                &num_children_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
+                &left_input, &right_input, &parent_input, &children_input)) {
         goto out;
     }
 
@@ -1236,20 +1232,15 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     if (parent_array == NULL) {
         goto out;
     }
-    num_children_array = table_read_column_array(num_children_input, NPY_UINT32,
-            &num_rows, true);
-    if (num_children_array == NULL) {
-        goto out;
-    }
     children_array = table_read_column_array(children_input, NPY_UINT32,
-            &total_children, false);
+            &children_length, false);
     if (children_array == NULL) {
         goto out;
     }
     err = edgeset_table_set_columns(self->edgeset_table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array),
-            PyArray_DATA(parent_array), PyArray_DATA(num_children_array),
-            total_children, PyArray_DATA(children_array));
+            PyArray_DATA(parent_array),
+            children_length, PyArray_DATA(children_array));
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1260,7 +1251,6 @@ out:
     Py_XDECREF(right_array);
     Py_XDECREF(parent_array);
     Py_XDECREF(children_array);
-    Py_XDECREF(num_children_array);
     return ret;
 }
 
@@ -1277,13 +1267,13 @@ out:
 }
 
 static PyObject *
-EdgesetTable_get_max_total_children_increment(EdgesetTable *self, void *closure)
+EdgesetTable_get_max_children_length_increment(EdgesetTable *self, void *closure)
 {
     PyObject *ret = NULL;
     if (EdgesetTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->edgeset_table->max_total_children_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->edgeset_table->max_children_length_increment);
 out:
     return ret;
 }
@@ -1346,21 +1336,6 @@ out:
 }
 
 static PyObject *
-EdgesetTable_get_num_children(EdgesetTable *self, void *closure)
-{
-    PyObject *ret = NULL;
-
-    if (EdgesetTable_check_state(self) != 0) {
-        goto out;
-    }
-    ret = table_get_column_array(
-            self->edgeset_table->num_rows, self->edgeset_table->num_children, NPY_UINT32,
-            sizeof(uint32_t));
-out:
-    return ret;
-}
-
-static PyObject *
 EdgesetTable_get_children(EdgesetTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -1369,7 +1344,7 @@ EdgesetTable_get_children(EdgesetTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edgeset_table->total_children, self->edgeset_table->children, NPY_UINT32,
+            self->edgeset_table->children_length, self->edgeset_table->children, NPY_UINT32,
             sizeof(uint32_t));
 out:
     return ret;
@@ -1379,15 +1354,14 @@ static PyGetSetDef EdgesetTable_getsetters[] = {
     {"max_rows_increment",
         (getter) EdgesetTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"max_total_children_increment",
-        (getter) EdgesetTable_get_max_total_children_increment, NULL,
+    {"max_children_length_increment",
+        (getter) EdgesetTable_get_max_children_length_increment, NULL,
         "The total children increment"},
     {"num_rows", (getter) EdgesetTable_get_num_rows, NULL,
         "The number of rows in the table."},
     {"left", (getter) EdgesetTable_get_left, NULL, "The left array"},
     {"right", (getter) EdgesetTable_get_right, NULL, "The right array"},
     {"parent", (getter) EdgesetTable_get_parent, NULL, "The parent array"},
-    {"num_children", (getter) EdgesetTable_get_num_children, NULL, "The num_children array"},
     {"children", (getter) EdgesetTable_get_children, NULL, "The children array"},
     {NULL}  /* Sentinel */
 };
@@ -1768,21 +1742,21 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {
-        "max_rows_increment", "max_total_nodes_increment", NULL};
+        "max_rows_increment", "max_nodes_length_increment", NULL};
     Py_ssize_t max_rows_increment = 1024;
-    Py_ssize_t max_total_nodes_increment = 1024;
+    Py_ssize_t max_nodes_length_increment = 1024;
 
     self->mutation_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
-                &max_rows_increment, &max_total_nodes_increment)) {
+                &max_rows_increment, &max_nodes_length_increment)) {
         goto out;
     }
     if (max_rows_increment <= 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    if (max_total_nodes_increment <= 0) {
-        PyErr_SetString(PyExc_ValueError, "max_total_nodes_increment must be positive");
+    if (max_nodes_length_increment <= 0) {
+        PyErr_SetString(PyExc_ValueError, "max_nodes_length_increment must be positive");
         goto out;
     }
     self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
@@ -1791,7 +1765,7 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutation_table_alloc(self->mutation_table, max_rows_increment,
-            max_total_nodes_increment);
+            max_nodes_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1807,37 +1781,29 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     int err;
     size_t num_rows = 0;
-    size_t total_nodes = 0;
+    size_t nodes_length = 0;
     PyObject *position_input = NULL;
     PyArrayObject *position_array = NULL;
-    PyObject *num_nodes_input = NULL;
-    PyArrayObject *num_nodes_array = NULL;
     PyObject *nodes_input = NULL;
     PyArrayObject *nodes_array = NULL;
 
-    static char *kwlist[] = {"position", "num_nodes", "nodes", NULL};
+    static char *kwlist[] = {"position", "nodes", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO", kwlist,
-                &position_input, &num_nodes_input, &nodes_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO", kwlist,
+                &position_input, &nodes_input)) {
         goto out;
     }
-
     position_array = table_read_column_array(position_input, NPY_FLOAT64,
             &num_rows, false);
     if (position_array == NULL) {
         goto out;
     }
-    num_nodes_array = table_read_column_array(num_nodes_input, NPY_UINT32, &num_rows, true);
-    if (num_nodes_array == NULL) {
-        goto out;
-    }
-    nodes_array = table_read_column_array(nodes_input, NPY_UINT32, &total_nodes, false);
+    nodes_array = table_read_column_array(nodes_input, NPY_UINT32, &nodes_length, false);
     if (nodes_array == NULL) {
         goto out;
     }
     err = mutation_table_set_columns(self->mutation_table, num_rows,
-            PyArray_DATA(position_array), PyArray_DATA(num_nodes_array),
-            total_nodes, PyArray_DATA(nodes_array));
+            PyArray_DATA(position_array), nodes_length, PyArray_DATA(nodes_array));
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1845,7 +1811,6 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     ret = Py_BuildValue("");
 out:
     Py_XDECREF(position_array);
-    Py_XDECREF(num_nodes_array);
     Py_XDECREF(nodes_array);
     return ret;
 }
@@ -1863,13 +1828,13 @@ out:
 }
 
 static PyObject *
-MutationTable_get_max_total_nodes_increment(MutationTable *self, void *closure)
+MutationTable_get_max_nodes_length_increment(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_total_nodes_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_nodes_length_increment);
 out:
     return ret;
 }
@@ -1902,21 +1867,6 @@ out:
 }
 
 static PyObject *
-MutationTable_get_num_nodes(MutationTable *self, void *closure)
-{
-    PyObject *ret = NULL;
-
-    if (MutationTable_check_state(self) != 0) {
-        goto out;
-    }
-    ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->num_nodes, NPY_UINT32,
-            sizeof(uint32_t));
-out:
-    return ret;
-}
-
-static PyObject *
 MutationTable_get_nodes(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -1925,7 +1875,7 @@ MutationTable_get_nodes(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->total_nodes, self->mutation_table->nodes, NPY_UINT32,
+            self->mutation_table->nodes_length, self->mutation_table->nodes, NPY_UINT32,
             sizeof(uint32_t));
 out:
     return ret;
@@ -1935,14 +1885,13 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows_increment",
         (getter) MutationTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"max_total_nodes_increment",
-        (getter) MutationTable_get_max_total_nodes_increment, NULL,
+    {"max_nodes_length_increment",
+        (getter) MutationTable_get_max_nodes_length_increment, NULL,
         "The total nodes increment"},
     {"num_rows",
         (getter) MutationTable_get_num_rows, NULL,
         "The number of rows in the table."},
     {"position", (getter) MutationTable_get_position, NULL, "The position array"},
-    {"num_nodes", (getter) MutationTable_get_num_nodes, NULL, "The num_nodes array"},
     {"nodes", (getter) MutationTable_get_nodes, NULL, "The nodes array"},
     {NULL}  /* Sentinel */
 };

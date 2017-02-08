@@ -1002,7 +1002,7 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     mutation_table_t *mutations)
 {
     int ret = 0;
-    size_t j, offset, num_coordinates;
+    size_t j, k, offset, num_coordinates;
     uint32_t left, right;
     double *coordinates = NULL;
 
@@ -1034,7 +1034,7 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     self->trees.num_breakpoints = num_coordinates;
     self->sequence_length = coordinates[num_coordinates - 1];
     self->trees.num_nodes = nodes->num_rows;
-    self->trees.total_child_nodes = edgesets->total_children;
+    self->trees.total_child_nodes = edgesets->children_length - edgesets->num_rows;
     self->trees.num_records = edgesets->num_rows;
     self->sample_size = 0;
     for (j = 0; j < nodes->num_rows; j++) {
@@ -1046,7 +1046,7 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     self->mutations.total_nodes = 0;
     if (mutations != NULL) {
         self->mutations.num_records = mutations->num_rows;
-        self->mutations.total_nodes = mutations->total_nodes;
+        self->mutations.total_nodes = mutations->nodes_length - mutations->num_rows;
     }
     self->migrations.num_records = 0;
     if (migrations != NULL) {
@@ -1063,15 +1063,18 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
             nodes->num_rows * sizeof(uint32_t));
     memcpy(self->trees.records.node, edgesets->parent,
             edgesets->num_rows * sizeof(uint32_t));
-    memcpy(self->trees.records.num_children, edgesets->num_children,
-            edgesets->num_rows * sizeof(uint32_t));
-    memcpy(self->trees.records.children_mem, edgesets->children,
-            edgesets->total_children * sizeof(uint32_t));
-
     offset = 0;
+    k = 0;
     for (j = 0; j < self->trees.num_records; j++) {
-        self->trees.records.children[j] = &self->trees.records.children_mem[offset];
-        offset += self->trees.records.num_children[j];
+        self->trees.records.num_children[j] = 0;
+        self->trees.records.children[j] = self->trees.records.children_mem + offset;
+        while (k < edgesets->children_length && edgesets->children[k] != MSP_NULL_NODE) {
+            self->trees.records.children_mem[offset] = edgesets->children[k];
+            self->trees.records.num_children[j]++;
+            offset++;
+            k++;
+        }
+        k++;
     }
     assert(offset == self->trees.total_child_nodes);
 
@@ -1102,20 +1105,25 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     if (mutations != NULL) {
         memcpy(self->mutations.position, mutations->position,
                 mutations->num_rows * sizeof(double));
-        memcpy(self->mutations.num_nodes, mutations->num_nodes,
-                mutations->num_rows * sizeof(uint32_t));
-        memcpy(self->mutations.nodes_mem, mutations->nodes,
-                mutations->total_nodes * sizeof(uint32_t));
+        k = 0;
+        offset = 0;
+        for (j = 0; j < mutations->num_rows; j++) {
+            self->mutations.num_nodes[j] = 0;
+            self->mutations.nodes[j] = self->mutations.nodes_mem + offset;
+            while (mutations->nodes[k] != MSP_NULL_NODE && k < mutations->nodes_length) {
+                self->mutations.num_nodes[j]++;
+                self->mutations.nodes_mem[offset] = mutations->nodes[k];
+                k++;
+                offset++;
+            }
+            k++;
+        }
+        assert(offset == self->mutations.total_nodes);
         /* TMP */
         memset(self->mutations.ancestral_state, '0', mutations->num_rows * sizeof(char));
         memset(self->mutations.derived_state, '1', mutations->num_rows * sizeof(char));
 
-        offset = 0;
-        for (j = 0; j < mutations->num_rows; j++) {
-            self->mutations.nodes[j] = &self->mutations.nodes_mem[offset];
-            offset += mutations->num_nodes[j];
-        }
-        assert(offset == self->mutations.total_nodes);
+
     }
     if (migrations != NULL) {
         /* Set up the migrations */

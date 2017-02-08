@@ -100,10 +100,11 @@ class CommonTestsMixin(object):
         table = self.table_class()
         table.set_columns(**input_data)
         for equal_len_col_set in self.equal_len_columns:
-            for col in equal_len_col_set:
-                kwargs = dict(input_data)
-                kwargs[col] = np.zeros(1, dtype=np.uint32)
-                self.assertRaises(ValueError, table.set_columns, **kwargs)
+            if len(equal_len_col_set) > 1:
+                for col in equal_len_col_set:
+                    kwargs = dict(input_data)
+                    kwargs[col] = np.zeros(1, dtype=np.uint32)
+                    self.assertRaises(ValueError, table.set_columns, **kwargs)
 
     def test_set_read_only_attributes(self):
         table = self.table_class()
@@ -168,20 +169,18 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
         DoubleColumn("left"),
         DoubleColumn("right"),
         UInt32Column("parent"),
-        UInt32Column("num_children"),
         UInt32Column("children")]
-    equal_len_columns = [["left", "right", "parent", "num_children"]]
-    input_parameters = ["max_rows_increment", "max_total_children_increment"]
+    equal_len_columns = [["left", "right", "parent"]]
+    input_parameters = ["max_rows_increment", "max_children_length_increment"]
     table_class = msprime.EdgesetTable
 
 
 class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("position"),
-        UInt32Column("num_nodes"),
         UInt32Column("nodes")]
-    equal_len_columns = [["position", "num_nodes"]]
-    input_parameters = ["max_rows_increment", "max_total_nodes_increment"]
+    equal_len_columns = [["position"]]
+    input_parameters = ["max_rows_increment", "max_nodes_length_increment"]
     table_class = msprime.MutationTable
 
 
