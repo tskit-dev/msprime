@@ -27,7 +27,6 @@ import unittest
 import random
 
 import msprime
-import _msprime
 
 ##
 # This tests implementation of the algorithm described in branch-lengths-methods.md
@@ -35,14 +34,7 @@ import _msprime
 
 
 def build_tree_sequence(records, mutations=[]):
-    ts = _msprime.TreeSequence()
-    # quick workaround to get the samples.
-    # NOTE this is a temporary workaround; the planned API will import nodes,
-    # edgesets and mutations.
-    sample_size = min(record.node for record in records)
-    samples = [(0, 0) for _ in range(sample_size)]
-    ts.load_records(samples, records, mutations)
-    return msprime.TreeSequence(ts)
+    return msprime.load_coalescence_records(records=records, mutations=mutations)
 
 
 def path_length(tr, x, y):

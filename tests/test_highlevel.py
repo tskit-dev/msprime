@@ -201,12 +201,9 @@ def simplify_tree_sequence(ts, samples):
     for pos, nodes in new_mutations:
         sorted_nodes = tuple(sorted(node_map[node] for node in nodes))
         compressed_mutations.append((pos, sorted_nodes))
-    ll_ts = _msprime.TreeSequence()
-    ll_ts.load_records(
+    return msprime.load_coalescence_records(
         samples=[(0, 0) for _ in samples],
-        coalescence_records=compressed_records,
-        mutations=compressed_mutations)
-    return msprime.TreeSequence(ll_ts)
+        records=compressed_records, mutations=compressed_mutations)
 
 
 class TestHarmonicNumber(unittest.TestCase):
@@ -2003,12 +2000,10 @@ class TestNodeOrdering(HighLevelTestCase):
                 children=tuple(
                     sorted([node_map[c] for c in record.children])))
             new_records.append(new_record)
-        ll_ts = _msprime.TreeSequence()
-        # FIXME
-        ll_ts.load_records(
+        other_ts = msprime.load_coalescence_records(
             samples=[(0, 0) for _ in range(ts.sample_size)],
-            coalescence_records=new_records)
-        other_ts = msprime.TreeSequence(ll_ts)
+            records=new_records)
+
         self.assertEqual(ts.get_num_trees(), other_ts.get_num_trees())
         self.assertEqual(ts.get_sample_size(), other_ts.get_sample_size())
         self.assertEqual(ts.get_num_nodes(), other_ts.get_num_nodes())

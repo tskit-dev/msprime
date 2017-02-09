@@ -39,13 +39,7 @@ def cr(left=0, right=1, node=None, children=None, time=None, population=0):
 
 
 def build_tree_sequence(records, mutations=[]):
-    ts = _msprime.TreeSequence()
-    # FIXME this is a hack to get the sample size. This API will be removed in favour
-    # of specifying nodes, so no point in cleaning it up.
-    n = max(2, min(r[2] for r in records))
-    samples = [(0, 0) for _ in range(n)]
-    ts.load_records(samples, records, mutations)
-    return msprime.TreeSequence(ts)
+    return msprime.load_coalescence_records(records=records, mutations=mutations)
 
 
 def insert_redundant_breakpoints(ts):
@@ -165,7 +159,8 @@ class TestUnaryNodes(TopologyTestCase):
             cr(left=0, right=1, node=4, children=(2, 3), time=2),
             cr(left=0, right=1, node=5, children=(4,), time=3),
         ]
-        mutations = [(j * 1 / 5, (j,)) for j in range(5)]
+        mutations = [
+            msprime.Mutation(index=j, position=j * 1 / 5, nodes=(j,)) for j in range(5)]
         ts = build_tree_sequence(records, mutations)
         self.assertEqual(ts.sample_size, 2)
         self.assertEqual(ts.num_nodes, 6)

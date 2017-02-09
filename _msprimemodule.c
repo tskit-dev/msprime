@@ -166,115 +166,6 @@ handle_input_error(int err)
 }
 
 static int
-parse_coalescence_record(PyObject *tuple, coalescence_record_t *cr)
-{
-    int ret = -1;
-    size_t size, j;
-    long v;
-    PyObject *item;
-    PyObject *children;
-    const char *err = "Coalescence records must be tuples of the form "
-        "(left, right, node, (children), time, population_id)";
-
-    if (!PyTuple_Check(tuple)) {
-        PyErr_SetString(
-            PyExc_TypeError, "Coalescence records must be a tuple.");
-        goto out;
-    }
-    size = PyTuple_Size(tuple);
-    if (size != 6) {
-        PyErr_SetString(PyExc_ValueError, err);
-        goto out;
-    }
-    /* left */
-    item = PyTuple_GetItem(tuple, 0);
-    if (!PyNumber_Check(item)) {
-        PyErr_Format(PyExc_TypeError, "'left' is not number");
-        goto out;
-    }
-    cr->left = PyFloat_AsDouble(item);
-    if (PyErr_Occurred() != NULL) {
-        goto out;
-    }
-    /* right */
-    item = PyTuple_GetItem(tuple, 1);
-    if (!PyNumber_Check(item)) {
-        PyErr_Format(PyExc_TypeError, "'right' is not number");
-        goto out;
-    }
-    cr->right = PyFloat_AsDouble(item);
-    if (PyErr_Occurred() != NULL) {
-        goto out;
-    }
-    /* node */
-    item = PyTuple_GetItem(tuple, 2);
-    if (!PyNumber_Check(item)) {
-        PyErr_Format(PyExc_TypeError, "'node' is not number");
-        goto out;
-    }
-    cr->node = (uint32_t) PyLong_AsLong(item);
-    if (PyErr_Occurred() != NULL) {
-        goto out;
-    }
-    /* children */
-    children = PyTuple_GetItem(tuple, 3);
-    if (!PyTuple_Check(children)) {
-        PyErr_SetString(PyExc_TypeError, "children must be a tuple.");
-        goto out;
-    }
-    if (PyTuple_Size(children) < 1) {
-        PyErr_SetString(PyExc_ValueError, "Must be >= 1 children");
-        goto out;
-    }
-    cr->num_children = PyTuple_Size(children);
-    cr->children = PyMem_Malloc(cr->num_children * sizeof(uint32_t));
-    if (cr->children == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    for (j = 0; j < cr->num_children; j++) {
-        item = PyTuple_GetItem(children, j);
-        if (!PyNumber_Check(item)) {
-            PyErr_Format(PyExc_TypeError, "children[%d]' is not number",
-                (int)j);
-            goto out;
-        }
-        cr->children[j] = (uint32_t) PyLong_AsLong(item);
-        if (PyErr_Occurred() != NULL) {
-            goto out;
-        }
-    }
-    /* time */
-    item = PyTuple_GetItem(tuple, 4);
-    if (!PyNumber_Check(item)) {
-        PyErr_Format(PyExc_TypeError, "'time' is not number");
-        goto out;
-    }
-    cr->time = PyFloat_AsDouble(item);
-    if (PyErr_Occurred() != NULL) {
-        goto out;
-    }
-    /* population */
-    item = PyTuple_GetItem(tuple, 5);
-    if (!PyNumber_Check(item)) {
-        PyErr_Format(PyExc_TypeError, "'population_id' is not number");
-        goto out;
-    }
-    v = PyLong_AsLong(item);
-    if (PyErr_Occurred() != NULL) {
-        goto out;
-    }
-    if (v == -1) {
-        cr->population_id = MSP_NULL_POPULATION_ID;
-    } else {
-        cr->population_id = (uint32_t) v;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static int
 parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
         uint32_t **samples)
 {
@@ -374,78 +265,6 @@ out:
     if (ret_samples != NULL) {
         PyMem_Free(ret_samples);
     }
-    return ret;
-}
-
-static int
-parse_mutations(PyObject *py_mutations, Py_ssize_t *num_mutations, mutation_t **mutations)
-{
-    int ret = -1;
-    Py_ssize_t j, n;
-    uint32_t k;
-    long tmp_long;
-    PyObject *item, *pos, *nodes, *value;
-    mutation_t *ret_mutations = NULL;
-
-    n = PyList_Size(py_mutations);
-    ret_mutations = PyMem_Malloc(n * sizeof(mutation_t));
-    if (ret_mutations == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    for (j = 0; j < n; j++) {
-        item = PyList_GetItem(py_mutations, j);
-        if (!PyTuple_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "not a tuple");
-            goto out;
-        }
-        if (PyTuple_Size(item) < 2) {
-            PyErr_SetString(PyExc_ValueError, "mutations must (pos, nodes, ...) tuples");
-            goto out;
-        }
-        pos = PyTuple_GetItem(item, 0);
-        ret_mutations[j].position = PyFloat_AsDouble(pos);
-        nodes = PyTuple_GetItem(item, 1);
-        if (!PyNumber_Check(pos)) {
-            PyErr_SetString(PyExc_TypeError, "position must be a number");
-            goto out;
-        }
-        if (!PyTuple_Check(nodes)) {
-            PyErr_SetString(PyExc_TypeError, "nodes must be a tuple");
-            goto out;
-        }
-        ret_mutations[j].num_nodes = PyTuple_Size(nodes);
-        if (ret_mutations[j].num_nodes == 0) {
-            PyErr_SetString(PyExc_ValueError, "Must be at least one node.");
-            goto out;
-        }
-        ret_mutations[j].nodes = PyMem_Malloc(
-                ret_mutations[j].num_nodes * sizeof(uint32_t));
-        if (ret_mutations[j].nodes == NULL) {
-            PyErr_NoMemory();
-            goto out;
-        }
-        for (k = 0; k < ret_mutations[j].num_nodes; k++) {
-            value = PyTuple_GetItem(nodes, k);
-            if (!PyNumber_Check(value)) {
-                PyErr_Format(PyExc_TypeError, "nodes item not a number");
-                goto out;
-            }
-            tmp_long = PyLong_AsLong(value);
-            if (tmp_long < 0) {
-                PyErr_SetString(PyExc_ValueError, "negative nodes not valid");
-                goto out;
-            }
-            ret_mutations[j].nodes[k] = (uint32_t) tmp_long;
-        }
-        /* FIXME */
-        ret_mutations[j].ancestral_state = '0';
-        ret_mutations[j].derived_state = '1';
-    }
-    *num_mutations = n;
-    *mutations = ret_mutations;
-    ret = 0;
-out:
     return ret;
 }
 
@@ -982,16 +801,19 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
     int err;
     size_t num_rows, name_length;
     char *name_data;
+    void *population_data;
     PyObject *time_input = NULL;
     PyArrayObject *time_array = NULL;
     PyObject *flags_input = NULL;
     PyArrayObject *flags_array = NULL;
+    PyObject *population_input = NULL;
+    PyArrayObject *population_array = NULL;
     PyObject *name_input = NULL;
     PyArrayObject *name_array = NULL;
-    static char *kwlist[] = {"flags", "time", "name", NULL};
+    static char *kwlist[] = {"flags", "time", "population", "name", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|O", kwlist,
-                &flags_input, &time_input, &name_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|OO", kwlist,
+                &flags_input, &time_input, &population_input, &name_input)) {
         goto out;
     }
     flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
@@ -1002,18 +824,26 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
     if (time_array == NULL) {
         goto out;
     }
+    population_data = NULL;
+    if (population_input != NULL) {
+        population_array = table_read_column_array(population_input, NPY_UINT32,
+                &num_rows, true);
+        if (population_array == NULL) {
+            goto out;
+        }
+        population_data = PyArray_DATA(population_array);
+    }
     name_length = 0;
     name_data = NULL;
     if (name_input != NULL) {
-        name_array = table_read_column_array(name_input, NPY_INT8,
-                &name_length, false);
+        name_array = table_read_column_array(name_input, NPY_INT8, &name_length, false);
         if (name_array == NULL) {
             goto out;
         }
         name_data = PyArray_DATA(name_array);
     }
     err = node_table_set_columns(self->node_table, num_rows,
-            PyArray_DATA(flags_array), PyArray_DATA(time_array), NULL,
+            PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
             name_length, name_data);
     if (err != 0) {
         handle_library_error(err);
@@ -1079,6 +909,20 @@ out:
 }
 
 static PyObject *
+NodeTable_get_population(NodeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->node_table->num_rows, self->node_table->population,
+            NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
 NodeTable_get_name(NodeTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -1101,6 +945,7 @@ static PyGetSetDef NodeTable_getsetters[] = {
         "The number of rows in the table."},
     {"time", (getter) NodeTable_get_time, NULL, "The time array"},
     {"flags", (getter) NodeTable_get_flags, NULL, "The flags array"},
+    {"population", (getter) NodeTable_get_population, NULL, "The population array"},
     {"name", (getter) NodeTable_get_name, NULL, "The name array"},
     {NULL}  /* Sentinel */
 };
@@ -2554,108 +2399,6 @@ out:
 }
 
 static PyObject *
-TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
-{
-    int err;
-    PyObject *ret = NULL;
-    PyObject *py_records = NULL;
-    PyObject *py_samples = NULL;
-    PyObject *py_mutations = NULL;
-    PyObject *py_provenance_strings = NULL;
-    PyObject *item;
-    coalescence_record_t *records = NULL;
-    mutation_t *mutations = NULL;
-    sample_t *samples = NULL;
-    char **provenance_strings = NULL;
-    Py_ssize_t num_samples, num_mutations, num_provenance_strings;
-    size_t num_records, j;
-    static char *kwlist[] = {"samples", "coalescence_records", "mutations",
-        "provenance_strings", NULL};
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!", kwlist,
-                &PyList_Type, &py_samples,
-                &PyList_Type, &py_records,
-                &PyList_Type, &py_mutations,
-                &PyList_Type, &py_provenance_strings)) {
-        goto out;
-    }
-    num_records = PyList_Size(py_records);
-    records = PyMem_Malloc(num_records * sizeof(coalescence_record_t));
-    if (records == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    memset(records, 0, num_records * sizeof(coalescence_record_t));
-    for (j = 0; j < num_records; j++) {
-        item = PyList_GetItem(py_records, j);
-        if (parse_coalescence_record(item, &records[j]) != 0) {
-            goto out;
-        }
-    }
-    if (parse_samples(py_samples, &num_samples, &samples) != 0) {
-        goto out;
-    }
-    if (num_samples < 2) {
-        PyErr_SetString(PyExc_ValueError, "At least two samples required.");
-        goto out;
-    }
-    num_mutations = 0;
-    if (py_mutations != NULL) {
-        if (parse_mutations(py_mutations, &num_mutations, &mutations) != 0) {
-            goto out;
-        }
-    }
-    num_provenance_strings = 0;
-    if (py_provenance_strings != NULL) {
-        if (parse_provenance_strings(py_provenance_strings, &num_provenance_strings,
-                    &provenance_strings) != 0) {
-            goto out;
-        }
-    }
-    /*
-    err = tree_sequence_load_records(self->tree_sequence,
-            num_samples, samples,
-            num_records, records,
-            num_mutations, mutations,
-            0, NULL,
-            num_provenance_strings, (const char **) provenance_strings);
-    */
-    err = -1;
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    if (records != NULL) {
-        for (j = 0; j < num_records; j++) {
-            if (records[j].children != NULL) {
-                PyMem_Free(records[j].children);
-            }
-        }
-        PyMem_Free(records);
-    }
-    if (samples != NULL) {
-        PyMem_Free(samples);
-    }
-    if (mutations != NULL) {
-        for (j = 0; j < num_mutations; j++) {
-            if (mutations[j].nodes != NULL) {
-                PyMem_Free(mutations[j].nodes);
-            }
-        }
-        PyMem_Free(mutations);
-    }
-    if (provenance_strings != NULL) {
-        PyMem_Free(provenance_strings);
-    }
-    return ret;
-}
-
-static PyObject *
 TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
@@ -2704,6 +2447,54 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         nodes->node_table, edgesets->edgeset_table,
         migrations->migration_table, mutations->mutation_table,
         num_provenance_strings, provenance_strings);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    NodeTable *nodes = NULL;
+    EdgesetTable *edgesets = NULL;
+    MigrationTable *migrations = NULL;
+    MutationTable *mutations = NULL;
+    size_t num_provenance_strings = 0;
+    char **provenance_strings = NULL;
+    static char *kwlist[] = {"nodes", "edgesets", "migrations", "mutations", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!", kwlist,
+            &NodeTableType, &nodes,
+            &EdgesetTableType, &edgesets,
+            &MigrationTableType, &migrations,
+            &MutationTableType, &mutations)) {
+        goto out;
+    }
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (NodeTable_check_state(nodes) != 0) {
+        goto out;
+    }
+    if (EdgesetTable_check_state(edgesets) != 0) {
+        goto out;
+    }
+    if (MigrationTable_check_state(migrations) != 0) {
+        goto out;
+    }
+    if (MutationTable_check_state(mutations) != 0) {
+        goto out;
+    }
+    err = tree_sequence_dump_tables_tmp(self->tree_sequence,
+        nodes->node_table, edgesets->edgeset_table,
+        migrations->migration_table, mutations->mutation_table,
+        &num_provenance_strings, &provenance_strings);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3084,12 +2875,12 @@ static PyMethodDef TreeSequence_methods[] = {
     {"load", (PyCFunction) TreeSequence_load,
         METH_VARARGS|METH_KEYWORDS,
         "Loads a tree sequence from the specified path."},
-    {"load_records", (PyCFunction) TreeSequence_load_records,
-        METH_VARARGS|METH_KEYWORDS,
-        "Loads a tree sequence from the specified set of records"},
     {"load_tables", (PyCFunction) TreeSequence_load_tables,
         METH_VARARGS|METH_KEYWORDS,
         "Loads a tree sequence from the specified set of tables"},
+    {"dump_tables", (PyCFunction) TreeSequence_dump_tables,
+        METH_VARARGS|METH_KEYWORDS,
+        "Dumps the tree sequence to the specified set of tables"},
     {"get_provenance_strings", (PyCFunction) TreeSequence_get_provenance_strings,
         METH_NOARGS, "Returns the list of provenance strings."},
     {"get_mutations", (PyCFunction) TreeSequence_get_mutations,

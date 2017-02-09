@@ -87,6 +87,64 @@ Sample = collections.namedtuple(
     ["population", "time"])
 
 
+def load_coalescence_records(
+        samples=None, records=None, mutations=None, provenance=[]):
+    """
+    Temporary function used to create a tree sequence using the 'coalescence records'
+    paradigm. This is used a bridge between existing code and the new table based
+    APIs.
+    """
+    num_nodes = -1
+    for r in records:
+        num_nodes = max(r.node, num_nodes, max(r.children))
+    num_nodes += 1
+    if samples is None:
+        n = max(2, min(r.node for r in records))
+    else:
+        n = len(samples)
+    flags = [int(j < n) for j in range(num_nodes)]
+    time = [0 for j in range(num_nodes)]
+    population = [0 for j in range(num_nodes)]
+    if samples is not None:
+        for j, (p, t) in enumerate(samples):
+            time[j] = t
+            population[j] = p
+    left = []
+    right = []
+    parent = []
+    children = []
+    for record in records:
+        time[record.node] = record.time
+        population[record.node] = record.population
+        left.append(record.left)
+        right.append(record.right)
+        parent.append(record.node)
+        children.extend(record.children)
+        children.append(msprime.NULL_NODE)
+
+    node_table = msprime.NodeTable()
+    node_table.set_columns(flags=flags, time=time, population=population)
+    edgeset_table = msprime.EdgesetTable()
+    edgeset_table.set_columns(left=left, right=right, parent=parent, children=children)
+    migration_table = msprime.MigrationTable()
+    mutation_table = msprime.MutationTable()
+    position = []
+    nodes = []
+    if mutations is not None:
+        for mutation in mutations:
+            position.append(mutation[0])
+            nodes.extend(mutation[1])
+            nodes.append(msprime.NULL_NODE)
+    mutation_table.set_columns(position=position, nodes=nodes)
+
+    ll_ts = _msprime.TreeSequence()
+    ll_ts.load_tables(
+        nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
+        mutations=mutation_table, provenance_strings=provenance)
+    ts = msprime.TreeSequence(ll_ts)
+    return ts
+
+
 def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
     """
     Returns true if the specified pair of integers are equal to
@@ -1442,24 +1500,31 @@ class TreeSequence(object):
         # Get the samples for these records.
         num_samples = min(r.node for r in records)
         samples = [Sample(0, 0) for _ in range(num_samples)]
-        ts = _msprime.TreeSequence()
-        ts.load_records(
-            samples=samples, coalescence_records=records, mutations=mutations)
-        return TreeSequence(ts)
+        return load_coalescence_records(
+            samples=samples, records=records, mutations=mutations)
 
     def copy(self, mutations=None):
         # Experimental API. Return a copy of this tree sequence, optionally with
         # the mutations set to the specified list.
-
-        # To get the samples we must first get the tree.
-        tree = next(self.trees())
-        samples = [
-            msprime.Sample(tree.population(u), tree.time(u)) for u in self.samples()]
-        if mutations is None:
-            mutations = list(self.mutations())
-        records = list(self.records())
+        node_table = msprime.NodeTable()
+        edgeset_table = msprime.EdgesetTable()
+        migration_table = msprime.MigrationTable()
+        mutation_table = msprime.MutationTable()
+        self._ll_tree_sequence.dump_tables(
+            nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
+            mutations=mutation_table)
+        if mutations is not None:
+            position = []
+            nodes = []
+            for mutation in mutations:
+                position.append(mutation[0])
+                nodes.extend(mutation[1])
+                nodes.append(msprime.NULL_NODE)
+            mutation_table.set_columns(position=position, nodes=nodes)
         new_ll_ts = _msprime.TreeSequence()
-        new_ll_ts.load_records(samples, records, mutations)
+        new_ll_ts.load_tables(
+            nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
+            mutations=mutation_table)
         return TreeSequence(new_ll_ts)
 
     @property

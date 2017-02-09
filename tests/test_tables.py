@@ -144,9 +144,10 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         UInt32Column("flags"),
         DoubleColumn("time"),
+        UInt32Column("population"),
         CharColumn("name")]
     input_parameters = ["max_rows_increment"]
-    equal_len_columns = [["time", "flags"]]
+    equal_len_columns = [["time", "flags", "population"]]
     table_class = msprime.NodeTable
 
     def test_variable_stuff(self):
