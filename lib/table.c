@@ -243,11 +243,11 @@ edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
 {
     int ret = 0;
 
+    memset(self, 0, sizeof(edgeset_table_t));
     if (max_rows_increment == 0 || max_children_length_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    memset(self, 0, sizeof(edgeset_table_t));
     self->max_rows_increment = max_rows_increment;
     self->max_children_length_increment = max_children_length_increment;
     self->max_rows = 0;
@@ -424,11 +424,11 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
 {
     int ret = 0;
 
+    memset(self, 0, sizeof(mutation_table_t));
     if (max_rows_increment == 0 || max_nodes_length_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    memset(self, 0, sizeof(mutation_table_t));
     self->max_rows_increment = max_rows_increment;
     self->max_nodes_length_increment = max_nodes_length_increment;
     self->max_rows = 0;

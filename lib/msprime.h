@@ -620,22 +620,19 @@ size_t msp_get_num_recombination_events(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self, FILE *out);
 int tree_sequence_initialise(tree_sequence_t *self);
-int tree_sequence_load_records(tree_sequence_t *self,
-        size_t num_samples, sample_t *samples,
-        size_t num_coalescence_records, coalescence_record_t *coalescence_records,
-        size_t num_mutations, mutation_t *mutations,
-        size_t num_migrations, migration_t *migrations,
-        size_t num_provenance_strings, const char **provenance_strings);
+/* Marking the x_tables API as tmp until we figure out what to do
+ * with provenance. */
 int tree_sequence_load_tables_tmp(tree_sequence_t *self,
         node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
         mutation_table_t *mutations, size_t num_provenance_strings,
-        const char **provenance_strings);
+        char **provenance_strings);
+int tree_sequence_dump_tables_tmp(tree_sequence_t *self, node_table_t *node_table,
+        edgeset_table_t *edgeset_table, migration_table_t *migration_table,
+        mutation_table_t *mutations, size_t *num_provenance_strings,
+        char ***provenance_strings);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
-int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
-
-/* REMOVE */
-size_t tree_sequence_get_num_coalescence_records(tree_sequence_t *self);
+int tree_sequence_free(tree_sequence_t *self);
 
 size_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
@@ -646,15 +643,10 @@ size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 
-
-int tree_sequence_get_node(tree_sequence_t *self, size_t index, node_t *node);
+int tree_sequence_get_node(tree_sequence_t *self, uint32_t index, node_t *node);
 int tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgeset);
 int tree_sequence_get_migration(tree_sequence_t *self, size_t index,
         migration_t *migration);
-
-int tree_sequence_get_coalescence_record(tree_sequence_t *self, size_t index,
-        coalescence_record_t *record, int order);
-
 int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t **mutations);
 int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u, sample_t *sample);
 int tree_sequence_get_time(tree_sequence_t *self, uint32_t u, double *t);

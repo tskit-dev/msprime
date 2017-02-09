@@ -64,8 +64,8 @@ cmp_index_sort(const void *a, const void *b) {
 
 static int
 cmp_record_time_left(const void *a, const void *b) {
-    const coalescence_record_t *ca = (const coalescence_record_t *) a;
-    const coalescence_record_t *cb = (const coalescence_record_t *) b;
+    const edgeset_t *ca = (const edgeset_t *) a;
+    const edgeset_t *cb = (const edgeset_t *) b;
     int ret = (ca->time > cb->time) - (ca->time < cb->time);
     if (ret == 0) {
         ret = (ca->left > cb->left) - (ca->left < cb->left);
@@ -572,6 +572,7 @@ out:
     return ret;
 }
 
+#if 0
 static int WARN_UNUSED
 tree_sequence_store_samples(tree_sequence_t *self, size_t num_samples, sample_t *samples)
 {
@@ -593,8 +594,8 @@ out:
 }
 
 static int WARN_UNUSED
-tree_sequence_store_coalescence_records(tree_sequence_t *self,
-        size_t num_coalescence_records, coalescence_record_t *coalescence_records)
+tree_sequence_store_edgesets(tree_sequence_t *self,
+        size_t num_edgesets, edgeset_t *edgesets)
 {
     int ret = MSP_ERR_GENERIC;
     size_t j, k, offset;
@@ -605,26 +606,26 @@ tree_sequence_store_coalescence_records(tree_sequence_t *self,
 
     offset = 0;
     for (j = 0; j < self->trees.num_records; j++) {
-        node = coalescence_records[j].node;
+        node = edgesets[j].node;
         if (self->trees.nodes.time[node] == 0.0) {
-            self->trees.nodes.time[node] = coalescence_records[j].time;
-        } else if (self->trees.nodes.time[node] != coalescence_records[j].time) {
+            self->trees.nodes.time[node] = edgesets[j].time;
+        } else if (self->trees.nodes.time[node] != edgesets[j].time) {
             ret = MSP_ERR_INCONSISTENT_NODE_TIMES;
             goto out;
         }
         if (self->trees.nodes.population[node] == MSP_NULL_POPULATION_ID) {
-            self->trees.nodes.population[node] = coalescence_records[j].population_id;
+            self->trees.nodes.population[node] = edgesets[j].population_id;
         } else if (self->trees.nodes.population[node] !=
-                coalescence_records[j].population_id) {
+                edgesets[j].population_id) {
             ret = MSP_ERR_INCONSISTENT_POPULATION_IDS;
             goto out;
         }
-        self->trees.records.node[j] = coalescence_records[j].node;
-        self->trees.records.num_children[j] = coalescence_records[j].num_children;
+        self->trees.records.node[j] = edgesets[j].node;
+        self->trees.records.num_children[j] = edgesets[j].num_children;
         self->trees.records.children[j] = &self->trees.records.children_mem[offset];
-        offset += coalescence_records[j].num_children;
-        for (k = 0; k < coalescence_records[j].num_children; k++) {
-            self->trees.records.children[j][k] = coalescence_records[j].children[k];
+        offset += edgesets[j].num_children;
+        for (k = 0; k < edgesets[j].num_children; k++) {
+            self->trees.records.children[j][k] = edgesets[j].children[k];
         }
     }
     assert(offset == self->trees.total_child_nodes);
@@ -640,7 +641,7 @@ tree_sequence_store_coalescence_records(tree_sequence_t *self,
      * records should be inserted */
     for (j = 0; j < self->trees.num_records; j++) {
         sort_buff[j].index = (uint32_t ) j;
-        sort_buff[j].value = coalescence_records[j].left;
+        sort_buff[j].value = edgesets[j].left;
         /* When comparing equal left values, we sort by time. Since we require
          * that records are provided in sorted order, the index can be
          * taken as a proxy for time. This avoids issues unstable sort
@@ -665,7 +666,7 @@ tree_sequence_store_coalescence_records(tree_sequence_t *self,
      * records should be removed. */
     for (j = 0; j < self->trees.num_records; j++) {
         sort_buff[j].index = (uint32_t ) j;
-        sort_buff[j].value = coalescence_records[j].right;
+        sort_buff[j].value = edgesets[j].right;
         sort_buff[j].time = -1 * (int64_t ) j;
     }
     qsort(sort_buff, self->trees.num_records, sizeof(index_sort_t), cmp_index_sort);
@@ -691,6 +692,8 @@ out:
     }
     return ret;
 }
+
+#endif
 
 /* Sets up the memory for the mutations associated with each tree.
  */
@@ -728,6 +731,7 @@ tree_sequence_init_tree_mutations(tree_sequence_t *self)
     return ret;
 }
 
+#if 0
 static int WARN_UNUSED
 tree_sequence_store_mutations(tree_sequence_t *self, size_t num_mutations,
         mutation_t *mutations)
@@ -782,10 +786,11 @@ tree_sequence_store_mutations(tree_sequence_t *self, size_t num_mutations,
 out:
     return ret;
 }
+#endif
 
 static int WARN_UNUSED
 tree_sequence_store_provenance_strings(tree_sequence_t *self,
-        size_t num_provenance_strings, const char**provenance_strings)
+        size_t num_provenance_strings, char**provenance_strings)
 {
     int ret = MSP_ERR_GENERIC;
     char *s;
@@ -815,10 +820,107 @@ out:
     return ret;
 }
 
+/* Temporary interface used to translate into load_tables for the simplify
+ * function. Remove once simplify has been updated.
+ */
+static int WARN_UNUSED
+tree_sequence_load_records(tree_sequence_t *self,
+        size_t num_samples, sample_t *samples,
+        size_t num_coalescence_records, coalescence_record_t *records,
+        size_t num_mutations, mutation_t *mutations)
+{
+    int ret = MSP_ERR_GENERIC;
+    node_table_t *node_table = NULL;
+    edgeset_table_t *edgeset_table = NULL;
+    mutation_table_t *mutation_table = NULL;
+    size_t j;
+    uint32_t last_node;
+    coalescence_record_t *cr;
+
+    node_table = malloc(sizeof(node_table_t));
+    if (node_table == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = node_table_alloc(node_table, num_samples + num_coalescence_records, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    edgeset_table = malloc(sizeof(edgeset_table_t));
+    if (edgeset_table == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = edgeset_table_alloc(edgeset_table, num_coalescence_records,
+            2 * num_coalescence_records);
+    if (ret != 0) {
+        goto out;
+    }
+    mutation_table = malloc(sizeof(mutation_table_t));
+    if (mutation_table == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = mutation_table_alloc(mutation_table, num_mutations + 1, num_mutations + 1);
+    if (ret != 0) {
+        goto out;
+    }
+
+    for (j = 0; j < num_samples; j++) {
+        ret = node_table_add_row(node_table, MSP_NODE_SAMPLE,
+                samples[j].time, samples[j].population_id, "");
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    last_node = 0;
+    for (j = 0; j < num_coalescence_records; j++) {
+        cr = &records[j];
+        if (cr->node != last_node) {
+            assert(cr->node > last_node);
+            last_node = cr->node;
+            ret = node_table_add_row(node_table, 0, cr->time, cr->population_id, "");
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        ret = edgeset_table_add_row(edgeset_table, cr->left, cr->right,
+                cr->node, cr->num_children, cr->children);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    for (j = 0; j < num_mutations; j++) {
+        ret = mutation_table_add_row(mutation_table, mutations[j].position,
+                mutations[j].num_nodes, mutations[j].nodes);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = tree_sequence_load_tables_tmp(self, node_table, edgeset_table,
+            NULL, mutation_table, 0, NULL);
+
+out:
+    if (node_table != NULL) {
+        node_table_free(node_table);
+        free(node_table);
+    }
+    if (edgeset_table != NULL) {
+        edgeset_table_free(edgeset_table);
+        free(edgeset_table);
+    }
+    if (mutation_table != NULL) {
+        mutation_table_free(mutation_table);
+        free(mutation_table);
+    }
+    return ret;
+}
+
+#if 0
 int WARN_UNUSED
 tree_sequence_load_records(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
-        size_t num_coalescence_records, coalescence_record_t *coalescence_records,
+        size_t num_edgesets, edgeset_t *edgesets,
         size_t num_mutations, mutation_t *mutations,
         size_t num_migrations, migration_t *migrations,
         size_t num_provenance_strings, const char **provenance_strings)
@@ -833,11 +935,11 @@ tree_sequence_load_records(tree_sequence_t *self,
         ret = MSP_ERR_NOT_INITIALISED;
         goto out;
     }
-    if (num_coalescence_records == 0) {
+    if (num_edgesets == 0) {
         ret = MSP_ERR_ZERO_RECORDS;
         goto out;
     }
-    left = malloc((num_coalescence_records + 1) * sizeof(double));
+    left = malloc((num_edgesets + 1) * sizeof(double));
     if (left == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -850,26 +952,26 @@ tree_sequence_load_records(tree_sequence_t *self,
     self->mutations.num_records = 0;
     self->trees.total_child_nodes = 0;
     self->sequence_length = 0.0;
-    self->trees.num_records = num_coalescence_records;
+    self->trees.num_records = num_edgesets;
     self->trees.num_nodes = 0;
     for (j = 0; j < self->trees.num_records; j++) {
-        self->trees.total_child_nodes += coalescence_records[j].num_children;
-        if (coalescence_records[j].node == MSP_NULL_NODE) {
+        self->trees.total_child_nodes += edgesets[j].num_children;
+        if (edgesets[j].node == MSP_NULL_NODE) {
             ret = MSP_ERR_NULL_NODE_IN_RECORD;
             goto out;
         }
-        for (k = 0; k < coalescence_records[j].num_children; k++) {
-            if (coalescence_records[j].children[k] == MSP_NULL_NODE) {
+        for (k = 0; k < edgesets[j].num_children; k++) {
+            if (edgesets[j].children[k] == MSP_NULL_NODE) {
                 ret = MSP_ERR_NULL_NODE_IN_RECORD;
                 goto out;
             }
             self->trees.num_nodes = GSL_MAX(self->trees.num_nodes,
-                    coalescence_records[j].children[k]);
+                    edgesets[j].children[k]);
         }
-        self->sample_size = GSL_MIN(self->sample_size, coalescence_records[j].node);
-        self->trees.num_nodes = GSL_MAX(self->trees.num_nodes, coalescence_records[j].node);
-        self->sequence_length = GSL_MAX(self->sequence_length, coalescence_records[j].right);
-        left[j] = coalescence_records[j].left;
+        self->sample_size = GSL_MIN(self->sample_size, edgesets[j].node);
+        self->trees.num_nodes = GSL_MAX(self->trees.num_nodes, edgesets[j].node);
+        self->sequence_length = GSL_MAX(self->sequence_length, edgesets[j].right);
+        left[j] = edgesets[j].left;
     }
     if (self->sample_size < 2 || self->sample_size != num_samples) {
         ret = MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE;
@@ -880,11 +982,11 @@ tree_sequence_load_records(tree_sequence_t *self,
         goto out;
     }
     self->trees.num_nodes++;
-    left[num_coalescence_records] = self->sequence_length;
-    qsort(left, num_coalescence_records + 1, sizeof(double), cmp_double);
+    left[num_edgesets] = self->sequence_length;
+    qsort(left, num_edgesets + 1, sizeof(double), cmp_double);
     self->trees.num_breakpoints = 0;
     last_breakpoint = -1.0;
-    for (j = 0; j < num_coalescence_records + 1; j++) {
+    for (j = 0; j < num_edgesets + 1; j++) {
         if (left[j] != last_breakpoint) {
             self->trees.num_breakpoints++;
             last_breakpoint = left[j];
@@ -913,15 +1015,15 @@ tree_sequence_load_records(tree_sequence_t *self,
     /* Store the breakpoints */
     last_breakpoint = -1.0;
     k = 0;
-    for (j = 0; j < num_coalescence_records + 1; j++) {
+    for (j = 0; j < num_edgesets + 1; j++) {
         if (left[j] != last_breakpoint) {
             self->trees.breakpoints[k] = left[j];
             k++;
             last_breakpoint = left[j];
         }
     }
-    ret = tree_sequence_store_coalescence_records(self, num_coalescence_records,
-            coalescence_records);
+    ret = tree_sequence_store_edgesets(self, num_edgesets,
+            edgesets);
     if (ret != 0) {
         goto out;
     }
@@ -941,6 +1043,7 @@ out:
     }
     return ret;
 }
+#endif
 
 
 static int WARN_UNUSED
@@ -1000,7 +1103,7 @@ int WARN_UNUSED
 tree_sequence_load_tables_tmp(tree_sequence_t *self,
     node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
     mutation_table_t *mutations, size_t num_provenance_strings,
-    const char **provenance_strings)
+    char **provenance_strings)
 {
     int ret = 0;
     size_t j, k, offset, num_coordinates;
@@ -1155,6 +1258,83 @@ out:
     }
     return ret;
 }
+
+
+int WARN_UNUSED
+tree_sequence_dump_tables_tmp(tree_sequence_t *self,
+    node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
+    mutation_table_t *mutations, size_t *num_provenance_strings,
+    char ***provenance_strings)
+{
+    int ret = 0;
+    uint32_t flags;
+    size_t j;
+    double left, right;
+
+    ret = node_table_reset(nodes);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_reset(edgesets);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = migration_table_reset(migrations);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_reset(mutations);
+    if (ret != 0) {
+        goto out;
+    }
+
+    for (j = 0; j < self->trees.num_nodes; j++) {
+        /* FIXME */
+        flags = j < self->sample_size? MSP_NODE_SAMPLE: 0;
+        ret = node_table_add_row(nodes, flags,
+                self->trees.nodes.time[j], self->trees.nodes.population[j], "");
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    for (j = 0; j < self->trees.num_records; j++) {
+        left = self->trees.breakpoints[self->trees.records.left[j]];
+        right = self->trees.breakpoints[self->trees.records.right[j]];
+        ret = edgeset_table_add_row(edgesets, left, right,
+                self->trees.records.node[j], self->trees.records.num_children[j],
+                self->trees.records.children[j]);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    for (j = 0; j < self->migrations.num_records; j++) {
+        ret = migration_table_add_row(migrations,
+                self->migrations.left[j],
+                self->migrations.right[j],
+                self->migrations.node[j],
+                self->migrations.source[j],
+                self->migrations.dest[j],
+                self->migrations.time[j]);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    for (j = 0; j < self->mutations.num_records; j++) {
+        ret = mutation_table_add_row(mutations,
+                self->mutations.position[j], self->mutations.num_nodes[j],
+                self->mutations.nodes[j]);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    *num_provenance_strings = self->num_provenance_strings;
+    *provenance_strings = self->provenance_strings;
+
+    ret = 0;
+out:
+    return ret;
+}
+
 
 /* Reads the metadata for the overall file and updates the basic
  * information in the tree_sequence.
@@ -1905,12 +2085,6 @@ tree_sequence_get_num_edgesets(tree_sequence_t *self)
 }
 
 size_t
-tree_sequence_get_num_coalescence_records(tree_sequence_t *self)
-{
-    return self->trees.num_records;
-}
-
-size_t
 tree_sequence_get_num_migrations(tree_sequence_t *self)
 {
     return self->migrations.num_records;
@@ -2012,37 +2186,36 @@ out:
 }
 
 int WARN_UNUSED
-tree_sequence_get_coalescence_record(tree_sequence_t *self, size_t index,
-        coalescence_record_t *record, int order)
+tree_sequence_get_node(tree_sequence_t *self, uint32_t index, node_t *node)
 {
     int ret = 0;
-    size_t j;
+
+    if (index >= self->trees.num_nodes) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    node->time = self->trees.nodes.time[index];
+    node->population = self->trees.nodes.population[index];
+    node->flags = 0; /* FIXME */
+    node->name = NULL; /* FIXME */
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgeset)
+{
+    int ret = 0;
 
     if (index >= self->trees.num_records) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    switch (order) {
-        case MSP_ORDER_TIME:
-            j = index;
-            break;
-        case MSP_ORDER_LEFT:
-            j = self->trees.indexes.insertion_order[index];
-            break;
-        case MSP_ORDER_RIGHT:
-            j = self->trees.indexes.removal_order[index];
-            break;
-        default:
-            ret = MSP_ERR_BAD_ORDERING;
-            goto out;
-    }
-    record->left = self->trees.breakpoints[self->trees.records.left[j]];
-    record->right = self->trees.breakpoints[self->trees.records.right[j]];
-    record->node = self->trees.records.node[j];
-    record->num_children = self->trees.records.num_children[j];
-    record->children = self->trees.records.children[j];
-    record->time = self->trees.nodes.time[self->trees.records.node[j]];
-    record->population_id = self->trees.nodes.population[self->trees.records.node[j]];
+    edgeset->left = self->trees.breakpoints[self->trees.records.left[index]];
+    edgeset->right = self->trees.breakpoints[self->trees.records.right[index]];
+    edgeset->parent = self->trees.records.node[index];
+    edgeset->num_children = self->trees.records.num_children[index];
+    edgeset->children = self->trees.records.children[index];
 out:
     return ret;
 }
@@ -2125,6 +2298,8 @@ out:
     return ret;
 }
 
+/* TODO this needs to be updated to use the new tables/edgesets API.
+ */
 int WARN_UNUSED
 tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
         uint32_t num_samples, int flags, tree_sequence_t *output)
@@ -2441,9 +2616,7 @@ tree_sequence_simplify(tree_sequence_t *self, uint32_t *samples,
     /* Alloc a new tree sequence for these records. */
     ret = tree_sequence_load_records(output, num_samples, sample_objects,
             num_output_records, output_records,
-            num_output_mutations, output_mutations,
-            0, NULL,
-            0, NULL);
+            num_output_mutations, output_mutations);
     if (ret != 0) {
         tree_sequence_free(output);
         goto out;
@@ -2505,7 +2678,7 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
     memset(self, 0, sizeof(tree_diff_iterator_t));
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->num_nodes = tree_sequence_get_num_nodes(tree_sequence);
-    self->num_records = tree_sequence_get_num_coalescence_records(tree_sequence);
+    self->num_records = tree_sequence_get_num_edgesets(tree_sequence);
     self->tree_sequence = tree_sequence;
     self->insertion_index = 0;
     self->removal_index = 0;

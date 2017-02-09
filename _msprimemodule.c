@@ -714,6 +714,26 @@ out:
 }
 
 static PyObject *
+make_coalescence_record_tmp(node_t *node, edgeset_t *edgeset)
+{
+    int population_id =
+        node->population == MSP_NULL_POPULATION_ID ? -1: node->population;
+    PyObject *children = NULL;
+    PyObject *ret = NULL;
+
+    children = convert_uint32_list(edgeset->children, edgeset->num_children);
+    if (children == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("ddIOdi",
+            edgeset->left, edgeset->right, (unsigned int) edgeset->parent,
+            children, node->time, population_id);
+out:
+    Py_XDECREF(children);
+    return ret;
+}
+
+static PyObject *
 make_migration(migration_t *r)
 {
     int source = r->source == MSP_NULL_POPULATION_ID ? -1: r->source;
@@ -2595,12 +2615,15 @@ TreeSequence_load_records(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+    /*
     err = tree_sequence_load_records(self->tree_sequence,
             num_samples, samples,
             num_records, records,
             num_mutations, mutations,
             0, NULL,
             num_provenance_strings, (const char **) provenance_strings);
+    */
+    err = -1;
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2680,7 +2703,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     err = tree_sequence_load_tables_tmp(self->tree_sequence,
         nodes->node_table, edgesets->edgeset_table,
         migrations->migration_table, mutations->mutation_table,
-        num_provenance_strings, (const char **) provenance_strings);
+        num_provenance_strings, provenance_strings);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2747,29 +2770,34 @@ TreeSequence_get_record(TreeSequence *self, PyObject *args)
 {
     int err;
     PyObject *ret = NULL;
-    int order = MSP_ORDER_TIME;
     Py_ssize_t record_index, num_records;
-    coalescence_record_t cr;
+    edgeset_t edgeset;
+    node_t node;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "n|i", &record_index, &order)) {
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
         goto out;
     }
-    num_records = (Py_ssize_t) tree_sequence_get_num_coalescence_records(
+    num_records = (Py_ssize_t) tree_sequence_get_num_edgesets(
         self->tree_sequence);
     if (record_index < 0 || record_index >= num_records) {
         PyErr_SetString(PyExc_IndexError, "record index out of bounds");
         goto out;
     }
-    err = tree_sequence_get_coalescence_record(self->tree_sequence,
-            (size_t) record_index, &cr, order);
+    err = tree_sequence_get_edgeset(self->tree_sequence, (size_t) record_index,
+            &edgeset);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = make_coalescence_record(&cr);
+    err = tree_sequence_get_node(self->tree_sequence, edgeset.parent, &node);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_coalescence_record_tmp(&node, &edgeset);
 out:
     return ret;
 }
@@ -2836,7 +2864,7 @@ TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    num_records = tree_sequence_get_num_coalescence_records(self->tree_sequence);
+    num_records = tree_sequence_get_num_edgesets(self->tree_sequence);
     ret = Py_BuildValue("n", (Py_ssize_t) num_records);
 out:
     return ret;
@@ -6661,9 +6689,6 @@ init_msprime(void)
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
 
-    PyModule_AddIntConstant(module, "MSP_ORDER_TIME", MSP_ORDER_TIME);
-    PyModule_AddIntConstant(module, "MSP_ORDER_LEFT", MSP_ORDER_LEFT);
-    PyModule_AddIntConstant(module, "MSP_ORDER_RIGHT", MSP_ORDER_RIGHT);
     /* Tree flags */
     PyModule_AddIntConstant(module, "LEAF_COUNTS", MSP_LEAF_COUNTS);
     PyModule_AddIntConstant(module, "LEAF_LISTS", MSP_LEAF_LISTS);

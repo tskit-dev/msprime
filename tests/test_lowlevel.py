@@ -1951,21 +1951,8 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(IndexError, ts.get_record, -1)
         for j in [0, 10, 10**6]:
             self.assertRaises(IndexError, ts.get_record, num_records + j)
-            self.assertRaises(
-                IndexError, ts.get_record, num_records + j,
-                _msprime.MSP_ORDER_TIME)
-            self.assertRaises(
-                IndexError, ts.get_record, num_records + j,
-                _msprime.MSP_ORDER_LEFT)
-            self.assertRaises(
-                IndexError, ts.get_record, num_records + j,
-                _msprime.MSP_ORDER_RIGHT)
-        # Make sure we don't accept bad values for order or index.
         for x in [None, "", {}, []]:
             self.assertRaises(TypeError, ts.get_record, x)
-            self.assertRaises(TypeError, ts.get_record, 0, x)
-        for x in [-1, 3, 5, 10**6]:
-            self.assertRaises(_msprime.LibraryError, ts.get_record, 0, x)
 
     def test_get_record_interface(self):
         for ts in self.get_example_tree_sequences():

@@ -688,21 +688,7 @@ static void
 print_tree_sequence(tree_sequence_t *ts)
 {
     int ret = 0;
-    size_t j;
-    size_t num_records = tree_sequence_get_num_coalescence_records(ts);
     sparse_tree_t tree;
-    coalescence_record_t cr;
-
-    // TODO tidy this up to make it more specific to the task of examining the
-    // tree sequence itself.
-    printf("Records:\n");
-    for (j = 0; j < num_records; j++) {
-        if (tree_sequence_get_coalescence_record(ts, j, &cr, MSP_ORDER_TIME) != 0) {
-            fatal_error("tree sequence out of bounds\n");
-        }
-        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
-                cr.children[1], cr.node, cr.time);
-    }
 
     tree_sequence_print_state(ts, stdout);
     /* sparse trees */
@@ -737,12 +723,13 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
-    const char *provenance = "main.run_simulate";
-
+    char provenance[1024];
     node_table_t *nodes = malloc(sizeof(node_table_t));
     edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
     migration_table_t *migrations = malloc(sizeof(migration_table_t));
+
+    strcpy(provenance, "main.simulate");
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL || nodes == NULL || edgesets == NULL
@@ -818,7 +805,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             goto out;
         }
         ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
-                mutations, 1, &provenance);
+                mutations, 1, (char **) &provenance);
         if (ret != 0) {
             goto out;
         }
@@ -980,8 +967,11 @@ run_simplify(const char *input_filename, const char *output_filename, int verbos
     for (j = 0; j < num_samples; j++) {
         samples[j] = (uint32_t) j;
     }
-    ret = tree_sequence_simplify(&ts, samples, num_samples,
-            flags, &subset);
+    ret = tree_sequence_initialise(&subset);
+    if (ret != 0) {
+        fatal_library_error(ret, "init error");
+    }
+    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
     }
