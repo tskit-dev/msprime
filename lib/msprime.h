@@ -644,7 +644,8 @@ int tree_sequence_load_records(tree_sequence_t *self,
         size_t num_provenance_strings, const char **provenance_strings);
 int tree_sequence_load_tables_tmp(tree_sequence_t *self,
         node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
-        mutation_table_t *mutations);
+        mutation_table_t *mutations, size_t num_provenance_strings,
+        const char **provenance_strings);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);

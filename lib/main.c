@@ -737,7 +737,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
-    /* const char *provenance = "main.run_simulate"; */
+    const char *provenance = "main.run_simulate";
 
     node_table_t *nodes = malloc(sizeof(node_table_t));
     edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
@@ -818,7 +818,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             goto out;
         }
         ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
-                mutations);
+                mutations, 1, &provenance);
         if (ret != 0) {
             goto out;
         }

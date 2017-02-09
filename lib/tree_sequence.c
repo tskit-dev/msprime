@@ -999,7 +999,8 @@ out:
 int WARN_UNUSED
 tree_sequence_load_tables_tmp(tree_sequence_t *self,
     node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
-    mutation_table_t *mutations)
+    mutation_table_t *mutations, size_t num_provenance_strings,
+    const char **provenance_strings)
 {
     int ret = 0;
     size_t j, k, offset, num_coordinates;
@@ -1033,6 +1034,7 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     }
     self->trees.num_breakpoints = num_coordinates;
     self->sequence_length = coordinates[num_coordinates - 1];
+    self->num_provenance_strings = num_provenance_strings;
     self->trees.num_nodes = nodes->num_rows;
     self->trees.total_child_nodes = edgesets->children_length - edgesets->num_rows;
     self->trees.num_records = edgesets->num_rows;
@@ -1052,8 +1054,12 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     if (migrations != NULL) {
         self->migrations.num_records = migrations->num_rows;
     }
-    self->num_provenance_strings = 0;
     ret = tree_sequence_alloc(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_store_provenance_strings(self, num_provenance_strings,
+            provenance_strings);
     if (ret != 0) {
         goto out;
     }

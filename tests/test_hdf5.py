@@ -127,7 +127,6 @@ class TestHdf5(unittest.TestCase):
         os.unlink(self.temp_file)
 
 
-@unittest.skip("Provenance")
 class TestRoundTrip(TestHdf5):
     """
     Tests if we can round trip convert a tree sequence in memory
@@ -257,7 +256,6 @@ class TestErrors(TestHdf5):
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
-@unittest.skip("Provenance")
 class TestHdf5Format(TestHdf5):
     """
     Tests on the HDF5 file format.

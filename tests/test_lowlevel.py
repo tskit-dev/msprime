@@ -202,19 +202,17 @@ def get_example_simulator(
     return sim
 
 
-def populate_tree_sequence(sim, Ne=0.25, mutation_generator=None):
+def populate_tree_sequence(
+        sim, Ne=0.25, mutation_generator=None, provenance_strings=[]):
     nodes = _msprime.NodeTable()
     edgesets = _msprime.EdgesetTable()
     migrations = _msprime.MigrationTable()
     mutations = _msprime.MutationTable()
     ts = _msprime.TreeSequence()
-    # FIXME provenance_strings
-    # provenance_strings = [
-    #     b"xxxxxxx" * (j + 1) for j in range(num_provenance_strings)]
     sim.populate_tables(nodes, edgesets, migrations, Ne=Ne)
     if mutation_generator is not None:
         mutation_generator.generate(nodes, edgesets, mutations)
-    ts.load_tables(nodes, edgesets, migrations, mutations)
+    ts.load_tables(nodes, edgesets, migrations, mutations, provenance_strings)
     return ts
 
 
@@ -476,12 +474,13 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         mutations = _msprime.MutationTable()
         ts = _msprime.TreeSequence()
         mutgen = _msprime.MutationGenerator(rng, mutation_rate)
-        # FIXME provenance_strings
-        # provenance_strings = [
-        #     b"xxxxxxx" * (j + 1) for j in range(num_provenance_strings)]
+        provenance_strings = [
+            b"xxxxxxx" * (j + 1) for j in range(num_provenance_strings)]
         sim.populate_tables(nodes, edgesets, migrations)
         mutgen.generate(nodes, edgesets, mutations)
-        ts.load_tables(nodes, edgesets, migrations, mutations)
+        ts.load_tables(
+            nodes, edgesets, migrations, mutations,
+            provenance_strings=provenance_strings)
         self.assertEqual(ts.get_num_nodes(), nodes.num_rows)
         self.assertEqual(ts.get_num_mutations(), mutations.num_rows)
         self.assertEqual(ts.get_num_records(), edgesets.num_rows)
@@ -1813,26 +1812,22 @@ class TestTreeSequence(LowLevelTestCase):
     def tearDown(self):
         os.unlink(self.temp_file)
 
-    @unittest.skip("FIXME")
     def test_seed_equality(self):
-        rng = _msprime.RandomGenerator(10)
         simulations = [
             {
                 "samples": get_samples(10),
-                "random_generator": rng,
             }, {
                 "samples": get_samples(10), "num_loci": 100,
                 "scaled_recombination_rate": 0.1,
-                "random_generator": rng,
             },
         ]
         for params in simulations:
-            sim1 = _msprime.Simulator(**params)
-            sim2 = _msprime.Simulator(**params)
-            sim1.run()
-            sim2.run()
             rng1 = _msprime.RandomGenerator(1)
             rng2 = _msprime.RandomGenerator(1)
+            sim1 = _msprime.Simulator(random_generator=rng1, **params)
+            sim2 = _msprime.Simulator(random_generator=rng2, **params)
+            sim1.run()
+            sim2.run()
             mutgen1 = _msprime.MutationGenerator(rng1, 1)
             mutgen2 = _msprime.MutationGenerator(rng2, 1)
             t1 = populate_tree_sequence(sim1, mutation_generator=mutgen1)
@@ -1842,19 +1837,6 @@ class TestTreeSequence(LowLevelTestCase):
             r2 = [t2.get_record(j) for j in range(t2.get_num_records())]
             self.assertEqual(r1, r2)
             self.assertEqual(t1.get_mutations(), t2.get_mutations())
-
-    @unittest.skip("empty tree sequence ")
-    def test_create_empty_tree_sequence(self):
-        sim = _msprime.Simulator(
-            samples=get_samples(10),
-            random_generator=_msprime.RandomGenerator(10))
-        ts = _msprime.TreeSequence()
-        self.assertRaises(ValueError, sim.populate_tree_sequence, ts)
-        sim.run(0.001)
-        self.assertRaises(ValueError, sim.populate_tree_sequence, ts)
-        sim.run()
-        sim.populate_tree_sequence(ts)
-        self.assertEqual(sim.get_num_coalescence_records(), ts.get_num_records())
 
     def test_file_errors(self):
         ts1 = self.get_tree_sequence()
@@ -2286,25 +2268,22 @@ class TestTreeSequence(LowLevelTestCase):
         r = (1, 0, 3, (0, 2, 1), 1, 0)
         self.assertRaises(_msprime.LibraryError, f, [r])
 
-    @unittest.skip("provenance_strings")
     def test_provenance_strings_populate(self):
         rng = _msprime.RandomGenerator(1)
         sim = _msprime.Simulator(get_samples(10), rng)
         sim.run()
         for bad_type in [{}, rng, None, 5]:
             provenance_strings = [bad_type]
-            ts = _msprime.TreeSequence()
             self.assertRaises(
-                TypeError, sim.populate_tree_sequence, ts,
+                TypeError, populate_tree_sequence, sim,
                 provenance_strings=provenance_strings)
 
         for j in range(10):
             strings = []
-            ts = _msprime.TreeSequence()
             for k in range(j):
                 # Use some fairly big strings to stress things out
                 strings.append(b"x" * (k + 1) * 8192)
-            sim.populate_tree_sequence(ts, provenance_strings=strings)
+            ts = populate_tree_sequence(sim, provenance_strings=strings)
             self.assertEqual(ts.get_provenance_strings(), strings)
             ts.dump(self.temp_file)
             ts2 = _msprime.TreeSequence()

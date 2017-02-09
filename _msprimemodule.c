@@ -2641,13 +2641,18 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     EdgesetTable *edgesets = NULL;
     MigrationTable *migrations = NULL;
     MutationTable *mutations = NULL;
-    static char *kwlist[] = {"nodes", "edgesets", "migrations", "mutations", NULL};
+    PyObject *py_provenance_strings = NULL;
+    Py_ssize_t num_provenance_strings = 0;
+    char **provenance_strings = NULL;
+    static char *kwlist[] = {"nodes", "edgesets", "migrations", "mutations",
+        "provenance_strings", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!", kwlist,
             &NodeTableType, &nodes,
             &EdgesetTableType, &edgesets,
             &MigrationTableType, &migrations,
-            &MutationTableType, &mutations)) {
+            &MutationTableType, &mutations,
+            &PyList_Type, &py_provenance_strings)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(self) != 0) {
@@ -2665,9 +2670,17 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (MutationTable_check_state(mutations) != 0) {
         goto out;
     }
+    num_provenance_strings = 0;
+    if (py_provenance_strings != NULL) {
+        if (parse_provenance_strings(py_provenance_strings, &num_provenance_strings,
+                    &provenance_strings) != 0) {
+            goto out;
+        }
+    }
     err = tree_sequence_load_tables_tmp(self->tree_sequence,
         nodes->node_table, edgesets->edgeset_table,
-        migrations->migration_table, mutations->mutation_table);
+        migrations->migration_table, mutations->mutation_table,
+        num_provenance_strings, (const char **) provenance_strings);
     if (err != 0) {
         handle_library_error(err);
         goto out;

@@ -48,10 +48,10 @@ import msprime.environment
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
-from _msprime import NodeTable  # NOQA
-from _msprime import EdgesetTable  # NOQA
-from _msprime import MigrationTable  # NOQA
-from _msprime import MutationTable  # NOQA
+from _msprime import NodeTable
+from _msprime import EdgesetTable
+from _msprime import MigrationTable
+from _msprime import MutationTable
 
 NULL_NODE = -1
 
@@ -1318,17 +1318,13 @@ class TreeSimulator(object):
         self._ll_sim.populate_tables(
             self.node_table, self.edgeset_table, self.migration_table,
             Ne=Ne, recombination_map=ll_recomb_map)
-        # self._ll_sim.populate_tree_sequence(
-        #     ll_tree_sequence, recombination_map=ll_recomb_map,
-        #     mutation_generator=mutation_generator, Ne=Ne,
-        #     provenance_strings=provenance_strings)
         if mutation_generator is not None:
             mutation_generator.generate(
                 self.node_table, self.edgeset_table, self.mutation_table)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.load_tables(
             self.node_table, self.edgeset_table, self.migration_table,
-            self.mutation_table)
+            self.mutation_table, provenance_strings=provenance_strings)
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
