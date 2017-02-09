@@ -820,7 +820,7 @@ tree_sequence_load_records(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
         size_t num_coalescence_records, coalescence_record_t *coalescence_records,
         size_t num_mutations, mutation_t *mutations,
-        size_t num_migration_records, migration_record_t *migration_records,
+        size_t num_migrations, migration_t *migrations,
         size_t num_provenance_strings, const char **provenance_strings)
 {
     int ret = MSP_ERR_GENERIC;
@@ -828,7 +828,7 @@ tree_sequence_load_records(tree_sequence_t *self,
     double last_breakpoint;
     double *left = NULL;
 
-    assert(num_migration_records == 0);
+    assert(num_migrations == 0);
     if (self->initialised_magic != MSP_INITIALISED_MAGIC) {
         ret = MSP_ERR_NOT_INITIALISED;
         goto out;
@@ -1878,6 +1878,8 @@ out:
     return ret;
 }
 
+/* Simple attribute getters */
+
 double
 tree_sequence_get_sequence_length(tree_sequence_t *self)
 {
@@ -1890,11 +1892,43 @@ tree_sequence_get_sample_size(tree_sequence_t *self)
     return self->sample_size;
 }
 
-uint32_t
+size_t
 tree_sequence_get_num_nodes(tree_sequence_t *self)
 {
-    return (uint32_t) self->trees.num_nodes;
+    return self->trees.num_nodes;
 }
+
+size_t
+tree_sequence_get_num_edgesets(tree_sequence_t *self)
+{
+    return self->trees.num_records;
+}
+
+size_t
+tree_sequence_get_num_coalescence_records(tree_sequence_t *self)
+{
+    return self->trees.num_records;
+}
+
+size_t
+tree_sequence_get_num_migrations(tree_sequence_t *self)
+{
+    return self->migrations.num_records;
+}
+
+size_t
+tree_sequence_get_num_mutations(tree_sequence_t *self)
+{
+    return self->mutations.num_records;
+}
+
+size_t
+tree_sequence_get_num_trees(tree_sequence_t *self)
+{
+    return self->trees.num_breakpoints == 0? 0 : self->trees.num_breakpoints - 1;
+}
+
+/* Accessors for records */
 
 int WARN_UNUSED
 tree_sequence_get_sample(tree_sequence_t *self, uint32_t u, sample_t *sample)
@@ -1977,30 +2011,6 @@ out:
     return ret;
 }
 
-size_t
-tree_sequence_get_num_coalescence_records(tree_sequence_t *self)
-{
-    return self->trees.num_records;
-}
-
-size_t
-tree_sequence_get_num_migration_records(tree_sequence_t *self)
-{
-    return self->migrations.num_records;
-}
-
-size_t
-tree_sequence_get_num_mutations(tree_sequence_t *self)
-{
-    return self->mutations.num_records;
-}
-
-size_t
-tree_sequence_get_num_trees(tree_sequence_t *self)
-{
-    return self->trees.num_breakpoints == 0? 0 : self->trees.num_breakpoints - 1;
-}
-
 int WARN_UNUSED
 tree_sequence_get_coalescence_record(tree_sequence_t *self, size_t index,
         coalescence_record_t *record, int order)
@@ -2038,8 +2048,7 @@ out:
 }
 
 int WARN_UNUSED
-tree_sequence_get_migration_record(tree_sequence_t *self, size_t index,
-        migration_record_t *record)
+tree_sequence_get_migration(tree_sequence_t *self, size_t index, migration_t *record)
 {
     int ret = 0;
 

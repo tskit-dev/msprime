@@ -68,8 +68,8 @@ CoalescenceRecord = collections.namedtuple(
     ["left", "right", "node", "children", "time", "population"])
 
 
-MigrationRecord = collections.namedtuple(
-    "MigrationRecord",
+Migration = collections.namedtuple(
+    "Migration",
     ["left", "right", "node", "source", "dest", "time"])
 
 Mutation = collections.namedtuple(
@@ -789,7 +789,7 @@ def simulator_factory(
         recomb_map = recombination_map
 
     sim = TreeSimulator(the_samples, recomb_map)
-    sim.set_store_migration_records(record_migrations)
+    sim.set_store_migrations(record_migrations)
     sim.set_effective_population_size(Ne)
     if model is not None:
         sim.set_model(model.lower())
@@ -1039,7 +1039,7 @@ class TreeSimulator(object):
         self._population_configurations = [PopulationConfiguration()]
         self._migration_matrix = [[0]]
         self._demographic_events = []
-        self._store_migration_records = False
+        self._store_migrations = False
         # Set default block sizes to 64K objects.
         # TODO does this give good performance in a range of scenarios?
         block_size = 64 * 1024
@@ -1049,7 +1049,7 @@ class TreeSimulator(object):
         self._avl_node_block_size = block_size
         self._node_mapping_block_size = block_size
         self._coalescence_record_block_size = block_size
-        self._migration_record_block_size = block_size
+        self._migration_block_size = block_size
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
         self._max_memory = sys.maxsize
@@ -1202,8 +1202,8 @@ class TreeSimulator(object):
             raise ValueError("Cannot set Ne to a non-positive value.")
         self._effective_population_size = effective_population_size
 
-    def set_store_migration_records(self, store_migration_records):
-        self._store_migration_records = store_migration_records
+    def set_store_migrations(self, store_migrations):
+        self._store_migrations = store_migrations
 
     def set_migration_matrix(self, migration_matrix):
         err = (
@@ -1289,14 +1289,14 @@ class TreeSimulator(object):
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
             model=self._model,
-            store_migration_records=self._store_migration_records,
+            store_migrations=self._store_migrations,
             scaled_recombination_rate=ll_recombination_rate,
             max_memory=self._max_memory,
             segment_block_size=self._segment_block_size,
             avl_node_block_size=self._avl_node_block_size,
             node_mapping_block_size=self._node_mapping_block_size,
             coalescence_record_block_size=self._coalescence_record_block_size,
-            migration_record_block_size=self._migration_record_block_size)
+            migration_block_size=self._migration_block_size)
         return ll_sim
 
     def run(self):
@@ -1626,8 +1626,8 @@ class TreeSequence(object):
             yield CoalescenceRecord(*self._ll_tree_sequence.get_record(j))
 
     def migrations(self):
-        for j in range(self._ll_tree_sequence.get_num_migration_records()):
-            yield MigrationRecord(*self._ll_tree_sequence.get_migration_record(j))
+        for j in range(self._ll_tree_sequence.get_num_migrations()):
+            yield Migration(*self._ll_tree_sequence.get_migration(j))
 
     def diffs(self):
         """

@@ -31,7 +31,7 @@ static void
 ld_calc_check_state(ld_calc_t *self)
 {
     uint32_t u;
-    uint32_t num_nodes = tree_sequence_get_num_nodes(self->tree_sequence);
+    uint32_t num_nodes = (uint32_t) tree_sequence_get_num_nodes(self->tree_sequence);
     sparse_tree_t *tA = self->outer_tree;
     sparse_tree_t *tB = self->inner_tree;
 

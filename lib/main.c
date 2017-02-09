@@ -454,7 +454,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (config_lookup_int(config, "store_migrations", &int_tmp) == CONFIG_FALSE) {
         fatal_error("store_migrations is a required parameter");
     }
-    msp_set_store_migration_records(msp, (bool) int_tmp);
+    msp_set_store_migrations(msp, (bool) int_tmp);
     t = config_lookup(config, "model");
     if (t == NULL) {
         fatal_error("model not specified");

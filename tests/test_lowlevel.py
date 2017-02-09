@@ -187,7 +187,7 @@ def get_migration_matrix(num_populations, value=1.0):
 
 def get_example_simulator(
         sample_size=10, random_seed=1, num_populations=1,
-        store_migration_records=False):
+        store_migrations=False):
     samples = [(j % num_populations, 0) for j in range(sample_size)]
     migration_matrix = [1 for _ in range(num_populations**2)]
     for j in range(num_populations):
@@ -198,7 +198,7 @@ def get_example_simulator(
         samples, _msprime.RandomGenerator(random_seed),
         population_configuration=population_configuration,
         migration_matrix=migration_matrix,
-        store_migration_records=store_migration_records)
+        store_migrations=store_migrations)
     return sim
 
 
@@ -505,7 +505,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
 
     def get_example_migration_tree_sequence(self):
         ts = _msprime.TreeSequence()
-        sim = get_example_simulator(20, num_populations=3, store_migration_records=True)
+        sim = get_example_simulator(20, num_populations=3, store_migrations=True)
         sim.run()
         nodes = _msprime.NodeTable()
         edgesets = _msprime.EdgesetTable()
@@ -514,7 +514,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         ts = _msprime.TreeSequence()
         sim.populate_tables(nodes, edgesets, migrations)
         ts.load_tables(nodes, edgesets, migrations, mutations)
-        self.assertGreater(sim.get_num_migration_records(), 0)
+        self.assertGreater(sim.get_num_migrations(), 0)
         return ts
 
     def verify_iterator(self, iterator):
@@ -551,7 +551,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
         self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
-        self.assertGreater(sim.get_num_migration_record_blocks(), 0)
+        self.assertGreater(sim.get_num_migration_blocks(), 0)
         n = sim.get_sample_size()
         m = sim.get_num_loci()
         N = sim.get_num_populations()
@@ -601,11 +601,11 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertEqual(record_am, n - 1)
             else:
                 self.assertEqual(segment_am + record_am, n)
-        migration_records = sim.get_migration_records()
-        self.assertEqual(len(migration_records), sim.get_num_migration_records())
-        if sim.get_store_migration_records():
+        migrations = sim.get_migrations()
+        self.assertEqual(len(migrations), sim.get_num_migrations())
+        if sim.get_store_migrations():
             self.assertGreaterEqual(
-                sim.get_num_migration_records(), sum(sim.get_num_migration_events()))
+                sim.get_num_migrations(), sum(sim.get_num_migration_events()))
 
     def verify_trees_equal(self, n, pi, tau, pop, sparse_tree):
         """
@@ -742,7 +742,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
         self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
-        self.assertGreater(sim.get_num_migration_record_blocks(), 0)
+        self.assertGreater(sim.get_num_migration_blocks(), 0)
         self.assertGreater(sim.get_used_memory(), 0)
 
         records = sim.get_coalescence_records()
@@ -781,7 +781,7 @@ class TestSimulationState(LowLevelTestCase):
         m = random.randint(1, 10**6)
         rho = random.uniform(0, 1000)
         N = random.randint(1, 4)
-        store_migration_records = random.choice([True, False])
+        store_migrations = random.choice([True, False])
         migration_matrix = [
             random.random() * (j != k) for j in range(N) for k in range(N)]
         population_configuration = [
@@ -797,12 +797,12 @@ class TestSimulationState(LowLevelTestCase):
         node_mapping_block_size = random.randint(1, 100)
         avl_node_block_size = random.randint(1, 100)
         coalescence_record_block_size = random.randint(1, 100)
-        migration_record_block_size = random.randint(1, 100)
+        migration_block_size = random.randint(1, 100)
         sim = _msprime.Simulator(
             samples=get_population_samples(*sample_sizes),
             random_generator=_msprime.RandomGenerator(random_seed),
             num_loci=m,
-            store_migration_records=store_migration_records,
+            store_migrations=store_migrations,
             scaled_recombination_rate=rho,
             population_configuration=population_configuration,
             demographic_events=demographic_events,
@@ -812,7 +812,7 @@ class TestSimulationState(LowLevelTestCase):
             avl_node_block_size=avl_node_block_size,
             node_mapping_block_size=node_mapping_block_size,
             coalescence_record_block_size=coalescence_record_block_size,
-            migration_record_block_size=migration_record_block_size)
+            migration_block_size=migration_block_size)
         for _ in range(3):
             # Check initial state
             self.assertEqual(0, sim.get_num_breakpoints())
@@ -826,7 +826,7 @@ class TestSimulationState(LowLevelTestCase):
             self.assertGreater(sim.get_num_segment_blocks(), 0)
             self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
             self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
-            self.assertGreater(sim.get_num_migration_record_blocks(), 0)
+            self.assertGreater(sim.get_num_migration_blocks(), 0)
             self.assertEqual(sim.get_sample_size(), n)
             self.assertEqual(sim.get_num_loci(), m)
             self.assertEqual(n, len(sim.get_ancestors()))
@@ -868,7 +868,7 @@ class TestSimulationState(LowLevelTestCase):
                     coalescence_record_block_size,
                     sim.get_coalescence_record_block_size())
                 self.assertEqual(
-                    migration_record_block_size, sim.get_migration_record_block_size())
+                    migration_block_size, sim.get_migration_block_size())
                 # Run this for a tiny amount of time and check the state
                 self.assertFalse(sim.run(1e-8))
                 self.verify_running_simulation(sim)
@@ -1153,7 +1153,7 @@ class TestSimulator(LowLevelTestCase):
             sim = f(model=model)
             self.assertEqual(sim.get_model(), model)
 
-    def test_store_migration_records(self):
+    def test_store_migrations(self):
         def f(sample_size=10, random_seed=1, **kwargs):
             samples = [(j % 2, 0) for j in range(sample_size)]
             migration_matrix = [0, 1, 1, 0]
@@ -1164,17 +1164,17 @@ class TestSimulator(LowLevelTestCase):
                 population_configuration=population_configuration,
                 migration_matrix=migration_matrix, **kwargs)
         for bad_type in [[], "False", None, {}, str]:
-            self.assertRaises(TypeError, f, store_migration_records=bad_type)
+            self.assertRaises(TypeError, f, store_migrations=bad_type)
         for store_records in [True, False]:
-            sim = f(store_migration_records=store_records)
-            self.assertEqual(sim.get_store_migration_records(), store_records)
+            sim = f(store_migrations=store_records)
+            self.assertEqual(sim.get_store_migrations(), store_records)
             sim.run()
             if store_records:
-                self.assertGreater(sim.get_num_migration_records(), 0)
+                self.assertGreater(sim.get_num_migrations(), 0)
             else:
-                self.assertEqual(sim.get_num_migration_records(), 0)
-            records = sim.get_migration_records()
-            self.assertEqual(len(records), sim.get_num_migration_records())
+                self.assertEqual(sim.get_num_migrations(), 0)
+            records = sim.get_migrations()
+            self.assertEqual(len(records), sim.get_num_migrations())
             for l, r, node, source, dest, time in records:
                 self.assertTrue(0 <= l < sim.get_num_loci())
                 self.assertTrue(0 < r <= sim.get_num_loci())
@@ -1184,7 +1184,7 @@ class TestSimulator(LowLevelTestCase):
                 self.assertGreater(time, 0)
         # By default, this should be off.
         sim = f()
-        self.assertFalse(sim.get_store_migration_records())
+        self.assertFalse(sim.get_store_migrations())
 
     def test_bad_samples(self):
         rng = _msprime.RandomGenerator(1)
@@ -1876,7 +1876,7 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertEqual(ts.get_num_records(), 0)
         self.assertEqual(ts.get_num_mutations(), 0)
         self.assertEqual(ts.get_mutations(), [])
-        self.assertEqual(ts.get_num_migration_records(), 0)
+        self.assertEqual(ts.get_num_migrations(), 0)
         self.verify_dump_equality(ts)
 
     def test_num_nodes(self):
@@ -1971,26 +1971,26 @@ class TestTreeSequence(LowLevelTestCase):
         for ts in self.get_example_tree_sequences():
             self.verify_get_record_interface(ts)
 
-    def test_get_migration_record_interface(self):
+    def test_get_migration_interface(self):
         ts = self.get_example_migration_tree_sequence()
         for bad_type in ["", None, {}]:
-            self.assertRaises(TypeError, ts.get_migration_record, bad_type)
-        num_records = ts.get_num_migration_records()
+            self.assertRaises(TypeError, ts.get_migration, bad_type)
+        num_records = ts.get_num_migrations()
         # We don't accept Python negative indexes here.
-        self.assertRaises(IndexError, ts.get_migration_record, -1)
+        self.assertRaises(IndexError, ts.get_migration, -1)
         for j in [0, 10, 10**6]:
-            self.assertRaises(IndexError, ts.get_migration_record, num_records + j)
+            self.assertRaises(IndexError, ts.get_migration, num_records + j)
 
-    def test_migration_records(self):
-        sim = get_example_simulator(10, num_populations=3, store_migration_records=True)
+    def test_migrations(self):
+        sim = get_example_simulator(10, num_populations=3, store_migrations=True)
         sim.run()
         ts = populate_tree_sequence(sim)
-        self.assertGreater(sim.get_num_migration_records(), 0)
+        self.assertGreater(sim.get_num_migrations(), 0)
         self.assertEqual(
-            sim.get_num_migration_records(), ts.get_num_migration_records())
-        sim_records = sim.get_migration_records()
+            sim.get_num_migrations(), ts.get_num_migrations())
+        sim_records = sim.get_migrations()
         ts_records = [
-            ts.get_migration_record(j) for j in range(ts.get_num_migration_records())]
+            ts.get_migration(j) for j in range(ts.get_num_migrations())]
         self.assertEqual(len(sim_records), len(ts_records))
         for sim_r, ts_r in zip(sim_records, ts_records):
             self.assertEqual(len(sim_r), len(ts_r))
@@ -2002,7 +2002,7 @@ class TestTreeSequence(LowLevelTestCase):
                 self.assertEqual(sim_r[j], ts_r[j])
 
     def test_record_scaling(self):
-        sim = get_example_simulator(10, num_populations=2, store_migration_records=True)
+        sim = get_example_simulator(10, num_populations=2, store_migrations=True)
         sim.run()
         for Ne in [0.25, 1, 10, 1e6]:
             tree_sequence = populate_tree_sequence(sim, Ne=Ne)
@@ -2014,14 +2014,14 @@ class TestTreeSequence(LowLevelTestCase):
             for j in range(tree_sequence.get_num_records()):
                 generation = tree_sequence.get_record(j)[-2]
                 self.assertAlmostEqual(generation, sim_times[j] * 4 * Ne)
-            self.assertGreater(sim.get_num_migration_records(), 0)
+            self.assertGreater(sim.get_num_migrations(), 0)
             self.assertEqual(
-                sim.get_num_migration_records(),
-                tree_sequence.get_num_migration_records())
+                sim.get_num_migrations(),
+                tree_sequence.get_num_migrations())
             sim_times = [
-                r[-1] for r in sim.get_migration_records()]
-            for j in range(tree_sequence.get_num_migration_records()):
-                generation = tree_sequence.get_migration_record(j)[-1]
+                r[-1] for r in sim.get_migrations()]
+            for j in range(tree_sequence.get_num_migrations()):
+                generation = tree_sequence.get_migration(j)[-1]
                 self.assertAlmostEqual(generation, sim_times[j] * 4 * Ne)
 
     def test_pairwise_diversity(self):
@@ -2076,7 +2076,7 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertEqual(ts1.get_mutations(), ts2.get_mutations())
             self.assertEqual(len(ts2.get_mutations()), ts1.get_num_mutations())
             self.assertEqual(
-                ts1.get_num_migration_records(), ts2.get_num_migration_records())
+                ts1.get_num_migrations(), ts2.get_num_migrations())
             self.assertEqual(ts1.get_sequence_length(), ts2.get_sequence_length())
 
     def test_load_records_interface(self):
