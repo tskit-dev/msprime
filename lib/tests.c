@@ -129,19 +129,6 @@ const char *unary_ex_edgesets =
     "0 2  8 6,7\n"
     "2 7  8 6\n";
 
-/* /1* Frees records locally alloced by (e.g.) parse_text_records function. */
-/*  *1/ */
-/* static void */
-/* free_local_records(size_t num_records, edgeset_t *records) */
-/* { */
-/*     size_t j; */
-
-/*     for (j = 0; j < num_records; j++) { */
-/*         free(records[j].children); */
-/*     } */
-/*     free(records); */
-/* } */
-
 /* Simple utilities to parse text so we can write declaritive
  * tests. This is not intended as a robust general input mechanism.
  */
@@ -340,16 +327,10 @@ tree_sequence_from_text(tree_sequence_t *ts, const char *nodes, const char *edge
     if (mutations != NULL) {
         parse_mutations(mutations, &mutation_table);
     }
-
-    /* node_table_print_state(&node_table, stdout); */
-    /* edgeset_table_print_state(&edgeset_table, stdout); */
-    /* mutation_table_print_state(&mutation_table, stdout); */
-
     ret = tree_sequence_initialise(ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(ts, &node_table, &edgeset_table,
             &migration_table, &mutation_table, 0, NULL);
-    /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     node_table_free(&node_table);
     edgeset_table_free(&edgeset_table);
@@ -2573,27 +2554,23 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     edgeset_table.parent[0] = 2;
 
-    printf("\n\n\nFIXME:Skipping NULL node tests\n");
-
     /* Null child */
-    /* edgeset_table.children[1] = MSP_NULL_NODE; */
-    /* ret = tree_sequence_initialise(&ts); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, NULL); */
-    /* CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_NODE_IN_RECORD); */
-    /* tree_sequence_free(&ts); */
-    /* edgeset_table.children[1] = 1; */
+    edgeset_table.children[1] = MSP_NULL_NODE;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_CHILDREN_ARRAY);
+    tree_sequence_free(&ts);
+    edgeset_table.children[1] = 1;
 
-    /* /1* 0 children *1/ */
-    /* edgeset_table.num_children[0] = 0; */
-    /* edgeset_table.children_length = 0; */
-    /* ret = tree_sequence_initialise(&ts); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, NULL); */
-    /* CU_ASSERT_EQUAL(ret, MSP_ERR_ZERO_CHILDREN); */
-    /* tree_sequence_free(&ts); */
-    /* edgeset_table.num_children[0] = 1; */
-    /* edgeset_table.children_length = 1; */
+    /* 0 children */
+    edgeset_table.children_length = 0;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_CHILDREN_ARRAY);
+    tree_sequence_free(&ts);
+    edgeset_table.children_length = 3;
 
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_initialise(&ts);
@@ -2804,26 +2781,25 @@ test_single_tree_bad_mutations(void)
     tree_sequence_free(&ts);
     mutation_table.position[2] = 0.2;
 
-    printf("\n\n\nFIXME:Skipping bad mutation  tests\n");
-    /* /1* node = NULL *1/ */
-    /* mutation_table.nodes[0] = MSP_NULL_NODE; */
-    /* ret = tree_sequence_initialise(&ts); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, */
-    /*         &mutation_table, 0, NULL); */
-    /* CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION); */
-    /* tree_sequence_free(&ts); */
-    /* mutation_table.nodes[0] = 0; */
+    /* node = NULL */
+    mutation_table.nodes[0] = MSP_NULL_NODE;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            &mutation_table, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_NODES_ARRAY);
+    tree_sequence_free(&ts);
+    mutation_table.nodes[0] = 0;
 
-    /* /1* node >= num_nodes *1/ */
-    /* mutation_table.nodes[0] = 7; */
-    /* ret = tree_sequence_initialise(&ts); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, */
-    /*         &mutation_table, 0, NULL); */
-    /* CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION); */
-    /* tree_sequence_free(&ts); */
-    /* mutation_table.nodes[0] = 0; */
+    /* node >= num_nodes */
+    mutation_table.nodes[0] = 7;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            &mutation_table, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
+    tree_sequence_free(&ts);
+    mutation_table.nodes[0] = 0;
 
     /* Unsorted positions */
     mutation_table.position[0] = 0.3;
@@ -2835,27 +2811,37 @@ test_single_tree_bad_mutations(void)
     tree_sequence_free(&ts);
     mutation_table.position[0] = 0.0;
 
-    /* /1* Unsorted nodes *1/ */
-    /* mutation_table.nodes[2] = 1; */
-    /* mutation_table.nodes[3] = 0; */
-    /* ret = tree_sequence_initialise(&ts); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, */
-    /*         &mutation_table, 0, NULL); */
-    /* CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATION_NODES); */
-    /* tree_sequence_free(&ts); */
-    /* mutation_table.nodes[2] = 0; */
-    /* mutation_table.nodes[3] = 1; */
+    /* Unsorted nodes */
+    mutation_table.nodes[4] = 1;
+    mutation_table.nodes[5] = 0;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            &mutation_table, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATION_NODES);
+    tree_sequence_free(&ts);
+    mutation_table.nodes[4] = 0;
+    mutation_table.nodes[5] = 1;
 
-    /* /1* Duplicate nodes *1/ */
-    /* mutation_table.nodes[2] = 1; */
-    /* ret = tree_sequence_initialise(&ts); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, */
-    /*         &mutation_table, 0, NULL); */
-    /* CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_MUTATION_NODES); */
-    /* tree_sequence_free(&ts); */
-    /* mutation_table.nodes[2] = 0; */
+    /* Duplicate nodes */
+    mutation_table.nodes[4] = 1;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            &mutation_table, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_MUTATION_NODES);
+    tree_sequence_free(&ts);
+    mutation_table.nodes[4] = 0;
+
+    /* zero nodes */
+    mutation_table.nodes_length = 0;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            &mutation_table, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_NODES_ARRAY);
+    tree_sequence_free(&ts);
+    mutation_table.nodes_length = 7;
 
     /* Check to make sure we've maintained legal mutations */
     ret = tree_sequence_initialise(&ts);
@@ -4246,8 +4232,6 @@ test_tree_sequence_bad_records(void)
     edgeset_table.children[9] = 0;
     edgeset_table.children[10] = 5;
 
-    /* FIXME we have lost the ability to detect nonmatching right records. Update and
-     * reinstate these test */
     printf("\n\nFIXME:Skipping non matching right\n\n");
     /* Make a gap between adjacent records */
     /* edgeset_table.right[1] = 1.0; */

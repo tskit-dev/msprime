@@ -508,10 +508,7 @@ tree_sequence_check(tree_sequence_t *self)
         left = GSL_MIN(left, self->trees.records.left[j]);
         for (k = 0; k < self->trees.records.num_children[j]; k++) {
             child = self->trees.records.children[j][k];
-            if (child == MSP_NULL_NODE) {
-                ret = MSP_ERR_NULL_NODE_IN_RECORD;
-                goto out;
-            }
+            assert(node != MSP_NULL_NODE);
             /* Children must be in ascending order */
             if (k < self->trees.records.num_children[j] - 1) {
                 if (child >= self->trees.records.children[j][k + 1]) {
@@ -1112,8 +1109,13 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
 
     /* TODO need to do a lot of input validation here. What do we allow to be
      * null? What are the size restrictions on the tables? */
+    /* Do we allow zero nodes and edgesets?? */
     if (nodes == NULL || edgesets == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (edgesets->children_length <= edgesets->num_rows) {
+        ret = MSP_ERR_BAD_CHILDREN_ARRAY;
         goto out;
     }
 
@@ -1150,6 +1152,10 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     self->mutations.num_records = 0;
     self->mutations.total_nodes = 0;
     if (mutations != NULL) {
+        if (mutations-> num_rows > 0 && mutations->nodes_length <= mutations->num_rows) {
+            ret = MSP_ERR_BAD_NODES_ARRAY;
+            goto out;
+        }
         self->mutations.num_records = mutations->num_rows;
         self->mutations.total_nodes = mutations->nodes_length - mutations->num_rows;
     }
@@ -1185,8 +1191,11 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
         }
         k++;
     }
-    assert(offset == self->trees.total_child_nodes);
+    if (offset != self->trees.total_child_nodes) {
+        ret = MSP_ERR_BAD_CHILDREN_ARRAY;
+        goto out;
 
+    }
     /* Get the coordinate indexes. */
     for (j = 0; j < self->trees.num_records; j++) {
         if (edgesets->left[j] >= edgesets->right[j]) {
@@ -1227,11 +1236,13 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
             }
             k++;
         }
-        assert(offset == self->mutations.total_nodes);
+        if (offset != self->mutations.total_nodes) {
+            ret = MSP_ERR_BAD_NODES_ARRAY;
+            goto out;
+        }
         /* TMP */
         memset(self->mutations.ancestral_state, '0', mutations->num_rows * sizeof(char));
         memset(self->mutations.derived_state, '1', mutations->num_rows * sizeof(char));
-
 
     }
     if (migrations != NULL) {
@@ -2072,10 +2083,10 @@ tree_sequence_get_sample_size(tree_sequence_t *self)
     return self->sample_size;
 }
 
-size_t
+uint32_t
 tree_sequence_get_num_nodes(tree_sequence_t *self)
 {
-    return self->trees.num_nodes;
+    return (uint32_t) self->trees.num_nodes;
 }
 
 size_t

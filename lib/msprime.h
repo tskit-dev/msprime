@@ -630,7 +630,7 @@ int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
 
-size_t tree_sequence_get_num_nodes(tree_sequence_t *self);
+uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
 size_t tree_sequence_get_num_edgesets(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);

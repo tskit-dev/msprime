@@ -216,8 +216,13 @@ msp_strerror(int err)
                 "ancestral state not consistent";
             break;
         case MSP_ERR_COORDINATE_NOT_FOUND:
-            ret = "Overlapping subtrees in recurrent mutation: "
-                "ancestral state not consistent";
+            ret = "Coordinate not found.";
+            break;
+        case MSP_ERR_BAD_NODES_ARRAY:
+            ret = "Malformed nodes array.";
+            break;
+        case MSP_ERR_BAD_CHILDREN_ARRAY:
+            ret = "Malformed array of children.";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {
