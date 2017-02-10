@@ -553,6 +553,34 @@ out:
 }
 
 static PyObject *
+make_node(node_t *r)
+{
+    int population = r->population == MSP_NULL_POPULATION_ID ? -1: r->population;
+    PyObject *ret = NULL;
+
+    ret = Py_BuildValue("idi", r->flags, r->time, population);
+    return ret;
+}
+
+static PyObject *
+make_edgeset(edgeset_t *edgeset)
+{
+    PyObject *children = NULL;
+    PyObject *ret = NULL;
+
+    children = convert_uint32_list(edgeset->children, edgeset->num_children);
+    if (children == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("ddIO",
+            edgeset->left, edgeset->right, (unsigned int) edgeset->parent,
+            children);
+out:
+    Py_XDECREF(children);
+    return ret;
+}
+
+static PyObject *
 make_migration(migration_t *r)
 {
     int source = r->source == MSP_NULL_POPULATION_ID ? -1: r->source;
@@ -563,6 +591,24 @@ make_migration(migration_t *r)
             r->left, r->right, (unsigned int) r->node, source, dest, r->time);
     return ret;
 }
+
+static PyObject *
+make_mutation(mutation_t *mutation)
+{
+    PyObject *nodes = NULL;
+    PyObject *ret = NULL;
+
+    nodes = convert_uint32_list(mutation->nodes, mutation->num_nodes);
+    if (nodes == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("dOn", mutation->position, nodes, (Py_ssize_t) mutation->index);
+out:
+    Py_XDECREF(nodes);
+    return ret;
+}
+
+
 
 /*===================================================================
  * RandomGenerator
@@ -2461,39 +2507,50 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *nodes = NULL;
-    EdgesetTable *edgesets = NULL;
-    MigrationTable *migrations = NULL;
-    MutationTable *mutations = NULL;
+    NodeTable *py_nodes = NULL;
+    EdgesetTable *py_edgesets = NULL;
+    MigrationTable *py_migrations = NULL;
+    MutationTable *py_mutations = NULL;
+    node_table_t *nodes = NULL;
+    edgeset_table_t *edgesets = NULL;
+    migration_table_t *migrations = NULL;
+    mutation_table_t *mutations = NULL;
     size_t num_provenance_strings = 0;
     char **provenance_strings = NULL;
     static char *kwlist[] = {"nodes", "edgesets", "migrations", "mutations", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!", kwlist,
-            &NodeTableType, &nodes,
-            &EdgesetTableType, &edgesets,
-            &MigrationTableType, &migrations,
-            &MutationTableType, &mutations)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!", kwlist,
+            &NodeTableType, &py_nodes,
+            &EdgesetTableType, &py_edgesets,
+            &MigrationTableType, &py_migrations,
+            &MutationTableType, &py_mutations)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (NodeTable_check_state(nodes) != 0) {
+    if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
-    if (EdgesetTable_check_state(edgesets) != 0) {
+    nodes = py_nodes->node_table;
+    if (EdgesetTable_check_state(py_edgesets) != 0) {
         goto out;
     }
-    if (MigrationTable_check_state(migrations) != 0) {
-        goto out;
+    edgesets = py_edgesets->edgeset_table;
+    if (py_migrations != NULL) {
+        if (MigrationTable_check_state(py_migrations) != 0) {
+            goto out;
+        }
+        migrations = py_migrations->migration_table;
     }
-    if (MutationTable_check_state(mutations) != 0) {
-        goto out;
+    if (py_mutations != NULL) {
+        if (MutationTable_check_state(py_mutations) != 0) {
+            goto out;
+        }
+        mutations = py_mutations->mutation_table;
     }
     err = tree_sequence_dump_tables_tmp(self->tree_sequence,
-        nodes->node_table, edgesets->edgeset_table,
-        migrations->migration_table, mutations->mutation_table,
+        nodes, edgesets, migrations, mutations,
         &num_provenance_strings, &provenance_strings);
     if (err != 0) {
         handle_library_error(err);
@@ -2594,12 +2651,70 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_node(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    node_t record;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_nodes(self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_node(self->tree_sequence, (size_t) record_index, &record);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_node(&record);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_edgeset(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    edgeset_t record;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_edgesets(self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_edgeset(self->tree_sequence, (size_t) record_index, &record);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_edgeset(&record);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_migration(TreeSequence *self, PyObject *args)
 {
     int err;
     PyObject *ret = NULL;
     Py_ssize_t record_index, num_records;
-    migration_t mr;
+    migration_t record;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
@@ -2614,40 +2729,49 @@ TreeSequence_get_migration(TreeSequence *self, PyObject *args)
         goto out;
     }
     err = tree_sequence_get_migration(self->tree_sequence,
-            (size_t) record_index, &mr);
+            (size_t) record_index, &record);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = make_migration(&mr);
+    ret = make_migration(&record);
 out:
     return ret;
 }
 
 static PyObject *
-TreeSequence_get_mutations(TreeSequence *self)
+TreeSequence_get_mutation(TreeSequence *self, PyObject *args)
 {
-    PyObject *ret = NULL;
-    mutation_t *mutations;
-    size_t num_mutations;
     int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    mutation_t record;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
-    err = tree_sequence_get_mutations(self->tree_sequence, &mutations);
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_mutations(
+        self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_mutation(self->tree_sequence,
+            (size_t) record_index, &record);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = convert_mutations(mutations, num_mutations);
+    ret = make_mutation(&record);
 out:
     return ret;
 }
 
 static PyObject *
-TreeSequence_get_num_records(TreeSequence *self, PyObject *args)
+TreeSequence_get_num_edgesets(TreeSequence *self, PyObject *args)
 {
     PyObject *ret = NULL;
     size_t num_records;
@@ -2737,30 +2861,35 @@ out:
     return ret;
 }
 
+/* TODO refactor this to be get_node() */
 static PyObject *
 TreeSequence_get_sample(TreeSequence *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    unsigned int node;
-    sample_t sample;
+    unsigned int u;
+    node_t node;
     int population, err;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
+    if (!PyArg_ParseTuple(args, "I", &u)) {
         goto out;
     }
-    err = tree_sequence_get_sample(self->tree_sequence, node, &sample);
+    if (u >= tree_sequence_get_sample_size(self->tree_sequence)) {
+        PyErr_SetString(PyExc_IndexError, "out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_node(self->tree_sequence, u, &node);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    population = sample.population_id;
-    if (sample.population_id == MSP_NULL_POPULATION_ID) {
+    population = node.population;
+    if (population == MSP_NULL_POPULATION_ID) {
         population = -1;
     }
-    ret = Py_BuildValue("id", population, sample.time);
+    ret = Py_BuildValue("id", population, node.time);
 out:
     return ret;
 }
@@ -2883,14 +3012,21 @@ static PyMethodDef TreeSequence_methods[] = {
         "Dumps the tree sequence to the specified set of tables"},
     {"get_provenance_strings", (PyCFunction) TreeSequence_get_provenance_strings,
         METH_NOARGS, "Returns the list of provenance strings."},
-    {"get_mutations", (PyCFunction) TreeSequence_get_mutations,
-        METH_NOARGS, "Returns the list of mutations"},
     {"get_record", (PyCFunction) TreeSequence_get_record, METH_VARARGS,
         "Returns the record at the specified index."},
+    {"get_node",
+        (PyCFunction) TreeSequence_get_node, METH_VARARGS,
+        "Returns the node record at the specified index."},
+    {"get_edgeset",
+        (PyCFunction) TreeSequence_get_edgeset, METH_VARARGS,
+        "Returns the edgeset record at the specified index."},
     {"get_migration",
         (PyCFunction) TreeSequence_get_migration, METH_VARARGS,
         "Returns the migration record at the specified index."},
-    {"get_num_records", (PyCFunction) TreeSequence_get_num_records,
+    {"get_mutation",
+        (PyCFunction) TreeSequence_get_mutation, METH_VARARGS,
+        "Returns the mutation record at the specified index."},
+    {"get_num_edgesets", (PyCFunction) TreeSequence_get_num_edgesets,
         METH_NOARGS, "Returns the number of coalescence records." },
     {"get_num_migrations", (PyCFunction) TreeSequence_get_num_migrations,
         METH_NOARGS, "Returns the number of migration records." },

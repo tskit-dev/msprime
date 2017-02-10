@@ -1604,6 +1604,7 @@ class TreeSequence(object):
     def num_records(self):
         return self.get_num_records()
 
+    # TODO deprecate
     def get_num_records(self):
         """
         Returns the number of coalescence records in this tree sequence.
@@ -1613,7 +1614,7 @@ class TreeSequence(object):
             sequence.
         :rtype: int
         """
-        return self._ll_tree_sequence.get_num_records()
+        return self._ll_tree_sequence.get_num_edgesets()
 
     @property
     def num_trees(self):
@@ -1660,6 +1661,7 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_num_nodes()
 
+    # TODO deprecate
     def records(self):
         """
         Returns an iterator over the coalescence records in this tree
@@ -1741,7 +1743,8 @@ class TreeSequence(object):
             the mutations in this tree sequence.
         :rtype: iter
         """
-        for position, node, index in self._ll_tree_sequence.get_mutations():
+        for j in range(self.get_num_mutations()):
+            position, node, index = self._ll_tree_sequence.get_mutation(j)
             yield Mutation(position, node, index)
 
     def breakpoints(self):
@@ -2004,6 +2007,7 @@ class TreeSequence(object):
     def time(self, sample):
         return self.get_time(sample)
 
+    # TODO refactor these methods to take node arguments not samples.
     def get_time(self, sample):
         """
         Returns the time that the specified sample ID was sampled at.

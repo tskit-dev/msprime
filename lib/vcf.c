@@ -177,24 +177,31 @@ out:
 }
 
 static int WARN_UNUSED
-vcf_converter_convert_positions(vcf_converter_t *self)
+vcf_converter_convert_positions(vcf_converter_t *self, tree_sequence_t *tree_sequence)
 {
+    int ret = 0;
     unsigned long pos;
+    mutation_t mut;
     /* VCF is 1-based, so we must make sure we never have a 0 coordinate */
     unsigned long last_position = 0;
     size_t j;
 
     for (j = 0; j < self->num_mutations; j++) {
+        ret = tree_sequence_get_mutation(tree_sequence, j, &mut);
+        if (ret != 0) {
+            goto out;
+        }
         /* update pos. We use a simple algorithm to ensure positions
          * are unique. */
-        pos = (unsigned long) round(self->mutations[j].position);
+        pos = (unsigned long) round(mut.position);
         if (pos <= last_position) {
             pos = last_position + 1;
         }
         last_position = pos;
         self->positions[j] = pos;
     }
-    return 0;
+out:
+    return ret;
 }
 
 int WARN_UNUSED
@@ -251,18 +258,12 @@ vcf_converter_alloc(vcf_converter_t *self,
         goto out;
     }
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
-    /* Note mutations is a borrowed reference from the tree sequence.
-     * Do not free! */
-    ret = tree_sequence_get_mutations(tree_sequence, &self->mutations);
-    if (ret != 0) {
-        goto out;
-    }
     self->positions = malloc(self->num_mutations * sizeof(unsigned long));
     if (self->positions == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = vcf_converter_convert_positions(self);
+    ret = vcf_converter_convert_positions(self, tree_sequence);
     if (ret != 0) {
         goto out;
     }

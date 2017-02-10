@@ -163,10 +163,12 @@ class PythonTreeSequence(object):
         self._tree_sequence = tree_sequence
         self._sample_size = tree_sequence.get_sample_size()
         self._breakpoints = breakpoints
-        self._mutations = tree_sequence.get_mutations()
+        self._mutations = [
+            tree_sequence.get_mutation(j) for j in
+            range(tree_sequence.get_num_mutations())]
 
     def _diffs(self):
-        M = self._tree_sequence.get_num_records()
+        M = self._tree_sequence.get_num_edgesets()
         records = [self._tree_sequence.get_record(j) for j in range(M)]
         l = [record[0] for record in records]
         r = [record[1] for record in records]
@@ -210,7 +212,7 @@ class PythonTreeSequence(object):
             return self._diffs()
 
     def trees(self):
-        M = self._tree_sequence.get_num_records()
+        M = self._tree_sequence.get_num_edgesets()
         records = [self._tree_sequence.get_record(j) for j in range(M)]
         l = [record[0] for record in records]
         r = [record[1] for record in records]

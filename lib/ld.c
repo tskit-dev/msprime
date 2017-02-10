@@ -89,10 +89,7 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence)
     if (ret < 0) {
         goto out;
     }
-    ret = tree_sequence_get_mutations(self->tree_sequence, &self->mutations);
-    if (ret != 0) {
-        goto out;
-    }
+    ret = 0;
 out:
     return ret;
 }
@@ -118,10 +115,17 @@ static int WARN_UNUSED
 ld_calc_position_trees(ld_calc_t *self, size_t mutation_index)
 {
     int ret = MSP_ERR_GENERIC;
-    double x = self->mutations[mutation_index].position;
+    mutation_t mut;
+    double x;
     sparse_tree_t *tA = self->outer_tree;
     sparse_tree_t *tB = self->inner_tree;
 
+    ret = tree_sequence_get_mutation(self->tree_sequence, mutation_index,
+            &mut);
+    if (ret != 0) {
+        goto out;
+    }
+    x = mut.position;
     assert(tA->index == tB->index);
     while (x >= tA->right) {
         ret = sparse_tree_next(tA);
@@ -211,7 +215,10 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
 
     tA = self->outer_tree;
     tB = self->inner_tree;
-    mA = self->mutations[source_index];
+    ret = tree_sequence_get_mutation(self->tree_sequence, source_index, &mA);
+    if (ret != 0) {
+        goto out;
+    }
     assert(mA.num_nodes == 1);
     assert(tA->parent[mA.nodes[0]] != MSP_NULL_NODE);
     fA = tA->num_leaves[mA.nodes[0]] / n;
@@ -221,7 +228,11 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
         if (source_index + j + 1 >= self->num_mutations) {
             break;
         }
-        mB = self->mutations[source_index + j + 1];
+        ret = tree_sequence_get_mutation(self->tree_sequence,
+                source_index + j + 1, &mB);
+        if (ret != 0) {
+            goto out;
+        }
         assert(mB.num_nodes == 1);
         if (mB.position - mA.position > max_distance) {
             break;
@@ -290,7 +301,10 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
 
     tA = self->outer_tree;
     tB = self->inner_tree;
-    mA = self->mutations[source_index];
+    ret = tree_sequence_get_mutation(self->tree_sequence, source_index, &mA);
+    if (ret != 0) {
+        goto out;
+    }
     assert(mA.num_nodes == 1);
     assert(tA->parent[mA.nodes[0]] != MSP_NULL_NODE);
     fA = tA->num_leaves[mA.nodes[0]] / n;
@@ -301,7 +315,10 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
         if (mutation_index < 0) {
             break;
         }
-        mB = self->mutations[mutation_index];
+        ret = tree_sequence_get_mutation(self->tree_sequence, (size_t) mutation_index, &mB);
+        if (ret != 0) {
+            goto out;
+        }
         if (mA.position - mB.position > max_distance) {
             break;
         }
@@ -407,8 +424,14 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     /* We can probably do a lot better than this implementation... */
     tA = self->outer_tree;
     tB = self->inner_tree;
-    mA = self->mutations[a];
-    mB = self->mutations[b];
+    ret = tree_sequence_get_mutation(self->tree_sequence, a, &mA);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_get_mutation(self->tree_sequence, b, &mB);
+    if (ret != 0) {
+        goto out;
+    }
     assert(mA.num_nodes == 1);
     assert(tA->parent[mA.nodes[0]] != MSP_NULL_NODE);
     fA = tA->num_leaves[mA.nodes[0]] / n;

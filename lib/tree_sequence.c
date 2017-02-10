@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2015-2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -974,23 +974,16 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
     size_t j;
     double left, right;
 
+    if (nodes == NULL || edgesets == NULL
+            || num_provenance_strings == NULL || provenance_strings == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
     ret = node_table_reset(nodes);
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_reset(edgesets);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = migration_table_reset(migrations);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutation_table_reset(mutations);
-    if (ret != 0) {
-        goto out;
-    }
-
     for (j = 0; j < self->trees.num_nodes; j++) {
         /* FIXME */
         flags = j < self->sample_size? MSP_NODE_SAMPLE: 0;
@@ -999,6 +992,11 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         if (ret != 0) {
             goto out;
         }
+    }
+
+    ret = edgeset_table_reset(edgesets);
+    if (ret != 0) {
+        goto out;
     }
     for (j = 0; j < self->trees.num_records; j++) {
         left = self->trees.breakpoints[self->trees.records.left[j]];
@@ -1010,26 +1008,41 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
             goto out;
         }
     }
-    for (j = 0; j < self->migrations.num_records; j++) {
-        ret = migration_table_add_row(migrations,
-                self->migrations.left[j],
-                self->migrations.right[j],
-                self->migrations.node[j],
-                self->migrations.source[j],
-                self->migrations.dest[j],
-                self->migrations.time[j]);
+
+    if (migrations != NULL) {
+        ret = migration_table_reset(migrations);
         if (ret != 0) {
             goto out;
         }
+        for (j = 0; j < self->migrations.num_records; j++) {
+            ret = migration_table_add_row(migrations,
+                    self->migrations.left[j],
+                    self->migrations.right[j],
+                    self->migrations.node[j],
+                    self->migrations.source[j],
+                    self->migrations.dest[j],
+                    self->migrations.time[j]);
+            if (ret != 0) {
+                goto out;
+            }
+        }
     }
-    for (j = 0; j < self->mutations.num_records; j++) {
-        ret = mutation_table_add_row(mutations,
-                self->mutations.position[j], self->mutations.num_nodes[j],
-                self->mutations.nodes[j]);
+
+    if (mutations != NULL) {
+        ret = mutation_table_reset(mutations);
         if (ret != 0) {
             goto out;
         }
+        for (j = 0; j < self->mutations.num_records; j++) {
+            ret = mutation_table_add_row(mutations,
+                    self->mutations.position[j], self->mutations.num_nodes[j],
+                    self->mutations.nodes[j]);
+            if (ret != 0) {
+                goto out;
+            }
+        }
     }
+
     *num_provenance_strings = self->num_provenance_strings;
     *provenance_strings = self->provenance_strings;
 
@@ -1808,35 +1821,6 @@ tree_sequence_get_num_trees(tree_sequence_t *self)
 /* Accessors for records */
 
 int WARN_UNUSED
-tree_sequence_get_sample(tree_sequence_t *self, uint32_t u, sample_t *sample)
-{
-    int ret = 0;
-
-    if (u >= self->sample_size) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
-    sample->population_id = self->trees.nodes.population[u];
-    sample->time = self->trees.nodes.time[u];
-out:
-    return ret;
-}
-
-int WARN_UNUSED
-tree_sequence_get_time(tree_sequence_t *self, uint32_t u, double *time)
-{
-    int ret = 0;
-
-    if (u >= self->trees.num_nodes) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
-    *time = self->trees.nodes.time[u];
-out:
-    return ret;
-}
-
-int WARN_UNUSED
 tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     uint32_t *samples, uint32_t num_samples, double *pi)
 {
@@ -1943,11 +1927,25 @@ out:
 }
 
 int WARN_UNUSED
-tree_sequence_get_mutations(tree_sequence_t *self, mutation_t **mutations)
+tree_sequence_get_mutation(tree_sequence_t *self, size_t index, mutation_t *record)
 {
-    *mutations = self->mutations.tree_mutations_mem;
-    return 0;
+    int ret = 0;
+
+    if (index >= self->mutations.num_records) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    /* TODO is this redundant?? */
+    record->index = index;
+    record->position = self->mutations.position[index];
+    record->num_nodes = self->mutations.num_nodes[index];
+    record->nodes = self->mutations.nodes[index];
+    record->ancestral_state = self->mutations.ancestral_state[index];
+    record->derived_state = self->mutations.derived_state[index];
+out:
+    return ret;
 }
+
 
 /* Compress the node space in the specified set of records and mutations.
  */

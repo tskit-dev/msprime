@@ -516,14 +516,12 @@ typedef struct {
     size_t num_mutations;
     unsigned long contig_length;
     unsigned long *positions;
-    mutation_t *mutations;
     vargen_t *vargen;
 } vcf_converter_t;
 
 typedef struct {
     sparse_tree_t *outer_tree;
     sparse_tree_t *inner_tree;
-    mutation_t *mutations;
     size_t num_mutations;
     int tree_changed;
     tree_sequence_t *tree_sequence;
@@ -643,9 +641,8 @@ int tree_sequence_get_node(tree_sequence_t *self, uint32_t index, node_t *node);
 int tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgeset);
 int tree_sequence_get_migration(tree_sequence_t *self, size_t index,
         migration_t *migration);
-int tree_sequence_get_mutations(tree_sequence_t *self, mutation_t **mutations);
-int tree_sequence_get_sample(tree_sequence_t *self, uint32_t u, sample_t *sample);
-int tree_sequence_get_time(tree_sequence_t *self, uint32_t u, double *t);
+int tree_sequence_get_mutation(tree_sequence_t *self, size_t index,
+        mutation_t *mutation);
 
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);
