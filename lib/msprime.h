@@ -331,6 +331,7 @@ typedef struct {
     uint32_t initialised_magic;
     uint32_t sample_size;
     double sequence_length;
+    size_t num_trees;
     struct {
         size_t num_records;
         size_t max_num_records;
@@ -343,12 +344,9 @@ typedef struct {
         size_t max_num_records;
         size_t total_child_nodes;
         size_t max_total_child_nodes;
-        size_t num_breakpoints;
-        size_t max_num_breakpoints;
-        double *breakpoints;
         struct {
-            uint32_t *left;
-            uint32_t *right;
+            double *left;
+            double *right;
             uint32_t *node;
             uint32_t *num_children;
             uint32_t **children;
@@ -410,7 +408,7 @@ typedef struct {
     double sequence_length;
     size_t num_nodes;
     size_t num_records;
-    uint32_t tree_left;
+    double tree_left;
     tree_sequence_t *tree_sequence;
     size_t insertion_index;
     size_t removal_index;
@@ -424,9 +422,6 @@ typedef struct {
     uint32_t num_nodes;
     int flags;
     uint32_t root;
-    /* These are indexes into the breakpoints array */
-    uint32_t left_breakpoint;
-    uint32_t right_breakpoint;
     /* Left and right physical coordinates of the tree */
     double left;
     double right;
