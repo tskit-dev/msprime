@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2015-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -36,7 +36,7 @@
 /* Flags for tree sequence dump/load */
 #define MSP_ZLIB_COMPRESSION 1
 
-#define MSP_FILE_FORMAT_VERSION_MAJOR 4
+#define MSP_FILE_FORMAT_VERSION_MAJOR UINT32_MAX
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */
@@ -334,17 +334,18 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t num_nodes;
-        size_t max_num_nodes;
+        uint32_t *flags;
+        uint32_t *population;
+        double *time;
+    } nodes;
+    struct {
+        size_t num_records;
+        size_t max_num_records;
         size_t total_child_nodes;
         size_t max_total_child_nodes;
         size_t num_breakpoints;
         size_t max_num_breakpoints;
         double *breakpoints;
-        struct {
-            double *time;
-            uint32_t *population;
-        } nodes;
         struct {
             uint32_t *left;
             uint32_t *right;
