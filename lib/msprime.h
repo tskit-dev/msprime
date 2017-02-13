@@ -344,19 +344,17 @@ typedef struct {
         size_t max_num_records;
         size_t total_child_nodes;
         size_t max_total_child_nodes;
-        struct {
-            double *left;
-            double *right;
-            uint32_t *node;
-            uint32_t *num_children;
-            uint32_t **children;
-            uint32_t *children_mem;
-        } records;
+        double *left;
+        double *right;
+        uint32_t *node;
+        uint32_t *num_children;
+        uint32_t **children;
+        uint32_t *children_mem;
         struct {
             uint32_t *insertion_order;
             uint32_t *removal_order;
         } indexes;
-    } trees;
+    } edgesets;
     struct {
         size_t num_records;
         size_t max_num_records;
