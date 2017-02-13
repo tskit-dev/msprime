@@ -84,4 +84,9 @@
 #define MSP_ERR_BAD_NODES_ARRAY                                     -53
 #define MSP_ERR_BAD_CHILDREN_ARRAY                                  -54
 
+/* TODO need to go through these and rename all the COALESCENCE_RECORD ones to
+ * have better names. There are also unused error numbers here which should be
+ * reused.
+ */
+
 #endif /*__ERR_H__*/

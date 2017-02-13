@@ -127,7 +127,6 @@ class TestHdf5(unittest.TestCase):
         os.unlink(self.temp_file)
 
 
-@unittest.skip("V5")
 class TestRoundTrip(TestHdf5):
     """
     Tests if we can round trip convert a tree sequence in memory
@@ -229,7 +228,6 @@ class TestRoundTrip(TestHdf5):
         self.verify_tree_sequences_equal(ts, tsp)
 
 
-@unittest.skip("V5")
 class TestErrors(TestHdf5):
     """
     Test various API errors.
