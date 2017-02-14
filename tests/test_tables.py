@@ -35,6 +35,11 @@ class Column(object):
         self.name = name
 
 
+class Int32Column(Column):
+    def get_input(self, n):
+        return np.arange(n, dtype=np.int32)
+
+
 class UInt32Column(Column):
     def get_input(self, n):
         return np.arange(n, dtype=np.uint32)
@@ -96,14 +101,15 @@ class CommonTestsMixin(object):
 
     def test_set_columns_input_sizes(self):
         num_rows = 100
-        input_data = {col.name: col.get_input(num_rows)for col in self.columns}
+        input_data = {col.name: col.get_input(num_rows) for col in self.columns}
+        col_map = {col.name: col for col in self.columns}
         table = self.table_class()
         table.set_columns(**input_data)
         for equal_len_col_set in self.equal_len_columns:
             if len(equal_len_col_set) > 1:
                 for col in equal_len_col_set:
                     kwargs = dict(input_data)
-                    kwargs[col] = np.zeros(1, dtype=np.uint32)
+                    kwargs[col] = col_map[col].get_input(1)
                     self.assertRaises(ValueError, table.set_columns, **kwargs)
 
     def test_set_read_only_attributes(self):
@@ -144,7 +150,7 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         UInt32Column("flags"),
         DoubleColumn("time"),
-        UInt32Column("population"),
+        Int32Column("population"),
         CharColumn("name")]
     input_parameters = ["max_rows_increment"]
     equal_len_columns = [["time", "flags", "population"]]
@@ -169,8 +175,8 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("left"),
         DoubleColumn("right"),
-        UInt32Column("parent"),
-        UInt32Column("children")]
+        Int32Column("parent"),
+        Int32Column("children")]
     equal_len_columns = [["left", "right", "parent"]]
     input_parameters = ["max_rows_increment", "max_children_length_increment"]
     table_class = msprime.EdgesetTable
@@ -179,7 +185,7 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
 class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("position"),
-        UInt32Column("nodes")]
+        Int32Column("nodes")]
     equal_len_columns = [["position"]]
     input_parameters = ["max_rows_increment", "max_nodes_length_increment"]
     table_class = msprime.MutationTable
@@ -189,9 +195,9 @@ class TestMigrationsTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("left"),
         DoubleColumn("right"),
-        UInt32Column("node"),
-        UInt32Column("source"),
-        UInt32Column("dest"),
+        Int32Column("node"),
+        Int32Column("source"),
+        Int32Column("dest"),
         DoubleColumn("time")]
     input_parameters = ["max_rows_increment"]
     equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]

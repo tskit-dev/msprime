@@ -43,7 +43,6 @@ from msprime import __version__ as _library_version
 # Root node marker
 NULL_NODE = -1
 NULL_POPULATION = -1
-UINT32_MAX = 2**32 - 1
 
 IS_PY2 = sys.version_info[0] < 3
 
@@ -2778,7 +2777,7 @@ class TestTablesInterface(LowLevelTestCase):
             for child in t[3]:
                 self.assertEqual(child, children[offset])
                 offset += 1
-            self.assertEqual(children[offset], UINT32_MAX)
+            self.assertEqual(children[offset], NULL_NODE)
             offset += 1
 
     def verify_migration_table(self, migrations, ts):
@@ -2819,7 +2818,7 @@ class TestTablesInterface(LowLevelTestCase):
             for node in t[1]:
                 self.assertEqual(node, nodes[offset])
                 offset += 1
-            self.assertEqual(nodes[offset], UINT32_MAX)
+            self.assertEqual(nodes[offset], NULL_NODE)
             offset += 1
 
     def test_dump_tables(self):

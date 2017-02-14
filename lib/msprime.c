@@ -946,7 +946,7 @@ msp_free_node_mapping(msp_t *self, node_mapping_t *nm)
 
 static segment_t * WARN_UNUSED
 msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
-        uint32_t population_id, segment_t *prev, segment_t *next)
+        population_id_t population_id, segment_t *prev, segment_t *next)
 {
     segment_t *seg = NULL;
 
@@ -1049,7 +1049,7 @@ msp_verify_segments(msp_t *self)
             left = u->left;
             while (u != NULL) {
                 total_segments++;
-                assert(u->population_id == j);
+                assert(u->population_id == (population_id_t) j);
                 assert(u->left < u->right);
                 assert(u->right <= self->num_loci);
                 if (u->prev != NULL) {
@@ -1281,7 +1281,7 @@ out:
 
 static int WARN_UNUSED
 msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
-        node_id_t node, uint32_t source_pop, uint32_t dest_pop)
+        node_id_t node, population_id_t source_pop, population_id_t dest_pop)
 {
     int ret = 0;
     migration_t *mr;
@@ -1312,7 +1312,7 @@ out:
 
 static int WARN_UNUSED
 msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
-        uint32_t dest_pop)
+        population_id_t dest_pop)
 {
     int ret = 0;
     segment_t *ind, *x;
@@ -1413,7 +1413,7 @@ msp_copy_overlap_count(msp_t *self, uint32_t k)
 static int WARN_UNUSED
 msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         uint32_t num_children, node_id_t *children, node_id_t node,
-        uint32_t population_id)
+        population_id_t population_id)
 {
     int ret = 0;
     int equal;
@@ -1631,7 +1631,7 @@ msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
 }
 
 static int WARN_UNUSED
-msp_merge_two_ancestors(msp_t *self, uint32_t population_id, segment_t *a,
+msp_merge_two_ancestors(msp_t *self, population_id_t population_id, segment_t *a,
         segment_t *b)
 {
     int ret = 0;
@@ -1799,7 +1799,7 @@ out:
 }
 
 static int WARN_UNUSED
-msp_common_ancestor_event(msp_t *self, uint32_t population_id)
+msp_common_ancestor_event(msp_t *self, population_id_t population_id)
 {
     int ret = 0;
     uint32_t j, n;
@@ -1866,7 +1866,7 @@ out:
  * sorted by left coordinate.
  */
 static int WARN_UNUSED
-msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
+msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id)
 {
     int ret = MSP_ERR_GENERIC;
     int coalescence = 0;
@@ -2002,8 +2002,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
                     }
                 }
             }
-            ret = msp_record_coalescence(self, l, r, h, children, v,
-                    population_id);
+            ret = msp_record_coalescence(self, l, r, h, children, v, population_id);
             if (ret != 0) {
                 goto out;
             }
@@ -2050,14 +2049,15 @@ out:
 }
 
 static int WARN_UNUSED
-msp_migration_event(msp_t *self, uint32_t source_pop, uint32_t dest_pop)
+msp_migration_event(msp_t *self, population_id_t source_pop, population_id_t dest_pop)
 {
     int ret = 0;
     uint32_t j;
     avl_node_t *node;
     avl_tree_t *source = &self->populations[source_pop].ancestors;
+    size_t index = ((size_t) source_pop) * self->num_populations + (size_t) dest_pop;
 
-    self->num_migration_events[source_pop * self->num_populations + dest_pop]++;
+    self->num_migration_events[index]++;
     j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
     node = avl_at(source, j);
     assert(node != NULL);
@@ -2113,7 +2113,7 @@ msp_reset_memory_state(msp_t *self)
 }
 
 static int WARN_UNUSED
-msp_insert_sample(msp_t *self, node_id_t sample, uint32_t population)
+msp_insert_sample(msp_t *self, node_id_t sample, population_id_t population)
 {
     int ret = MSP_ERR_GENERIC;
     segment_t *u;
@@ -2137,7 +2137,7 @@ int
 msp_reset(msp_t *self)
 {
     int ret = 0;
-    uint32_t population_id;
+    population_id_t population_id;
     node_id_t j;
     population_t *pop, *initial_pop;
     size_t N = self->num_populations;
@@ -2147,7 +2147,7 @@ msp_reset(msp_t *self)
         goto out;
     }
     /* Set up the initial segments and algorithm state */
-    for (population_id = 0; population_id < N; population_id++) {
+    for (population_id = 0; population_id < (population_id_t) N; population_id++) {
         pop = &self->populations[population_id];
         assert(avl_count(&pop->ancestors) == 0);
         /* Set the initial population parameters */
@@ -2213,7 +2213,7 @@ msp_initialise(msp_t *self)
     }
     /* First check that the sample configuration makes sense */
     for (j = 0; j < self->sample_size; j++) {
-        if (self->samples[j].population_id >= self->num_populations) {
+        if (self->samples[j].population_id >= (population_id_t) self->num_populations) {
             ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
@@ -2323,7 +2323,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
            sampling_event_time, demographic_event_time;
     int64_t num_links;
     uint32_t j, k, n;
-    uint32_t ca_pop_id, mig_source_pop, mig_dest_pop;
+    population_id_t ca_pop_id, mig_source_pop, mig_dest_pop;
     unsigned long events = 0;
     sampling_event_t *se;
 
@@ -2355,7 +2355,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             t_temp = msp_get_common_ancestor_waiting_time(self, j);
             if (t_temp < ca_t_wait) {
                 ca_t_wait = t_temp;
-                ca_pop_id = j;
+                ca_pop_id = (population_id_t) j;
             }
         }
         /* Migration */
@@ -2376,8 +2376,8 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
                          * in time, we move the individual from from
                          * population j into population k.
                          */
-                        mig_source_pop = j;
-                        mig_dest_pop = k;
+                        mig_source_pop = (population_id_t) j;
+                        mig_dest_pop = (population_id_t) k;
                     }
                 }
             }
@@ -2975,10 +2975,10 @@ static int
 msp_mass_migration(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    int source = event->params.mass_migration.source;
-    int dest = event->params.mass_migration.destination;
+    population_id_t source = event->params.mass_migration.source;
+    population_id_t dest = event->params.mass_migration.destination;
     double p = event->params.mass_migration.proportion;
-    int N = (int) self->num_populations;
+    int N = (population_id_t) self->num_populations;
     avl_node_t *node, *next;
     avl_tree_t *pop;
 
@@ -2995,7 +2995,7 @@ msp_mass_migration(msp_t *self, demographic_event_t *event)
     while (node != NULL) {
         next = node->next;
         if (gsl_rng_uniform(self->rng) < p) {
-            ret = msp_move_individual(self, node, pop, (uint32_t) dest);
+            ret = msp_move_individual(self, node, pop, dest);
             if (ret != 0) {
                 goto out;
             }
@@ -3057,9 +3057,9 @@ static int
 msp_simple_bottleneck(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    int population_id = event->params.simple_bottleneck.population_id;
+    population_id_t population_id = event->params.simple_bottleneck.population_id;
     double p = event->params.simple_bottleneck.proportion;
-    int N = (int) self->num_populations;
+    population_id_t N = (population_id_t) self->num_populations;
     avl_node_t *node, *next, *q_node;
     avl_tree_t *pop, Q;
     segment_t *u;
@@ -3093,7 +3093,7 @@ msp_simple_bottleneck(msp_t *self, demographic_event_t *event)
         }
         node = next;
     }
-    ret = msp_merge_ancestors(self, &Q, (uint32_t) population_id);
+    ret = msp_merge_ancestors(self, &Q, population_id);
 out:
     return ret;
 }
@@ -3148,9 +3148,9 @@ static int
 msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    int population_id = event->params.instantaneous_bottleneck.population_id;
+    population_id_t population_id = event->params.instantaneous_bottleneck.population_id;
     double T2 = event->params.instantaneous_bottleneck.strength;
-    int N = (int) self->num_populations;
+    population_id_t N = (population_id_t) self->num_populations;
     node_id_t *lineages = NULL;
     node_id_t *pi = NULL;
     avl_node_t **avl_nodes = NULL;
@@ -3248,7 +3248,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     }
     for (j = 0; j < num_roots; j++) {
         if (lineages[j] >= (node_id_t) n) {
-            ret = msp_merge_ancestors(self, &sets[lineages[j]], (uint32_t) population_id);
+            ret = msp_merge_ancestors(self, &sets[lineages[j]], population_id);
             if (ret != 0) {
                 goto out;
             }

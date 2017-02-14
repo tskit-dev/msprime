@@ -61,11 +61,12 @@
 /* The root node indicator */
 #define MSP_NULL_NODE (-1)
 /* Indicates the that the population ID has not been set. */
-#define MSP_NULL_POPULATION_ID UINT32_MAX
+#define MSP_NULL_POPULATION_ID (-1)
 
 #define MSP_INITIALISED_MAGIC 0x1234567
 
 typedef int32_t node_id_t;
+typedef int32_t population_id_t;
 
 typedef struct {
     size_t num_rows;
@@ -87,7 +88,7 @@ typedef struct {
     size_t max_name_length_increment;
     uint32_t *flags;
     double *time;
-    uint32_t *population;
+    population_id_t *population;
     char *name;
 } node_table_t;
 
@@ -108,8 +109,8 @@ typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
-    uint32_t *source;
-    uint32_t *dest;
+    population_id_t *source;
+    population_id_t *dest;
     node_id_t *node;
     double *left;
     double *right;
@@ -118,7 +119,7 @@ typedef struct {
 
 
 typedef struct segment_t_t {
-    uint32_t population_id;
+    population_id_t population_id;
     /* During simulation we use genetic coordinates */
     uint32_t left;
     uint32_t right;
@@ -129,7 +130,7 @@ typedef struct segment_t_t {
 } segment_t;
 
 typedef struct {
-    uint32_t population_id;
+    population_id_t population_id;
     uint32_t num_children;
     /* After simulation, all coordinates are converted to physical coordinates
      * using a genetic map */
@@ -145,8 +146,8 @@ typedef struct {
  * *_record types completely
  */
 typedef struct {
-    uint32_t source;
-    uint32_t dest;
+    population_id_t source;
+    population_id_t dest;
     node_id_t node;
     double left;
     double right;
@@ -170,7 +171,7 @@ typedef struct {
 } object_heap_t;
 
 typedef struct {
-    uint32_t population_id;
+    population_id_t population_id;
     double time;
 } sample_t;
 
@@ -184,7 +185,7 @@ typedef struct {
 typedef struct {
     double time;
     node_id_t sample;
-    uint32_t population_id;
+    population_id_t population_id;
 } sampling_event_t;
 
 typedef struct {
@@ -250,7 +251,7 @@ typedef struct {
 
 /* Demographic events */
 typedef struct {
-    int population_id;
+    population_id_t population_id;
     double initial_size;
     double growth_rate;
 } population_parameters_change_t;
@@ -261,18 +262,18 @@ typedef struct {
 } migration_rate_change_t;
 
 typedef struct {
-    int source;
-    int destination;
+    population_id_t source;
+    population_id_t destination;
     double proportion;
 } mass_migration_t;
 
 typedef struct {
-    int population_id;
+    population_id_t population_id;
     double proportion;
 } simple_bottleneck_t;
 
 typedef struct {
-    int population_id;
+    population_id_t population_id;
     double strength;
 } instantaneous_bottleneck_t;
 
@@ -306,7 +307,7 @@ typedef struct {
 typedef struct {
     uint32_t flags;
     double time;
-    uint32_t population;
+    population_id_t population;
     char *name;
 } node_t;
 
@@ -338,7 +339,7 @@ typedef struct {
         size_t num_records;
         size_t max_num_records;
         uint32_t *flags;
-        uint32_t *population;
+        population_id_t *population;
         double *time;
     } nodes;
     struct {
@@ -376,8 +377,8 @@ typedef struct {
         size_t num_records;
         size_t max_num_records;
         node_id_t *node;
-        uint32_t *source;
-        uint32_t *dest;
+        population_id_t *source;
+        population_id_t *dest;
         double *left;
         double *right;
         double *time;
@@ -425,7 +426,7 @@ typedef struct {
     /* Left and right physical coordinates of the tree */
     double left;
     double right;
-    uint32_t *population;
+    population_id_t *population;
     node_id_t *parent;
     uint32_t *num_children;
     node_id_t **children;
@@ -750,9 +751,9 @@ void mutgen_print_state(mutgen_t *self, FILE *out);
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
         size_t max_total_name_length_increment);
 int node_table_add_row(node_table_t *self, uint32_t flags, double time,
-        uint32_t population, const char *name);
+        population_id_t population, const char *name);
 int node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        uint32_t *population, size_t total_name_length, char *name);
+        population_id_t *population, size_t total_name_length, char *name);
 int node_table_reset(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
@@ -779,10 +780,10 @@ void mutation_table_print_state(mutation_table_t *self, FILE *out);
 
 int migration_table_alloc(migration_table_t *self, size_t max_rows_increment);
 int migration_table_add_row(migration_table_t *self, double left, double right,
-        node_id_t node, uint32_t source, uint32_t dest, double time);
+        node_id_t node, population_id_t source, population_id_t dest, double time);
 int migration_table_set_columns(migration_table_t *self, size_t num_rows,
-        double *left, double *right, node_id_t *node, uint32_t *source,
-        uint32_t *dest, double *time);
+        double *left, double *right, node_id_t *node, population_id_t *source,
+        population_id_t *dest, double *time);
 int migration_table_reset(migration_table_t *self);
 int migration_table_free(migration_table_t *self);
 void migration_table_print_state(migration_table_t *self, FILE *out);

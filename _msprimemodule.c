@@ -249,7 +249,7 @@ parse_samples(PyObject *py_samples, Py_ssize_t *sample_size, sample_t **samples)
             PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
             goto out;
         }
-        ret_samples[j].population_id = (uint32_t) tmp_long;
+        ret_samples[j].population_id = (population_id_t) tmp_long;
         value = PyTuple_GetItem(sample, 1);
         if (!PyNumber_Check(value)) {
             PyErr_Format(PyExc_TypeError, "'time' is not number");
@@ -519,8 +519,6 @@ out:
 static PyObject *
 make_coalescence_record(coalescence_record_t *cr)
 {
-    int population_id =
-        cr->population_id == MSP_NULL_POPULATION_ID ? -1: cr->population_id;
     PyObject *children = NULL;
     PyObject *ret = NULL;
 
@@ -529,8 +527,8 @@ make_coalescence_record(coalescence_record_t *cr)
         goto out;
     }
     ret = Py_BuildValue("ddiOdi",
-            cr->left, cr->right, (int) cr->node, children,
-            cr->time, population_id);
+            cr->left, cr->right, (int) cr->node, children, cr->time,
+            (int) cr->population_id);
 out:
     Py_XDECREF(children);
     return ret;
@@ -539,8 +537,6 @@ out:
 static PyObject *
 make_coalescence_record_tmp(node_t *node, edgeset_t *edgeset)
 {
-    int population_id =
-        node->population == MSP_NULL_POPULATION_ID ? -1: node->population;
     PyObject *children = NULL;
     PyObject *ret = NULL;
 
@@ -550,7 +546,7 @@ make_coalescence_record_tmp(node_t *node, edgeset_t *edgeset)
     }
     ret = Py_BuildValue("ddIOdi",
             edgeset->left, edgeset->right, (int) edgeset->parent,
-            children, node->time, population_id);
+            children, node->time, (int) node->population);
 out:
     Py_XDECREF(children);
     return ret;
@@ -559,10 +555,9 @@ out:
 static PyObject *
 make_node(node_t *r)
 {
-    int population = r->population == MSP_NULL_POPULATION_ID ? -1: r->population;
     PyObject *ret = NULL;
 
-    ret = Py_BuildValue("Idi", (unsigned int) r->flags, r->time, population);
+    ret = Py_BuildValue("Idi", (unsigned int) r->flags, r->time, (int) r->population);
     return ret;
 }
 
@@ -875,7 +870,7 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
     }
     population_data = NULL;
     if (population_input != NULL) {
-        population_array = table_read_column_array(population_input, NPY_UINT32,
+        population_array = table_read_column_array(population_input, NPY_INT32,
                 &num_rows, true);
         if (population_array == NULL) {
             goto out;
@@ -966,7 +961,7 @@ NodeTable_get_population(NodeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(self->node_table->num_rows, self->node_table->population,
-            NPY_UINT32, sizeof(uint32_t));
+            NPY_INT32, sizeof(int32_t));
 out:
     return ret;
 }
@@ -1142,11 +1137,11 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     if (right_array == NULL) {
         goto out;
     }
-    parent_array = table_read_column_array(parent_input, NPY_UINT32, &num_rows, true);
+    parent_array = table_read_column_array(parent_input, NPY_INT32, &num_rows, true);
     if (parent_array == NULL) {
         goto out;
     }
-    children_array = table_read_column_array(children_input, NPY_UINT32,
+    children_array = table_read_column_array(children_input, NPY_INT32,
             &children_length, false);
     if (children_array == NULL) {
         goto out;
@@ -1243,8 +1238,8 @@ EdgesetTable_get_parent(EdgesetTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edgeset_table->num_rows, self->edgeset_table->parent, NPY_UINT32,
-            sizeof(uint32_t));
+            self->edgeset_table->num_rows, self->edgeset_table->parent, NPY_INT32,
+            sizeof(int32_t));
 out:
     return ret;
 }
@@ -1258,8 +1253,8 @@ EdgesetTable_get_children(EdgesetTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edgeset_table->children_length, self->edgeset_table->children, NPY_UINT32,
-            sizeof(uint32_t));
+            self->edgeset_table->children_length, self->edgeset_table->children, NPY_INT32,
+            sizeof(int32_t));
 out:
     return ret;
 }
@@ -1419,15 +1414,15 @@ MigrationTable_set_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
     if (right_array == NULL) {
         goto out;
     }
-    node_array = table_read_column_array(node_input, NPY_UINT32, &num_rows, true);
+    node_array = table_read_column_array(node_input, NPY_INT32, &num_rows, true);
     if (node_array == NULL) {
         goto out;
     }
-    source_array = table_read_column_array(source_input, NPY_UINT32, &num_rows, true);
+    source_array = table_read_column_array(source_input, NPY_INT32, &num_rows, true);
     if (source_array == NULL) {
         goto out;
     }
-    dest_array = table_read_column_array(dest_input, NPY_UINT32, &num_rows, true);
+    dest_array = table_read_column_array(dest_input, NPY_INT32, &num_rows, true);
     if (dest_array == NULL) {
         goto out;
     }
@@ -1528,7 +1523,7 @@ MigrationTable_get_node(MigrationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->node,
-            NPY_UINT32, sizeof(uint32_t));
+            NPY_INT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1542,7 +1537,7 @@ MigrationTable_get_source(MigrationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->source,
-            NPY_UINT32, sizeof(uint32_t));
+            NPY_INT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1556,7 +1551,7 @@ MigrationTable_get_dest(MigrationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->dest,
-            NPY_UINT32, sizeof(uint32_t));
+            NPY_INT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1712,7 +1707,7 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     if (position_array == NULL) {
         goto out;
     }
-    nodes_array = table_read_column_array(nodes_input, NPY_UINT32, &nodes_length, false);
+    nodes_array = table_read_column_array(nodes_input, NPY_INT32, &nodes_length, false);
     if (nodes_array == NULL) {
         goto out;
     }
@@ -1789,7 +1784,7 @@ MutationTable_get_nodes(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->nodes_length, self->mutation_table->nodes, NPY_UINT32,
+            self->mutation_table->nodes_length, self->mutation_table->nodes, NPY_INT32,
             sizeof(uint32_t));
 out:
     return ret;
@@ -2871,7 +2866,7 @@ TreeSequence_get_sample(TreeSequence *self, PyObject *args)
     PyObject *ret = NULL;
     unsigned int u;
     node_t node;
-    int population, err;
+    int err;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
@@ -2888,11 +2883,7 @@ TreeSequence_get_sample(TreeSequence *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    population = node.population;
-    if (population == MSP_NULL_POPULATION_ID) {
-        population = -1;
-    }
-    ret = Py_BuildValue("id", population, node.time);
+    ret = Py_BuildValue("id", (int) node.population, node.time);
 out:
     return ret;
 }
@@ -3321,20 +3312,32 @@ out:
     return ret;
 }
 
+static int
+SparseTree_get_node_argument(SparseTree *self, PyObject *args, int *node)
+{
+    int ret = -1;
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", node)) {
+        goto out;
+    }
+    if (SparseTree_check_bounds(self, *node)) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 static PyObject *
 SparseTree_get_parent(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    unsigned int node;
-    uint32_t parent;
+    node_id_t parent;
+    int node;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
     parent = self->sparse_tree->parent[node];
@@ -3347,23 +3350,14 @@ static PyObject *
 SparseTree_get_population(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    unsigned int node;
-    int population;
+    population_id_t population;
+    int node;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
     population = self->sparse_tree->population[node];
-    if (population == MSP_NULL_POPULATION_ID) {
-        population = -1;
-    }
-    ret = Py_BuildValue("i", population);
+    ret = Py_BuildValue("i", (int) population);
 out:
     return ret;
 }
@@ -3373,15 +3367,9 @@ SparseTree_get_time(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     double time;
-    unsigned int node;
+    int node;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
     time = self->sparse_tree->time[node];
@@ -3396,29 +3384,18 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
     PyObject *ret = NULL;
     node_id_t *children;
     uint32_t num_children;
-    unsigned int node;
-    int err;
+    int err, node;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
     err = sparse_tree_get_children(self->sparse_tree,
-            (uint32_t) node, &num_children, &children);
+            (node_id_t) node, &num_children, &children);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    if (num_children == 0) {
-        ret = Py_BuildValue("()");
-    } else {
-        ret = convert_node_id_list(children, num_children);
-    }
+    ret = convert_node_id_list(children, num_children);
 out:
     return ret;
 }
@@ -3434,7 +3411,7 @@ SparseTree_get_mrca(SparseTree *self, PyObject *args)
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "II", &u, &v)) {
+    if (!PyArg_ParseTuple(args, "ii", &u, &v)) {
         goto out;
     }
     if (SparseTree_check_bounds(self, u)) {
@@ -3458,20 +3435,13 @@ static PyObject *
 SparseTree_get_num_leaves(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    unsigned int node;
     uint32_t num_leaves;
-    int err;
+    int err, node;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
-        goto out;
-    }
-    err = sparse_tree_get_num_leaves(self->sparse_tree, (uint32_t) node,
+    err = sparse_tree_get_num_leaves(self->sparse_tree, (node_id_t) node,
             &num_leaves);
     if (err != 0) {
         handle_library_error(err);
@@ -3486,20 +3456,13 @@ static PyObject *
 SparseTree_get_num_tracked_leaves(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    unsigned int node;
     uint32_t num_tracked_leaves;
-    int err;
+    int err, node;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "I", &node)) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self, node)) {
-        goto out;
-    }
-    err = sparse_tree_get_num_tracked_leaves(self->sparse_tree, (uint32_t) node,
+    err = sparse_tree_get_num_tracked_leaves(self->sparse_tree, (node_id_t) node,
             &num_tracked_leaves);
     if (err != 0) {
         handle_library_error(err);

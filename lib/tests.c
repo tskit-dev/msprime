@@ -5167,7 +5167,8 @@ test_node_table(void)
     node_table_t table;
     size_t num_rows = 100;
     size_t j;
-    uint32_t *flags, *population;
+    uint32_t *flags;
+    population_id_t *population;
     double *time;
     char *s, *name;
     const char *test_name = "test";
@@ -5421,7 +5422,7 @@ test_migration_table(void)
     size_t num_rows = 100;
     size_t j;
     node_id_t *node;
-    uint32_t *source, *dest;
+    population_id_t *source, *dest;
     double *left, *right, *time;
 
     ret = migration_table_alloc(&table, 0);
@@ -5459,12 +5460,12 @@ test_migration_table(void)
     node = malloc(num_rows * sizeof(node_id_t));
     CU_ASSERT_FATAL(node != NULL);
     memset(node, 4, num_rows * sizeof(node_id_t));
-    source = malloc(num_rows * sizeof(uint32_t));
+    source = malloc(num_rows * sizeof(population_id_t));
     CU_ASSERT_FATAL(source != NULL);
-    memset(source, 5, num_rows * sizeof(uint32_t));
-    dest = malloc(num_rows * sizeof(uint32_t));
+    memset(source, 5, num_rows * sizeof(population_id_t));
+    dest = malloc(num_rows * sizeof(population_id_t));
     CU_ASSERT_FATAL(dest != NULL);
-    memset(dest, 6, num_rows * sizeof(uint32_t));
+    memset(dest, 6, num_rows * sizeof(population_id_t));
 
     ret = migration_table_set_columns(&table, num_rows, left, right, node, source,
             dest, time);
@@ -5473,8 +5474,8 @@ test_migration_table(void)
     CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.source, source, num_rows * sizeof(uint32_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.dest, dest, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.source, source, num_rows * sizeof(population_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.dest, dest, num_rows * sizeof(population_id_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
 
     /* inputs cannot be NULL */

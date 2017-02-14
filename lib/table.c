@@ -85,7 +85,8 @@ node_table_expand_fixed_columns(node_table_t *self, size_t new_size)
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->population, new_size, sizeof(uint32_t));
+        ret = expand_column((void **) &self->population, new_size,
+                sizeof(population_id_t));
         if (ret != 0) {
             goto out;
         }
@@ -113,7 +114,7 @@ out:
 
 int
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        uint32_t *population, size_t name_length, char *name)
+        population_id_t *population, size_t name_length, char *name)
 {
     int ret;
 
@@ -132,9 +133,9 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
     memcpy(self->flags, flags, num_rows * sizeof(uint32_t));
     memcpy(self->time, time, num_rows * sizeof(double));
     if (population == NULL) {
-        memset(self->population, 0xff, num_rows * sizeof(uint32_t));
+        memset(self->population, 0xff, num_rows * sizeof(population_id_t));
     } else {
-        memcpy(self->population, population, num_rows * sizeof(uint32_t));
+        memcpy(self->population, population, num_rows * sizeof(population_id_t));
     }
     self->num_rows = num_rows;
     if (name != NULL) {
@@ -152,7 +153,7 @@ out:
 
 int
 node_table_add_row(node_table_t *self, uint32_t flags, double time,
-        uint32_t population, const char *name)
+        population_id_t population, const char *name)
 {
     int ret = 0;
     size_t new_size, name_length;
@@ -272,7 +273,7 @@ edgeset_table_expand_main_columns(edgeset_table_t *self, size_t new_size)
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->parent, new_size, sizeof(uint32_t));
+        ret = expand_column((void **) &self->parent, new_size, sizeof(node_id_t));
         if (ret != 0) {
             goto out;
         }
@@ -288,7 +289,7 @@ edgeset_table_expand_children(edgeset_table_t *self, size_t new_size)
     int ret = 0;
 
     if (new_size > self->max_children_length) {
-        ret = expand_column((void **) &self->children, new_size, sizeof(uint32_t));
+        ret = expand_column((void **) &self->children, new_size, sizeof(node_id_t));
         if (ret != 0) {
             goto out;
         }
@@ -328,7 +329,7 @@ edgeset_table_add_row(edgeset_table_t *self, double left,
     self->right[self->num_rows] = right;
     self->parent[self->num_rows] = parent;
     memcpy(self->children + self->children_length, children,
-            num_children * sizeof(uint32_t));
+            num_children * sizeof(node_id_t));
     self->children[self->children_length + num_children] = MSP_NULL_NODE;
     self->children_length += 1 + num_children;
     self->num_rows++;
@@ -357,8 +358,8 @@ edgeset_table_set_columns(edgeset_table_t *self,
     }
     memcpy(self->left, left, num_rows * sizeof(double));
     memcpy(self->right, right, num_rows * sizeof(double));
-    memcpy(self->parent, parent, num_rows * sizeof(uint32_t));
-    memcpy(self->children, children, children_length * sizeof(uint32_t));
+    memcpy(self->parent, parent, num_rows * sizeof(node_id_t));
+    memcpy(self->children, children, children_length * sizeof(node_id_t));
     self->num_rows = num_rows;
     self->children_length = children_length;
 out:
@@ -461,7 +462,7 @@ mutation_table_expand_nodes(mutation_table_t *self, size_t new_size)
     int ret = 0;
 
     if (new_size > self->max_nodes_length) {
-        ret = expand_column((void **) &self->nodes, new_size, sizeof(uint32_t));
+        ret = expand_column((void **) &self->nodes, new_size, sizeof(node_id_t));
         if (ret != 0) {
             goto out;
         }
@@ -497,7 +498,7 @@ mutation_table_add_row(mutation_table_t *self, double position,
         }
     }
     self->position[self->num_rows] = position;
-    memcpy(self->nodes + self->nodes_length, nodes, num_nodes * sizeof(uint32_t));
+    memcpy(self->nodes + self->nodes_length, nodes, num_nodes * sizeof(node_id_t));
     self->nodes[self->nodes_length + num_nodes] = MSP_NULL_NODE;
     self->nodes_length += 1 + num_nodes;
     self->num_rows++;
@@ -524,7 +525,7 @@ mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *posi
         goto out;
     }
     memcpy(self->position, position, num_rows * sizeof(double));
-    memcpy(self->nodes, nodes, nodes_length * sizeof(uint32_t));
+    memcpy(self->nodes, nodes, nodes_length * sizeof(node_id_t));
     self->num_rows = num_rows;
     self->nodes_length = nodes_length;
 out:
@@ -605,15 +606,15 @@ migration_table_expand(migration_table_t *self, size_t new_size)
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->node, new_size, sizeof(uint32_t));
+        ret = expand_column((void **) &self->node, new_size, sizeof(node_id_t));
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->source, new_size, sizeof(uint32_t));
+        ret = expand_column((void **) &self->source, new_size, sizeof(population_id_t));
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->dest, new_size, sizeof(uint32_t));
+        ret = expand_column((void **) &self->dest, new_size, sizeof(population_id_t));
         if (ret != 0) {
             goto out;
         }
@@ -629,7 +630,8 @@ out:
 
 int
 migration_table_set_columns(migration_table_t *self, size_t num_rows, double *left,
-        double *right, node_id_t *node, uint32_t *source, uint32_t *dest, double *time)
+        double *right, node_id_t *node, population_id_t *source, population_id_t *dest,
+        double *time)
 {
     int ret;
 
@@ -644,9 +646,9 @@ migration_table_set_columns(migration_table_t *self, size_t num_rows, double *le
     }
     memcpy(self->left, left, num_rows * sizeof(double));
     memcpy(self->right, right, num_rows * sizeof(double));
-    memcpy(self->node, node, num_rows * sizeof(uint32_t));
-    memcpy(self->source, source, num_rows * sizeof(uint32_t));
-    memcpy(self->dest, dest, num_rows * sizeof(uint32_t));
+    memcpy(self->node, node, num_rows * sizeof(node_id_t));
+    memcpy(self->source, source, num_rows * sizeof(population_id_t));
+    memcpy(self->dest, dest, num_rows * sizeof(population_id_t));
     memcpy(self->time, time, num_rows * sizeof(double));
     self->num_rows = num_rows;
 out:
@@ -655,7 +657,7 @@ out:
 
 int
 migration_table_add_row(migration_table_t *self, double left, double right,
-        node_id_t node, uint32_t source, uint32_t dest, double time)
+        node_id_t node, population_id_t source, population_id_t dest, double time)
 {
     int ret = 0;
     size_t new_size;
