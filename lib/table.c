@@ -301,7 +301,7 @@ out:
 
 int
 edgeset_table_add_row(edgeset_table_t *self, double left,
-        double right, node_id_t parent, uint32_t num_children,
+        double right, node_id_t parent, size_t num_children,
         node_id_t *children)
 {
     int ret = 0;
@@ -473,8 +473,8 @@ out:
 }
 
 int
-mutation_table_add_row(mutation_table_t *self, double position,
-        uint32_t num_nodes, node_id_t *nodes)
+mutation_table_add_row(mutation_table_t *self, double position, size_t num_nodes,
+        node_id_t *nodes)
 {
     int ret = 0;
     size_t new_size;

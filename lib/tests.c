@@ -2894,7 +2894,7 @@ test_single_tree_iter(void)
     tree_sequence_t ts;
     sparse_tree_t tree;
     node_id_t u, v, w;
-    uint32_t num_leaves;
+    size_t num_leaves;
     uint32_t num_nodes = 7;
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
@@ -2959,9 +2959,9 @@ test_single_nonbinary_tree_iter(void)
     tree_sequence_t ts;
     sparse_tree_t tree;
     node_id_t u, v, w, *children;
-    uint32_t num_leaves, num_children;
-    uint32_t num_nodes = 10;
-    uint32_t num_samples = 7;
+    size_t num_leaves, num_children;
+    size_t num_nodes = 10;
+    size_t num_samples = 7;
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
     ret = sparse_tree_alloc(&tree, &ts, 0);
@@ -3521,7 +3521,7 @@ verify_trees_consistent(tree_sequence_t *ts)
     int ret, found;
     size_t sample_size, num_trees;
     node_id_t u, v, root, *children;
-    uint32_t j, k, num_children;
+    size_t j, k, num_children;
     sparse_tree_t tree;
 
     sample_size = tree_sequence_get_sample_size(ts);
@@ -3742,7 +3742,7 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests,
         leaf_count_test_t *tests)
 {
     int ret;
-    uint32_t j, num_leaves, n, k;
+    size_t j, num_leaves, n, k;
     node_id_t *tracked_leaves = NULL;
     sparse_tree_t tree;
     leaf_list_node_t *u, *head, *tail;
@@ -3871,8 +3871,9 @@ static void
 verify_leaf_sets_for_tree(sparse_tree_t *tree)
 {
     int ret, stack_top, j;
-    uint32_t u, v, n, num_nodes, num_leaves;
-    uint32_t *stack, *leaves;
+    node_id_t u, v, n, num_nodes, num_leaves;
+    size_t tmp;
+    node_id_t *stack, *leaves;
     leaf_list_node_t *z, *head, *tail;
     tree_sequence_t *ts = tree->tree_sequence;
 
@@ -3904,9 +3905,9 @@ verify_leaf_sets_for_tree(sparse_tree_t *tree)
                     stack[stack_top] = tree->children[v][j];
                 }
             }
-            ret = sparse_tree_get_num_leaves(tree, u, &v);
+            ret = sparse_tree_get_num_leaves(tree, u, &tmp);
             CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_EQUAL(num_leaves, v);
+            CU_ASSERT_EQUAL(num_leaves, tmp);
             ret = sparse_tree_get_leaf_list(tree, u, &head, &tail);
             CU_ASSERT_EQUAL(ret, 0);
             z = head;

@@ -31,9 +31,9 @@ vcf_converter_print_state(vcf_converter_t *self, FILE* out)
 {
     fprintf(out, "VCF converter state\n");
     fprintf(out, "ploidy = %d\n", self->ploidy);
-    fprintf(out, "sample_size = %d\n", self->sample_size);
+    fprintf(out, "sample_size = %d\n", (int) self->sample_size);
     fprintf(out, "contig_length = %lu\n", self->contig_length);
-    fprintf(out, "num_vcf_samples = %d\n", self->num_vcf_samples);
+    fprintf(out, "num_vcf_samples = %d\n", (int) self->num_vcf_samples);
     fprintf(out, "header = %d bytes\n", (int) strlen(self->header));
     fprintf(out, "vcf_genotypes = %d bytes: %s", (int) self->vcf_genotypes_size,
             self->vcf_genotypes);
@@ -115,8 +115,8 @@ vcf_converter_make_record(vcf_converter_t *self)
 {
     int ret = MSP_ERR_GENERIC;
     unsigned int ploidy = self->ploidy;
-    uint32_t n = self->num_vcf_samples;
-    uint32_t j, k;
+    size_t n = self->num_vcf_samples;
+    size_t j, k;
 
     self->vcf_genotypes_size = 2 * self->sample_size + 1;
     /* it's not worth working out exactly what size the record prefix

@@ -616,7 +616,7 @@ print_stats(tree_sequence_t *ts)
 {
     int ret = 0;
     uint32_t j;
-    uint32_t sample_size = tree_sequence_get_sample_size(ts) / 2;
+    size_t sample_size = tree_sequence_get_sample_size(ts) / 2;
     node_id_t *sample = malloc(sample_size * sizeof(node_id_t));
     double pi;
 
@@ -955,7 +955,7 @@ static void
 run_simplify(const char *input_filename, const char *output_filename, int verbose)
 {
     tree_sequence_t ts, subset;
-    uint32_t j, num_samples;
+    size_t j, num_samples;
     node_id_t *samples;
     int flags = 0;
     int ret;

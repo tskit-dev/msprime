@@ -313,15 +313,16 @@ typedef struct {
 
 typedef struct {
     double position;
+    /* TODO should we rename this to ID and change to mutation_id_t ? */
     size_t index;
-    uint32_t num_nodes;
+    size_t num_nodes;
     node_id_t *nodes;
     char ancestral_state;
     char derived_state;
 } mutation_t;
 
 typedef struct {
-    uint32_t num_children;
+    size_t num_children;
     node_id_t parent;
     node_id_t *children;
     double left;
@@ -332,9 +333,9 @@ typedef struct {
 /* Tree sequences */
 typedef struct {
     uint32_t initialised_magic;
-    uint32_t sample_size;
-    double sequence_length;
+    size_t sample_size;
     size_t num_trees;
+    double sequence_length;
     struct {
         size_t num_records;
         size_t max_num_records;
@@ -350,12 +351,12 @@ typedef struct {
         double *left;
         double *right;
         node_id_t *parent;
-        uint32_t *num_children;
+        node_id_t *num_children;
         node_id_t **children;
         node_id_t *children_mem;
         struct {
-            uint32_t *insertion_order;
-            uint32_t *removal_order;
+            node_id_t *insertion_order;
+            node_id_t *removal_order;
         } indexes;
     } edgesets;
     struct {
@@ -365,11 +366,11 @@ typedef struct {
         size_t max_nodes_length;
         node_id_t *nodes_mem;
         node_id_t **nodes;
-        uint32_t *num_nodes;
+        node_id_t *num_nodes;
         double *position;
         char *ancestral_state;
         char *derived_state;
-        size_t *num_tree_mutations;
+        node_id_t *num_tree_mutations;
         mutation_t *tree_mutations_mem;
         mutation_t **tree_mutations;
     } mutations;
@@ -393,7 +394,7 @@ typedef struct {
  */
 typedef struct node_record {
     node_id_t node;
-    uint32_t num_children;
+    size_t num_children;
     node_id_t *children;
     double time;
     struct node_record *next;
@@ -405,7 +406,7 @@ typedef struct leaf_list_node {
 } leaf_list_node_t;
 
 typedef struct {
-    uint32_t sample_size;
+    size_t sample_size;
     double sequence_length;
     size_t num_nodes;
     size_t num_records;
@@ -419,8 +420,8 @@ typedef struct {
 
 typedef struct {
     tree_sequence_t *tree_sequence;
-    uint32_t sample_size;
-    uint32_t num_nodes;
+    size_t sample_size;
+    size_t num_nodes;
     int flags;
     node_id_t root;
     /* Left and right physical coordinates of the tree */
@@ -428,15 +429,15 @@ typedef struct {
     double right;
     population_id_t *population;
     node_id_t *parent;
-    uint32_t *num_children;
+    node_id_t *num_children;
     node_id_t **children;
     double *time;
     size_t index;
     /* These are involved in the optional leaf tracking; num_leaves counts
      * all leaves below a give node, and num_tracked_leaves counts those
      * from a specific subset. */
-    uint32_t *num_leaves;
-    uint32_t *num_tracked_leaves;
+    node_id_t *num_leaves;
+    node_id_t *num_tracked_leaves;
     /* All nodes that are marked during a particular transition are marked
      * with a given value. */
     uint8_t *marked;
@@ -453,8 +454,8 @@ typedef struct {
     size_t num_mutations;
     /* Counters needed for next() and prev() transformations. */
     int direction;
-    size_t left_index;
-    size_t right_index;
+    node_id_t left_index;
+    node_id_t right_index;
 } sparse_tree_t;
 
 typedef struct newick_tree_node {
@@ -467,7 +468,7 @@ typedef struct newick_tree_node {
 } newick_tree_node_t;
 
 typedef struct {
-    uint32_t sample_size;
+    size_t sample_size;
     double sequence_length;
     size_t precision;
     double Ne;
@@ -478,7 +479,7 @@ typedef struct {
 } newick_converter_t;
 
 typedef struct {
-    uint32_t sample_size;
+    size_t sample_size;
     double sequence_length;
     size_t num_mutations;
     tree_sequence_t *tree_sequence;
@@ -490,7 +491,7 @@ typedef struct {
 } hapgen_t;
 
 typedef struct {
-    uint32_t sample_size;
+    size_t sample_size;
     double sequence_length;
     size_t num_mutations;
     tree_sequence_t *tree_sequence;
@@ -501,8 +502,8 @@ typedef struct {
 } vargen_t;
 
 typedef struct {
-    uint32_t sample_size;
-    uint32_t num_vcf_samples;
+    size_t sample_size;
+    size_t num_vcf_samples;
     unsigned int ploidy;
     char *genotypes;
     char *header;
@@ -625,13 +626,13 @@ int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
 
-uint32_t tree_sequence_get_num_nodes(tree_sequence_t *self);
+size_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
 size_t tree_sequence_get_num_edgesets(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
-uint32_t tree_sequence_get_sample_size(tree_sequence_t *self);
+size_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 
 int tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node);
@@ -644,9 +645,9 @@ int tree_sequence_get_mutation(tree_sequence_t *self, size_t index,
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);
 int tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
-        uint32_t sample_size, int flags, tree_sequence_t *output);
+        size_t sample_size, int flags, tree_sequence_t *output);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
-    node_id_t *samples, uint32_t num_samples, double *pi);
+    node_id_t *samples, size_t num_samples, double *pi);
 
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence);
@@ -661,20 +662,20 @@ int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source);
 int sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other);
 int sparse_tree_set_tracked_leaves(sparse_tree_t *self,
-        uint32_t num_tracked_leaves, node_id_t *tracked_leaves);
+        size_t num_tracked_leaves, node_id_t *tracked_leaves);
 int sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
         leaf_list_node_t *head, leaf_list_node_t *tail);
 int sparse_tree_get_root(sparse_tree_t *self, node_id_t *root);
 int sparse_tree_get_parent(sparse_tree_t *self, node_id_t u, node_id_t *parent);
 int sparse_tree_get_children(sparse_tree_t *self, node_id_t u,
-        uint32_t *num_children, node_id_t **children);
+        size_t *num_children, node_id_t **children);
 int sparse_tree_get_time(sparse_tree_t *self, node_id_t u, double *t);
 int sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v,
         node_id_t *mrca);
 int sparse_tree_get_num_leaves(sparse_tree_t *self, node_id_t u,
-        uint32_t *num_leaves);
+        size_t *num_leaves);
 int sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, node_id_t u,
-        uint32_t *num_tracked_leaves);
+        size_t *num_tracked_leaves);
 int sparse_tree_get_leaf_list(sparse_tree_t *self, node_id_t u,
         leaf_list_node_t **head, leaf_list_node_t **tail);
 int sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
@@ -761,7 +762,7 @@ void node_table_print_state(node_table_t *self, FILE *out);
 int edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
         size_t max_children_length_increment);
 int edgeset_table_add_row(edgeset_table_t *self, double left, double right,
-        node_id_t parent, uint32_t num_children, node_id_t *children);
+        node_id_t parent, size_t num_children, node_id_t *children);
 int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, double *left,
         double *right, node_id_t *parent, size_t children_length, node_id_t *children);
 int edgeset_table_reset(edgeset_table_t *self);
@@ -771,7 +772,7 @@ void edgeset_table_print_state(edgeset_table_t *self, FILE *out);
 int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
         size_t max_total_nodes_increment);
 int mutation_table_add_row(mutation_table_t *self, double position,
-        uint32_t num_nodes, node_id_t *nodes);
+        size_t num_nodes, node_id_t *nodes);
 int mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *position,
         size_t total_nodes, node_id_t *nodes);
 int mutation_table_reset(mutation_table_t *self);

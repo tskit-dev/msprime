@@ -158,12 +158,11 @@ out:
     return ret;
 }
 
-static uint32_t
+static double
 ld_calc_overlap_within_tree(ld_calc_t *self, mutation_t mA, mutation_t mB)
 {
     sparse_tree_t *t = self->inner_tree;
-    node_id_t u, v;
-    uint32_t nAB;
+    node_id_t u, v, nAB;
 
     assert(mA.num_nodes == 1);
     assert(mB.num_nodes == 1);
@@ -180,7 +179,7 @@ ld_calc_overlap_within_tree(ld_calc_t *self, mutation_t mA, mutation_t mB)
     if (u == v) {
         nAB = GSL_MIN(t->num_leaves[mA.nodes[0]], t->num_leaves[mB.nodes[0]]);
     }
-    return nAB;
+    return (size_t) nAB;
 }
 
 static inline int WARN_UNUSED
@@ -210,9 +209,9 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
     double fA, fB, fAB, D;
     int tracked_leaves_set = 0;
     sparse_tree_t *tA, *tB;
-    double n = tree_sequence_get_sample_size(self->tree_sequence);
-    uint32_t nAB;
+    double n = (double) tree_sequence_get_sample_size(self->tree_sequence);
     size_t j;
+    double nAB;
 
     tA = self->outer_tree;
     tB = self->inner_tree;
@@ -295,9 +294,9 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
     double fA, fB, fAB, D;
     int tracked_leaves_set = 0;
     sparse_tree_t *tA, *tB;
-    double n = tree_sequence_get_sample_size(self->tree_sequence);
-    uint32_t nAB;
+    double n = (double) tree_sequence_get_sample_size(self->tree_sequence);
     size_t j;
+    double nAB;
     int64_t mutation_index;
 
     tA = self->outer_tree;
@@ -405,8 +404,8 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     mutation_t mA, mB;
     double fA, fB, fAB, D;
     sparse_tree_t *tA, *tB;
-    double n = tree_sequence_get_sample_size(self->tree_sequence);
-    uint32_t nAB;
+    double n = (double) tree_sequence_get_sample_size(self->tree_sequence);
+    double nAB;
     size_t tmp;
 
     if (a >= self->num_mutations || b >= self->num_mutations) {
@@ -452,7 +451,7 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     assert(tB->parent[mB.nodes[0]] != MSP_NULL_NODE);
     fB = tB->num_leaves[mB.nodes[0]] / n;
     assert(fB > 0);
-    nAB = tB->num_tracked_leaves[mB.nodes[0]];
+    nAB = (double) tB->num_tracked_leaves[mB.nodes[0]];
     fAB = nAB / n;
     D = fAB - fA * fB;
     *r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));

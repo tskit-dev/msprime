@@ -425,12 +425,12 @@ out:
 }
 
 static PyObject *
-convert_node_id_list(node_id_t *children, uint32_t num_children)
+convert_node_id_list(node_id_t *children, size_t num_children)
 {
     PyObject *ret = NULL;
     PyObject *t;
     PyObject *py_int;
-    uint32_t j;
+    size_t j;
 
     t = PyTuple_New(num_children);
     if (t == NULL) {
@@ -3383,7 +3383,7 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     node_id_t *children;
-    uint32_t num_children;
+    size_t num_children;
     int err, node;
 
     if (SparseTree_get_node_argument(self, args, &node) != 0) {
@@ -3435,7 +3435,7 @@ static PyObject *
 SparseTree_get_num_leaves(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    uint32_t num_leaves;
+    size_t num_leaves;
     int err, node;
 
     if (SparseTree_get_node_argument(self, args, &node) != 0) {
@@ -3456,7 +3456,7 @@ static PyObject *
 SparseTree_get_num_tracked_leaves(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    uint32_t num_tracked_leaves;
+    size_t num_tracked_leaves;
     int err, node;
 
     if (SparseTree_get_node_argument(self, args, &node) != 0) {
