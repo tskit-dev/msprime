@@ -339,9 +339,14 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
+        size_t total_name_length;
+        size_t max_total_name_length;
         uint32_t *flags;
         population_id_t *population;
         double *time;
+        uint32_t *name_length;
+        char **name;
+        char *name_mem;
     } nodes;
     struct {
         size_t num_records;

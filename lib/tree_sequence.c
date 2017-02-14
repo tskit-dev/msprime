@@ -101,9 +101,10 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     fprintf(out, "sequence_length = %f\n", self->sequence_length);
     fprintf(out, "nodes (%d)\n", (int) self->nodes.num_records);
     for (j = 0; j < self->nodes.num_records; j++) {
-        fprintf(out, "\t%d\t%d\t%f\n", (int) j,
+        fprintf(out, "\t%d\t%d\t%f\t%s\n", (int) j,
                 (int) self->nodes.population[j],
-                self->nodes.time[j]);
+                self->nodes.time[j],
+                self->nodes.name[j]);
     }
     fprintf(out, "edgesets = (%d records)\n", (int) self->edgesets.num_records);
     for (j = 0; j < self->edgesets.num_records; j++) {
@@ -230,18 +231,34 @@ tree_sequence_alloc_trees(tree_sequence_t *self)
     int ret = MSP_ERR_GENERIC;
     size_t size;
 
+    if (self->nodes.total_name_length > self->nodes.max_total_name_length) {
+        size = self->nodes.total_name_length;
+        self->nodes.max_total_name_length = size;
+        msp_safe_free(self->nodes.name_mem);
+        self->nodes.name_mem = malloc(size * sizeof(char));
+        if (self->nodes.name_mem == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+    }
     if (self->nodes.num_records > self->nodes.max_num_records) {
         size = self->nodes.num_records;
         self->nodes.max_num_records = size;
         msp_safe_free(self->nodes.time);
         msp_safe_free(self->nodes.population);
         msp_safe_free(self->nodes.flags);
+        msp_safe_free(self->nodes.name);
+        msp_safe_free(self->nodes.name_length);
         self->nodes.flags = malloc(size * sizeof(uint32_t));
         self->nodes.time = malloc(size * sizeof(double));
         self->nodes.population = malloc(size * sizeof(population_id_t));
+        self->nodes.name = malloc(size * sizeof(char *));
+        self->nodes.name_length = malloc(size * sizeof(size_t));
         if (self->nodes.flags == NULL
                 || self->nodes.time == NULL
-                || self->nodes.population == NULL) {
+                || self->nodes.population == NULL
+                || self->nodes.name == NULL
+                || self->nodes.name_length == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
@@ -393,6 +410,9 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->nodes.flags);
     msp_safe_free(self->nodes.population);
     msp_safe_free(self->nodes.time);
+    msp_safe_free(self->nodes.name);
+    msp_safe_free(self->nodes.name_mem);
+    msp_safe_free(self->nodes.name_length);
     msp_safe_free(self->edgesets.left);
     msp_safe_free(self->edgesets.right);
     msp_safe_free(self->edgesets.children);
@@ -549,14 +569,22 @@ out:
 static int
 tree_sequence_init_nodes(tree_sequence_t *self)
 {
-    size_t j;
+    size_t j, k;
     int ret = 0;
 
     self->sample_size = 0;
+    k = 0;
     for (j = 0; j < self->nodes.num_records; j++) {
         if (self->nodes.flags[j] & MSP_NODE_SAMPLE) {
             self->sample_size++;
         }
+        self->nodes.name_length[j] = 0;
+        self->nodes.name[j] = self->nodes.name_mem + k;
+        while (k < self->nodes.total_name_length && self->nodes.name_mem[k] != '\0') {
+            self->nodes.name_length[j]++;
+            k++;
+        }
+        k++;
     }
     if (self->nodes.num_records > 0 && self->sample_size == 0) {
         ret = MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE;
@@ -889,6 +917,7 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
 
     self->num_provenance_strings = num_provenance_strings;
     self->nodes.num_records = nodes->num_rows;
+    self->nodes.total_name_length = nodes->name_length;
     self->edgesets.total_children = edgesets->children_length - edgesets->num_rows;
     self->edgesets.num_records = edgesets->num_rows;
     self->mutations.num_records = 0;
@@ -918,6 +947,7 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     memcpy(self->nodes.flags, nodes->flags, nodes->num_rows * sizeof(uint32_t));
     memcpy(self->nodes.population, nodes->population,
             nodes->num_rows * sizeof(population_id_t));
+    memcpy(self->nodes.name_mem, nodes->name, nodes->name_length * sizeof(char));
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {
         goto out;
@@ -1022,10 +1052,10 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         goto out;
     }
     for (j = 0; j < self->nodes.num_records; j++) {
-        /* FIXME */
         flags = j < self->sample_size? MSP_NODE_SAMPLE: 0;
         ret = node_table_add_row(nodes, flags,
-                self->nodes.time[j], self->nodes.population[j], "");
+                self->nodes.time[j], self->nodes.population[j],
+                self->nodes.name[j]);
         if (ret != 0) {
             goto out;
         }
@@ -1171,6 +1201,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/mutations/nodes", 1, self->mutations.total_nodes},
         {"/nodes/flags", 1, self->nodes.num_records},
         {"/nodes/population", 1, self->nodes.num_records},
+        {"/nodes/name_length", 1, self->nodes.num_records},
         {"/nodes/time", 1, self->nodes.num_records},
         {"/edgesets/left", 1, self->edgesets.num_records},
         {"/edgesets/right", 1, self->edgesets.num_records},
@@ -1259,7 +1290,6 @@ tree_sequence_read_hdf5_groups(tree_sequence_t *self, hid_t file_id)
     int ret = MSP_ERR_HDF5;
     htri_t exists;
     const char* groups[] = {
-        "/trees",
         "/edgesets/indexes",
         "/nodes",
         "/edgesets",
@@ -1299,11 +1329,13 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         const char *name;
         size_t *dest;
     };
+    size_t flattened_name_length;
     struct _dimension_read fields[] = {
         {"/mutations/position", &self->mutations.num_records},
         {"/mutations/nodes", &self->mutations.total_nodes},
         {"/provenance", &self->num_provenance_strings},
         {"/nodes/time", &self->nodes.num_records},
+        {"/nodes/name", &flattened_name_length},
         {"/edgesets/left", &self->edgesets.num_records},
         {"/edgesets/children", &self->edgesets.total_children},
     };
@@ -1346,12 +1378,37 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
             }
         }
     }
+    self->nodes.total_name_length = flattened_name_length + self->nodes.num_records;
     ret = tree_sequence_check_hdf5_dimensions(self, file_id);
     if (ret != 0) {
         goto out;
     }
     ret = 0;
 out:
+    return ret;
+}
+
+static int
+tree_sequence_init_node_names(tree_sequence_t *self, size_t flattened_name_length,
+        char *flattened_name)
+{
+    int ret = 0;
+    size_t input_offset = 0;
+    size_t output_offset = 0;
+    size_t j, k;
+
+    for (j = 0; j < self->nodes.num_records; j++) {
+        for (k = 0; k < self->nodes.name_length[j]; k++) {
+            assert(input_offset < flattened_name_length);
+            assert(output_offset < self->nodes.total_name_length);
+            self->nodes.name_mem[output_offset] = flattened_name[input_offset];
+            input_offset++;
+            output_offset++;
+        }
+        assert(output_offset < self->nodes.total_name_length);
+        self->nodes.name_mem[output_offset] = '\0';
+        output_offset++;
+    }
     return ret;
 }
 
@@ -1367,14 +1424,18 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         hid_t type;
         void *dest;
     };
+    size_t flattened_name_length;
+    char *flattened_name = NULL;
     struct _hdf5_field_read fields[] = {
         {"/provenance", 0, self->provenance_strings},
-        {"/mutations/nodes", H5T_NATIVE_INT32, self->mutations.nodes_mem},
-        {"/mutations/num_nodes", H5T_NATIVE_INT32, self->mutations.num_nodes},
-        {"/mutations/position", H5T_NATIVE_DOUBLE, self->mutations.position},
+        {"/nodes/name", H5T_NATIVE_CHAR, NULL},
+        {"/nodes/name_length", H5T_NATIVE_UINT32, self->nodes.name_length},
         {"/nodes/flags", H5T_NATIVE_UINT32, self->nodes.flags},
         {"/nodes/population", H5T_NATIVE_UINT32, self->nodes.population},
         {"/nodes/time", H5T_NATIVE_DOUBLE, self->nodes.time},
+        {"/mutations/nodes", H5T_NATIVE_INT32, self->mutations.nodes_mem},
+        {"/mutations/num_nodes", H5T_NATIVE_INT32, self->mutations.num_nodes},
+        {"/mutations/position", H5T_NATIVE_DOUBLE, self->mutations.position},
         {"/edgesets/left", H5T_NATIVE_DOUBLE, self->edgesets.left},
         {"/edgesets/right", H5T_NATIVE_DOUBLE, self->edgesets.right},
         {"/edgesets/parent", H5T_NATIVE_INT32, self->edgesets.parent},
@@ -1398,6 +1459,14 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         goto out;
     }
     fields[0].type = vlen_str;
+
+    flattened_name_length = self->nodes.total_name_length - self->nodes.num_records;
+    flattened_name = malloc(flattened_name_length * sizeof(char));
+    if (flattened_name == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    fields[1].dest = flattened_name;
 
     for (j = 0; j < num_fields; j++) {
         exists = H5Lexists(file_id, fields[j].name, H5P_DEFAULT);
@@ -1424,6 +1493,10 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     if (status < 0) {
         goto out;
     }
+    ret = tree_sequence_init_node_names(self, flattened_name_length, flattened_name);
+    if (ret != 0) {
+        goto out;
+    }
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {
         goto out;
@@ -1442,6 +1515,9 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     }
     ret = 0;
 out:
+    if (flattened_name != NULL) {
+        free(flattened_name);
+    }
     return ret;
 }
 
@@ -1499,6 +1575,8 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     herr_t status;
     hid_t group_id, dataset_id, dataspace_id, plist_id;
     hsize_t dim, chunk_size;
+    char *flattened_name = NULL;
+    size_t flattened_name_length;
     struct _hdf5_field_write {
         const char *name;
         hid_t storage_type;
@@ -1510,6 +1588,11 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/provenance",
             0, 0, /* We must set this afterwards */
             self->num_provenance_strings, self->provenance_strings},
+        {"/nodes/name",
+            H5T_STD_I8LE, H5T_NATIVE_CHAR, 0, NULL},
+        {"/nodes/name_length",
+            H5T_STD_U32LE, H5T_NATIVE_UINT32,
+            self->nodes.num_records, self->nodes.name_length},
         {"/nodes/flags",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->nodes.num_records, self->nodes.flags},
@@ -1556,13 +1639,13 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     };
     struct _hdf5_group_write groups[] = {
         {"/mutations"},
-        {"/trees"},
         {"/nodes"},
         {"/edgesets"},
         {"/edgesets/indexes"},
     };
     size_t num_groups = sizeof(groups) / sizeof(struct _hdf5_group_write);
-    size_t j;
+    size_t j, k;
+
     /* We need to use separate types for storage and memory here because
      * we seem to get a memory leak in HDF5 otherwise.*/
     hid_t filetype_str = -1;
@@ -1586,6 +1669,27 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     }
     fields[0].storage_type = filetype_str;
     fields[0].memory_type = memtype_str;
+
+    /* Make the array to hold the flattened string */
+    flattened_name_length = self->nodes.total_name_length - self->nodes.num_records;
+    if (flattened_name_length != 0) {
+        flattened_name = malloc(flattened_name_length * sizeof(char));
+        if (flattened_name == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        /* fill in the array */
+        k = 0;
+        for (j = 0; j < self->nodes.total_name_length; j++) {
+            if (self->nodes.name_mem[j] != '\0') {
+                flattened_name[k] = self->nodes.name_mem[j];
+                k++;
+            }
+        }
+        assert(k == flattened_name_length);
+        fields[1].size = flattened_name_length;
+        fields[1].source = flattened_name;
+    }
 
     /* Create the groups */
     for (j = 0; j < num_groups; j++) {
@@ -1677,6 +1781,9 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     }
     ret = 0;
 out:
+    if (flattened_name != NULL) {
+        free(flattened_name);
+    }
     if (filetype_str != -1) {
         status = H5Tclose(filetype_str);
         if (status < 0) {
@@ -1898,7 +2005,7 @@ tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node)
     node->time = self->nodes.time[index];
     node->population = self->nodes.population[index];
     node->flags = self->nodes.flags[index];
-    node->name = NULL; /* FIXME */
+    node->name = self->nodes.name[index];
 out:
     return ret;
 }

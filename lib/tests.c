@@ -144,6 +144,7 @@ parse_nodes(const char *text, node_table_t *node_table)
     char *p;
     double time;
     int flags, population;
+    char *name;
 
     c = 0;
     while (text[c] != '\0') {
@@ -168,7 +169,13 @@ parse_nodes(const char *text, node_table_t *node_table)
         p = strtok(NULL, whitespace);
         CU_ASSERT_FATAL(p != NULL);
         population = atoi(p);
-        ret = node_table_add_row(node_table, flags, time, population, "");
+        p = strtok(NULL, whitespace);
+        if (p == NULL) {
+            name = "";
+        } else {
+            name = p;
+        }
+        ret = node_table_add_row(node_table, flags, time, population, name);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
 }
@@ -333,6 +340,7 @@ tree_sequence_from_text(tree_sequence_t *ts, const char *nodes, const char *edge
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(ts, &node_table, &edgeset_table,
             &migration_table, &mutation_table, 0, NULL);
+    /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     node_table_free(&node_table);
     edgeset_table_free(&edgeset_table);
@@ -348,8 +356,9 @@ verify_nodes_equal(node_t *n1, node_t *n2)
     CU_ASSERT_DOUBLE_EQUAL_FATAL(n1->time, n1->time, eps);
     CU_ASSERT_EQUAL_FATAL(n1->population, n2->population);
     CU_ASSERT_EQUAL_FATAL(n1->flags, n2->flags);
-    /* FIXME name */
-    /* CU_ASSERT_STRING_EQUAL(n1->name, n2->name); */
+    CU_ASSERT_FATAL(n1->name != NULL);
+    CU_ASSERT_FATAL(n2->name != NULL);
+    CU_ASSERT_STRING_EQUAL_FATAL(n1->name, n2->name);
 }
 
 static void
@@ -2183,6 +2192,48 @@ test_large_bottleneck_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
+}
+
+static void
+test_node_names(void)
+{
+    const char *nodes =
+        "1  0   0   n1\n"
+        "1  0   0   n2\n"
+        "0  1   0   A_much_longer_name\n"
+        "0  1   0\n"
+        "0  1   0   n4";
+    const char *edgesets =
+        "0  1   2   0,1\n";
+    tree_sequence_t ts;
+    int ret;
+    node_t node;
+
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
+
+    ret = tree_sequence_get_node(&ts, 0, &node);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(node.name, "n1");
+
+    ret = tree_sequence_get_node(&ts, 1, &node);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(node.name, "n2");
+
+    ret = tree_sequence_get_node(&ts, 2, &node);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(node.name, "A_much_longer_name");
+
+    ret = tree_sequence_get_node(&ts, 3, &node);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(node.name, "");
+
+    ret = tree_sequence_get_node(&ts, 4, &node);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(node.name, "n4");
+
+    tree_sequence_free(&ts);
 }
 
 static void
@@ -5574,6 +5625,7 @@ main(int argc, char **argv)
         {"simple_recombination_map", test_simple_recomb_map},
         {"recombination_map_errors", test_recomb_map_errors},
         {"recombination_map_examples", test_recomb_map_examples},
+        {"node_names", test_node_names},
         {"simplest_records", test_simplest_records},
         {"simplest_nonbinary_records", test_simplest_nonbinary_records},
         {"simplest_unary_records", test_simplest_unary_records},
