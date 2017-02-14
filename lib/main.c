@@ -556,7 +556,7 @@ print_haplotypes(tree_sequence_t *ts)
         fatal_library_error(ret, "hapgen_alloc");
     }
     for (j = 0; j < ts->sample_size; j++) {
-        ret = hapgen_get_haplotype(&hg, j, &haplotype);
+        ret = hapgen_get_haplotype(&hg, (node_id_t) j, &haplotype);
         if (ret < 0) {
             fatal_library_error(ret, "hapgen_get_haplotype");
         }
@@ -617,17 +617,16 @@ print_stats(tree_sequence_t *ts)
     int ret = 0;
     uint32_t j;
     uint32_t sample_size = tree_sequence_get_sample_size(ts) / 2;
-    uint32_t *sample = malloc(sample_size * sizeof(uint32_t));
+    node_id_t *sample = malloc(sample_size * sizeof(node_id_t));
     double pi;
 
     if (sample == NULL) {
         fatal_error("no memory");
     }
     for (j = 0; j < sample_size; j++) {
-        sample[j] = j;
+        sample[j] = (node_id_t) j;
     }
-    ret = tree_sequence_get_pairwise_diversity(ts, sample,
-        sample_size, &pi);
+    ret = tree_sequence_get_pairwise_diversity(ts, sample, sample_size, &pi);
     if (ret != 0) {
         fatal_library_error(ret, "get_pairwise_diversity");
     }
@@ -956,18 +955,19 @@ static void
 run_simplify(const char *input_filename, const char *output_filename, int verbose)
 {
     tree_sequence_t ts, subset;
-    uint32_t j, num_samples, *samples;
+    uint32_t j, num_samples;
+    node_id_t *samples;
     int flags = 0;
     int ret;
 
     load_tree_sequence(&ts, input_filename);
     num_samples = tree_sequence_get_sample_size(&ts);
-    samples = malloc(num_samples * sizeof(uint32_t));
+    samples = malloc(num_samples * sizeof(node_id_t));
     if (samples == NULL) {
         fatal_error("out of memory");
     }
     for (j = 0; j < num_samples; j++) {
-        samples[j] = (uint32_t) j;
+        samples[j] = (node_id_t) j;
     }
     ret = tree_sequence_initialise(&subset);
     if (ret != 0) {

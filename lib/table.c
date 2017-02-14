@@ -300,8 +300,8 @@ out:
 
 int
 edgeset_table_add_row(edgeset_table_t *self, double left,
-        double right, uint32_t parent, uint32_t num_children,
-        uint32_t *children)
+        double right, node_id_t parent, uint32_t num_children,
+        node_id_t *children)
 {
     int ret = 0;
 
@@ -338,8 +338,8 @@ out:
 
 int
 edgeset_table_set_columns(edgeset_table_t *self,
-        size_t num_rows, double *left, double *right, uint32_t *parent,
-        size_t children_length, uint32_t *children)
+        size_t num_rows, double *left, double *right, node_id_t *parent,
+        size_t children_length, node_id_t *children)
 {
     int ret;
 
@@ -473,7 +473,7 @@ out:
 
 int
 mutation_table_add_row(mutation_table_t *self, double position,
-        uint32_t num_nodes, uint32_t *nodes)
+        uint32_t num_nodes, node_id_t *nodes)
 {
     int ret = 0;
     size_t new_size;
@@ -507,7 +507,7 @@ out:
 
 int
 mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *position,
-        size_t nodes_length, uint32_t *nodes)
+        size_t nodes_length, node_id_t *nodes)
 {
     int ret = 0;
 
@@ -629,7 +629,7 @@ out:
 
 int
 migration_table_set_columns(migration_table_t *self, size_t num_rows, double *left,
-        double *right, uint32_t *node, uint32_t *source, uint32_t *dest, double *time)
+        double *right, node_id_t *node, uint32_t *source, uint32_t *dest, double *time)
 {
     int ret;
 
@@ -655,7 +655,7 @@ out:
 
 int
 migration_table_add_row(migration_table_t *self, double left, double right,
-        uint32_t node, uint32_t source, uint32_t dest, double time)
+        node_id_t node, uint32_t source, uint32_t dest, double time)
 {
     int ret = 0;
     size_t new_size;

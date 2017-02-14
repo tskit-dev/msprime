@@ -162,7 +162,8 @@ static uint32_t
 ld_calc_overlap_within_tree(ld_calc_t *self, mutation_t mA, mutation_t mB)
 {
     sparse_tree_t *t = self->inner_tree;
-    uint32_t u, v, nAB;
+    node_id_t u, v;
+    uint32_t nAB;
 
     assert(mA.num_nodes == 1);
     assert(mB.num_nodes == 1);

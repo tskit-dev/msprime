@@ -184,7 +184,8 @@ parse_edgesets(const char *text, edgeset_table_t *edgeset_table)
     const char *whitespace = " \t";
     char *p, *q;
     double left, right;
-    uint32_t parent, num_children, children[MAX_CHILDREN];
+    node_id_t parent, children[MAX_CHILDREN];
+    uint32_t num_children;
 
     c = 0;
     while (text[c] != '\0') {
@@ -248,7 +249,8 @@ parse_mutations(const char *text, mutation_table_t *mutation_table)
     const char *whitespace = " \t";
     char *p, *q;
     double position;
-    uint32_t num_nodes, nodes[MAX_NODES];
+    uint32_t num_nodes;
+    node_id_t nodes[MAX_NODES];
 
     c = 0;
     while (text[c] != '\0') {
@@ -460,7 +462,7 @@ verify_stats(tree_sequence_t *ts)
 {
     int ret;
     uint32_t sample_size = tree_sequence_get_sample_size(ts);
-    uint32_t *samples = malloc(sample_size * sizeof(uint32_t));
+    node_id_t *samples = malloc(sample_size * sizeof(node_id_t));
     uint32_t j;
     double pi;
 
@@ -486,13 +488,14 @@ verify_stats(tree_sequence_t *ts)
 
 static void
 verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
-        uint32_t *samples, uint32_t num_samples)
+        node_id_t *samples, uint32_t num_samples)
 {
     int ret;
     node_t n1, n2;
     sparse_tree_t full_tree, subset_tree;
     mutation_t *mut;
-    uint32_t j, k, u, mrca1, mrca2;
+    uint32_t j, k;
+    node_id_t u, mrca1, mrca2;
     double tmrca1, tmrca2;
     size_t total_mutations;
 
@@ -529,8 +532,7 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
         while (full_tree.right <= subset_tree.right) {
             for (j = 0; j < num_samples; j++) {
                 for (k = j + 1; k < num_samples; k++) {
-                    ret = sparse_tree_get_mrca(&full_tree, samples[j], samples[k],
-                            &mrca1);
+                    ret = sparse_tree_get_mrca(&full_tree, samples[j], samples[k], &mrca1);
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
                     ret = sparse_tree_get_time(&full_tree, mrca1, &tmrca1);
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -585,7 +587,7 @@ verify_simplify(tree_sequence_t *ts)
     uint32_t n = tree_sequence_get_sample_size(ts);
     uint32_t sample_sizes[] = {2, 3, n / 2, n - 1, n};
     size_t j;
-    uint32_t *sample = malloc(n * sizeof(uint32_t));
+    node_id_t *sample = malloc(n * sizeof(node_id_t));
     tree_sequence_t subset;
     int flags = MSP_FILTER_ROOT_MUTATIONS;
 
@@ -843,7 +845,8 @@ make_recurrent_mutations_copy(tree_sequence_t *ts)
     size_t j, num_provenance_strings;
     size_t alloc_size = 8192;
     size_t max_nodes = 1024;
-    uint32_t num_nodes, mutation_nodes[max_nodes];
+    uint32_t num_nodes;
+    node_id_t mutation_nodes[max_nodes];
     char **provenance_strings;
     tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
     node_table_t nodes;
@@ -2239,7 +2242,7 @@ test_simplest_unary_records(void)
         "0  1   3   1\n"
         "0  1   4   2,3\n";
     tree_sequence_t ts, simplified;
-    uint32_t sample_ids[] = {0, 1};
+    node_id_t sample_ids[] = {0, 1};
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
@@ -2280,7 +2283,7 @@ test_simplest_non_sample_leaf_records(void)
         "0.3    3\n"
         "0.4    4";
     tree_sequence_t ts, simplified;
-    uint32_t sample_ids[] = {0, 1};
+    node_id_t sample_ids[] = {0, 1};
     hapgen_t hapgen;
     vargen_t vargen;
     char *haplotype, genotypes[64];
@@ -2351,7 +2354,7 @@ test_simplest_degenerate_multiple_root_records(void)
         "0  1   2   0\n"
         "0  1   3   1\n";
     tree_sequence_t ts, simplified;
-    uint32_t sample_ids[] = {0, 1};
+    node_id_t sample_ids[] = {0, 1};
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
@@ -2382,7 +2385,7 @@ test_simplest_multiple_root_records(void)
         "0  1   4   0,1\n"
         "0  1   5   2,3\n";
     tree_sequence_t ts, simplified;
-    uint32_t sample_ids[] = {0, 1, 2, 3};
+    node_id_t sample_ids[] = {0, 1, 2, 3};
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
@@ -2421,7 +2424,7 @@ test_simplest_root_mutations(void)
     hapgen_t hapgen;
     char *haplotype;
     int flags = 0;
-    uint32_t sample_ids[] = {0, 1};
+    node_id_t sample_ids[] = {0, 1};
     tree_sequence_t ts, simplified;
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, mutations, NULL);
@@ -2890,7 +2893,8 @@ test_single_tree_iter(void)
     uint32_t parents[] = {4, 4, 5, 5, 6, 6, MSP_NULL_NODE};
     tree_sequence_t ts;
     sparse_tree_t tree;
-    uint32_t u, v, num_leaves, w;
+    node_id_t u, v, w;
+    uint32_t num_leaves;
     uint32_t num_nodes = 7;
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
@@ -2954,7 +2958,8 @@ test_single_nonbinary_tree_iter(void)
     uint32_t parents[] = {7, 7, 7, 7, 8, 8, 9, 9, 9, MSP_NULL_NODE};
     tree_sequence_t ts;
     sparse_tree_t tree;
-    uint32_t u, v, num_leaves, w, num_children, *children;
+    node_id_t u, v, w, *children;
+    uint32_t num_leaves, num_children;
     uint32_t num_nodes = 10;
     uint32_t num_samples = 7;
 
@@ -3055,7 +3060,7 @@ test_single_tree_iter_times(void)
     double t;
     tree_sequence_t ts;
     sparse_tree_t tree;
-    uint32_t u, v;
+    node_id_t u, v;
     uint32_t num_nodes = 7;
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL);
@@ -3461,7 +3466,8 @@ static void
 verify_trees(tree_sequence_t *ts, uint32_t num_trees, uint32_t* parents)
 {
     int ret;
-    uint32_t u, v, j, k, l, mutation_index;
+    node_id_t u, v;
+    uint32_t j, k, l, mutation_index;
     sparse_tree_t tree;
     mutation_t *tree_mutations;
     size_t num_tree_mutations;
@@ -3514,7 +3520,8 @@ verify_trees_consistent(tree_sequence_t *ts)
 {
     int ret, found;
     size_t sample_size, num_trees;
-    uint32_t u, v, j, root, k, num_children, *children;
+    node_id_t u, v, root, *children;
+    uint32_t j, k, num_children;
     sparse_tree_t tree;
 
     sample_size = tree_sequence_get_sample_size(ts);
@@ -3535,8 +3542,7 @@ verify_trees_consistent(tree_sequence_t *ts)
                 ret = sparse_tree_get_parent(&tree, u, &v);
                 CU_ASSERT_EQUAL(ret, 0);
                 if (v != MSP_NULL_NODE) {
-                    ret = sparse_tree_get_children(&tree, v,
-                            &num_children, &children);
+                    ret = sparse_tree_get_children(&tree, v, &num_children, &children);
                     CU_ASSERT_EQUAL(ret, 0);
                     CU_ASSERT(num_children >= 1);
                     found = 0;
@@ -3566,8 +3572,8 @@ test_sparse_tree_errors(void)
     uint32_t u;
     tree_sequence_t ts, other_ts;
     sparse_tree_t t, other_t;
-    uint32_t bad_nodes[] = {num_nodes, num_nodes + 1, UINT32_MAX};
-    uint32_t tracked_leaves[] = {0, 0, 0};
+    node_id_t bad_nodes[] = {num_nodes, num_nodes + 1, -1};
+    node_id_t tracked_leaves[] = {0, 0, 0};
 
     tree_sequence_from_text(&ts, paper_ex_nodes, paper_ex_edgesets, NULL, NULL, NULL);
 
@@ -3737,7 +3743,7 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests,
 {
     int ret;
     uint32_t j, num_leaves, n, k;
-    uint32_t *tracked_leaves = NULL;
+    node_id_t *tracked_leaves = NULL;
     sparse_tree_t tree;
     leaf_list_node_t *u, *head, *tail;
 
@@ -3820,7 +3826,7 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests,
     sparse_tree_free(&tree);
 
     /* Now use MSP_LEAF_COUNTS|MSP_LEAF_LISTS */
-    tracked_leaves = malloc(n * sizeof(uint32_t));
+    tracked_leaves = malloc(n * sizeof(node_id_t));
     for (j = 0; j < n; j++) {
         tracked_leaves[j] = j;
     }
@@ -4305,8 +4311,8 @@ verify_tree_diffs(tree_sequence_t *ts)
     size_t j, k, num_in, num_out, num_trees;
     double length, t, x;
     node_t node;
-    uint32_t u;
-    uint32_t *pi = malloc(num_nodes * sizeof(uint32_t));
+    node_id_t u;
+    node_id_t *pi = malloc(num_nodes * sizeof(node_id_t));
     double *tau = malloc(num_nodes * sizeof(double));
     int first_tree;
 
@@ -4708,7 +4714,7 @@ verify_simplify_errors(tree_sequence_t *ts)
     int ret;
     uint32_t n = tree_sequence_get_sample_size(ts);
     tree_sequence_t subset;
-    uint32_t sample[] = {0, 1, 2, 3};
+    node_id_t sample[] = {0, 1, 2, 3};
 
     ret = tree_sequence_simplify(ts, sample, 0, 0, &subset);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
@@ -5255,9 +5261,9 @@ test_edgeset_table(void)
     size_t num_rows = 100;
     size_t max_children = 10;
     size_t j, k, children_length;
-    uint32_t *parent, *children;
+    node_id_t *parent, *children;
     double *left, *right;
-    uint32_t c[max_children];
+    node_id_t c[max_children];
 
     ret = edgeset_table_alloc(&table, 0, 1);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
@@ -5271,7 +5277,7 @@ test_edgeset_table(void)
     /* Adding 0 children is an error */
     ret = edgeset_table_add_row(&table, 0, 0, 0, 0, c);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    memset(c, 0, max_children * sizeof(uint32_t));
+    memset(c, 0, max_children * sizeof(node_id_t));
 
     children_length = 0;
     for (j = 0; j < num_rows; j++) {
@@ -5297,11 +5303,11 @@ test_edgeset_table(void)
     right = malloc(num_rows * sizeof(double));
     CU_ASSERT_FATAL(right != NULL);
     memset(right, 0, num_rows * sizeof(double));
-    parent = malloc(num_rows * sizeof(uint32_t));
+    parent = malloc(num_rows * sizeof(node_id_t));
     CU_ASSERT_FATAL(parent != NULL);
-    memset(parent, 1, num_rows * sizeof(uint32_t));
-    children = malloc(2 * num_rows * sizeof(uint32_t));
-    memset(children, 0, 2 * num_rows * sizeof(uint32_t));
+    memset(parent, 1, num_rows * sizeof(node_id_t));
+    children = malloc(2 * num_rows * sizeof(node_id_t));
+    memset(children, 0, 2 * num_rows * sizeof(node_id_t));
     for (j = 0; j < num_rows; j++) {
         children[2 * j] = j;
         children[2 * j + 1] = MSP_NULL_NODE;
@@ -5312,8 +5318,8 @@ test_edgeset_table(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(uint32_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.children, children, 2 * num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.children, children, 2 * num_rows * sizeof(node_id_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.children_length, 2 * num_rows);
 
@@ -5346,9 +5352,9 @@ test_mutation_table(void)
     size_t num_rows = 100;
     size_t max_nodes = 10;
     size_t j, k, nodes_length;
-    uint32_t *nodes;
+    node_id_t *nodes;
     double *position;
-    uint32_t c[max_nodes];
+    node_id_t c[max_nodes];
 
     ret = mutation_table_alloc(&table, 0, 1);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
@@ -5362,7 +5368,7 @@ test_mutation_table(void)
     /* Adding 0 nodes is an error */
     ret = mutation_table_add_row(&table, 0, 0, c);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    memset(c, 0, max_nodes * sizeof(uint32_t));
+    memset(c, 0, max_nodes * sizeof(node_id_t));
 
     nodes_length = 0;
     for (j = 0; j < num_rows; j++) {
@@ -5383,7 +5389,7 @@ test_mutation_table(void)
     position = malloc(num_rows * sizeof(double));
     CU_ASSERT_FATAL(position != NULL);
     memset(position, 0, num_rows * sizeof(double));
-    nodes = malloc(2 * num_rows * sizeof(uint32_t));
+    nodes = malloc(2 * num_rows * sizeof(node_id_t));
     CU_ASSERT_FATAL(nodes != NULL);
     for (j = 0; j < num_rows; j++) {
         nodes[2 * j] = j;
@@ -5392,7 +5398,7 @@ test_mutation_table(void)
     ret = mutation_table_set_columns(&table, num_rows, position, 2 * num_rows, nodes);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.position, position, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.nodes, nodes, 2 * num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.nodes, nodes, 2 * num_rows * sizeof(node_id_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.nodes_length, 2 * num_rows);
 
@@ -5414,7 +5420,8 @@ test_migration_table(void)
     migration_table_t table;
     size_t num_rows = 100;
     size_t j;
-    uint32_t *node, *source, *dest;
+    node_id_t *node;
+    uint32_t *source, *dest;
     double *left, *right, *time;
 
     ret = migration_table_alloc(&table, 0);
@@ -5449,9 +5456,9 @@ test_migration_table(void)
     time = malloc(num_rows * sizeof(double));
     CU_ASSERT_FATAL(time != NULL);
     memset(time, 3, num_rows * sizeof(double));
-    node = malloc(num_rows * sizeof(uint32_t));
+    node = malloc(num_rows * sizeof(node_id_t));
     CU_ASSERT_FATAL(node != NULL);
-    memset(node, 4, num_rows * sizeof(uint32_t));
+    memset(node, 4, num_rows * sizeof(node_id_t));
     source = malloc(num_rows * sizeof(uint32_t));
     CU_ASSERT_FATAL(source != NULL);
     memset(source, 5, num_rows * sizeof(uint32_t));
@@ -5465,7 +5472,7 @@ test_migration_table(void)
     CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.source, source, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.dest, dest, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);

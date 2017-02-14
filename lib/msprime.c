@@ -294,9 +294,9 @@ cmp_sampling_event(const void *a, const void *b) {
 }
 
 static int
-cmp_uint32_t(const void *a, const void *b) {
-    const uint32_t *ia = (const uint32_t *) a;
-    const uint32_t *ib = (const uint32_t *) b;
+cmp_node_id_t(const void *a, const void *b) {
+    const node_id_t *ia = (const node_id_t *) a;
+    const node_id_t *ib = (const node_id_t *) b;
     return (*ia > *ib) - (*ia < *ib);
 }
 
@@ -684,7 +684,7 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng)
         k = 0;
         for (j = 0; j < self->sample_size; j++) {
             if (self->samples[j].time > 0) {
-                self->sampling_events[k].sample = (uint32_t) j;
+                self->sampling_events[k].sample = (node_id_t) j;
                 self->sampling_events[k].time = self->samples[j].time;
                 self->sampling_events[k].population_id =
                     self->samples[j].population_id;
@@ -746,7 +746,7 @@ msp_alloc_memory_blocks(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    ret = object_heap_init(&self->binary_children_heap, 2 * sizeof(uint32_t),
+    ret = object_heap_init(&self->binary_children_heap, 2 * sizeof(node_id_t),
            self->coalescence_record_block_size, NULL);
     if (ret != 0) {
         goto out;
@@ -795,10 +795,10 @@ msp_is_completed(msp_t *self)
     return self->state == MSP_STATE_SIMULATING && n == 0;
 }
 
-static uint32_t *
+static node_id_t *
 msp_alloc_children(msp_t *self, uint32_t num_children)
 {
-    uint32_t *ret = NULL;
+    node_id_t *ret = NULL;
 
     /* Binary children are by far the most common, so we optimise for this
      * case with a fixed memory heap. We malloc the rest directly. This
@@ -815,17 +815,17 @@ msp_alloc_children(msp_t *self, uint32_t num_children)
                 goto out;
             }
         }
-        ret = (uint32_t *) object_heap_alloc_object(
+        ret = (node_id_t *) object_heap_alloc_object(
                 &self->binary_children_heap);
     } else {
-        ret = malloc(num_children * sizeof(uint32_t));
+        ret = malloc(num_children * sizeof(node_id_t));
     }
 out:
     return ret;
 }
 
 static void
-msp_free_children(msp_t *self, uint32_t num_children, uint32_t *children)
+msp_free_children(msp_t *self, uint32_t num_children, node_id_t *children)
 {
     if (num_children == 2) {
         object_heap_free_object(&self->binary_children_heap, children);
@@ -945,7 +945,7 @@ msp_free_node_mapping(msp_t *self, node_mapping_t *nm)
 }
 
 static segment_t * WARN_UNUSED
-msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, uint32_t value,
+msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
         uint32_t population_id, segment_t *prev, segment_t *next)
 {
     segment_t *seg = NULL;
@@ -1281,7 +1281,7 @@ out:
 
 static int WARN_UNUSED
 msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
-        uint32_t node, uint32_t source_pop, uint32_t dest_pop)
+        node_id_t node, uint32_t source_pop, uint32_t dest_pop)
 {
     int ret = 0;
     migration_t *mr;
@@ -1412,7 +1412,7 @@ msp_copy_overlap_count(msp_t *self, uint32_t k)
 
 static int WARN_UNUSED
 msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
-        uint32_t num_children, uint32_t *children, uint32_t node,
+        uint32_t num_children, node_id_t *children, node_id_t node,
         uint32_t population_id)
 {
     int ret = 0;
@@ -1434,7 +1434,7 @@ msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
         self->num_coalescence_record_blocks++;
     }
     /* Sort the children */
-    qsort(children, num_children, sizeof(uint32_t), cmp_uint32_t);
+    qsort(children, num_children, sizeof(node_id_t), cmp_node_id_t);
 
     cr = &self->coalescence_records[self->num_coalescence_records];
     if (self->num_coalescence_records != 0) {
@@ -1637,7 +1637,8 @@ msp_merge_two_ancestors(msp_t *self, uint32_t population_id, segment_t *a,
     int ret = 0;
     int coalescence = 0;
     int defrag_required = 0;
-    uint32_t v, l, r, l_min, r_max, *children;
+    node_id_t v, *children;
+    uint32_t l, r, l_min, r_max;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
@@ -1870,7 +1871,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, uint32_t population_id)
     int ret = MSP_ERR_GENERIC;
     int coalescence = 0;
     int defrag_required = 0;
-    uint32_t j, l, r, h, r_max, next_l, l_min, v, *children;
+    node_id_t v, *children;
+    uint32_t j, l, r, h, r_max, next_l, l_min;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *z, *alpha;
@@ -2111,7 +2113,7 @@ msp_reset_memory_state(msp_t *self)
 }
 
 static int WARN_UNUSED
-msp_insert_sample(msp_t *self, uint32_t sample, uint32_t population)
+msp_insert_sample(msp_t *self, node_id_t sample, uint32_t population)
 {
     int ret = MSP_ERR_GENERIC;
     segment_t *u;
@@ -2135,7 +2137,8 @@ int
 msp_reset(msp_t *self)
 {
     int ret = 0;
-    uint32_t j, population_id;
+    uint32_t population_id;
+    node_id_t j;
     population_t *pop, *initial_pop;
     size_t N = self->num_populations;
 
@@ -2154,7 +2157,7 @@ msp_reset(msp_t *self)
         pop->start_time = 0.0;
     }
     /* Set up the sample */
-    for (j = 0; j < self->sample_size; j++) {
+    for (j = 0; j < (node_id_t) self->sample_size; j++) {
         if (self->samples[j].time == 0.0) {
             ret = msp_insert_sample(self, j, self->samples[j].population_id);
             if (ret != 0) {
@@ -2162,7 +2165,7 @@ msp_reset(msp_t *self)
             }
         }
     }
-    self->next_node = self->sample_size;
+    self->next_node = (node_id_t) self->sample_size;
     self->next_demographic_event = self->demographic_events_head;
     memcpy(self->migration_matrix, self->initial_migration_matrix,
             N * N * sizeof(double));
@@ -2440,7 +2443,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
         migration_table_t *migrations)
 {
     int ret = 0;
-    uint32_t last_node;
+    node_id_t last_node;
     size_t j;
     double scaled_time;
     double left, right;
@@ -2474,7 +2477,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
         if (cr->node != last_node) {
-            assert(cr->node == nodes->num_rows);
+            assert(cr->node == (node_id_t) nodes->num_rows);
             scaled_time = cr->time * 4 * Ne;
             ret = node_table_add_row(nodes, 0, scaled_time, cr->population_id, "");
             if (ret != 0) {
@@ -3148,11 +3151,12 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     int population_id = event->params.instantaneous_bottleneck.population_id;
     double T2 = event->params.instantaneous_bottleneck.strength;
     int N = (int) self->num_populations;
-    uint32_t *lineages = NULL;
-    uint32_t *pi = NULL;
+    node_id_t *lineages = NULL;
+    node_id_t *pi = NULL;
     avl_node_t **avl_nodes = NULL;
     avl_tree_t *sets = NULL;
-    uint32_t j, k, n, u, parent, num_roots;
+    node_id_t u, parent;
+    uint32_t j, k, n, num_roots;
     double t;
     avl_tree_t *pop;
     avl_node_t *node, *set_node;
@@ -3165,20 +3169,20 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     }
     pop = &self->populations[population_id].ancestors;
     n = avl_count(pop);
-    lineages = malloc(n * sizeof(uint32_t));
+    lineages = malloc(n * sizeof(node_id_t));
     avl_nodes = malloc(n * sizeof(avl_node_t *));
-    pi = malloc(2 * n * sizeof(uint32_t));
+    pi = malloc(2 * n * sizeof(node_id_t));
     sets = malloc(2 * n * sizeof(avl_tree_t));
     if (lineages == NULL || avl_nodes == NULL || pi == NULL
             || sets == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    for (j = 0; j < n; j++) {
-        lineages[j] = j;
+    for (u = 0; u < (node_id_t) n; u++) {
+        lineages[u] = u;
     }
-    for (j = 0; j < 2 * n; j++) {
-        pi[j] = MSP_NULL_NODE;
+    for (u = 0; u < (node_id_t) (2 * n); u++) {
+        pi[u] = MSP_NULL_NODE;
     }
     j = 0;
     for (node = pop->head; node != NULL; node = node->next) {
@@ -3191,7 +3195,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
      */
     j = n - 1;
     t = 0.0;
-    parent = n;
+    parent = (node_id_t) n;
     while (j > 0) {
         t += msp_get_common_ancestor_waiting_time_size(self,
                 &self->populations[population_id], j + 1);
@@ -3212,7 +3216,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     }
     num_roots = j + 1;
     for (j = 0; j < num_roots; j++) {
-        if (lineages[j] >= n) {
+        if (lineages[j] >= (node_id_t) n) {
             avl_init_tree(&sets[lineages[j]], cmp_segment_queue, NULL);
         }
     }
@@ -3222,11 +3226,11 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
      * leave it alone.
      */
     for (j = 0; j < n; j++) {
-        u = j;
+        u = (node_id_t) j;
         while (pi[u] != MSP_NULL_NODE) {
             u = pi[u];
         }
-        if (u >= n) {
+        if (u >= (node_id_t) n) {
             /* Remove this node from the population, and add it into the
              * set for the root at u */
             individual = (segment_t *) avl_nodes[j]->item;
@@ -3243,9 +3247,8 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
         }
     }
     for (j = 0; j < num_roots; j++) {
-        if (lineages[j] >= n) {
-            ret = msp_merge_ancestors(self, &sets[lineages[j]],
-                    (uint32_t) population_id);
+        if (lineages[j] >= (node_id_t) n) {
+            ret = msp_merge_ancestors(self, &sets[lineages[j]], (uint32_t) population_id);
             if (ret != 0) {
                 goto out;
             }

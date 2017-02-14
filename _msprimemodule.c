@@ -167,13 +167,13 @@ handle_input_error(int err)
 
 static int
 parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
-        uint32_t **samples)
+        node_id_t **samples)
 {
     int ret = -1;
     PyObject *item;
     size_t j;
     Py_ssize_t num_samples_local;
-    uint32_t *samples_local = NULL;
+    node_id_t *samples_local = NULL;
     uint32_t n = tree_sequence_get_sample_size(ts);
 
     num_samples_local = PyList_Size(py_samples);
@@ -181,7 +181,7 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
         PyErr_SetString(PyExc_ValueError, "Must provide at least 2 samples");
         goto out;
     }
-    samples_local = PyMem_Malloc(num_samples_local * sizeof(uint32_t));
+    samples_local = PyMem_Malloc(num_samples_local * sizeof(node_id_t));
     if (samples_local == NULL) {
         PyErr_NoMemory();
         goto out;
@@ -192,7 +192,11 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
             PyErr_SetString(PyExc_TypeError, "sample id must be a number");
             goto out;
         }
-        samples_local[j] = (uint32_t) PyLong_AsLong(item);
+        samples_local[j] = (node_id_t) PyLong_AsLong(item);
+        if (samples_local[j] < 0) {
+            PyErr_SetString(PyExc_ValueError, "sample IDs must be >= 0");
+            goto out;
+        }
         if (samples_local[j] >= n) {
             PyErr_SetString(PyExc_ValueError, "sample ids must be < sample_size");
             goto out;
@@ -421,7 +425,7 @@ out:
 }
 
 static PyObject *
-convert_uint32_list(uint32_t *children, uint32_t num_children)
+convert_node_id_list(node_id_t *children, uint32_t num_children)
 {
     PyObject *ret = NULL;
     PyObject *t;
@@ -433,7 +437,7 @@ convert_uint32_list(uint32_t *children, uint32_t num_children)
         goto out;
     }
     for (j = 0; j < num_children; j++) {
-        py_int = Py_BuildValue("I", (unsigned int) children[j]);
+        py_int = Py_BuildValue("i", (int) children[j]);
         if (py_int == NULL) {
             Py_DECREF(children);
             goto out;
@@ -476,7 +480,7 @@ convert_mutation(mutation_t *mutation)
     PyObject *nodes = NULL;
     PyObject *ret = NULL;
 
-    nodes = convert_uint32_list(mutation->nodes, mutation->num_nodes);
+    nodes = convert_node_id_list(mutation->nodes, mutation->num_nodes);
     if (nodes == NULL) {
         goto out;
     }
@@ -520,12 +524,12 @@ make_coalescence_record(coalescence_record_t *cr)
     PyObject *children = NULL;
     PyObject *ret = NULL;
 
-    children = convert_uint32_list(cr->children, cr->num_children);
+    children = convert_node_id_list(cr->children, cr->num_children);
     if (children == NULL) {
         goto out;
     }
-    ret = Py_BuildValue("ddIOdi",
-            cr->left, cr->right, (unsigned int) cr->node, children,
+    ret = Py_BuildValue("ddiOdi",
+            cr->left, cr->right, (int) cr->node, children,
             cr->time, population_id);
 out:
     Py_XDECREF(children);
@@ -540,12 +544,12 @@ make_coalescence_record_tmp(node_t *node, edgeset_t *edgeset)
     PyObject *children = NULL;
     PyObject *ret = NULL;
 
-    children = convert_uint32_list(edgeset->children, edgeset->num_children);
+    children = convert_node_id_list(edgeset->children, edgeset->num_children);
     if (children == NULL) {
         goto out;
     }
     ret = Py_BuildValue("ddIOdi",
-            edgeset->left, edgeset->right, (unsigned int) edgeset->parent,
+            edgeset->left, edgeset->right, (int) edgeset->parent,
             children, node->time, population_id);
 out:
     Py_XDECREF(children);
@@ -558,7 +562,7 @@ make_node(node_t *r)
     int population = r->population == MSP_NULL_POPULATION_ID ? -1: r->population;
     PyObject *ret = NULL;
 
-    ret = Py_BuildValue("idi", r->flags, r->time, population);
+    ret = Py_BuildValue("Idi", (unsigned int) r->flags, r->time, population);
     return ret;
 }
 
@@ -568,13 +572,12 @@ make_edgeset(edgeset_t *edgeset)
     PyObject *children = NULL;
     PyObject *ret = NULL;
 
-    children = convert_uint32_list(edgeset->children, edgeset->num_children);
+    children = convert_node_id_list(edgeset->children, edgeset->num_children);
     if (children == NULL) {
         goto out;
     }
-    ret = Py_BuildValue("ddIO",
-            edgeset->left, edgeset->right, (unsigned int) edgeset->parent,
-            children);
+    ret = Py_BuildValue("ddiO",
+            edgeset->left, edgeset->right, (int) edgeset->parent, children);
 out:
     Py_XDECREF(children);
     return ret;
@@ -587,8 +590,8 @@ make_migration(migration_t *r)
     int dest = r->dest == MSP_NULL_POPULATION_ID ? -1: r->dest;
     PyObject *ret = NULL;
 
-    ret = Py_BuildValue("ddIiid",
-            r->left, r->right, (unsigned int) r->node, source, dest, r->time);
+    ret = Py_BuildValue("ddiiid",
+            r->left, r->right, (int) r->node, source, dest, r->time);
     return ret;
 }
 
@@ -598,7 +601,7 @@ make_mutation(mutation_t *mutation)
     PyObject *nodes = NULL;
     PyObject *ret = NULL;
 
-    nodes = convert_uint32_list(mutation->nodes, mutation->num_nodes);
+    nodes = convert_node_id_list(mutation->nodes, mutation->num_nodes);
     if (nodes == NULL) {
         goto out;
     }
@@ -2901,7 +2904,7 @@ TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args,
     PyObject *ret = NULL;
     PyObject *py_samples = NULL;
     static char *kwlist[] = {"samples", NULL};
-    uint32_t *samples = NULL;
+    node_id_t *samples = NULL;
     size_t num_samples = 0;
     double pi;
     int err;
@@ -2939,7 +2942,7 @@ TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     PyObject *py_samples = NULL;
     static char *kwlist[] = {"output", "samples", "filter_root_mutations", NULL};
-    uint32_t *samples = NULL;
+    node_id_t *samples = NULL;
     size_t num_samples = 0;
     TreeSequence *output = NULL;
     int filter_root_mutations = 1;
@@ -3107,10 +3110,10 @@ SparseTree_check_sparse_tree(SparseTree *self)
 }
 
 static int
-SparseTree_check_bounds(SparseTree *self, unsigned int node)
+SparseTree_check_bounds(SparseTree *self, int node)
 {
     int ret = 0;
-    if (node >= self->sparse_tree->num_nodes) {
+    if (node < 0 || node >= self->sparse_tree->num_nodes) {
         PyErr_SetString(PyExc_ValueError, "Node index out of bounds");
         ret = -1;
     }
@@ -3138,7 +3141,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         NULL};
     PyObject *py_tracked_leaves = NULL;
     TreeSequence *tree_sequence = NULL;
-    uint32_t *tracked_leaves = NULL;
+    node_id_t *tracked_leaves = NULL;
     int flags = 0;
     uint32_t j, n, num_tracked_leaves;
     PyObject *item;
@@ -3164,7 +3167,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         }
         num_tracked_leaves = PyList_Size(py_tracked_leaves);
     }
-    tracked_leaves = PyMem_Malloc(num_tracked_leaves * sizeof(uint32_t));
+    tracked_leaves = PyMem_Malloc(num_tracked_leaves * sizeof(node_id_t));
     if (tracked_leaves == NULL) {
         PyErr_NoMemory();
         goto out;
@@ -3175,7 +3178,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
             PyErr_SetString(PyExc_TypeError, "leaf must be a number");
             goto out;
         }
-        tracked_leaves[j] = (uint32_t) PyLong_AsLong(item);
+        tracked_leaves[j] = (node_id_t) PyLong_AsLong(item);
         if (tracked_leaves[j] >= n) {
             PyErr_SetString(PyExc_ValueError, "leaves must be < sample_size");
             goto out;
@@ -3391,7 +3394,8 @@ static PyObject *
 SparseTree_get_children(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    uint32_t *children, num_children;
+    node_id_t *children;
+    uint32_t num_children;
     unsigned int node;
     int err;
 
@@ -3413,7 +3417,7 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
     if (num_children == 0) {
         ret = Py_BuildValue("()");
     } else {
-        ret = convert_uint32_list(children, num_children);
+        ret = convert_node_id_list(children, num_children);
     }
 out:
     return ret;
@@ -3424,8 +3428,8 @@ SparseTree_get_mrca(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     int err;
-    uint32_t mrca;
-    unsigned int u, v;
+    node_id_t mrca;
+    int u, v;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
@@ -3439,8 +3443,8 @@ SparseTree_get_mrca(SparseTree *self, PyObject *args)
     if (SparseTree_check_bounds(self, v)) {
         goto out;
     }
-    err = sparse_tree_get_mrca(self->sparse_tree, (uint32_t) u,
-            (uint32_t) v, &mrca);
+    err = sparse_tree_get_mrca(self->sparse_tree, (node_id_t) u,
+            (node_id_t) v, &mrca);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3719,7 +3723,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         record = records_out;
         j = 0;
         while (record != NULL) {
-            children = convert_uint32_list(record->children, record->num_children);
+            children = convert_node_id_list(record->children, record->num_children);
             if (children == NULL) {
                 goto out;
             }
@@ -3747,7 +3751,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
         record = records_in;
         j = 0;
         while (record != NULL) {
-            children = convert_uint32_list(record->children, record->num_children);
+            children = convert_node_id_list(record->children, record->num_children);
             if (children == NULL) {
                 goto out;
             }
@@ -6611,8 +6615,7 @@ init_msprime(void)
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);
-    MsprimeLibraryError = PyErr_NewException("_msprime.LibraryError", NULL,
-            NULL);
+    MsprimeLibraryError = PyErr_NewException("_msprime.LibraryError", NULL, NULL);
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
 

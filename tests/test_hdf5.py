@@ -40,6 +40,21 @@ import msprime
 import _msprime
 
 
+def unpack_sentinel_delimited_list(l):
+    """
+    Returns a list of lists delimited by the -1 sentinel.
+    """
+    ret = []
+    current_list = []
+    for j, v in enumerate(l):
+        if v == -1:
+            ret.append(tuple(current_list))
+            current_list = []
+        else:
+            current_list.append(v)
+    return ret
+
+
 @contextlib.contextmanager
 def silence_stderr():
     """
@@ -256,13 +271,13 @@ class TestErrors(TestHdf5):
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
-@unittest.skip("V5")
 class TestHdf5Format(TestHdf5):
     """
     Tests on the HDF5 file format.
     """
 
     def verify_tree_dump_format(self, ts):
+        int32 = "<i4"
         uint32 = "<u4"
         float64 = "<f8"
         ts.dump(self.temp_file)
@@ -271,30 +286,24 @@ class TestHdf5Format(TestHdf5):
         root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 4)
+        # FIXME marking this version as transitional
+        self.assertEqual(format_version[0], 2**32 - 1)
         self.assertEqual(format_version[1], 0)
         keys = set(root.keys())
-        self.assertLessEqual(keys, set(["mutations", "trees", "provenance"]))
-        self.assertIn("trees", keys)
+        self.assertIn("nodes", keys)
+        self.assertIn("edgesets", keys)
         self.assertIn("provenance", keys)
         self.assertIn("mutations", keys)
         g = root["mutations"]
-        fields = [("nodes", uint32), ("num_nodes", uint32), ("position", float64)]
+        fields = [("position", float64)]
         if ts.num_mutations > 0:
-            self.assertEqual(set(g.keys()), set([name for name, _ in fields]))
             for name, dtype in fields:
                 self.assertEqual(len(g[name].shape), 1)
                 self.assertEqual(g[name].shape[0], ts.get_num_mutations())
                 self.assertEqual(g[name].dtype, dtype)
-            flat_nodes = list(g["nodes"])
-            num_nodes = list(g["num_nodes"])
+            self.assertEqual(g["nodes"].dtype, int32)
+            nodes = unpack_sentinel_delimited_list(g["nodes"])
             position = list(g["position"])
-            nodes = []
-            offset = 0
-            for k in num_nodes:
-                nodes.append(tuple(flat_nodes[offset: offset + k]))
-                offset += k
-            self.assertEqual(len(num_nodes), ts.get_num_mutations())
             self.assertEqual(len(position), ts.get_num_mutations())
             for j, mutation in enumerate(ts.mutations()):
                 self.assertEqual(mutation.nodes, nodes[j])
@@ -302,73 +311,60 @@ class TestHdf5Format(TestHdf5):
         else:
             self.assertEqual(0, len(list(g.keys())))
 
-        trees_group = root["trees"]
-        self.assertEqual(
-            set(trees_group.keys()),
-            {"records", "nodes", "breakpoints", "indexes"})
-        # Breakpoints must be equal to the sorted list of distinct left and
-        # right values.
-        breakpoints = set()
-        for record in ts.records():
-            breakpoints.add(record.left)
-            breakpoints.add(record.right)
-        breakpoints = sorted(list(breakpoints))
-        self.assertEqual(list(trees_group["breakpoints"]), breakpoints)
-        self.assertEqual(trees_group["breakpoints"].dtype, float64)
-
-        nodes_group = trees_group["nodes"]
-        self.assertEqual(set(nodes_group.keys()), {"population", "time"})
+        nodes_group = root["nodes"]
+        self.assertEqual(set(nodes_group.keys()), {"flags", "population", "time"})
+        self.assertEqual(nodes_group["flags"].dtype, uint32)
         self.assertEqual(nodes_group["population"].dtype, uint32)
         self.assertEqual(nodes_group["time"].dtype, float64)
         population = [0 for j in range(ts.get_num_nodes())]
         time = [0 for j in range(ts.get_num_nodes())]
+        # FIXME this will break when we have samples not in 0...n-1
+        flags = [0 for j in range(ts.get_num_nodes())]
         for u in range(ts.get_sample_size()):
             time[u] = ts.get_time(u)
             population[u] = ts.get_population(u)
+            flags[u] = 1  # FIXME
         for record in ts.records():
             time[record.node] = record.time
             population[record.node] = record.population
         self.assertEqual(time, list(nodes_group["time"]))
         self.assertEqual(population, list(nodes_group["population"]))
+        self.assertEqual(flags, list(nodes_group["flags"]))
 
-        records_group = trees_group["records"]
+        edgesets_group = root["edgesets"]
         self.assertEqual(
-            set(records_group.keys()),
-            {"children", "num_children", "left", "right", "node"})
-        for field in records_group.keys():
-            self.assertEqual(records_group[field].dtype, uint32)
-        left = list(records_group["left"])
-        right = list(records_group["right"])
-        children = list(records_group["children"])
-        num_children = list(records_group["num_children"])
-        node = list(records_group["node"])
+            set(edgesets_group.keys()),
+            {"indexes", "children", "left", "right", "parent"})
+
+        self.assertEqual(edgesets_group["left"].dtype, float64)
+        self.assertEqual(edgesets_group["right"].dtype, float64)
+        self.assertEqual(edgesets_group["parent"].dtype, int32)
+        self.assertEqual(edgesets_group["children"].dtype, int32)
+        left = list(edgesets_group["left"])
+        right = list(edgesets_group["right"])
+        children = unpack_sentinel_delimited_list(edgesets_group["children"])
+        parent = list(edgesets_group["parent"])
+        # TODO use the edgesets() APIs
         self.assertEqual(len(left), ts.get_num_records())
         self.assertEqual(len(right), ts.get_num_records())
-        self.assertEqual(len(num_children), ts.get_num_records())
-        self.assertEqual(len(node), ts.get_num_records())
-        breakpoint_map = {breakpoints[j]: j for j in range(len(breakpoints))}
-        children_offset = 0
+        self.assertEqual(len(parent), ts.get_num_records())
         for j, record in enumerate(ts.records()):
-            self.assertEqual(time[record.node], record.time)
-            self.assertEqual(population[record.node], record.population)
-            self.assertEqual(breakpoint_map[record.left], left[j])
-            self.assertEqual(breakpoint_map[record.right], right[j])
-            self.assertEqual(
-                list(record.children),
-                children[children_offset: children_offset + num_children[j]])
-            children_offset += num_children[j]
+            self.assertEqual(record.left, left[j])
+            self.assertEqual(record.right, right[j])
+            self.assertEqual(record.node, parent[j])
+            self.assertEqual(record.children, children[j])
 
-        indexes_group = trees_group["indexes"]
+        indexes_group = edgesets_group["indexes"]
         self.assertEqual(
             set(indexes_group.keys()), {"insertion_order", "removal_order"})
         for field in indexes_group.keys():
             self.assertEqual(indexes_group[field].dtype, uint32)
         I = sorted(
             range(ts.get_num_records()),
-            key=lambda j: (left[j], time[node[j]]))
+            key=lambda j: (left[j], time[parent[j]]))
         O = sorted(
             range(ts.get_num_records()),
-            key=lambda j: (right[j], -time[node[j]]))
+            key=lambda j: (right[j], -time[parent[j]]))
         self.assertEqual(I, list(indexes_group["insertion_order"]))
         self.assertEqual(O, list(indexes_group["removal_order"]))
         root.close()

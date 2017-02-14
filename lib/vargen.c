@@ -101,7 +101,7 @@ vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes,
             not_done = true;
             while (not_done) {
                 assert(w != NULL);
-                assert(w->node < self->sample_size);
+                assert(w->node < (node_id_t)self->sample_size);
                 if (genotypes[w->node] != ancestral) {
                     ret = MSP_ERR_INCONSISTENT_MUTATIONS;
                     goto out;

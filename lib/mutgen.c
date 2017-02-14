@@ -87,7 +87,7 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = object_heap_init(&self->node_heap, sizeof(uint32_t),
+    ret = object_heap_init(&self->node_heap, sizeof(node_id_t),
             self->mutation_block_size, NULL);
     if (ret != 0) {
         goto out;
@@ -120,19 +120,18 @@ out:
 }
 
 static int WARN_UNUSED
-mutgen_add_mutation(mutgen_t *self, uint32_t node, double position,
+mutgen_add_mutation(mutgen_t *self, node_id_t node, double position,
         char ancestral_state, char derived_state)
 {
     int ret = 0;
     mutation_t *tmp_buffer;
-    uint32_t *p;
+    node_id_t *p;
 
     assert(self->num_mutations <= self->max_num_mutations);
 
     if (self->num_mutations == self->max_num_mutations) {
         self->max_num_mutations += self->mutation_block_size;
-        tmp_buffer = realloc(self->mutations,
-            self->max_num_mutations * sizeof(mutation_t));
+        tmp_buffer = realloc(self->mutations, self->max_num_mutations * sizeof(mutation_t));
         if (tmp_buffer == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -145,7 +144,7 @@ mutgen_add_mutation(mutgen_t *self, uint32_t node, double position,
             goto out;
         }
     }
-    p = (uint32_t *) object_heap_alloc_object(&self->node_heap);
+    p = (node_id_t *) object_heap_alloc_object(&self->node_heap);
     self->mutations[self->num_mutations].nodes = p;
     self->mutations[self->num_mutations].nodes[0] = node;
     self->mutations[self->num_mutations].num_nodes = 1;
@@ -166,7 +165,8 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
     int ret;
     size_t j, offset, branch_mutations;
     double left, right, branch_length, distance, mu, position;
-    uint32_t parent, child, l;
+    node_id_t parent, child;
+    uint32_t l;
 
     /* First free up any memory used in previous calls */
     for (j = 0; j < self->num_mutations; j++) {
