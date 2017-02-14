@@ -1021,9 +1021,9 @@ msp_print_segment_chain(msp_t *self, segment_t *head, FILE *out)
 {
     segment_t *s = head;
 
-    fprintf(out, "[%d]", s->population_id);
+    fprintf(out, "[%d]", (int) s->population_id);
     while (s != NULL) {
-        fprintf(out, "[(%d-%d) %d] ", s->left, s->right, s->value);
+        fprintf(out, "[(%d-%d) %d] ", s->left, s->right, (int) s->value);
         s = s->next;
     }
     fprintf(out, "\n");
@@ -1177,7 +1177,7 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "m = %d\n", self->num_loci);
     fprintf(out, "Samples = \n");
     for (j = 0; j < self->sample_size; j++) {
-        fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j, self->samples[j].population_id,
+        fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j, (int) self->samples[j].population_id,
                 self->samples[j].time);
     }
     fprintf(out, "Sampling events:\n");
@@ -1187,7 +1187,7 @@ msp_print_state(msp_t *self, FILE *out)
         }
         se = &self->sampling_events[j];
         fprintf(out, "\t");
-        fprintf(out, "%d @ %f in deme %d\n", se->sample, se->time, se->population_id);
+        fprintf(out, "%d @ %f in deme %d\n", (int) se->sample, se->time, (int) se->population_id);
     }
     fprintf(out, "Demographic events:\n");
     for (de = self->demographic_events_head; de != NULL; de = de->next) {
@@ -1244,22 +1244,21 @@ msp_print_state(msp_t *self, FILE *out)
             (long) self->num_coalescence_records);
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
-        fprintf(out, "\t%f\t%f\t%d\t(", cr->left, cr->right,
-                cr->node);
+        fprintf(out, "\t%f\t%f\t%d\t(", cr->left, cr->right, (int) cr->node);
         for (k = 0; k < cr->num_children; k++) {
-            fprintf(out, "%d", cr->children[k]);
+            fprintf(out, "%d", (int) cr->children[k]);
             if (k < cr->num_children - 1) {
                 fprintf(out, ", ");
             }
         }
-        fprintf(out, ")\t%f\t%d\n", cr->time, cr->population_id);
+        fprintf(out, ")\t%f\t%d\n", cr->time, (int) cr->population_id);
     }
     fprintf(out, "Migration records = %ld\n",
             (long) self->num_migrations);
     for (j = 0; j < self->num_migrations; j++) {
         mr = &self->migrations[j];
         fprintf(out, "\t%f\t%f\t%d\t%f\t%d\t%d\n", mr->left, mr->right,
-                mr->node, mr->time, mr->source, mr->dest);
+                (int) mr->node, mr->time, (int) mr->source, (int) mr->dest);
     }
     fprintf(out, "Memory heaps\n");
     fprintf(out, "avl_node_heap:");
@@ -2806,7 +2805,7 @@ static int
 msp_change_population_parameters(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    int pid = event->params.population_parameters_change.population_id;
+    population_id_t pid = event->params.population_parameters_change.population_id;
     double initial_size =
         event->params.population_parameters_change.initial_size;
     double growth_rate =
@@ -2838,7 +2837,7 @@ msp_print_population_parameters_change(msp_t *self,
     fprintf(out,
             "%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
             event->time,
-            event->params.population_parameters_change.population_id,
+            (int) event->params.population_parameters_change.population_id,
             event->params.population_parameters_change.initial_size,
             event->params.population_parameters_change.growth_rate);
 }
@@ -2978,7 +2977,7 @@ msp_mass_migration(msp_t *self, demographic_event_t *event)
     population_id_t source = event->params.mass_migration.source;
     population_id_t dest = event->params.mass_migration.destination;
     double p = event->params.mass_migration.proportion;
-    int N = (population_id_t) self->num_populations;
+    population_id_t N = (population_id_t) self->num_populations;
     avl_node_t *node, *next;
     avl_tree_t *pop;
 
@@ -3011,8 +3010,8 @@ msp_print_mass_migration(msp_t *self, demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tmass_migration: %d -> %d p = %f\n",
             event->time,
-            event->params.mass_migration.source,
-            event->params.mass_migration.destination,
+            (int) event->params.mass_migration.source,
+            (int) event->params.mass_migration.destination,
             event->params.mass_migration.proportion);
 }
 
@@ -3103,7 +3102,7 @@ msp_print_simple_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tsimple_bottleneck: %d I = %f\n",
             event->time,
-            event->params.simple_bottleneck.population_id,
+            (int) event->params.simple_bottleneck.population_id,
             event->params.simple_bottleneck.proportion);
 }
 
@@ -3275,7 +3274,7 @@ msp_print_instantaneous_bottleneck(msp_t *self, demographic_event_t *event, FILE
 {
     fprintf(out, "%f\tinstantaneous_bottleneck: %d T2 = %f\n",
             event->time,
-            event->params.instantaneous_bottleneck.population_id,
+            (int) event->params.instantaneous_bottleneck.population_id,
             event->params.instantaneous_bottleneck.strength);
 }
 

@@ -64,16 +64,16 @@ newick_converter_print_state(newick_converter_t *self, FILE *out)
 
     fprintf(out, "Newick converter state\n");
     fprintf(out, "num_nodes = %d\n", avl_count(&self->tree));
-    fprintf(out, "root = %d\n", self->root == NULL? 0: self->root->id);
+    fprintf(out, "root = %d\n", self->root == NULL? 0: (int) self->root->id);
     for (avl_node = self->tree.head; avl_node != NULL; avl_node = avl_node->next) {
         node = (newick_tree_node_t *) avl_node->item;
-        fprintf(out, "%d\t", node->id);
+        fprintf(out, "%d\t", (int) node->id);
         for (j = 0; j < 2; j++) {
             fprintf(out, "%d\t", node->children[j] == NULL? 0 :
-                    node->children[j]->id);
+                    (int) node->children[j]->id);
         }
         fprintf(out, "%d\t%f\t%s\t",
-                node->parent == NULL ? 0: node->parent->id, node->time,
+                node->parent == NULL ? 0: (int) node->parent->id, node->time,
                 node->branch_length);
         if (node->subtree == NULL) {
             fprintf(out, "NULL\n");

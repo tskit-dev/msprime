@@ -222,7 +222,7 @@ node_table_print_state(node_table_t *self, FILE *out)
     k = 0;
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "\t%d\t%d\t%f\t%d\t", (int) j, self->flags[j], self->time[j],
-                self->population[j]);
+                (int) self->population[j]);
         if (self->name_length == 0) {
             name = "NULL";
         } else {
@@ -399,10 +399,10 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "\t%d\t%.3f\t%.3f\t%d\t", (int) j, self->left[j], self->right[j],
-                self->parent[j]);
+                (int) self->parent[j]);
         while (offset < self->children_length
                 && self->children[offset] != MSP_NULL_NODE) {
-            fprintf(out, "%d", self->children[offset]);
+            fprintf(out, "%d", (int) self->children[offset]);
             assert(offset < self->children_length - 1);
             if (self->children[offset + 1] != MSP_NULL_NODE) {
                 fprintf(out, ",");
@@ -560,7 +560,7 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "\t%d\t%f\t", (int) j, self->position[j]);
         while (self->nodes[offset] != MSP_NULL_NODE) {
-            fprintf(out, "%d", self->nodes[offset]);
+            fprintf(out, "%d", (int) self->nodes[offset]);
             offset++;
             if (self->nodes[offset] != MSP_NULL_NODE) {
                 fprintf(out, ",");
@@ -709,7 +709,7 @@ migration_table_print_state(migration_table_t *self, FILE *out)
     fprintf(out, "\tindex\tleft\tright\tnode\tsource\tdest\tpopulation\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "\t%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
-                self->right[j], self->node[j], self->source[j], self->dest[j],
-                self->time[j]);
+                self->right[j], (int) self->node[j], (int) self->source[j],
+                (int) self->dest[j], self->time[j]);
     }
 }

@@ -2890,7 +2890,7 @@ test_single_tree_iter(void)
         "0  6   4   0,1\n"
         "0  6   5   2,3\n"
         "0  6   6   4,5\n";
-    uint32_t parents[] = {4, 4, 5, 5, 6, 6, MSP_NULL_NODE};
+    node_id_t parents[] = {4, 4, 5, 5, 6, 6, MSP_NULL_NODE};
     tree_sequence_t ts;
     sparse_tree_t tree;
     node_id_t u, v, w;
@@ -2955,7 +2955,7 @@ test_single_nonbinary_tree_iter(void)
         "0  1   7   0,1,2,3\n"
         "0  1   8   4,5\n"
         "0  1   9   6,7,8\n";
-    uint32_t parents[] = {7, 7, 7, 7, 8, 8, 9, 9, 9, MSP_NULL_NODE};
+    node_id_t parents[] = {7, 7, 7, 7, 8, 8, 9, 9, 9, MSP_NULL_NODE};
     tree_sequence_t ts;
     sparse_tree_t tree;
     node_id_t u, v, w, *children;
@@ -3055,7 +3055,7 @@ test_single_tree_iter_times(void)
         "0  6   4   0,1\n"
         "0  6   5   2,3\n"
         "0  6   6   4,5\n";
-    uint32_t parents[] = {4, 4, 5, 5, 6, 6, MSP_NULL_NODE};
+    node_id_t parents[] = {4, 4, 5, 5, 6, 6, MSP_NULL_NODE};
     double times[] = {0.0, 0.0, 2.0, 3.0, 1.0, 4.0, 5.0};
     double t;
     tree_sequence_t ts;
@@ -3405,10 +3405,10 @@ test_single_tree_mutgen(void)
         before[j].position = mutations[j].position;
         before[j].index = mutations[j].index;
         before[j].num_nodes = mutations[j].num_nodes;
-        before[j].nodes = malloc(before[j].num_nodes * sizeof(uint32_t));
+        before[j].nodes = malloc(before[j].num_nodes * sizeof(node_id_t));
         CU_ASSERT_FATAL(before[j].nodes != NULL);
         memcpy(before[j].nodes, mutations[j].nodes,
-                mutations[j].num_nodes * sizeof(uint32_t));
+                mutations[j].num_nodes * sizeof(node_id_t));
     }
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3434,10 +3434,10 @@ test_single_tree_mutgen(void)
         after[j].position = mutations[j].position;
         after[j].index = mutations[j].index;
         after[j].num_nodes = mutations[j].num_nodes;
-        after[j].nodes = malloc(after[j].num_nodes * sizeof(uint32_t));
+        after[j].nodes = malloc(after[j].num_nodes * sizeof(node_id_t));
         CU_ASSERT_FATAL(after[j].nodes != NULL);
         memcpy(after[j].nodes, mutations[j].nodes,
-                mutations[j].num_nodes * sizeof(uint32_t));
+                mutations[j].num_nodes * sizeof(node_id_t));
     }
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3463,7 +3463,7 @@ test_single_tree_mutgen(void)
 }
 
 static void
-verify_trees(tree_sequence_t *ts, uint32_t num_trees, uint32_t* parents)
+verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
 {
     int ret;
     node_id_t u, v;
@@ -3585,7 +3585,7 @@ test_sparse_tree_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 1);
 
     /* Out-of-bounds queries */
-    for (j = 0; j < sizeof(bad_nodes) / sizeof(uint32_t); j++) {
+    for (j = 0; j < sizeof(bad_nodes) / sizeof(node_id_t); j++) {
         u = bad_nodes[j];
         ret = sparse_tree_get_children(&t, u, NULL, NULL);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
@@ -3639,7 +3639,7 @@ test_tree_sequence_iter(void)
         "1      2   0   1\n"
         "4.5    0   0   1\n"
         "8.5    5   0   1\n";
-    uint32_t parents[] = {
+    node_id_t parents[] = {
         6, 5, 8, 5, MSP_NULL_NODE, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
         6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
         7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
@@ -3660,7 +3660,7 @@ test_unary_tree_sequence_iter(void)
         "1.0    2   0   1\n"
         "4.5    6   0   1\n"
         "8.5    5   0   1\n";
-    uint32_t parents[] = {
+    node_id_t parents[] = {
         6, 5, 7, 5, MSP_NULL_NODE, 6, 8, 8, MSP_NULL_NODE,
         6, 5, 4, 4, 5, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
         7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
@@ -3680,7 +3680,7 @@ test_nonbinary_tree_sequence_iter(void)
     const char *mutations =
         "1.0    2   0   1\n"
         "18     11  0   1";
-    uint32_t parents[] = {
+    node_id_t parents[] = {
         8, 8, 8, 8, 10, 10, 9, 10, 9, 12, 12, MSP_NULL_NODE, MSP_NULL_NODE,
         8, 8, 8, 8, 10, 11, 9, 10, 9, 11, 12, 12, MSP_NULL_NODE,
     };
@@ -3718,7 +3718,7 @@ test_left_to_right_tree_sequence_iter(void)
         "4.5    0   0   1\n"
         "8.5    4   0   1\n";
 
-    uint32_t parents[] = {
+    node_id_t parents[] = {
         5, 4, 6, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
         5, 4, 7, 7, 5, MSP_NULL_NODE, MSP_NULL_NODE, 4, MSP_NULL_NODE,
         8, 4, 7, 7, 8, MSP_NULL_NODE, MSP_NULL_NODE, 4, MSP_NULL_NODE,
@@ -3879,8 +3879,8 @@ verify_leaf_sets_for_tree(sparse_tree_t *tree)
 
     n = tree_sequence_get_sample_size(ts);
     num_nodes = tree_sequence_get_num_nodes(ts);
-    stack = malloc(n * sizeof(uint32_t));
-    leaves = malloc(n * sizeof(uint32_t));
+    stack = malloc(n * sizeof(node_id_t));
+    leaves = malloc(n * sizeof(node_id_t));
     CU_ASSERT_FATAL(stack != NULL);
     CU_ASSERT_FATAL(leaves != NULL);
     for (u = 0; u < num_nodes; u++) {
@@ -4199,7 +4199,7 @@ test_tree_sequence_bad_records(void)
     node_table_t node_table;
     edgeset_table_t edgeset_table;
     uint32_t num_trees = 3;
-    uint32_t parents[] = {
+    node_id_t parents[] = {
         6, 5, 8, 5, MSP_NULL_NODE, 6, 8, MSP_NULL_NODE, MSP_NULL_NODE,
         6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
         7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,

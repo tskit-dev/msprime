@@ -58,7 +58,7 @@ mutgen_print_state(mutgen_t *self, FILE *out)
                 self->mutations[j].ancestral_state,
                 self->mutations[j].derived_state);
         for (k = 0; k < self->mutations[j].num_nodes; k++) {
-            fprintf(out, "%d,", self->mutations[j].nodes[k]);
+            fprintf(out, "%d,", (int) self->mutations[j].nodes[k]);
         }
         fprintf(out, "\n");
     }
@@ -163,10 +163,9 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
         edgeset_table_t *edgesets)
 {
     int ret;
-    size_t j, offset, branch_mutations;
+    size_t j, l, offset, branch_mutations;
     double left, right, branch_length, distance, mu, position;
     node_id_t parent, child;
-    uint32_t l;
 
     /* First free up any memory used in previous calls */
     for (j = 0; j < self->num_mutations; j++) {
