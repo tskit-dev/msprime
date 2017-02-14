@@ -346,8 +346,8 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t children_length;
-        size_t max_children_length;
+        size_t total_children;
+        size_t max_total_children;
         double *left;
         double *right;
         node_id_t *parent;
@@ -362,8 +362,8 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t nodes_length;
-        size_t max_nodes_length;
+        size_t total_nodes;
+        size_t max_total_nodes;
         node_id_t *nodes_mem;
         node_id_t **nodes;
         node_id_t *num_nodes;

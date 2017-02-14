@@ -40,21 +40,6 @@ import msprime
 import _msprime
 
 
-def unpack_sentinel_delimited_list(l):
-    """
-    Returns a list of lists delimited by the -1 sentinel.
-    """
-    ret = []
-    current_list = []
-    for j, v in enumerate(l):
-        if v == -1:
-            ret.append(tuple(current_list))
-            current_list = []
-        else:
-            current_list.append(v)
-    return ret
-
-
 @contextlib.contextmanager
 def silence_stderr():
     """
@@ -295,15 +280,22 @@ class TestHdf5Format(TestHdf5):
         self.assertIn("provenance", keys)
         self.assertIn("mutations", keys)
         g = root["mutations"]
-        fields = [("position", float64)]
+        fields = [("position", float64), ("num_nodes", int32)]
         if ts.num_mutations > 0:
             for name, dtype in fields:
                 self.assertEqual(len(g[name].shape), 1)
                 self.assertEqual(g[name].shape[0], ts.get_num_mutations())
                 self.assertEqual(g[name].dtype, dtype)
             self.assertEqual(g["nodes"].dtype, int32)
-            nodes = unpack_sentinel_delimited_list(g["nodes"])
+            flat_nodes = list(g["nodes"])
+            num_nodes = list(g["num_nodes"])
             position = list(g["position"])
+            nodes = []
+            offset = 0
+            for k in num_nodes:
+                nodes.append(tuple(flat_nodes[offset: offset + k]))
+                offset += k
+            self.assertEqual(len(num_nodes), ts.get_num_mutations())
             self.assertEqual(len(position), ts.get_num_mutations())
             for j, mutation in enumerate(ts.mutations()):
                 self.assertEqual(mutation.nodes, nodes[j])
@@ -334,20 +326,29 @@ class TestHdf5Format(TestHdf5):
         edgesets_group = root["edgesets"]
         self.assertEqual(
             set(edgesets_group.keys()),
-            {"indexes", "children", "left", "right", "parent"})
+            {"indexes", "num_children", "children", "left", "right", "parent"})
 
         self.assertEqual(edgesets_group["left"].dtype, float64)
         self.assertEqual(edgesets_group["right"].dtype, float64)
         self.assertEqual(edgesets_group["parent"].dtype, int32)
         self.assertEqual(edgesets_group["children"].dtype, int32)
+        self.assertEqual(edgesets_group["num_children"].dtype, int32)
         left = list(edgesets_group["left"])
         right = list(edgesets_group["right"])
-        children = unpack_sentinel_delimited_list(edgesets_group["children"])
         parent = list(edgesets_group["parent"])
+        num_children = list(edgesets_group["num_children"])
+        flat_children = list(edgesets_group["children"])
+        children = []
+        offset = 0
+        for k in num_children:
+            children.append(tuple(flat_children[offset: offset + k]))
+            offset += k
+
         # TODO use the edgesets() APIs
         self.assertEqual(len(left), ts.get_num_records())
         self.assertEqual(len(right), ts.get_num_records())
         self.assertEqual(len(parent), ts.get_num_records())
+        self.assertEqual(len(num_children), ts.get_num_records())
         for j, record in enumerate(ts.records()):
             self.assertEqual(record.left, left[j])
             self.assertEqual(record.right, right[j])
