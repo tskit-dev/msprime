@@ -5278,16 +5278,19 @@ test_node_table(void)
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.name_length, 2 * num_rows);
 
-    /* If population is NULL it should be set the -1 */
+    /* If population is NULL it should be set the -1. If name is NULL all names
+     * should be set to the empty string. */
     num_rows = 10;
     memset(population, 0xff, num_rows * sizeof(uint32_t));
+    memset(name, '\0', num_rows * sizeof(char));
     ret = node_table_set_columns(&table, num_rows, flags, time, NULL, 0, NULL);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name, name, num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
-    CU_ASSERT_EQUAL(table.name_length, 0);
+    CU_ASSERT_EQUAL(table.name_length, num_rows);
     node_table_print_state(&table, _devnull);
 
     /* flags and time cannot be NULL */

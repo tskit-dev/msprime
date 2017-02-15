@@ -144,9 +144,17 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
             goto out;
         }
         memcpy(self->name, name, name_length * sizeof(char));
+        self->name_length = name_length;
+    } else {
+        /* If input name is NULL fill the column with NULLs to designate
+         * all names as the empty string. */
+        ret = node_table_expand_name(self, num_rows);
+        if (ret != 0) {
+            goto out;
+        }
+        memset(self->name, '\0', num_rows * sizeof(char));
+        self->name_length = num_rows;
     }
-    self->name_length = name_length;
-
 out:
     return ret;
 }

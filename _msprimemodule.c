@@ -2447,38 +2447,51 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *nodes = NULL;
-    EdgesetTable *edgesets = NULL;
-    MigrationTable *migrations = NULL;
-    MutationTable *mutations = NULL;
+    NodeTable *py_nodes = NULL;
+    EdgesetTable *py_edgesets = NULL;
+    MigrationTable *py_migrations = NULL;
+    MutationTable *py_mutations = NULL;
     PyObject *py_provenance_strings = NULL;
     Py_ssize_t num_provenance_strings = 0;
     char **provenance_strings = NULL;
+    node_table_t *nodes = NULL;
+    edgeset_table_t *edgesets = NULL;
+    migration_table_t *migrations = NULL;
+    mutation_table_t *mutations = NULL;
+
     static char *kwlist[] = {"nodes", "edgesets", "migrations", "mutations",
         "provenance_strings", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!", kwlist,
-            &NodeTableType, &nodes,
-            &EdgesetTableType, &edgesets,
-            &MigrationTableType, &migrations,
-            &MutationTableType, &mutations,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!", kwlist,
+            &NodeTableType, &py_nodes,
+            &EdgesetTableType, &py_edgesets,
+            &MigrationTableType, &py_migrations,
+            &MutationTableType, &py_mutations,
             &PyList_Type, &py_provenance_strings)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (NodeTable_check_state(nodes) != 0) {
+    if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
-    if (EdgesetTable_check_state(edgesets) != 0) {
+    nodes = py_nodes->node_table;
+    if (EdgesetTable_check_state(py_edgesets) != 0) {
         goto out;
     }
-    if (MigrationTable_check_state(migrations) != 0) {
-        goto out;
+    edgesets = py_edgesets->edgeset_table;
+    if (py_migrations != NULL) {
+        if (MigrationTable_check_state(py_migrations) != 0) {
+            goto out;
+        }
+        migrations = py_migrations->migration_table;
     }
-    if (MutationTable_check_state(mutations) != 0) {
-        goto out;
+    if (py_mutations != NULL) {
+        if (MutationTable_check_state(py_mutations) != 0) {
+            goto out;
+        }
+        mutations = py_mutations->mutation_table;
     }
     num_provenance_strings = 0;
     if (py_provenance_strings != NULL) {
@@ -2488,8 +2501,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         }
     }
     err = tree_sequence_load_tables_tmp(self->tree_sequence,
-        nodes->node_table, edgesets->edgeset_table,
-        migrations->migration_table, mutations->mutation_table,
+        nodes, edgesets, migrations, mutations,
         num_provenance_strings, provenance_strings);
     if (err != 0) {
         handle_library_error(err);

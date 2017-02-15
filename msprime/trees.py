@@ -998,6 +998,10 @@ def load(path):
     return TreeSequence.load(path)
 
 
+def load_tables(**kwargs):
+    return TreeSequence.load_tables(**kwargs)
+
+
 def load_txt(records_file, mutations_file=None):
     """
     Loads a tree sequence from the specified file paths. The files input here
@@ -1457,6 +1461,12 @@ class TreeSequence(object):
         return TreeSequence(ts)
 
     @classmethod
+    def load_tables(cls, **kwargs):
+        ts = _msprime.TreeSequence()
+        ts.load_tables(**kwargs)
+        return TreeSequence(ts)
+
+    @classmethod
     def parse_record(cls, line):
         tokens = line.split()
         left = float(tokens[0])
@@ -1567,6 +1577,9 @@ class TreeSequence(object):
             transparently, but load times will be significantly slower.
         """
         self._ll_tree_sequence.dump(path, zlib_compression)
+
+    def dump_tables(self, **kwargs):
+        self._ll_tree_sequence.dump_tables(**kwargs)
 
     @property
     def sample_size(self):

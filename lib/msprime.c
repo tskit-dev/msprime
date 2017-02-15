@@ -2466,7 +2466,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     for (j = 0; j < self->sample_size; j++) {
         scaled_time = self->samples[j].time * 4 * Ne;
         ret = node_table_add_row(nodes, MSP_NODE_SAMPLE, scaled_time,
-                self->samples[j].population_id, "sample");
+                self->samples[j].population_id, "");
         if (ret != 0) {
             goto out;
         }

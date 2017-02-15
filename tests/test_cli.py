@@ -1461,7 +1461,6 @@ class TestMspConversionOutput(unittest.TestCase):
                 self.assertEqual(col[j], haplotypes[j][site])
 
 
-@unittest.skip("FIXME node name")
 class TestUpgrade(TestCli):
     """
     Tests the results of the upgrade operation to ensure they are

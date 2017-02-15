@@ -1953,7 +1953,7 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_mutations(), 0)
 
 
-@unittest.skip("Problem with samples probably")
+# @unittest.skip("Problem with samples probably")
 class TestNodeOrdering(HighLevelTestCase):
     """
     Verify that we can use any node ordering for internal nodes

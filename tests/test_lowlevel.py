@@ -2878,6 +2878,80 @@ class TestTablesInterface(LowLevelTestCase):
         self.verify_edgeset_table(edgesets, ts)
         self.verify_mutation_table(mutations, ts)
 
+    def test_load_tables(self):
+        ex_ts = self.get_example_migration_tree_sequence()
+        nodes = _msprime.NodeTable()
+        edgesets = _msprime.EdgesetTable()
+        mutations = _msprime.MutationTable()
+        migrations = _msprime.MigrationTable()
+        provenance = [b"sdf", b"wer"]
+        kwargs = {
+            "nodes": nodes,
+            "edgesets": edgesets,
+            "mutations": mutations,
+            "migrations": migrations,
+        }
+        ex_ts.dump_tables(**kwargs)
+        ts = _msprime.TreeSequence()
+        kwargs["provenance_strings"] = provenance
+        ts.load_tables(**kwargs)
+        self.verify_node_table(nodes, ts)
+        self.verify_edgeset_table(edgesets, ts)
+        self.verify_migration_table(migrations, ts)
+        self.verify_mutation_table(mutations, ts)
+        self.assertEqual(ts.get_provenance_strings(), provenance)
+
+    def test_load_tables_errors(self):
+        ex_ts = self.get_example_migration_tree_sequence()
+        kwargs = {
+            "nodes": _msprime.NodeTable(),
+            "edgesets": _msprime.EdgesetTable(),
+            "mutations": _msprime.MutationTable(),
+            "migrations": _msprime.MigrationTable(),
+        }
+        ex_ts.dump_tables(**kwargs)
+        ts = _msprime.TreeSequence()
+        kwargs["provenance_strings"] = ["sdf", "wer"]
+
+        for bad_type in [None, "", tuple()]:
+            for parameter in kwargs.keys():
+                copy = dict(kwargs)
+                copy[parameter] = bad_type
+                self.assertRaises(TypeError, ts.load_tables, **copy)
+        self.assertRaises(TypeError, ts.load_tables)
+        self.assertRaises(TypeError, ts.load_tables, nodes=_msprime.NodeTable())
+        self.assertRaises(TypeError, ts.load_tables, edgesets=_msprime.EdgesetTable())
+
+    def test_load_tables_optional_parameters(self):
+        ex_ts = self.get_example_migration_tree_sequence()
+        nodes = _msprime.NodeTable()
+        edgesets = _msprime.EdgesetTable()
+        mutations = _msprime.MutationTable()
+        migrations = _msprime.MigrationTable()
+        ex_ts.dump_tables(
+            nodes=nodes, edgesets=edgesets, mutations=mutations, migrations=migrations)
+
+        ts = _msprime.TreeSequence()
+        ts.load_tables(nodes=nodes, edgesets=edgesets)
+        self.verify_node_table(nodes, ts)
+        self.verify_edgeset_table(edgesets, ts)
+        self.assertEqual(ts.get_num_migrations(), 0)
+        self.assertEqual(ts.get_num_mutations(), 0)
+
+        ts = _msprime.TreeSequence()
+        ts.load_tables(nodes=nodes, edgesets=edgesets, migrations=migrations)
+        self.verify_node_table(nodes, ts)
+        self.verify_edgeset_table(edgesets, ts)
+        self.verify_migration_table(migrations, ts)
+        self.assertEqual(ts.get_num_mutations(), 0)
+
+        ts = _msprime.TreeSequence()
+        ts.load_tables(nodes=nodes, edgesets=edgesets, mutations=mutations)
+        self.verify_node_table(nodes, ts)
+        self.verify_edgeset_table(edgesets, ts)
+        self.verify_mutation_table(mutations, ts)
+        self.assertEqual(ts.get_num_migrations(), 0)
+
 
 class TestLeafListIterator(LowLevelTestCase):
     """

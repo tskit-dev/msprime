@@ -1431,7 +1431,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/nodes/name", H5T_NATIVE_CHAR, NULL},
         {"/nodes/name_length", H5T_NATIVE_UINT32, self->nodes.name_length},
         {"/nodes/flags", H5T_NATIVE_UINT32, self->nodes.flags},
-        {"/nodes/population", H5T_NATIVE_UINT32, self->nodes.population},
+        {"/nodes/population", H5T_NATIVE_INT32, self->nodes.population},
         {"/nodes/time", H5T_NATIVE_DOUBLE, self->nodes.time},
         {"/mutations/nodes", H5T_NATIVE_INT32, self->mutations.nodes_mem},
         {"/mutations/num_nodes", H5T_NATIVE_INT32, self->mutations.num_nodes},
@@ -1441,9 +1441,9 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/edgesets/parent", H5T_NATIVE_INT32, self->edgesets.parent},
         {"/edgesets/num_children", H5T_NATIVE_INT32, self->edgesets.num_children},
         {"/edgesets/children", H5T_NATIVE_INT32, self->edgesets.children_mem},
-        {"/edgesets/indexes/insertion_order", H5T_NATIVE_UINT32,
+        {"/edgesets/indexes/insertion_order", H5T_NATIVE_INT32,
             self->edgesets.indexes.insertion_order},
-        {"/edgesets/indexes/removal_order", H5T_NATIVE_UINT32,
+        {"/edgesets/indexes/removal_order", H5T_NATIVE_INT32,
             self->edgesets.indexes.removal_order},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
@@ -1597,7 +1597,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->nodes.num_records, self->nodes.flags},
         {"/nodes/population",
-            H5T_STD_U32LE, H5T_NATIVE_UINT32,
+            H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->nodes.num_records, self->nodes.population},
         {"/nodes/time",
             H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
@@ -1618,10 +1618,10 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->edgesets.total_children, self->edgesets.children_mem},
         {"/edgesets/indexes/insertion_order",
-            H5T_STD_U32LE, H5T_NATIVE_UINT32,
+            H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->edgesets.num_records, self->edgesets.indexes.insertion_order},
         {"/edgesets/indexes/removal_order",
-            H5T_STD_U32LE, H5T_NATIVE_UINT32,
+            H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->edgesets.num_records, self->edgesets.indexes.removal_order},
         {"/mutations/nodes",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
@@ -1670,6 +1670,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     fields[0].storage_type = filetype_str;
     fields[0].memory_type = memtype_str;
 
+    assert(self->nodes.total_name_length >= self->nodes.num_records);
     /* Make the array to hold the flattened string */
     flattened_name_length = self->nodes.total_name_length - self->nodes.num_records;
     if (flattened_name_length != 0) {
@@ -1878,8 +1879,8 @@ tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags)
     if (status < 0) {
         goto out;
     }
-    status = tree_sequence_write_hdf5_data(self, file_id, flags);
-    if (status < 0) {
+    ret = tree_sequence_write_hdf5_data(self, file_id, flags);
+    if (ret < 0) {
         goto out;
     }
     ret = 0;

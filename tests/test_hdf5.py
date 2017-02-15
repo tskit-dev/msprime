@@ -35,6 +35,7 @@ except ImportError:
     pass
 
 import h5py
+import numpy as np
 
 import msprime
 import _msprime
@@ -115,6 +116,20 @@ def historical_sample_example():
         samples=[(0, j) for j in range(10)])
 
 
+def node_name_example():
+    ts = msprime.simulate(
+        sample_size=100, recombination_rate=0.1, length=10, random_seed=1)
+    nodes = msprime.NodeTable()
+    edgesets = msprime.EdgesetTable()
+    ts.dump_tables(nodes=nodes, edgesets=edgesets)
+    new_nodes = msprime.NodeTable()
+    names = ["n_{}".format(u).encode() for u in range(ts.num_nodes)]
+    packed = np.frombuffer(b'\0'.join(names + [b""]), dtype=np.int8)
+    new_nodes.set_columns(name=packed, flags=nodes.flags, time=nodes.time)
+    return msprime.load_tables(
+        nodes=new_nodes, edgesets=edgesets, provenance_strings=[b"sdf"])
+
+
 class TestHdf5(unittest.TestCase):
     """
     Superclass of HDF5 tests.
@@ -172,6 +187,9 @@ class TestRoundTrip(TestHdf5):
         msprime.dump_legacy(ts, self.temp_file, version=version)
         with silence_stderr():
             tsp = msprime.load_legacy(self.temp_file)
+        self.verify_tree_sequences_equal(ts, tsp)
+        tsp.dump(self.temp_file)
+        tsp = msprime.load(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
 
     def verify_malformed_json_v2(self, ts, group_name, attr, bad_json):
@@ -306,14 +324,17 @@ class TestHdf5Format(TestHdf5):
 
         # TODO some of these fields should be optional.
         nodes_group = root["nodes"]
-        self.assertEqual(
-            set(nodes_group.keys()),
-            {"flags", "population", "time", "name_length", "name"})
         self.assertEqual(nodes_group["flags"].dtype, uint32)
-        self.assertEqual(nodes_group["population"].dtype, uint32)
-        self.assertEqual(nodes_group["name_length"].dtype, uint32)
-        self.assertEqual(nodes_group["name"].dtype, int8)
+        self.assertEqual(nodes_group["population"].dtype, int32)
         self.assertEqual(nodes_group["time"].dtype, float64)
+        self.assertEqual(nodes_group["name_length"].dtype, uint32)
+        stored_fields = set(nodes_group.keys())
+        total_name_length = sum(nodes_group["name_length"])
+        if "name" in stored_fields:
+            self.assertEqual(nodes_group["name"].dtype, int8)
+            self.assertGreater(total_name_length, 0)
+        else:
+            self.assertEqual(total_name_length, 0)
         population = [0 for j in range(ts.get_num_nodes())]
         time = [0 for j in range(ts.get_num_nodes())]
         # FIXME this will break when we have samples not in 0...n-1
@@ -365,7 +386,7 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(
             set(indexes_group.keys()), {"insertion_order", "removal_order"})
         for field in indexes_group.keys():
-            self.assertEqual(indexes_group[field].dtype, uint32)
+            self.assertEqual(indexes_group[field].dtype, int32)
         I = sorted(
             range(ts.get_num_records()),
             key=lambda j: (left[j], time[parent[j]]))
@@ -394,6 +415,9 @@ class TestHdf5Format(TestHdf5):
     def test_historical_sample_example(self):
         self.verify_tree_dump_format(historical_sample_example())
 
+    def test_node_names_example(self):
+        self.verify_tree_dump_format(node_name_example())
+
     def test_optional_provenance(self):
         ts = single_locus_no_mutation_example()
         ts.dump(self.temp_file)
@@ -405,7 +429,6 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(other_ts.get_provenance(), [])
 
 
-@unittest.skip("Hitting assert")
 class TestHdf5FormatErrors(TestHdf5):
     """
     Tests for errors in the HDF5 format.
