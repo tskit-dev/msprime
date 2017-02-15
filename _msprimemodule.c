@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2014-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2014-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -557,7 +557,8 @@ make_node(node_t *r)
 {
     PyObject *ret = NULL;
 
-    ret = Py_BuildValue("Idi", (unsigned int) r->flags, r->time, (int) r->population);
+    ret = Py_BuildValue("Idis",
+        (unsigned int) r->flags, r->time, (int) r->population, r->name);
     return ret;
 }
 
@@ -606,7 +607,39 @@ out:
     return ret;
 }
 
+static int
+parse_node_tuple(PyObject *py_nodes, size_t *size, node_id_t **nodes)
+{
+    int ret = -1;
+    PyObject *item;
+    size_t j;
+    Py_ssize_t num_nodes_local;
+    node_id_t *nodes_local = NULL;
 
+    num_nodes_local = PyTuple_Size(py_nodes);
+    nodes_local = PyMem_Malloc(num_nodes_local * sizeof(node_id_t));
+    if (nodes_local == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    for (j = 0; j < num_nodes_local; j++) {
+        item = PyTuple_GetItem(py_nodes, j);
+        if (!PyNumber_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "node id must be a number");
+            goto out;
+        }
+        nodes_local[j] = (node_id_t) PyLong_AsLong(item);
+    }
+    *size = (size_t) num_nodes_local;
+    *nodes = nodes_local;
+    nodes_local = NULL;
+    ret = 0;
+out:
+    if (nodes_local != NULL) {
+        PyMem_Free(nodes_local);
+    }
+    return ret;
+}
 
 /*===================================================================
  * RandomGenerator
@@ -839,6 +872,36 @@ out:
 }
 
 static PyObject *
+NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    unsigned int flags = 0;
+    double time = 0;
+    int population = -1;
+    char *name = "";
+    Py_ssize_t name_length = 0;
+    static char *kwlist[] = {"flags", "time", "population", "name", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|idis#", kwlist,
+                &flags, &time, &population, &name, &name_length)) {
+        goto out;
+    }
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = node_table_add_row(self->node_table, (uint32_t) flags, time,
+            (population_id_t) population, name);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
 NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
@@ -858,6 +921,9 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|OO", kwlist,
                 &flags_input, &time_input, &population_input, &name_input)) {
+        goto out;
+    }
+    if (NodeTable_check_state(self) != 0) {
         goto out;
     }
     flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
@@ -995,6 +1061,8 @@ static PyGetSetDef NodeTable_getsetters[] = {
 };
 
 static PyMethodDef NodeTable_methods[] = {
+    {"add_row", (PyCFunction) NodeTable_add_row, METH_VARARGS|METH_KEYWORDS,
+        "Adds a new row to this table."},
     {"set_columns", (PyCFunction) NodeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the speficied arrays into the columns."},
     {NULL}  /* Sentinel */
@@ -1106,6 +1174,45 @@ EdgesetTable_init(EdgesetTable *self, PyObject *args, PyObject *kwds)
 out:
     return ret;
 }
+
+static PyObject *
+EdgesetTable_add_row(EdgesetTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    double left = 0.0;
+    double right = 1.0;
+    int parent;
+    PyObject * py_children;
+    node_id_t *children = NULL;
+    size_t num_children;
+    static char *kwlist[] = {"left", "right", "parent", "children", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "ddiO!", kwlist,
+                &left, &right, &parent, &PyTuple_Type, &py_children)) {
+        goto out;
+    }
+    if (EdgesetTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = parse_node_tuple(py_children, &num_children, &children);
+    if (err != 0) {
+        goto out;
+    }
+    err = edgeset_table_add_row(self->edgeset_table, left, right, parent,
+        num_children, children);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    if (children != NULL) {
+        PyMem_Free(children);
+    }
+    return ret;
+}
+
 
 static PyObject *
 EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
@@ -1276,6 +1383,8 @@ static PyGetSetDef EdgesetTable_getsetters[] = {
 };
 
 static PyMethodDef EdgesetTable_methods[] = {
+    {"add_row", (PyCFunction) EdgesetTable_add_row, METH_VARARGS|METH_KEYWORDS,
+        "Adds a new row to this table."},
     {"set_columns", (PyCFunction) EdgesetTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the speficied arrays into the columns."},
     {NULL}  /* Sentinel */
@@ -1685,6 +1794,42 @@ out:
 }
 
 static PyObject *
+MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    double position = 0.0;
+    PyObject * py_nodes;
+    node_id_t *nodes = NULL;
+    size_t num_nodes;
+    static char *kwlist[] = {"position", "nodes", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dO!", kwlist,
+                &position, &PyTuple_Type, &py_nodes)) {
+        goto out;
+    }
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = parse_node_tuple(py_nodes, &num_nodes, &nodes);
+    if (err != 0) {
+        goto out;
+    }
+    err = mutation_table_add_row(self->mutation_table, position, num_nodes, nodes);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    if (nodes != NULL) {
+        PyMem_Free(nodes);
+    }
+    return ret;
+}
+
+
+static PyObject *
 MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
@@ -1806,6 +1951,8 @@ static PyGetSetDef MutationTable_getsetters[] = {
 };
 
 static PyMethodDef MutationTable_methods[] = {
+    {"add_row", (PyCFunction) MutationTable_add_row, METH_VARARGS|METH_KEYWORDS,
+        "Adds a new row to this table."},
     {"set_columns", (PyCFunction) MutationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the speficied arrays into the columns."},
     {NULL}  /* Sentinel */
@@ -6593,6 +6740,9 @@ init_msprime(void)
     MsprimeLibraryError = PyErr_NewException("_msprime.LibraryError", NULL, NULL);
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
+
+    /* Node flags */
+    PyModule_AddIntConstant(module, "NODE_IS_SAMPLE", MSP_NODE_IS_SAMPLE);
 
     /* Tree flags */
     PyModule_AddIntConstant(module, "LEAF_COUNTS", MSP_LEAF_COUNTS);

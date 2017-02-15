@@ -29,6 +29,8 @@ import math
 import random
 import sys
 
+import six
+
 try:
     import svgwrite
     _svgwrite_imported = True
@@ -52,6 +54,7 @@ from _msprime import NodeTable
 from _msprime import EdgesetTable
 from _msprime import MigrationTable
 from _msprime import MutationTable
+from _msprime import NODE_IS_SAMPLE
 
 NULL_NODE = -1
 
@@ -85,6 +88,34 @@ Variant = collections.namedtuple(
 Sample = collections.namedtuple(
     "Sample",
     ["population", "time"])
+
+
+class SimpleContainer(object):
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return repr(self.__dict__)
+
+
+class Node(SimpleContainer):
+    def __init__(
+            self, time=0, population=NULL_POPULATION, name="", is_sample=False):
+        self.time = time
+        self.population = population
+        self.name = name
+        self.flags = 0
+        if is_sample:
+            self.flags |= NODE_IS_SAMPLE
+
+
+class Edgeset(SimpleContainer):
+    def __init__(self, parent, children, left=0, right=1):
+        self.left = left
+        self.right = right
+        self.parent = parent
+        self.children = children
 
 
 def load_coalescence_records(
@@ -126,21 +157,15 @@ def load_coalescence_records(
     node_table.set_columns(flags=flags, time=time, population=population)
     edgeset_table = msprime.EdgesetTable()
     edgeset_table.set_columns(left=left, right=right, parent=parent, children=children)
-    migration_table = msprime.MigrationTable()
     mutation_table = msprime.MutationTable()
-    position = []
-    nodes = []
     if mutations is not None:
         for mutation in mutations:
-            position.append(mutation[0])
-            nodes.extend(mutation[1])
-            nodes.append(msprime.NULL_NODE)
-    mutation_table.set_columns(position=position, nodes=nodes)
+            mutation_table.add_row(mutation[0], mutation[1])
 
     ll_ts = _msprime.TreeSequence()
     ll_ts.load_tables(
-        nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
-        mutations=mutation_table, provenance_strings=provenance)
+        nodes=node_table, edgesets=edgeset_table, mutations=mutation_table,
+        provenance_strings=provenance)
     ts = msprime.TreeSequence(ll_ts)
     return ts
 
@@ -998,8 +1023,26 @@ def load(path):
     return TreeSequence.load(path)
 
 
-def load_tables(**kwargs):
-    return TreeSequence.load_tables(**kwargs)
+def load_tables(*args, **kwargs):
+    return TreeSequence.load_tables(*args, **kwargs)
+
+
+def load_records(nodes, edgesets, mutations=None):
+    node_table = NodeTable(len(nodes))
+    for node in nodes:
+        node_table.add_row(
+            flags=node.flags, population=node.population, time=node.time,
+            name=node.name)
+    edgesets_table = EdgesetTable(len(edgesets), 2 * len(edgesets))
+    for edgeset in edgesets:
+        edgesets_table.add_row(
+            edgeset.left, edgeset.right, edgeset.parent, edgeset.children)
+    mutations_table = MutationTable(len(mutations) if mutations is not None else 1024)
+    if mutations is not None:
+        for mutation in mutations:
+            mutations_table.add_row(mutation.position, mutation.nodes)
+    return load_tables(
+        nodes=node_table, edgesets=edgesets_table, mutations=mutations_table)
 
 
 def load_txt(records_file, mutations_file=None):
@@ -1078,6 +1121,33 @@ def load_txt(records_file, mutations_file=None):
     :rtype: :class:`msprime.TreeSequence`
     """
     return TreeSequence.load_records(records_file, mutations_file)
+
+
+def load_str(nodes, edgesets):
+    f = six.StringIO(nodes)
+    # Read the first line to get the header
+    header = f.readline()
+    assert len(header) > 0
+    cols = [("id", np.uint32), ("is_sample", np.uint32), ("time", np.float64)]
+    node_id, is_sample, time = np.loadtxt(f, dtype=cols, unpack=True)
+    # TODO
+    # - verify node_id is an arange(0, n)
+    # - check the header columns and parse the input accordingly
+    node_table = NodeTable()
+    node_table.set_columns(flags=is_sample, time=time)
+
+    lines = edgesets.splitlines()
+    edgeset_table = EdgesetTable(len(lines), 2 * len(lines))
+    for line in lines[1:]:
+        split = line.split()
+        if len(split) > 0:
+            left = float(split[0])
+            right = float(split[1])
+            parent = int(split[2])
+            children = tuple(map(int, split[3].split(",")))
+            edgeset_table.add_row(
+                left=left, right=right, parent=parent, children=children)
+    return load_tables(nodes=node_table, edgesets=edgeset_table)
 
 
 class TreeSimulator(object):
@@ -1614,6 +1684,10 @@ class TreeSequence(object):
         return self._ll_tree_sequence.get_sequence_length()
 
     @property
+    def num_edgesets(self):
+        return self._ll_tree_sequence.get_num_edgesets()
+
+    @property
     def num_records(self):
         return self.get_num_records()
 
@@ -1708,6 +1782,18 @@ class TreeSequence(object):
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
             yield Migration(*self._ll_tree_sequence.get_migration(j))
+
+    def nodes(self):
+        for j in range(self.num_nodes):
+            flags, time, population, name = self._ll_tree_sequence.get_node(j)
+            yield Node(
+                time=time, population=population, name=name,
+                is_sample=flags & NODE_IS_SAMPLE)
+
+    def edgesets(self):
+        for j in range(self.num_edgesets):
+            left, right, parent, children = self._ll_tree_sequence.get_edgeset(j)
+            yield Edgeset(parent=parent, children=children, left=left, right=right)
 
     def diffs(self):
         """

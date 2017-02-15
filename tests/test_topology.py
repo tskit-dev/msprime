@@ -82,18 +82,23 @@ class TestRecordSquashing(TopologyTestCase):
     Tests that we correctly squash adjacent equal records together.
     """
     def test_single_record(self):
-        records = [
-            cr(left=0, right=1, node=2, children=(0, 1), time=1),
-            cr(left=1, right=2, node=2, children=(0, 1), time=1),
-        ]
-        ts = build_tree_sequence(records)
-        self.assertEqual(list(ts.records()), records)
+        nodes = [
+            msprime.Node(is_sample=True),
+            msprime.Node(is_sample=True),
+            msprime.Node(is_sample=False, time=1)]
+        edgesets = [
+            msprime.Edgeset(left=0, right=1, parent=2, children=(0, 1)),
+            msprime.Edgeset(left=1, right=2, parent=2, children=(0, 1))]
+        ts = msprime.load_records(nodes, edgesets)
+        self.assertEqual(list(ts.nodes()), nodes)
+        self.assertEqual(list(ts.edgesets()), edgesets)
         tss = ts.simplify()
-        simplified_records = list(tss.records())
-        self.assertEqual(len(simplified_records), 1)
-        r = simplified_records[0]
-        self.assertEqual(r.left, 0)
-        self.assertEqual(r.right, 2)
+        self.assertEqual(list(tss.nodes()), nodes)
+        simplified_edgesets = list(tss.edgesets())
+        self.assertEqual(len(simplified_edgesets), 1)
+        e = simplified_edgesets[0]
+        self.assertEqual(e.left, 0)
+        self.assertEqual(e.right, 2)
 
     def test_single_tree(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
@@ -644,22 +649,35 @@ class TestWithVisuals(TopologyTestCase):
         # 0.0    0     1           2           1   0       2          0   1           2
         #
         #          (0.0, 0.2),               (0.2, 0.8),              (0.8, 1.0)
-        records = [
-            cr(left=0.0, right=0.2, node=4, children=(2, 3), time=0.4),
-            cr(left=0.2, right=0.8, node=4, children=(0, 2), time=0.4),
-            cr(left=0.8, right=1.0, node=4, children=(2, 3), time=0.4),
-            cr(left=0.0, right=1.0, node=5, children=(1, 4), time=0.5),
-            cr(left=0.8, right=1.0, node=6, children=(0, 5), time=0.7),
-            cr(left=0.0, right=0.2, node=6, children=(5,), time=0.7),
-            cr(left=0.0, right=0.2, node=7, children=(0, 6), time=1.0),
-        ]
+        nodes = """\
+        id  is_sample   time
+        0   1           0
+        1   1           0
+        2   1           0
+        3   0           0       # Non sample leaf
+        4   0           0.4
+        5   0           0.5
+        6   0           0.7
+        7   0           1.0
+        """
+        edgesets = """\
+        left    right   parent  children
+        0.0     0.2     4       2,3
+        0.2     0.8     4       0,2
+        0.8     1.0     4       2,3
+        0.0     1.0     5       1,4
+        0.8     1.0     6       0,5
+        0.0     0.2     6       5
+        0.0     0.2     7       0,6
+        """
+        ts = msprime.load_str(nodes, edgesets)
         true_trees = [
             {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: 7, 7: -1},
             {0: 4, 1: 5, 2: 4, 3: -1, 4: 5, 5: -1, 6: -1, 7: -1},
             {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: -1, 7: -1}]
-        ts = build_tree_sequence(records)
+        # ts = build_tree_sequence(records)
         tree_dicts = [t.parent_dict for t in ts.trees()]
-        self.assertEqual(ts.sample_size, 4)
+        self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, 3)
         self.assertEqual(ts.num_nodes, 8)
         # check topologies agree:
@@ -726,29 +744,38 @@ class TestWithVisuals(TopologyTestCase):
                 {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 7, 9: 6, 10: 8},
                 {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 3, 7: 5, 8: 7, 9: 6, 10: 8}
             ]
-
-        records = [
-            cr(left=0.5, right=1.0, node=10, children=(1,), time=5.0-4.0),
-            cr(left=0.0, right=0.4, node=10, children=(2,), time=5.0-4.0),
-            cr(left=0.6, right=1.0, node=9, children=(0,), time=5.0-4.0),
-            cr(left=0.0, right=0.5, node=9, children=(1,), time=5.0-4.0),
-            cr(left=0.8, right=1.0, node=8, children=(10,), time=5.0-3.0),
-            cr(left=0.2, right=0.8, node=8, children=(9, 10), time=5.0-3.0),
-            cr(left=0.0, right=0.2, node=8, children=(9,), time=5.0-3.0),
-            cr(left=0.7, right=1.0, node=7, children=(8,), time=5.0-2.0),
-            cr(left=0.0, right=0.2, node=7, children=(10,), time=5.0-2.0),
-            cr(left=0.8, right=1.0, node=6, children=(9,), time=5.0-2.0),
-            cr(left=0.0, right=0.7, node=6, children=(8,), time=5.0-2.0),
-            cr(left=0.4, right=1.0, node=5, children=(2, 7), time=5.0-1.0),
-            cr(left=0.1, right=0.4, node=5, children=(7,), time=5.0-1.0),
-            cr(left=0.6, right=0.9, node=4, children=(6,), time=5.0-1.0),
-            cr(left=0.0, right=0.6, node=4, children=(0, 6), time=5.0-1.0),
-            cr(left=0.9, right=1.0, node=3, children=(4, 5, 6), time=5.0-0.0),
-            cr(left=0.1, right=0.9, node=3, children=(4, 5), time=5.0-0.0),
-            cr(left=0.0, right=0.1, node=3, children=(4, 5, 7), time=5.0-0.0),
+        nodes = [msprime.Node(is_sample=True) for _ in range(3)]
+        nodes += [
+            msprime.Node(time=5.0),
+            msprime.Node(time=4.0),
+            msprime.Node(time=4.0),
+            msprime.Node(time=3.0),
+            msprime.Node(time=3.0),
+            msprime.Node(time=2.0),
+            msprime.Node(time=1.0),
+            msprime.Node(time=1.0)]
+        edgesets = [
+            msprime.Edgeset(left=0.5, right=1.0, parent=10, children=(1,)),
+            msprime.Edgeset(left=0.0, right=0.4, parent=10, children=(2,)),
+            msprime.Edgeset(left=0.6, right=1.0, parent=9, children=(0,)),
+            msprime.Edgeset(left=0.0, right=0.5, parent=9, children=(1,)),
+            msprime.Edgeset(left=0.8, right=1.0, parent=8, children=(10,)),
+            msprime.Edgeset(left=0.2, right=0.8, parent=8, children=(9, 10)),
+            msprime.Edgeset(left=0.0, right=0.2, parent=8, children=(9,)),
+            msprime.Edgeset(left=0.7, right=1.0, parent=7, children=(8,)),
+            msprime.Edgeset(left=0.0, right=0.2, parent=7, children=(10,)),
+            msprime.Edgeset(left=0.8, right=1.0, parent=6, children=(9,)),
+            msprime.Edgeset(left=0.0, right=0.7, parent=6, children=(8,)),
+            msprime.Edgeset(left=0.4, right=1.0, parent=5, children=(2, 7)),
+            msprime.Edgeset(left=0.1, right=0.4, parent=5, children=(7,)),
+            msprime.Edgeset(left=0.6, right=0.9, parent=4, children=(6,)),
+            msprime.Edgeset(left=0.0, right=0.6, parent=4, children=(0, 6)),
+            msprime.Edgeset(left=0.9, right=1.0, parent=3, children=(4, 5, 6)),
+            msprime.Edgeset(left=0.1, right=0.9, parent=3, children=(4, 5)),
+            msprime.Edgeset(left=0.0, right=0.1, parent=3, children=(4, 5, 7)),
         ]
 
-        ts = build_tree_sequence(records)
+        ts = msprime.load_records(nodes, edgesets)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         # self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, len(true_trees))

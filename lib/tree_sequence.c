@@ -575,7 +575,7 @@ tree_sequence_init_nodes(tree_sequence_t *self)
     self->sample_size = 0;
     k = 0;
     for (j = 0; j < self->nodes.num_records; j++) {
-        if (self->nodes.flags[j] & MSP_NODE_SAMPLE) {
+        if (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE) {
             self->sample_size++;
         }
         self->nodes.name_length[j] = 0;
@@ -792,7 +792,7 @@ tree_sequence_load_records(tree_sequence_t *self,
     }
 
     for (j = 0; j < num_samples; j++) {
-        ret = node_table_add_row(node_table, MSP_NODE_SAMPLE,
+        ret = node_table_add_row(node_table, MSP_NODE_IS_SAMPLE,
                 samples[j].time, samples[j].population_id, "");
         if (ret != 0) {
             goto out;
@@ -1052,7 +1052,7 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         goto out;
     }
     for (j = 0; j < self->nodes.num_records; j++) {
-        flags = j < self->sample_size? MSP_NODE_SAMPLE: 0;
+        flags = j < self->sample_size? MSP_NODE_IS_SAMPLE: 0;
         ret = node_table_add_row(nodes, flags,
                 self->nodes.time[j], self->nodes.population[j],
                 self->nodes.name[j]);

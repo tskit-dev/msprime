@@ -2952,6 +2952,92 @@ class TestTablesInterface(LowLevelTestCase):
         self.verify_mutation_table(mutations, ts)
         self.assertEqual(ts.get_num_migrations(), 0)
 
+    def test_node_table_add_row(self):
+        table = _msprime.NodeTable()
+        table.add_row()
+        self.assertEqual(table.num_rows, 1)
+        self.assertEqual(table.population, [-1])
+        self.assertEqual(table.flags, [0])
+        self.assertEqual(table.time, [0])
+        self.assertEqual(table.name, [0])
+
+        # TODO issues here with Python2 and 3 when importing the name. Not
+        # easy, possibly will need to change the model back to storing the
+        # length rather than zero delimiting.
+        table = _msprime.NodeTable()
+        table.add_row(flags=5, population=10, time=1.23, name="")
+        self.assertEqual(table.num_rows, 1)
+        self.assertEqual(table.population, [10])
+        self.assertEqual(table.flags, [5])
+        self.assertEqual(table.time, [1.23])
+        stored_name = list(table.name)
+        self.assertEqual(stored_name, [0])
+
+    def test_node_table_add_row_errors(self):
+        table = _msprime.NodeTable()
+        for bad_type in ["3423", None, []]:
+            self.assertRaises(TypeError, table.add_row, flags=bad_type)
+            self.assertRaises(TypeError, table.add_row, population=bad_type)
+            self.assertRaises(TypeError, table.add_row, time=bad_type)
+        for bad_type in [234, None, []]:
+            self.assertRaises(TypeError, table.add_row, name=bad_type)
+
+    def test_edgeset_table_add_row(self):
+        table = _msprime.EdgesetTable()
+        table = _msprime.EdgesetTable()
+        table.add_row(left=0, right=1, parent=2, children=(0, 1))
+        self.assertEqual(table.num_rows, 1)
+        self.assertEqual(table.left, [0])
+        self.assertEqual(table.right, [1])
+        self.assertEqual(table.parent, [2])
+        self.assertEqual(list(table.children), [0, 1, NULL_NODE])
+
+    def test_edgeset_table_add_row_errors(self):
+        table = _msprime.EdgesetTable()
+        for bad_type in ["3423", None, []]:
+            self.assertRaises(
+                TypeError, table.add_row, left=bad_type, right=1, parent=1,
+                children=(0, 1))
+            self.assertRaises(
+                TypeError, table.add_row, left=0, right=bad_type, parent=1,
+                children=(0, 1))
+            self.assertRaises(
+                TypeError, table.add_row, left=0, right=1, parent=bad_type,
+                children=(0, 1))
+            self.assertRaises(
+                TypeError, table.add_row, left=0, right=1, parent=1, children=bad_type)
+            self.assertRaises(
+                TypeError, table.add_row, left=0, right=1, parent=1,
+                children=(0, bad_type))
+        for bad_type in [234, None, []]:
+            self.assertRaises(TypeError, table.add_row, name=bad_type)
+
+    def test_add_row_data(self):
+        nodes = _msprime.NodeTable()
+        edgesets = _msprime.EdgesetTable()
+        mutations = _msprime.MutationTable()
+        ts = self.get_example_migration_tree_sequence()
+        ts.dump_tables(nodes=nodes, edgesets=edgesets, mutations=mutations)
+        self.assertGreater(mutations.num_rows, 0)
+
+        new_nodes = _msprime.NodeTable()
+        for j in range(ts.get_num_nodes()):
+            flags, time, population, name = ts.get_node(j)
+            new_nodes.add_row(
+                flags=flags, time=time, population=population, name=name)
+        new_edgesets = _msprime.EdgesetTable()
+        for j in range(ts.get_num_edgesets()):
+            left, right, parent, children = ts.get_edgeset(j)
+            new_edgesets.add_row(left, right, parent, children)
+        self.assertEqual(list(edgesets.left), list(new_edgesets.left))
+        self.assertEqual(list(edgesets.right), list(new_edgesets.right))
+        self.assertEqual(list(edgesets.parent), list(new_edgesets.parent))
+        self.assertEqual(list(edgesets.children), list(new_edgesets.children))
+        new_mutations = _msprime.MutationTable()
+        for j in range(ts.get_num_mutations()):
+            position, nodes, index = ts.get_mutation(j)
+            new_mutations.add_row(position, nodes)
+
 
 class TestLeafListIterator(LowLevelTestCase):
     """

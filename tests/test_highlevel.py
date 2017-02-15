@@ -1387,6 +1387,22 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(list(ts1.records()), list(ts2.records()))
                 self.assertEqual(mutations, list(ts2.mutations()))
 
+    def test_generate_mutations_on_tree_sequence(self):
+        some_mutations = False
+        for ts in self.get_example_tree_sequences():
+            nodes = msprime.NodeTable()
+            edgesets = msprime.EdgesetTable()
+            mutations = msprime.MutationTable()
+            ts.dump_tables(nodes=nodes, edgesets=edgesets)
+            mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 10)
+            mutgen.generate(nodes, edgesets, mutations)
+            if mutations.num_rows > 0:
+                some_mutations = True
+            tsp = msprime.load_tables(
+                nodes=nodes, edgesets=edgesets, mutations=mutations)
+            self.assertEqual(tsp.num_mutations, mutations.num_rows)
+        self.assertTrue(some_mutations)
+
 
 class TestSparseTree(HighLevelTestCase):
     """
