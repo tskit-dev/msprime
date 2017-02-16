@@ -36,7 +36,7 @@
 /* Flags for tree sequence dump/load */
 #define MSP_ZLIB_COMPRESSION 1
 
-#define MSP_FILE_FORMAT_VERSION_MAJOR UINT32_MAX
+#define MSP_FILE_FORMAT_VERSION_MAJOR 5
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */
