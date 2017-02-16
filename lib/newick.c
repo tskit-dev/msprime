@@ -36,13 +36,13 @@ cmp_newick_tree_node(const void *a, const void *b) {
 static void
 newick_converter_check_state(newick_converter_t *self)
 {
-    uint32_t j;
+    node_id_t j;
     avl_node_t *avl_node;
     newick_tree_node_t *node = NULL;
     newick_tree_node_t search;
 
     assert(avl_count(&self->tree) == 2 * self->sample_size - 1);
-    for (j = 0; j < self->sample_size; j++) {
+    for (j = 0; j < (node_id_t) self->sample_size; j++) {
         search.id = j;
         avl_node = avl_search(&self->tree, &search);
         assert(avl_node != NULL);
@@ -64,16 +64,16 @@ newick_converter_print_state(newick_converter_t *self, FILE *out)
 
     fprintf(out, "Newick converter state\n");
     fprintf(out, "num_nodes = %d\n", avl_count(&self->tree));
-    fprintf(out, "root = %d\n", self->root == NULL? 0: self->root->id);
+    fprintf(out, "root = %d\n", self->root == NULL? 0: (int) self->root->id);
     for (avl_node = self->tree.head; avl_node != NULL; avl_node = avl_node->next) {
         node = (newick_tree_node_t *) avl_node->item;
-        fprintf(out, "%d\t", node->id);
+        fprintf(out, "%d\t", (int) node->id);
         for (j = 0; j < 2; j++) {
             fprintf(out, "%d\t", node->children[j] == NULL? 0 :
-                    node->children[j]->id);
+                    (int) node->children[j]->id);
         }
         fprintf(out, "%d\t%f\t%s\t",
-                node->parent == NULL ? 0: node->parent->id, node->time,
+                node->parent == NULL ? 0: (int) node->parent->id, node->time,
                 node->branch_length);
         if (node->subtree == NULL) {
             fprintf(out, "NULL\n");
@@ -87,8 +87,7 @@ newick_converter_print_state(newick_converter_t *self, FILE *out)
 }
 
 static inline avl_node_t * WARN_UNUSED
-newick_converter_alloc_avl_node(newick_converter_t *self, uint32_t node_id,
-        double time)
+newick_converter_alloc_avl_node(newick_converter_t *self, node_id_t node_id, double time)
 {
     avl_node_t *ret = NULL;
     newick_tree_node_t *node;
@@ -127,7 +126,7 @@ newick_converter_free_avl_node(newick_converter_t *self, avl_node_t *avl_node)
 }
 
 static int
-newick_converter_delete_node(newick_converter_t *self, uint32_t node_id)
+newick_converter_delete_node(newick_converter_t *self, node_id_t node_id)
 {
     int ret = 0;
     newick_tree_node_t search, *node;
@@ -153,7 +152,7 @@ newick_converter_delete_node(newick_converter_t *self, uint32_t node_id)
  * this node can be removed from the tree.
  */
 static int
-newick_converter_update_out_node(newick_converter_t *self, uint32_t node_id)
+newick_converter_update_out_node(newick_converter_t *self, node_id_t node_id)
 {
     int ret = 0;
     newick_tree_node_t search, *node, *u;;
@@ -198,8 +197,8 @@ out:
 }
 
 static int
-newick_converter_insert_node(newick_converter_t *self, uint32_t node_id,
-        uint32_t *children, double time)
+newick_converter_insert_node(newick_converter_t *self, node_id_t node_id,
+        node_id_t *children, double time)
 {
     int ret = 0;
     unsigned int j;
@@ -481,7 +480,7 @@ newick_converter_alloc(newick_converter_t *self,
     avl_init_tree(&self->tree, cmp_newick_tree_node, NULL);
     /* Add in the leaf nodes */
     for (j = 0; j < self->sample_size; j++) {
-        avl_node = newick_converter_alloc_avl_node(self, j, 0.0);
+        avl_node = newick_converter_alloc_avl_node(self, (node_id_t) j, 0.0);
         if (avl_node == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;

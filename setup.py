@@ -40,8 +40,10 @@ class PathConfigurator(object):
     on various platforms.
     """
     def __init__(self):
+        # TODO add numpy to the install_requires??
+        import numpy as np
         # TODO: make some other guesses for this...
-        self.include_dirs = []
+        self.include_dirs = [np.get_include()]
         self.library_dirs = []
         self._check_hdf5_version()
         self._attempt_pkgconfig()
@@ -81,8 +83,8 @@ class PathConfigurator(object):
         return ret
 
     def _attempt_pkgconfig(self):
-        self.library_dirs = self._get_pkgconfig_list("--libs-only-L")
-        self.include_dirs = self._get_pkgconfig_list("--cflags-only-I")
+        self.library_dirs.extend(self._get_pkgconfig_list("--libs-only-L"))
+        self.include_dirs.extend(self._get_pkgconfig_list("--cflags-only-I"))
 
 
 # Now, setup the extension module. We have to do some quirky workarounds
@@ -120,7 +122,7 @@ _msprime_module = Extension(
         "_msprimemodule.c", d + "msprime.c", d + "fenwick.c", d + "avl.c",
         d + "tree_sequence.c", d + "object_heap.c", d + "newick.c",
         d + "hapgen.c", d + "recomb_map.c", d + "mutgen.c",
-        d + "vargen.c", d + "vcf.c", d + "ld.c"],
+        d + "vargen.c", d + "vcf.c", d + "ld.c", d + "table.c"],
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
     define_macros=DefineMacros(),
@@ -146,7 +148,7 @@ setup(
             'msp=msprime.cli:msp_main',
         ]
     },
-    install_requires=["svgwrite"],
+    install_requires=["six", "svgwrite"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU LGPLv3+",

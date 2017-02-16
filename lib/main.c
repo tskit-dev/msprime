@@ -96,7 +96,7 @@ read_samples(config_t *config, size_t *sample_size, sample_t **samples)
         if (t == NULL) {
             fatal_error("population not specified");
         }
-        ret_samples[j].population_id = (uint32_t) config_setting_get_int(t);
+        ret_samples[j].population_id = (population_id_t) config_setting_get_int(t);
         t = config_setting_get_member(s, "time");
         if (t == NULL) {
             fatal_error("population not specified");
@@ -451,6 +451,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("max_memory is a required parameter");
     }
     msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
+    if (config_lookup_int(config, "store_migrations", &int_tmp) == CONFIG_FALSE) {
+        fatal_error("store_migrations is a required parameter");
+    }
+    msp_set_store_migrations(msp, (bool) int_tmp);
     t = config_lookup(config, "model");
     if (t == NULL) {
         fatal_error("model not specified");
@@ -552,7 +556,7 @@ print_haplotypes(tree_sequence_t *ts)
         fatal_library_error(ret, "hapgen_alloc");
     }
     for (j = 0; j < ts->sample_size; j++) {
-        ret = hapgen_get_haplotype(&hg, j, &haplotype);
+        ret = hapgen_get_haplotype(&hg, (node_id_t) j, &haplotype);
         if (ret < 0) {
             fatal_library_error(ret, "hapgen_get_haplotype");
         }
@@ -566,17 +570,13 @@ print_ld_matrix(tree_sequence_t *ts)
 {
     int ret;
     size_t num_mutations = tree_sequence_get_num_mutations(ts);
-    mutation_t *mutations;
+    mutation_t mA, mB;
     double *r2 = malloc(num_mutations * sizeof(double));
     size_t j, k, num_r2_values;
     ld_calc_t ld_calc;
 
     if (r2 == NULL) {
         fatal_error("no memory");
-    }
-    ret = tree_sequence_get_mutations(ts, &mutations);
-    if (ret != 0) {
-        fatal_library_error(ret, "get_mutations");
     }
     ret = ld_calc_alloc(&ld_calc, ts);
     printf("alloc: ret = %d\n", ret);
@@ -591,10 +591,17 @@ print_ld_matrix(tree_sequence_t *ts)
             fatal_library_error(ret, "ld_calc_get_r2_array");
         }
         for (k = 0; k < num_r2_values; k++) {
+            ret = tree_sequence_get_mutation(ts, j, &mA);
+            if (ret != 0) {
+                fatal_library_error(ret, "get_mutation");
+            }
+            ret = tree_sequence_get_mutation(ts, j + k + 1, &mB);
+            if (ret != 0) {
+                fatal_library_error(ret, "get_mutation");
+            }
             printf("%d\t%f\t%d\t%f\t%.3f\n",
-                (int) mutations[j].index, mutations[j].position,
-                (int) mutations[j + k + 1].index,
-                mutations[j + k + 1].position, r2[k]);
+                (int) mA.index, mA.position,
+                (int) mB.index, mB.position, r2[k]);
         }
     }
     free(r2);
@@ -609,18 +616,17 @@ print_stats(tree_sequence_t *ts)
 {
     int ret = 0;
     uint32_t j;
-    uint32_t sample_size = tree_sequence_get_sample_size(ts) / 2;
-    uint32_t *sample = malloc(sample_size * sizeof(uint32_t));
+    size_t sample_size = tree_sequence_get_sample_size(ts) / 2;
+    node_id_t *sample = malloc(sample_size * sizeof(node_id_t));
     double pi;
 
     if (sample == NULL) {
         fatal_error("no memory");
     }
     for (j = 0; j < sample_size; j++) {
-        sample[j] = j;
+        sample[j] = (node_id_t) j;
     }
-    ret = tree_sequence_get_pairwise_diversity(ts, sample,
-        sample_size, &pi);
+    ret = tree_sequence_get_pairwise_diversity(ts, sample, sample_size, &pi);
     if (ret != 0) {
         fatal_library_error(ret, "get_pairwise_diversity");
     }
@@ -684,21 +690,7 @@ static void
 print_tree_sequence(tree_sequence_t *ts)
 {
     int ret = 0;
-    size_t j;
-    size_t num_records = tree_sequence_get_num_coalescence_records(ts);
     sparse_tree_t tree;
-    coalescence_record_t cr;
-
-    // TODO tidy this up to make it more specific to the task of examining the
-    // tree sequence itself.
-    printf("Records:\n");
-    for (j = 0; j < num_records; j++) {
-        if (tree_sequence_get_coalescence_record(ts, j, &cr, MSP_ORDER_TIME) != 0) {
-            fatal_error("tree sequence out of bounds\n");
-        }
-        printf("\t%f\t%f\t%d\t%d\t%d\t%f\n", cr.left, cr.right, cr.children[0],
-                cr.children[1], cr.node, cr.time);
-    }
 
     tree_sequence_print_state(ts, stdout);
     /* sparse trees */
@@ -733,13 +725,35 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
-    const char *provenance = "main.run_simulate";
+    const char *provenance[] = {"main.simulate"};
+    node_table_t *nodes = malloc(sizeof(node_table_t));
+    edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
+    mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
+    migration_table_t *migrations = malloc(sizeof(migration_table_t));
+
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
-            || mutgen == NULL) {
+            || mutgen == NULL || nodes == NULL || edgesets == NULL
+            || mutations == NULL || migrations == NULL) {
         goto out;
     }
     ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_alloc(edgesets, 10, 10);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = node_table_alloc(nodes, 10, 10);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_alloc(mutations, 10, 10);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = migration_table_alloc(migrations, 10);
     if (ret != 0) {
         goto out;
     }
@@ -779,8 +793,20 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         /* Create the tree_sequence from the state of the simulator.
          * We want to use coalescent time here, so use an Ne of 1/4
          * to cancel scaling factor. */
-        ret = msp_populate_tree_sequence(msp, recomb_map, mutgen, 0.25, 1, &provenance,
-                tree_seq);
+        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, migrations);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = mutgen_generate_tables_tmp(mutgen, nodes, edgesets);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = mutgen_populate_tables(mutgen, mutations);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
+                mutations, 1, (char **) &provenance);
         if (ret != 0) {
             goto out;
         }
@@ -791,6 +817,10 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             }
         }
         if (verbose >= 1) {
+            node_table_print_state(nodes, stdout);
+            edgeset_table_print_state(edgesets, stdout);
+            mutation_table_print_state(mutations, stdout);
+            migration_table_print_state(migrations, stdout);
             printf("-----------------\n");
             mutgen_print_state(mutgen, stdout);
             printf("-----------------\n");
@@ -816,6 +846,22 @@ out:
     }
     if (rng != NULL) {
         gsl_rng_free(rng);
+    }
+    if (edgesets != NULL) {
+        edgeset_table_free(edgesets);
+        free(edgesets);
+    }
+    if (nodes != NULL) {
+        node_table_free(nodes);
+        free(nodes);
+    }
+    if (mutations != NULL) {
+        mutation_table_free(mutations);
+        free(mutations);
+    }
+    if (migrations != NULL) {
+        migration_table_free(migrations);
+        free(migrations);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));
@@ -909,21 +955,25 @@ static void
 run_simplify(const char *input_filename, const char *output_filename, int verbose)
 {
     tree_sequence_t ts, subset;
-    uint32_t j, num_samples, *samples;
+    size_t j, num_samples;
+    node_id_t *samples;
     int flags = 0;
     int ret;
 
     load_tree_sequence(&ts, input_filename);
     num_samples = tree_sequence_get_sample_size(&ts);
-    samples = malloc(num_samples * sizeof(uint32_t));
+    samples = malloc(num_samples * sizeof(node_id_t));
     if (samples == NULL) {
         fatal_error("out of memory");
     }
     for (j = 0; j < num_samples; j++) {
-        samples[j] = (uint32_t) j;
+        samples[j] = (node_id_t) j;
     }
-    ret = tree_sequence_simplify(&ts, samples, num_samples,
-            flags, &subset);
+    ret = tree_sequence_initialise(&subset);
+    if (ret != 0) {
+        fatal_library_error(ret, "init error");
+    }
+    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
     }

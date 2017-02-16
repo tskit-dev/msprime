@@ -58,7 +58,7 @@ mutgen_print_state(mutgen_t *self, FILE *out)
                 self->mutations[j].ancestral_state,
                 self->mutations[j].derived_state);
         for (k = 0; k < self->mutations[j].num_nodes; k++) {
-            fprintf(out, "%d,", self->mutations[j].nodes[k]);
+            fprintf(out, "%d,", (int) self->mutations[j].nodes[k]);
         }
         fprintf(out, "\n");
     }
@@ -87,7 +87,7 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = object_heap_init(&self->node_heap, sizeof(uint32_t),
+    ret = object_heap_init(&self->node_heap, sizeof(node_id_t),
             self->mutation_block_size, NULL);
     if (ret != 0) {
         goto out;
@@ -120,19 +120,18 @@ out:
 }
 
 static int WARN_UNUSED
-mutgen_add_mutation(mutgen_t *self, uint32_t node, double position,
+mutgen_add_mutation(mutgen_t *self, node_id_t node, double position,
         char ancestral_state, char derived_state)
 {
     int ret = 0;
     mutation_t *tmp_buffer;
-    uint32_t *p;
+    node_id_t *p;
 
     assert(self->num_mutations <= self->max_num_mutations);
 
     if (self->num_mutations == self->max_num_mutations) {
         self->max_num_mutations += self->mutation_block_size;
-        tmp_buffer = realloc(self->mutations,
-            self->max_num_mutations * sizeof(mutation_t));
+        tmp_buffer = realloc(self->mutations, self->max_num_mutations * sizeof(mutation_t));
         if (tmp_buffer == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -145,7 +144,7 @@ mutgen_add_mutation(mutgen_t *self, uint32_t node, double position,
             goto out;
         }
     }
-    p = (uint32_t *) object_heap_alloc_object(&self->node_heap);
+    p = (node_id_t *) object_heap_alloc_object(&self->node_heap);
     self->mutations[self->num_mutations].nodes = p;
     self->mutations[self->num_mutations].nodes[0] = node;
     self->mutations[self->num_mutations].num_nodes = 1;
@@ -157,66 +156,72 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
-mutgen_generate_record_mutations(mutgen_t *self, tree_sequence_t *ts,
-        coalescence_record_t *cr)
-{
-    int ret = -1;
-    size_t k, l, branch_mutations;
-    double branch_length, position, mu, child_time;
-    double distance = cr->right - cr->left;
-    uint32_t child;
-
-    for (k = 0; k < cr->num_children; k++) {
-        child = cr->children[k];
-        ret = tree_sequence_get_time(ts, child, &child_time);
-        if (ret != 0) {
-            goto out;
-        }
-        branch_length = cr->time - child_time;
-        mu = branch_length * distance * self->mutation_rate;
-        branch_mutations = gsl_ran_poisson(self->rng, mu);
-        for (l = 0; l < branch_mutations; l++) {
-            position = gsl_ran_flat(self->rng, cr->left, cr->right);
-            assert(cr->left <= position && position < cr->right);
-            ret = mutgen_add_mutation(self, child, position, '0', '1');
-            if (ret != 0) {
-                goto out;
-            }
-        }
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
+/* temporary interface while we're working out the details of passing around
+ * data via tables. */
 int WARN_UNUSED
-mutgen_generate(mutgen_t *self, tree_sequence_t *ts)
+mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
+        edgeset_table_t *edgesets)
 {
-    int ret = -1;
-    coalescence_record_t cr;
-    size_t j, num_records;
+    int ret;
+    size_t j, l, offset, branch_mutations;
+    double left, right, branch_length, distance, mu, position;
+    node_id_t parent, child;
 
-    assert(ts != NULL);
     /* First free up any memory used in previous calls */
     for (j = 0; j < self->num_mutations; j++) {
         object_heap_free_object(&self->node_heap, self->mutations[j].nodes);
     }
     self->num_mutations = 0;
 
-    num_records = tree_sequence_get_num_coalescence_records(ts);
-    for (j = 0; j < num_records; j++) {
-        ret = tree_sequence_get_coalescence_record(ts, j, &cr, MSP_ORDER_TIME);
-        if (ret != 0) {
-            goto out;
+    offset = 0;
+    for (j = 0; j < edgesets->num_rows; j++) {
+        left = edgesets->left[j];
+        right = edgesets->right[j];
+        distance = right - left;
+        parent = edgesets->parent[j];
+        while (offset < edgesets->children_length
+                && edgesets->children[offset] != MSP_NULL_NODE) {
+            child = edgesets->children[offset];
+            offset++;
+            branch_length = nodes->time[parent] - nodes->time[child];
+            mu = branch_length * distance * self->mutation_rate;
+            branch_mutations = gsl_ran_poisson(self->rng, mu);
+            for (l = 0; l < branch_mutations; l++) {
+                position = gsl_ran_flat(self->rng, left, right);
+                assert(left <= position && position < right);
+                ret = mutgen_add_mutation(self, child, position, '0', '1');
+                if (ret != 0) {
+                    goto out;
+                }
+            }
         }
-        ret = mutgen_generate_record_mutations(self, ts, &cr);
+        offset++;
+    }
+    qsort(self->mutations, self->num_mutations, sizeof(mutation_t), cmp_mutation);
+    ret = 0;
+out:
+    return ret;
+}
+
+int
+mutgen_populate_tables(mutgen_t *self, mutation_table_t *mutations)
+{
+    int ret = 0;
+    mutation_t *mut;
+    size_t j;
+
+    ret = mutation_table_reset(mutations);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_mutations; j++) {
+        mut = &self->mutations[j];
+        ret = mutation_table_add_row(mutations, mut->position,
+                mut->num_nodes, mut->nodes);
         if (ret != 0) {
             goto out;
         }
     }
-    qsort(self->mutations, self->num_mutations, sizeof(mutation_t), cmp_mutation);
-    ret = 0;
 out:
     return ret;
 }

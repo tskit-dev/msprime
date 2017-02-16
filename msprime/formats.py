@@ -36,7 +36,6 @@ except ImportError:
 
 
 import msprime
-import _msprime
 
 
 def _check_h5py():
@@ -132,10 +131,10 @@ def _load_legacy_hdf5_v2(root):
             mutations[j] = msprime.Mutation(
                 position=position[j], nodes=(node[j],), index=j)
 
-    ll_ts = _msprime.TreeSequence()
     provenance.append(_get_upgrade_provenance(root))
-    ll_ts.load_records(samples, records, mutations, provenance)
-    return ll_ts
+    return msprime.load_coalescence_records(
+        samples=samples, records=records, mutations=mutations,
+        provenance=provenance)
 
 
 def _load_legacy_hdf5_v3(root):
@@ -183,9 +182,9 @@ def _load_legacy_hdf5_v3(root):
     if "provenance" in root:
         provenance = list(root["provenance"])
     provenance.append(_get_upgrade_provenance(root))
-    ll_ts = _msprime.TreeSequence()
-    ll_ts.load_records(samples, records, mutations, provenance)
-    return ll_ts
+    return msprime.load_coalescence_records(
+        samples=samples, records=records, mutations=mutations,
+        provenance=provenance)
 
 
 def load_legacy(filename):
@@ -205,10 +204,10 @@ def load_legacy(filename):
     if format_version[0] not in loaders:
         raise ValueError("Version {} not supported for loading".format(format_version))
     try:
-        ll_ts = loaders[format_version[0]](root)
+        ts = loaders[format_version[0]](root)
     finally:
         root.close()
-    return msprime.TreeSequence(ll_ts)
+    return ts
 
 
 def _dump_legacy_hdf5_v2(tree_sequence, root):

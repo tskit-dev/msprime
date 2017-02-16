@@ -31,9 +31,9 @@ vcf_converter_print_state(vcf_converter_t *self, FILE* out)
 {
     fprintf(out, "VCF converter state\n");
     fprintf(out, "ploidy = %d\n", self->ploidy);
-    fprintf(out, "sample_size = %d\n", self->sample_size);
+    fprintf(out, "sample_size = %d\n", (int) self->sample_size);
     fprintf(out, "contig_length = %lu\n", self->contig_length);
-    fprintf(out, "num_vcf_samples = %d\n", self->num_vcf_samples);
+    fprintf(out, "num_vcf_samples = %d\n", (int) self->num_vcf_samples);
     fprintf(out, "header = %d bytes\n", (int) strlen(self->header));
     fprintf(out, "vcf_genotypes = %d bytes: %s", (int) self->vcf_genotypes_size,
             self->vcf_genotypes);
@@ -115,8 +115,8 @@ vcf_converter_make_record(vcf_converter_t *self)
 {
     int ret = MSP_ERR_GENERIC;
     unsigned int ploidy = self->ploidy;
-    uint32_t n = self->num_vcf_samples;
-    uint32_t j, k;
+    size_t n = self->num_vcf_samples;
+    size_t j, k;
 
     self->vcf_genotypes_size = 2 * self->sample_size + 1;
     /* it's not worth working out exactly what size the record prefix
@@ -177,24 +177,31 @@ out:
 }
 
 static int WARN_UNUSED
-vcf_converter_convert_positions(vcf_converter_t *self)
+vcf_converter_convert_positions(vcf_converter_t *self, tree_sequence_t *tree_sequence)
 {
+    int ret = 0;
     unsigned long pos;
+    mutation_t mut;
     /* VCF is 1-based, so we must make sure we never have a 0 coordinate */
     unsigned long last_position = 0;
     size_t j;
 
     for (j = 0; j < self->num_mutations; j++) {
+        ret = tree_sequence_get_mutation(tree_sequence, j, &mut);
+        if (ret != 0) {
+            goto out;
+        }
         /* update pos. We use a simple algorithm to ensure positions
          * are unique. */
-        pos = (unsigned long) round(self->mutations[j].position);
+        pos = (unsigned long) round(mut.position);
         if (pos <= last_position) {
             pos = last_position + 1;
         }
         last_position = pos;
         self->positions[j] = pos;
     }
-    return 0;
+out:
+    return ret;
 }
 
 int WARN_UNUSED
@@ -251,18 +258,12 @@ vcf_converter_alloc(vcf_converter_t *self,
         goto out;
     }
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
-    /* Note mutations is a borrowed reference from the tree sequence.
-     * Do not free! */
-    ret = tree_sequence_get_mutations(tree_sequence, &self->mutations);
-    if (ret != 0) {
-        goto out;
-    }
     self->positions = malloc(self->num_mutations * sizeof(unsigned long));
     if (self->positions == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = vcf_converter_convert_positions(self);
+    ret = vcf_converter_convert_positions(self, tree_sequence);
     if (ret != 0) {
         goto out;
     }
@@ -277,7 +278,7 @@ vcf_converter_alloc(vcf_converter_t *self,
     if (ret != 0) {
         goto out;
     }
-    if (tree_sequence_get_num_coalescence_records(tree_sequence) > 0) {
+    if (tree_sequence_get_num_edgesets(tree_sequence) > 0) {
         ret = vcf_converter_make_record(self);
         if (ret != 0) {
             goto out;

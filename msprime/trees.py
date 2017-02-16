@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -29,6 +29,8 @@ import math
 import random
 import sys
 
+import six
+
 try:
     import svgwrite
     _svgwrite_imported = True
@@ -48,6 +50,11 @@ import msprime.environment
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
+from _msprime import NodeTable
+from _msprime import EdgesetTable
+from _msprime import MigrationTable
+from _msprime import MutationTable
+from _msprime import NODE_IS_SAMPLE
 
 NULL_NODE = -1
 
@@ -64,8 +71,8 @@ CoalescenceRecord = collections.namedtuple(
     ["left", "right", "node", "children", "time", "population"])
 
 
-MigrationRecord = collections.namedtuple(
-    "MigrationRecord",
+Migration = collections.namedtuple(
+    "Migration",
     ["left", "right", "node", "source", "dest", "time"])
 
 Mutation = collections.namedtuple(
@@ -81,6 +88,86 @@ Variant = collections.namedtuple(
 Sample = collections.namedtuple(
     "Sample",
     ["population", "time"])
+
+
+class SimpleContainer(object):
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return repr(self.__dict__)
+
+
+class Node(SimpleContainer):
+    def __init__(
+            self, time=0, population=NULL_POPULATION, name="", is_sample=False):
+        self.time = time
+        self.population = population
+        self.name = name
+        self.flags = 0
+        if is_sample:
+            self.flags |= NODE_IS_SAMPLE
+
+
+class Edgeset(SimpleContainer):
+    def __init__(self, parent, children, left=0, right=1):
+        self.left = left
+        self.right = right
+        self.parent = parent
+        self.children = children
+
+
+def load_coalescence_records(
+        samples=None, records=None, mutations=None, provenance=[]):
+    """
+    Temporary function used to create a tree sequence using the 'coalescence records'
+    paradigm. This is used a bridge between existing code and the new table based
+    APIs.
+    """
+    num_nodes = -1
+    for r in records:
+        num_nodes = max(r.node, num_nodes, max(r.children))
+    num_nodes += 1
+    if samples is None:
+        n = max(2, min(r.node for r in records))
+    else:
+        n = len(samples)
+    flags = [int(j < n) for j in range(num_nodes)]
+    time = [0 for j in range(num_nodes)]
+    population = [0 for j in range(num_nodes)]
+    if samples is not None:
+        for j, (p, t) in enumerate(samples):
+            time[j] = t
+            population[j] = p
+    left = []
+    right = []
+    parent = []
+    children = []
+    for record in records:
+        time[record.node] = record.time
+        population[record.node] = record.population
+        left.append(record.left)
+        right.append(record.right)
+        parent.append(record.node)
+        children.extend(record.children)
+        children.append(msprime.NULL_NODE)
+
+    node_table = msprime.NodeTable()
+    node_table.set_columns(flags=flags, time=time, population=population)
+    edgeset_table = msprime.EdgesetTable()
+    edgeset_table.set_columns(left=left, right=right, parent=parent, children=children)
+    mutation_table = msprime.MutationTable()
+    if mutations is not None:
+        for mutation in mutations:
+            mutation_table.add_row(mutation[0], mutation[1])
+
+    ll_ts = _msprime.TreeSequence()
+    ll_ts.load_tables(
+        nodes=node_table, edgesets=edgeset_table, mutations=mutation_table,
+        provenance_strings=provenance)
+    ts = msprime.TreeSequence(ll_ts)
+    return ts
 
 
 def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
@@ -785,7 +872,7 @@ def simulator_factory(
         recomb_map = recombination_map
 
     sim = TreeSimulator(the_samples, recomb_map)
-    sim.set_store_migration_records(record_migrations)
+    sim.set_store_migrations(record_migrations)
     sim.set_effective_population_size(Ne)
     if model is not None:
         sim.set_model(model.lower())
@@ -936,6 +1023,10 @@ def load(path):
     return TreeSequence.load(path)
 
 
+def load_tables(*args, **kwargs):
+    return TreeSequence.load_tables(*args, **kwargs)
+
+
 def load_txt(records_file, mutations_file=None):
     """
     Loads a tree sequence from the specified file paths. The files input here
@@ -1014,6 +1105,37 @@ def load_txt(records_file, mutations_file=None):
     return TreeSequence.load_records(records_file, mutations_file)
 
 
+def load_str(nodes, edgesets):
+    # Initial implementation. This is very rough and will need to be much
+    # more carefully written before release. The load_txt method will be replaced
+    # with an implementation like this eventually, and this function might be
+    # removed entirely.
+    f = six.StringIO(nodes)
+    # Read the first line to get the header
+    header = f.readline()
+    assert len(header) > 0
+    cols = [("id", np.uint32), ("is_sample", np.uint32), ("time", np.float64)]
+    node_id, is_sample, time = np.loadtxt(f, dtype=cols, unpack=True)
+    # TODO
+    # - verify node_id is an arange(0, n)
+    # - check the header columns and parse the input accordingly
+    node_table = NodeTable()
+    node_table.set_columns(flags=is_sample, time=time)
+
+    lines = edgesets.splitlines()
+    edgeset_table = EdgesetTable(len(lines), 2 * len(lines))
+    for line in lines[1:]:
+        split = line.split()
+        if len(split) > 0:
+            left = float(split[0])
+            right = float(split[1])
+            parent = int(split[2])
+            children = tuple(map(int, split[3].split(",")))
+            edgeset_table.add_row(
+                left=left, right=right, parent=parent, children=children)
+    return load_tables(nodes=node_table, edgesets=edgeset_table)
+
+
 class TreeSimulator(object):
     """
     Class to simulate trees under the standard neutral coalescent with
@@ -1035,7 +1157,7 @@ class TreeSimulator(object):
         self._population_configurations = [PopulationConfiguration()]
         self._migration_matrix = [[0]]
         self._demographic_events = []
-        self._store_migration_records = False
+        self._store_migrations = False
         # Set default block sizes to 64K objects.
         # TODO does this give good performance in a range of scenarios?
         block_size = 64 * 1024
@@ -1045,11 +1167,17 @@ class TreeSimulator(object):
         self._avl_node_block_size = block_size
         self._node_mapping_block_size = block_size
         self._coalescence_record_block_size = block_size
-        self._migration_record_block_size = block_size
+        self._migration_block_size = block_size
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
         self._max_memory = sys.maxsize
         self._ll_sim = None
+
+        # TODO document these public attributes.
+        self.node_table = NodeTable(block_size)
+        self.edgeset_table = EdgesetTable(block_size)
+        self.migration_table = MigrationTable(block_size)
+        self.mutation_table = MutationTable(block_size)
 
     def set_random_generator(self, random_generator):
         """
@@ -1192,8 +1320,8 @@ class TreeSimulator(object):
             raise ValueError("Cannot set Ne to a non-positive value.")
         self._effective_population_size = effective_population_size
 
-    def set_store_migration_records(self, store_migration_records):
-        self._store_migration_records = store_migration_records
+    def set_store_migrations(self, store_migrations):
+        self._store_migrations = store_migrations
 
     def set_migration_matrix(self, migration_matrix):
         err = (
@@ -1279,14 +1407,14 @@ class TreeSimulator(object):
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
             model=self._model,
-            store_migration_records=self._store_migration_records,
+            store_migrations=self._store_migrations,
             scaled_recombination_rate=ll_recombination_rate,
             max_memory=self._max_memory,
             segment_block_size=self._segment_block_size,
             avl_node_block_size=self._avl_node_block_size,
             node_mapping_block_size=self._node_mapping_block_size,
             coalescence_record_block_size=self._coalescence_record_block_size,
-            migration_record_block_size=self._migration_record_block_size)
+            migration_block_size=self._migration_block_size)
         return ll_sim
 
     def run(self):
@@ -1303,15 +1431,18 @@ class TreeSimulator(object):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
-        if mutation_generator is None:
-            mutation_generator = MutationGenerator(self._random_generator, 0)
-        ll_tree_sequence = _msprime.TreeSequence()
         ll_recomb_map = self._recombination_map.get_ll_recombination_map()
         Ne = self.get_effective_population_size()
-        self._ll_sim.populate_tree_sequence(
-            ll_tree_sequence, recombination_map=ll_recomb_map,
-            mutation_generator=mutation_generator, Ne=Ne,
-            provenance_strings=provenance_strings)
+        self._ll_sim.populate_tables(
+            self.node_table, self.edgeset_table, self.migration_table,
+            Ne=Ne, recombination_map=ll_recomb_map)
+        if mutation_generator is not None:
+            mutation_generator.generate(
+                self.node_table, self.edgeset_table, self.mutation_table)
+        ll_tree_sequence = _msprime.TreeSequence()
+        ll_tree_sequence.load_tables(
+            self.node_table, self.edgeset_table, self.migration_table,
+            self.mutation_table, provenance_strings=provenance_strings)
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
@@ -1386,6 +1517,12 @@ class TreeSequence(object):
         return TreeSequence(ts)
 
     @classmethod
+    def load_tables(cls, **kwargs):
+        ts = _msprime.TreeSequence()
+        ts.load_tables(**kwargs)
+        return TreeSequence(ts)
+
+    @classmethod
     def parse_record(cls, line):
         tokens = line.split()
         left = float(tokens[0])
@@ -1429,24 +1566,31 @@ class TreeSequence(object):
         # Get the samples for these records.
         num_samples = min(r.node for r in records)
         samples = [Sample(0, 0) for _ in range(num_samples)]
-        ts = _msprime.TreeSequence()
-        ts.load_records(
-            samples=samples, coalescence_records=records, mutations=mutations)
-        return TreeSequence(ts)
+        return load_coalescence_records(
+            samples=samples, records=records, mutations=mutations)
 
     def copy(self, mutations=None):
         # Experimental API. Return a copy of this tree sequence, optionally with
         # the mutations set to the specified list.
-
-        # To get the samples we must first get the tree.
-        tree = next(self.trees())
-        samples = [
-            msprime.Sample(tree.population(u), tree.time(u)) for u in self.samples()]
-        if mutations is None:
-            mutations = list(self.mutations())
-        records = list(self.records())
+        node_table = msprime.NodeTable()
+        edgeset_table = msprime.EdgesetTable()
+        migration_table = msprime.MigrationTable()
+        mutation_table = msprime.MutationTable()
+        self._ll_tree_sequence.dump_tables(
+            nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
+            mutations=mutation_table)
+        if mutations is not None:
+            position = []
+            nodes = []
+            for mutation in mutations:
+                position.append(mutation[0])
+                nodes.extend(mutation[1])
+                nodes.append(msprime.NULL_NODE)
+            mutation_table.set_columns(position=position, nodes=nodes)
         new_ll_ts = _msprime.TreeSequence()
-        new_ll_ts.load_records(samples, records, mutations)
+        new_ll_ts.load_tables(
+            nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
+            mutations=mutation_table)
         return TreeSequence(new_ll_ts)
 
     @property
@@ -1490,6 +1634,9 @@ class TreeSequence(object):
         """
         self._ll_tree_sequence.dump(path, zlib_compression)
 
+    def dump_tables(self, **kwargs):
+        self._ll_tree_sequence.dump_tables(**kwargs)
+
     @property
     def sample_size(self):
         return self.get_sample_size()
@@ -1523,9 +1670,14 @@ class TreeSequence(object):
         return self._ll_tree_sequence.get_sequence_length()
 
     @property
+    def num_edgesets(self):
+        return self._ll_tree_sequence.get_num_edgesets()
+
+    @property
     def num_records(self):
         return self.get_num_records()
 
+    # TODO deprecate
     def get_num_records(self):
         """
         Returns the number of coalescence records in this tree sequence.
@@ -1535,7 +1687,7 @@ class TreeSequence(object):
             sequence.
         :rtype: int
         """
-        return self._ll_tree_sequence.get_num_records()
+        return self._ll_tree_sequence.get_num_edgesets()
 
     @property
     def num_trees(self):
@@ -1582,6 +1734,7 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_num_nodes()
 
+    # TODO deprecate
     def records(self):
         """
         Returns an iterator over the coalescence records in this tree
@@ -1613,8 +1766,20 @@ class TreeSequence(object):
             yield CoalescenceRecord(*self._ll_tree_sequence.get_record(j))
 
     def migrations(self):
-        for j in range(self._ll_tree_sequence.get_num_migration_records()):
-            yield MigrationRecord(*self._ll_tree_sequence.get_migration_record(j))
+        for j in range(self._ll_tree_sequence.get_num_migrations()):
+            yield Migration(*self._ll_tree_sequence.get_migration(j))
+
+    def nodes(self):
+        for j in range(self.num_nodes):
+            flags, time, population, name = self._ll_tree_sequence.get_node(j)
+            yield Node(
+                time=time, population=population, name=name,
+                is_sample=flags & NODE_IS_SAMPLE)
+
+    def edgesets(self):
+        for j in range(self.num_edgesets):
+            left, right, parent, children = self._ll_tree_sequence.get_edgeset(j)
+            yield Edgeset(parent=parent, children=children, left=left, right=right)
 
     def diffs(self):
         """
@@ -1663,7 +1828,8 @@ class TreeSequence(object):
             the mutations in this tree sequence.
         :rtype: iter
         """
-        for position, node, index in self._ll_tree_sequence.get_mutations():
+        for j in range(self.get_num_mutations()):
+            position, node, index = self._ll_tree_sequence.get_mutation(j)
             yield Mutation(position, node, index)
 
     def breakpoints(self):
@@ -1926,6 +2092,7 @@ class TreeSequence(object):
     def time(self, sample):
         return self.get_time(sample)
 
+    # TODO refactor these methods to take node arguments not samples.
     def get_time(self, sample):
         """
         Returns the time that the specified sample ID was sampled at.

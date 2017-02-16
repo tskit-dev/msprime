@@ -201,12 +201,9 @@ def simplify_tree_sequence(ts, samples):
     for pos, nodes in new_mutations:
         sorted_nodes = tuple(sorted(node_map[node] for node in nodes))
         compressed_mutations.append((pos, sorted_nodes))
-    ll_ts = _msprime.TreeSequence()
-    ll_ts.load_records(
+    return msprime.load_coalescence_records(
         samples=[(0, 0) for _ in samples],
-        coalescence_records=compressed_records,
-        mutations=compressed_mutations)
-    return msprime.TreeSequence(ll_ts)
+        records=compressed_records, mutations=compressed_mutations)
 
 
 class TestHarmonicNumber(unittest.TestCase):
@@ -1390,6 +1387,22 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(list(ts1.records()), list(ts2.records()))
                 self.assertEqual(mutations, list(ts2.mutations()))
 
+    def test_generate_mutations_on_tree_sequence(self):
+        some_mutations = False
+        for ts in self.get_example_tree_sequences():
+            nodes = msprime.NodeTable()
+            edgesets = msprime.EdgesetTable()
+            mutations = msprime.MutationTable()
+            ts.dump_tables(nodes=nodes, edgesets=edgesets)
+            mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 10)
+            mutgen.generate(nodes, edgesets, mutations)
+            if mutations.num_rows > 0:
+                some_mutations = True
+            tsp = msprime.load_tables(
+                nodes=nodes, edgesets=edgesets, mutations=mutations)
+            self.assertEqual(tsp.num_mutations, mutations.num_rows)
+        self.assertTrue(some_mutations)
+
 
 class TestSparseTree(HighLevelTestCase):
     """
@@ -1941,8 +1954,6 @@ class TestSimulateInterface(unittest.TestCase):
     def test_mutation_interface(self):
         for bad_type in ["x", [], {}]:
             self.assertRaises(
-                TypeError, msprime.simulate, 10, mutation_generator=bad_type)
-            self.assertRaises(
                 TypeError, msprime.simulate, 10, mutation_rate=bad_type)
         mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 1)
         self.assertRaises(
@@ -1958,6 +1969,7 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_mutations(), 0)
 
 
+# @unittest.skip("Problem with samples probably")
 class TestNodeOrdering(HighLevelTestCase):
     """
     Verify that we can use any node ordering for internal nodes
@@ -2005,12 +2017,10 @@ class TestNodeOrdering(HighLevelTestCase):
                 children=tuple(
                     sorted([node_map[c] for c in record.children])))
             new_records.append(new_record)
-        ll_ts = _msprime.TreeSequence()
-        # FIXME
-        ll_ts.load_records(
+        other_ts = msprime.load_coalescence_records(
             samples=[(0, 0) for _ in range(ts.sample_size)],
-            coalescence_records=new_records)
-        other_ts = msprime.TreeSequence(ll_ts)
+            records=new_records)
+
         self.assertEqual(ts.get_num_trees(), other_ts.get_num_trees())
         self.assertEqual(ts.get_sample_size(), other_ts.get_sample_size())
         self.assertEqual(ts.get_num_nodes(), other_ts.get_num_nodes())
