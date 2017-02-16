@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2016-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -82,18 +82,20 @@ class TestRecordSquashing(TopologyTestCase):
     Tests that we correctly squash adjacent equal records together.
     """
     def test_single_record(self):
-        nodes = [
-            msprime.Node(is_sample=True),
-            msprime.Node(is_sample=True),
-            msprime.Node(is_sample=False, time=1)]
-        edgesets = [
-            msprime.Edgeset(left=0, right=1, parent=2, children=(0, 1)),
-            msprime.Edgeset(left=1, right=2, parent=2, children=(0, 1))]
-        ts = msprime.load_records(nodes, edgesets)
-        self.assertEqual(list(ts.nodes()), nodes)
-        self.assertEqual(list(ts.edgesets()), edgesets)
+        nodes = """\
+        id  is_sample   time
+        0   1           0
+        1   1           0
+        2   0           1
+        """
+        edgesets = """\
+        left    right   parent  children
+        0       1       2       0,1
+        1       2       2       0,1
+        """
+        ts = msprime.load_str(nodes, edgesets)
         tss = ts.simplify()
-        self.assertEqual(list(tss.nodes()), nodes)
+        self.assertEqual(list(tss.nodes()), list(ts.nodes()))
         simplified_edgesets = list(tss.edgesets())
         self.assertEqual(len(simplified_edgesets), 1)
         e = simplified_edgesets[0]
@@ -734,50 +736,54 @@ class TestWithVisuals(TopologyTestCase):
         #         0.5 - 0.6  |  0.6 - 0.7  |  0.7 - 0.8  |  0.8 - 0.9  |  0.9 - 1.0
 
         true_trees = [
-                {0: 4, 1: 9, 2: 10, 3: -1, 4: 3, 5: 3, 6: 4, 7: 3, 8: 6, 9: 8, 10: 7},
-                {0: 4, 1: 9, 2: 10, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 7},
-                {0: 4, 1: 9, 2: 10, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 8},
-                {0: 4, 1: 9,  2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 8},
-                {0: 4, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 8},
-                {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 8},
-                {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 7, 9: 8, 10: 8},
-                {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 7, 9: 6, 10: 8},
-                {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 3, 7: 5, 8: 7, 9: 6, 10: 8}
-            ]
-        nodes = [msprime.Node(is_sample=True) for _ in range(3)]
-        nodes += [
-            msprime.Node(time=5.0),
-            msprime.Node(time=4.0),
-            msprime.Node(time=4.0),
-            msprime.Node(time=3.0),
-            msprime.Node(time=3.0),
-            msprime.Node(time=2.0),
-            msprime.Node(time=1.0),
-            msprime.Node(time=1.0)]
-        edgesets = [
-            msprime.Edgeset(left=0.5, right=1.0, parent=10, children=(1,)),
-            msprime.Edgeset(left=0.0, right=0.4, parent=10, children=(2,)),
-            msprime.Edgeset(left=0.6, right=1.0, parent=9, children=(0,)),
-            msprime.Edgeset(left=0.0, right=0.5, parent=9, children=(1,)),
-            msprime.Edgeset(left=0.8, right=1.0, parent=8, children=(10,)),
-            msprime.Edgeset(left=0.2, right=0.8, parent=8, children=(9, 10)),
-            msprime.Edgeset(left=0.0, right=0.2, parent=8, children=(9,)),
-            msprime.Edgeset(left=0.7, right=1.0, parent=7, children=(8,)),
-            msprime.Edgeset(left=0.0, right=0.2, parent=7, children=(10,)),
-            msprime.Edgeset(left=0.8, right=1.0, parent=6, children=(9,)),
-            msprime.Edgeset(left=0.0, right=0.7, parent=6, children=(8,)),
-            msprime.Edgeset(left=0.4, right=1.0, parent=5, children=(2, 7)),
-            msprime.Edgeset(left=0.1, right=0.4, parent=5, children=(7,)),
-            msprime.Edgeset(left=0.6, right=0.9, parent=4, children=(6,)),
-            msprime.Edgeset(left=0.0, right=0.6, parent=4, children=(0, 6)),
-            msprime.Edgeset(left=0.9, right=1.0, parent=3, children=(4, 5, 6)),
-            msprime.Edgeset(left=0.1, right=0.9, parent=3, children=(4, 5)),
-            msprime.Edgeset(left=0.0, right=0.1, parent=3, children=(4, 5, 7)),
+            {0: 4, 1: 9, 2: 10, 3: -1, 4: 3, 5: 3, 6: 4, 7: 3, 8: 6, 9: 8, 10: 7},
+            {0: 4, 1: 9, 2: 10, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 7},
+            {0: 4, 1: 9, 2: 10, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 8},
+            {0: 4, 1: 9,  2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 8},
+            {0: 4, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 8},
+            {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 6, 9: 8, 10: 8},
+            {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 7, 9: 8, 10: 8},
+            {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 7, 9: 6, 10: 8},
+            {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 3, 7: 5, 8: 7, 9: 6, 10: 8}
         ]
-
-        ts = msprime.load_records(nodes, edgesets)
+        nodes = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           0
+        3       0           5
+        4       0           4
+        5       0           4
+        6       0           3
+        7       0           3
+        8       0           2
+        9       0           1
+        10      0           1
+        """
+        edgesets = """\
+        left    right   parent  children
+        0.5     1.0     10      1
+        0.0     0.4     10      2
+        0.6     1.0     9       0
+        0.0     0.5     9       1
+        0.8     1.0     8       10
+        0.2     0.8     8       9,10
+        0.0     0.2     8       9
+        0.7     1.0     7       8
+        0.0     0.2     7       10
+        0.8     1.0     6       9
+        0.0     0.7     6       8
+        0.4     1.0     5       2,7
+        0.1     0.4     5       7
+        0.6     0.9     4       6
+        0.0     0.6     4       0,6
+        0.9     1.0     3       4,5,6
+        0.1     0.9     3       4,5
+        0.0     0.1     3       4,5,7
+        """
+        ts = msprime.load_str(nodes, edgesets)
         tree_dicts = [t.parent_dict for t in ts.trees()]
-        # self.assertEqual(ts.sample_size, 3)
+        self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, len(true_trees))
         self.assertEqual(ts.num_nodes, 11)
         self.assertEqual(len(list(ts.diffs())), ts.num_trees)

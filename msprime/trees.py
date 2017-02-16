@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -1027,24 +1027,6 @@ def load_tables(*args, **kwargs):
     return TreeSequence.load_tables(*args, **kwargs)
 
 
-def load_records(nodes, edgesets, mutations=None):
-    node_table = NodeTable(len(nodes))
-    for node in nodes:
-        node_table.add_row(
-            flags=node.flags, population=node.population, time=node.time,
-            name=node.name)
-    edgesets_table = EdgesetTable(len(edgesets), 2 * len(edgesets))
-    for edgeset in edgesets:
-        edgesets_table.add_row(
-            edgeset.left, edgeset.right, edgeset.parent, edgeset.children)
-    mutations_table = MutationTable(len(mutations) if mutations is not None else 1024)
-    if mutations is not None:
-        for mutation in mutations:
-            mutations_table.add_row(mutation.position, mutation.nodes)
-    return load_tables(
-        nodes=node_table, edgesets=edgesets_table, mutations=mutations_table)
-
-
 def load_txt(records_file, mutations_file=None):
     """
     Loads a tree sequence from the specified file paths. The files input here
@@ -1124,6 +1106,10 @@ def load_txt(records_file, mutations_file=None):
 
 
 def load_str(nodes, edgesets):
+    # Initial implementation. This is very rough and will need to be much
+    # more carefully written before release. The load_txt method will be replaced
+    # with an implementation like this eventually, and this function might be
+    # removed entirely.
     f = six.StringIO(nodes)
     # Read the first line to get the header
     header = f.readline()
