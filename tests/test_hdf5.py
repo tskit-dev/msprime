@@ -290,8 +290,7 @@ class TestHdf5Format(TestHdf5):
         root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        # FIXME marking this version as transitional
-        self.assertEqual(format_version[0], 2**32 - 1)
+        self.assertEqual(format_version[0], 5)
         self.assertEqual(format_version[1], 0)
         keys = set(root.keys())
         self.assertIn("nodes", keys)
