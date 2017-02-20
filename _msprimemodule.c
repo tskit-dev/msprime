@@ -305,26 +305,6 @@ out:
     return ret;
 }
 
-static int
-parse_model(char *model_str, int *model)
-{
-    int ret = -1;
-
-    if (strcmp(model_str, "hudson") == 0) {
-        *model = MSP_MODEL_HUDSON;
-    } else if (strcmp(model_str, "smc") == 0) {
-        *model = MSP_MODEL_SMC;
-    } else if (strcmp(model_str, "smc_prime") == 0) {
-        *model = MSP_MODEL_SMC_PRIME;
-    } else {
-        PyErr_Format(PyExc_ValueError, "Unknown model '%s'", model_str);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
 /*
  * Retrieves the PyObject* corresponding the specified key in the
  * specified dictionary.
@@ -372,6 +352,72 @@ get_dict_number(PyObject *dict, const char *key_str)
 out:
     return ret;
 }
+
+static int
+parse_model(PyObject *py_model, int *model)
+{
+    int ret = -1;
+    PyObject *py_name = NULL;
+    PyObject *hudson_s = NULL;
+    PyObject *smc_s = NULL;
+    PyObject *smc_prime_s = NULL;
+    int is_hudson, is_smc, is_smc_prime;
+
+    hudson_s = Py_BuildValue("s", "hudson");
+    if (hudson_s == NULL) {
+        goto out;
+    }
+    smc_s = Py_BuildValue("s", "smc");
+    if (smc_s == NULL) {
+        goto out;
+    }
+    smc_prime_s = Py_BuildValue("s", "smc_prime");
+    if (smc_prime_s == NULL) {
+        goto out;
+    }
+    py_name = get_dict_value(py_model, "name");
+    if (py_name == NULL) {
+        goto out;
+    }
+
+    /* We need to go through this tedious rigmarole because of string
+     * handling in Python 3. By pushing the comparison up into Python
+     * we don't need to worry about encodings, etc, etc.
+     */
+    is_hudson = PyObject_RichCompareBool(py_name, hudson_s, Py_EQ);
+    if (is_hudson == -1) {
+        goto out;
+    }
+    if (is_hudson) {
+        *model = MSP_MODEL_HUDSON;
+    }
+    is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
+    if (is_smc == -1) {
+        goto out;
+    }
+    if (is_smc) {
+        *model = MSP_MODEL_SMC;
+    }
+    is_smc_prime = PyObject_RichCompareBool(py_name, smc_prime_s, Py_EQ);
+    if (is_smc_prime == -1) {
+        goto out;
+    }
+    if (is_smc_prime) {
+        *model = MSP_MODEL_SMC_PRIME;
+    }
+    if (! (is_hudson || is_smc || is_smc_prime)) {
+        PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(hudson_s);
+    Py_XDECREF(smc_s);
+    Py_XDECREF(smc_prime_s);
+    return ret;
+}
+
+
 
 static PyObject *
 convert_integer_list(size_t *list, size_t size)
@@ -5314,13 +5360,13 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     }
     ret = 0;
 out:
-    Py_DECREF(population_parameter_change_s);
-    Py_DECREF(migration_rate_change_s);
-    Py_DECREF(mass_migration_s);
-    Py_DECREF(simple_bottleneck_s);
-    Py_DECREF(instantaneous_bottleneck_s);
-    Py_DECREF(initial_size_s);
-    Py_DECREF(growth_rate_s);
+    Py_XDECREF(population_parameter_change_s);
+    Py_XDECREF(migration_rate_change_s);
+    Py_XDECREF(mass_migration_s);
+    Py_XDECREF(simple_bottleneck_s);
+    Py_XDECREF(instantaneous_bottleneck_s);
+    Py_XDECREF(initial_size_s);
+    Py_XDECREF(growth_rate_s);
     return ret;
 }
 
@@ -5351,7 +5397,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
-    char *model_str = NULL;
+    PyObject *py_model = NULL;
     RandomGenerator *random_generator = NULL;
     sample_t *samples = NULL;
     /* parameter defaults */
@@ -5369,14 +5415,15 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!snnnnnni", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!O!nnnnnni", kwlist,
             &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
             &num_loci, &scaled_recombination_rate,
             &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
-            &model_str, &max_memory, &avl_node_block_size, &segment_block_size,
+            &PyDict_Type, &py_model,
+            &max_memory, &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &coalescence_record_block_size,
             &migration_block_size, &store_migrations)) {
         goto out;
@@ -5400,8 +5447,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
-    if (model_str != NULL) {
-        if (parse_model(model_str, &model) != 0) {
+    if (py_model != NULL) {
+        if (parse_model(py_model, &model) != 0) {
             goto out;
         }
     }

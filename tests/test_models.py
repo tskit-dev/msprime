@@ -108,11 +108,29 @@ class TestModelParsing(unittest.TestCase):
         for bad_model in ["NOT", "",  "MODEL"]:
             self.assertRaises(ValueError, msprime.simulate, 10, model=bad_model)
 
-    def test_model_variants(self):
-        for model in ["hudson", "smc", "smc_prime"]:
-            sim = msprime.simulator_factory(sample_size=10, model=model.upper())
-            self.assertEqual(sim.get_model(), model)
-            sim = msprime.simulator_factory(sample_size=10, model=model.title())
+    def test_named_model_variants(self):
+        simulation_models = [
+            ("hudson", msprime.StandardCoalescent),
+            ("smc", msprime.SmcApproxCoalescent),
+            ("smc_prime", msprime.SmcPrimeApproxCoalescent)
+        ]
+        for name, model in simulation_models:
+            sim = msprime.simulator_factory(sample_size=10, model=name.upper())
+            self.assertIsInstance(sim.get_model(), model)
+            sim = msprime.simulator_factory(sample_size=10, model=name.title())
+            self.assertIsInstance(sim.get_model(), model)
+
+    def test_model_instances(self):
+        for bad_type in [1234, {}]:
+            self.assertRaises(
+                TypeError, msprime.simulator_factory, sample_size=2, model=bad_type)
+        models = [
+            msprime.StandardCoalescent(),
+            msprime.SmcApproxCoalescent(),
+            msprime.SmcPrimeApproxCoalescent(),
+        ]
+        for model in models:
+            sim = msprime.simulator_factory(sample_size=10, model=model)
             self.assertEqual(sim.get_model(), model)
 
 
