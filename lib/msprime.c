@@ -1205,11 +1205,11 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "simulation model = '%s'\n", msp_get_model_name(self));
     if (self->model.type == MSP_MODEL_BETA) {
-        printf("\tbeta coalescent parameters: alpha = %f, truncation_point = %f\n",
+        fprintf(out, "\tbeta coalescent parameters: alpha = %f, truncation_point = %f\n",
                 self->model.params.beta_coalescent.alpha,
                 self->model.params.beta_coalescent.truncation_point);
     } else if (self->model.type == MSP_MODEL_DIRAC) {
-        printf("\tdirac coalescent parameters: psi = %f\n",
+        fprintf(out, "\tdirac coalescent parameters: psi = %f\n",
                 self->model.params.dirac_coalescent.psi);
     }
     fprintf(out, "used_memory = %f MiB\n", (double) self->used_memory / gig);
@@ -1839,49 +1839,6 @@ out:
 }
 
 static int WARN_UNUSED
-msp_common_ancestor_event(msp_t *self, population_id_t population_id)
-{
-    int ret = 0;
-    uint32_t j, n;
-    avl_tree_t *ancestors;
-    avl_node_t *x_node, *y_node, *node;
-    segment_t *x, *y;
-
-    ancestors = &self->populations[population_id].ancestors;
-    /* Choose x and y */
-    n = avl_count(ancestors);
-    j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
-    x_node = avl_at(ancestors, j);
-    assert(x_node != NULL);
-    x = (segment_t *) x_node->item;
-    avl_unlink_node(ancestors, x_node);
-    j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
-    y_node = avl_at(ancestors, j);
-    assert(y_node != NULL);
-    y = (segment_t *) y_node->item;
-    avl_unlink_node(ancestors, y_node);
-
-    /* For SMC and SMC' models we reject some events to get the required
-     * distribution. */
-    if (msp_reject_ca_event(self, x, y)) {
-        self->num_rejected_ca_events++;
-        /* insert x and y back into the population */
-        assert(x_node->item == x);
-        node = avl_insert_node(ancestors, x_node);
-        assert(node != NULL);
-        assert(y_node->item == y);
-        node = avl_insert_node(ancestors, y_node);
-        assert(node != NULL);
-    } else {
-        self->num_ca_events++;
-        msp_free_avl_node(self, x_node);
-        msp_free_avl_node(self, y_node);
-        ret = msp_merge_two_ancestors(self, population_id, x, y);
-    }
-    return ret;
-}
-
-static int WARN_UNUSED
 msp_priority_queue_insert(msp_t *self, avl_tree_t *Q, segment_t *u)
 {
     int ret = 0;
@@ -1918,7 +1875,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id)
     segment_t *x, *z, *alpha;
     segment_t **H = NULL;
 
-    assert(self->model.type == MSP_MODEL_HUDSON);
     H = malloc(avl_count(Q) * sizeof(segment_t *));
     if (H == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -2085,6 +2041,113 @@ out:
     if (H != NULL) {
         free(H);
     }
+    return ret;
+}
+
+
+
+static int WARN_UNUSED
+msp_common_ancestor_event(msp_t *self, population_id_t population_id)
+{
+    int ret = 0;
+    uint32_t j, n;
+    avl_tree_t *ancestors;
+    avl_node_t *x_node, *y_node, *node;
+    segment_t *x, *y;
+
+    ancestors = &self->populations[population_id].ancestors;
+    /* Choose x and y */
+    n = avl_count(ancestors);
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
+    x_node = avl_at(ancestors, j);
+    assert(x_node != NULL);
+    x = (segment_t *) x_node->item;
+    avl_unlink_node(ancestors, x_node);
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
+    y_node = avl_at(ancestors, j);
+    assert(y_node != NULL);
+    y = (segment_t *) y_node->item;
+    avl_unlink_node(ancestors, y_node);
+
+    /* For SMC and SMC' models we reject some events to get the required
+     * distribution. */
+    if (msp_reject_ca_event(self, x, y)) {
+        self->num_rejected_ca_events++;
+        /* insert x and y back into the population */
+        assert(x_node->item == x);
+        node = avl_insert_node(ancestors, x_node);
+        assert(node != NULL);
+        assert(y_node->item == y);
+        node = avl_insert_node(ancestors, y_node);
+        assert(node != NULL);
+    } else {
+        self->num_ca_events++;
+        msp_free_avl_node(self, x_node);
+        msp_free_avl_node(self, y_node);
+        ret = msp_merge_two_ancestors(self, population_id, x, y);
+    }
+    return ret;
+}
+
+
+static int WARN_UNUSED
+msp_multiple_merger_common_ancestor_event(msp_t *self)
+{
+    int ret = 0;
+    uint32_t j, n;
+    avl_tree_t *ancestors, Q;
+    avl_node_t *x_node, *y_node, *node, *next, *q_node;
+    segment_t *x, *y, *u;
+
+    ancestors = &self->populations[0].ancestors;
+    /* This is just an example to show how to perform the two regimes. With probability 1/2
+     * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
+     */
+    if (gsl_rng_uniform(self->rng) < 0.5) {
+        /* Choose x and y */
+        n = avl_count(ancestors);
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
+        x_node = avl_at(ancestors, j);
+        assert(x_node != NULL);
+        x = (segment_t *) x_node->item;
+        avl_unlink_node(ancestors, x_node);
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
+        y_node = avl_at(ancestors, j);
+        assert(y_node != NULL);
+        y = (segment_t *) y_node->item;
+        avl_unlink_node(ancestors, y_node);
+        self->num_ca_events++;
+        msp_free_avl_node(self, x_node);
+        msp_free_avl_node(self, y_node);
+        ret = msp_merge_two_ancestors(self, 0, x, y);
+    } else {
+        /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
+         * of being included. This isn't how things will work for the real simulation,
+         * but it should show how the machinery of merging lots of ancestors should work.
+         */
+        avl_init_tree(&Q, cmp_segment_queue, NULL);
+        node = ancestors->head;
+        while (node != NULL) {
+            next = node->next;
+            if (gsl_rng_uniform(self->rng) < 0.5) {
+                u = (segment_t *) node->item;
+                avl_unlink_node(ancestors, node);
+                msp_free_avl_node(self, node);
+                q_node = msp_alloc_avl_node(self);
+                if (q_node == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                avl_init_node(q_node, u);
+                q_node = avl_insert_node(&Q, q_node);
+                assert(q_node != NULL);
+            }
+            node = next;
+        }
+        /* Now that we have filled Q in the correct way, we can merge the ancestors. */
+        ret = msp_merge_ancestors(self, &Q, 0);
+    }
+out:
     return ret;
 }
 
@@ -2355,8 +2418,10 @@ out:
     return ret;
 }
 
-int WARN_UNUSED
-msp_run(msp_t *self, double max_time, unsigned long max_events)
+/* The main event loop for the standard coalescent (and SMC variants).
+ */
+static int WARN_UNUSED
+msp_run_standard_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait,
@@ -2367,13 +2432,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     unsigned long events = 0;
     sampling_event_t *se;
 
-    if (self->state == MSP_STATE_INITIALISED) {
-        self->state = MSP_STATE_SIMULATING;
-    }
-    if (self->state != MSP_STATE_SIMULATING) {
-        ret = MSP_ERR_BAD_STATE;
-        goto out;
-    }
     while (msp_get_num_ancestors(self) > 0
             && self->time < max_time && events < max_events) {
         events++;
@@ -2466,6 +2524,83 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
                 goto out;
             }
         }
+    }
+out:
+    return ret;
+}
+
+/* The main event loop for the Dirac and Beta multiple merger coalescents.
+ */
+static int WARN_UNUSED
+msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long max_events)
+{
+    int ret = 0;
+    double lambda, t_wait, ca_t_wait, re_t_wait, n;
+    int64_t num_links;
+    unsigned long events = 0;
+
+    assert(self->num_populations == 1);
+    assert(self->num_sampling_events == 0);
+    assert(self->next_demographic_event == NULL);
+    while (msp_get_num_ancestors(self) > 0
+            && self->time < max_time && events < max_events) {
+        events++;
+        num_links = fenwick_get_total(&self->links);
+        ret = msp_sanity_check(self, num_links);
+        if (ret != 0) {
+            goto out;
+        }
+
+        /* Recombination */
+        lambda = (double) num_links * self->scaled_recombination_rate;
+        re_t_wait = DBL_MAX;
+        if (lambda != 0.0) {
+            re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
+        }
+        /* Common ancestors */
+        n = (double) avl_count(&self->populations[0].ancestors);
+        lambda = n * (n - 1.0);
+        ca_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
+
+        t_wait = GSL_MIN(re_t_wait, ca_t_wait);
+        self->time += t_wait;
+        if (re_t_wait == t_wait) {
+            ret = msp_recombination_event(self);
+        } else if (ca_t_wait == t_wait) {
+            ret = msp_multiple_merger_common_ancestor_event(self);
+        }
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+/* Runs the simulation backwards in time until either the sample has coalesced,
+ * or specified maximum simulation time has been reached or the specified maximum
+ * number of events has been reached.
+ */
+int WARN_UNUSED
+msp_run(msp_t *self, double max_time, unsigned long max_events)
+{
+    int ret = 0;
+    int model_type = self->model.type;
+
+    if (self->state == MSP_STATE_INITIALISED) {
+        self->state = MSP_STATE_SIMULATING;
+    }
+    if (self->state != MSP_STATE_SIMULATING) {
+        ret = MSP_ERR_BAD_STATE;
+        goto out;
+    }
+    if (model_type == MSP_MODEL_DIRAC || model_type == MSP_MODEL_BETA) {
+        ret = msp_run_multiple_mergers_coalescent(self, max_time, max_events);
+    } else {
+        ret = msp_run_standard_coalescent(self, max_time, max_events);
+    }
+    if (ret != 0) {
+        goto out;
     }
     if (msp_get_num_ancestors(self) != 0) {
         ret = 1;
