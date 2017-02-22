@@ -353,71 +353,6 @@ out:
     return ret;
 }
 
-static int
-parse_model(PyObject *py_model, int *model)
-{
-    int ret = -1;
-    PyObject *py_name = NULL;
-    PyObject *hudson_s = NULL;
-    PyObject *smc_s = NULL;
-    PyObject *smc_prime_s = NULL;
-    int is_hudson, is_smc, is_smc_prime;
-
-    hudson_s = Py_BuildValue("s", "hudson");
-    if (hudson_s == NULL) {
-        goto out;
-    }
-    smc_s = Py_BuildValue("s", "smc");
-    if (smc_s == NULL) {
-        goto out;
-    }
-    smc_prime_s = Py_BuildValue("s", "smc_prime");
-    if (smc_prime_s == NULL) {
-        goto out;
-    }
-    py_name = get_dict_value(py_model, "name");
-    if (py_name == NULL) {
-        goto out;
-    }
-
-    /* We need to go through this tedious rigmarole because of string
-     * handling in Python 3. By pushing the comparison up into Python
-     * we don't need to worry about encodings, etc, etc.
-     */
-    is_hudson = PyObject_RichCompareBool(py_name, hudson_s, Py_EQ);
-    if (is_hudson == -1) {
-        goto out;
-    }
-    if (is_hudson) {
-        *model = MSP_MODEL_HUDSON;
-    }
-    is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
-    if (is_smc == -1) {
-        goto out;
-    }
-    if (is_smc) {
-        *model = MSP_MODEL_SMC;
-    }
-    is_smc_prime = PyObject_RichCompareBool(py_name, smc_prime_s, Py_EQ);
-    if (is_smc_prime == -1) {
-        goto out;
-    }
-    if (is_smc_prime) {
-        *model = MSP_MODEL_SMC_PRIME;
-    }
-    if (! (is_hudson || is_smc || is_smc_prime)) {
-        PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
-        goto out;
-    }
-    ret = 0;
-out:
-    Py_XDECREF(hudson_s);
-    Py_XDECREF(smc_s);
-    Py_XDECREF(smc_prime_s);
-    return ret;
-}
-
-
 
 static PyObject *
 convert_integer_list(size_t *list, size_t size)
@@ -5167,6 +5102,129 @@ out:
 }
 
 static int
+Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
+{
+    int ret = -1;
+    int err = -1;
+    PyObject *py_name = NULL;
+    PyObject *hudson_s = NULL;
+    PyObject *smc_s = NULL;
+    PyObject *smc_prime_s = NULL;
+    PyObject *dirac_s = NULL;
+    PyObject *beta_s = NULL;
+    PyObject *value;
+    int is_hudson, is_smc, is_smc_prime, is_dirac, is_beta;
+    double psi, alpha, truncation_point;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    hudson_s = Py_BuildValue("s", "hudson");
+    if (hudson_s == NULL) {
+        goto out;
+    }
+    smc_s = Py_BuildValue("s", "smc");
+    if (smc_s == NULL) {
+        goto out;
+    }
+    smc_prime_s = Py_BuildValue("s", "smc_prime");
+    if (smc_prime_s == NULL) {
+        goto out;
+    }
+    dirac_s = Py_BuildValue("s", "dirac");
+    if (dirac_s == NULL) {
+        goto out;
+    }
+    beta_s = Py_BuildValue("s", "beta");
+    if (beta_s == NULL) {
+        goto out;
+    }
+    py_name = get_dict_value(py_model, "name");
+    if (py_name == NULL) {
+        goto out;
+    }
+
+    /* We need to go through this tedious rigmarole because of string
+     * handling in Python 3. By pushing the comparison up into Python
+     * we don't need to worry about encodings, etc, etc.
+     */
+    is_hudson = PyObject_RichCompareBool(py_name, hudson_s, Py_EQ);
+    if (is_hudson == -1) {
+        goto out;
+    }
+    if (is_hudson) {
+        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_HUDSON);
+    }
+
+    is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
+    if (is_smc == -1) {
+        goto out;
+    }
+    if (is_smc) {
+        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_SMC);
+    }
+
+    is_smc_prime = PyObject_RichCompareBool(py_name, smc_prime_s, Py_EQ);
+    if (is_smc_prime == -1) {
+        goto out;
+    }
+    if (is_smc_prime) {
+        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_SMC_PRIME);
+    }
+
+    is_dirac = PyObject_RichCompareBool(py_name, dirac_s, Py_EQ);
+    if (is_dirac == -1) {
+        goto out;
+    }
+    if (is_dirac) {
+        value = get_dict_number(py_model, "psi");
+        if (value == NULL) {
+            goto out;
+        }
+        psi = PyFloat_AsDouble(value);
+        /* TODO range checking on psi */
+        err = msp_set_simulation_model_dirac(self->sim, psi);
+    }
+
+    is_beta = PyObject_RichCompareBool(py_name, beta_s, Py_EQ);
+    if (is_beta == -1) {
+        goto out;
+    }
+    if (is_beta) {
+        value = get_dict_number(py_model, "alpha");
+        if (value == NULL) {
+            goto out;
+        }
+        alpha = PyFloat_AsDouble(value);
+        value = get_dict_number(py_model, "truncation_point");
+        if (value == NULL) {
+            goto out;
+        }
+        truncation_point = PyFloat_AsDouble(value);
+        /* TODO range checking on alpha and truncation_point */
+        err = msp_set_simulation_model_beta(self->sim, alpha, truncation_point);
+    }
+
+    if (! (is_hudson || is_smc || is_smc_prime || is_dirac || is_beta)) {
+        PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
+        goto out;
+    }
+    if (err != 0) {
+        handle_input_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(hudson_s);
+    Py_XDECREF(smc_s);
+    Py_XDECREF(smc_prime_s);
+    Py_XDECREF(beta_s);
+    Py_XDECREF(dirac_s);
+    return ret;
+}
+
+
+static int
 Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 {
     int ret = -1;
@@ -5403,7 +5461,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     /* parameter defaults */
     Py_ssize_t sample_size = 2;
     Py_ssize_t num_loci = 1;
-    int model = MSP_MODEL_HUDSON;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
@@ -5448,14 +5505,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     if (py_model != NULL) {
-        if (parse_model(py_model, &model) != 0) {
+        if (Simulator_parse_simulation_model(self, py_model) != 0) {
             goto out;
         }
-    }
-    sim_ret = msp_set_model(self->sim, model);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
     }
     sim_ret = msp_set_store_migrations(self->sim, (bool) store_migrations);
     if (sim_ret != 0) {
@@ -5530,8 +5582,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     if (demographic_events != NULL) {
-        if (Simulator_parse_demographic_events(self,
-                    demographic_events) != 0) {
+        if (Simulator_parse_demographic_events(self, demographic_events) != 0) {
             goto out;
         }
     }
@@ -5557,11 +5608,50 @@ static PyObject *
 Simulator_get_model(Simulator *self)
 {
     PyObject *ret = NULL;
+    PyObject *d = NULL;
+    PyObject *value = NULL;
+    simulation_model_t *model;
+
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("s", msp_get_model_str(self->sim));
+    model = msp_get_model(self->sim);
+    d = Py_BuildValue("{ss}", "name", msp_get_model_name(self->sim));
+    if (model->type == MSP_MODEL_DIRAC) {
+        value = Py_BuildValue("d", model->params.dirac_coalescent.psi);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "psi", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
+    } else if (model->type == MSP_MODEL_BETA) {
+        value = Py_BuildValue("d", model->params.beta_coalescent.alpha);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "alpha", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
+        value = Py_BuildValue("d", model->params.beta_coalescent.truncation_point);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "truncation_point", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
+    }
+    ret = d;
+    d = NULL;
 out:
+    Py_XDECREF(d);
+    Py_XDECREF(value);
     return ret;
 }
 

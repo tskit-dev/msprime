@@ -391,12 +391,14 @@ msp_get_num_recombination_events(msp_t *self)
 }
 
 int
-msp_set_model(msp_t *self, int model)
+msp_set_simulation_model_non_parametric(msp_t *self, int model)
 {
     int ret = 0;
 
     if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
-            && model != MSP_MODEL_SMC_PRIME) {
+            && model != MSP_MODEL_SMC_PRIME
+            && model != MSP_MODEL_DIRAC
+            && model != MSP_MODEL_BETA) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
@@ -405,7 +407,39 @@ msp_set_model(msp_t *self, int model)
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
-    self->model = model;
+    self->model.type = model;
+out:
+    return ret;
+}
+
+int
+msp_set_simulation_model_dirac(msp_t *self, double psi)
+{
+    int ret = 0;
+
+    /* TODO bounds check psi: what are legal values? */
+    ret = msp_set_simulation_model_non_parametric(self, MSP_MODEL_DIRAC);
+    if (ret != 0) {
+        goto out;
+    }
+    self->model.params.dirac_coalescent.psi = psi;
+out:
+    return ret;
+}
+
+int
+msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point)
+{
+
+    int ret = 0;
+
+    /* TODO bounds check alpha and truncation_point: what are legal values? */
+    ret = msp_set_simulation_model_non_parametric(self, MSP_MODEL_BETA);
+    if (ret != 0) {
+        goto out;
+    }
+    self->model.params.beta_coalescent.alpha = alpha;
+    self->model.params.beta_coalescent.truncation_point = truncation_point;
 out:
     return ret;
 }
@@ -1169,8 +1203,15 @@ msp_print_state(msp_t *self, FILE *out)
     if (ret != 0) {
         goto out;
     }
-    fprintf(out, "simulation model = '%s' (%d)\n", msp_get_model_str(self),
-            msp_get_model(self));
+    fprintf(out, "simulation model = '%s'\n", msp_get_model_name(self));
+    if (self->model.type == MSP_MODEL_BETA) {
+        printf("\tbeta coalescent parameters: alpha = %f, truncation_point = %f\n",
+                self->model.params.beta_coalescent.alpha,
+                self->model.params.beta_coalescent.truncation_point);
+    } else if (self->model.type == MSP_MODEL_DIRAC) {
+        printf("\tdirac coalescent parameters: psi = %f\n",
+                self->model.params.dirac_coalescent.psi);
+    }
     fprintf(out, "used_memory = %f MiB\n", (double) self->used_memory / gig);
     fprintf(out, "max_memory  = %f MiB\n", (double) self->max_memory / gig);
     fprintf(out, "n = %d\n", self->sample_size);
@@ -1609,9 +1650,9 @@ msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
     segment_t *beta;
     int64_t overlap, min_overlap;
 
-    if (self->model == MSP_MODEL_SMC || self->model == MSP_MODEL_SMC_PRIME) {
+    if (self->model.type == MSP_MODEL_SMC || self->model.type == MSP_MODEL_SMC_PRIME) {
         ret = 1;
-        min_overlap = self->model == MSP_MODEL_SMC ? 1: 0;
+        min_overlap = self->model.type == MSP_MODEL_SMC ? 1: 0;
         while (x != NULL && y != NULL) {
             if (y->left < x->left) {
                 beta = x;
@@ -1877,7 +1918,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id)
     segment_t *x, *z, *alpha;
     segment_t **H = NULL;
 
-    assert(self->model == MSP_MODEL_HUDSON);
+    assert(self->model.type == MSP_MODEL_HUDSON);
     H = malloc(avl_count(Q) * sizeof(segment_t *));
     if (H == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -2542,18 +2583,18 @@ out:
     return ret;
 }
 
-int
+simulation_model_t *
 msp_get_model(msp_t *self)
 {
-    return self->model;
+    return &self->model;
 }
 
 const char *
-msp_get_model_str(msp_t *self)
+msp_get_model_name(msp_t *self)
 {
     const char *ret;
 
-    switch (self->model) {
+    switch (self->model.type) {
         case MSP_MODEL_HUDSON:
             ret = "hudson";
             break;
@@ -2562,6 +2603,12 @@ msp_get_model_str(msp_t *self)
             break;
         case MSP_MODEL_SMC_PRIME:
             ret = "smc_prime";
+            break;
+        case MSP_MODEL_DIRAC:
+            ret = "dirac";
+            break;
+        case MSP_MODEL_BETA:
+            ret = "beta";
             break;
         default:
             ret = "BUG: bad model in simulator!";
@@ -3122,7 +3169,7 @@ msp_add_simple_bottleneck(msp_t *self, double time, int population_id,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (self->model != MSP_MODEL_HUDSON) {
+    if (self->model.type != MSP_MODEL_HUDSON) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
@@ -3294,7 +3341,7 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (self->model != MSP_MODEL_HUDSON) {
+    if (self->model.type != MSP_MODEL_HUDSON) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }

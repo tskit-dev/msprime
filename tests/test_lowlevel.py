@@ -58,11 +58,13 @@ def uniform_recombination_map(sim):
         [sim.get_scaled_recombination_rate(), 0])
 
 
-def get_simulation_model(name="hudson"):
+def get_simulation_model(name="hudson", **kwargs):
     """
     Returns simulation model dictionary suitable for passing to the low-level API.
     """
-    return {"name": name}
+    d = {"name": name}
+    d.update(kwargs)
+    return d
 
 
 def get_population_configuration(growth_rate=0.0, initial_size=1.0):
@@ -1141,7 +1143,7 @@ class TestSimulator(LowLevelTestCase):
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, max_memory=2**65)
 
-    def test_models(self):
+    def test_non_parametric_simulation_models(self):
 
         def f(sample_size=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
@@ -1153,9 +1155,49 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(ValueError, f, model=bad_dict)
         for bad_model in ["", "SMC", "ABC", "hud", None, 1234, {}, []]:
             self.assertRaises(ValueError, f, model=get_simulation_model(bad_model))
-        for model in ["hudson", "smc", "smc_prime"]:
-            sim = f(model=get_simulation_model(model))
+        for name in ["hudson", "smc", "smc_prime"]:
+            model = get_simulation_model(name)
+            sim = f(model=model)
             self.assertEqual(sim.get_model(), model)
+
+    def test_dirac_simulation_model(self):
+
+        def f(sample_size=10, random_seed=1, **kwargs):
+            return _msprime.Simulator(
+                get_samples(sample_size),
+                _msprime.RandomGenerator(random_seed), **kwargs)
+        for bad_type in [None, str, "sdf"]:
+            model = get_simulation_model("dirac", psi=bad_type)
+            self.assertRaises(TypeError, f, model=model)
+        self.assertRaises(ValueError, f, model=get_simulation_model("dirac"))
+        # TODO check for bad values when range checking is done.
+        for psi in [1.0, 2.2, 1e-4]:
+            model = get_simulation_model("dirac", psi=psi)
+            sim = f(model=model)
+            self.assertEqual(sim.get_model(), model)
+
+    def test_beta_simulation_model(self):
+
+        def f(sample_size=10, random_seed=1, **kwargs):
+            return _msprime.Simulator(
+                get_samples(sample_size),
+                _msprime.RandomGenerator(random_seed), **kwargs)
+        for bad_type in [None, str, "sdf"]:
+            model = get_simulation_model("beta", alpha=bad_type, truncation_point=1)
+            self.assertRaises(TypeError, f, model=model)
+            model = get_simulation_model("beta", alpha=1, truncation_point=bad_type)
+            self.assertRaises(TypeError, f, model=model)
+        model = get_simulation_model("beta", alpha=1)
+        self.assertRaises(ValueError, f, model=model)
+        model = get_simulation_model("beta", truncation_point=1)
+        self.assertRaises(ValueError, f, model=model)
+        # TODO check for bad values when range checking is done.
+        for alpha in [1.0, 2.2, 1e-4]:
+            for truncation_point in [0.1, 1.5, 1e9]:
+                model = get_simulation_model(
+                    "beta", alpha=alpha, truncation_point=truncation_point)
+                sim = f(model=model)
+                self.assertEqual(sim.get_model(), model)
 
     def test_store_migrations(self):
         def f(sample_size=10, random_seed=1, **kwargs):

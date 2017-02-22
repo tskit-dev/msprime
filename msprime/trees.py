@@ -2682,15 +2682,45 @@ class StandardCoalescent(SimulationModel):
 
 
 class SmcApproxCoalescent(SimulationModel):
+    # TODO document
     name = "smc"
 
 
 class SmcPrimeApproxCoalescent(SimulationModel):
+    # TODO document
     name = "smc_prime"
 
-# TODO
-# BetaCoalescent(alpha, truncation_point=None)
-# DiracCoalescent(psi)
+
+class ParametricSimulationModel(SimulationModel):
+    """
+    The superclass of simulation models that require parameters.
+    """
+    def get_ll_representation(self):
+        d = super(ParametricSimulationModel, self).get_ll_representation()
+        d.update(self.__dict__)
+        return d
+
+
+class BetaCoalescent(ParametricSimulationModel):
+    # TODO document.
+    name = "beta"
+
+    # TODO what is a meaningful value for this parameter? Ideally, the default
+    # would be the equivalent of the Kingman coalescent or something similar.
+    def __init__(self, alpha=1, truncation_point=None):
+        self.alpha = alpha
+        if truncation_point is None:
+            truncation_point = sys.float_info.max
+        self.truncation_point = truncation_point
+
+
+class DiracCoalescent(ParametricSimulationModel):
+    # TODO document
+    name = "dirac"
+
+    # TODO What is a meaningful default for this value? See above.
+    def __init__(self, psi=1):
+        self.psi = psi
 
 
 class Population(object):

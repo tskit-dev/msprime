@@ -53,6 +53,8 @@
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
 #define MSP_MODEL_SMC_PRIME 2
+#define MSP_MODEL_BETA 3
+#define MSP_MODEL_DIRAC 4
 
 #define MSP_NODE_IS_SAMPLE 1
 
@@ -188,10 +190,29 @@ typedef struct {
     population_id_t population_id;
 } sampling_event_t;
 
+/* Simulation models */
+
+typedef struct {
+    double alpha;
+    double truncation_point;
+} beta_coalescent_t;
+
+typedef struct {
+    double psi;
+} dirac_coalescent_t;
+
+typedef struct {
+    int type;
+    union {
+        beta_coalescent_t beta_coalescent;
+        dirac_coalescent_t dirac_coalescent;
+    } params;
+} simulation_model_t;
+
 typedef struct {
     gsl_rng *rng;
     /* input parameters */
-    int model;
+    simulation_model_t model;
     bool store_migrations;
     uint32_t sample_size;
     uint32_t num_loci;
@@ -541,7 +562,9 @@ typedef struct {
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
-int msp_set_model(msp_t *self, int model);
+int msp_set_simulation_model_non_parametric(msp_t *self, int model);
+int msp_set_simulation_model_dirac(msp_t *self, double psi);
+int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
@@ -595,8 +618,8 @@ int msp_get_population(msp_t *self, size_t population_id,
         population_t **population);
 int msp_is_completed(msp_t *self);
 
-int msp_get_model(msp_t *self);
-const char * msp_get_model_str(msp_t *self);
+simulation_model_t * msp_get_model(msp_t *self);
+const char * msp_get_model_name(msp_t *self);
 bool msp_get_store_migrations(msp_t *self);
 size_t msp_get_sample_size(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
