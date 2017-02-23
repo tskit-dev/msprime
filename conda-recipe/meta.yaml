@@ -19,17 +19,16 @@ build:
 
 requirements:
   build:
-    - gcc
     - python
     - setuptools
     - setuptools_scm
-    - svgwrite
+    # - svgwrite
     - hdf5
     - gsl {{CONDA_GSL}}*
 
   run:
     - python
-    - svgwrite
+    # - svgwrite
     - hdf5
     - numpy
     - h5py
