@@ -99,7 +99,8 @@ class DefineMacros(object):
             # the HDF5 API and not earlier deprecated versions.
             ("H5_NO_DEPRECATED_SYMBOLS", None),
             # Define the library version
-            ("MSP_LIBRARY_VERSION_STR", '"{}"'.format(self._msprime_version)),
+            # ("MSP_LIBRARY_VERSION_STR", '"{}"'.format(self._msprime_version)),
+            ("MSP_LIBRARY_VERSION_STR", "fixme-version"),
             ("GSL_DLL)", None),
         ]
         return l[index]
