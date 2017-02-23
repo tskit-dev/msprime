@@ -1460,8 +1460,7 @@ test_simulator_getters_setters(void)
             msp_set_population_configuration(&msp, 3, 0, 0),
             MSP_ERR_BAD_POPULATION_ID);
 
-    CU_ASSERT_EQUAL(msp_set_model(&msp, -1), MSP_ERR_BAD_MODEL);
-    CU_ASSERT_EQUAL(msp_get_model(&msp), MSP_MODEL_HUDSON);
+    CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
 
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1570,8 +1569,7 @@ test_simulator_model_errors(void)
     }
 
     CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
-    CU_ASSERT_EQUAL(msp_set_model(&msp, -1), MSP_ERR_BAD_MODEL);
-    CU_ASSERT_EQUAL(msp_get_model(&msp), MSP_MODEL_HUDSON);
+    CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
     CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), 0);
     CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1), 0);
     CU_ASSERT_EQUAL(msp_initialise(&msp), 0);
@@ -1581,13 +1579,13 @@ test_simulator_model_errors(void)
     CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
     CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), 0);
     CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1), 0);
-    CU_ASSERT_EQUAL(msp_set_model(&msp, MSP_MODEL_HUDSON),
+    CU_ASSERT_EQUAL(msp_set_simulation_model_non_parametric(&msp, MSP_MODEL_HUDSON),
             MSP_ERR_UNSUPPORTED_OPERATION);
     CU_ASSERT_EQUAL(msp_free(&msp), 0);
 
     for (j = 0; j < sizeof(models) / sizeof(int); j++) {
         CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
-        CU_ASSERT_EQUAL(msp_set_model(&msp, models[j]), 0);
+        CU_ASSERT_EQUAL(msp_set_simulation_model_non_parametric(&msp, models[j]), 0);
         CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), MSP_ERR_BAD_MODEL);
         CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1),
                 MSP_ERR_BAD_MODEL);
@@ -1758,7 +1756,7 @@ test_single_locus_simulation(void)
 {
     int ret;
     int model;
-    const char *model_str;
+    const char *model_name;
     uint32_t j;
     uint32_t n = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -1785,10 +1783,10 @@ test_single_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(msp);
 
-    model = msp_get_model(msp);
+    model = msp_get_model(msp)->type;
     CU_ASSERT_EQUAL(model, MSP_MODEL_HUDSON);
-    model_str = msp_get_model_str(msp);
-    CU_ASSERT_STRING_EQUAL(model_str, "hudson");
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "hudson");
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1844,8 +1842,8 @@ test_multi_locus_simulation(void)
     int models[] = {MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
     double migration_matrix[] = {0, 1, 1, 0};
     size_t migration_events[4];
-    const char *model_strs[] = {"hudson", "smc", "smc_prime"};
-    const char *model_str;
+    const char *model_names[] = {"hudson", "smc", "smc_prime"};
+    const char *model_name;
     size_t j;
 
     for (j = 0; j < sizeof(models) / sizeof(int); j++) {
@@ -1882,7 +1880,7 @@ test_multi_locus_simulation(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_scaled_recombination_rate(msp, 1.0);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_model(msp, models[j]);
+        ret = msp_set_simulation_model_non_parametric(msp, models[j]);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1926,10 +1924,10 @@ test_multi_locus_simulation(void)
             CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
         }
 
-        model = msp_get_model(msp);
+        model = msp_get_model(msp)->type;
         CU_ASSERT_EQUAL(model, models[j]);
-        model_str = msp_get_model_str(msp);
-        CU_ASSERT_STRING_EQUAL(model_str, model_strs[j]);
+        model_name = msp_get_model_name(msp);
+        CU_ASSERT_STRING_EQUAL(model_name, model_names[j]);
 
         ret = msp_free(msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -2189,6 +2187,67 @@ test_large_bottleneck_simulation(void)
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+}
+
+static void
+test_multiple_mergers_simulation(void)
+{
+    int ret;
+    size_t j;
+    uint32_t n = 100;
+    uint32_t m = 100;
+    long seed = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    for (j = 0; j < 2; j++) {
+        gsl_rng_set(rng, seed);
+        /* TODO check non-zero sample times here to make sure they fail. */
+        memset(samples, 0, n * sizeof(sample_t));
+        ret = msp_alloc(msp, n, samples, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        /* TODO what are good parameters here?? */
+        if (j == 0) {
+            ret = msp_set_simulation_model_dirac(msp, 1.0);
+        } else {
+            ret = msp_set_simulation_model_beta(msp, 1.0, 10.0);
+        }
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_num_loci(msp, m);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_scaled_recombination_rate(msp, 10.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        /* TODO check for adding various complications like multiple populations etc
+         * to ensure they fail.
+         */
+        ret = msp_initialise(msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        msp_print_state(msp, _devnull);
+
+        ret = msp_run(msp, DBL_MAX, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_TRUE(msp_is_completed(msp));
+        CU_ASSERT_TRUE(msp->time > 0);
+        msp_verify(msp);
+
+        msp_reset(msp);
+        while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+            msp_verify(msp);
+        }
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_TRUE(msp_is_completed(msp));
+
+        ret = msp_free(msp);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
     gsl_rng_free(rng);
     free(msp);
     free(samples);
@@ -5692,6 +5751,7 @@ main(int argc, char **argv)
         {"multi_locus_simulation", test_multi_locus_simulation},
         {"simulation_replicates", test_simulation_replicates},
         {"bottleneck_simulation", test_bottleneck_simulation},
+        {"multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"large_bottleneck_simulation", test_large_bottleneck_simulation},
         {"test_error_messages", test_strerror},
         {"test_node_table", test_node_table},

@@ -305,26 +305,6 @@ out:
     return ret;
 }
 
-static int
-parse_model(char *model_str, int *model)
-{
-    int ret = -1;
-
-    if (strcmp(model_str, "hudson") == 0) {
-        *model = MSP_MODEL_HUDSON;
-    } else if (strcmp(model_str, "smc") == 0) {
-        *model = MSP_MODEL_SMC;
-    } else if (strcmp(model_str, "smc_prime") == 0) {
-        *model = MSP_MODEL_SMC_PRIME;
-    } else {
-        PyErr_Format(PyExc_ValueError, "Unknown model '%s'", model_str);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
 /*
  * Retrieves the PyObject* corresponding the specified key in the
  * specified dictionary.
@@ -372,6 +352,7 @@ get_dict_number(PyObject *dict, const char *key_str)
 out:
     return ret;
 }
+
 
 static PyObject *
 convert_integer_list(size_t *list, size_t size)
@@ -5121,6 +5102,129 @@ out:
 }
 
 static int
+Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
+{
+    int ret = -1;
+    int err = -1;
+    PyObject *py_name = NULL;
+    PyObject *hudson_s = NULL;
+    PyObject *smc_s = NULL;
+    PyObject *smc_prime_s = NULL;
+    PyObject *dirac_s = NULL;
+    PyObject *beta_s = NULL;
+    PyObject *value;
+    int is_hudson, is_smc, is_smc_prime, is_dirac, is_beta;
+    double psi, alpha, truncation_point;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    hudson_s = Py_BuildValue("s", "hudson");
+    if (hudson_s == NULL) {
+        goto out;
+    }
+    smc_s = Py_BuildValue("s", "smc");
+    if (smc_s == NULL) {
+        goto out;
+    }
+    smc_prime_s = Py_BuildValue("s", "smc_prime");
+    if (smc_prime_s == NULL) {
+        goto out;
+    }
+    dirac_s = Py_BuildValue("s", "dirac");
+    if (dirac_s == NULL) {
+        goto out;
+    }
+    beta_s = Py_BuildValue("s", "beta");
+    if (beta_s == NULL) {
+        goto out;
+    }
+    py_name = get_dict_value(py_model, "name");
+    if (py_name == NULL) {
+        goto out;
+    }
+
+    /* We need to go through this tedious rigmarole because of string
+     * handling in Python 3. By pushing the comparison up into Python
+     * we don't need to worry about encodings, etc, etc.
+     */
+    is_hudson = PyObject_RichCompareBool(py_name, hudson_s, Py_EQ);
+    if (is_hudson == -1) {
+        goto out;
+    }
+    if (is_hudson) {
+        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_HUDSON);
+    }
+
+    is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
+    if (is_smc == -1) {
+        goto out;
+    }
+    if (is_smc) {
+        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_SMC);
+    }
+
+    is_smc_prime = PyObject_RichCompareBool(py_name, smc_prime_s, Py_EQ);
+    if (is_smc_prime == -1) {
+        goto out;
+    }
+    if (is_smc_prime) {
+        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_SMC_PRIME);
+    }
+
+    is_dirac = PyObject_RichCompareBool(py_name, dirac_s, Py_EQ);
+    if (is_dirac == -1) {
+        goto out;
+    }
+    if (is_dirac) {
+        value = get_dict_number(py_model, "psi");
+        if (value == NULL) {
+            goto out;
+        }
+        psi = PyFloat_AsDouble(value);
+        /* TODO range checking on psi */
+        err = msp_set_simulation_model_dirac(self->sim, psi);
+    }
+
+    is_beta = PyObject_RichCompareBool(py_name, beta_s, Py_EQ);
+    if (is_beta == -1) {
+        goto out;
+    }
+    if (is_beta) {
+        value = get_dict_number(py_model, "alpha");
+        if (value == NULL) {
+            goto out;
+        }
+        alpha = PyFloat_AsDouble(value);
+        value = get_dict_number(py_model, "truncation_point");
+        if (value == NULL) {
+            goto out;
+        }
+        truncation_point = PyFloat_AsDouble(value);
+        /* TODO range checking on alpha and truncation_point */
+        err = msp_set_simulation_model_beta(self->sim, alpha, truncation_point);
+    }
+
+    if (! (is_hudson || is_smc || is_smc_prime || is_dirac || is_beta)) {
+        PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
+        goto out;
+    }
+    if (err != 0) {
+        handle_input_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(hudson_s);
+    Py_XDECREF(smc_s);
+    Py_XDECREF(smc_prime_s);
+    Py_XDECREF(beta_s);
+    Py_XDECREF(dirac_s);
+    return ret;
+}
+
+
+static int
 Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 {
     int ret = -1;
@@ -5314,13 +5418,13 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     }
     ret = 0;
 out:
-    Py_DECREF(population_parameter_change_s);
-    Py_DECREF(migration_rate_change_s);
-    Py_DECREF(mass_migration_s);
-    Py_DECREF(simple_bottleneck_s);
-    Py_DECREF(instantaneous_bottleneck_s);
-    Py_DECREF(initial_size_s);
-    Py_DECREF(growth_rate_s);
+    Py_XDECREF(population_parameter_change_s);
+    Py_XDECREF(migration_rate_change_s);
+    Py_XDECREF(mass_migration_s);
+    Py_XDECREF(simple_bottleneck_s);
+    Py_XDECREF(instantaneous_bottleneck_s);
+    Py_XDECREF(initial_size_s);
+    Py_XDECREF(growth_rate_s);
     return ret;
 }
 
@@ -5351,13 +5455,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
-    char *model_str = NULL;
+    PyObject *py_model = NULL;
     RandomGenerator *random_generator = NULL;
     sample_t *samples = NULL;
     /* parameter defaults */
     Py_ssize_t sample_size = 2;
     Py_ssize_t num_loci = 1;
-    int model = MSP_MODEL_HUDSON;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
@@ -5369,14 +5472,15 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!snnnnnni", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!O!nnnnnni", kwlist,
             &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
             &num_loci, &scaled_recombination_rate,
             &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
-            &model_str, &max_memory, &avl_node_block_size, &segment_block_size,
+            &PyDict_Type, &py_model,
+            &max_memory, &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &coalescence_record_block_size,
             &migration_block_size, &store_migrations)) {
         goto out;
@@ -5400,15 +5504,10 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
-    if (model_str != NULL) {
-        if (parse_model(model_str, &model) != 0) {
+    if (py_model != NULL) {
+        if (Simulator_parse_simulation_model(self, py_model) != 0) {
             goto out;
         }
-    }
-    sim_ret = msp_set_model(self->sim, model);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
     }
     sim_ret = msp_set_store_migrations(self->sim, (bool) store_migrations);
     if (sim_ret != 0) {
@@ -5483,8 +5582,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     if (demographic_events != NULL) {
-        if (Simulator_parse_demographic_events(self,
-                    demographic_events) != 0) {
+        if (Simulator_parse_demographic_events(self, demographic_events) != 0) {
             goto out;
         }
     }
@@ -5510,11 +5608,50 @@ static PyObject *
 Simulator_get_model(Simulator *self)
 {
     PyObject *ret = NULL;
+    PyObject *d = NULL;
+    PyObject *value = NULL;
+    simulation_model_t *model;
+
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("s", msp_get_model_str(self->sim));
+    model = msp_get_model(self->sim);
+    d = Py_BuildValue("{ss}", "name", msp_get_model_name(self->sim));
+    if (model->type == MSP_MODEL_DIRAC) {
+        value = Py_BuildValue("d", model->params.dirac_coalescent.psi);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "psi", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
+    } else if (model->type == MSP_MODEL_BETA) {
+        value = Py_BuildValue("d", model->params.beta_coalescent.alpha);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "alpha", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
+        value = Py_BuildValue("d", model->params.beta_coalescent.truncation_point);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "truncation_point", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
+    }
+    ret = d;
+    d = NULL;
 out:
+    Py_XDECREF(d);
+    Py_XDECREF(value);
     return ret;
 }
 

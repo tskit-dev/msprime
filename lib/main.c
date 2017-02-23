@@ -109,7 +109,56 @@ out:
     return ret;
 }
 
+static int
+read_model_config(msp_t *msp, config_t *config)
+{
+    int ret = 0;
+    config_setting_t *setting = config_lookup(config, "model");
+    config_setting_t *s;
+    const char *name;
+    double psi, alpha, truncation_point;
 
+    if (setting == NULL) {
+        fatal_error("model is a required parameter");
+    }
+    if (config_setting_is_group(setting) == CONFIG_FALSE) {
+        fatal_error("model not a group");
+    }
+    s = config_setting_get_member(setting, "name");
+    if (s == NULL) {
+        fatal_error("model name not specified");
+    }
+    name = config_setting_get_string(s);
+    if (strcmp(name, "hudson") == 0) {
+        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_HUDSON);
+    } else if (strcmp(name, "smc") == 0) {
+        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_SMC);
+    } else if (strcmp(name, "smc_prime") == 0) {
+        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_SMC_PRIME);
+    } else if (strcmp(name, "dirac") == 0) {
+        s = config_setting_get_member(setting, "psi");
+        if (s == NULL) {
+            fatal_error("dirac model psi not specified");
+        }
+        psi = config_setting_get_float(s);
+        ret = msp_set_simulation_model_dirac(msp, psi);
+    } else if (strcmp(name, "beta") == 0) {
+        s = config_setting_get_member(setting, "alpha");
+        if (s == NULL) {
+            fatal_error("beta model alpha not specified");
+        }
+        alpha = config_setting_get_float(s);
+        s = config_setting_get_member(setting, "truncation_point");
+        if (s == NULL) {
+            fatal_error("beta model truncation_point not specified");
+        }
+        truncation_point = config_setting_get_float(s);
+        ret = msp_set_simulation_model_beta(msp, alpha, truncation_point);
+    } else {
+        fatal_error("Unknown simulation model '%s'", name);
+    }
+    return ret;
+}
 
 static int
 read_population_configuration(msp_t *msp, config_t *config)
@@ -388,7 +437,6 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     int int_tmp;
     double rho;
     size_t sample_size;
-    const char *model;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
     config_setting_t *t;
@@ -459,16 +507,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (t == NULL) {
         fatal_error("model not specified");
     }
-    model = config_setting_get_string(t);
-    if (strcmp(model, "hudson") == 0) {
-        ret = msp_set_model(msp, MSP_MODEL_HUDSON);
-    } else if (strcmp(model, "smc") == 0) {
-        ret = msp_set_model(msp, MSP_MODEL_SMC);
-    } else if (strcmp(model, "smc_prime") == 0) {
-        ret = msp_set_model(msp, MSP_MODEL_SMC_PRIME);
-    } else {
-        fatal_error("Unknown simulation model '%s'", model);
-    }
+    ret = read_model_config(msp, config);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }

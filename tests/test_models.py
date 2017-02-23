@@ -23,6 +23,7 @@ basic properties.
 from __future__ import print_function
 from __future__ import division
 
+import sys
 import unittest
 
 import _msprime
@@ -108,12 +109,83 @@ class TestModelParsing(unittest.TestCase):
         for bad_model in ["NOT", "",  "MODEL"]:
             self.assertRaises(ValueError, msprime.simulate, 10, model=bad_model)
 
-    def test_model_variants(self):
-        for model in ["hudson", "smc", "smc_prime"]:
-            sim = msprime.simulator_factory(sample_size=10, model=model.upper())
+    def test_named_model_variants(self):
+        simulation_models = [
+            ("hudson", msprime.StandardCoalescent),
+            ("smc", msprime.SmcApproxCoalescent),
+            ("smc_prime", msprime.SmcPrimeApproxCoalescent)
+        ]
+        for name, model in simulation_models:
+            sim = msprime.simulator_factory(sample_size=10, model=name.upper())
+            self.assertIsInstance(sim.get_model(), model)
+            sim = msprime.simulator_factory(sample_size=10, model=name.title())
+            self.assertIsInstance(sim.get_model(), model)
+
+    def test_model_instances(self):
+        for bad_type in [1234, {}]:
+            self.assertRaises(
+                TypeError, msprime.simulator_factory, sample_size=2, model=bad_type)
+        models = [
+            msprime.StandardCoalescent(),
+            msprime.SmcApproxCoalescent(),
+            msprime.SmcPrimeApproxCoalescent(),
+            msprime.BetaCoalescent(),
+            msprime.DiracCoalescent(),
+        ]
+        for model in models:
+            sim = msprime.simulator_factory(sample_size=10, model=model)
             self.assertEqual(sim.get_model(), model)
-            sim = msprime.simulator_factory(sample_size=10, model=model.title())
-            self.assertEqual(sim.get_model(), model)
+
+
+class TestParametricModels(unittest.TestCase):
+    """
+    Tests for the parametric simulation models.
+    """
+    def test_beta_coalescent_parameters(self):
+        dbl_max = sys.float_info.max
+        for alpha in [-1, 0, 1.1]:
+            model = msprime.BetaCoalescent(alpha)
+            self.assertEqual(model.alpha, alpha)
+            self.assertEqual(model.truncation_point, dbl_max)
+            d = model.get_ll_representation()
+            self.assertEqual(d, {
+                "name": "beta",
+                "alpha": alpha,
+                "truncation_point": dbl_max})
+        alpha = 2
+        for truncation_point in [0, 3, 1e6]:
+            model = msprime.BetaCoalescent(alpha, truncation_point)
+            self.assertEqual(model.alpha, alpha)
+            self.assertEqual(model.truncation_point, truncation_point)
+            d = model.get_ll_representation()
+            self.assertEqual(d, {
+                "name": "beta",
+                "alpha": alpha,
+                "truncation_point": truncation_point})
+
+    def test_dirac_coalescent_parameters(self):
+        for psi in [-1, 0, 1.1]:
+            model = msprime.DiracCoalescent(psi)
+            self.assertEqual(model.psi, psi)
+            d = model.get_ll_representation()
+            self.assertEqual(d, {"name": "dirac", "psi": psi})
+
+
+class TestMultipleMergerModels(unittest.TestCase):
+    """
+    Runs tests on the multiple merger coalescent models.
+    """
+    def test_dirac_coalescent(self):
+        model = msprime.DiracCoalescent(5)
+        ts = msprime.simulate(sample_size=10, model=model)
+        # TODO real tests
+        self.assertTrue(ts is not None)
+
+    def test_beta_coalescent(self):
+        model = msprime.BetaCoalescent(5)
+        ts = msprime.simulate(sample_size=10, model=model)
+        # TODO real tests
+        self.assertTrue(ts is not None)
 
 
 class TestUnsupportedDemographicEvents(unittest.TestCase):

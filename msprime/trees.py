@@ -874,8 +874,7 @@ def simulator_factory(
     sim = TreeSimulator(the_samples, recomb_map)
     sim.set_store_migrations(record_migrations)
     sim.set_effective_population_size(Ne)
-    if model is not None:
-        sim.set_model(model.lower())
+    sim.set_model(model)
     rng = random_generator
     if rng is None:
         rng = RandomGenerator(_get_random_seed())
@@ -1366,7 +1365,31 @@ class TreeSimulator(object):
         self._demographic_events = demographic_events
 
     def set_model(self, model):
-        self._model = model
+        """
+        Sets the simulation model to the specified value. This may be either a string
+        or a SimulationModel instance. If None, the default simulation model is used
+        (i.e., Hudson's algorithm).
+        """
+        model_map = {
+            "hudson": StandardCoalescent(),
+            "smc": SmcApproxCoalescent(),
+            "smc_prime": SmcPrimeApproxCoalescent()
+        }
+        if model is None:
+            model_instance = StandardCoalescent()
+        elif isinstance(model, str):
+            lower_model = model.lower()
+            if lower_model not in model_map:
+                raise ValueError("Model '{}' unknown. Choose from {}".format(
+                    model, list(model_map.keys())))
+            model_instance = model_map[lower_model]
+        else:
+            if not isinstance(model, SimulationModel):
+                raise TypeError(
+                    "Simulation model must be a string or an instance of "
+                    "SimulationModel")
+            model_instance = model
+        self._model = model_instance
 
     def set_segment_block_size(self, segment_block_size):
         self._segment_block_size = segment_block_size
@@ -1397,6 +1420,7 @@ class TreeSimulator(object):
         ll_demographic_events = [
             event.get_ll_representation(d, Ne)
             for event in self._demographic_events]
+        ll_simulation_model = self._model.get_ll_representation()
         ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
         ll_samples = [(pop, time / (4 * Ne)) for pop, time in self._samples]
         ll_sim = _msprime.Simulator(
@@ -1406,7 +1430,7 @@ class TreeSimulator(object):
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
-            model=self._model,
+            model=ll_simulation_model,
             store_migrations=self._store_migrations,
             scaled_recombination_rate=ll_recombination_rate,
             max_memory=self._max_memory,
@@ -2638,6 +2662,65 @@ class InstantaneousBottleneck(DemographicEvent):
             "Instantaneous bottleneck in population {}: equivalent to {} "
             "generations of the coalescent".format(
                 self.population_id, self.strength))
+
+
+class SimulationModel(object):
+    """
+    Superclass of all simulation models.
+    """
+    name = None
+
+    def get_ll_representation(self):
+        return {"name": self.name}
+
+
+class StandardCoalescent(SimulationModel):
+    """
+    The classical coalescent with recombination model (i.e., Hudson's algorithm).
+    """
+    name = "hudson"
+
+
+class SmcApproxCoalescent(SimulationModel):
+    # TODO document
+    name = "smc"
+
+
+class SmcPrimeApproxCoalescent(SimulationModel):
+    # TODO document
+    name = "smc_prime"
+
+
+class ParametricSimulationModel(SimulationModel):
+    """
+    The superclass of simulation models that require parameters.
+    """
+    def get_ll_representation(self):
+        d = super(ParametricSimulationModel, self).get_ll_representation()
+        d.update(self.__dict__)
+        return d
+
+
+class BetaCoalescent(ParametricSimulationModel):
+    # TODO document.
+    name = "beta"
+
+    # TODO what is a meaningful value for this parameter? Ideally, the default
+    # would be the equivalent of the Kingman coalescent or something similar.
+    def __init__(self, alpha=1, truncation_point=None):
+        self.alpha = alpha
+        if truncation_point is None:
+            truncation_point = sys.float_info.max
+        self.truncation_point = truncation_point
+
+
+class DiracCoalescent(ParametricSimulationModel):
+    # TODO document
+    name = "dirac"
+
+    # TODO What is a meaningful default for this value? See above.
+    def __init__(self, psi=1):
+        self.psi = psi
 
 
 class Population(object):
