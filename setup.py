@@ -100,6 +100,7 @@ class DefineMacros(object):
             ("H5_NO_DEPRECATED_SYMBOLS", None),
             # Define the library version
             ("MSP_LIBRARY_VERSION_STR", '"{}"'.format(self._msprime_version)),
+            ("GSL_DLL)", NONE),
         ]
         return l[index]
 
