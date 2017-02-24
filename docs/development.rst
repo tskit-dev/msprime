@@ -124,6 +124,171 @@ which are used for development. For example, to run the development version of
 C Library
 *********
 
+The low-level code for ``msprime`` is written in C, and is structured as a
+standalone library. This code is all contained in the ``lib`` directory.
+Although the code is structured as a library, it is not intended to be used
+outside of the ``msprime`` project! The interfaces at the C level change
+considerably over time, and are deliberately undocumented.
+
+++++++++++++
+Requirements
+++++++++++++
+
+To compile and develop the C code, a few extra development libraries are needed.
+`Libconfig <http://www.hyperrealm.com/libconfig/>`_ is used for the development CLI
+and `CUnit <http://cunit.sourceforge.net>`_ for unit tests. On Debian/Ubuntu, these
+can be installed using
+
+.. code-block:: bash
+
+    $ sudo apt-get install libcunit1-dev libconfig-dev
+
++++++++++++++++
+Development CLI
++++++++++++++++
+
+When developing the C code, it is usually best to use the development CLI to invoke
+the code. This is much simpler than going through the Python interface, and allows
+tools such as `valgrind <http://valgrind.org>`_ to be used directly. For example,
+when developing new simulation functionality, you should get the basic work done
+using the CLI and only move over to the Python API once you are reasonably sure
+that the code works properly.
+
+The development CLI is written using `libconfig
+<http://www.hyperrealm.com/libconfig/>`_ to parse the simulation parameters
+file, and `argtable3 <https://github.com/argtable/argtable3>`_ to parse the
+command line arguments. The ``argtable3`` code is included in the source (but
+not used in the distributed binaries, since this is strictly a development
+tool).
+
+The CLI is run as follows:
+
+.. code-block:: bash
+
+    $ ./main <command> <arguments>
+
+Running the ``main`` program without arguments will print out a summary of the
+options.
+
+.. warning
+
+    The development CLI is a tool used to develop the msprime API, and not a
+    polished artefact intended for users. There is quite a lot of code left
+    over from earlier debugging which might not make immediate sense. Some
+    commands may not work as expected, or indeed at all. Please feel free to
+    tidy it up if you would like to improve it!
+
+The most important command for simulator development is ``simulate``,
+which takes a configuration file as a parameter and writes the resulting
+simulation to an output file in HDF5 format. For example,
+
+.. code-block:: bash
+
+    $ ./main simulate dev.cfg out.hdf5
+
+
+.. warning
+
+    It is important to note that all values in the low-level C code are in
+    scaled coalescent units. The high-level Python API defines values in units
+    of generations, but for the C code all time is measured in coalescent units.
+
+++++++++++++++++++
+Coding conventions
+++++++++++++++++++
+
+The code is written using the `C99 <https://en.wikipedia.org/wiki/C99>`_ standard. All
+variable declarations should be done at the start of a function, and functions
+kept short and simple where at all possible.
+
+No global or module level variables are used for production code.
+
+The code is organised following object-oriented principles. Each 'class' is defined using
+a struct, which encapsulates all the data it requires. Every 'method' on this class
+is then a function that takes this struct as it's first parameter. Each class has
+an ``alloc`` method, which is responsible for allocating memory and a ``free`` method
+which frees all memory used by the object. For example, the
+`Fenwick tree <https://en.wikipedia.org/wiki/Fenwick_tree>`_ class is defined as
+follows:
+
+.. code-block:: C
+
+    typedef struct {
+        size_t size;
+        size_t log_size;
+        int64_t *tree;
+        int64_t *values;
+    } fenwick_t;
+
+    int fenwick_alloc(fenwick_t *self, size_t initial_size);
+    int fenwick_free(fenwick_t *self);
+    int64_t fenwick_get_total(fenwick_t *self);
+
+This defines the ``fenwick_t`` struct, and alloc and free methods and a method
+to return the total of the tree. Note that we follow the Python convention
+and use ``self`` to refer to the current instance.
+
+Most objects also provide a ``print_state`` method, which is useful for
+debugging.
+
+This object-oriented structure means that the vast majority of the code is
+fully thread safe.
+
+
+++++++++++++++
+Error handling
+++++++++++++++
+
+A critical element of producing reliable C programs is consistent error handling
+and checking of return values. All return values **must** be checked! In msprime,
+all functions (except the most trivial accessors) return an integer to indicate
+success or failure. Any negative value is an error, and must be handled accordingly.
+The following pattern is canonical:
+
+.. code-block:: C
+
+        ret = msp_do_something(self, argument);
+        if (ret != 0) {
+            goto out;
+        }
+        // rest of function
+    out:
+        return ret;
+
+Here we test the return value of ``msp_do_something`` and if it is non-zero,
+abort the function and return this same value from the current function. This
+is a bit like throwing an exception in higher-level languages, but discipline
+is required to ensure that the error codes are propagated back to the original
+caller correctly.
+
+Particular care must be taken in functions that allocate memory, because
+we must ensure that this memory is freed in all possible success and
+failure scenarios. The following pattern is used throughout for this purpose:
+
+.. code-block:: C
+
+        double x = NULL;
+
+        x = malloc(n * sizeof(double));
+        if (x == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        // rest of function
+    out:
+        if (x != NULL) {
+            free(x);
+        }
+        return ret;
+
+
+It is vital here that ``x`` is initialised to ``NULL`` so that we are guaranteed
+correct behaviour in all cases. For this reason, the convention is to declare all
+pointer variables on a single line and to initialise them to ``NULL`` as part
+of the declaration.
+
+Error codes are defined in ``err.h``, and these can be translated into a
+message using ``msp_strerror(err)``.
 
 ******************
 Python C Interface
