@@ -4,10 +4,9 @@
 Developer documentation
 =======================
 
-This is documentation intended for those who wish to develop ``msprime``. If you
-would like to add some features to ``msprime``, please read the following. If
-you think there is anything missing from the documentation, please
-open an `issue <http://github.com/jeromekelleher/msprime/issues>`_ or
+If you would like to add some features to ``msprime``, please read the
+following. If you think there is anything missing,
+please open an `issue <http://github.com/jeromekelleher/msprime/issues>`_ or
 `pull request <http://github.com/jeromekelleher/msprime/pulls>`_ on GitHub!
 
 **********
@@ -16,6 +15,7 @@ Quickstart
 
 - Make a fork of the msprime repo on `GitHub <github.com/jeromekelleher/msprime>`_
 - Clone your fork into a local directory.
+- Install the :ref:`basic requirements <sec-requirements>`.
 - Install the development requirements using ``pip install -r requirements.txt``.
 - Build the lowlevel module by running ``make`` in the project root. If you
   are using Python 2.7, run ``make ext2`` and if you are using Python 3.x,
