@@ -331,9 +331,7 @@ way to ensure that the low-level code is memory-tight is to separate it out
 into an independent library.)
 
 Unfortunately due to a bug in HDF5, when running valgrind on either the tests or the
-development CLI, it appears that there is a memory leak:
-
-.. code-block:: bash
+development CLI, it appears that there is a memory leak::
 
     $ valgrind ./tests fenwick_tree
     ==23308== Memcheck, a memory error detector
