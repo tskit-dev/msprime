@@ -130,9 +130,9 @@ Although the code is structured as a library, it is not intended to be used
 outside of the ``msprime`` project! The interfaces at the C level change
 considerably over time, and are deliberately undocumented.
 
-++++++++++++
-Requirements
-++++++++++++
+++++++
+Basics
+++++++
 
 To compile and develop the C code, a few extra development libraries are needed.
 `Libconfig <http://www.hyperrealm.com/libconfig/>`_ is used for the development CLI
@@ -142,6 +142,9 @@ can be installed using
 .. code-block:: bash
 
     $ sudo apt-get install libcunit1-dev libconfig-dev
+
+Compile the code using ``make``.
+
 
 +++++++++++++++
 Development CLI
@@ -186,12 +189,39 @@ simulation to an output file in HDF5 format. For example,
 
     $ ./main simulate dev.cfg out.hdf5
 
+The development configuration file describes the simulation that we want to
+run, and uses the
+`libconfig syntax <http://www.hyperrealm.com/libconfig/libconfig_manual.html#Configuration-Files>`_.
+An example is given in the file ``dev.cfg`` which should have sufficient documentation
+to be self-explanatory.
 
 .. warning
 
     It is important to note that all values in the low-level C code are in
     scaled coalescent units. The high-level Python API defines values in units
     of generations, but for the C code all time is measured in coalescent units.
+
+++++++++++
+Unit Tests
+++++++++++
+
+The C-library has an extensive suite of unit tests written using
+`CUnit <http://cunit.sourceforge.net>`_. These tests aim to establish that the
+low-level APIs work correctly over a variety of inputs, and particularly, that
+the tests don't result in leaked memory or illegal memory accesses. The tests should be
+periodically run under valgrind to make sure of this. To run all the tests, type
+``./tests``. To run a specific test, provide this test name as a command line argument,
+e.g.:
+
+.. code-block:: bash
+
+    $ ./tests fenwick_tree
+
+
+While 100% test coverage is not feasible for C code, we aim to cover all code
+that can be reached. (Some classes of error such as malloc failures
+and IO errors are difficult to simulate in C.) Code coverate statistics are
+automatically tracked using `CodeCov <https://codecov.io/gh/jeromekelleher/msprime/>`_.
 
 ++++++++++++++++++
 Coding conventions
@@ -205,7 +235,7 @@ No global or module level variables are used for production code.
 
 The code is organised following object-oriented principles. Each 'class' is defined using
 a struct, which encapsulates all the data it requires. Every 'method' on this class
-is then a function that takes this struct as it's first parameter. Each class has
+is then a function that takes this struct as its first parameter. Each class has
 an ``alloc`` method, which is responsible for allocating memory and a ``free`` method
 which frees all memory used by the object. For example, the
 `Fenwick tree <https://en.wikipedia.org/wiki/Fenwick_tree>`_ class is defined as
@@ -290,9 +320,101 @@ of the declaration.
 Error codes are defined in ``err.h``, and these can be translated into a
 message using ``msp_strerror(err)``.
 
+++++++++++++++++
+Running valgrind
+++++++++++++++++
+
+Valgrind is an essential development tool, and is used extensively. (Being able
+to run valgrind was one of the motivating factors in the C-library architecture.
+It is difficult to run valgrind on a Python extension module, and so the simplest
+way to ensure that the low-level code is memory-tight is to separate it out
+into an independent library.)
+
+Unfortunately due to a bug in HDF5, when running valgrind on either the tests or the
+development CLI, it appears that there is a memory leak:
+
+.. code-block:: bash
+
+    $ valgrind ./tests fenwick_tree
+    ==23308== Memcheck, a memory error detector
+    ==23308== Copyright (C) 2002-2015, and GNU GPL'd, by Julian Seward et al.
+    ==23308== Using Valgrind-3.11.0 and LibVEX; rerun with -h for copyright info
+    ==23308== Command: ./tests fenwick_tree
+    ==23308==
+
+
+         CUnit - A unit testing framework for C - Version 2.1-3
+         http://cunit.sourceforge.net/
+
+
+    Suite: msprime
+      Test: fenwick_tree ...passed
+
+    Run Summary:    Type  Total    Ran Passed Failed Inactive
+                  suites      1      0    n/a      0        0
+                   tests     74      1      1      0        0
+                 asserts  39798  39798  39798      0      n/a
+
+    Elapsed time =    0.342 seconds
+    ==23308==
+    ==23308== HEAP SUMMARY:
+    ==23308==     in use at exit: 1,360 bytes in 3 blocks
+    ==23308==   total heap usage: 12,752 allocs, 12,749 frees, 8,295,436 bytes allocated
+    ==23308==
+    ==23308== LEAK SUMMARY:
+    ==23308==    definitely lost: 0 bytes in 0 blocks
+    ==23308==    indirectly lost: 0 bytes in 0 blocks
+    ==23308==      possibly lost: 0 bytes in 0 blocks
+    ==23308==    still reachable: 1,360 bytes in 3 blocks
+    ==23308==         suppressed: 0 bytes in 0 blocks
+    ==23308== Rerun with --leak-check=full to see details of leaked memory
+    ==23308==
+    ==23308== For counts of detected and suppressed errors, rerun with: -v
+    ==23308== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+
+
+Note the "1,360 bytes in 3 blocks" reported as lost. This is harmless,
+and can be ignored.
+
+
 ******************
 Python C Interface
 ******************
+
+++++++++
+Overview
+++++++++
+
+The Python C interface is written using the
+`Python C API <https://docs.python.org/3.6/c-api/>`_ and the code is in the
+``_msprimemodule.c`` file. When compiled, this produces the ``_msprime`` module,
+which is imported by the high-level module. The low-level Python module is
+not intended to be used directly and may change arbitrarily over time.
+
+The usual pattern in the low-level Python API is to define a Python class
+which corresponds to a given "class" in the C API. For example, we define
+a ``TreeSequence`` class, which is essentially a thin wrapper around the
+``tree_sequence_t`` type from the C library.
+
+The ``_msprimemodule.c`` file follows the standard conventions given in the
+`Python documentation <https://docs.python.org/3.6/extending/index.html>`_.
+
+
++++++++++
+Compiling
++++++++++
+
+The ``setup.py`` file descibes the requirements for the low-level ``_msprime``
+module and how it is built from source. To build the module so that it is available
+for use in the current working directory, run
+
+.. code-block:: bash
+
+    $ python setup.py build_ext --inplace
+
+A development Makefile is also provided in the project root, so that running
+``make ext2`` or ``make ext3`` should build the extension module for either
+Python 2 or Python 3.
 
 ++++++++++++++++++++++++
 Testing for memory leaks
@@ -351,4 +473,16 @@ QQ-plots of the statistics in question comparing ``ms`` and ``msprime``.
 
 There are also several "analytical" tests, which compare the distributions of
 values from ``msprime`` with analytical expectations.
+
+*************
+Documentation
+*************
+
+Documentation is written using `Sphinx <http://www.sphinx-doc.org/en/stable/>`_
+and contained in the ``docs`` directory. It is written in the
+`reStructuredText <http://docutils.sourceforge.net/rst.html>`_ format and
+is deployed automatically to `readthedocs <https://readthedocs.org/>`_. To
+build the documentation locally run ``make`` in the ``docs`` directory.
+This should build the HTML documentation in ``docs/_build/html/``.
+
 
