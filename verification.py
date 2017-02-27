@@ -1,6 +1,6 @@
 """
 Script to automate verification of the msprime simulator against
-Hudson's ms.
+known statistical results and benchmark programs such as Hudson's ms.
 """
 from __future__ import print_function
 from __future__ import division
@@ -64,20 +64,20 @@ class SimulationVerifier(object):
     def __init__(self, output_dir):
         self._output_dir = output_dir
         self._instances = {}
-        self._ms_executable = ["./data/ms/ms"]
+        self._ms_executable = ["./data/ms"]
         self._scrm_executable = ["./data/scrm"]
-        self._mspms_executable = ["python", "mspms_dev.py"]
+        self._mspms_executable = [sys.executable, "mspms_dev.py"]
 
     def get_ms_seeds(self):
         max_seed = 2**16
         seeds = [random.randint(1, max_seed) for j in range(3)]
-        return ["-seed"] + map(str, seeds)
+        return ["-seed"] + list(map(str, seeds))
 
     def _run_sample_stats(self, args):
         print("\t", " ".join(args))
         p1 = subprocess.Popen(args, stdout=subprocess.PIPE)
         p2 = subprocess.Popen(
-            ["./data/ms/sample_stats"], stdin=p1.stdout,
+            ["./data/sample_stats"], stdin=p1.stdout,
             stdout=subprocess.PIPE)
         p1.stdout.close()
         output = p2.communicate()[0]
@@ -96,7 +96,7 @@ class SimulationVerifier(object):
             self._mspms_executable + args.split() + self.get_ms_seeds())
 
     def _run_ms_coalescent_stats(self, args):
-        executable = ["./data/ms/ms_summary_stats"]
+        executable = ["./data/ms_summary_stats"]
         with tempfile.TemporaryFile() as f:
             argList = executable + args.split() + self.get_ms_seeds()
             print("\t", " ".join(argList))
@@ -188,8 +188,8 @@ class SimulationVerifier(object):
         T = np.zeros(R)
         j = 0
         for line in output.splitlines():
-            if line.startswith("("):
-                t = dendropy.Tree.get_from_string(line, schema="newick")
+            if line.startswith(b"("):
+                t = dendropy.Tree.get_from_string(str(line), schema="newick")
                 a = t.calc_node_ages()
                 T[j] = a[-1]
                 j += 1
@@ -654,8 +654,7 @@ class SimulationVerifier(object):
         """
         Adds a check for the analytical check for pairwise island model
         """
-        self._instances[
-            "analytical_pairwise_island"] = self.run_pairwise_island_model
+        self._instances["analytical_pairwise_island"] = self.run_pairwise_island_model
 
     def add_smc_num_trees_analytical_check(self):
         """

@@ -16,10 +16,12 @@ Contents:
    :maxdepth: 2
 
    introduction
+   installation
    tutorial
    api
    cli
    file-format
+   development
    CITATION
 
 Indices and tables

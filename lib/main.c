@@ -455,7 +455,6 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("random_seed is a required parameter");
     }
     gsl_rng_set(rng,  (unsigned long) int_tmp);
-
     ret = read_samples(config, &sample_size, &samples);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
