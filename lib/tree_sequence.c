@@ -550,6 +550,10 @@ tree_sequence_check(tree_sequence_t *self)
             ret = MSP_ERR_BAD_MUTATION;
             goto out;
         }
+        if (self->mutations.type[j] > self->mutation_types.num_records) {
+            ret = MSP_ERR_MUTATION_TYPE_OUT_OF_BOUNDS;
+            goto out;
+        }
         for (k = 0; k < self->mutations.num_nodes[j]; k++) {
             u = self->mutations.nodes[j][k];
             if (u < 0 || u >= (node_id_t) self->nodes.num_records) {
@@ -1256,6 +1260,8 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         size_t size;
     };
     struct _dimension_check fields[] = {
+        {"/mutation_types/ancestral_state", 1, self->mutation_types.num_records},
+        {"/mutation_types/derived_state", 1, self->mutation_types.num_records},
         {"/mutations/position", 1, self->mutations.num_records},
         {"/mutations/num_nodes", 1, self->mutations.num_records},
         {"/mutations/nodes", 1, self->mutations.total_nodes},
@@ -1353,6 +1359,7 @@ tree_sequence_read_hdf5_groups(tree_sequence_t *self, hid_t file_id)
         "/edgesets/indexes",
         "/nodes",
         "/edgesets",
+        "/mutation_types",
         "/mutations"
     };
     size_t num_groups = sizeof(groups) / sizeof(const char *);
@@ -1391,6 +1398,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     };
     size_t flattened_name_length;
     struct _dimension_read fields[] = {
+        {"/mutation_types/ancestral_state", &self->mutation_types.num_records},
         {"/mutations/position", &self->mutations.num_records},
         {"/mutations/nodes", &self->mutations.total_nodes},
         {"/provenance", &self->num_provenance_strings},
@@ -1439,10 +1447,6 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         }
     }
     self->nodes.total_name_length = flattened_name_length + self->nodes.num_records;
-    ret = tree_sequence_check_hdf5_dimensions(self, file_id);
-    if (ret != 0) {
-        goto out;
-    }
     ret = 0;
 out:
     return ret;
@@ -1493,9 +1497,14 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/nodes/flags", H5T_NATIVE_UINT32, self->nodes.flags},
         {"/nodes/population", H5T_NATIVE_INT32, self->nodes.population},
         {"/nodes/time", H5T_NATIVE_DOUBLE, self->nodes.time},
+        {"/mutation_types/ancestral_state", H5T_NATIVE_CHAR,
+            self->mutation_types.ancestral_state},
+        {"/mutation_types/derived_state", H5T_NATIVE_CHAR,
+            self->mutation_types.derived_state},
         {"/mutations/nodes", H5T_NATIVE_INT32, self->mutations.nodes_mem},
         {"/mutations/num_nodes", H5T_NATIVE_INT32, self->mutations.num_nodes},
         {"/mutations/position", H5T_NATIVE_DOUBLE, self->mutations.position},
+        {"/mutations/type", H5T_NATIVE_UINT8, self->mutations.type},
         {"/edgesets/left", H5T_NATIVE_DOUBLE, self->edgesets.left},
         {"/edgesets/right", H5T_NATIVE_DOUBLE, self->edgesets.right},
         {"/edgesets/parent", H5T_NATIVE_INT32, self->edgesets.parent},
@@ -1609,6 +1618,10 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
+    ret = tree_sequence_check_hdf5_dimensions(self, file_id);
+    if (ret != 0) {
+        goto out;
+    }
     ret = tree_sequence_alloc(self);
     if (ret != 0) {
         goto out;
@@ -1617,7 +1630,9 @@ tree_sequence_load(tree_sequence_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_check(self);
+    if (flags & MSP_LOAD_EXTENDED_CHECKS) {
+        ret = tree_sequence_check(self);
+    }
 out:
     if (file_id >= 0) {
         status = H5Fclose(file_id);
@@ -1683,6 +1698,12 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/edgesets/indexes/removal_order",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->edgesets.num_records, self->edgesets.indexes.removal_order},
+        {"/mutation_types/ancestral_state",
+            H5T_STD_I8LE, H5T_NATIVE_CHAR,
+            self->mutation_types.num_records, self->mutation_types.ancestral_state},
+        {"/mutation_types/derived_state",
+            H5T_STD_I8LE, H5T_NATIVE_CHAR,
+            self->mutation_types.num_records, self->mutation_types.derived_state},
         {"/mutations/nodes",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->mutations.total_nodes, self->mutations.nodes_mem},
@@ -1692,12 +1713,16 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/mutations/position",
             H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
             self->mutations.num_records, self->mutations.position},
+        {"/mutations/type",
+            H5T_STD_U8LE, H5T_NATIVE_UINT8,
+            self->mutations.num_records, self->mutations.type},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
     struct _hdf5_group_write {
         const char *name;
     };
     struct _hdf5_group_write groups[] = {
+        {"/mutation_types"},
         {"/mutations"},
         {"/nodes"},
         {"/edgesets"},
@@ -1797,7 +1822,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
                     goto out;
                 }
             }
-            if (flags & MSP_ZLIB_COMPRESSION) {
+            if (flags & MSP_DUMP_ZLIB_COMPRESSION) {
                 /* Turn on byte shuffling to improve compression */
                 status = H5Pset_shuffle(plist_id);
                 if (status < 0) {

@@ -224,6 +224,9 @@ msp_strerror(int err)
         case MSP_ERR_BAD_CHILDREN_ARRAY:
             ret = "Malformed array of children.";
             break;
+        case MSP_ERR_MUTATION_TYPE_OUT_OF_BOUNDS:
+            ret = "Mutation type out of bounds";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

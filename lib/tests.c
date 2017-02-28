@@ -5173,7 +5173,7 @@ test_save_hdf5(void)
     tree_sequence_t **examples = get_example_tree_sequences(1);
     tree_sequence_t ts2;
     tree_sequence_t *ts1;
-    int dump_flags[] = {0, MSP_ZLIB_COMPRESSION};
+    int dump_flags[] = {0, MSP_DUMP_ZLIB_COMPRESSION};
 
     CU_ASSERT_FATAL(examples != NULL);
 
@@ -5184,7 +5184,7 @@ test_save_hdf5(void)
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = tree_sequence_initialise(&ts2);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            ret = tree_sequence_load(&ts2, _tmp_file_name, 0);
+            ret = tree_sequence_load(&ts2, _tmp_file_name, MSP_LOAD_EXTENDED_CHECKS);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             /* FIXME storing migrations */
             verify_tree_sequences_equal(ts1, &ts2, false, true, true);
