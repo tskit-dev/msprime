@@ -53,6 +53,7 @@ from _msprime import MutationGenerator
 from _msprime import NodeTable
 from _msprime import EdgesetTable
 from _msprime import MigrationTable
+from _msprime import MutationTypeTable
 from _msprime import MutationTable
 from _msprime import NODE_IS_SAMPLE
 
@@ -157,15 +158,17 @@ def load_coalescence_records(
     node_table.set_columns(flags=flags, time=time, population=population)
     edgeset_table = msprime.EdgesetTable()
     edgeset_table.set_columns(left=left, right=right, parent=parent, children=children)
+    mutation_types_table = msprime.MutationTypeTable()
+    mutation_types_table.add_row("0", "1")
     mutation_table = msprime.MutationTable()
     if mutations is not None:
         for mutation in mutations:
-            mutation_table.add_row(mutation[0], mutation[1])
+            mutation_table.add_row(mutation[0], mutation[1], 0)
 
     ll_ts = _msprime.TreeSequence()
     ll_ts.load_tables(
-        nodes=node_table, edgesets=edgeset_table, mutations=mutation_table,
-        provenance_strings=provenance)
+        nodes=node_table, edgesets=edgeset_table, mutation_types=mutation_types_table,
+        mutations=mutation_table, provenance_strings=provenance)
     ts = msprime.TreeSequence(ll_ts)
     return ts
 
@@ -1176,6 +1179,7 @@ class TreeSimulator(object):
         self.node_table = NodeTable(block_size)
         self.edgeset_table = EdgesetTable(block_size)
         self.migration_table = MigrationTable(block_size)
+        self.mutation_type_table = MutationTypeTable(1)
         self.mutation_table = MutationTable(block_size)
 
     def set_random_generator(self, random_generator):
@@ -1462,11 +1466,13 @@ class TreeSimulator(object):
             Ne=Ne, recombination_map=ll_recomb_map)
         if mutation_generator is not None:
             mutation_generator.generate(
-                self.node_table, self.edgeset_table, self.mutation_table)
+                self.node_table, self.edgeset_table, self.mutation_type_table,
+                self.mutation_table)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.load_tables(
             self.node_table, self.edgeset_table, self.migration_table,
-            self.mutation_table, provenance_strings=provenance_strings)
+            self.mutation_type_table, self.mutation_table,
+            provenance_strings=provenance_strings)
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
@@ -1599,18 +1605,21 @@ class TreeSequence(object):
         node_table = msprime.NodeTable()
         edgeset_table = msprime.EdgesetTable()
         migration_table = msprime.MigrationTable()
+        mutation_types_table = msprime.MutationTypeTable()
         mutation_table = msprime.MutationTable()
         self._ll_tree_sequence.dump_tables(
             nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
-            mutations=mutation_table)
+            mutation_types=mutation_types_table, mutations=mutation_table)
         if mutations is not None:
             position = []
             nodes = []
+            types = []
             for mutation in mutations:
                 position.append(mutation[0])
                 nodes.extend(mutation[1])
                 nodes.append(msprime.NULL_NODE)
-            mutation_table.set_columns(position=position, nodes=nodes)
+                types.append(mutation[2])
+            mutation_table.set_columns(position=position, nodes=nodes, type=types)
         new_ll_ts = _msprime.TreeSequence()
         new_ll_ts.load_tables(
             nodes=node_table, edgesets=edgeset_table, migrations=migration_table,

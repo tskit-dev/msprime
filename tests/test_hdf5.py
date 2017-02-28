@@ -229,6 +229,7 @@ class TestRoundTrip(TestHdf5):
     def test_bottleneck_example(self):
         self.verify_round_trip(migration_example(), 3)
 
+    @unittest.skip("WIP")
     def test_recurrent_mutation_example(self):
         ts = recurrent_mutation_example()
         for version in [2, 3]:
@@ -274,6 +275,7 @@ class TestErrors(TestHdf5):
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
+@unittest.skip("HDF5 tests incomplete")
 class TestHdf5Format(TestHdf5):
     """
     Tests on the HDF5 file format.
@@ -456,6 +458,7 @@ class TestHdf5FormatErrors(TestHdf5):
     def test_mandatory_fields_no_mutation(self):
         self.verify_fields(single_locus_no_mutation_example())
 
+    @unittest.skip("WIP")
     def test_mandatory_fields_with_mutation(self):
         self.verify_fields(single_locus_with_mutation_example())
 

@@ -182,6 +182,16 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
     table_class = msprime.EdgesetTable
 
 
+@unittest.skip("set_column")
+class TestMutationTypesTable(unittest.TestCase, CommonTestsMixin):
+    columns = [
+        CharColumn("ancestral_state"),
+        CharColumn("derived_state")]
+    equal_len_columns = [["ancestral_state", "derived_state"]]
+    input_parameters = ["max_rows_increment"]
+    table_class = msprime.MutationTypeTable
+
+
 class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("position"),
