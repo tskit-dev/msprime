@@ -134,8 +134,8 @@ vargen_next(vargen_t *self, mutation_t **mutation, char *genotypes)
         }
         if (not_done) {
             m = &self->tree.mutations[self->tree_mutation_index];
-            ancestral = m->ancestral_state;
-            derived = m->derived_state;
+            ancestral = '0';
+            derived = '1';
             if (!self->flags & MSP_GENOTYPES_AS_CHAR) {
                 /* TODO how do we gracefully do this for non binary mutations? */
                 if (ancestral != '0' || derived != '1') {

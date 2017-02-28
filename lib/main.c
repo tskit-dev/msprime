@@ -766,13 +766,14 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     const char *provenance[] = {"main.simulate"};
     node_table_t *nodes = malloc(sizeof(node_table_t));
     edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
+    mutation_type_table_t *mutation_types = malloc(sizeof(mutation_type_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
     migration_table_t *migrations = malloc(sizeof(migration_table_t));
 
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL || nodes == NULL || edgesets == NULL
-            || mutations == NULL || migrations == NULL) {
+            || mutation_types == NULL || mutations == NULL || migrations == NULL) {
         goto out;
     }
     ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
@@ -784,6 +785,10 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         goto out;
     }
     ret = node_table_alloc(nodes, 10, 10);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_type_table_alloc(mutation_types, 1);
     if (ret != 0) {
         goto out;
     }
@@ -839,12 +844,12 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_populate_tables(mutgen, mutations);
+        ret = mutgen_populate_tables(mutgen, mutation_types, mutations);
         if (ret != 0) {
             goto out;
         }
         ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
-                mutations, 1, (char **) &provenance);
+                mutation_types, mutations, 1, (char **) &provenance);
         if (ret != 0) {
             goto out;
         }
@@ -857,6 +862,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (verbose >= 1) {
             node_table_print_state(nodes, stdout);
             edgeset_table_print_state(edgesets, stdout);
+            mutation_type_table_print_state(mutation_types, stdout);
             mutation_table_print_state(mutations, stdout);
             migration_table_print_state(migrations, stdout);
             printf("-----------------\n");
@@ -896,6 +902,10 @@ out:
     if (mutations != NULL) {
         mutation_table_free(mutations);
         free(mutations);
+    }
+    if (mutation_types != NULL) {
+        mutation_type_table_free(mutation_types);
+        free(mutation_types);
     }
     if (migrations != NULL) {
         migration_table_free(migrations);

@@ -54,9 +54,8 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     object_heap_print_state(&self->node_heap, out);
     fprintf(out, "mutations\t%d\n", (int) self->num_mutations);
     for (j = 0; j < self->num_mutations; j++) {
-        fprintf(out, "\t%f\t%c->%c\t", self->mutations[j].position,
-                self->mutations[j].ancestral_state,
-                self->mutations[j].derived_state);
+        fprintf(out, "\t%f\t%d\t", self->mutations[j].position,
+                self->mutations[j].type);
         for (k = 0; k < self->mutations[j].num_nodes; k++) {
             fprintf(out, "%d,", (int) self->mutations[j].nodes[k]);
         }
@@ -121,7 +120,7 @@ out:
 
 static int WARN_UNUSED
 mutgen_add_mutation(mutgen_t *self, node_id_t node, double position,
-        char ancestral_state, char derived_state)
+        mutation_type_id_t type)
 {
     int ret = 0;
     mutation_t *tmp_buffer;
@@ -149,8 +148,7 @@ mutgen_add_mutation(mutgen_t *self, node_id_t node, double position,
     self->mutations[self->num_mutations].nodes[0] = node;
     self->mutations[self->num_mutations].num_nodes = 1;
     self->mutations[self->num_mutations].position = position;
-    self->mutations[self->num_mutations].ancestral_state = ancestral_state;
-    self->mutations[self->num_mutations].derived_state = derived_state;
+    self->mutations[self->num_mutations].type = type;
     self->num_mutations++;
 out:
     return ret;
@@ -189,7 +187,7 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
             for (l = 0; l < branch_mutations; l++) {
                 position = gsl_ran_flat(self->rng, left, right);
                 assert(left <= position && position < right);
-                ret = mutgen_add_mutation(self, child, position, '0', '1');
+                ret = mutgen_add_mutation(self, child, position, 0);
                 if (ret != 0) {
                     goto out;
                 }
@@ -204,20 +202,29 @@ out:
 }
 
 int
-mutgen_populate_tables(mutgen_t *self, mutation_table_t *mutations)
+mutgen_populate_tables(mutgen_t *self, mutation_type_table_t *mutation_types,
+        mutation_table_t *mutations)
 {
     int ret = 0;
     mutation_t *mut;
     size_t j;
 
+    ret = mutation_type_table_reset(mutation_types);
+    if (ret != 0) {
+        goto out;
+    }
     ret = mutation_table_reset(mutations);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_type_table_add_row(mutation_types, "0", "1");
     if (ret != 0) {
         goto out;
     }
     for (j = 0; j < self->num_mutations; j++) {
         mut = &self->mutations[j];
         ret = mutation_table_add_row(mutations, mut->position,
-                mut->num_nodes, mut->nodes);
+                mut->num_nodes, mut->nodes, 0);
         if (ret != 0) {
             goto out;
         }

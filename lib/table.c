@@ -424,6 +424,103 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
 }
 
 /*************************
+ * mutation_type table
+ *************************/
+
+int
+mutation_type_table_alloc(mutation_type_table_t *self, size_t max_rows_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(mutation_type_table_t));
+    if (max_rows_increment == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->max_rows_increment = max_rows_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+out:
+    return ret;
+}
+
+static int
+mutation_type_table_expand_main_columns(mutation_type_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_rows) {
+        ret = expand_column((void **) &self->ancestral_state, new_size, sizeof(char));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->derived_state, new_size, sizeof(char));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_rows = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+mutation_type_table_add_row(mutation_type_table_t *self, const char *ancestral_state,
+        const char *derived_state)
+{
+    int ret = 0;
+    size_t new_size;
+
+    if (strlen(ancestral_state) != 1 || strlen(derived_state) != 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (self->num_rows == self->max_rows) {
+        new_size = self->max_rows + self->max_rows_increment;
+        ret = mutation_type_table_expand_main_columns(self, new_size);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    self->ancestral_state[self->num_rows] = ancestral_state[0];
+    self->derived_state[self->num_rows] = derived_state[0];
+    self->num_rows++;
+out:
+    return ret;
+}
+
+/* TODO add set_columns */
+
+int
+mutation_type_table_reset(mutation_type_table_t *self)
+{
+    self->num_rows = 0;
+    return 0;
+}
+
+int
+mutation_type_table_free(mutation_type_table_t *self)
+{
+    msp_safe_free(self->ancestral_state);
+    msp_safe_free(self->derived_state);
+    return 0;
+}
+
+void
+mutation_type_table_print_state(mutation_type_table_t *self, FILE *out)
+{
+    size_t j;
+
+    fprintf(out, "mutation_type_table: %p:%d\t%d\t%d\n", (void *) self,
+            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
+    fprintf(out, "\tindex\tancestral_state\tderived_state\n");
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "\t%d\t%c\t%c\n", (int) j, self->ancestral_state[j],
+            self->derived_state[j]);
+    }
+}
+
+/*************************
  * mutation table
  *************************/
 
@@ -458,6 +555,10 @@ mutation_table_expand_main_columns(mutation_table_t *self, size_t new_size)
         if (ret != 0) {
             goto out;
         }
+        ret = expand_column((void **) &self->type, new_size, sizeof(mutation_type_id_t));
+        if (ret != 0) {
+            goto out;
+        }
         self->max_rows = new_size;
     }
 out:
@@ -482,7 +583,7 @@ out:
 
 int
 mutation_table_add_row(mutation_table_t *self, double position, size_t num_nodes,
-        node_id_t *nodes)
+        node_id_t *nodes, mutation_type_id_t type)
 {
     int ret = 0;
     size_t new_size;
@@ -506,6 +607,7 @@ mutation_table_add_row(mutation_table_t *self, double position, size_t num_nodes
         }
     }
     self->position[self->num_rows] = position;
+    self->type[self->num_rows] = type;
     memcpy(self->nodes + self->nodes_length, nodes, num_nodes * sizeof(node_id_t));
     self->nodes[self->nodes_length + num_nodes] = MSP_NULL_NODE;
     self->nodes_length += 1 + num_nodes;
@@ -553,6 +655,7 @@ mutation_table_free(mutation_table_t *self)
 {
     msp_safe_free(self->position);
     msp_safe_free(self->nodes);
+    msp_safe_free(self->type);
     return 0;
 }
 
@@ -563,7 +666,7 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
 
     fprintf(out, "mutation_table: %p:%d\t%d\t%d\n", (void *) self,
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "\tindex\tposition\tnodes\n");
+    fprintf(out, "\tindex\tposition\tnodes\ttype\n");
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "\t%d\t%f\t", (int) j, self->position[j]);
@@ -575,7 +678,7 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
             }
         }
         offset++;
-        fprintf(out, "\n");
+        fprintf(out, "\t%d\n", self->type[j]);
     }
 }
 

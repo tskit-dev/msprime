@@ -80,10 +80,6 @@ hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
     bool not_done;
     uint32_t j;
 
-    if (mut->ancestral_state != '0' || mut->derived_state != '1') {
-        ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
-        goto out;
-    }
     for (j = 0; j < mut->num_nodes; j++) {
         ret = sparse_tree_get_leaf_list(&self->tree, mut->nodes[j], &w, &tail);
         if (ret != 0) {
@@ -136,6 +132,11 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
     self->tree_sequence = tree_sequence;
+
+    if (self->num_mutations > 0 && tree_sequence->mutation_types.num_records != 1) {
+        ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
+        goto out;
+    }
 
     ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
     if (ret != 0) {
