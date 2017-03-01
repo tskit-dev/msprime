@@ -428,18 +428,29 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
  *************************/
 
 int
-mutation_type_table_alloc(mutation_type_table_t *self, size_t max_rows_increment)
+mutation_type_table_alloc(mutation_type_table_t *self, size_t max_rows_increment,
+        size_t max_total_ancestral_state_length_increment,
+        size_t max_total_derived_state_length_increment)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(mutation_type_table_t));
-    if (max_rows_increment == 0) {
+    if (max_rows_increment == 0 || max_total_ancestral_state_length_increment == 0
+            || max_total_derived_state_length_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->max_rows_increment = max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
+    self->max_total_ancestral_state_length_increment =
+        max_total_ancestral_state_length_increment;
+    self->max_total_ancestral_state_length = 0;
+    self->total_ancestral_state_length = 0;
+    self->max_total_derived_state_length_increment =
+        max_total_derived_state_length_increment;
+    self->max_total_derived_state_length = 0;
+    self->total_derived_state_length = 0;
 out:
     return ret;
 }
@@ -450,15 +461,49 @@ mutation_type_table_expand_main_columns(mutation_type_table_t *self, size_t new_
     int ret = 0;
 
     if (new_size > self->max_rows) {
-        ret = expand_column((void **) &self->ancestral_state, new_size, sizeof(char));
+        ret = expand_column((void **) &self->ancestral_state_length, new_size,
+                sizeof(uint32_t));
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->derived_state, new_size, sizeof(char));
+        ret = expand_column((void **) &self->derived_state_length, new_size,
+                sizeof(uint32_t));
         if (ret != 0) {
             goto out;
         }
         self->max_rows = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
+mutation_type_table_expand_ancestral_state(mutation_type_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_total_ancestral_state_length) {
+        ret = expand_column((void **) &self->ancestral_state, new_size, sizeof(char));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_total_ancestral_state_length = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
+mutation_type_table_expand_derived_state(mutation_type_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_total_derived_state_length) {
+        ret = expand_column((void **) &self->derived_state, new_size, sizeof(char));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_total_derived_state_length = new_size;
     }
 out:
     return ret;
@@ -470,11 +515,9 @@ mutation_type_table_add_row(mutation_type_table_t *self, const char *ancestral_s
 {
     int ret = 0;
     size_t new_size;
+    size_t ancestral_state_length = strlen(ancestral_state);
+    size_t derived_state_length = strlen(derived_state);
 
-    if (strlen(ancestral_state) != 1 || strlen(derived_state) != 1) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
     if (self->num_rows == self->max_rows) {
         new_size = self->max_rows + self->max_rows_increment;
         ret = mutation_type_table_expand_main_columns(self, new_size);
@@ -482,19 +525,90 @@ mutation_type_table_add_row(mutation_type_table_t *self, const char *ancestral_s
             goto out;
         }
     }
-    self->ancestral_state[self->num_rows] = ancestral_state[0];
-    self->derived_state[self->num_rows] = derived_state[0];
+    while (self->total_ancestral_state_length + ancestral_state_length >
+            self->max_total_ancestral_state_length) {
+        ret = mutation_type_table_expand_ancestral_state(self,
+                self->max_total_ancestral_state_length +
+                self->max_total_ancestral_state_length_increment);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    while (self->total_derived_state_length + derived_state_length >
+            self->max_total_derived_state_length) {
+        ret = mutation_type_table_expand_derived_state(self,
+                self->max_total_derived_state_length +
+                self->max_total_derived_state_length_increment);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    self->ancestral_state_length[self->num_rows] = (uint32_t) ancestral_state_length;
+    self->derived_state_length[self->num_rows] = (uint32_t) derived_state_length;
+    memcpy(self->ancestral_state + self->total_ancestral_state_length,
+            ancestral_state, ancestral_state_length);
+    self->total_ancestral_state_length += ancestral_state_length;
+    memcpy(self->derived_state + self->total_derived_state_length,
+            derived_state, derived_state_length);
+    self->total_derived_state_length += derived_state_length;
     self->num_rows++;
 out:
     return ret;
 }
 
-/* TODO add set_columns */
+int
+mutation_type_table_set_columns(mutation_type_table_t *self, size_t num_rows,
+        const char *ancestral_state, uint32_t *ancestral_state_length,
+        const char *derived_state, uint32_t *derived_state_length)
+{
+    int ret = 0;
+    size_t total_ancestral_state_length = 0;
+    size_t total_derived_state_length = 0;
+    size_t j;
+
+    if (ancestral_state == NULL || ancestral_state_length == NULL ||
+            derived_state == NULL || derived_state_length == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
+    for (j = 0; j < num_rows; j++) {
+        total_ancestral_state_length += ancestral_state_length[j];
+        total_derived_state_length += derived_state_length[j];
+    }
+    ret = mutation_type_table_expand_main_columns(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_type_table_expand_ancestral_state(self, total_ancestral_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_type_table_expand_derived_state(self, total_derived_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->ancestral_state, ancestral_state,
+            total_ancestral_state_length * sizeof(char));
+    memcpy(self->ancestral_state_length, ancestral_state_length,
+            num_rows * sizeof(uint32_t));
+    memcpy(self->derived_state, derived_state,
+            total_derived_state_length * sizeof(char));
+    memcpy(self->derived_state_length, derived_state_length,
+            num_rows * sizeof(uint32_t));
+    self->num_rows = num_rows;
+    self->total_ancestral_state_length = total_ancestral_state_length;
+    self->total_derived_state_length = total_derived_state_length;
+out:
+    return ret;
+}
 
 int
 mutation_type_table_reset(mutation_type_table_t *self)
 {
     self->num_rows = 0;
+    self->total_ancestral_state_length = 0;
+    self->total_derived_state_length = 0;
     return 0;
 }
 
@@ -503,20 +617,43 @@ mutation_type_table_free(mutation_type_table_t *self)
 {
     msp_safe_free(self->ancestral_state);
     msp_safe_free(self->derived_state);
+    msp_safe_free(self->ancestral_state_length);
+    msp_safe_free(self->derived_state_length);
     return 0;
 }
 
 void
 mutation_type_table_print_state(mutation_type_table_t *self, FILE *out)
 {
-    size_t j;
+    size_t j, k, ancestral_state_offset, derived_state_offset;
 
-    fprintf(out, "mutation_type_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, "mutation_type_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "\tindex\tancestral_state\tderived_state\n");
+    fprintf(out, "total_ancestral_state_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->total_ancestral_state_length,
+            (int) self->max_total_ancestral_state_length,
+            (int) self->max_total_ancestral_state_length_increment);
+    fprintf(out, "total_derived_state_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->total_derived_state_length,
+            (int) self->max_total_derived_state_length,
+            (int) self->max_total_derived_state_length_increment);
+    fprintf(out,
+        "\tindex\tancestral_state_length\tderived_state_length\tancestral_state\t"
+        "derived_state\n");
+    ancestral_state_offset = 0;
+    derived_state_offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%c\t%c\n", (int) j, self->ancestral_state[j],
-            self->derived_state[j]);
+        fprintf(out, "\t%d\t%d\t%d\t", (int) j, self->ancestral_state_length[j],
+            self->derived_state_length[j]);
+        for (k = 0; k < self->ancestral_state_length[j]; k++) {
+            fprintf(out, "%c", self->ancestral_state[ancestral_state_offset]);
+        }
+        fprintf(out, "\t");
+        for (k = 0; k < self->derived_state_length[j]; k++) {
+            fprintf(out, "%c", self->derived_state[derived_state_offset]);
+        }
+        fprintf(out, "\n");
     }
 }
 

@@ -788,7 +788,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_type_table_alloc(mutation_types, 1);
+    ret = mutation_type_table_alloc(mutation_types, 1, 1, 1);
     if (ret != 0) {
         goto out;
     }

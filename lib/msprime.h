@@ -76,8 +76,16 @@ typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
+    size_t total_ancestral_state_length;
+    size_t max_total_ancestral_state_length;
+    size_t max_total_ancestral_state_length_increment;
+    size_t total_derived_state_length;
+    size_t max_total_derived_state_length;
+    size_t max_total_derived_state_length_increment;
     char *ancestral_state;
     char *derived_state;
+    uint32_t *ancestral_state_length;
+    uint32_t *derived_state_length;
 } mutation_type_table_t;
 
 typedef struct {
@@ -821,10 +829,14 @@ int edgeset_table_reset(edgeset_table_t *self);
 int edgeset_table_free(edgeset_table_t *self);
 void edgeset_table_print_state(edgeset_table_t *self, FILE *out);
 
-int mutation_type_table_alloc(mutation_type_table_t *self, size_t max_rows_increment);
+int mutation_type_table_alloc(mutation_type_table_t *self, size_t max_rows_increment,
+        size_t max_total_ancestral_state_length_increment,
+        size_t max_total_derived_state_length_increment);
 int mutation_type_table_add_row(mutation_type_table_t *self, const char *ancestral_state,
         const char *derived_state);
-/* TODO add set columns */
+int mutation_type_table_set_columns(mutation_type_table_t *self, size_t num_rows,
+        const char *ancestral_state, uint32_t *ancestral_state_length,
+        const char *derived_state, uint32_t *derived_state_length);
 int mutation_type_table_reset(mutation_type_table_t *self);
 int mutation_type_table_free(mutation_type_table_t *self);
 void mutation_type_table_print_state(mutation_type_table_t *self, FILE *out);

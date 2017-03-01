@@ -75,7 +75,7 @@ class CommonTestsMixin(object):
 
     def test_input_parameters_errors(self):
         self.assertGreater(len(self.input_parameters), 0)
-        for param in self.input_parameters:
+        for param, _ in self.input_parameters:
             for bad_value in [-1, 0, -2**10]:
                 self.assertRaises(ValueError, self.table_class, **{param: bad_value})
             for bad_type in [None, ValueError, "ser"]:
@@ -83,13 +83,17 @@ class CommonTestsMixin(object):
 
     def test_input_parameter_values(self):
         self.assertGreater(len(self.input_parameters), 0)
-        for param in self.input_parameters:
+        for param, _ in self.input_parameters:
             for v in [1, 100, 256]:
                 table = self.table_class(**{param: v})
                 self.assertEqual(getattr(table, param), v)
 
     def test_set_columns_interface(self):
         kwargs = {c.name: c.get_input(1) for c in self.columns}
+        for string_col, length_col in self.string_columns:
+            value = string_col.get_input(1)
+            kwargs[string_col.name] = value
+            kwargs[length_col.name] = [1]
         # Make sure this works.
         table = self.table_class()
         table.set_columns(**kwargs)
@@ -108,6 +112,12 @@ class CommonTestsMixin(object):
         num_rows = 100
         input_data = {col.name: col.get_input(num_rows) for col in self.columns}
         col_map = {col.name: col for col in self.columns}
+        for string_col, length_col in self.string_columns:
+            value = string_col.get_input(num_rows)
+            input_data[string_col.name] = value
+            input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
+            col_map[string_col.name] = string_col
+            col_map[length_col.name] = length_col
         table = self.table_class()
         table.set_columns(**input_data)
         for equal_len_col_set in self.equal_len_columns:
@@ -121,7 +131,7 @@ class CommonTestsMixin(object):
         table = self.table_class()
         with self.assertRaises(AttributeError):
             table.num_rows = 10
-        for param in self.input_parameters:
+        for param, default in self.input_parameters:
             with self.assertRaises(AttributeError):
                 setattr(table, param, 2)
         for col in self.columns:
@@ -132,8 +142,8 @@ class CommonTestsMixin(object):
     def test_defaults(self):
         table = self.table_class()
         self.assertEqual(table.num_rows, 0)
-        for param in self.input_parameters:
-            self.assertEqual(getattr(table, param), 1024)
+        for param, default in self.input_parameters:
+            self.assertEqual(getattr(table, param), default)
         for col in self.columns:
             array = getattr(table, col.name)
             self.assertEqual(array.shape, (0,))
@@ -142,6 +152,10 @@ class CommonTestsMixin(object):
         for num_rows in [0, 10, 100, 1000]:
             input_data = {
                 col.name: col.get_input(num_rows) for col in self.columns}
+            for string_col, length_col in self.string_columns:
+                value = string_col.get_input(num_rows)
+                input_data[string_col.name] = value
+                input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
             table = self.table_class()
             table.set_columns(**input_data)
             for colname, input_array in input_data.items():
@@ -157,7 +171,8 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
         DoubleColumn("time"),
         Int32Column("population"),
         CharColumn("name")]
-    input_parameters = ["max_rows_increment"]
+    string_columns = []
+    input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["time", "flags", "population"]]
     table_class = msprime.NodeTable
 
@@ -182,18 +197,23 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
         DoubleColumn("right"),
         Int32Column("parent"),
         Int32Column("children")]
+    string_columns = []
     equal_len_columns = [["left", "right", "parent"]]
-    input_parameters = ["max_rows_increment", "max_children_length_increment"]
+    input_parameters = [
+        ("max_rows_increment", 1024),
+        ("max_children_length_increment", 1024)]
     table_class = msprime.EdgesetTable
 
 
-@unittest.skip("set_column")
-class TestMutationTypesTable(unittest.TestCase, CommonTestsMixin):
-    columns = [
-        CharColumn("ancestral_state"),
-        CharColumn("derived_state")]
-    equal_len_columns = [["ancestral_state", "derived_state"]]
-    input_parameters = ["max_rows_increment"]
+class TestMutationTypeTable(unittest.TestCase, CommonTestsMixin):
+    columns = []
+    string_columns = [
+        (CharColumn("ancestral_state"), UInt32Column("ancestral_state_length")),
+        (CharColumn("derived_state"), UInt32Column("derived_state_length"))]
+    equal_len_columns = [["ancestral_state_length", "derived_state_length"]]
+    input_parameters = [
+        ("max_rows_increment", 1),
+        ("max_length_increment", 1)]
     table_class = msprime.MutationTypeTable
 
 
@@ -202,8 +222,11 @@ class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
         DoubleColumn("position"),
         Int32Column("nodes"),
         UInt8Column("type")]
+    string_columns = []
     equal_len_columns = [["position", "type"]]
-    input_parameters = ["max_rows_increment", "max_nodes_length_increment"]
+    input_parameters = [
+        ("max_rows_increment", 1024),
+        ("max_nodes_length_increment", 1024)]
     table_class = msprime.MutationTable
 
 
@@ -215,6 +238,7 @@ class TestMigrationsTable(unittest.TestCase, CommonTestsMixin):
         Int32Column("source"),
         Int32Column("dest"),
         DoubleColumn("time")]
-    input_parameters = ["max_rows_increment"]
+    string_columns = []
+    input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]
     table_class = msprime.MigrationTable

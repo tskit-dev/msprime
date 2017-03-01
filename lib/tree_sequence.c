@@ -801,7 +801,7 @@ tree_sequence_load_records(tree_sequence_t *self,
         goto out;
     }
     /* TODO update to work with general mutations */
-    ret = mutation_type_table_alloc(mutation_type_table, 1);
+    ret = mutation_type_table_alloc(mutation_type_table, 1, 1, 1);
     if (ret != 0) {
         goto out;
     }

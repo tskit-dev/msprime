@@ -1739,15 +1739,21 @@ MutationTypeTable_init(MutationTypeTable *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"max_rows_increment", NULL};
+    static char *kwlist[] = {"max_rows_increment", "max_length_increment", NULL};
     Py_ssize_t max_rows_increment = 1;
+    Py_ssize_t max_length_increment = 1;
 
     self->mutation_type_table = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &max_rows_increment)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
+                &max_rows_increment, &max_length_increment)) {
         goto out;
     }
     if (max_rows_increment <= 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
+        goto out;
+    }
+    if (max_length_increment <= 0) {
+        PyErr_SetString(PyExc_ValueError, "max_length_increment must be positive");
         goto out;
     }
     self->mutation_type_table = PyMem_Malloc(sizeof(mutation_type_table_t));
@@ -1755,7 +1761,8 @@ MutationTypeTable_init(MutationTypeTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = mutation_type_table_alloc(self->mutation_type_table, max_rows_increment);
+    err = mutation_type_table_alloc(self->mutation_type_table,
+            max_rows_increment, max_length_increment, max_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1792,46 +1799,82 @@ out:
     return ret;
 }
 
-/* TODO implement */
-/* static PyObject * */
-/* MutationTypeTable_set_columns(MutationTypeTable *self, PyObject *args, PyObject *kwds) */
-/* { */
-/*     PyObject *ret = NULL; */
-/*     int err; */
-/*     size_t num_rows = 0; */
-/*     size_t nodes_length = 0; */
-/*     PyObject *position_input = NULL; */
-/*     PyArrayObject *position_array = NULL; */
-/*     PyObject *nodes_input = NULL; */
-/*     PyArrayObject *nodes_array = NULL; */
+static PyObject *
+MutationTypeTable_set_columns(MutationTypeTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    size_t num_rows = 0;
+    size_t j, total_ancestral_state_length, total_derived_state_length,
+        input_total_ancestral_state_length, input_total_derived_state_length;
+    uint32_t *ancestral_state_length, *derived_state_length;
+    PyObject *ancestral_state_input = NULL;
+    PyArrayObject *ancestral_state_array = NULL;
+    PyObject *ancestral_state_length_input = NULL;
+    PyArrayObject *ancestral_state_length_array = NULL;
+    PyObject *derived_state_input = NULL;
+    PyArrayObject *derived_state_array = NULL;
+    PyObject *derived_state_length_input = NULL;
+    PyArrayObject *derived_state_length_array = NULL;
 
-/*     static char *kwlist[] = {"position", "nodes", NULL}; */
+    static char *kwlist[] = {"ancestral_state", "ancestral_state_length",
+        "derived_state", "derived_state_length", NULL};
 
-/*     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO", kwlist, */
-/*                 &position_input, &nodes_input)) { */
-/*         goto out; */
-/*     } */
-/*     position_array = table_read_column_array(position_input, NPY_FLOAT64, */
-/*             &num_rows, false); */
-/*     if (position_array == NULL) { */
-/*         goto out; */
-/*     } */
-/*     nodes_array = table_read_column_array(nodes_input, NPY_INT32, &nodes_length, false); */
-/*     if (nodes_array == NULL) { */
-/*         goto out; */
-/*     } */
-/*     err = mutation_type_table_set_columns(self->mutation_type_table, num_rows, */
-/*             PyArray_DATA(position_array), nodes_length, PyArray_DATA(nodes_array)); */
-/*     if (err != 0) { */
-/*         handle_library_error(err); */
-/*         goto out; */
-/*     } */
-/*     ret = Py_BuildValue(""); */
-/* out: */
-/*     Py_XDECREF(position_array); */
-/*     Py_XDECREF(nodes_array); */
-/*     return ret; */
-/* } */
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
+                &ancestral_state_input, &ancestral_state_length_input,
+                &derived_state_input, &derived_state_length_input)) {
+        goto out;
+    }
+    ancestral_state_length_array = table_read_column_array(ancestral_state_length_input,
+            NPY_UINT32, &num_rows, false);
+    if (ancestral_state_length_array == NULL) {
+        goto out;
+    }
+    derived_state_length_array = table_read_column_array(derived_state_length_input,
+            NPY_UINT32, &num_rows, true);
+    if (derived_state_length_array == NULL) {
+        goto out;
+    }
+    ancestral_state_array = table_read_column_array(ancestral_state_input, NPY_INT8,
+            &input_total_ancestral_state_length, false);
+    if (ancestral_state_array == NULL) {
+        goto out;
+    }
+    derived_state_array = table_read_column_array(derived_state_input, NPY_INT8,
+            &input_total_derived_state_length, false);
+    if (derived_state_array == NULL) {
+        goto out;
+    }
+
+    ancestral_state_length = PyArray_DATA(ancestral_state_length_array);
+    derived_state_length = PyArray_DATA(derived_state_length_array);
+    /* Make sure that the input arrays make sense */
+    total_ancestral_state_length = 0;
+    total_derived_state_length = 0;
+    for (j = 0; j < num_rows; j++) {
+        total_ancestral_state_length += ancestral_state_length[j];
+        total_derived_state_length += derived_state_length[j];
+    }
+    if (total_ancestral_state_length != input_total_ancestral_state_length
+            || total_derived_state_length != input_total_derived_state_length) {
+        PyErr_SetString(PyExc_ValueError, "Length mismatch in table string input");
+        goto out;
+    }
+    err = mutation_type_table_set_columns(self->mutation_type_table, num_rows,
+            PyArray_DATA(ancestral_state_array), ancestral_state_length,
+            PyArray_DATA(derived_state_array), derived_state_length);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    Py_XDECREF(ancestral_state_array);
+    Py_XDECREF(ancestral_state_length_array);
+    Py_XDECREF(derived_state_array);
+    Py_XDECREF(derived_state_length_array);
+    return ret;
+}
 
 static PyObject *
 MutationTypeTable_get_max_rows_increment(MutationTypeTable *self, void *closure)
@@ -1841,6 +1884,19 @@ MutationTypeTable_get_max_rows_increment(MutationTypeTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_type_table->max_rows_increment);
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTypeTable_get_max_length_increment(MutationTypeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (MutationTypeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) self->mutation_type_table->max_total_ancestral_state_length_increment);
 out:
     return ret;
 }
@@ -1866,8 +1922,8 @@ MutationTypeTable_get_ancestral_state(MutationTypeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_type_table->num_rows, self->mutation_type_table->ancestral_state,
-            NPY_INT8, sizeof(char));
+            self->mutation_type_table->total_ancestral_state_length,
+            self->mutation_type_table->ancestral_state, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -1881,8 +1937,38 @@ MutationTypeTable_get_derived_state(MutationTypeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_type_table->num_rows, self->mutation_type_table->derived_state,
-            NPY_INT8, sizeof(char));
+            self->mutation_type_table->total_derived_state_length,
+            self->mutation_type_table->derived_state, NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTypeTable_get_ancestral_state_length(MutationTypeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTypeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_type_table->num_rows,
+            self->mutation_type_table->ancestral_state_length, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTypeTable_get_derived_state_length(MutationTypeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTypeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_type_table->num_rows,
+            self->mutation_type_table->derived_state_length, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1891,6 +1977,9 @@ static PyGetSetDef MutationTypeTable_getsetters[] = {
     {"max_rows_increment",
         (getter) MutationTypeTable_get_max_rows_increment, NULL,
         "The size increment"},
+    {"max_length_increment",
+        (getter) MutationTypeTable_get_max_length_increment, NULL,
+        "The string length increment"},
     {"num_rows",
         (getter) MutationTypeTable_get_num_rows, NULL,
         "The number of rows in the table."},
@@ -1898,14 +1987,18 @@ static PyGetSetDef MutationTypeTable_getsetters[] = {
         "The ancestral state array."},
     {"derived_state", (getter) MutationTypeTable_get_derived_state, NULL,
         "The derived state array."},
+    {"ancestral_state_length", (getter) MutationTypeTable_get_ancestral_state_length, NULL,
+        "The ancestral state_length array."},
+    {"derived_state_length", (getter) MutationTypeTable_get_derived_state_length, NULL,
+        "The derived state_length array."},
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef MutationTypeTable_methods[] = {
     {"add_row", (PyCFunction) MutationTypeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
-    /* {"set_columns", (PyCFunction) MutationTypeTable_set_columns, METH_VARARGS|METH_KEYWORDS, */
-    /*     "Copies the data in the speficied arrays into the columns."}, */
+    {"set_columns", (PyCFunction) MutationTypeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
+        "Copies the data in the speficied arrays into the columns."},
     {NULL}  /* Sentinel */
 };
 
