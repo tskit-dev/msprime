@@ -74,7 +74,7 @@ def recurrent_mutation_example():
     ts = msprime.simulate(
         10, recombination_rate=1, length=10, random_seed=2)
     mutations = [msprime.Mutation(
-        position=j, nodes=tuple(k for k in range(j + 1)), index=j)
+        position=j, nodes=tuple(k for k in range(j + 1)), index=j, type=0)
         for j in range(ts.sample_size)]
     return ts.copy(mutations)
 
@@ -229,7 +229,6 @@ class TestRoundTrip(TestHdf5):
     def test_bottleneck_example(self):
         self.verify_round_trip(migration_example(), 3)
 
-    @unittest.skip("WIP")
     def test_recurrent_mutation_example(self):
         ts = recurrent_mutation_example()
         for version in [2, 3]:

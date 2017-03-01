@@ -678,6 +678,7 @@ class TestVariantGenerator(HighLevelTestCase):
             row = np.fromstring(variant.genotypes, np.uint8) - ord('0')
             self.assertTrue(np.all(A[j] == row))
 
+    @unittest.skip("Update variant to include mutation type info")
     def test_mutation_information(self):
         ts = self.get_tree_sequence()
         for mutation, variant in zip(ts.mutations(), ts.variants()):
@@ -692,13 +693,12 @@ class TestVariantGenerator(HighLevelTestCase):
         variants = list(ts.variants())
         self.assertEqual(len(variants), 0)
 
-    @unittest.skip("WIP")
     def test_recurrent_mutations_over_leaves(self):
         ts = self.get_tree_sequence()
         num_mutations = 5
         mutations = [
             msprime.Mutation(
-                index=j,
+                index=j, type=0,
                 position=ts.sequence_length / num_mutations,
                 nodes=tuple([u for u in range(ts.sample_size)]))
             for j in range(num_mutations)]
@@ -714,7 +714,6 @@ class TestVariantGenerator(HighLevelTestCase):
         for variant in ts.variants():
             self.assertTrue(np.all(variant.genotypes == np.ones(ts.sample_size)))
 
-    @unittest.skip("WIP")
     def test_recurrent_mutations_errors(self):
         ts = self.get_tree_sequence()
         tree = next(ts.trees())
@@ -722,7 +721,7 @@ class TestVariantGenerator(HighLevelTestCase):
             for leaf in tree.leaves(u):
                 if leaf != u:
                     mutations = [
-                        msprime.Mutation(index=0, position=0, nodes=(leaf, u))]
+                        msprime.Mutation(index=0, type=0, position=0, nodes=(leaf, u))]
             ts_new = ts.copy(mutations)
             self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
 
@@ -799,13 +798,12 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         for ts in self.get_bottleneck_examples():
             self.verify_tree_sequence(ts)
 
-    @unittest.skip("WIP")
     def test_recurrent_mutations_over_leaves(self):
         for ts in self.get_bottleneck_examples():
             num_mutations = 5
             mutations = [
                 msprime.Mutation(
-                    index=j,
+                    index=j, type=0,
                     position=ts.sequence_length / num_mutations,
                     nodes=tuple([u for u in range(ts.sample_size)]))
                 for j in range(num_mutations)]
@@ -814,13 +812,12 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             for h in ts_new.haplotypes():
                 self.assertEqual(ones, h)
 
-    @unittest.skip("WIP")
     def test_recurrent_mutations_errors(self):
         for ts in self.get_bottleneck_examples():
             tree = next(ts.trees())
             for u in tree.children(tree.root):
                 mutations = [
-                    msprime.Mutation(index=0, position=0, nodes=(u, tree.root))]
+                    msprime.Mutation(index=0, type=0, position=0, nodes=(u, tree.root))]
                 ts_new = ts.copy(mutations)
                 self.assertRaises(_msprime.LibraryError, ts_new.haplotypes)
 
@@ -932,14 +929,15 @@ class TestTreeSequence(HighLevelTestCase):
                     yield ts
         for ts in self.get_bottleneck_examples():
             yield ts
-        print("FIXME: recurrent mutation example broken!")
         # Make an example with recurrent mutations
-        # n = 10
-        # ts = msprime.simulate(n, length=n, recombination_rate=1)
-        # self.assertGreater(ts.num_trees, 1)
-        # mutations = [
-        #     (j, tuple(u for u in range(j + 1))) for j in range(ts.sample_size)]
-        # yield ts.copy(mutations)
+        n = 10
+        ts = msprime.simulate(n, length=n, recombination_rate=1)
+        self.assertGreater(ts.num_trees, 1)
+        mutations = [
+            msprime.Mutation(
+                position=j, nodes=tuple(u for u in range(j + 1)), type=0, index=j)
+            for j in range(ts.sample_size)]
+        yield ts.copy(mutations)
 
     def test_sparse_trees(self):
         for ts in self.get_example_tree_sequences():
@@ -1379,7 +1377,6 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(ts.get_samples(p), ts.samples(p))
             self.assertEqual(ts.get_samples(), ts.samples())
 
-    @unittest.skip("WIP")
     def test_copy(self):
         for ts1 in self.get_example_tree_sequences():
             ts2 = ts1.copy()
@@ -1977,7 +1974,6 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_mutations(), 0)
 
 
-# @unittest.skip("Problem with samples probably")
 class TestNodeOrdering(HighLevelTestCase):
     """
     Verify that we can use any node ordering for internal nodes

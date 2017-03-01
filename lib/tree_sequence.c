@@ -844,8 +844,8 @@ tree_sequence_load_records(tree_sequence_t *self,
         }
     }
     for (j = 0; j < num_mutations; j++) {
-        ret = mutation_table_add_row(mutation_table, mutations[j].position,
-                mutations[j].num_nodes, mutations[j].nodes, 0);
+        ret = mutation_table_add_row(mutation_table, mutations[j].position, 0,
+                mutations[j].num_nodes, mutations[j].nodes);
         if (ret != 0) {
             goto out;
         }
@@ -1094,7 +1094,11 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-
+    /* mutation types and mutations must be specified together */
+    if ((mutation_types != NULL) != (mutations != NULL)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     ret = node_table_reset(nodes);
     if (ret != 0) {
         goto out;
@@ -1166,8 +1170,8 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         }
         for (j = 0; j < self->mutations.num_records; j++) {
             ret = mutation_table_add_row(mutations,
-                    self->mutations.position[j], (size_t) self->mutations.num_nodes[j],
-                    self->mutations.nodes[j], self->mutations.type[j]);
+                    self->mutations.position[j], self->mutations.type[j],
+                    (size_t) self->mutations.num_nodes[j], self->mutations.nodes[j]);
             if (ret != 0) {
                 goto out;
             }

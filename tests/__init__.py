@@ -23,6 +23,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
+import collections
 import random
 import unittest
 
@@ -157,15 +158,19 @@ class PythonSparseTree(object):
 
 class PythonTreeSequence(object):
     """
-    A python implementation of the TreeDiffIterator algorithm.
+    A python implementation of the TreeSequence object.
     """
     def __init__(self, tree_sequence, breakpoints=None):
         self._tree_sequence = tree_sequence
         self._sample_size = tree_sequence.get_sample_size()
         self._breakpoints = breakpoints
-        self._mutations = [
-            tree_sequence.get_mutation(j) for j in
-            range(tree_sequence.get_num_mutations())]
+        self._mutations = []
+        _Mutation = collections.namedtuple(
+            "Mutation",
+            ["position", "nodes", "index", "type"])
+        for j in range(tree_sequence.get_num_mutations()):
+            pos, nodes, type_, index = tree_sequence.get_mutation(j)
+            self._mutations.append(_Mutation(pos, nodes, index, type_))
 
     def _diffs(self):
         M = self._tree_sequence.get_num_edgesets()
@@ -253,9 +258,7 @@ class PythonTreeSequence(object):
             st.index += 1
             # Add in all the mutations
             st.mutation_list = [
-                (position, node, index) for (position, node, index) in self._mutations
-                if st.left <= position < st.right
-            ]
+                mut for mut in self._mutations if st.left <= mut.position < st.right]
             yield st
 
 

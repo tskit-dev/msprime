@@ -223,8 +223,8 @@ mutgen_populate_tables(mutgen_t *self, mutation_type_table_t *mutation_types,
     }
     for (j = 0; j < self->num_mutations; j++) {
         mut = &self->mutations[j];
-        ret = mutation_table_add_row(mutations, mut->position,
-                mut->num_nodes, mut->nodes, 0);
+        ret = mutation_table_add_row(mutations, mut->position, 0,
+                mut->num_nodes, mut->nodes);
         if (ret != 0) {
             goto out;
         }

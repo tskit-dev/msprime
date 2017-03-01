@@ -129,7 +129,7 @@ def _load_legacy_hdf5_v2(root):
         mutations = num_mutations * [None]
         for j in range(num_mutations):
             mutations[j] = msprime.Mutation(
-                position=position[j], nodes=(node[j],), index=j)
+                position=position[j], nodes=(node[j],), index=j, type=0)
 
     provenance.append(_get_upgrade_provenance(root))
     return msprime.load_coalescence_records(
@@ -176,7 +176,7 @@ def _load_legacy_hdf5_v3(root):
         mutations = num_mutations * [None]
         for j in range(num_mutations):
             mutations[j] = msprime.Mutation(
-                position=position[j], nodes=(node[j],), index=j)
+                position=position[j], nodes=(node[j],), index=j, type=0)
 
     provenance = []
     if "provenance" in root:

@@ -78,7 +78,7 @@ Migration = collections.namedtuple(
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["position", "nodes", "index"])
+    ["position", "nodes", "index", "type"])
 
 
 Variant = collections.namedtuple(
@@ -599,8 +599,8 @@ class SparseTree(object):
             the mutations in this tree.
         :rtype: iter
         """
-        for position, nodes, index in self._ll_sparse_tree.get_mutations():
-            yield Mutation(position, nodes, index)
+        for position, nodes, _type, index in self._ll_sparse_tree.get_mutations():
+            yield Mutation(position, nodes, index, _type)
 
     def _leaf_generator(self, u):
         for v in self.nodes(u):
@@ -1569,7 +1569,7 @@ class TreeSequence(object):
         tokens = line.split()
         position = float(tokens[0])
         nodes = tuple(map(int, tokens[1].split(",")))
-        return Mutation(position=position, nodes=nodes, index=0)
+        return Mutation(position=position, nodes=nodes, index=0, type=0)
 
     @classmethod
     def load_records(cls, records_file_path, mutations_file_path=None):
@@ -1615,15 +1615,15 @@ class TreeSequence(object):
             nodes = []
             types = []
             for mutation in mutations:
-                position.append(mutation[0])
-                nodes.extend(mutation[1])
+                position.append(mutation.position)
+                nodes.extend(mutation.nodes)
                 nodes.append(msprime.NULL_NODE)
-                types.append(mutation[2])
+                types.append(mutation.type)
             mutation_table.set_columns(position=position, nodes=nodes, type=types)
         new_ll_ts = _msprime.TreeSequence()
         new_ll_ts.load_tables(
             nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
-            mutations=mutation_table)
+            mutation_types=mutation_types_table, mutations=mutation_table)
         return TreeSequence(new_ll_ts)
 
     @property
@@ -1862,8 +1862,8 @@ class TreeSequence(object):
         :rtype: iter
         """
         for j in range(self.get_num_mutations()):
-            position, node, index = self._ll_tree_sequence.get_mutation(j)
-            yield Mutation(position, node, index)
+            position, nodes, type_, index = self._ll_tree_sequence.get_mutation(j)
+            yield Mutation(position, nodes, index, type_)
 
     def breakpoints(self):
         """
@@ -1994,13 +1994,13 @@ class TreeSequence(object):
         iterator = _msprime.VariantGenerator(
             self._ll_tree_sequence, genotypes_buffer, as_bytes)
         if as_bytes:
-            for position, nodes, index in iterator:
+            for position, nodes, type_, index in iterator:
                 g = bytes(genotypes_buffer)
                 yield Variant(position=position, nodes=nodes, index=index, genotypes=g)
         else:
             check_numpy()
             g = np.frombuffer(genotypes_buffer, "u1", n)
-            for position, nodes, index in iterator:
+            for position, nodes, type_, index in iterator:
                 yield Variant(position=position, nodes=nodes, index=index, genotypes=g)
 
     def pairwise_diversity(self, samples=None):

@@ -582,8 +582,8 @@ out:
 }
 
 int
-mutation_table_add_row(mutation_table_t *self, double position, size_t num_nodes,
-        node_id_t *nodes, mutation_type_id_t type)
+mutation_table_add_row(mutation_table_t *self, double position, mutation_type_id_t type,
+        size_t num_nodes, node_id_t *nodes)
 {
     int ret = 0;
     size_t new_size;
@@ -618,11 +618,11 @@ out:
 
 int
 mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *position,
-        size_t nodes_length, node_id_t *nodes)
+        mutation_type_id_t *type, size_t nodes_length, node_id_t *nodes)
 {
     int ret = 0;
 
-    if (position == NULL || nodes == NULL) {
+    if (position == NULL || type == NULL || nodes == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -635,6 +635,7 @@ mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *posi
         goto out;
     }
     memcpy(self->position, position, num_rows * sizeof(double));
+    memcpy(self->type, type, num_rows * sizeof(mutation_type_id_t));
     memcpy(self->nodes, nodes, nodes_length * sizeof(node_id_t));
     self->num_rows = num_rows;
     self->nodes_length = nodes_length;

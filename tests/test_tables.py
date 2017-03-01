@@ -40,6 +40,11 @@ class Int32Column(Column):
         return np.arange(n, dtype=np.int32)
 
 
+class UInt8Column(Column):
+    def get_input(self, n):
+        return np.arange(n, dtype=np.uint8)
+
+
 class UInt32Column(Column):
     def get_input(self, n):
         return np.arange(n, dtype=np.uint32)
@@ -195,8 +200,9 @@ class TestMutationTypesTable(unittest.TestCase, CommonTestsMixin):
 class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("position"),
-        Int32Column("nodes")]
-    equal_len_columns = [["position"]]
+        Int32Column("nodes"),
+        UInt8Column("type")]
+    equal_len_columns = [["position", "type"]]
     input_parameters = ["max_rows_increment", "max_nodes_length_increment"]
     table_class = msprime.MutationTable
 

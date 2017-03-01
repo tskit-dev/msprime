@@ -57,7 +57,6 @@ def get_r2_matrix(ts):
     return A
 
 
-@unittest.skip("fix copy")
 class TestLdCalculator(unittest.TestCase):
     """
     Tests for the LdCalculator class.
@@ -143,7 +142,9 @@ class TestLdCalculator(unittest.TestCase):
 
     def test_single_tree_regular_mutations(self):
         ts = msprime.simulate(self.num_test_mutations, length=self.num_test_mutations)
-        mutations = [(j, (j,)) for j in range(self.num_test_mutations)]
+        mutations = [
+            msprime.Mutation(position=j, nodes=(j,), type=0, index=j)
+            for j in range(self.num_test_mutations)]
         ts = ts.copy(mutations)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
@@ -153,7 +154,9 @@ class TestLdCalculator(unittest.TestCase):
             self.num_test_mutations, recombination_rate=1,
             length=self.num_test_mutations)
         self.assertGreater(ts.get_num_trees(), 10)
-        mutations = [(j, (j,)) for j in range(self.num_test_mutations)]
+        mutations = [
+            msprime.Mutation(position=j, nodes=(j,), type=0, index=j)
+            for j in range(self.num_test_mutations)]
         ts = ts.copy(mutations)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)

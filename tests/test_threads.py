@@ -80,7 +80,7 @@ class TestSimulatorThreads(unittest.TestCase):
             self.assertEqual(results[0], result)
 
 
-@unittest.skip("WIP")
+# @unittest.skip("WIP")
 class TestLdCalculatorReplicates(unittest.TestCase):
     """
     Tests the LdCalculator object to ensure we get correct results

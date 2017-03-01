@@ -460,48 +460,6 @@ out:
     return ret;
 }
 
-static inline PyObject *
-convert_mutation(mutation_t *mutation)
-{
-    PyObject *nodes = NULL;
-    PyObject *ret = NULL;
-
-    nodes = convert_node_id_list(mutation->nodes, mutation->num_nodes);
-    if (nodes == NULL) {
-        goto out;
-    }
-    ret = Py_BuildValue("dOn", mutation->position, nodes, (Py_ssize_t) mutation->index);
-out:
-    Py_XDECREF(nodes);
-    return ret;
-
-}
-
-static PyObject *
-convert_mutations(mutation_t *mutations, size_t num_mutations)
-{
-    PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *py_mutation = NULL;
-    size_t j;
-
-    l = PyList_New(num_mutations);
-    if (l == NULL) {
-        goto out;
-    }
-    for (j = 0; j < num_mutations; j++) {
-        py_mutation = convert_mutation(&mutations[j]);
-        if (py_mutation == NULL) {
-            Py_DECREF(l);
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, py_mutation);
-    }
-    ret = l;
-out:
-    return ret;
-}
-
 static PyObject *
 make_coalescence_record(coalescence_record_t *cr)
 {
@@ -578,6 +536,16 @@ make_migration(migration_t *r)
 }
 
 static PyObject *
+make_mutation_type(mutation_type_t *mutation_type)
+{
+    PyObject *ret = NULL;
+
+    ret = Py_BuildValue("ss", mutation_type->ancestral_state,
+            mutation_type->derived_state);
+    return ret;
+}
+
+static PyObject *
 make_mutation(mutation_t *mutation)
 {
     PyObject *nodes = NULL;
@@ -587,9 +555,35 @@ make_mutation(mutation_t *mutation)
     if (nodes == NULL) {
         goto out;
     }
-    ret = Py_BuildValue("dOn", mutation->position, nodes, (Py_ssize_t) mutation->index);
+    ret = Py_BuildValue("dOin", mutation->position, nodes,
+           (int) mutation->type, (Py_ssize_t) mutation->index);
 out:
     Py_XDECREF(nodes);
+    return ret;
+}
+
+static PyObject *
+convert_mutations(mutation_t *mutations, size_t num_mutations)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_mutation = NULL;
+    size_t j;
+
+    l = PyList_New(num_mutations);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_mutations; j++) {
+        py_mutation = make_mutation(&mutations[j]);
+        if (py_mutation == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_mutation);
+    }
+    ret = l;
+out:
     return ret;
 }
 
@@ -2046,8 +2040,8 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
     if (err != 0) {
         goto out;
     }
-    err = mutation_table_add_row(self->mutation_table, position, num_nodes, nodes,
-            (mutation_type_id_t) type);
+    err = mutation_table_add_row(self->mutation_table, position,
+            (mutation_type_id_t) type, num_nodes, nodes);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2072,11 +2066,13 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     PyArrayObject *position_array = NULL;
     PyObject *nodes_input = NULL;
     PyArrayObject *nodes_array = NULL;
+    PyObject *type_input = NULL;
+    PyArrayObject *type_array = NULL;
 
-    static char *kwlist[] = {"position", "nodes", NULL};
+    static char *kwlist[] = {"position", "nodes", "type", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO", kwlist,
-                &position_input, &nodes_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO", kwlist,
+                &position_input, &nodes_input, &type_input)) {
         goto out;
     }
     position_array = table_read_column_array(position_input, NPY_FLOAT64,
@@ -2088,8 +2084,13 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     if (nodes_array == NULL) {
         goto out;
     }
+    type_array = table_read_column_array(type_input, NPY_UINT8, &num_rows, true);
+    if (type_array == NULL) {
+        goto out;
+    }
     err = mutation_table_set_columns(self->mutation_table, num_rows,
-            PyArray_DATA(position_array), nodes_length, PyArray_DATA(nodes_array));
+            PyArray_DATA(position_array), PyArray_DATA(type_array),
+            nodes_length, PyArray_DATA(nodes_array));
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2153,6 +2154,21 @@ out:
 }
 
 static PyObject *
+MutationTable_get_type(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_table->num_rows, self->mutation_table->type, NPY_UINT8,
+            sizeof(uint8_t));
+out:
+    return ret;
+}
+
+static PyObject *
 MutationTable_get_nodes(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -2178,6 +2194,7 @@ static PyGetSetDef MutationTable_getsetters[] = {
         (getter) MutationTable_get_num_rows, NULL,
         "The number of rows in the table."},
     {"position", (getter) MutationTable_get_position, NULL, "The position array"},
+    {"type", (getter) MutationTable_get_type, NULL, "The type array"},
     {"nodes", (getter) MutationTable_get_nodes, NULL, "The nodes array"},
     {NULL}  /* Sentinel */
 };
@@ -2894,6 +2911,10 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+    if ((mutations == NULL) != (mutation_types == NULL)) {
+        PyErr_SetString(PyExc_TypeError, "Must specify both mutations and mutation types");
+        goto out;
+    }
     err = tree_sequence_load_tables_tmp(self->tree_sequence,
         nodes, edgesets, migrations, mutation_types, mutations,
         num_provenance_strings, provenance_strings);
@@ -2962,6 +2983,10 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         mutations = py_mutations->mutation_table;
+    }
+    if ((mutations == NULL) != (mutation_types == NULL)) {
+        PyErr_SetString(PyExc_TypeError, "Must specify both mutations and mutation types");
+        goto out;
     }
     err = tree_sequence_dump_tables_tmp(self->tree_sequence,
         nodes, edgesets, migrations, mutation_types, mutations,
@@ -3154,6 +3179,37 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_mutation_type(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    mutation_type_t record;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_mutation_types(
+        self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_mutation_type(self->tree_sequence,
+            (size_t) record_index, &record);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_mutation_type(&record);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_mutation(TreeSequence *self, PyObject *args)
 {
     int err;
@@ -3183,6 +3239,7 @@ TreeSequence_get_mutation(TreeSequence *self, PyObject *args)
 out:
     return ret;
 }
+
 
 static PyObject *
 TreeSequence_get_num_edgesets(TreeSequence *self, PyObject *args)
@@ -3403,6 +3460,21 @@ out:
     return ret;
 }
 
+static PyObject *
+TreeSequence_get_num_mutation_types(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    size_t num_mutation_types;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_mutation_types = tree_sequence_get_num_mutation_types(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_mutation_types);
+out:
+    return ret;
+}
+
 static PyMemberDef TreeSequence_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -3433,6 +3505,9 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_migration",
         (PyCFunction) TreeSequence_get_migration, METH_VARARGS,
         "Returns the migration record at the specified index."},
+    {"get_mutation_type",
+        (PyCFunction) TreeSequence_get_mutation_type, METH_VARARGS,
+        "Returns the mutation type record at the specified index."},
     {"get_mutation",
         (PyCFunction) TreeSequence_get_mutation, METH_VARARGS,
         "Returns the mutation record at the specified index."},
@@ -3444,6 +3519,8 @@ static PyMethodDef TreeSequence_methods[] = {
         METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
+    {"get_num_mutation_types", (PyCFunction) TreeSequence_get_num_mutation_types,
+        METH_NOARGS, "Returns the number of mutation types" },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
         "Returns the number of mutations" },
     {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
@@ -4995,7 +5072,7 @@ VariantGenerator_next(VariantGenerator *self)
         goto out;
     }
     if (err == 1) {
-        ret = convert_mutation(mutation);
+        ret = make_mutation(mutation);
     }
 out:
     return ret;
