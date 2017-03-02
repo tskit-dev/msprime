@@ -29,6 +29,8 @@
 
 #define DEFAULT_MAX_ROWS_INCREMENT 1024
 
+#define TABLE_SEP "-----------------------------------------\n"
+
 
 static int
 expand_column(void **column, size_t new_max_rows, size_t element_size)
@@ -52,21 +54,21 @@ out:
 
 int
 node_table_alloc(node_table_t *self, size_t max_rows_increment,
-        size_t max_name_length_increment)
+        size_t max_total_name_length_increment)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(node_table_t));
-    if (max_rows_increment == 0 || max_name_length_increment == 0) {
+    if (max_rows_increment == 0 || max_total_name_length_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->max_rows_increment = max_rows_increment;
-    self->max_name_length_increment = max_name_length_increment;
+    self->max_total_name_length_increment = max_total_name_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    self->max_name_length = 0;
-    self->name_length = 0;
+    self->max_total_name_length = 0;
+    self->total_name_length = 0;
 out:
     return ret;
 }
@@ -90,6 +92,10 @@ node_table_expand_fixed_columns(node_table_t *self, size_t new_size)
         if (ret != 0) {
             goto out;
         }
+        ret = expand_column((void **) &self->name_length, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
         self->max_rows = new_size;
     }
 out:
@@ -101,12 +107,12 @@ node_table_expand_name(node_table_t *self, size_t new_size)
 {
     int ret = 0;
 
-    if (new_size > self->max_name_length) {
+    if (new_size > self->max_total_name_length) {
         ret = expand_column((void **) &self->name, new_size, sizeof(char *));
         if (ret != 0) {
             goto out;
         }
-        self->max_name_length = new_size;
+        self->max_total_name_length = new_size;
     }
 out:
     return ret;
@@ -114,15 +120,16 @@ out:
 
 int
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, size_t name_length, char *name)
+        population_id_t *population, char *name, uint32_t *name_length)
 {
     int ret;
+    size_t j, total_name_length;
 
     if (flags == NULL || time == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (name == NULL && name_length > 0) {
+    if ((name == NULL) != (name_length == NULL)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -132,29 +139,28 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
     }
     memcpy(self->flags, flags, num_rows * sizeof(uint32_t));
     memcpy(self->time, time, num_rows * sizeof(double));
+    if (name == NULL) {
+        self->total_name_length = 0;
+        memset(self->name_length, 0, num_rows * sizeof(uint32_t));
+    } else {
+        memcpy(self->name_length, name_length, num_rows * sizeof(uint32_t));
+        total_name_length = 0;
+        for (j = 0; j < num_rows; j++) {
+            total_name_length += name_length[j];
+        }
+        ret = node_table_expand_name(self, total_name_length);
+        if (ret != 0) {
+            goto out;
+        }
+        memcpy(self->name, name, total_name_length * sizeof(char));
+        self->total_name_length = total_name_length;
+    }
     if (population == NULL) {
         memset(self->population, 0xff, num_rows * sizeof(population_id_t));
     } else {
         memcpy(self->population, population, num_rows * sizeof(population_id_t));
     }
     self->num_rows = num_rows;
-    if (name != NULL) {
-        ret = node_table_expand_name(self, name_length);
-        if (ret != 0) {
-            goto out;
-        }
-        memcpy(self->name, name, name_length * sizeof(char));
-        self->name_length = name_length;
-    } else {
-        /* If input name is NULL fill the column with NULLs to designate
-         * all names as the empty string. */
-        ret = node_table_expand_name(self, num_rows);
-        if (ret != 0) {
-            goto out;
-        }
-        memset(self->name, '\0', num_rows * sizeof(char));
-        self->name_length = num_rows;
-    }
 out:
     return ret;
 }
@@ -177,22 +183,20 @@ node_table_add_row(node_table_t *self, uint32_t flags, double time,
             goto out;
         }
     }
-    /* include the sentinel \0 */
-    name_length = 1 + strlen(name);
-    while (self->name_length + name_length
-            >= self->max_name_length) {
-        new_size = self->max_name_length + self->max_name_length_increment;
+    name_length = strlen(name);
+    while (self->total_name_length + name_length >= self->max_total_name_length) {
+        new_size = self->max_total_name_length + self->max_total_name_length_increment;
         ret = node_table_expand_name(self, new_size);
         if (ret != 0) {
             goto out;
         }
     }
-    memcpy(self->name + self->name_length, name, name_length);
-    self->name_length += name_length;
-
+    memcpy(self->name + self->total_name_length, name, name_length);
+    self->total_name_length += name_length;
     self->flags[self->num_rows] = flags;
     self->time[self->num_rows] = time;
     self->population[self->num_rows] = population;
+    self->name_length[self->num_rows] = (uint32_t) name_length;
     self->num_rows++;
 out:
     return ret;
@@ -202,7 +206,7 @@ int
 node_table_reset(node_table_t *self)
 {
     self->num_rows = 0;
-    self->name_length = 0;
+    self->total_name_length = 0;
     return 0;
 }
 
@@ -213,32 +217,35 @@ node_table_free(node_table_t *self)
     msp_safe_free(self->time);
     msp_safe_free(self->population);
     msp_safe_free(self->name);
+    msp_safe_free(self->name_length);
     return 0;
 }
 
 void
 node_table_print_state(node_table_t *self, FILE *out)
 {
-    size_t j, k;
-    const char *name;
+    size_t j, k, offset;
 
-    fprintf(out, "node_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "node_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "\tindex\tflags\ttime\tpopulation\tname\n");
-    assert(self->name_length == 0 || self->name_length >= self->num_rows);
-
-    k = 0;
+    fprintf(out, "total_name_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->total_name_length,
+            (int) self->max_total_name_length,
+            (int) self->max_total_name_length_increment);
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tflags\ttime\tpopulation\tname_length\tname\n");
+    offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%d\t%f\t%d\t", (int) j, self->flags[j], self->time[j],
-                (int) self->population[j]);
-        if (self->name_length == 0) {
-            name = "NULL";
-        } else {
-            assert(k < self->name_length);
-            name = self->name + k;
-            k += 1 + strlen(name);
+        fprintf(out, "%d\t%d\t%f\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
+                (int) self->population[j], self->name_length[j]);
+        for (k = 0; k < self->name_length[j]; k++) {
+            assert(offset < self->total_name_length);
+            fprintf(out, "%c", self->name[offset]);
+            offset++;
         }
-        fprintf(out, "%s\n", name);
+        fprintf(out, "\n");
     }
 }
 
@@ -397,16 +404,21 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
 {
     size_t j, offset;
 
-    fprintf(out,
-        "edgeset_table: %p:num_rows=%d,max_rows=%d,max_rows_increment%d,"
-        "children_length=%d,max_children_length=%d,max_children_length_increment=%d\n",
-            (void *) self, (int) self->num_rows, (int) self->max_rows,
-            (int) self->max_rows_increment, (int) self->children_length,
-            (int) self->max_children_length, (int) self->max_children_length_increment);
-    fprintf(out, "\tindex\tleft\tright\tparent\tchildren\n");
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "edgeset_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
+    /* fprintf(out, */
+    /*     "edgeset_table: %p:num_rows=%d,max_rows=%d,max_rows_increment%d," */
+    /*     "children_length=%d,max_children_length=%d,max_children_length_increment=%d\n", */
+    /*         (void *) self, (int) self->num_rows, (int) self->max_rows, */
+    /*         (int) self->max_rows_increment, (int) self->children_length, */
+    /*         (int) self->max_children_length, (int) self->max_children_length_increment); */
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tleft\tright\tparent\tchildren\n");
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%.3f\t%.3f\t%d\t", (int) j, self->left[j], self->right[j],
+        fprintf(out, "%d\t%.3f\t%.3f\t%d\t", (int) j, self->left[j], self->right[j],
                 (int) self->parent[j]);
         while (offset < self->children_length
                 && self->children[offset] != MSP_NULL_NODE) {
@@ -627,6 +639,7 @@ mutation_type_table_print_state(mutation_type_table_t *self, FILE *out)
 {
     size_t j, k, ancestral_state_offset, derived_state_offset;
 
+    fprintf(out, TABLE_SEP);
     fprintf(out, "mutation_type_table: %p:\n", (void *) self);
     fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
@@ -638,13 +651,14 @@ mutation_type_table_print_state(mutation_type_table_t *self, FILE *out)
             (int) self->total_derived_state_length,
             (int) self->max_total_derived_state_length,
             (int) self->max_total_derived_state_length_increment);
+    fprintf(out, TABLE_SEP);
     fprintf(out,
-        "\tindex\tancestral_state_length\tderived_state_length\tancestral_state\t"
+        "index\tancestral_state_length\tderived_state_length\tancestral_state\t"
         "derived_state\n");
     ancestral_state_offset = 0;
     derived_state_offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%d\t%d\t", (int) j, self->ancestral_state_length[j],
+        fprintf(out, "%d\t%d\t%d\t", (int) j, self->ancestral_state_length[j],
             self->derived_state_length[j]);
         for (k = 0; k < self->ancestral_state_length[j]; k++) {
             fprintf(out, "%c", self->ancestral_state[ancestral_state_offset]);
@@ -802,12 +816,16 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
 {
     size_t j, offset;
 
-    fprintf(out, "mutation_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "mutation_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "\tindex\tposition\tnodes\ttype\n");
+    // TODO insert length increment rows
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tposition\tnodes\ttype\n");
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%f\t", (int) j, self->position[j]);
+        fprintf(out, "%d\t%f\t", (int) j, self->position[j]);
         while (self->nodes[offset] != MSP_NULL_NODE) {
             fprintf(out, "%d", (int) self->nodes[offset]);
             offset++;
@@ -953,11 +971,14 @@ migration_table_print_state(migration_table_t *self, FILE *out)
 {
     size_t j;
 
-    fprintf(out, "migration_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "migration_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "\tindex\tleft\tright\tnode\tsource\tdest\tpopulation\n");
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tleft\tright\tnode\tsource\tdest\tpopulation\n");
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
+        fprintf(out, "%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
                 self->right[j], (int) self->node[j], (int) self->source[j],
                 (int) self->dest[j], self->time[j]);
     }

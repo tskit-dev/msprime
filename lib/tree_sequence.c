@@ -73,6 +73,65 @@ cmp_record_time_left(const void *a, const void *b) {
     return ret;
 }
 
+/* Initialise the strings represented by the flattened source array
+ * and list of lengths into the specified memory and pointers.
+ */
+static int WARN_UNUSED
+init_string_column(size_t num_rows, char *source, uint32_t *length,
+        char **pointers, char *mem)
+{
+    int ret = 0;
+    size_t j, k, mem_offset, source_offset;
+
+    mem_offset = 0;
+    source_offset = 0;
+    for (j = 0; j < num_rows; j++) {
+        pointers[j] = mem + mem_offset;
+        for (k = 0; k < length[j]; k++) {
+            mem[mem_offset] = source[source_offset];
+            source_offset++;
+            mem_offset++;
+        }
+        mem[mem_offset] = '\0';
+        mem_offset++;
+    }
+    return ret;
+}
+
+static int WARN_UNUSED
+flatten_string_column(size_t total_length, char *mem, char *flattened)
+{
+    int ret = 0;
+    size_t j, k;
+
+    /* fill in the array */
+    k = 0;
+    for (j = 0; j < total_length; j++) {
+        if (mem[j] != '\0') {
+            flattened[k] = mem[j];
+            k++;
+        }
+    }
+    return ret;
+}
+
+static int WARN_UNUSED
+validate_length(size_t num_rows, uint32_t *length, size_t total_length)
+{
+    int ret = 0;
+    size_t j;
+    size_t sum = 0;
+
+    for (j = 0; j < num_rows; j++) {
+        sum += length[j];
+    }
+    if (sum != total_length) {
+        ret = MSP_ERR_LENGTH_MISMATCH;
+    }
+    return ret;
+
+}
+
 static void
 tree_sequence_check_state(tree_sequence_t *self)
 {
@@ -589,22 +648,14 @@ out:
 static int
 tree_sequence_init_nodes(tree_sequence_t *self)
 {
-    size_t j, k;
+    size_t j;
     int ret = 0;
 
     self->sample_size = 0;
-    k = 0;
     for (j = 0; j < self->nodes.num_records; j++) {
         if (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE) {
             self->sample_size++;
         }
-        self->nodes.name_length[j] = 0;
-        self->nodes.name[j] = self->nodes.name_mem + k;
-        while (k < self->nodes.total_name_length && self->nodes.name_mem[k] != '\0') {
-            self->nodes.name_length[j]++;
-            k++;
-        }
-        k++;
     }
     if (self->nodes.num_records > 0 && self->sample_size == 0) {
         ret = MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE;
@@ -949,7 +1000,8 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
 
     self->num_provenance_strings = num_provenance_strings;
     self->nodes.num_records = nodes->num_rows;
-    self->nodes.total_name_length = nodes->name_length;
+    /* name_mem here contains terminal NULLs, so we need more space */
+    self->nodes.total_name_length = nodes->total_name_length + nodes->num_rows;
     self->edgesets.total_children = edgesets->children_length - edgesets->num_rows;
     self->edgesets.num_records = edgesets->num_rows;
     self->mutation_types.num_records = 0;
@@ -987,7 +1039,13 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     memcpy(self->nodes.flags, nodes->flags, nodes->num_rows * sizeof(uint32_t));
     memcpy(self->nodes.population, nodes->population,
             nodes->num_rows * sizeof(population_id_t));
-    memcpy(self->nodes.name_mem, nodes->name, nodes->name_length * sizeof(char));
+    memcpy(self->nodes.name_length, nodes->name_length, nodes->num_rows * sizeof(uint32_t));
+    ret = init_string_column(nodes->num_rows, nodes->name, nodes->name_length,
+            self->nodes.name, self->nodes.name_mem);
+    if (ret != 0) {
+        goto out;
+    }
+    /* memcpy(self->nodes.name_mem, nodes->name, nodes->total_name_length * sizeof(char)); */
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {
         goto out;
@@ -1457,30 +1515,6 @@ out:
 }
 
 static int
-tree_sequence_init_node_names(tree_sequence_t *self, size_t flattened_name_length,
-        char *flattened_name)
-{
-    int ret = 0;
-    size_t input_offset = 0;
-    size_t output_offset = 0;
-    size_t j, k;
-
-    for (j = 0; j < self->nodes.num_records; j++) {
-        for (k = 0; k < self->nodes.name_length[j]; k++) {
-            assert(input_offset < flattened_name_length);
-            assert(output_offset < self->nodes.total_name_length);
-            self->nodes.name_mem[output_offset] = flattened_name[input_offset];
-            input_offset++;
-            output_offset++;
-        }
-        assert(output_offset < self->nodes.total_name_length);
-        self->nodes.name_mem[output_offset] = '\0';
-        output_offset++;
-    }
-    return ret;
-}
-
-static int
 tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
 {
     herr_t status;
@@ -1566,7 +1600,13 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     if (status < 0) {
         goto out;
     }
-    ret = tree_sequence_init_node_names(self, flattened_name_length, flattened_name);
+    ret = validate_length(self->nodes.num_records, self->nodes.name_length,
+            flattened_name_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = init_string_column(self->nodes.num_records, flattened_name,
+            self->nodes.name_length, self->nodes.name, self->nodes.name_mem);
     if (ret != 0) {
         goto out;
     }
@@ -1733,7 +1773,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/edgesets/indexes"},
     };
     size_t num_groups = sizeof(groups) / sizeof(struct _hdf5_group_write);
-    size_t j, k;
+    size_t j;
 
     /* We need to use separate types for storage and memory here because
      * we seem to get a memory leak in HDF5 otherwise.*/
@@ -1768,15 +1808,8 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        /* fill in the array */
-        k = 0;
-        for (j = 0; j < self->nodes.total_name_length; j++) {
-            if (self->nodes.name_mem[j] != '\0') {
-                flattened_name[k] = self->nodes.name_mem[j];
-                k++;
-            }
-        }
-        assert(k == flattened_name_length);
+        ret = flatten_string_column(self->nodes.total_name_length, self->nodes.name_mem,
+                flattened_name);
         fields[1].size = flattened_name_length;
         fields[1].source = flattened_name;
     }

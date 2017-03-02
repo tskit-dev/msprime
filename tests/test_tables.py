@@ -23,11 +23,21 @@ between simulations and the tree sequence.
 from __future__ import print_function
 from __future__ import division
 
+import random
+import string
 import unittest
 
 import numpy as np
 
 import msprime
+
+
+def random_string(max_length):
+    """
+    Returns a random character string of the specified maximum length.
+    """
+    length = random.randint(0, max_length)
+    return "".join(random.choice(string.printable) for _ in range(length))
 
 
 class Column(object):
@@ -87,6 +97,23 @@ class CommonTestsMixin(object):
             for v in [1, 100, 256]:
                 table = self.table_class(**{param: v})
                 self.assertEqual(getattr(table, param), v)
+
+    def test_set_columns_string_errors(self):
+        inputs = {c.name: c.get_input(1) for c in self.columns}
+        for string_col, length_col in self.string_columns:
+            value = string_col.get_input(1)
+            inputs[string_col.name] = value
+            inputs[length_col.name] = [1]
+        # Make sure this works.
+        table = self.table_class()
+        table.set_columns(**inputs)
+        for string_col, length_col in self.string_columns:
+            kwargs = dict(inputs)
+            del kwargs[string_col.name]
+            self.assertRaises(TypeError, table.set_columns, **kwargs)
+            kwargs = dict(inputs)
+            del kwargs[length_col.name]
+            self.assertRaises(TypeError, table.set_columns, **kwargs)
 
     def test_set_columns_interface(self):
         kwargs = {c.name: c.get_input(1) for c in self.columns}
@@ -169,25 +196,51 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         UInt32Column("flags"),
         DoubleColumn("time"),
-        Int32Column("population"),
-        CharColumn("name")]
-    string_columns = []
+        Int32Column("population")]
+    string_columns = [(CharColumn("name"),  UInt32Column("name_length"))]
     input_parameters = [("max_rows_increment", 1024)]
-    equal_len_columns = [["time", "flags", "population"]]
+    equal_len_columns = [["time", "flags", "population", "name_length"]]
     table_class = msprime.NodeTable
 
-    def test_variable_stuff(self):
-        flags = np.arange(3, dtype=np.uint32)
-        time = np.arange(3)
-        names = [b"one", b"two", b"three"]
-        packed = np.frombuffer(b'\0'.join(names + [b""]), dtype=np.int8)
-        table = msprime.NodeTable()
-        table.set_columns(flags=flags, time=time, name=packed)
-        self.assertTrue(np.all(table.flags == flags))
-        self.assertTrue(np.all(table.time == time))
-        self.assertTrue(np.all(table.name == packed))
-        unpacked = table.name.tostring().split(b"\0")[:-1]
-        self.assertEqual(unpacked, names)
+    def test_optional_population(self):
+        for num_rows in [0, 10, 100]:
+            names = [str(j) for j in range(num_rows)]
+            name, name_length = msprime.pack_strings(names)
+            flags = list(range(num_rows))
+            time = list(range(num_rows))
+            table = msprime.NodeTable()
+            table.set_columns(
+                name=name, name_length=name_length, flags=flags, time=time)
+            self.assertEqual(list(table.population), [-1 for _ in range(num_rows)])
+            self.assertEqual(list(table.flags), flags)
+            self.assertEqual(list(table.time), time)
+            self.assertEqual(list(table.name), list(name))
+            self.assertEqual(list(table.name_length), list(name_length))
+
+    def test_random_names(self):
+        for num_rows in [0, 10, 100]:
+            names = [random_string(10) for _ in range(num_rows)]
+            name, name_length = msprime.pack_strings(names)
+            flags = list(range(num_rows))
+            time = list(range(num_rows))
+            table = msprime.NodeTable()
+            table.set_columns(
+                name=name, name_length=name_length, flags=flags, time=time)
+            self.assertEqual(list(table.flags), flags)
+            self.assertEqual(list(table.time), time)
+            self.assertEqual(list(table.name), list(name))
+            self.assertEqual(list(table.name_length), list(name_length))
+            unpacked_names = msprime.unpack_strings(table.name, table.name_length)
+            self.assertEqual(names, unpacked_names)
+
+    def test_optional_names(self):
+        for num_rows in [0, 10, 100]:
+            flags = list(range(num_rows))
+            time = list(range(num_rows))
+            table = msprime.NodeTable()
+            table.set_columns(flags=flags, time=time)
+            self.assertEqual(len(list(table.name)), 0)
+            self.assertEqual(list(table.name_length), [0 for _ in range(num_rows)])
 
 
 class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
@@ -242,3 +295,36 @@ class TestMigrationsTable(unittest.TestCase, CommonTestsMixin):
     input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]
     table_class = msprime.MigrationTable
+
+
+class TestStringPacking(unittest.TestCase):
+    """
+    Tests the code for packing and unpacking strings into numpy arrays.
+    """
+
+    def test_simple_case(self):
+        strings = ["hello", "world"]
+        packed, length = msprime.pack_strings(strings)
+        self.assertEqual(list(length), [5, 5])
+        self.assertEqual(packed.shape, (10,))
+        returned = msprime.unpack_strings(packed, length)
+        self.assertEqual(returned, strings)
+
+    def verify_packing(self, strings):
+        packed, length = msprime.pack_strings(strings)
+        self.assertEqual(packed.dtype, np.int8)
+        self.assertEqual(length.dtype, np.uint32)
+        self.assertEqual(list(length), [len(s) for s in strings])
+        self.assertEqual(packed.shape[0], np.sum(length))
+        returned = msprime.unpack_strings(packed, length)
+        self.assertEqual(strings, returned)
+
+    def test_regular_cases(self):
+        for n in range(10):
+            strings = ["a" * j for j in range(n)]
+            self.verify_packing(strings)
+
+    def test_random_cases(self):
+        for n in range(100):
+            strings = [random_string(10) for _ in range(n)]
+            self.verify_packing(strings)

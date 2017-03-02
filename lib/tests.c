@@ -5406,10 +5406,13 @@ test_node_table(void)
     uint32_t *flags;
     population_id_t *population;
     double *time;
-    char *s, *name;
+    char *name;
+    uint32_t *name_length;
     const char *test_name = "test";
     size_t test_name_length = 4;
+    char name_copy[test_name_length + 1];
 
+    name_copy[test_name_length] = '\0';
     ret = node_table_alloc(&table, 0, 1);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = node_table_alloc(&table, 1, 0);
@@ -5428,15 +5431,15 @@ test_node_table(void)
         CU_ASSERT_EQUAL(table.time[j], j);
         CU_ASSERT_EQUAL(table.population[j], j);
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
-        CU_ASSERT_EQUAL(table.name_length, (j + 1) * (test_name_length + 1));
+        CU_ASSERT_EQUAL(table.total_name_length, (j + 1) * test_name_length);
         /* check the name */
-        s = table.name + table.name_length - (j + 1) * (test_name_length + 1);
-        CU_ASSERT_STRING_EQUAL(s, test_name);
-        CU_ASSERT_EQUAL(table.name[table.name_length - 1], '\0');
+        memcpy(name_copy, table.name + j * test_name_length, test_name_length);
+        CU_ASSERT_STRING_EQUAL(name_copy, test_name);
     }
     node_table_print_state(&table, _devnull);
     node_table_reset(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
+    CU_ASSERT_EQUAL(table.total_name_length, 0);
 
     num_rows *= 2;
     flags = malloc(num_rows * sizeof(uint32_t));
@@ -5448,49 +5451,66 @@ test_node_table(void)
     time = malloc(num_rows * sizeof(double));
     CU_ASSERT_FATAL(time != NULL);
     memset(time, 0, num_rows * sizeof(double));
-    name = malloc(2 * num_rows * sizeof(char));
+    name = malloc(num_rows * sizeof(char));
+    memset(name, 'a', num_rows * sizeof(char));
+    CU_ASSERT_FATAL(name != NULL);
+    name_length = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(name_length != NULL);
     for (j = 0; j < num_rows; j++) {
-        name[2 * j] = 'a';
-        name[2 * j + 1] = '\0';
+        name_length[j] = 1;
     }
     ret = node_table_set_columns(&table, num_rows, flags, time, population,
-            2 * num_rows, name);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(table.num_rows, num_rows);
-    CU_ASSERT_EQUAL(table.name_length, 2 * num_rows);
-
-    /* If population is NULL it should be set the -1. If name is NULL all names
-     * should be set to the empty string. */
-    num_rows = 10;
-    memset(population, 0xff, num_rows * sizeof(uint32_t));
-    memset(name, '\0', num_rows * sizeof(char));
-    ret = node_table_set_columns(&table, num_rows, flags, time, NULL, 0, NULL);
+            name, name_length);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.name, name, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name_length, name_length, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
-    CU_ASSERT_EQUAL(table.name_length, num_rows);
-    node_table_print_state(&table, _devnull);
+    CU_ASSERT_EQUAL(table.total_name_length, num_rows);
+
+    /* If population is NULL it should be set the -1. If name is NULL all names
+     * should be set to the empty string. */
+    num_rows = 10;
+    memset(population, 0xff, num_rows * sizeof(uint32_t));
+    ret = node_table_set_columns(&table, num_rows, flags, time, NULL, name, name_length);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name, name, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name_length, name_length, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.total_name_length, num_rows);
 
     /* flags and time cannot be NULL */
-    ret = node_table_set_columns(&table, num_rows, NULL, time, population, 0, NULL);
+    ret = node_table_set_columns(&table, num_rows, NULL, time, population, name, name_length);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = node_table_set_columns(&table, num_rows, flags, NULL, population, 0, NULL);
+    ret = node_table_set_columns(&table, num_rows, flags, NULL, population, name, name_length);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    /* if name is null, total name length must be 0 */
-    ret = node_table_set_columns(&table, num_rows, flags, time, population, 1, NULL);
+    ret = node_table_set_columns(&table, num_rows, flags, time, population, NULL, name_length);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = node_table_set_columns(&table, num_rows, flags, time, population, name, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    /* if name and name_length are both null, all names are zero length */
+    num_rows = 10;
+    memset(name_length, 0, num_rows * sizeof(uint32_t));
+    ret = node_table_set_columns(&table, num_rows, flags, time, NULL, NULL, NULL);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name_length, name_length, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.total_name_length, 0);
 
     node_table_free(&table);
     free(flags);
     free(population);
     free(time);
     free(name);
+    free(name_length);
 }
 
 static void

@@ -3071,19 +3071,18 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertEqual(table.population, [-1])
         self.assertEqual(table.flags, [0])
         self.assertEqual(table.time, [0])
-        self.assertEqual(table.name, [0])
+        self.assertEqual(list(table.name), [])
+        self.assertEqual(list(table.name_length), [0])
 
-        # TODO issues here with Python2 and 3 when importing the name. Not
-        # easy, possibly will need to change the model back to storing the
-        # length rather than zero delimiting.
+        name = "abcde"
         table = _msprime.NodeTable()
-        table.add_row(flags=5, population=10, time=1.23, name="")
+        table.add_row(flags=5, population=10, time=1.23, name=name)
         self.assertEqual(table.num_rows, 1)
         self.assertEqual(table.population, [10])
         self.assertEqual(table.flags, [5])
         self.assertEqual(table.time, [1.23])
-        stored_name = list(table.name)
-        self.assertEqual(stored_name, [0])
+        self.assertEqual(list(table.name), [ord(c) for c in name])
+        self.assertEqual(list(table.name_length), [len(name)])
 
     def test_node_table_add_row_errors(self):
         table = _msprime.NodeTable()

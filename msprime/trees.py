@@ -173,6 +173,33 @@ def load_coalescence_records(
     return ts
 
 
+def pack_strings(strings):
+    """
+    Packs the specified list of strings into a flattened numpy array of characters
+    and corresponding lengths.
+    """
+    check_numpy()
+    lengths = np.array([len(s) for s in strings], dtype=np.uint32)
+    encoded = ("".join(strings)).encode()
+    return np.fromstring(encoded, dtype=np.int8), lengths
+
+
+def unpack_strings(packed, length):
+    """
+    Unpacks a list of string from the specified numpy arrays of packed character
+    data and corresponding lengths.
+    """
+    # This could be done a lot more efficiently...
+    check_numpy()
+    ret = []
+    offset = 0
+    for l in length:
+        raw = packed[offset: offset + l].tostring()
+        ret.append(raw.decode())
+        offset += l
+    return ret
+
+
 def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
     """
     Returns true if the specified pair of integers are equal to

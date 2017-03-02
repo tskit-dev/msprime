@@ -227,6 +227,9 @@ msp_strerror(int err)
         case MSP_ERR_MUTATION_TYPE_OUT_OF_BOUNDS:
             ret = "Mutation type out of bounds";
             break;
+        case MSP_ERR_LENGTH_MISMATCH:
+            ret = "Mismatch in stored total column length and sum of row lengths";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
