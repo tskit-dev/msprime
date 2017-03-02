@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -21,7 +21,10 @@ from __future__ import print_function
 
 import subprocess
 import platform
+import os
+import os.path
 
+CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
 IS_WINDOWS = platform.system() == "Windows"
 
 # First, we try to use setuptools. If it's not available locally,
@@ -51,6 +54,10 @@ class PathConfigurator(object):
         self.library_dirs = []
         self._check_hdf5_version()
         self._attempt_pkgconfig()
+        if CONDA_PREFIX is not None:
+            prefix = os.path.join(CONDA_PREFIX, "Library")
+            self.library_dirs.append(os.path.join(prefix, "lib"))
+            self.include_dirs.append(os.path.join(prefix, "include"))
 
     def _check_hdf5_version(self):
         # TODO add h5py to the install_requires?
@@ -116,6 +123,13 @@ class DefineMacros(object):
             # Define the library version
             ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
         ]
+        if IS_WINDOWS:
+            l += [
+                # These two are required for GSL to compile and link against the
+                # conda-forge version.
+                ("GSL_DLL", None), ("WIN32", None),
+                # This is needed for HDF5 to link properly.
+                ("H5_BUILT_AS_DYNAMIC_LIB", None)]
         return l[index]
 
 
