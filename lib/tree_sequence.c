@@ -184,7 +184,7 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     }
     fprintf(out, "mutation_types = (%d records)\n", (int) self->mutation_types.num_records);
     for (j = 0; j < self->mutation_types.num_records; j++) {
-        fprintf(out, "\t%d\t%c\t%c\n", (int) j, self->mutation_types.ancestral_state[j],
+        fprintf(out, "\t%d\t%s\t%s\n", (int) j, self->mutation_types.ancestral_state[j],
                 self->mutation_types.derived_state[j]);
     }
     fprintf(out, "mutations = (%d records)\n", (int) self->mutations.num_records);
@@ -252,12 +252,42 @@ tree_sequence_alloc_mutations(tree_sequence_t *self)
     if (self->mutation_types.num_records > self->mutation_types.max_num_records) {
         self->mutation_types.max_num_records = self->mutation_types.num_records;
         size = self->mutation_types.max_num_records;
+        msp_safe_free(self->mutation_types.ancestral_state_length);
         msp_safe_free(self->mutation_types.ancestral_state);
+        msp_safe_free(self->mutation_types.derived_state_length);
         msp_safe_free(self->mutation_types.derived_state);
-        self->mutation_types.ancestral_state = malloc(size * sizeof(char));
-        self->mutation_types.derived_state = malloc(size * sizeof(char));
-        if (self->mutation_types.ancestral_state == NULL
+        self->mutation_types.ancestral_state = malloc(size * sizeof(char *));
+        self->mutation_types.ancestral_state_length = malloc(size * sizeof(uint32_t));
+        self->mutation_types.derived_state = malloc(size * sizeof(char *));
+        self->mutation_types.derived_state_length = malloc(size * sizeof(uint32_t));
+        if (self->mutation_types.ancestral_state_length == NULL
+                || self->mutation_types.derived_state_length == NULL
+                || self->mutation_types.ancestral_state == NULL
                 || self->mutation_types.derived_state == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+    }
+    if (self->mutation_types.total_ancestral_state_length >
+            self->mutation_types.max_total_ancestral_state_length) {
+        self->mutation_types.max_total_ancestral_state_length =
+            self->mutation_types.total_ancestral_state_length;
+        size = self->mutation_types.total_ancestral_state_length;
+        msp_safe_free(self->mutation_types.ancestral_state_mem);
+        self->mutation_types.ancestral_state_mem = malloc(size * sizeof(char));
+        if (self->mutation_types.ancestral_state_mem == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+    }
+    if (self->mutation_types.total_derived_state_length >
+            self->mutation_types.max_total_derived_state_length) {
+        self->mutation_types.max_total_derived_state_length =
+            self->mutation_types.total_derived_state_length;
+        size = self->mutation_types.total_derived_state_length;
+        msp_safe_free(self->mutation_types.derived_state_mem);
+        self->mutation_types.derived_state_mem = malloc(size * sizeof(char));
+        if (self->mutation_types.derived_state_mem == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
@@ -496,7 +526,11 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->edgesets.indexes.insertion_order);
     msp_safe_free(self->edgesets.indexes.removal_order);
     msp_safe_free(self->mutation_types.ancestral_state);
+    msp_safe_free(self->mutation_types.ancestral_state_length);
+    msp_safe_free(self->mutation_types.ancestral_state_mem);
     msp_safe_free(self->mutation_types.derived_state);
+    msp_safe_free(self->mutation_types.derived_state_length);
+    msp_safe_free(self->mutation_types.derived_state_mem);
     msp_safe_free(self->mutations.nodes);
     msp_safe_free(self->mutations.num_nodes);
     msp_safe_free(self->mutations.position);
@@ -1005,10 +1039,17 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     self->edgesets.total_children = edgesets->children_length - edgesets->num_rows;
     self->edgesets.num_records = edgesets->num_rows;
     self->mutation_types.num_records = 0;
+    self->mutation_types.total_ancestral_state_length = 0;
+    self->mutation_types.total_derived_state_length = 0;
     self->mutations.num_records = 0;
     self->mutations.total_nodes = 0;
     if (mutation_types != NULL) {
+        /* We need to allow space for NULLs in string columns */
         self->mutation_types.num_records = mutation_types->num_rows;
+        self->mutation_types.total_ancestral_state_length =
+            mutation_types->total_ancestral_state_length + mutation_types->num_rows;
+        self->mutation_types.total_derived_state_length =
+            mutation_types->total_derived_state_length + mutation_types->num_rows;
     }
     if (mutations != NULL) {
         if (mutation_types == NULL) {
@@ -1045,7 +1086,6 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     if (ret != 0) {
         goto out;
     }
-    /* memcpy(self->nodes.name_mem, nodes->name, nodes->total_name_length * sizeof(char)); */
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {
         goto out;
@@ -1080,10 +1120,25 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
         goto out;
     }
     if (mutation_types != NULL) {
-        memcpy(self->mutation_types.ancestral_state, mutation_types->ancestral_state,
-                mutation_types->num_rows * sizeof(char));
-        memcpy(self->mutation_types.derived_state, mutation_types->derived_state,
-                mutation_types->num_rows * sizeof(char));
+        memcpy(self->mutation_types.ancestral_state_length,
+                mutation_types->ancestral_state_length,
+                mutation_types->num_rows * sizeof(uint32_t));
+        memcpy(self->mutation_types.derived_state_length,
+                mutation_types->derived_state_length,
+                mutation_types->num_rows * sizeof(uint32_t));
+        ret = init_string_column(mutation_types->num_rows, mutation_types->ancestral_state,
+                mutation_types->ancestral_state_length,
+                self->mutation_types.ancestral_state,
+                self->mutation_types.ancestral_state_mem);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = init_string_column(mutation_types->num_rows, mutation_types->derived_state,
+                mutation_types->derived_state_length,
+                self->mutation_types.derived_state, self->mutation_types.derived_state_mem);
+        if (ret != 0) {
+            goto out;
+        }
     }
     if (mutations != NULL) {
         memcpy(self->mutations.position, mutations->position,
@@ -1145,7 +1200,7 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
     uint32_t flags;
     size_t j;
     double left, right;
-    char ancestral_state[2], derived_state[2];
+    char *ancestral_state, *derived_state;
 
     if (nodes == NULL || edgesets == NULL
             || num_provenance_strings == NULL || provenance_strings == NULL) {
@@ -1205,15 +1260,13 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         }
     }
     if (mutation_types != NULL) {
-        ancestral_state[1] = '\0';
-        derived_state[1] = '\0';
         ret = mutation_type_table_reset(mutation_types);
         if (ret != 0) {
             goto out;
         }
         for (j = 0; j < self->mutation_types.num_records; j++) {
-            ancestral_state[0] = self->mutation_types.ancestral_state[j];
-            derived_state[0] = self->mutation_types.derived_state[j];
+            ancestral_state = self->mutation_types.ancestral_state[j];
+            derived_state = self->mutation_types.derived_state[j];
             ret = mutation_type_table_add_row(mutation_types, ancestral_state,
                     derived_state);
             if (ret != 0) {
@@ -1322,8 +1375,8 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         size_t size;
     };
     struct _dimension_check fields[] = {
-        {"/mutation_types/ancestral_state", 1, self->mutation_types.num_records},
-        {"/mutation_types/derived_state", 1, self->mutation_types.num_records},
+        {"/mutation_types/ancestral_state_length", 1, self->mutation_types.num_records},
+        {"/mutation_types/derived_state_length", 1, self->mutation_types.num_records},
         {"/mutations/position", 1, self->mutations.num_records},
         {"/mutations/num_nodes", 1, self->mutations.num_records},
         {"/mutations/nodes", 1, self->mutations.total_nodes},
@@ -1458,14 +1511,16 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         const char *name;
         size_t *dest;
     };
-    size_t flattened_name_length;
+    size_t name_length, ancestral_state_length, derived_state_length;
     struct _dimension_read fields[] = {
-        {"/mutation_types/ancestral_state", &self->mutation_types.num_records},
+        {"/mutation_types/ancestral_state_length", &self->mutation_types.num_records},
+        {"/mutation_types/ancestral_state", &ancestral_state_length},
+        {"/mutation_types/derived_state", &derived_state_length},
         {"/mutations/position", &self->mutations.num_records},
         {"/mutations/nodes", &self->mutations.total_nodes},
         {"/provenance", &self->num_provenance_strings},
         {"/nodes/time", &self->nodes.num_records},
-        {"/nodes/name", &flattened_name_length},
+        {"/nodes/name", &name_length},
         {"/edgesets/left", &self->edgesets.num_records},
         {"/edgesets/children", &self->edgesets.total_children},
     };
@@ -1508,7 +1563,11 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
             }
         }
     }
-    self->nodes.total_name_length = flattened_name_length + self->nodes.num_records;
+    self->nodes.total_name_length = name_length + self->nodes.num_records;
+    self->mutation_types.total_ancestral_state_length = ancestral_state_length
+        + self->mutation_types.num_records;
+    self->mutation_types.total_derived_state_length = derived_state_length
+        + self->mutation_types.num_records;
     ret = 0;
 out:
     return ret;
@@ -1526,19 +1585,23 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         hid_t type;
         void *dest;
     };
-    size_t flattened_name_length;
-    char *flattened_name = NULL;
+    size_t name_length, ancestral_state_length, derived_state_length;
+    char *name = NULL;
+    char *ancestral_state = NULL;
+    char *derived_state = NULL;
     struct _hdf5_field_read fields[] = {
         {"/provenance", 0, self->provenance_strings},
         {"/nodes/name", H5T_NATIVE_CHAR, NULL},
+        {"/mutation_types/ancestral_state", H5T_NATIVE_CHAR, NULL},
+        {"/mutation_types/derived_state", H5T_NATIVE_CHAR, NULL},
         {"/nodes/name_length", H5T_NATIVE_UINT32, self->nodes.name_length},
         {"/nodes/flags", H5T_NATIVE_UINT32, self->nodes.flags},
         {"/nodes/population", H5T_NATIVE_INT32, self->nodes.population},
         {"/nodes/time", H5T_NATIVE_DOUBLE, self->nodes.time},
-        {"/mutation_types/ancestral_state", H5T_NATIVE_CHAR,
-            self->mutation_types.ancestral_state},
-        {"/mutation_types/derived_state", H5T_NATIVE_CHAR,
-            self->mutation_types.derived_state},
+        {"/mutation_types/ancestral_state_length", H5T_NATIVE_UINT32,
+            self->mutation_types.ancestral_state_length},
+        {"/mutation_types/derived_state_length", H5T_NATIVE_UINT32,
+            self->mutation_types.derived_state_length},
         {"/mutations/nodes", H5T_NATIVE_INT32, self->mutations.nodes_mem},
         {"/mutations/num_nodes", H5T_NATIVE_INT32, self->mutations.num_nodes},
         {"/mutations/position", H5T_NATIVE_DOUBLE, self->mutations.position},
@@ -1567,13 +1630,29 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     }
     fields[0].type = vlen_str;
 
-    flattened_name_length = self->nodes.total_name_length - self->nodes.num_records;
-    flattened_name = malloc(flattened_name_length * sizeof(char));
-    if (flattened_name == NULL) {
+    name_length = self->nodes.total_name_length - self->nodes.num_records;
+    name = malloc(name_length * sizeof(char));
+    if (name == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    fields[1].dest = flattened_name;
+    fields[1].dest = name;
+    ancestral_state_length = self->mutation_types.total_ancestral_state_length
+        - self->mutation_types.num_records;
+    ancestral_state = malloc(ancestral_state_length * sizeof(char));
+    if (ancestral_state == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    fields[2].dest = ancestral_state;
+    derived_state_length = self->mutation_types.total_derived_state_length
+        - self->mutation_types.num_records;
+    derived_state = malloc(derived_state_length * sizeof(char));
+    if (derived_state == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    fields[3].dest = derived_state;
 
     for (j = 0; j < num_fields; j++) {
         exists = H5Lexists(file_id, fields[j].name, H5P_DEFAULT);
@@ -1600,13 +1679,38 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     if (status < 0) {
         goto out;
     }
+    /* Initialise the node name column */
     ret = validate_length(self->nodes.num_records, self->nodes.name_length,
-            flattened_name_length);
+            name_length);
     if (ret != 0) {
         goto out;
     }
-    ret = init_string_column(self->nodes.num_records, flattened_name,
-            self->nodes.name_length, self->nodes.name, self->nodes.name_mem);
+    ret = init_string_column(self->nodes.num_records, name, self->nodes.name_length,
+            self->nodes.name, self->nodes.name_mem);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Initialise the ancestral_state column */
+    ret = validate_length(self->mutation_types.num_records,
+            self->mutation_types.ancestral_state_length, ancestral_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = init_string_column(self->mutation_types.num_records,
+            ancestral_state, self->mutation_types.ancestral_state_length,
+            self->mutation_types.ancestral_state, self->mutation_types.ancestral_state_mem);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Initialise the derived_state column */
+    ret = validate_length(self->mutation_types.num_records,
+            self->mutation_types.derived_state_length, derived_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = init_string_column(self->mutation_types.num_records,
+            derived_state, self->mutation_types.derived_state_length,
+            self->mutation_types.derived_state, self->mutation_types.derived_state_mem);
     if (ret != 0) {
         goto out;
     }
@@ -1628,8 +1732,14 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     }
     ret = 0;
 out:
-    if (flattened_name != NULL) {
-        free(flattened_name);
+    if (name != NULL) {
+        free(name);
+    }
+    if (ancestral_state != NULL) {
+        free(ancestral_state);
+    }
+    if (derived_state != NULL) {
+        free(derived_state);
     }
     return ret;
 }
@@ -1696,6 +1806,10 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     hsize_t dim, chunk_size;
     char *flattened_name = NULL;
     size_t flattened_name_length;
+    char *flattened_ancestral_state = NULL;
+    size_t flattened_ancestral_state_length;
+    char *flattened_derived_state = NULL;
+    size_t flattened_derived_state_length;
     struct _hdf5_field_write {
         const char *name;
         hid_t storage_type;
@@ -1708,6 +1822,10 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
             0, 0, /* We must set this afterwards */
             self->num_provenance_strings, self->provenance_strings},
         {"/nodes/name",
+            H5T_STD_I8LE, H5T_NATIVE_CHAR, 0, NULL},
+        {"/mutation_types/ancestral_state",
+            H5T_STD_I8LE, H5T_NATIVE_CHAR, 0, NULL},
+        {"/mutation_types/derived_state",
             H5T_STD_I8LE, H5T_NATIVE_CHAR, 0, NULL},
         {"/nodes/name_length",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
@@ -1742,12 +1860,12 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/edgesets/indexes/removal_order",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->edgesets.num_records, self->edgesets.indexes.removal_order},
-        {"/mutation_types/ancestral_state",
-            H5T_STD_I8LE, H5T_NATIVE_CHAR,
-            self->mutation_types.num_records, self->mutation_types.ancestral_state},
-        {"/mutation_types/derived_state",
-            H5T_STD_I8LE, H5T_NATIVE_CHAR,
-            self->mutation_types.num_records, self->mutation_types.derived_state},
+        {"/mutation_types/ancestral_state_length",
+            H5T_STD_U32LE, H5T_NATIVE_UINT32,
+            self->mutation_types.num_records, self->mutation_types.ancestral_state_length},
+        {"/mutation_types/derived_state_length",
+            H5T_STD_U32LE, H5T_NATIVE_UINT32,
+            self->mutation_types.num_records, self->mutation_types.derived_state_length},
         {"/mutations/nodes",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->mutations.total_nodes, self->mutations.nodes_mem},
@@ -1800,7 +1918,8 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
     fields[0].memory_type = memtype_str;
 
     assert(self->nodes.total_name_length >= self->nodes.num_records);
-    /* Make the array to hold the flattened string */
+
+    /* Make the arrays to hold the flattened strings */
     flattened_name_length = self->nodes.total_name_length - self->nodes.num_records;
     if (flattened_name_length != 0) {
         flattened_name = malloc(flattened_name_length * sizeof(char));
@@ -1812,6 +1931,38 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
                 flattened_name);
         fields[1].size = flattened_name_length;
         fields[1].source = flattened_name;
+    }
+
+    assert(self->mutation_types.total_ancestral_state_length
+            >= self->mutation_types.num_records);
+    flattened_ancestral_state_length = self->mutation_types.total_ancestral_state_length
+        - self->mutation_types.num_records;
+    if (flattened_ancestral_state_length != 0) {
+        flattened_ancestral_state = malloc(flattened_ancestral_state_length * sizeof(char));
+        if (flattened_ancestral_state == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        ret = flatten_string_column(self->mutation_types.total_ancestral_state_length,
+                self->mutation_types.ancestral_state_mem, flattened_ancestral_state);
+        fields[2].size = flattened_ancestral_state_length;
+        fields[2].source = flattened_ancestral_state;
+    }
+
+    assert(self->mutation_types.total_derived_state_length
+            >= self->mutation_types.num_records);
+    flattened_derived_state_length = self->mutation_types.total_derived_state_length
+        - self->mutation_types.num_records;
+    if (flattened_derived_state_length != 0) {
+        flattened_derived_state = malloc(flattened_derived_state_length * sizeof(char));
+        if (flattened_derived_state == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        ret = flatten_string_column(self->mutation_types.total_derived_state_length,
+                self->mutation_types.derived_state_mem, flattened_derived_state);
+        fields[3].size = flattened_derived_state_length;
+        fields[3].source = flattened_derived_state;
     }
 
     /* Create the groups */
@@ -1906,6 +2057,12 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
 out:
     if (flattened_name != NULL) {
         free(flattened_name);
+    }
+    if (flattened_ancestral_state != NULL) {
+        free(flattened_ancestral_state);
+    }
+    if (flattened_derived_state != NULL) {
+        free(flattened_derived_state);
     }
     if (filetype_str != -1) {
         status = H5Tclose(filetype_str);
@@ -2204,10 +2361,8 @@ tree_sequence_get_mutation_type(tree_sequence_t *self, size_t index, mutation_ty
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    record->ancestral_state[0] = self->mutation_types.ancestral_state[index];
-    record->ancestral_state[1] = '\0';
-    record->derived_state[0] = self->mutation_types.derived_state[index];
-    record->derived_state[1] = '\0';
+    record->ancestral_state = self->mutation_types.ancestral_state[index];
+    record->derived_state = self->mutation_types.derived_state[index];
 out:
     return ret;
 }

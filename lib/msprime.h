@@ -352,8 +352,8 @@ typedef struct {
 } node_t;
 
 typedef struct {
-    char ancestral_state[2];
-    char derived_state[2];
+    char *ancestral_state;
+    char *derived_state;
 } mutation_type_t;
 
 typedef struct {
@@ -411,8 +411,16 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        char *ancestral_state;
-        char *derived_state;
+        size_t total_ancestral_state_length;
+        size_t max_total_ancestral_state_length;
+        size_t total_derived_state_length;
+        size_t max_total_derived_state_length;
+        char **ancestral_state;
+        char *ancestral_state_mem;
+        uint32_t *ancestral_state_length;
+        char **derived_state;
+        char *derived_state_mem;
+        uint32_t *derived_state_length;
     } mutation_types;
     struct {
         size_t num_records;
