@@ -335,7 +335,7 @@ parse_mutations(const char *text, mutation_table_t *mutation_table)
         }
         CU_ASSERT_FATAL(q == NULL);
         ret = mutation_table_add_row(mutation_table, position, 0,
-                num_nodes, nodes);
+                nodes, num_nodes);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
 }
@@ -609,7 +609,7 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
             mut = &subset_tree.mutations[j];
             CU_ASSERT(subset_tree.left <= mut->position);
             CU_ASSERT(mut->position < subset_tree.right);
-            for (k = 0; k < mut->num_nodes; k++) {
+            for (k = 0; k < mut->nodes_length; k++) {
                 if (k > 0) {
                     CU_ASSERT_TRUE(mut->nodes[k - 1] <  mut->nodes[k]);
                 }
@@ -940,7 +940,7 @@ make_recurrent_mutations_copy(tree_sequence_t *ts)
     for (j = 0; j < n; j++) {
         num_nodes = GSL_MIN(j + 1, max_nodes);
         ret = mutation_table_add_row(&mutations, j * (length / n), 0,
-                num_nodes, mutation_nodes);
+                mutation_nodes, num_nodes);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
     ret = tree_sequence_initialise(new_ts);
@@ -1007,35 +1007,35 @@ test_parse_mutations(void)
 
     CU_ASSERT_EQUAL(mutations.position[0], 0.1);
     CU_ASSERT_EQUAL(mutations.nodes[0], 0);
-    CU_ASSERT_EQUAL(mutations.nodes[1], MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(mutations.nodes_length[0], 1);
 
     CU_ASSERT_EQUAL(mutations.position[1], 0.2);
-    CU_ASSERT_EQUAL(mutations.nodes[2], 1);
-    CU_ASSERT_EQUAL(mutations.nodes[3], MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(mutations.nodes[1], 1);
+    CU_ASSERT_EQUAL(mutations.nodes_length[1], 1);
 
     CU_ASSERT_EQUAL(mutations.position[2], 0.3);
-    CU_ASSERT_EQUAL(mutations.nodes[4], 3);
-    CU_ASSERT_EQUAL(mutations.nodes[5], MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(mutations.nodes[2], 3);
+    CU_ASSERT_EQUAL(mutations.nodes_length[2], 1);
 
     mutation_table_reset(&mutations);
     parse_mutations(case2, &mutations);
     CU_ASSERT_EQUAL_FATAL(mutations.num_rows, 3);
 
     CU_ASSERT_EQUAL(mutations.position[0], 0);
+    CU_ASSERT_EQUAL(mutations.nodes_length[0], 2);
     CU_ASSERT_EQUAL(mutations.nodes[0], 0);
     CU_ASSERT_EQUAL(mutations.nodes[1], 1);
-    CU_ASSERT_EQUAL(mutations.nodes[2], MSP_NULL_NODE);
 
     CU_ASSERT_EQUAL(mutations.position[1], 1);
-    CU_ASSERT_EQUAL(mutations.nodes[3], 2);
-    CU_ASSERT_EQUAL(mutations.nodes[4], MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(mutations.nodes_length[1], 1);
+    CU_ASSERT_EQUAL(mutations.nodes[2], 2);
 
     CU_ASSERT_EQUAL(mutations.position[2], 2);
-    CU_ASSERT_EQUAL(mutations.nodes[5], 3);
-    CU_ASSERT_EQUAL(mutations.nodes[6], 4);
-    CU_ASSERT_EQUAL(mutations.nodes[7], 5);
-    CU_ASSERT_EQUAL(mutations.nodes[8], 6);
-    CU_ASSERT_EQUAL(mutations.nodes[9], MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(mutations.nodes_length[2], 4);
+    CU_ASSERT_EQUAL(mutations.nodes[3], 3);
+    CU_ASSERT_EQUAL(mutations.nodes[4], 4);
+    CU_ASSERT_EQUAL(mutations.nodes[5], 5);
+    CU_ASSERT_EQUAL(mutations.nodes[6], 6);
 
     mutation_table_free(&mutations);
 }
@@ -2913,19 +2913,19 @@ test_single_tree_good_mutations(void)
     CU_ASSERT_EQUAL(other_mutations[0].index, 0);
     CU_ASSERT_EQUAL(other_mutations[0].position, 0.1);
     CU_ASSERT_EQUAL(other_mutations[0].nodes[0], 2);
-    CU_ASSERT_EQUAL(other_mutations[0].num_nodes, 1);
+    CU_ASSERT_EQUAL(other_mutations[0].nodes_length, 1);
     CU_ASSERT_EQUAL(other_mutations[1].index, 1);
     CU_ASSERT_EQUAL(other_mutations[1].position, 0.2);
     CU_ASSERT_EQUAL(other_mutations[1].nodes[0], 0);
     CU_ASSERT_EQUAL(other_mutations[1].nodes[1], 1);
-    CU_ASSERT_EQUAL(other_mutations[1].num_nodes, 2);
+    CU_ASSERT_EQUAL(other_mutations[1].nodes_length, 2);
     CU_ASSERT_EQUAL(other_mutations[2].index, 2);
     CU_ASSERT_EQUAL(other_mutations[2].position, 0.3);
     CU_ASSERT_EQUAL(other_mutations[2].nodes[0], 0);
     CU_ASSERT_EQUAL(other_mutations[2].nodes[1], 1);
     CU_ASSERT_EQUAL(other_mutations[2].nodes[2], 2);
     CU_ASSERT_EQUAL(other_mutations[2].nodes[3], 3);
-    CU_ASSERT_EQUAL(other_mutations[2].num_nodes, 4);
+    CU_ASSERT_EQUAL(other_mutations[2].nodes_length, 4);
     tree_sequence_free(&ts);
 }
 
@@ -2995,7 +2995,7 @@ test_single_tree_bad_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             &mutation_type_table, &mutation_table, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_NODES_ARRAY);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_MUTATION);
     tree_sequence_free(&ts);
     mutation_table.nodes[0] = 0;
 
@@ -3020,36 +3020,36 @@ test_single_tree_bad_mutations(void)
     mutation_table.position[0] = 0.0;
 
     /* Unsorted nodes */
-    mutation_table.nodes[4] = 1;
-    mutation_table.nodes[5] = 0;
+    mutation_table.nodes[2] = 1;
+    mutation_table.nodes[3] = 0;
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             &mutation_type_table, &mutation_table, 0, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATION_NODES);
     tree_sequence_free(&ts);
-    mutation_table.nodes[4] = 0;
-    mutation_table.nodes[5] = 1;
+    mutation_table.nodes[2] = 0;
+    mutation_table.nodes[3] = 1;
 
     /* Duplicate nodes */
-    mutation_table.nodes[4] = 1;
+    mutation_table.nodes[2] = 1;
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             &mutation_type_table, &mutation_table, 0, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_MUTATION_NODES);
     tree_sequence_free(&ts);
-    mutation_table.nodes[4] = 0;
+    mutation_table.nodes[2] = 0;
 
     /* zero nodes */
-    mutation_table.nodes_length = 0;
+    mutation_table.total_nodes_length = 0;
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             &mutation_type_table, &mutation_table, 0, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_NODES_ARRAY);
     tree_sequence_free(&ts);
-    mutation_table.nodes_length = 7;
+    mutation_table.total_nodes_length = 4;
 
     /* Check to make sure we've maintained legal mutations */
     ret = tree_sequence_initialise(&ts);
@@ -3378,19 +3378,19 @@ test_single_tree_vargen(void)
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     CU_ASSERT_STRING_EQUAL(genotypes, "1000");
     CU_ASSERT_EQUAL(mut->index, 0);
-    CU_ASSERT_EQUAL(mut->num_nodes, 1);
+    CU_ASSERT_EQUAL(mut->nodes_length, 1);
 
     ret = vargen_next(&vargen, &mut, genotypes);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     CU_ASSERT_STRING_EQUAL(genotypes, "0100");
     CU_ASSERT_EQUAL(mut->index, 1);
-    CU_ASSERT_EQUAL(mut->num_nodes, 1);
+    CU_ASSERT_EQUAL(mut->nodes_length, 1);
 
     ret = vargen_next(&vargen, &mut, genotypes);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     CU_ASSERT_STRING_EQUAL(genotypes, "1110");
     CU_ASSERT_EQUAL(mut->index, 2);
-    CU_ASSERT_EQUAL(mut->num_nodes, 3);
+    CU_ASSERT_EQUAL(mut->nodes_length, 3);
 
     ret = vargen_next(&vargen, &mut, genotypes);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3599,11 +3599,11 @@ test_single_tree_mutgen(void)
     for (j = 0; j < num_mutations; j++) {
         before[j].position = mutations[j].position;
         before[j].index = mutations[j].index;
-        before[j].num_nodes = mutations[j].num_nodes;
-        before[j].nodes = malloc(before[j].num_nodes * sizeof(node_id_t));
+        before[j].nodes_length = mutations[j].nodes_length;
+        before[j].nodes = malloc(before[j].nodes_length * sizeof(node_id_t));
         CU_ASSERT_FATAL(before[j].nodes != NULL);
         memcpy(before[j].nodes, mutations[j].nodes,
-                mutations[j].num_nodes * sizeof(node_id_t));
+                mutations[j].nodes_length * sizeof(node_id_t));
     }
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3628,11 +3628,11 @@ test_single_tree_mutgen(void)
     for (j = 0; j < num_mutations; j++) {
         after[j].position = mutations[j].position;
         after[j].index = mutations[j].index;
-        after[j].num_nodes = mutations[j].num_nodes;
-        after[j].nodes = malloc(after[j].num_nodes * sizeof(node_id_t));
+        after[j].nodes_length = mutations[j].nodes_length;
+        after[j].nodes = malloc(after[j].nodes_length * sizeof(node_id_t));
         CU_ASSERT_FATAL(after[j].nodes != NULL);
         memcpy(after[j].nodes, mutations[j].nodes,
-                mutations[j].num_nodes * sizeof(node_id_t));
+                mutations[j].nodes_length * sizeof(node_id_t));
     }
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3640,8 +3640,8 @@ test_single_tree_mutgen(void)
     /* before and after should be identical */
     for (j = 0; j < num_mutations; j++) {
         CU_ASSERT_EQUAL(before[j].position, after[j].position);
-        CU_ASSERT_EQUAL(before[j].num_nodes, after[j].num_nodes);
-        for (k = 0; k < before[j].num_nodes; k++) {
+        CU_ASSERT_EQUAL(before[j].nodes_length, after[j].nodes_length);
+        for (k = 0; k < before[j].nodes_length; k++) {
             CU_ASSERT_EQUAL(before[j].nodes[k], after[j].nodes[k]);
         }
     }
@@ -3693,8 +3693,8 @@ verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT_EQUAL(tree_mutations[k].index, mutation_index);
             CU_ASSERT_EQUAL(tree_mutations[k].position, mut.position);
-            CU_ASSERT_EQUAL(tree_mutations[k].num_nodes, mut.num_nodes);
-            for (l = 0; l < tree_mutations[k].num_nodes; l++) {
+            CU_ASSERT_EQUAL(tree_mutations[k].nodes_length, mut.nodes_length);
+            for (l = 0; l < tree_mutations[k].nodes_length; l++) {
                 CU_ASSERT_EQUAL(tree_mutations[k].nodes[l], mut.nodes[l]);
             }
             mutation_index++;
@@ -5081,8 +5081,8 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
             CU_ASSERT_EQUAL(mutation_1.index, mutation_2.index);
             CU_ASSERT_EQUAL(mutation_1.position, mutation_2.position);
             CU_ASSERT_EQUAL(mutation_1.type, mutation_2.type);
-            CU_ASSERT_EQUAL(mutation_1.num_nodes, mutation_2.num_nodes);
-            for (k = 0; k < mutation_1.num_nodes; k++) {
+            CU_ASSERT_EQUAL(mutation_1.nodes_length, mutation_2.nodes_length);
+            for (k = 0; k < mutation_1.nodes_length; k++) {
                 CU_ASSERT_EQUAL(mutation_1.nodes[k], mutation_2.nodes[k]);
             }
         }
@@ -5704,8 +5704,9 @@ test_mutation_table(void)
     mutation_table_t table;
     size_t num_rows = 100;
     size_t max_nodes = 10;
-    size_t j, k, nodes_length;
+    size_t j, k, len;
     node_id_t *nodes;
+    list_len_t *nodes_length;
     double *position;
     mutation_type_id_t *type;
     node_id_t c[max_nodes];
@@ -5720,24 +5721,25 @@ test_mutation_table(void)
     mutation_table_print_state(&table, _devnull);
 
     /* Adding 0 nodes is an error */
-    ret = mutation_table_add_row(&table, 0, 0, 0, c);
+    ret = mutation_table_add_row(&table, 0, 0, c, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     memset(c, 0, max_nodes * sizeof(node_id_t));
 
-    nodes_length = 0;
+    len = 0;
     for (j = 0; j < num_rows; j++) {
         k = GSL_MIN(j + 1, max_nodes);
-        nodes_length += 1 + k;
-        ret = mutation_table_add_row(&table, j, 0, k, c);
+        len += k;
+        ret = mutation_table_add_row(&table, j, 0, c, k);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL(table.position[j], j);
+        CU_ASSERT_EQUAL(table.nodes_length[j], k);
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
-        CU_ASSERT_EQUAL(table.nodes_length, nodes_length);
+        CU_ASSERT_EQUAL(table.total_nodes_length, len);
     }
     mutation_table_print_state(&table, _devnull);
     mutation_table_reset(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
-    CU_ASSERT_EQUAL(table.nodes_length, 0);
+    CU_ASSERT_EQUAL(table.total_nodes_length, 0);
 
     num_rows *= 2;
     position = malloc(num_rows * sizeof(double));
@@ -5748,30 +5750,38 @@ test_mutation_table(void)
     memset(type, 0, num_rows * sizeof(mutation_type_id_t));
     nodes = malloc(2 * num_rows * sizeof(node_id_t));
     CU_ASSERT_FATAL(nodes != NULL);
+    nodes_length = malloc(num_rows * sizeof(list_len_t));
+    CU_ASSERT_FATAL(nodes_length != NULL);
     for (j = 0; j < num_rows; j++) {
+        nodes_length[j] = 2;
         nodes[2 * j] = j;
-        nodes[2 * j + 1] = MSP_NULL_NODE;
+        nodes[2 * j + 1] = j;
     }
     ret = mutation_table_set_columns(&table, num_rows, position, type,
-            2 * num_rows, nodes);
+            nodes, nodes_length);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.position, position, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.type, type, num_rows * sizeof(mutation_type_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.nodes, nodes, 2 * num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.nodes_length, nodes_length,
+                num_rows * sizeof(list_len_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
-    CU_ASSERT_EQUAL(table.nodes_length, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.total_nodes_length, 2 * num_rows);
 
     /* Inputs cannot be NULL */
-    ret = mutation_table_set_columns(&table, num_rows, NULL, type, 2 * num_rows, nodes);
+    ret = mutation_table_set_columns(&table, num_rows, NULL, type, nodes, nodes_length);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = mutation_table_set_columns(&table, num_rows, position, NULL, 2 * num_rows, nodes);
+    ret = mutation_table_set_columns(&table, num_rows, position, NULL, nodes, nodes_length);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = mutation_table_set_columns(&table, num_rows, position, type, 2 * num_rows, NULL);
+    ret = mutation_table_set_columns(&table, num_rows, position, type, NULL, nodes_length);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = mutation_table_set_columns(&table, num_rows, position, type, nodes, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     mutation_table_free(&table);
     free(position);
     free(nodes);
+    free(nodes_length);
     free(type);
 }
 

@@ -78,9 +78,9 @@ hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
     int ret = 0;
     leaf_list_node_t *w, *tail;
     bool not_done;
-    uint32_t j;
+    list_len_t j;
 
-    for (j = 0; j < mut->num_nodes; j++) {
+    for (j = 0; j < mut->nodes_length; j++) {
         ret = sparse_tree_get_leaf_list(&self->tree, mut->nodes[j], &w, &tail);
         if (ret != 0) {
             goto out;

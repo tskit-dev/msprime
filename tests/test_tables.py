@@ -100,16 +100,16 @@ class CommonTestsMixin(object):
 
     def test_set_columns_string_errors(self):
         inputs = {c.name: c.get_input(1) for c in self.columns}
-        for string_col, length_col in self.string_columns:
-            value = string_col.get_input(1)
-            inputs[string_col.name] = value
+        for list_col, length_col in self.ragged_list_columns:
+            value = list_col.get_input(1)
+            inputs[list_col.name] = value
             inputs[length_col.name] = [1]
         # Make sure this works.
         table = self.table_class()
         table.set_columns(**inputs)
-        for string_col, length_col in self.string_columns:
+        for list_col, length_col in self.ragged_list_columns:
             kwargs = dict(inputs)
-            del kwargs[string_col.name]
+            del kwargs[list_col.name]
             self.assertRaises(TypeError, table.set_columns, **kwargs)
             kwargs = dict(inputs)
             del kwargs[length_col.name]
@@ -117,9 +117,9 @@ class CommonTestsMixin(object):
 
     def test_set_columns_interface(self):
         kwargs = {c.name: c.get_input(1) for c in self.columns}
-        for string_col, length_col in self.string_columns:
-            value = string_col.get_input(1)
-            kwargs[string_col.name] = value
+        for list_col, length_col in self.ragged_list_columns:
+            value = list_col.get_input(1)
+            kwargs[list_col.name] = value
             kwargs[length_col.name] = [1]
         # Make sure this works.
         table = self.table_class()
@@ -139,11 +139,11 @@ class CommonTestsMixin(object):
         num_rows = 100
         input_data = {col.name: col.get_input(num_rows) for col in self.columns}
         col_map = {col.name: col for col in self.columns}
-        for string_col, length_col in self.string_columns:
-            value = string_col.get_input(num_rows)
-            input_data[string_col.name] = value
+        for list_col, length_col in self.ragged_list_columns:
+            value = list_col.get_input(num_rows)
+            input_data[list_col.name] = value
             input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
-            col_map[string_col.name] = string_col
+            col_map[list_col.name] = list_col
             col_map[length_col.name] = length_col
         table = self.table_class()
         table.set_columns(**input_data)
@@ -179,9 +179,9 @@ class CommonTestsMixin(object):
         for num_rows in [0, 10, 100, 1000]:
             input_data = {
                 col.name: col.get_input(num_rows) for col in self.columns}
-            for string_col, length_col in self.string_columns:
-                value = string_col.get_input(num_rows)
-                input_data[string_col.name] = value
+            for list_col, length_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
                 input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
             table = self.table_class()
             table.set_columns(**input_data)
@@ -197,7 +197,7 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
         UInt32Column("flags"),
         DoubleColumn("time"),
         Int32Column("population")]
-    string_columns = [(CharColumn("name"),  UInt32Column("name_length"))]
+    ragged_list_columns = [(CharColumn("name"),  UInt32Column("name_length"))]
     input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["time", "flags", "population", "name_length"]]
     table_class = msprime.NodeTable
@@ -250,7 +250,7 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
         DoubleColumn("right"),
         Int32Column("parent"),
         Int32Column("children")]
-    string_columns = []
+    ragged_list_columns = []
     equal_len_columns = [["left", "right", "parent"]]
     input_parameters = [
         ("max_rows_increment", 1024),
@@ -260,7 +260,7 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
 
 class TestMutationTypeTable(unittest.TestCase, CommonTestsMixin):
     columns = []
-    string_columns = [
+    ragged_list_columns = [
         (CharColumn("ancestral_state"), UInt32Column("ancestral_state_length")),
         (CharColumn("derived_state"), UInt32Column("derived_state_length"))]
     equal_len_columns = [["ancestral_state_length", "derived_state_length"]]
@@ -270,20 +270,20 @@ class TestMutationTypeTable(unittest.TestCase, CommonTestsMixin):
     table_class = msprime.MutationTypeTable
 
 
-class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
+class TestMutationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("position"),
-        Int32Column("nodes"),
         UInt8Column("type")]
-    string_columns = []
-    equal_len_columns = [["position", "type"]]
+    ragged_list_columns = [
+        (Int32Column("nodes"), UInt32Column("nodes_length"))]
+    equal_len_columns = [["position", "type", "nodes_length"]]
     input_parameters = [
         ("max_rows_increment", 1024),
-        ("max_nodes_length_increment", 1024)]
+        ("max_total_nodes_length_increment", 1024)]
     table_class = msprime.MutationTable
 
 
-class TestMigrationsTable(unittest.TestCase, CommonTestsMixin):
+class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("left"),
         DoubleColumn("right"),
@@ -291,7 +291,7 @@ class TestMigrationsTable(unittest.TestCase, CommonTestsMixin):
         Int32Column("source"),
         Int32Column("dest"),
         DoubleColumn("time")]
-    string_columns = []
+    ragged_list_columns = []
     input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]
     table_class = msprime.MigrationTable

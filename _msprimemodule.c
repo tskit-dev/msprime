@@ -551,7 +551,7 @@ make_mutation(mutation_t *mutation)
     PyObject *nodes = NULL;
     PyObject *ret = NULL;
 
-    nodes = convert_node_id_list(mutation->nodes, mutation->num_nodes);
+    nodes = convert_node_id_list(mutation->nodes, mutation->nodes_length);
     if (nodes == NULL) {
         goto out;
     }
@@ -2119,21 +2119,21 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {
-        "max_rows_increment", "max_nodes_length_increment", NULL};
+        "max_rows_increment", "max_total_nodes_length_increment", NULL};
     Py_ssize_t max_rows_increment = 1024;
-    Py_ssize_t max_nodes_length_increment = 1024;
+    Py_ssize_t max_total_nodes_length_increment = 1024;
 
     self->mutation_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
-                &max_rows_increment, &max_nodes_length_increment)) {
+                &max_rows_increment, &max_total_nodes_length_increment)) {
         goto out;
     }
     if (max_rows_increment <= 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    if (max_nodes_length_increment <= 0) {
-        PyErr_SetString(PyExc_ValueError, "max_nodes_length_increment must be positive");
+    if (max_total_nodes_length_increment <= 0) {
+        PyErr_SetString(PyExc_ValueError, "max_total_nodes_length_increment must be positive");
         goto out;
     }
     self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
@@ -2142,7 +2142,7 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutation_table_alloc(self->mutation_table, max_rows_increment,
-            max_nodes_length_increment);
+            max_total_nodes_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2176,7 +2176,7 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutation_table_add_row(self->mutation_table, position,
-            (mutation_type_id_t) type, num_nodes, nodes);
+            (mutation_type_id_t) type, nodes, num_nodes);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2196,18 +2196,20 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     int err;
     size_t num_rows = 0;
-    size_t nodes_length = 0;
+    size_t total_nodes_length = 0;
     PyObject *position_input = NULL;
     PyArrayObject *position_array = NULL;
     PyObject *nodes_input = NULL;
     PyArrayObject *nodes_array = NULL;
+    PyObject *nodes_length_input = NULL;
+    PyArrayObject *nodes_length_array = NULL;
     PyObject *type_input = NULL;
     PyArrayObject *type_array = NULL;
 
-    static char *kwlist[] = {"position", "nodes", "type", NULL};
+    static char *kwlist[] = {"position", "type", "nodes", "nodes_length", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO", kwlist,
-                &position_input, &nodes_input, &type_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
+                &position_input, &type_input, &nodes_input, &nodes_length_input)) {
         goto out;
     }
     position_array = table_read_column_array(position_input, NPY_FLOAT64,
@@ -2215,8 +2217,14 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     if (position_array == NULL) {
         goto out;
     }
-    nodes_array = table_read_column_array(nodes_input, NPY_INT32, &nodes_length, false);
+    nodes_array = table_read_column_array(nodes_input, NPY_INT32,
+            &total_nodes_length, false);
     if (nodes_array == NULL) {
+        goto out;
+    }
+    nodes_length_array = table_read_column_array(nodes_length_input, NPY_UINT32,
+            &num_rows, true);
+    if (nodes_length_array == NULL) {
         goto out;
     }
     type_array = table_read_column_array(type_input, NPY_UINT8, &num_rows, true);
@@ -2225,7 +2233,7 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     }
     err = mutation_table_set_columns(self->mutation_table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(type_array),
-            nodes_length, PyArray_DATA(nodes_array));
+            PyArray_DATA(nodes_array), PyArray_DATA(nodes_length_array));
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2234,6 +2242,8 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
 out:
     Py_XDECREF(position_array);
     Py_XDECREF(nodes_array);
+    Py_XDECREF(nodes_length_array);
+    Py_XDECREF(type_array);
     return ret;
 }
 
@@ -2250,13 +2260,13 @@ out:
 }
 
 static PyObject *
-MutationTable_get_max_nodes_length_increment(MutationTable *self, void *closure)
+MutationTable_get_max_total_nodes_length_increment(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_nodes_length_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_total_nodes_length_increment);
 out:
     return ret;
 }
@@ -2312,8 +2322,23 @@ MutationTable_get_nodes(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->nodes_length, self->mutation_table->nodes, NPY_INT32,
-            sizeof(uint32_t));
+            self->mutation_table->total_nodes_length, self->mutation_table->nodes,
+            NPY_INT32, sizeof(int32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTable_get_nodes_length(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_table->num_rows, self->mutation_table->nodes_length,
+            NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -2322,8 +2347,8 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows_increment",
         (getter) MutationTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"max_nodes_length_increment",
-        (getter) MutationTable_get_max_nodes_length_increment, NULL,
+    {"max_total_nodes_length_increment",
+        (getter) MutationTable_get_max_total_nodes_length_increment, NULL,
         "The total nodes increment"},
     {"num_rows",
         (getter) MutationTable_get_num_rows, NULL,
@@ -2331,6 +2356,7 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"position", (getter) MutationTable_get_position, NULL, "The position array"},
     {"type", (getter) MutationTable_get_type, NULL, "The type array"},
     {"nodes", (getter) MutationTable_get_nodes, NULL, "The nodes array"},
+    {"nodes_length", (getter) MutationTable_get_nodes_length, NULL, "The nodes_length array"},
     {NULL}  /* Sentinel */
 };
 

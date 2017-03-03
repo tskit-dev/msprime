@@ -1640,13 +1640,15 @@ class TreeSequence(object):
         if mutations is not None:
             position = []
             nodes = []
+            nodes_length = []
             types = []
             for mutation in mutations:
                 position.append(mutation.position)
                 nodes.extend(mutation.nodes)
-                nodes.append(msprime.NULL_NODE)
+                nodes_length.append(len(mutation.nodes))
                 types.append(mutation.type)
-            mutation_table.set_columns(position=position, nodes=nodes, type=types)
+            mutation_table.set_columns(
+                position=position, nodes=nodes, nodes_length=nodes_length, type=types)
         new_ll_ts = _msprime.TreeSequence()
         new_ll_ts.load_tables(
             nodes=node_table, edgesets=edgeset_table, migrations=migration_table,

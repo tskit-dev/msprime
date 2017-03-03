@@ -2752,13 +2752,15 @@ class TestSparseTree(LowLevelTestCase):
         def f(mutations):
             position = []
             nodes = []
+            nodes_length = []
             type_ = []
             for p, n in mutations:
                 position.append(p)
                 type_.append(0)
                 nodes.extend(n)
-                nodes.append(NULL_NODE)
-            mutation_table.set_columns(position=position, nodes=nodes, type=type_)
+                nodes_length.append(len(n))
+            mutation_table.set_columns(
+                position=position, nodes=nodes, nodes_length=nodes_length, type=type_)
             ts2 = _msprime.TreeSequence()
             ts2.load_tables(
                 nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
@@ -2889,17 +2891,17 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertGreater(mutations.num_rows, 0)
         position = mutations.position
         nodes = mutations.nodes
+        nodes_length = mutations.nodes_length
         mutation_type = mutations.type
         offset = 0
         for j in range(ts.get_num_mutations()):
             t = ts.get_mutation(j)
             self.assertEqual(t[0], position[j])
             self.assertEqual(t[2], mutation_type[j])
+            self.assertEqual(len(t[1]), nodes_length[j])
             for node in t[1]:
                 self.assertEqual(node, nodes[offset])
                 offset += 1
-            self.assertEqual(nodes[offset], NULL_NODE)
-            offset += 1
 
     def test_dump_tables(self):
         ts = self.get_example_migration_tree_sequence()

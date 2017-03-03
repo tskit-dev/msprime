@@ -677,20 +677,20 @@ mutation_type_table_print_state(mutation_type_table_t *self, FILE *out)
 
 int
 mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        size_t max_nodes_length_increment)
+        size_t max_total_nodes_length_increment)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(mutation_table_t));
-    if (max_rows_increment == 0 || max_nodes_length_increment == 0) {
+    if (max_rows_increment == 0 || max_total_nodes_length_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->max_rows_increment = max_rows_increment;
-    self->max_nodes_length_increment = max_nodes_length_increment;
+    self->max_total_nodes_length_increment = max_total_nodes_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    self->max_nodes_length = 0;
+    self->max_total_nodes_length = 0;
     self->nodes_length = 0;
 out:
     return ret;
@@ -710,6 +710,10 @@ mutation_table_expand_main_columns(mutation_table_t *self, size_t new_size)
         if (ret != 0) {
             goto out;
         }
+        ret = expand_column((void **) &self->nodes_length, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
         self->max_rows = new_size;
     }
 out:
@@ -721,12 +725,12 @@ mutation_table_expand_nodes(mutation_table_t *self, size_t new_size)
 {
     int ret = 0;
 
-    if (new_size > self->max_nodes_length) {
+    if (new_size > self->max_total_nodes_length) {
         ret = expand_column((void **) &self->nodes, new_size, sizeof(node_id_t));
         if (ret != 0) {
             goto out;
         }
-        self->max_nodes_length = new_size;
+        self->max_total_nodes_length = new_size;
     }
 out:
     return ret;
@@ -734,12 +738,13 @@ out:
 
 int
 mutation_table_add_row(mutation_table_t *self, double position, mutation_type_id_t type,
-        size_t num_nodes, node_id_t *nodes)
+        node_id_t *nodes, list_len_t nodes_length)
 {
     int ret = 0;
     size_t new_size;
+    size_t length = (size_t) nodes_length;
 
-    if (num_nodes == 0) {
+    if (nodes_length <= 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -750,8 +755,8 @@ mutation_table_add_row(mutation_table_t *self, double position, mutation_type_id
             goto out;
         }
     }
-    while (1 + self->nodes_length + num_nodes >= self->max_nodes_length) {
-        new_size = 1 + self->max_nodes_length + self->max_nodes_length_increment;
+    while (self->total_nodes_length + length >= self->max_total_nodes_length) {
+        new_size = self->max_total_nodes_length + self->max_total_nodes_length_increment;
         ret = mutation_table_expand_nodes(self, new_size);
         if (ret != 0) {
             goto out;
@@ -759,9 +764,10 @@ mutation_table_add_row(mutation_table_t *self, double position, mutation_type_id
     }
     self->position[self->num_rows] = position;
     self->type[self->num_rows] = type;
-    memcpy(self->nodes + self->nodes_length, nodes, num_nodes * sizeof(node_id_t));
-    self->nodes[self->nodes_length + num_nodes] = MSP_NULL_NODE;
-    self->nodes_length += 1 + num_nodes;
+    self->nodes_length[self->num_rows] = nodes_length;
+    memcpy(self->nodes + self->total_nodes_length, nodes,
+            nodes_length * sizeof(node_id_t));
+    self->total_nodes_length += nodes_length;
     self->num_rows++;
 out:
     return ret;
@@ -769,11 +775,13 @@ out:
 
 int
 mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *position,
-        mutation_type_id_t *type, size_t nodes_length, node_id_t *nodes)
+        mutation_type_id_t *type, node_id_t *nodes, list_len_t *nodes_length)
 {
     int ret = 0;
+    size_t total_nodes_length = 0;
+    size_t j;
 
-    if (position == NULL || type == NULL || nodes == NULL) {
+    if (position == NULL || type == NULL || nodes == NULL || nodes_length == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -781,15 +789,19 @@ mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *posi
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_expand_nodes(self, nodes_length);
+    for (j = 0; j < num_rows; j++) {
+        total_nodes_length += (size_t) nodes_length[j];
+    }
+    ret = mutation_table_expand_nodes(self, total_nodes_length);
     if (ret != 0) {
         goto out;
     }
     memcpy(self->position, position, num_rows * sizeof(double));
     memcpy(self->type, type, num_rows * sizeof(mutation_type_id_t));
-    memcpy(self->nodes, nodes, nodes_length * sizeof(node_id_t));
+    memcpy(self->nodes_length, nodes_length, num_rows * sizeof(node_id_t));
+    memcpy(self->nodes, nodes, total_nodes_length * sizeof(node_id_t));
     self->num_rows = num_rows;
-    self->nodes_length = nodes_length;
+    self->total_nodes_length = total_nodes_length;
 out:
     return ret;
 }
@@ -798,7 +810,7 @@ int
 mutation_table_reset(mutation_table_t *self)
 {
     self->num_rows = 0;
-    self->nodes_length = 0;
+    self->total_nodes_length = 0;
     return 0;
 }
 
@@ -807,6 +819,7 @@ mutation_table_free(mutation_table_t *self)
 {
     msp_safe_free(self->position);
     msp_safe_free(self->nodes);
+    msp_safe_free(self->nodes_length);
     msp_safe_free(self->type);
     return 0;
 }
@@ -814,26 +827,28 @@ mutation_table_free(mutation_table_t *self)
 void
 mutation_table_print_state(mutation_table_t *self, FILE *out)
 {
-    size_t j, offset;
+    size_t j, k, offset;
 
     fprintf(out, TABLE_SEP);
     fprintf(out, "mutation_table: %p:\n", (void *) self);
     fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    // TODO insert length increment rows
+    fprintf(out, "nodes_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->total_nodes_length,
+            (int) self->max_total_nodes_length,
+            (int) self->max_total_nodes_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tposition\tnodes\ttype\n");
+    fprintf(out, "index\tposition\tnodes_length\tnodes\ttype\n");
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "%d\t%f\t", (int) j, self->position[j]);
-        while (self->nodes[offset] != MSP_NULL_NODE) {
+        fprintf(out, "%d\t%f\t%d\t", (int) j, self->position[j], self->nodes_length[j]);
+        for (k = 0; k < self->nodes_length[j]; k++) {
             fprintf(out, "%d", (int) self->nodes[offset]);
-            offset++;
-            if (self->nodes[offset] != MSP_NULL_NODE) {
+            if (k < self->nodes_length[j] - 1) {
                 fprintf(out, ",");
             }
+            offset++;
         }
-        offset++;
         fprintf(out, "\t%d\n", self->type[j]);
     }
 }
