@@ -484,7 +484,7 @@ make_coalescence_record_tmp(node_t *node, edgeset_t *edgeset)
     PyObject *children = NULL;
     PyObject *ret = NULL;
 
-    children = convert_node_id_list(edgeset->children, edgeset->num_children);
+    children = convert_node_id_list(edgeset->children, edgeset->children_length);
     if (children == NULL) {
         goto out;
     }
@@ -512,7 +512,7 @@ make_edgeset(edgeset_t *edgeset)
     PyObject *children = NULL;
     PyObject *ret = NULL;
 
-    children = convert_node_id_list(edgeset->children, edgeset->num_children);
+    children = convert_node_id_list(edgeset->children, edgeset->children_length);
     if (children == NULL) {
         goto out;
     }
@@ -1227,7 +1227,7 @@ EdgesetTable_add_row(EdgesetTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = edgeset_table_add_row(self->edgeset_table, left, right, parent,
-        num_children, children);
+        children, num_children);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1247,7 +1247,7 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     int err;
     size_t num_rows = 0;
-    size_t children_length = 0;
+    size_t total_children_length = 0;
     PyObject *left_input = NULL;
     PyArrayObject *left_array = NULL;
     PyObject *right_input = NULL;
@@ -1256,10 +1256,14 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     PyArrayObject *parent_array = NULL;
     PyObject *children_input = NULL;
     PyArrayObject *children_array = NULL;
-    static char *kwlist[] = {"left", "right", "parent", "children", NULL};
+    PyObject *children_length_input = NULL;
+    PyArrayObject *children_length_array = NULL;
+    static char *kwlist[] = {"left", "right", "parent", "children",
+        "children_length", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
-                &left_input, &right_input, &parent_input, &children_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOOO", kwlist,
+                &left_input, &right_input, &parent_input, &children_input,
+                &children_length_input)) {
         goto out;
     }
 
@@ -1276,14 +1280,19 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     children_array = table_read_column_array(children_input, NPY_INT32,
-            &children_length, false);
+            &total_children_length, false);
     if (children_array == NULL) {
+        goto out;
+    }
+    children_length_array = table_read_column_array(children_length_input, NPY_UINT32,
+            &num_rows, true);
+    if (children_length_array == NULL) {
         goto out;
     }
     err = edgeset_table_set_columns(self->edgeset_table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array),
-            PyArray_DATA(parent_array),
-            children_length, PyArray_DATA(children_array));
+            PyArray_DATA(parent_array), PyArray_DATA(children_array),
+            PyArray_DATA(children_length_array));
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1294,6 +1303,7 @@ out:
     Py_XDECREF(right_array);
     Py_XDECREF(parent_array);
     Py_XDECREF(children_array);
+    Py_XDECREF(children_length_array);
     return ret;
 }
 
@@ -1316,7 +1326,8 @@ EdgesetTable_get_max_children_length_increment(EdgesetTable *self, void *closure
     if (EdgesetTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->edgeset_table->max_children_length_increment);
+    ret = Py_BuildValue("n",
+            (Py_ssize_t) self->edgeset_table->max_total_children_length_increment);
 out:
     return ret;
 }
@@ -1387,8 +1398,23 @@ EdgesetTable_get_children(EdgesetTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edgeset_table->children_length, self->edgeset_table->children, NPY_INT32,
-            sizeof(int32_t));
+            self->edgeset_table->total_children_length, self->edgeset_table->children,
+            NPY_INT32, sizeof(int32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+EdgesetTable_get_children_length(EdgesetTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (EdgesetTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->edgeset_table->num_rows, self->edgeset_table->children_length,
+            NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1406,6 +1432,8 @@ static PyGetSetDef EdgesetTable_getsetters[] = {
     {"right", (getter) EdgesetTable_get_right, NULL, "The right array"},
     {"parent", (getter) EdgesetTable_get_parent, NULL, "The parent array"},
     {"children", (getter) EdgesetTable_get_children, NULL, "The children array"},
+    {"children_length", (getter) EdgesetTable_get_children_length, NULL,
+        "The children_length array"},
     {NULL}  /* Sentinel */
 };
 

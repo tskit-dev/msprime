@@ -240,7 +240,7 @@ parse_edgesets(const char *text, edgeset_table_t *edgeset_table)
         }
         CU_ASSERT_FATAL(q == NULL);
         ret = edgeset_table_add_row(edgeset_table, left, right, parent,
-                num_children, children);
+                children, num_children);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
 }
@@ -415,8 +415,8 @@ verify_edgesets_equal(edgeset_t *r1, edgeset_t *r2, double scale)
 
     CU_ASSERT_DOUBLE_EQUAL_FATAL(r1->left * scale, r2->left, eps);
     CU_ASSERT_DOUBLE_EQUAL_FATAL(r1->right * scale, r2->right, eps);
-    CU_ASSERT_EQUAL_FATAL(r1->num_children, r2->num_children);
-    for (j = 0; j < r1->num_children; j++) {
+    CU_ASSERT_EQUAL_FATAL(r1->children_length, r2->children_length);
+    for (j = 0; j < r1->children_length; j++) {
         CU_ASSERT_EQUAL(r1->children[j], r2->children[j]);
     }
 }
@@ -701,7 +701,7 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
         sim_edgeset.left = sim_records[j].left;
         sim_edgeset.right = sim_records[j].right;
         sim_edgeset.parent = sim_records[j].node;
-        sim_edgeset.num_children = sim_records[j].num_children;
+        sim_edgeset.children_length = sim_records[j].num_children;
         sim_edgeset.children = sim_records[j].children;
         verify_edgesets_equal(&sim_edgeset, &ts_edgeset, scale);
     }
@@ -2749,24 +2749,24 @@ test_simplest_bad_records(void)
     edgeset_table.parent[0] = 2;
 
     /* Null child */
-    edgeset_table.children[1] = MSP_NULL_NODE;
+    edgeset_table.children[0] = MSP_NULL_NODE;
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_CHILDREN_ARRAY);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_NODE_IN_RECORD);
     tree_sequence_free(&ts);
-    edgeset_table.children[1] = 1;
+    edgeset_table.children[0] = 0;
 
     /* 0 children */
-    edgeset_table.children_length = 0;
+    edgeset_table.total_children_length = 0;
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             NULL, NULL, 0, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_CHILDREN_ARRAY);
     tree_sequence_free(&ts);
-    edgeset_table.children_length = 3;
+    edgeset_table.total_children_length = 2;
 
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_initialise(&ts);
@@ -4436,26 +4436,26 @@ test_tree_sequence_bad_records(void)
     edgeset_table.left[0] = 2.0;
 
     /* Children equal */
-    edgeset_table.children[10] = 0;
+    edgeset_table.children[7] = 0;
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             NULL, NULL, 0, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
     tree_sequence_free(&ts);
-    edgeset_table.children[10] = 5;
+    edgeset_table.children[7] = 5;
 
     /* Children not sorted */
-    edgeset_table.children[9] = 5;
-    edgeset_table.children[10] = 0;
+    edgeset_table.children[6] = 5;
+    edgeset_table.children[7] = 0;
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             NULL, NULL, 0, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
     tree_sequence_free(&ts);
-    edgeset_table.children[9] = 0;
-    edgeset_table.children[10] = 5;
+    edgeset_table.children[6] = 0;
+    edgeset_table.children[7] = 5;
 
     /* Make a gap between adjacent records */
     edgeset_table.right[1] = 1.0;
@@ -5520,8 +5520,9 @@ test_edgeset_table(void)
     edgeset_table_t table;
     size_t num_rows = 100;
     size_t max_children = 10;
-    size_t j, k, children_length;
+    size_t j, k, total_children_length;
     node_id_t *parent, *children;
+    list_len_t *children_length;
     double *left, *right;
     node_id_t c[max_children];
 
@@ -5535,26 +5536,27 @@ test_edgeset_table(void)
     edgeset_table_print_state(&table, _devnull);
 
     /* Adding 0 children is an error */
-    ret = edgeset_table_add_row(&table, 0, 0, 0, 0, c);
+    ret = edgeset_table_add_row(&table, 0, 0, 0, c, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     memset(c, 0, max_children * sizeof(node_id_t));
 
-    children_length = 0;
+    total_children_length = 0;
     for (j = 0; j < num_rows; j++) {
         k = GSL_MIN(j + 1, max_children);
-        children_length += k + 1;
-        ret = edgeset_table_add_row(&table, j, j, j, k, c);
+        total_children_length += k;
+        ret = edgeset_table_add_row(&table, j, j, j, c, k);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL(table.left[j], j);
         CU_ASSERT_EQUAL(table.right[j], j);
         CU_ASSERT_EQUAL(table.parent[j], j);
+        CU_ASSERT_EQUAL(table.children_length[j], k);
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
-        CU_ASSERT_EQUAL(table.children_length, children_length);
+        CU_ASSERT_EQUAL(table.total_children_length, total_children_length);
     }
     edgeset_table_print_state(&table, _devnull);
     edgeset_table_reset(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
-    CU_ASSERT_EQUAL(table.children_length, 0);
+    CU_ASSERT_EQUAL(table.total_children_length, 0);
 
     num_rows *= 2;
     left = malloc(num_rows * sizeof(double));
@@ -5567,34 +5569,41 @@ test_edgeset_table(void)
     CU_ASSERT_FATAL(parent != NULL);
     memset(parent, 1, num_rows * sizeof(node_id_t));
     children = malloc(2 * num_rows * sizeof(node_id_t));
-    memset(children, 0, 2 * num_rows * sizeof(node_id_t));
+    children_length = malloc(num_rows * sizeof(list_len_t));
+    CU_ASSERT_FATAL(children_length != NULL);
     for (j = 0; j < num_rows; j++) {
         children[2 * j] = j;
-        children[2 * j + 1] = MSP_NULL_NODE;
+        children[2 * j + 1] = j + 1;
+        children_length[j] = 2;
     }
 
     ret = edgeset_table_set_columns(&table, num_rows, left, right, parent,
-            2 * num_rows, children);
+            children, children_length);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(node_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.children, children, 2 * num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.children_length, children_length,
+                num_rows * sizeof(list_len_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
-    CU_ASSERT_EQUAL(table.children_length, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.total_children_length, 2 * num_rows);
 
     /* Inputs cannot be NULL */
     ret = edgeset_table_set_columns(&table, num_rows, NULL, right, parent,
-            2 * num_rows, children);
+            children, children_length);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = edgeset_table_set_columns(&table, num_rows, left, NULL, parent,
-            2 * num_rows, children);
+            children, children_length);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = edgeset_table_set_columns(&table, num_rows, left, right, NULL,
-            2 * num_rows, children);
+            children, children_length);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = edgeset_table_set_columns(&table, num_rows, left, right, parent,
-            2 * num_rows, NULL);
+            NULL, children_length);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = edgeset_table_set_columns(&table, num_rows, left, right, parent,
+            children, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     edgeset_table_free(&table);
@@ -5602,6 +5611,7 @@ test_edgeset_table(void)
     free(right);
     free(parent);
     free(children);
+    free(children_length);
 }
 
 static void

@@ -145,6 +145,7 @@ def load_coalescence_records(
     right = []
     parent = []
     children = []
+    children_length = []
     for record in records:
         time[record.node] = record.time
         population[record.node] = record.population
@@ -152,12 +153,14 @@ def load_coalescence_records(
         right.append(record.right)
         parent.append(record.node)
         children.extend(record.children)
-        children.append(msprime.NULL_NODE)
+        children_length.append(len(record.children))
 
     node_table = msprime.NodeTable()
     node_table.set_columns(flags=flags, time=time, population=population)
     edgeset_table = msprime.EdgesetTable()
-    edgeset_table.set_columns(left=left, right=right, parent=parent, children=children)
+    edgeset_table.set_columns(
+        left=left, right=right, parent=parent, children=children,
+        children_length=children_length)
     mutation_types_table = msprime.MutationTypeTable()
     mutation_types_table.add_row("0", "1")
     mutation_table = msprime.MutationTable()

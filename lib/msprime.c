@@ -2673,7 +2673,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             right = recomb_map_genetic_to_phys(recomb_map, cr->right);
         }
         ret = edgeset_table_add_row(edgesets, left, right, cr->node,
-                cr->num_children, cr->children);
+                cr->children, cr->num_children);
     }
     /* Add in the migration records */
     for (j = 0; j < self->num_migrations; j++) {

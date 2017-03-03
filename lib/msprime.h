@@ -120,13 +120,14 @@ typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
-    size_t children_length;
-    size_t max_children_length;
-    size_t max_children_length_increment;
+    size_t total_children_length;
+    size_t max_total_children_length;
+    size_t max_total_children_length_increment;
     double *left;
     double *right;
     node_id_t *parent;
     node_id_t *children;
+    list_len_t *children_length;
 } edgeset_table_t;
 
 typedef struct {
@@ -368,9 +369,9 @@ typedef struct {
 } mutation_t;
 
 typedef struct {
-    size_t num_children;
     node_id_t parent;
     node_id_t *children;
+    list_len_t children_length;
     double left;
     double right;
     double time;
@@ -397,12 +398,12 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t total_children;
-        size_t max_total_children;
+        size_t total_children_length;
+        size_t max_total_children_length;
         double *left;
         double *right;
         node_id_t *parent;
-        list_len_t *num_children;
+        list_len_t *children_length;
         node_id_t **children;
         node_id_t *children_mem;
         struct {
@@ -493,6 +494,7 @@ typedef struct {
     double right;
     population_id_t *population;
     node_id_t *parent;
+    /* TODO Change this to children_length for consistency with the tree sequence */
     list_len_t *num_children;
     node_id_t **children;
     double *time;
@@ -830,11 +832,12 @@ int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
 
 int edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
-        size_t max_children_length_increment);
+        size_t max_total_children_length_increment);
 int edgeset_table_add_row(edgeset_table_t *self, double left, double right,
-        node_id_t parent, size_t num_children, node_id_t *children);
+        node_id_t parent, node_id_t *children, list_len_t children_length);
 int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, double *left,
-        double *right, node_id_t *parent, size_t children_length, node_id_t *children);
+        double *right, node_id_t *parent, node_id_t *children,
+        list_len_t *children_length);
 int edgeset_table_reset(edgeset_table_t *self);
 int edgeset_table_free(edgeset_table_t *self);
 void edgeset_table_print_state(edgeset_table_t *self, FILE *out);

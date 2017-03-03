@@ -138,7 +138,7 @@ tree_sequence_check_state(tree_sequence_t *self)
     size_t j;
 
     for (j = 0; j < self->edgesets.num_records; j++) {
-        assert(self->edgesets.num_children[j] >= 1);
+        assert(self->edgesets.children_length[j] >= 1);
     }
 }
 
@@ -172,9 +172,9 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
                 self->edgesets.left[j],
                 self->edgesets.right[j],
                 (int) self->edgesets.parent[j]);
-        for (k = 0; k < self->edgesets.num_children[j]; k++) {
+        for (k = 0; k < self->edgesets.children_length[j]; k++) {
             fprintf(out, "%d", (int) self->edgesets.children[j][k]);
-            if (k < self->edgesets.num_children[j] - 1) {
+            if (k < self->edgesets.children_length[j] - 1) {
                 fprintf(out, ", ");
             }
         }
@@ -212,9 +212,10 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     fprintf(out, "\tnodes.max_num_records = %d\n", (int) self->nodes.max_num_records);
     fprintf(out, "\tedgesets.num_records = %d\n", (int) self->edgesets.num_records);
     fprintf(out, "\tedgesets.max_num_records = %d\n", (int) self->edgesets.max_num_records);
-    fprintf(out, "\tedgesets.total_children = %d\n", (int) self->edgesets.total_children);
-    fprintf(out, "\tedgesets.max_total_children = %d\n",
-            (int) self->edgesets.max_total_children);
+    fprintf(out, "\tedgesets.total_children_length = %d\n",
+            (int) self->edgesets.total_children_length);
+    fprintf(out, "\tedgesets.max_total_children_length = %d\n",
+            (int) self->edgesets.max_total_children_length);
     fprintf(out, "\tmutations.num_records = %d\n", (int) self->mutations.num_records);
     fprintf(out, "\tmutations.max_num_records = %d\n", (int) self->mutations.max_num_records);
     fprintf(out, "\tmutations.total_nodes_length = %d\n", (int) self->mutations.total_nodes_length);
@@ -372,14 +373,14 @@ tree_sequence_alloc_trees(tree_sequence_t *self)
         self->edgesets.max_num_records = size;
         msp_safe_free(self->edgesets.left);
         msp_safe_free(self->edgesets.right);
-        msp_safe_free(self->edgesets.num_children);
+        msp_safe_free(self->edgesets.children_length);
         msp_safe_free(self->edgesets.children);
         msp_safe_free(self->edgesets.parent);
         msp_safe_free(self->edgesets.indexes.insertion_order);
         msp_safe_free(self->edgesets.indexes.removal_order);
         self->edgesets.left = malloc(size * sizeof(double));
         self->edgesets.right = malloc(size * sizeof(double));
-        self->edgesets.num_children = malloc(size * sizeof(size_t));
+        self->edgesets.children_length = malloc(size * sizeof(list_len_t));
         self->edgesets.children = malloc(size * sizeof(node_id_t *));
         self->edgesets.parent = malloc(size * sizeof(node_id_t));
         self->edgesets.indexes.insertion_order = malloc(size * sizeof(node_id_t));
@@ -388,16 +389,16 @@ tree_sequence_alloc_trees(tree_sequence_t *self)
                 || self->edgesets.right == NULL
                 || self->edgesets.children == NULL
                 || self->edgesets.parent == NULL
-                || self->edgesets.num_children == NULL
+                || self->edgesets.children_length == NULL
                 || self->edgesets.indexes.insertion_order == NULL
                 || self->edgesets.indexes.removal_order == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
     }
-    if (self->edgesets.total_children > self->edgesets.max_total_children) {
-        size = self->edgesets.total_children;
-        self->edgesets.max_total_children = size;
+    if (self->edgesets.total_children_length > self->edgesets.max_total_children_length) {
+        size = self->edgesets.total_children_length;
+        self->edgesets.max_total_children_length = size;
         msp_safe_free(self->edgesets.children_mem);
         self->edgesets.children_mem = malloc(size * sizeof(node_id_t));
         if (self->edgesets.children_mem == NULL) {
@@ -520,7 +521,7 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->edgesets.left);
     msp_safe_free(self->edgesets.right);
     msp_safe_free(self->edgesets.children);
-    msp_safe_free(self->edgesets.num_children);
+    msp_safe_free(self->edgesets.children_length);
     msp_safe_free(self->edgesets.children_mem);
     msp_safe_free(self->edgesets.parent);
     msp_safe_free(self->edgesets.indexes.insertion_order);
@@ -590,7 +591,7 @@ tree_sequence_check(tree_sequence_t *self)
             ret = MSP_ERR_NULL_NODE_IN_RECORD;
             goto out;
         }
-        if (self->edgesets.num_children[j] < 1) {
+        if (self->edgesets.children_length[j] < 1) {
             ret = MSP_ERR_ZERO_CHILDREN;
             goto out;
         }
@@ -603,11 +604,14 @@ tree_sequence_check(tree_sequence_t *self)
             }
         }
         left = GSL_MIN(left, self->edgesets.left[j]);
-        for (k = 0; k < self->edgesets.num_children[j]; k++) {
+        for (k = 0; k < self->edgesets.children_length[j]; k++) {
             child = self->edgesets.children[j][k];
-            assert(node != MSP_NULL_NODE);
+            if (child == MSP_NULL_NODE) {
+                ret = MSP_ERR_NULL_NODE_IN_RECORD;
+                goto out;
+            }
             /* Children must be in ascending order */
-            if (k < self->edgesets.num_children[j] - 1) {
+            if (k < self->edgesets.children_length[j] - 1) {
                 if (child >= self->edgesets.children[j][k + 1]) {
                     ret = MSP_ERR_UNSORTED_CHILDREN;
                     goto out;
@@ -702,17 +706,22 @@ out:
 static int
 tree_sequence_init_edgesets(tree_sequence_t *self)
 {
+    int ret = 0;
     size_t j, offset;
 
     offset = 0;
     self->sequence_length = 0.0;
     for (j = 0; j < self->edgesets.num_records; j++) {
         self->sequence_length = GSL_MAX(self->sequence_length, self->edgesets.right[j]);
-        assert(offset < self->edgesets.total_children);
+        if (offset >= self->edgesets.total_children_length) {
+            ret = MSP_ERR_BAD_CHILDREN_ARRAY;
+            goto out;
+        }
         self->edgesets.children[j] = self->edgesets.children_mem + offset;
-        offset += (size_t) self->edgesets.num_children[j];
+        offset += (size_t) self->edgesets.children_length[j];
     }
-    return 0;
+out:
+    return ret;
 }
 
 /* Initialises memory associated with mutations.
@@ -927,7 +936,7 @@ tree_sequence_load_records(tree_sequence_t *self,
             }
         }
         ret = edgeset_table_add_row(edgeset_table, cr->left, cr->right,
-                cr->node, cr->num_children, cr->children);
+                cr->node, cr->children, cr->num_children);
         if (ret != 0) {
             goto out;
         }
@@ -1022,7 +1031,6 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     size_t num_provenance_strings, char **provenance_strings)
 {
     int ret = 0;
-    size_t j, k, offset;
 
     /* TODO need to do a lot of input validation here. What do we allow to be
      * null? What are the size restrictions on the tables? */
@@ -1031,16 +1039,12 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (edgesets->children_length <= edgesets->num_rows) {
-        ret = MSP_ERR_BAD_CHILDREN_ARRAY;
-        goto out;
-    }
 
     self->num_provenance_strings = num_provenance_strings;
     self->nodes.num_records = nodes->num_rows;
     /* name_mem here contains terminal NULLs, so we need more space */
     self->nodes.total_name_length = nodes->total_name_length + nodes->num_rows;
-    self->edgesets.total_children = edgesets->children_length - edgesets->num_rows;
+    self->edgesets.total_children_length = edgesets->total_children_length;
     self->edgesets.num_records = edgesets->num_rows;
     self->mutation_types.num_records = 0;
     self->mutation_types.total_ancestral_state_length = 0;
@@ -1095,22 +1099,10 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     memcpy(self->edgesets.left, edgesets->left, edgesets->num_rows * sizeof(double));
     memcpy(self->edgesets.right, edgesets->right, edgesets->num_rows * sizeof(double));
     memcpy(self->edgesets.parent, edgesets->parent, edgesets->num_rows * sizeof(node_id_t));
-    k = 0;
-    offset = 0;
-    for (j = 0; j < edgesets->num_rows; j++) {
-        self->edgesets.num_children[j] = 0;
-        while (k < edgesets->children_length && edgesets->children[k] != MSP_NULL_NODE) {
-            self->edgesets.num_children[j]++;
-            self->edgesets.children_mem[offset] = edgesets->children[k];
-            offset++;
-            k++;
-        }
-        k++;
-    }
-    if (k != edgesets->children_length) {
-        ret = MSP_ERR_BAD_CHILDREN_ARRAY;
-        goto out;
-    }
+    memcpy(self->edgesets.children_length, edgesets->children_length,
+            edgesets->num_rows * sizeof(list_len_t));
+    memcpy(self->edgesets.children_mem, edgesets->children,
+            edgesets->total_children_length * sizeof(node_id_t));
     ret = tree_sequence_init_edgesets(self);
     if (ret != 0) {
         goto out;
@@ -1222,8 +1214,8 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         left = self->edgesets.left[j];
         right = self->edgesets.right[j];
         ret = edgeset_table_add_row(edgesets, left, right,
-                self->edgesets.parent[j], (size_t) self->edgesets.num_children[j],
-                self->edgesets.children[j]);
+                self->edgesets.parent[j], self->edgesets.children[j],
+                self->edgesets.children_length[j]);
         if (ret != 0) {
             goto out;
         }
@@ -1375,8 +1367,8 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/edgesets/left", 1, self->edgesets.num_records},
         {"/edgesets/right", 1, self->edgesets.num_records},
         {"/edgesets/parent", 1, self->edgesets.num_records},
-        {"/edgesets/num_children", 1, self->edgesets.num_records},
-        {"/edgesets/children", 0, self->edgesets.total_children},
+        {"/edgesets/children_length", 1, self->edgesets.num_records},
+        {"/edgesets/children", 0, self->edgesets.total_children_length},
         {"/edgesets/indexes/insertion_order", 1, self->edgesets.num_records},
         {"/edgesets/indexes/removal_order", 1, self->edgesets.num_records},
     };
@@ -1389,7 +1381,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
             ret = MSP_ERR_FILE_FORMAT;
             goto out;
         }
-        if (self->edgesets.total_children == 0) {
+        if (self->edgesets.total_children_length == 0) {
             ret = MSP_ERR_FILE_FORMAT;
             goto out;
         }
@@ -1442,7 +1434,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
     }
     /* Make sure that the total number of nodes makes sense */
     if (self->mutations.total_nodes_length < self->mutations.num_records
-            || self->edgesets.total_children < self->edgesets.num_records) {
+            || self->edgesets.total_children_length < self->edgesets.num_records) {
         ret = MSP_ERR_FILE_FORMAT;
         goto out;
     }
@@ -1510,7 +1502,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/nodes/time", &self->nodes.num_records},
         {"/nodes/name", &name_length},
         {"/edgesets/left", &self->edgesets.num_records},
-        {"/edgesets/children", &self->edgesets.total_children},
+        {"/edgesets/children", &self->edgesets.total_children_length},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_read);
     size_t j;
@@ -1597,7 +1589,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/edgesets/left", H5T_NATIVE_DOUBLE, self->edgesets.left},
         {"/edgesets/right", H5T_NATIVE_DOUBLE, self->edgesets.right},
         {"/edgesets/parent", H5T_NATIVE_INT32, self->edgesets.parent},
-        {"/edgesets/num_children", H5T_NATIVE_INT32, self->edgesets.num_children},
+        {"/edgesets/children_length", H5T_NATIVE_INT32, self->edgesets.children_length},
         {"/edgesets/children", H5T_NATIVE_INT32, self->edgesets.children_mem},
         {"/edgesets/indexes/insertion_order", H5T_NATIVE_INT32,
             self->edgesets.indexes.insertion_order},
@@ -1836,12 +1828,12 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/edgesets/parent",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->edgesets.num_records, self->edgesets.parent},
-        {"/edgesets/num_children",
+        {"/edgesets/children_length",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
-            self->edgesets.num_records, self->edgesets.num_children},
+            self->edgesets.num_records, self->edgesets.children_length},
         {"/edgesets/children",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
-            self->edgesets.total_children, self->edgesets.children_mem},
+            self->edgesets.total_children_length, self->edgesets.children_mem},
         {"/edgesets/indexes/insertion_order",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->edgesets.num_records, self->edgesets.indexes.insertion_order},
@@ -2296,7 +2288,7 @@ tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgese
     edgeset->left = self->edgesets.left[index];
     edgeset->right = self->edgesets.right[index];
     edgeset->parent = self->edgesets.parent[index];
-    edgeset->num_children = (size_t) self->edgesets.num_children[index];
+    edgeset->children_length = (size_t) self->edgesets.children_length[index];
     edgeset->children = self->edgesets.children[index];
 out:
     return ret;
@@ -2425,7 +2417,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
 
     int ret = MSP_ERR_GENERIC;
     node_id_t *parent = NULL;
-    list_len_t *num_children = NULL;
+    list_len_t *children_length = NULL;
     node_id_t **children = NULL;
     node_id_t *mapping = NULL;
     node_id_t *mapped_children = NULL;
@@ -2462,7 +2454,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     }
     parent = malloc(self->nodes.num_records * sizeof(node_id_t));
     children = malloc(self->nodes.num_records * sizeof(node_id_t *));
-    num_children = malloc(self->nodes.num_records * sizeof(node_id_t));
+    children_length = malloc(self->nodes.num_records * sizeof(node_id_t));
     mapping = malloc(self->nodes.num_records * sizeof(node_id_t));
     sample_objects = malloc(num_samples * sizeof(sample_t));
     avl_node_mem = malloc(self->nodes.num_records * sizeof(avl_node_t));
@@ -2470,14 +2462,14 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     active_records = malloc(self->nodes.num_records * sizeof(active_record_t));
     mapped_children = malloc(self->nodes.num_records * sizeof(node_id_t));
     /* TODO work out better bounds for these values */
-    max_num_child_nodes = 2 * self->edgesets.total_children;
+    max_num_child_nodes = 2 * self->edgesets.total_children_length;
     max_num_records = 2 * self->edgesets.num_records;
     mapped_children_mem = malloc(max_num_child_nodes * sizeof(node_id_t));
     output_records = malloc(max_num_records * sizeof(coalescence_record_t));
     output_mutations = malloc(self->mutations.num_records * sizeof(mutation_t));
     output_mutations_nodes_mem = malloc(self->mutations.total_nodes_length *
             sizeof(node_id_t));
-    if (parent == NULL || children == NULL || num_children == NULL
+    if (parent == NULL || children == NULL || children_length == NULL
             || mapping == NULL || sample_objects == NULL
             || avl_node_mem == NULL || avl_node_value_mem == NULL
             || mapped_children == NULL || active_records == NULL
@@ -2491,7 +2483,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     for (u = 0; u < (node_id_t) self->nodes.num_records; u++) {
         parent[u] = MSP_NULL_NODE;
         children[u] = NULL;
-        num_children[u] = 0;
+        children_length[u] = 0;
         mapping[u] = MSP_NULL_NODE;
         avl_node_mem[u].item = avl_node_value_mem + u;
         active_records[u].active = false;
@@ -2529,10 +2521,10 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
             h = O[k];
             k++;
             u = self->edgesets.parent[h];
-            for (c = 0; c < num_children[u]; c++) {
+            for (c = 0; c < children_length[u]; c++) {
                 parent[children[u][c]] = MSP_NULL_NODE;
             }
-            num_children[u] = 0;
+            children_length[u] = 0;
             children[u] = NULL;
             /* Propagate up to the root and save visited nodes */
             while (u != MSP_NULL_NODE) {
@@ -2546,7 +2538,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
                 }
 
                 w = MSP_NULL_NODE;
-                for (c = 0; c < num_children[u]; c++) {
+                for (c = 0; c < children_length[u]; c++) {
                     v = children[u][c];
                     if (mapping[v] != MSP_NULL_NODE) {
                         w = w == MSP_NULL_NODE ? mapping[v]: u;
@@ -2562,9 +2554,9 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
             h = I[j];
             j++;
             u = self->edgesets.parent[h];
-            num_children[u] = self->edgesets.num_children[h];
+            children_length[u] = self->edgesets.children_length[h];
             children[u] = self->edgesets.children[h];
-            for (c = 0; c < num_children[u]; c++) {
+            for (c = 0; c < children_length[u]; c++) {
                 v = children[u][c];
                 parent[v] = u;
             }
@@ -2580,7 +2572,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
                 }
 
                 w = MSP_NULL_NODE;
-                for (c = 0; c < num_children[u]; c++) {
+                for (c = 0; c < children_length[u]; c++) {
                     v = children[u][c];
                     if (mapping[v] != MSP_NULL_NODE) {
                         w = w == MSP_NULL_NODE ? mapping[v]: u;
@@ -2600,7 +2592,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
             if (ar->active) {
                 /* Compare the mapped children at this node to the record. */
                 num_mapped_children = 0;
-                for (c = 0; c < num_children[u]; c++) {
+                for (c = 0; c < children_length[u]; c++) {
                     v = children[u][c];
                     if (mapping[v] != MSP_NULL_NODE) {
                         assert(num_mapped_children < self->nodes.num_records);
@@ -2641,7 +2633,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
                 ar->left = x;
                 ar->num_mapped_children = 0;
                 ar->mapped_children = mapped_children_mem + mapped_children_mem_offset;
-                for (c = 0; c < num_children[u]; c++) {
+                for (c = 0; c < children_length[u]; c++) {
                     v = children[u][c];
                     if (mapping[v] != MSP_NULL_NODE) {
                         assert(mapped_children_mem_offset < max_num_child_nodes);
@@ -2742,8 +2734,8 @@ out:
     if (children != NULL) {
         free(children);
     }
-    if (num_children != NULL) {
-        free(num_children);
+    if (children_length != NULL) {
+        free(children_length);
     }
     if (mapping != NULL) {
         free(mapping);
@@ -2857,7 +2849,7 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
             next_node_record++;
             w->node = s->edgesets.parent[k];
             w->time = s->nodes.time[w->node];
-            w->num_children = (size_t) s->edgesets.num_children[k];
+            w->num_children = (size_t) s->edgesets.children_length[k];
             w->children = s->edgesets.children[k];
             w->next = NULL;
             if (out_head == NULL) {
@@ -2881,7 +2873,7 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
             next_node_record++;
             w->node = s->edgesets.parent[k];
             w->time = s->nodes.time[w->node];
-            w->num_children = (size_t) s->edgesets.num_children[k];
+            w->num_children = (size_t) s->edgesets.children_length[k];
             w->children = s->edgesets.children[k];
             w->next = NULL;
             if (in_head == NULL) {
@@ -3663,10 +3655,10 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     while (in >= 0 && in < R && in_breakpoints[in_order[in]] == x) {
         k = in_order[in];
         u = s->edgesets.parent[k];
-        for (j = 0; j < s->edgesets.num_children[k]; j++) {
+        for (j = 0; j < s->edgesets.children_length[k]; j++) {
             self->parent[s->edgesets.children[k][j]] = u;
         }
-        self->num_children[u] = s->edgesets.num_children[k];
+        self->num_children[u] = s->edgesets.children_length[k];
         self->children[u] = s->edgesets.children[k];
         self->time[u] = s->nodes.time[u];
         self->population[u] = s->nodes.population[u];

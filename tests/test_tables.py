@@ -248,10 +248,9 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("left"),
         DoubleColumn("right"),
-        Int32Column("parent"),
-        Int32Column("children")]
-    ragged_list_columns = []
-    equal_len_columns = [["left", "right", "parent"]]
+        Int32Column("parent")]
+    ragged_list_columns = [(Int32Column("children"), UInt32Column("children_length"))]
+    equal_len_columns = [["left", "right", "parent", "children_length"]]
     input_parameters = [
         ("max_rows_increment", 1024),
         ("max_children_length_increment", 1024)]

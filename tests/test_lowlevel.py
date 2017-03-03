@@ -2834,6 +2834,7 @@ class TestTablesInterface(LowLevelTestCase):
         right = edgesets.right
         parent = edgesets.parent
         children = edgesets.children
+        children_length = edgesets.children_length
         offset = 0
         for j in range(ts.get_num_edgesets()):
             t = ts.get_edgeset(j)
@@ -2843,8 +2844,7 @@ class TestTablesInterface(LowLevelTestCase):
             for child in t[3]:
                 self.assertEqual(child, children[offset])
                 offset += 1
-            self.assertEqual(children[offset], NULL_NODE)
-            offset += 1
+            self.assertEqual(len(t[3]), children_length[j])
 
     def verify_migration_table(self, migrations, ts):
         """
@@ -3103,7 +3103,8 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertEqual(table.left, [0])
         self.assertEqual(table.right, [1])
         self.assertEqual(table.parent, [2])
-        self.assertEqual(list(table.children), [0, 1, NULL_NODE])
+        self.assertEqual(list(table.children), [0, 1])
+        self.assertEqual(list(table.children_length), [2])
 
     def test_edgeset_table_add_row_errors(self):
         table = _msprime.EdgesetTable()

@@ -162,6 +162,7 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
 {
     int ret;
     size_t j, l, offset, branch_mutations;
+    list_len_t k;
     double left, right, branch_length, distance, mu, position;
     node_id_t parent, child;
 
@@ -177,9 +178,11 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
         right = edgesets->right[j];
         distance = right - left;
         parent = edgesets->parent[j];
-        while (offset < edgesets->children_length
-                && edgesets->children[offset] != MSP_NULL_NODE) {
+        assert(parent >= 0 && parent < (node_id_t) nodes->num_rows);
+        for (k = 0; k < edgesets->children_length[j]; k++) {
+            assert(offset < edgesets->total_children_length);
             child = edgesets->children[offset];
+            assert(child >= 0 && child < (node_id_t) nodes->num_rows);
             offset++;
             branch_length = nodes->time[parent] - nodes->time[child];
             mu = branch_length * distance * self->mutation_rate;
@@ -193,7 +196,6 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
                 }
             }
         }
-        offset++;
     }
     qsort(self->mutations, self->num_mutations, sizeof(mutation_t), cmp_mutation);
     ret = 0;
