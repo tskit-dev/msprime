@@ -250,6 +250,8 @@ def _dump_legacy_hdf5_v2(tree_sequence, root):
     samples.create_dataset("time", (l, ), data=time, dtype=float)
     samples.create_dataset("population", (l, ), data=population, dtype="u1")
     if tree_sequence.get_num_mutations() > 0:
+        if tree_sequence.num_mutation_types > 1:
+            raise ValueError("v2 does not support non-binary mutations")
         node = []
         position = []
         for mutation in tree_sequence.mutations():
@@ -327,6 +329,8 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
         position.append(mutation.position)
     l = len(position)
     if l > 0:
+        if tree_sequence.num_mutation_types > 1:
+            raise ValueError("v3 does not support non-binary mutations")
         mutations = root.create_group("mutations")
         mutations.create_dataset("position", (l, ), data=position, dtype=float)
         mutations.create_dataset("node", (l, ), data=node, dtype="u4")

@@ -76,6 +76,12 @@ Migration = collections.namedtuple(
     "Migration",
     ["left", "right", "node", "source", "dest", "time"])
 
+
+MutationType = collections.namedtuple(
+    "MutationType",
+    ["ancestral_state", "derived_state"])
+
+
 Mutation = collections.namedtuple(
     "Mutation",
     ["position", "nodes", "index", "type"])
@@ -1770,6 +1776,10 @@ class TreeSequence(object):
         return self._ll_tree_sequence.get_num_trees()
 
     @property
+    def num_mutation_types(self):
+        return self._ll_tree_sequence.get_num_mutation_types()
+
+    @property
     def num_mutations(self):
         return self.get_num_mutations()
 
@@ -1829,6 +1839,10 @@ class TreeSequence(object):
         """
         for j in range(self.get_num_records()):
             yield CoalescenceRecord(*self._ll_tree_sequence.get_record(j))
+
+    def mutation_types(self):
+        for j in range(self.num_mutation_types):
+            yield MutationType(*self._ll_tree_sequence.get_mutation_type(j))
 
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
