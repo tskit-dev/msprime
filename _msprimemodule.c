@@ -2495,7 +2495,8 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng);
+    err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng,
+            MSP_ALPHABET_BINARY);
     if (err != 0) {
         handle_library_error(err);
         goto out;

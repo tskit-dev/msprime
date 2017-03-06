@@ -36,6 +36,7 @@
  */
 
 typedef struct {
+    int alphabet;
     double mutation_rate;
 } mutation_params_t;
 
@@ -467,12 +468,16 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    /* Set the mutation rate */
     if (config_lookup_float(config,
             "mutation_rate", &mutation_params->mutation_rate)
             == CONFIG_FALSE) {
         fatal_error("mutation_rate is a required parameter");
     }
+    if (config_lookup_int(config, "mutation_alphabet", &int_tmp)
+            == CONFIG_FALSE) {
+        fatal_error("mutation_alphabet is a required parameter.");
+    }
+    mutation_params->alphabet = int_tmp;
     if (config_lookup_int(config, "avl_node_block_size", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("avl_node_block_size is a required parameter");
@@ -557,7 +562,8 @@ print_variants(tree_sequence_t *ts)
     }
     j = 0;
     while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) {
-        printf("%d\t%f\t", j, mut->position);
+        printf("%d\t%f\t%s\t%s\t", j, mut->position, mut->ancestral_state,
+                mut->derived_state);
         for (k = 0; k < tree_sequence_get_sample_size(ts); k++) {
             printf("%d", genotypes[k]);
         }
@@ -800,7 +806,8 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng);
+    ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng,
+            mutation_params.alphabet);
     if (ret != 0) {
         goto out;
     }

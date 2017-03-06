@@ -230,6 +230,12 @@ msp_strerror(int err)
         case MSP_ERR_LENGTH_MISMATCH:
             ret = "Mismatch in stored total column length and sum of row lengths";
             break;
+        case MSP_ERR_BAD_ALPHABET:
+            ret = "Uknown alphabet provided.";
+            break;
+        case MSP_ERR_NON_SINGLE_CHAR_MUTATION:
+            ret = "Only single char mutations supported.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

@@ -51,6 +51,9 @@
 
 #define MSP_GENOTYPES_AS_CHAR 1
 
+#define MSP_ALPHABET_BINARY 0
+#define MSP_ALPHABET_ASCII  1
+
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
 #define MSP_MODEL_SMC_PRIME 2
@@ -366,6 +369,8 @@ typedef struct {
     list_len_t nodes_length;
     node_id_t *nodes;
     mutation_type_id_t type;
+    const char *ancestral_state;
+    const char *derived_state;
 } mutation_t;
 
 typedef struct {
@@ -412,6 +417,7 @@ typedef struct {
         } indexes;
     } edgesets;
     struct {
+        int alphabet;
         size_t num_records;
         size_t max_num_records;
         size_t total_ancestral_state_length;
@@ -549,10 +555,13 @@ typedef struct {
     double sequence_length;
     size_t num_mutations;
     tree_sequence_t *tree_sequence;
-    /* the haplotype binary matrix */
+    /* The haplotype binary matrix. This is an optimised special case. */
+    bool binary;
     size_t words_per_row;
-    uint64_t *haplotype_matrix;
-    char *haplotype;
+    uint64_t *binary_haplotype_matrix;
+    char *output_haplotype;
+    /* The general haplotype matrix. */
+    char *ascii_haplotype_matrix;
     sparse_tree_t tree;
 } hapgen_t;
 
@@ -597,6 +606,7 @@ typedef struct {
     size_t num_mutations;
     size_t max_num_mutations;
     size_t mutation_block_size;
+    mutation_type_table_t *mutation_types;
     mutation_t *mutations;
     object_heap_t node_heap;
 } mutgen_t;
@@ -703,6 +713,7 @@ size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
+int tree_sequence_get_alphabet(tree_sequence_t *self);
 
 int tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node);
 int tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgeset);
@@ -808,7 +819,8 @@ int recomb_map_get_rates(recomb_map_t *self, double *rates);
 
 void recomb_map_print_state(recomb_map_t *self, FILE *out);
 
-int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng);
+int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
+        int alphabet);
 int mutgen_free(mutgen_t *self);
 /* TODO finalise this interface */
 int mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
@@ -850,6 +862,7 @@ int mutation_type_table_add_row(mutation_type_table_t *self, const char *ancestr
 int mutation_type_table_set_columns(mutation_type_table_t *self, size_t num_rows,
         const char *ancestral_state, list_len_t *ancestral_state_length,
         const char *derived_state, list_len_t *derived_state_length);
+int mutation_type_table_copy(mutation_type_table_t *self, mutation_type_table_t *dest);
 int mutation_type_table_reset(mutation_type_table_t *self);
 int mutation_type_table_free(mutation_type_table_t *self);
 void mutation_type_table_print_state(mutation_type_table_t *self, FILE *out);

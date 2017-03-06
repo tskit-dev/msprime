@@ -148,7 +148,8 @@ out:
 }
 
 static int WARN_UNUSED
-vcf_converter_write_record(vcf_converter_t *self, unsigned long pos)
+vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
+        const char *ancestral_state, const char *derived_state)
 {
     int ret = MSP_ERR_GENERIC;
     int written;
@@ -223,7 +224,8 @@ vcf_converter_next(vcf_converter_t *self, char **record)
         goto out;
     }
     if (ret == 1) {
-        err = vcf_converter_write_record(self, self->positions[mut->index]);
+        err = vcf_converter_write_record(self, self->positions[mut->index],
+                mut->ancestral_state, mut->derived_state);
         if (err != 0) {
             ret = err;
             goto out;

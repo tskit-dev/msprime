@@ -626,6 +626,14 @@ out:
 }
 
 int
+mutation_type_table_copy(mutation_type_table_t *self, mutation_type_table_t *dest)
+{
+    return mutation_type_table_set_columns(dest, self->num_rows,
+            self->ancestral_state, self->ancestral_state_length,
+            self->derived_state, self->derived_state_length);
+}
+
+int
 mutation_type_table_reset(mutation_type_table_t *self)
 {
     self->num_rows = 0;
@@ -672,10 +680,12 @@ mutation_type_table_print_state(mutation_type_table_t *self, FILE *out)
             self->derived_state_length[j]);
         for (k = 0; k < self->ancestral_state_length[j]; k++) {
             fprintf(out, "%c", self->ancestral_state[ancestral_state_offset]);
+            ancestral_state_offset++;
         }
         fprintf(out, "\t");
         for (k = 0; k < self->derived_state_length[j]; k++) {
             fprintf(out, "%c", self->derived_state[derived_state_offset]);
+            derived_state_offset++;
         }
         fprintf(out, "\n");
     }

@@ -183,6 +183,7 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
                 (int) self->edgesets.indexes.removal_order[j]);
     }
     fprintf(out, "mutation_types = (%d records)\n", (int) self->mutation_types.num_records);
+    fprintf(out, "alphabet = %d\n", (int) self->mutation_types.alphabet);
     for (j = 0; j < self->mutation_types.num_records; j++) {
         fprintf(out, "\t%d\t%s\t%s\n", (int) j, self->mutation_types.ancestral_state[j],
                 self->mutation_types.derived_state[j]);
@@ -757,6 +758,18 @@ tree_sequence_init_trees(tree_sequence_t *self)
     double x;
     node_id_t *I = self->edgesets.indexes.insertion_order;
 
+    /* Set the mutation type alphabet */
+    self->mutation_types.alphabet = MSP_ALPHABET_ASCII;
+    if (self->mutation_types.num_records > 0) {
+        /* TODO what about binary back-mutations?? */
+        if (self->mutation_types.ancestral_state_length[0] == 1 &&
+                self->mutation_types.ancestral_state[0][0] == '0' &&
+                self->mutation_types.derived_state_length[0] == 1 &&
+                self->mutation_types.derived_state[0][0] == '1') {
+            self->mutation_types.alphabet = MSP_ALPHABET_BINARY;
+        }
+    }
+
     self->num_trees = 0;
     for (j = 0; j < self->edgesets.num_records; j++) {
         x = self->edgesets.left[I[j]];
@@ -790,6 +803,8 @@ tree_sequence_init_trees(tree_sequence_t *self)
             mut->index = j;
             mut->position = self->mutations.position[j];
             mut->type = self->mutations.type[j];
+            mut->ancestral_state = self->mutation_types.ancestral_state[mut->type];
+            mut->derived_state = self->mutation_types.derived_state[mut->type];
             mut->nodes_length = (size_t) self->mutations.nodes_length[j];
             mut->nodes = self->mutations.nodes[j];
         }
@@ -2162,6 +2177,12 @@ tree_sequence_get_sequence_length(tree_sequence_t *self)
     return self->sequence_length;
 }
 
+int
+tree_sequence_get_alphabet(tree_sequence_t *self)
+{
+    return self->mutation_types.alphabet;
+}
+
 size_t
 tree_sequence_get_sample_size(tree_sequence_t *self)
 {
@@ -2329,6 +2350,8 @@ tree_sequence_get_mutation(tree_sequence_t *self, size_t index, mutation_t *reco
     record->nodes_length = (size_t) self->mutations.nodes_length[index];
     record->nodes = self->mutations.nodes[index];
     record->type = self->mutations.type[index];
+    record->ancestral_state = self->mutation_types.ancestral_state[record->type];
+    record->derived_state = self->mutation_types.derived_state[record->type];
 out:
     return ret;
 }
