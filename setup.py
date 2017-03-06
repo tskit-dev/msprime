@@ -41,6 +41,10 @@ class PathConfigurator(object):
     """
     def __init__(self):
         # TODO add numpy to the install_requires??
+        # NB: interesting approach taken by statsmodels of
+        # programattically updating install_requires
+        # to avoid force-upgrading user installs of numpy, scipy, etc
+        # https://github.com/statsmodels/statsmodels/blob/master/setup.py#L124
         import numpy as np
         # TODO: make some other guesses for this...
         self.include_dirs = [np.get_include()]
@@ -49,6 +53,7 @@ class PathConfigurator(object):
         self._attempt_pkgconfig()
 
     def _check_hdf5_version(self):
+        # TODO add h5py to the install_requires?
         try:
             output = subprocess.check_output(["h5ls", "-V"]).split()
             version_str = output[2]
