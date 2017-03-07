@@ -50,6 +50,13 @@ documented in the following sections.
 High-level Python
 *****************
 
+Throughout this document, we assume that the `msprime` package is built and
+run locally _within_ the project directory. That is, `msprime` is _not_ installed
+into the Python installation using ``pip install -e`` or setuptools `development
+mode <http://setuptools.readthedocs.io/en/latest/setuptools.html#id23>`_. Please
+ensure that you build the low-level module using (e.g.) ``make ext3`` and that
+the shared object file is in the project root.
+
 +++++++++++
 Conventions
 +++++++++++
@@ -68,7 +75,6 @@ should do the trick:
 
     # Run flake8 to check for lint errors.
     exec flake8 --max-line-length 89 setup.py msprime tests
-
 
 +++++++++
 Packaging
@@ -118,10 +124,7 @@ first-class executable programs in a cross-platform manner.
 
 There are simple scripts in the root of the project (currently: ``msp_dev.py``,
 ``mspms_dev.py``) which are used for development. For example, to run the
-development version of ``mspms`` without updating the installed package, use
-``python mspms_dev.py``.
-.. assuming the purpose of these is to run without needing to update
-.. installation. Would using `pip install -e .` avoid the need for these?
+development version of ``mspms`` use ``python mspms_dev.py``.
 
 *********
 C Library
@@ -265,9 +268,11 @@ Most objects also provide a ``print_state`` method, which is useful for
 debugging.
 
 This object-oriented structure means that the vast majority of the code is
-fully thread safe.
-.. any exceptions that should be noted?
-
+fully thread safe. The only exceptions to this rule is the ``msp_strerror``,
+``tree_sequence_load`` and ``tree_sequence_dump`` functions which are not
+threadsafe due to their interaction with HDF5's error handling code.
+.. I'm not actually that sure if load() and dump() are not threadsafe, but
+.. better to overly paranoid.
 
 ++++++++++++++
 Error handling
@@ -434,7 +439,7 @@ Statistical tests
 *****************
 
 To ensure that ``msprime`` is simulating the correct process we run many statistical
-tests. Since these tests are quite expensive, taking ZZZ time to run and
+tests. Since these tests are quite expensive (taking some hours to run) and
 difficult to automatically validate, they are not run as part of CI but instead
 as a pre-release sanity check. They are also very useful to run when developing
 new simulation functionality, as subtle statistical bugs can easily slip in
