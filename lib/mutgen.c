@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2015-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -25,37 +25,37 @@
 
 #include "err.h"
 #include "msprime.h"
-#include "object_heap.h"
 
+typedef struct {
+    const char *ancestral_state;
+    const char *derived_state;
+} mutation_type_t;
+
+
+static const mutation_type_t binary_mutation_types[] = {
+    {"0", "1"}
+};
+
+static const mutation_type_t acgt_mutation_types[] = {
+    {"A", "C"},
+    {"A", "G"},
+    {"A", "T"},
+    {"C", "A"},
+    {"C", "G"},
+    {"C", "T"},
+    {"G", "A"},
+    {"G", "C"},
+    {"G", "T"},
+    {"T", "A"},
+    {"T", "C"},
+    {"T", "G"},
+};
 
 static int
-cmp_mutation(const void *a, const void *b) {
-    const mutation_t *ia = (const mutation_t *) a;
-    const mutation_t *ib = (const mutation_t *) b;
+cmp_infinite_sites_mutation(const void *a, const void *b) {
+    const infinite_sites_mutation_t *ia = (const infinite_sites_mutation_t *) a;
+    const infinite_sites_mutation_t *ib = (const infinite_sites_mutation_t *) b;
     return (ia->position > ib->position) - (ia->position < ib->position);
-}
-
-static int
-make_acgt_mutation_types(mutation_type_table_t *mutation_types)
-{
-    int ret = 0;
-    size_t j, k;
-    const char *nucleotides[] = {"A", "C", "G", "T"};
-
-    ret = mutation_type_table_alloc(mutation_types,  12, 1, 1);
-    if (ret != 0) {
-        goto out;
-    }
-    for (j = 0; j < 4; j++) {
-        for (k = 0; k < 4; k++) {
-            if (j != k) {
-                ret = mutation_type_table_add_row(mutation_types,
-                        nucleotides[j], nucleotides[k]);
-            }
-        }
-    }
-out:
-    return ret;
 }
 
 static void
@@ -67,25 +67,18 @@ mutgen_check_state(mutgen_t *self)
 void
 mutgen_print_state(mutgen_t *self, FILE *out)
 {
-    size_t j, k;
+    size_t j;
 
     fprintf(out, "Mutgen state\n");
     fprintf(out, "\tmutation_rate = %f\n", (double) self->mutation_rate);
     fprintf(out, "\tmutation_block_size = %d\n", (int) self->mutation_block_size);
     fprintf(out, "\tmax_num_mutations  = %d\n", (int) self->max_num_mutations);
-    fprintf(out, "\tnode_heap  = \n");
-    object_heap_print_state(&self->node_heap, out);
-    fprintf(out, "mutations\t%d\n", (int) self->num_mutations);
+    fprintf(out, "\tmutations\t%d\n", (int) self->num_mutations);
     for (j = 0; j < self->num_mutations; j++) {
-        fprintf(out, "\t%f\t%d\t", self->mutations[j].position,
-                self->mutations[j].type);
-        for (k = 0; k < (size_t) self->mutations[j].nodes_length; k++) {
-            fprintf(out, "%d,", (int) self->mutations[j].nodes[k]);
-        }
-        fprintf(out, "\n");
+        fprintf(out, "\t%f\t%d\t%s\t%s\n", self->mutations[j].position,
+                self->mutations[j].node, self->mutations[j].ancestral_state,
+                self->mutations[j].derived_state);
     }
-    fprintf(out, "\tmutation_types\n");
-    mutation_type_table_print_state(self->mutation_types, out);
     mutgen_check_state(self);
 }
 
@@ -93,50 +86,21 @@ mutgen_print_state(mutgen_t *self, FILE *out)
 int WARN_UNUSED
 mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet)
 {
-    int ret = MSP_ERR_NO_MEMORY;
+    int ret = 0;
 
     assert(rng != NULL);
     memset(self, 0, sizeof(mutgen_t));
+    if (! (alphabet == MSP_ALPHABET_BINARY || alphabet == MSP_ALPHABET_ASCII)) {
+        ret = MSP_ERR_BAD_ALPHABET;
+        goto out;
+    }
+    self->alphabet = alphabet;
     self->mutation_rate = mutation_rate;
     self->rng = rng;
     self->num_mutations = 0;
     self->mutation_block_size = 1024 * 1024;
-    /* Avoid potential portability issues with realloc(NULL, newsize)
-     * by mallocing enough space for 1 mutation initially. This gives the user
-     * control over the overall malloc behavior.
-     */
-    self->max_num_mutations = 1;
-    self->mutations = malloc(self->max_num_mutations * sizeof(mutation_t));
-    self->mutation_types = malloc(sizeof(mutation_type_table_t));
-    /* We need to zero out the table as we can have errors before alloc is called */
-    memset(self->mutation_types, 0, sizeof(mutation_type_table_t));
-    if (self->mutations == NULL || self->mutation_types == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = object_heap_init(&self->node_heap, sizeof(node_id_t),
-            self->mutation_block_size, NULL);
-    if (ret != 0) {
-        goto out;
-    }
-    if (alphabet == MSP_ALPHABET_BINARY) {
-        ret = mutation_type_table_alloc(self->mutation_types, 1, 1, 1);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = mutation_type_table_add_row(self->mutation_types, "0", "1");
-        if (ret != 0) {
-            goto out;
-        }
-    } else if (alphabet == MSP_ALPHABET_ASCII) {
-        ret = make_acgt_mutation_types(self->mutation_types);
-        if (ret != 0) {
-            goto out;
-        }
-    } else {
-        ret = MSP_ERR_BAD_ALPHABET;
-        goto out;
-    }
+    self->max_num_mutations = 0;
+    self->mutations = NULL;
 out:
     return ret;
 }
@@ -144,12 +108,7 @@ out:
 int
 mutgen_free(mutgen_t *self)
 {
-    if (self->mutation_types != NULL) {
-        mutation_type_table_free(self->mutation_types);
-        msp_safe_free(self->mutation_types);
-    }
     msp_safe_free(self->mutations);
-    object_heap_free(&self->node_heap);
     return 0;
 }
 
@@ -168,35 +127,27 @@ out:
 
 static int WARN_UNUSED
 mutgen_add_mutation(mutgen_t *self, node_id_t node, double position,
-        mutation_type_id_t type)
+        const char *ancestral_state, const char *derived_state)
 {
     int ret = 0;
-    mutation_t *tmp_buffer;
-    node_id_t *p;
+    infinite_sites_mutation_t *tmp_buffer;
 
     assert(self->num_mutations <= self->max_num_mutations);
 
     if (self->num_mutations == self->max_num_mutations) {
         self->max_num_mutations += self->mutation_block_size;
-        tmp_buffer = realloc(self->mutations, self->max_num_mutations * sizeof(mutation_t));
+        tmp_buffer = realloc(self->mutations, self->max_num_mutations
+                * sizeof(infinite_sites_mutation_t));
         if (tmp_buffer == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
         self->mutations = tmp_buffer;
     }
-    if (object_heap_empty(&self->node_heap)) {
-        ret = object_heap_expand(&self->node_heap);
-        if ( ret != 0) {
-            goto out;
-        }
-    }
-    p = (node_id_t *) object_heap_alloc_object(&self->node_heap);
-    self->mutations[self->num_mutations].nodes = p;
-    self->mutations[self->num_mutations].nodes[0] = node;
-    self->mutations[self->num_mutations].nodes_length = 1;
+    self->mutations[self->num_mutations].node = node;
     self->mutations[self->num_mutations].position = position;
-    self->mutations[self->num_mutations].type = type;
+    self->mutations[self->num_mutations].ancestral_state = ancestral_state;
+    self->mutations[self->num_mutations].derived_state = derived_state;
     self->num_mutations++;
 out:
     return ret;
@@ -211,17 +162,22 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
     int ret;
     size_t j, l, offset, branch_mutations;
     list_len_t k;
-    mutation_type_id_t type;
-    unsigned long num_types = (unsigned long) self->mutation_types->num_rows;
     double left, right, branch_length, distance, mu, position;
     node_id_t parent, child;
+    const mutation_type_t *mutation_types;
+    unsigned long num_mutation_types;
+    const char *ancestral_state, *derived_state;
+    unsigned long type;
 
-    /* First free up any memory used in previous calls */
-    for (j = 0; j < self->num_mutations; j++) {
-        object_heap_free_object(&self->node_heap, self->mutations[j].nodes);
+    if (self->alphabet == MSP_ALPHABET_BINARY) {
+        mutation_types = binary_mutation_types;
+        num_mutation_types = 1;
+    } else {
+        mutation_types = acgt_mutation_types;
+        num_mutation_types = 12;
     }
-    self->num_mutations = 0;
 
+    self->num_mutations = 0;
     offset = 0;
     for (j = 0; j < edgesets->num_rows; j++) {
         left = edgesets->left[j];
@@ -240,29 +196,32 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
             for (l = 0; l < branch_mutations; l++) {
                 position = gsl_ran_flat(self->rng, left, right);
                 assert(left <= position && position < right);
-                type = (mutation_type_id_t) gsl_rng_uniform_int(self->rng, num_types);
-                ret = mutgen_add_mutation(self, child, position, type);
+                type = gsl_rng_uniform_int(self->rng, num_mutation_types);
+                ancestral_state = mutation_types[type].ancestral_state;
+                derived_state = mutation_types[type].derived_state;
+                ret = mutgen_add_mutation(self, child, position, ancestral_state,
+                        derived_state);
                 if (ret != 0) {
                     goto out;
                 }
             }
         }
     }
-    qsort(self->mutations, self->num_mutations, sizeof(mutation_t), cmp_mutation);
+    qsort(self->mutations, self->num_mutations, sizeof(infinite_sites_mutation_t),
+            cmp_infinite_sites_mutation);
     ret = 0;
 out:
     return ret;
 }
 
 int
-mutgen_populate_tables(mutgen_t *self, mutation_type_table_t *mutation_types,
-        mutation_table_t *mutations)
+mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mutations)
 {
     int ret = 0;
-    mutation_t *mut;
+    infinite_sites_mutation_t *mut;
     size_t j;
 
-    ret = mutation_type_table_copy(self->mutation_types, mutation_types);
+    ret = site_table_reset(sites);
     if (ret != 0) {
         goto out;
     }
@@ -271,33 +230,17 @@ mutgen_populate_tables(mutgen_t *self, mutation_type_table_t *mutation_types,
         goto out;
     }
     for (j = 0; j < self->num_mutations; j++) {
-        mut = &self->mutations[j];
-        ret = mutation_table_add_row(mutations, mut->position, mut->type,
-                mut->nodes, mut->nodes_length);
+        mut = self->mutations + j;
+        ret = site_table_add_row(sites, mut->position, mut->ancestral_state, 1);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = mutation_table_add_row(mutations, (site_id_t) j, mut->node,
+                mut->derived_state, 1);
         if (ret != 0) {
             goto out;
         }
     }
 out:
     return ret;
-}
-
-size_t
-mutgen_get_num_mutations(mutgen_t *self)
-
-{
-    return self->num_mutations;
-}
-
-size_t
-mutgen_get_total_nodes(mutgen_t *self)
-{
-    return self->num_mutations;
-}
-
-int  WARN_UNUSED
-mutgen_get_mutations(mutgen_t *self, mutation_t **mutations)
-{
-    *mutations = self->mutations;
-    return 0;
 }

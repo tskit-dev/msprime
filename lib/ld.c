@@ -120,7 +120,7 @@ ld_calc_position_trees(ld_calc_t *self, size_t mutation_index)
     sparse_tree_t *tA = self->outer_tree;
     sparse_tree_t *tB = self->inner_tree;
 
-    ret = tree_sequence_get_mutation(self->tree_sequence, mutation_index,
+    ret = tree_sequence_get_mutation(self->tree_sequence, (mutation_id_t) mutation_index,
             &mut);
     if (ret != 0) {
         goto out;
@@ -215,7 +215,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
 
     tA = self->outer_tree;
     tB = self->inner_tree;
-    ret = tree_sequence_get_mutation(self->tree_sequence, source_index, &mA);
+    ret = tree_sequence_get_mutation(self->tree_sequence, (mutation_id_t) source_index, &mA);
     if (ret != 0) {
         goto out;
     }
@@ -229,7 +229,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
             break;
         }
         ret = tree_sequence_get_mutation(self->tree_sequence,
-                source_index + j + 1, &mB);
+                (mutation_id_t) (source_index + j + 1), &mB);
         if (ret != 0) {
             goto out;
         }
@@ -301,7 +301,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
 
     tA = self->outer_tree;
     tB = self->inner_tree;
-    ret = tree_sequence_get_mutation(self->tree_sequence, source_index, &mA);
+    ret = tree_sequence_get_mutation(self->tree_sequence, (mutation_id_t) source_index, &mA);
     if (ret != 0) {
         goto out;
     }
@@ -315,7 +315,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
         if (mutation_index < 0) {
             break;
         }
-        ret = tree_sequence_get_mutation(self->tree_sequence, (size_t) mutation_index, &mB);
+        ret = tree_sequence_get_mutation(self->tree_sequence, (mutation_id_t) mutation_index, &mB);
         if (ret != 0) {
             goto out;
         }
@@ -424,11 +424,11 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     /* We can probably do a lot better than this implementation... */
     tA = self->outer_tree;
     tB = self->inner_tree;
-    ret = tree_sequence_get_mutation(self->tree_sequence, a, &mA);
+    ret = tree_sequence_get_mutation(self->tree_sequence, (mutation_id_t) a, &mA);
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_get_mutation(self->tree_sequence, b, &mB);
+    ret = tree_sequence_get_mutation(self->tree_sequence, (mutation_id_t) b, &mB);
     if (ret != 0) {
         goto out;
     }

@@ -83,10 +83,13 @@
 #define MSP_ERR_COORDINATE_NOT_FOUND                                -52
 #define MSP_ERR_BAD_NODES_ARRAY                                     -53
 #define MSP_ERR_BAD_CHILDREN_ARRAY                                  -54
-#define MSP_ERR_MUTATION_TYPE_OUT_OF_BOUNDS                         -55
+#define MSP_ERR_SITE_OUT_OF_BOUNDS                                  -55
 #define MSP_ERR_LENGTH_MISMATCH                                     -56
 #define MSP_ERR_BAD_ALPHABET                                        -57
 #define MSP_ERR_NON_SINGLE_CHAR_MUTATION                            -58
+#define MSP_ERR_UNSORTED_SITES                                      -59
+#define MSP_ERR_BAD_SITE_POSITION                                   -60
+#define MSP_ERR_UNSORTED_MUTATIONS                                  -61
 
 /* TODO need to go through these and rename all the COALESCENCE_RECORD ones to
  * have better names. There are also unused error numbers here which should be

@@ -188,7 +188,7 @@ vcf_converter_convert_positions(vcf_converter_t *self, tree_sequence_t *tree_seq
     size_t j;
 
     for (j = 0; j < self->num_mutations; j++) {
-        ret = tree_sequence_get_mutation(tree_sequence, j, &mut);
+        ret = tree_sequence_get_mutation(tree_sequence, (mutation_id_t) j, &mut);
         if (ret != 0) {
             goto out;
         }

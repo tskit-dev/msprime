@@ -224,8 +224,8 @@ msp_strerror(int err)
         case MSP_ERR_BAD_CHILDREN_ARRAY:
             ret = "Malformed array of children.";
             break;
-        case MSP_ERR_MUTATION_TYPE_OUT_OF_BOUNDS:
-            ret = "Mutation type out of bounds";
+        case MSP_ERR_SITE_OUT_OF_BOUNDS:
+            ret = "Site out of bounds";
             break;
         case MSP_ERR_LENGTH_MISMATCH:
             ret = "Mismatch in stored total column length and sum of row lengths";
@@ -235,6 +235,15 @@ msp_strerror(int err)
             break;
         case MSP_ERR_NON_SINGLE_CHAR_MUTATION:
             ret = "Only single char mutations supported.";
+            break;
+        case MSP_ERR_UNSORTED_SITES:
+            ret = "Sites must be provided in strictly increasing position order.";
+            break;
+        case MSP_ERR_BAD_SITE_POSITION:
+            ret = "Sites positions must be between 0 and sequence_length";
+            break;
+        case MSP_ERR_UNSORTED_MUTATIONS:
+            ret = "Mutations must be provided in nondecreasing site order";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {
