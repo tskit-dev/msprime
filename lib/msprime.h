@@ -355,27 +355,23 @@ typedef struct {
 } node_t;
 
 typedef struct {
-    site_id_t id;
-    double position;
-    char *ancestral_state;
-} site_t;
-
-typedef struct {
     mutation_id_t id;
     site_id_t site;
     node_id_t node;
     const char *derived_state;
+    list_len_t derived_state_length;
     // TODO remove this and change to ID?
     size_t index;
-
-    /* /1* OLD *1/ */
-    /* double position; */
-    /* /1* TODO should we rename this to ID and change to mutation_id_t ? *1/ */
-    /* list_len_t nodes_length; */
-    /* node_id_t *nodes; */
-    /* site_id_t type; */
-    /* const char *ancestral_state; */
 } mutation_t;
+
+typedef struct {
+    site_id_t id;
+    double position;
+    char *ancestral_state;
+    list_len_t ancestral_state_length;
+    mutation_t *mutations;
+    list_len_t mutations_length;
+} site_t;
 
 typedef struct {
     node_id_t parent;
@@ -432,8 +428,9 @@ typedef struct {
         char *ancestral_state_mem;
         list_len_t *ancestral_state_length;
         double *position;
-        site_id_t *first_tree_site;
-        list_len_t *num_tree_sites;
+        site_t *tree_sites_mem;
+        site_t **tree_sites;
+        list_len_t *tree_sites_length;
         mutation_t *site_mutations_mem;
         mutation_t **site_mutations;
         list_len_t *site_mutations_length;
@@ -529,8 +526,8 @@ typedef struct {
     node_id_t *stack1;
     node_id_t *stack2;
     /* The sites on this tree */
-    site_id_t first_site;
-    list_len_t num_sites;
+    site_t *sites;
+    list_len_t sites_length;
     /* Counters needed for next() and prev() transformations. */
     int direction;
     node_id_t left_index;
@@ -560,7 +557,7 @@ typedef struct {
 typedef struct {
     size_t sample_size;
     double sequence_length;
-    size_t num_mutations;
+    size_t num_sites;
     tree_sequence_t *tree_sequence;
     /* The haplotype binary matrix. This is an optimised special case. */
     bool binary;
@@ -775,8 +772,7 @@ int sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, node_id_t u,
         size_t *num_tracked_leaves);
 int sparse_tree_get_leaf_list(sparse_tree_t *self, node_id_t u,
         leaf_list_node_t **head, leaf_list_node_t **tail);
-int sparse_tree_get_site_bounds(sparse_tree_t *self, site_id_t *first_site,
-        list_len_t *num_sites);
+int sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, list_len_t *sites_length);
 void sparse_tree_print_state(sparse_tree_t *self, FILE *out);
 /* Method for positioning the tree in the sequence. */
 int sparse_tree_first(sparse_tree_t *self);
