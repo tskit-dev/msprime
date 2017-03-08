@@ -4723,147 +4723,147 @@ test_hapgen_from_examples(void)
     free(examples);
 }
 
-/* static void */
-/* verify_ld(tree_sequence_t *ts) */
-/* { */
-/*     int ret; */
-/*     size_t num_sites = tree_sequence_get_num_sites(ts); */
-/*     site_t *sites = malloc(num_sites * sizeof(site_t)); */
-/*     ld_calc_t ld_calc; */
-/*     double *r2, *r2_prime, x; */
-/*     size_t j, num_r2_values; */
-/*     double eps = 1e-6; */
+static void
+verify_ld(tree_sequence_t *ts)
+{
+    int ret;
+    size_t num_sites = tree_sequence_get_num_sites(ts);
+    site_t *sites = malloc(num_sites * sizeof(site_t));
+    ld_calc_t ld_calc;
+    double *r2, *r2_prime, x;
+    size_t j, num_r2_values;
+    double eps = 1e-6;
 
-/*     r2 = malloc(num_sites * sizeof(double)); */
-/*     r2_prime = malloc(num_sites * sizeof(double)); */
-/*     CU_ASSERT_FATAL(r2 != NULL); */
+    r2 = malloc(num_sites * sizeof(double));
+    r2_prime = malloc(num_sites * sizeof(double));
+    CU_ASSERT_FATAL(r2 != NULL);
 
-/*     ret = ld_calc_alloc(&ld_calc, ts); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*     ld_calc_print_state(&ld_calc, _devnull); */
+    ret = ld_calc_alloc(&ld_calc, ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ld_calc_print_state(&ld_calc, _devnull);
 
 
-/*     for (j = 0; j < num_sites; j++) { */
-/*         ret = tree_sequence_get_site(ts, j, sites + j); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         ret = ld_calc_get_r2(&ld_calc, j, j, &x); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_DOUBLE_EQUAL_FATAL(x, 1.0, eps); */
-/*     } */
+    for (j = 0; j < num_sites; j++) {
+        ret = tree_sequence_get_site(ts, j, sites + j);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = ld_calc_get_r2(&ld_calc, j, j, &x);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_DOUBLE_EQUAL_FATAL(x, 1.0, eps);
+    }
 
-/*     if (num_sites > 0) { */
-/*         /1* Some checks in the forward direction *1/ */
-/*         ret = ld_calc_get_r2_array(&ld_calc, 0, MSP_DIR_FORWARD, */
-/*                 num_sites, DBL_MAX, r2, &num_r2_values); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1); */
-/*         ld_calc_print_state(&ld_calc, _devnull); */
+    if (num_sites > 0) {
+        /* Some checks in the forward direction */
+        ret = ld_calc_get_r2_array(&ld_calc, 0, MSP_DIR_FORWARD,
+                num_sites, DBL_MAX, r2, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+        ld_calc_print_state(&ld_calc, _devnull);
 
-/*         ret = ld_calc_get_r2_array(&ld_calc, num_sites - 2, MSP_DIR_FORWARD, */
-/*                 num_sites, DBL_MAX, r2_prime, &num_r2_values); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL_FATAL(num_r2_values, 1); */
-/*         ld_calc_print_state(&ld_calc, _devnull); */
+        ret = ld_calc_get_r2_array(&ld_calc, num_sites - 2, MSP_DIR_FORWARD,
+                num_sites, DBL_MAX, r2_prime, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        ld_calc_print_state(&ld_calc, _devnull);
 
-/*         ret = ld_calc_get_r2_array(&ld_calc, 0, MSP_DIR_FORWARD, */
-/*                 num_sites, DBL_MAX, r2_prime, &num_r2_values); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1); */
-/*         ld_calc_print_state(&ld_calc, _devnull); */
+        ret = ld_calc_get_r2_array(&ld_calc, 0, MSP_DIR_FORWARD,
+                num_sites, DBL_MAX, r2_prime, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+        ld_calc_print_state(&ld_calc, _devnull);
 
-/*         for (j = 0; j < num_r2_values; j++) { */
-/*             CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]); */
-/*             ret = ld_calc_get_r2(&ld_calc, 0, j + 1, &x); */
-/*             CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*             CU_ASSERT_DOUBLE_EQUAL_FATAL(r2[j], x, eps); */
-/*         } */
+        for (j = 0; j < num_r2_values; j++) {
+            CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]);
+            ret = ld_calc_get_r2(&ld_calc, 0, j + 1, &x);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_DOUBLE_EQUAL_FATAL(r2[j], x, eps);
+        }
 
-/*         /1* Some checks in the reverse direction *1/ */
-/*         ret = ld_calc_get_r2_array(&ld_calc, num_sites - 1, */
-/*                 MSP_DIR_REVERSE, num_sites, DBL_MAX, */
-/*                 r2, &num_r2_values); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1); */
-/*         ld_calc_print_state(&ld_calc, _devnull); */
+        /* Some checks in the reverse direction */
+        ret = ld_calc_get_r2_array(&ld_calc, num_sites - 1,
+                MSP_DIR_REVERSE, num_sites, DBL_MAX,
+                r2, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+        ld_calc_print_state(&ld_calc, _devnull);
 
-/*         ret = ld_calc_get_r2_array(&ld_calc, 1, MSP_DIR_REVERSE, */
-/*                 num_sites, DBL_MAX, r2_prime, &num_r2_values); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL_FATAL(num_r2_values, 1); */
-/*         ld_calc_print_state(&ld_calc, _devnull); */
+        ret = ld_calc_get_r2_array(&ld_calc, 1, MSP_DIR_REVERSE,
+                num_sites, DBL_MAX, r2_prime, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        ld_calc_print_state(&ld_calc, _devnull);
 
-/*         ret = ld_calc_get_r2_array(&ld_calc, num_sites - 1, */
-/*                 MSP_DIR_REVERSE, num_sites, DBL_MAX, */
-/*                 r2_prime, &num_r2_values); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1); */
-/*         ld_calc_print_state(&ld_calc, _devnull); */
+        ret = ld_calc_get_r2_array(&ld_calc, num_sites - 1,
+                MSP_DIR_REVERSE, num_sites, DBL_MAX,
+                r2_prime, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+        ld_calc_print_state(&ld_calc, _devnull);
 
-/*         for (j = 0; j < num_r2_values; j++) { */
-/*             CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]); */
-/*             ret = ld_calc_get_r2(&ld_calc, num_sites - 1, */
-/*                     num_sites - j - 2, &x); */
-/*             CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*             CU_ASSERT_DOUBLE_EQUAL_FATAL(r2[j], x, eps); */
-/*         } */
+        for (j = 0; j < num_r2_values; j++) {
+            CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]);
+            ret = ld_calc_get_r2(&ld_calc, num_sites - 1,
+                    num_sites - j - 2, &x);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_DOUBLE_EQUAL_FATAL(r2[j], x, eps);
+        }
 
-/*         /1* Check some error conditions *1/ */
-/*         ret = ld_calc_get_r2_array(&ld_calc, 0, 0, num_sites, DBL_MAX, */
-/*             r2, &num_r2_values); */
-/*         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE); */
-/*     } */
+        /* Check some error conditions */
+        ret = ld_calc_get_r2_array(&ld_calc, 0, 0, num_sites, DBL_MAX,
+            r2, &num_r2_values);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    }
 
-/*     if (num_sites > 3) { */
-/*         /1* Check for some basic distance calculations *1/ */
-/*         j = num_sites / 2; */
-/*         x = sites[j + 1].position - sites[j].position; */
-/*         ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_sites, */
-/*                 x, r2, &num_r2_values); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL_FATAL(num_r2_values, 1); */
+    if (num_sites > 3) {
+        /* Check for some basic distance calculations */
+        j = num_sites / 2;
+        x = sites[j + 1].position - sites[j].position;
+        ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_sites,
+                x, r2, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
 
-/*         x = sites[j].position - sites[j - 1].position; */
-/*         ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_REVERSE, num_sites, */
-/*                 x, r2, &num_r2_values); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL_FATAL(num_r2_values, 1); */
-/*     } */
+        x = sites[j].position - sites[j - 1].position;
+        ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_REVERSE, num_sites,
+                x, r2, &num_r2_values);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+    }
 
-/*     /1* Check some error conditions *1/ */
-/*     for (j = num_sites; j < num_sites + 2; j++) { */
-/*         ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, */
-/*                 num_sites, DBL_MAX, r2, &num_r2_values); */
-/*         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS); */
-/*         ret = ld_calc_get_r2(&ld_calc, j, 0, r2); */
-/*         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS); */
-/*         ret = ld_calc_get_r2(&ld_calc, 0, j, r2); */
-/*         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS); */
-/*     } */
+    /* Check some error conditions */
+    for (j = num_sites; j < num_sites + 2; j++) {
+        ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD,
+                num_sites, DBL_MAX, r2, &num_r2_values);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+        ret = ld_calc_get_r2(&ld_calc, j, 0, r2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+        ret = ld_calc_get_r2(&ld_calc, 0, j, r2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+    }
 
-/*     ld_calc_free(&ld_calc); */
-/*     free(r2); */
-/*     free(r2_prime); */
-/*     free(sites); */
-/* } */
+    ld_calc_free(&ld_calc);
+    free(r2);
+    free(r2_prime);
+    free(sites);
+}
 
-/* static void */
-/* test_ld_from_examples(void) */
-/* { */
-/*     tree_sequence_t **examples = get_example_tree_sequences(1); */
-/*     uint32_t j; */
+static void
+test_ld_from_examples(void)
+{
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    uint32_t j;
 
-/*     CU_ASSERT_FATAL(examples != NULL); */
-/*     for (j = 0; examples[j] != NULL; j++) { */
-/*         /1* j = 4 corresponds to the recurrent mutation case where we */
-/*          * trigger an assert *1/ */
-/*         if (j != 4) { */
-/*             verify_ld(examples[j]); */
-/*         } */
-/*         tree_sequence_free(examples[j]); */
-/*         free(examples[j]); */
-/*     } */
-/*     free(examples); */
-/* } */
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        /* j = 4 corresponds to the recurrent mutation case where we
+         * trigger an assert */
+        if (j != 4) {
+            verify_ld(examples[j]);
+        }
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
 
 /* static void */
 /* test_vargen_from_examples(void) */
@@ -5966,7 +5966,7 @@ main(int argc, char **argv)
         /* {"test_vargen_from_examples", test_vargen_from_examples}, */
         {"test_newick_from_examples", test_newick_from_examples},
         {"test_stats_from_examples", test_stats_from_examples},
-        /* {"test_ld_from_examples", test_ld_from_examples}, */
+        {"test_ld_from_examples", test_ld_from_examples},
         /* {"test_simplify_from_examples", test_simplify_from_examples}, */
         /* {"test_save_empty_hdf5", test_save_empty_hdf5}, */
         /* {"test_save_hdf5", test_save_hdf5}, */

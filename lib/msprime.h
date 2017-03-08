@@ -599,7 +599,7 @@ typedef struct {
 typedef struct {
     sparse_tree_t *outer_tree;
     sparse_tree_t *inner_tree;
-    size_t num_mutations;
+    size_t num_sites;
     int tree_changed;
     tree_sequence_t *tree_sequence;
 } ld_calc_t;

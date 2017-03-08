@@ -613,48 +613,46 @@ print_haplotypes(tree_sequence_t *ts)
 static void
 print_ld_matrix(tree_sequence_t *ts)
 {
-    printf("FIXME LD\n");
-    /* int ret; */
-    /* size_t num_mutations = tree_sequence_get_num_mutations(ts); */
-    /* mutation_t mA, mB; */
-    /* double *r2 = malloc(num_mutations * sizeof(double)); */
-    /* size_t j, k, num_r2_values; */
-    /* ld_calc_t ld_calc; */
+    int ret;
+    size_t num_sites = tree_sequence_get_num_sites(ts);
+    site_t sA, sB;
+    double *r2 = malloc(num_sites * sizeof(double));
+    size_t j, k, num_r2_values;
+    ld_calc_t ld_calc;
 
-    /* if (r2 == NULL) { */
-    /*     fatal_error("no memory"); */
-    /* } */
-    /* ret = ld_calc_alloc(&ld_calc, ts); */
-    /* printf("alloc: ret = %d\n", ret); */
-    /* if (ret != 0) { */
-    /*     fatal_library_error(ret, "ld_calc_alloc"); */
-    /* } */
-    /* ld_calc_print_state(&ld_calc, stdout); */
-    /* for (j = 0; j < num_mutations; j++) { */
-    /*     ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_mutations, */
-    /*             DBL_MAX, r2, &num_r2_values); */
-    /*     if (ret != 0) { */
-    /*         fatal_library_error(ret, "ld_calc_get_r2_array"); */
-    /*     } */
-    /*     for (k = 0; k < num_r2_values; k++) { */
-    /*         ret = tree_sequence_get_mutation(ts, (mutation_id_t) j, &mA); */
-    /*         if (ret != 0) { */
-    /*             fatal_library_error(ret, "get_mutation"); */
-    /*         } */
-    /*         ret = tree_sequence_get_mutation(ts, (mutation_id_t) (j + k + 1), &mB); */
-    /*         if (ret != 0) { */
-    /*             fatal_library_error(ret, "get_mutation"); */
-    /*         } */
-    /*         printf("%d\t%f\t%d\t%f\t%.3f\n", */
-    /*             (int) mA.index, mA.position, */
-    /*             (int) mB.index, mB.position, r2[k]); */
-    /*     } */
-    /* } */
-    /* free(r2); */
-    /* ret = ld_calc_free(&ld_calc); */
-    /* if (ret != 0) { */
-    /*     fatal_library_error(ret, "ld_calc_write_table"); */
-    /* } */
+    if (r2 == NULL) {
+        fatal_error("no memory");
+    }
+    ret = ld_calc_alloc(&ld_calc, ts);
+    printf("alloc: ret = %d\n", ret);
+    if (ret != 0) {
+        fatal_library_error(ret, "ld_calc_alloc");
+    }
+    ld_calc_print_state(&ld_calc, stdout);
+    for (j = 0; j < num_sites; j++) {
+        ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_sites,
+                DBL_MAX, r2, &num_r2_values);
+        if (ret != 0) {
+            fatal_library_error(ret, "ld_calc_get_r2_array");
+        }
+        for (k = 0; k < num_r2_values; k++) {
+            ret = tree_sequence_get_site(ts, (site_id_t) j, &sA);
+            if (ret != 0) {
+                fatal_library_error(ret, "get_site");
+            }
+            ret = tree_sequence_get_site(ts, (site_id_t) (j + k + 1), &sB);
+            if (ret != 0) {
+                fatal_library_error(ret, "get_site");
+            }
+            printf("%d\t%f\t%d\t%f\t%.3f\n",
+                (int) sA.id, sA.position, (int) sB.id, sB.position, r2[k]);
+        }
+    }
+    free(r2);
+    ret = ld_calc_free(&ld_calc);
+    if (ret != 0) {
+        fatal_library_error(ret, "ld_calc_write_table");
+    }
 }
 
 static void
