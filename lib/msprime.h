@@ -365,15 +365,16 @@ typedef struct {
     site_id_t site;
     node_id_t node;
     const char *derived_state;
-
-    /* OLD */
-    double position;
-    /* TODO should we rename this to ID and change to mutation_id_t ? */
+    // TODO remove this and change to ID?
     size_t index;
-    list_len_t nodes_length;
-    node_id_t *nodes;
-    site_id_t type;
-    const char *ancestral_state;
+
+    /* /1* OLD *1/ */
+    /* double position; */
+    /* /1* TODO should we rename this to ID and change to mutation_id_t ? *1/ */
+    /* list_len_t nodes_length; */
+    /* node_id_t *nodes; */
+    /* site_id_t type; */
+    /* const char *ancestral_state; */
 } mutation_t;
 
 typedef struct {
@@ -774,8 +775,8 @@ int sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, node_id_t u,
         size_t *num_tracked_leaves);
 int sparse_tree_get_leaf_list(sparse_tree_t *self, node_id_t u,
         leaf_list_node_t **head, leaf_list_node_t **tail);
-int sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
-        mutation_t **mutations);
+int sparse_tree_get_site_bounds(sparse_tree_t *self, site_id_t *first_site,
+        list_len_t *num_sites);
 void sparse_tree_print_state(sparse_tree_t *self, FILE *out);
 /* Method for positioning the tree in the sequence. */
 int sparse_tree_first(sparse_tree_t *self);
@@ -871,6 +872,7 @@ int site_table_add_row(site_table_t *self, double position, const char *ancestra
         list_len_t ancestral_state_length);
 int site_table_set_columns(site_table_t *self, size_t num_rows,
         double *position, const char *ancestral_state, list_len_t *ancestral_state_length);
+bool site_table_equal(site_table_t *self, site_table_t *other);
 int site_table_reset(site_table_t *self);
 int site_table_free(site_table_t *self);
 void site_table_print_state(site_table_t *self, FILE *out);
@@ -883,6 +885,7 @@ int mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t nod
 int mutation_table_set_columns(mutation_table_t *self, size_t num_rows,
         site_id_t *site, node_id_t *node, const char *derived_state,
         list_len_t *derived_state_length);
+bool mutation_table_equal(mutation_table_t *self, mutation_table_t *other);
 int mutation_table_reset(mutation_table_t *self);
 int mutation_table_free(mutation_table_t *self);
 void mutation_table_print_state(mutation_table_t *self, FILE *out);

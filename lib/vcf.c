@@ -147,61 +147,63 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
-vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
-        const char *ancestral_state, const char *derived_state)
-{
-    int ret = MSP_ERR_GENERIC;
-    int written;
-    uint32_t j, k;
-    size_t offset;
-    unsigned int p = self->ploidy;
-    const char *template = "1\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t";
+/* static int WARN_UNUSED */
+/* vcf_converter_write_record(vcf_converter_t *self, unsigned long pos, */
+/*         const char *ancestral_state, const char *derived_state) */
+/* { */
+/*     int ret = MSP_ERR_GENERIC; */
+/*     int written; */
+/*     uint32_t j, k; */
+/*     size_t offset; */
+/*     unsigned int p = self->ploidy; */
+/*     const char *template = "1\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t"; */
 
-    written = snprintf(self->record, self->record_size, template, pos);
-    if (written < 0) {
-        ret = MSP_ERR_IO;
-        goto out;
-    }
-    offset = (size_t) written;
+/*     written = snprintf(self->record, self->record_size, template, pos); */
+/*     if (written < 0) { */
+/*         ret = MSP_ERR_IO; */
+/*         goto out; */
+/*     } */
+/*     offset = (size_t) written; */
 
-    for (j = 0; j < self->num_vcf_samples; j++) {
-        for (k = 0; k < p; k++) {
-            self->vcf_genotypes[2 * p * j + 2 * k] = self->genotypes[j * p + k];
-        }
-    }
-    assert(offset + self->vcf_genotypes_size < self->record_size);
-    memcpy(self->record + offset, self->vcf_genotypes, self->vcf_genotypes_size);
-    ret = 0;
-out:
-    return ret;
-}
+/*     for (j = 0; j < self->num_vcf_samples; j++) { */
+/*         for (k = 0; k < p; k++) { */
+/*             self->vcf_genotypes[2 * p * j + 2 * k] = self->genotypes[j * p + k]; */
+/*         } */
+/*     } */
+/*     assert(offset + self->vcf_genotypes_size < self->record_size); */
+/*     memcpy(self->record + offset, self->vcf_genotypes, self->vcf_genotypes_size); */
+/*     ret = 0; */
+/* out: */
+/*     return ret; */
+/* } */
 
 static int WARN_UNUSED
 vcf_converter_convert_positions(vcf_converter_t *self, tree_sequence_t *tree_sequence)
 {
     int ret = 0;
-    unsigned long pos;
-    mutation_t mut;
-    /* VCF is 1-based, so we must make sure we never have a 0 coordinate */
-    unsigned long last_position = 0;
-    size_t j;
 
-    for (j = 0; j < self->num_mutations; j++) {
-        ret = tree_sequence_get_mutation(tree_sequence, (mutation_id_t) j, &mut);
-        if (ret != 0) {
-            goto out;
-        }
-        /* update pos. We use a simple algorithm to ensure positions
-         * are unique. */
-        pos = (unsigned long) round(mut.position);
-        if (pos <= last_position) {
-            pos = last_position + 1;
-        }
-        last_position = pos;
-        self->positions[j] = pos;
-    }
-out:
+    printf("FIXME VCF\n");
+    /* unsigned long pos; */
+    /* mutation_t mut; */
+    /* /1* VCF is 1-based, so we must make sure we never have a 0 coordinate *1/ */
+    /* unsigned long last_position = 0; */
+    /* size_t j; */
+
+    /* for (j = 0; j < self->num_mutations; j++) { */
+    /*     ret = tree_sequence_get_mutation(tree_sequence, (mutation_id_t) j, &mut); */
+    /*     if (ret != 0) { */
+    /*         goto out; */
+    /*     } */
+    /*     /1* update pos. We use a simple algorithm to ensure positions */
+    /*      * are unique. *1/ */
+    /*     pos = (unsigned long) round(mut.position); */
+    /*     if (pos <= last_position) { */
+    /*         pos = last_position + 1; */
+    /*     } */
+    /*     last_position = pos; */
+    /*     self->positions[j] = pos; */
+    /* } */
+/* out: */
     return ret;
 }
 
@@ -216,23 +218,24 @@ int WARN_UNUSED
 vcf_converter_next(vcf_converter_t *self, char **record)
 {
     int ret = -1;
-    int err;
-    mutation_t *mut;
+    printf("FIXME VCF\n");
+    /* int err; */
+    /* mutation_t *mut; */
 
-    ret = vargen_next(self->vargen, &mut, self->genotypes);
-    if (ret < 0) {
-        goto out;
-    }
-    if (ret == 1) {
-        err = vcf_converter_write_record(self, self->positions[mut->index],
-                mut->ancestral_state, mut->derived_state);
-        if (err != 0) {
-            ret = err;
-            goto out;
-        }
-        *record = self->record;
-    }
-out:
+    /* ret = vargen_next(self->vargen, &mut, self->genotypes); */
+    /* if (ret < 0) { */
+    /*     goto out; */
+    /* } */
+    /* if (ret == 1) { */
+    /*     err = vcf_converter_write_record(self, self->positions[mut->index], */
+    /*             mut->ancestral_state, mut->derived_state); */
+    /*     if (err != 0) { */
+    /*         ret = err; */
+    /*         goto out; */
+    /*     } */
+    /*     *record = self->record; */
+    /* } */
+/* out: */
     return ret;
 }
 

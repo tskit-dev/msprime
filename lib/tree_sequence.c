@@ -296,8 +296,9 @@ tree_sequence_alloc_mutations(tree_sequence_t *self)
         self->mutations.max_num_records = self->mutations.num_records;
         size = self->mutations.max_num_records;
         msp_safe_free(self->mutations.node);
-        msp_safe_free(self->mutations.derived_state_length);
         msp_safe_free(self->mutations.site);
+        msp_safe_free(self->mutations.derived_state);
+        msp_safe_free(self->mutations.derived_state_length);
         msp_safe_free(self->sites.site_mutations_mem);
         self->mutations.node = malloc(size * sizeof(node_id_t));
         self->mutations.derived_state = malloc(size * sizeof(char *));
@@ -553,7 +554,7 @@ tree_sequence_check(tree_sequence_t *self)
     node_id_t child, node;
     list_len_t j, k;
     size_t num_coordinates = self->edgesets.num_records + 1;
-    double left, *result;
+    double t1, t2, left, *result;
     double *coordinates = malloc(num_coordinates * sizeof(double));
 
     if (coordinates == NULL) {
@@ -638,7 +639,7 @@ tree_sequence_check(tree_sequence_t *self)
             ret = MSP_ERR_BAD_SITE_POSITION;
             goto out;
         }
-        if (j > 1) {
+        if (j > 0) {
             if (self->sites.position[j - 1] >= self->sites.position[j]) {
                 ret = MSP_ERR_UNSORTED_SITES;
                 goto out;
@@ -646,20 +647,39 @@ tree_sequence_check(tree_sequence_t *self)
         }
     }
     for (j = 0; j < self->mutations.num_records; j++) {
-        if (self->mutations.site[j] > (mutation_id_t) self->sites.num_records) {
+        if (self->mutations.site[j] < 0
+                || self->mutations.site[j] >= (mutation_id_t) self->sites.num_records) {
             ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
             goto out;
         }
-
-        if (j > 1) {
+        if (self->mutations.node[j] < 0
+                || self->mutations.node[j] >= (node_id_t) self->nodes.num_records) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (j > 0) {
             if (self->mutations.site[j - 1] > self->mutations.site[j]) {
                 ret = MSP_ERR_UNSORTED_MUTATIONS;
+                goto out;
+            }
+            if (self->mutations.site[j - 1] == self->mutations.site[j]) {
+                t1 = self->nodes.time[self->mutations.node[j - 1]];
+                t2 = self->nodes.time[self->mutations.node[j]];
+                if (t1 > t2) {
+                    ret = MSP_ERR_UNSORTED_MUTATION_NODES;
+                    goto out;
+                }
+                /* Within a site, nodes must be unique */
+                if (self->mutations.node[j - 1] == self->mutations.node[j]) {
+                    ret = MSP_ERR_DUPLICATE_MUTATION_NODES;
+                    goto out;
+                }
             }
         }
     }
     /* TODO add checks for nodes in order. */
 
-    printf("FIXME check mutations\n");
+    /* printf("FIXME check mutations\n"); */
     /* for (j = 0; j < self->mutations.num_records; j++) { */
     /*     if (self->mutations.position[j] < 0 */
     /*             || self->mutations.position[j] >= self->sequence_length */
@@ -1219,104 +1239,99 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
     size_t *num_provenance_strings, char ***provenance_strings)
 {
     int ret = -1;
-    printf("FIXME dump_tables\n");
-    /* uint32_t flags; */
-    /* size_t j; */
-    /* double left, right; */
-    /* char *ancestral_state, *derived_state; */
+    uint32_t flags;
+    size_t j;
+    double left, right;
 
-    /* if (nodes == NULL || edgesets == NULL */
-    /*         || num_provenance_strings == NULL || provenance_strings == NULL) { */
-    /*     ret = MSP_ERR_BAD_PARAM_VALUE; */
-    /*     goto out; */
-    /* } */
-    /* /1* mutation types and mutations must be specified together *1/ */
-    /* if ((sites != NULL) != (mutations != NULL)) { */
-    /*     ret = MSP_ERR_BAD_PARAM_VALUE; */
-    /*     goto out; */
-    /* } */
-    /* ret = node_table_reset(nodes); */
-    /* if (ret != 0) { */
-    /*     goto out; */
-    /* } */
-    /* for (j = 0; j < self->nodes.num_records; j++) { */
-    /*     flags = j < self->sample_size? MSP_NODE_IS_SAMPLE: 0; */
-    /*     ret = node_table_add_row(nodes, flags, */
-    /*             self->nodes.time[j], self->nodes.population[j], */
-    /*             self->nodes.name[j]); */
-    /*     if (ret != 0) { */
-    /*         goto out; */
-    /*     } */
-    /* } */
+    if (nodes == NULL || edgesets == NULL
+            || num_provenance_strings == NULL || provenance_strings == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    /* mutation types and mutations must be specified together */
+    if ((sites != NULL) != (mutations != NULL)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = node_table_reset(nodes);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->nodes.num_records; j++) {
+        flags = j < self->sample_size? MSP_NODE_IS_SAMPLE: 0;
+        ret = node_table_add_row(nodes, flags,
+                self->nodes.time[j], self->nodes.population[j],
+                self->nodes.name[j]);
+        if (ret != 0) {
+            goto out;
+        }
+    }
 
-    /* ret = edgeset_table_reset(edgesets); */
-    /* if (ret != 0) { */
-    /*     goto out; */
-    /* } */
-    /* for (j = 0; j < self->edgesets.num_records; j++) { */
-    /*     left = self->edgesets.left[j]; */
-    /*     right = self->edgesets.right[j]; */
-    /*     ret = edgeset_table_add_row(edgesets, left, right, */
-    /*             self->edgesets.parent[j], self->edgesets.children[j], */
-    /*             self->edgesets.children_length[j]); */
-    /*     if (ret != 0) { */
-    /*         goto out; */
-    /*     } */
-    /* } */
+    ret = edgeset_table_reset(edgesets);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->edgesets.num_records; j++) {
+        left = self->edgesets.left[j];
+        right = self->edgesets.right[j];
+        ret = edgeset_table_add_row(edgesets, left, right,
+                self->edgesets.parent[j], self->edgesets.children[j],
+                self->edgesets.children_length[j]);
+        if (ret != 0) {
+            goto out;
+        }
+    }
 
-    /* if (migrations != NULL) { */
-    /*     ret = migration_table_reset(migrations); */
-    /*     if (ret != 0) { */
-    /*         goto out; */
-    /*     } */
-    /*     for (j = 0; j < self->migrations.num_records; j++) { */
-    /*         ret = migration_table_add_row(migrations, */
-    /*                 self->migrations.left[j], */
-    /*                 self->migrations.right[j], */
-    /*                 self->migrations.node[j], */
-    /*                 self->migrations.source[j], */
-    /*                 self->migrations.dest[j], */
-    /*                 self->migrations.time[j]); */
-    /*         if (ret != 0) { */
-    /*             goto out; */
-    /*         } */
-    /*     } */
-    /* } */
-    /* if (sites != NULL) { */
-    /*     ret = site_table_reset(sites); */
-    /*     if (ret != 0) { */
-    /*         goto out; */
-    /*     } */
-    /*     for (j = 0; j < self->sites.num_records; j++) { */
-    /*         ancestral_state = self->sites.ancestral_state[j]; */
-    /*         derived_state = self->sites.derived_state[j]; */
-    /*         ret = site_table_add_row(sites, ancestral_state, */
-    /*                 derived_state); */
-    /*         if (ret != 0) { */
-    /*             goto out; */
-    /*         } */
-    /*     } */
-    /* } */
-    /* if (mutations != NULL) { */
-    /*     ret = mutation_table_reset(mutations); */
-    /*     if (ret != 0) { */
-    /*         goto out; */
-    /*     } */
-    /*     for (j = 0; j < self->mutations.num_records; j++) { */
-    /*         ret = mutation_table_add_row(mutations, */
-    /*                 self->mutations.position[j], self->mutations.type[j], */
-    /*                 self->mutations.nodes[j], self->mutations.nodes_length[j]); */
-    /*         if (ret != 0) { */
-    /*             goto out; */
-    /*         } */
-    /*     } */
-    /* } */
+    if (migrations != NULL) {
+        ret = migration_table_reset(migrations);
+        if (ret != 0) {
+            goto out;
+        }
+        for (j = 0; j < self->migrations.num_records; j++) {
+            ret = migration_table_add_row(migrations,
+                    self->migrations.left[j],
+                    self->migrations.right[j],
+                    self->migrations.node[j],
+                    self->migrations.source[j],
+                    self->migrations.dest[j],
+                    self->migrations.time[j]);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+    if (sites != NULL) {
+        ret = site_table_reset(sites);
+        if (ret != 0) {
+            goto out;
+        }
+        for (j = 0; j < self->sites.num_records; j++) {
+            ret = site_table_add_row(sites, self->sites.position[j],
+                    self->sites.ancestral_state[j], self->sites.ancestral_state_length[j]);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+    if (mutations != NULL) {
+        ret = mutation_table_reset(mutations);
+        if (ret != 0) {
+            goto out;
+        }
+        for (j = 0; j < self->mutations.num_records; j++) {
+            ret = mutation_table_add_row(mutations,
+                    self->mutations.site[j], self->mutations.node[j],
+                    self->mutations.derived_state[j], self->mutations.derived_state_length[j]);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+    *num_provenance_strings = self->num_provenance_strings;
+    *provenance_strings = self->provenance_strings;
 
-    /* *num_provenance_strings = self->num_provenance_strings; */
-    /* *provenance_strings = self->provenance_strings; */
-
-    /* ret = 0; */
-/* out: */
+    ret = 0;
+out:
     return ret;
 }
 
@@ -1402,7 +1417,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/sites/ancestral_state_length", 1, self->sites.num_records},
         {"/mutations/site", 1, self->mutations.num_records},
         {"/mutations/node", 1, self->mutations.num_records},
-        {"/mutations/derived_state_length", 1, self->sites.num_records},
+        {"/mutations/derived_state_length", 1, self->mutations.num_records},
         {"/nodes/flags", 1, self->nodes.num_records},
         {"/nodes/population", 1, self->nodes.num_records},
         {"/nodes/name_length", 1, self->nodes.num_records},
@@ -2412,7 +2427,7 @@ tree_sequence_compress_nodes(tree_sequence_t *self, node_id_t *samples, size_t n
     int ret = MSP_ERR_GENERIC;
     node_id_t *node_map = NULL;
     node_id_t next_node;
-    size_t c, j, k;
+    size_t c, j;
     coalescence_record_t *cr;
 
     node_map = malloc(self->nodes.num_records * sizeof(node_id_t));
@@ -2440,12 +2455,8 @@ tree_sequence_compress_nodes(tree_sequence_t *self, node_id_t *samples, size_t n
         qsort(cr->children, cr->num_children, sizeof(node_id_t), cmp_node_id_t);
     }
     for (j = 0; j < num_mutations; j++) {
-        for (k = 0; k < (size_t) mutations[j].nodes_length; k++) {
-            mutations[j].nodes[k] = node_map[mutations[j].nodes[k]];
-            assert(mutations[j].nodes[k] != MSP_NULL_NODE);
-        }
-        qsort(mutations[j].nodes, (size_t) mutations[j].nodes_length,
-                sizeof(node_id_t), cmp_node_id_t);
+        mutations[j].node = node_map[mutations[j].node];
+        assert(mutations[j].node != MSP_NULL_NODE);
     }
     ret = 0;
 out:
@@ -3478,14 +3489,14 @@ out:
     return ret;
 }
 
-/* int WARN_UNUSED */
-/* sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations, */
-/*         mutation_t **mutations) */
-/* { */
-/*     *mutations = self->mutations; */
-/*     *num_mutations = self->num_mutations; */
-/*     return 0; */
-/* } */
+int WARN_UNUSED
+sparse_tree_get_site_bounds(sparse_tree_t *self, site_id_t *first_site,
+        list_len_t *num_sites)
+{
+    *first_site = self->first_site;
+    *num_sites = self->num_sites;
+    return 0;
+}
 
 static void
 sparse_tree_check_state(sparse_tree_t *self)
@@ -3769,7 +3780,6 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     ret = 1;
     return ret;
 }
-
 
 int WARN_UNUSED
 sparse_tree_first(sparse_tree_t *self)

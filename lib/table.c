@@ -576,6 +576,22 @@ out:
     return ret;
 }
 
+bool
+site_table_equal(site_table_t *self, site_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows
+            && self->total_ancestral_state_length == other->total_ancestral_state_length) {
+        ret = memcmp(self->position, other->position,
+                self->num_rows * sizeof(double)) == 0
+            && memcmp(self->ancestral_state_length, other->ancestral_state_length,
+                    self->num_rows * sizeof(list_len_t)) == 0
+            && memcmp(self->ancestral_state, other->ancestral_state,
+                    self->total_ancestral_state_length * sizeof(char)) == 0;
+    }
+    return ret;
+}
+
 int
 site_table_reset(site_table_t *self)
 {
@@ -748,10 +764,26 @@ mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *s
     memcpy(self->site, site, num_rows * sizeof(site_id_t));
     memcpy(self->node, node, num_rows * sizeof(node_id_t));
     memcpy(self->derived_state_length, derived_state_length, num_rows * sizeof(node_id_t));
-    memcpy(self->derived_state, derived_state, total_derived_state_length * sizeof(node_id_t));
+    memcpy(self->derived_state, derived_state, total_derived_state_length * sizeof(char));
     self->num_rows = num_rows;
     self->total_derived_state_length = total_derived_state_length;
 out:
+    return ret;
+}
+
+bool
+mutation_table_equal(mutation_table_t *self, mutation_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows
+            && self->total_derived_state_length == other->total_derived_state_length) {
+        ret = memcmp(self->site, other->site, self->num_rows * sizeof(site_id_t)) == 0
+            && memcmp(self->node, other->node, self->num_rows * sizeof(node_id_t)) == 0
+            && memcmp(self->derived_state_length, other->derived_state_length,
+                    self->num_rows * sizeof(list_len_t)) == 0
+            && memcmp(self->derived_state, other->derived_state,
+                    self->total_derived_state_length * sizeof(char)) == 0;
+    }
     return ret;
 }
 

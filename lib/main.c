@@ -546,44 +546,45 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
 static void
 print_variants(tree_sequence_t *ts)
 {
-    int ret = 0;
-    vargen_t vg;
-    uint32_t j, k;
-    mutation_t *mut;
-    char *genotypes = malloc(tree_sequence_get_sample_size(ts) * sizeof(char));
+    /* int ret = 0; */
+    printf("FIXME print variants");
+    /* vargen_t vg; */
+    /* uint32_t j, k; */
+    /* mutation_t *mut; */
+    /* char *genotypes = malloc(tree_sequence_get_sample_size(ts) * sizeof(char)); */
 
-    if (genotypes == NULL) {
-        fatal_error("no memory");
-    }
-    printf("variants (%d) \n", (int) ts->mutations.num_records);
-    ret = vargen_alloc(&vg, ts, 0);
-    if (ret != 0) {
-        fatal_library_error(ret, "vargen_alloc");
-    }
-    j = 0;
-    while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) {
-        printf("%d\t%f\t%s\t%s\t", j, mut->position, mut->ancestral_state,
-                mut->derived_state);
-        for (k = 0; k < tree_sequence_get_sample_size(ts); k++) {
-            printf("%d", genotypes[k]);
-        }
-        printf("\n");
-        j++;
-    }
-    if (ret != 0) {
-        fatal_library_error(ret, "vargen_next");
-    }
-    if (j != ts->mutations.num_records) {
-        printf("ERROR!! missing variants %d %d\n", j, (int) ts->mutations.num_records);
-    }
+    /* if (genotypes == NULL) { */
+    /*     fatal_error("no memory"); */
+    /* } */
+    /* printf("variants (%d) \n", (int) ts->mutations.num_records); */
+    /* ret = vargen_alloc(&vg, ts, 0); */
+    /* if (ret != 0) { */
+    /*     fatal_library_error(ret, "vargen_alloc"); */
+    /* } */
+    /* j = 0; */
+    /* while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) { */
+    /*     printf("%d\t%f\t%s\t%s\t", j, mut->position, mut->ancestral_state, */
+    /*             mut->derived_state); */
+    /*     for (k = 0; k < tree_sequence_get_sample_size(ts); k++) { */
+    /*         printf("%d", genotypes[k]); */
+    /*     } */
+    /*     printf("\n"); */
+    /*     j++; */
+    /* } */
+    /* if (ret != 0) { */
+    /*     fatal_library_error(ret, "vargen_next"); */
+    /* } */
+    /* if (j != ts->mutations.num_records) { */
+    /*     printf("ERROR!! missing variants %d %d\n", j, (int) ts->mutations.num_records); */
+    /* } */
 
-    while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) {
-        /* this should never happen as the iterators should always
-         * fail after they finish. */
-        assert(0);
-    }
-    vargen_free(&vg);
-    free(genotypes);
+    /* while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) { */
+    /*     /1* this should never happen as the iterators should always */
+    /*      * fail after they finish. *1/ */
+    /*     assert(0); */
+    /* } */
+    /* vargen_free(&vg); */
+    /* free(genotypes); */
 }
 
 static void
@@ -612,47 +613,48 @@ print_haplotypes(tree_sequence_t *ts)
 static void
 print_ld_matrix(tree_sequence_t *ts)
 {
-    int ret;
-    size_t num_mutations = tree_sequence_get_num_mutations(ts);
-    mutation_t mA, mB;
-    double *r2 = malloc(num_mutations * sizeof(double));
-    size_t j, k, num_r2_values;
-    ld_calc_t ld_calc;
+    printf("FIXME LD\n");
+    /* int ret; */
+    /* size_t num_mutations = tree_sequence_get_num_mutations(ts); */
+    /* mutation_t mA, mB; */
+    /* double *r2 = malloc(num_mutations * sizeof(double)); */
+    /* size_t j, k, num_r2_values; */
+    /* ld_calc_t ld_calc; */
 
-    if (r2 == NULL) {
-        fatal_error("no memory");
-    }
-    ret = ld_calc_alloc(&ld_calc, ts);
-    printf("alloc: ret = %d\n", ret);
-    if (ret != 0) {
-        fatal_library_error(ret, "ld_calc_alloc");
-    }
-    ld_calc_print_state(&ld_calc, stdout);
-    for (j = 0; j < num_mutations; j++) {
-        ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_mutations,
-                DBL_MAX, r2, &num_r2_values);
-        if (ret != 0) {
-            fatal_library_error(ret, "ld_calc_get_r2_array");
-        }
-        for (k = 0; k < num_r2_values; k++) {
-            ret = tree_sequence_get_mutation(ts, (mutation_id_t) j, &mA);
-            if (ret != 0) {
-                fatal_library_error(ret, "get_mutation");
-            }
-            ret = tree_sequence_get_mutation(ts, (mutation_id_t) (j + k + 1), &mB);
-            if (ret != 0) {
-                fatal_library_error(ret, "get_mutation");
-            }
-            printf("%d\t%f\t%d\t%f\t%.3f\n",
-                (int) mA.index, mA.position,
-                (int) mB.index, mB.position, r2[k]);
-        }
-    }
-    free(r2);
-    ret = ld_calc_free(&ld_calc);
-    if (ret != 0) {
-        fatal_library_error(ret, "ld_calc_write_table");
-    }
+    /* if (r2 == NULL) { */
+    /*     fatal_error("no memory"); */
+    /* } */
+    /* ret = ld_calc_alloc(&ld_calc, ts); */
+    /* printf("alloc: ret = %d\n", ret); */
+    /* if (ret != 0) { */
+    /*     fatal_library_error(ret, "ld_calc_alloc"); */
+    /* } */
+    /* ld_calc_print_state(&ld_calc, stdout); */
+    /* for (j = 0; j < num_mutations; j++) { */
+    /*     ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_mutations, */
+    /*             DBL_MAX, r2, &num_r2_values); */
+    /*     if (ret != 0) { */
+    /*         fatal_library_error(ret, "ld_calc_get_r2_array"); */
+    /*     } */
+    /*     for (k = 0; k < num_r2_values; k++) { */
+    /*         ret = tree_sequence_get_mutation(ts, (mutation_id_t) j, &mA); */
+    /*         if (ret != 0) { */
+    /*             fatal_library_error(ret, "get_mutation"); */
+    /*         } */
+    /*         ret = tree_sequence_get_mutation(ts, (mutation_id_t) (j + k + 1), &mB); */
+    /*         if (ret != 0) { */
+    /*             fatal_library_error(ret, "get_mutation"); */
+    /*         } */
+    /*         printf("%d\t%f\t%d\t%f\t%.3f\n", */
+    /*             (int) mA.index, mA.position, */
+    /*             (int) mB.index, mB.position, r2[k]); */
+    /*     } */
+    /* } */
+    /* free(r2); */
+    /* ret = ld_calc_free(&ld_calc); */
+    /* if (ret != 0) { */
+    /*     fatal_library_error(ret, "ld_calc_write_table"); */
+    /* } */
 }
 
 static void
