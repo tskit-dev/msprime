@@ -572,9 +572,9 @@ typedef struct {
 typedef struct {
     size_t sample_size;
     double sequence_length;
-    size_t num_mutations;
+    size_t num_sites;
     tree_sequence_t *tree_sequence;
-    size_t tree_mutation_index;
+    size_t tree_site_index;
     int finished;
     sparse_tree_t tree;
     int flags;
@@ -590,7 +590,7 @@ typedef struct {
     char *vcf_genotypes;
     size_t vcf_genotypes_size;
     size_t record_size;
-    size_t num_mutations;
+    size_t num_sites;
     unsigned long contig_length;
     unsigned long *positions;
     vargen_t *vargen;
@@ -808,7 +808,7 @@ int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self, FILE *out);
 
 int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags);
-int vargen_next(vargen_t *self, mutation_t **mutation, char *genotypes);
+int vargen_next(vargen_t *self, site_t **site, char *genotypes);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self, FILE *out);
 

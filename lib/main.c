@@ -546,45 +546,45 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
 static void
 print_variants(tree_sequence_t *ts)
 {
-    /* int ret = 0; */
-    printf("FIXME print variants");
-    /* vargen_t vg; */
-    /* uint32_t j, k; */
-    /* mutation_t *mut; */
-    /* char *genotypes = malloc(tree_sequence_get_sample_size(ts) * sizeof(char)); */
+    int ret = 0;
+    vargen_t vg;
+    uint32_t j, k;
+    site_t *site;
+    char *genotypes = malloc(tree_sequence_get_sample_size(ts) * sizeof(char));
 
-    /* if (genotypes == NULL) { */
-    /*     fatal_error("no memory"); */
-    /* } */
-    /* printf("variants (%d) \n", (int) ts->mutations.num_records); */
-    /* ret = vargen_alloc(&vg, ts, 0); */
-    /* if (ret != 0) { */
-    /*     fatal_library_error(ret, "vargen_alloc"); */
-    /* } */
-    /* j = 0; */
-    /* while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) { */
-    /*     printf("%d\t%f\t%s\t%s\t", j, mut->position, mut->ancestral_state, */
-    /*             mut->derived_state); */
-    /*     for (k = 0; k < tree_sequence_get_sample_size(ts); k++) { */
-    /*         printf("%d", genotypes[k]); */
-    /*     } */
-    /*     printf("\n"); */
-    /*     j++; */
-    /* } */
-    /* if (ret != 0) { */
-    /*     fatal_library_error(ret, "vargen_next"); */
-    /* } */
-    /* if (j != ts->mutations.num_records) { */
-    /*     printf("ERROR!! missing variants %d %d\n", j, (int) ts->mutations.num_records); */
-    /* } */
+    if (genotypes == NULL) {
+        fatal_error("no memory");
+    }
+    printf("variants (%d) \n", (int) ts->sites.num_records);
+    ret = vargen_alloc(&vg, ts, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "vargen_alloc");
+    }
+    j = 0;
+    while ((ret = vargen_next(&vg, &site, genotypes)) == 1) {
+        assert(site->mutations_length == 1);
+        printf("%d\t%f\t%s\t%s\t", j, site->position, site->ancestral_state,
+                site->mutations[0].derived_state);
+        for (k = 0; k < tree_sequence_get_sample_size(ts); k++) {
+            printf("%d", genotypes[k]);
+        }
+        printf("\n");
+        j++;
+    }
+    if (ret != 0) {
+        fatal_library_error(ret, "vargen_next");
+    }
+    if (j != ts->sites.num_records) {
+        printf("ERROR!! missing variants %d %d\n", j, (int) ts->sites.num_records);
+    }
 
-    /* while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) { */
-    /*     /1* this should never happen as the iterators should always */
-    /*      * fail after they finish. *1/ */
-    /*     assert(0); */
-    /* } */
-    /* vargen_free(&vg); */
-    /* free(genotypes); */
+    while ((ret = vargen_next(&vg, &site, genotypes)) == 1) {
+        /* this should never happen as the iterators should always
+         * fail after they finish. */
+        assert(0);
+    }
+    vargen_free(&vg);
+    free(genotypes);
 }
 
 static void

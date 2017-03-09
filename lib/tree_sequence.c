@@ -735,7 +735,7 @@ tree_sequence_init_sites(tree_sequence_t *self)
     site_id_t j;
     mutation_id_t k;
     int ret = 0;
-    int binary = true;
+    bool binary = true;
     size_t offset = 0;
 
     self->alphabet = MSP_ALPHABET_ASCII;
@@ -788,7 +788,7 @@ tree_sequence_init_sites(tree_sequence_t *self)
         }
     }
     if (binary) {
-        self->alphabet = MSP_ALPHABET_ASCII;
+        self->alphabet = MSP_ALPHABET_BINARY;
     }
 out:
     return ret;
