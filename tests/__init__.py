@@ -50,8 +50,8 @@ class PythonSparseTree(object):
         self.root = 0
         self.index = -1
         self.sample_size = 0
-        # We need a mutations function, so this name is taken.
-        self.mutation_list = []
+        # We need a sites function, so this name is taken.
+        self.site_list = []
 
     @classmethod
     def from_sparse_tree(self, sparse_tree):
@@ -59,7 +59,7 @@ class PythonSparseTree(object):
         ret.root = sparse_tree.get_root()
         ret.sample_size = sparse_tree.get_sample_size()
         ret.left, ret.right = sparse_tree.get_interval()
-        ret.mutation_list = list(sparse_tree.mutations())
+        ret.site_list = list(sparse_tree.sites())
         ret.index = sparse_tree.get_index()
         # Traverse the tree and update the details as we go
         # We don't use the traversal method here because this
@@ -152,8 +152,8 @@ class PythonSparseTree(object):
     def get_time_dict(self):
         return self.time
 
-    def mutations(self):
-        return iter(self.mutation_list)
+    def sites(self):
+        return iter(self.site_list)
 
 
 class PythonTreeSequence(object):
@@ -164,13 +164,18 @@ class PythonTreeSequence(object):
         self._tree_sequence = tree_sequence
         self._sample_size = tree_sequence.get_sample_size()
         self._breakpoints = breakpoints
-        self._mutations = []
+        self._sites = []
+        _Site = collections.namedtuple(
+            "Site",
+            ["position", "ancestral_state", "index", "mutations"])
         _Mutation = collections.namedtuple(
             "Mutation",
-            ["position", "nodes", "index", "type"])
-        for j in range(tree_sequence.get_num_mutations()):
-            pos, nodes, type_, index = tree_sequence.get_mutation(j)
-            self._mutations.append(_Mutation(pos, nodes, index, type_))
+            ["site", "node", "derived_state"])
+        for j in range(tree_sequence.get_num_sites()):
+            pos, ancestral_state, mutations, index = tree_sequence.get_site(j)
+            self._sites.append(_Site(
+                position=pos, ancestral_state=ancestral_state, index=index,
+                mutations=[_Mutation(*mut) for mut in mutations]))
 
     def _diffs(self):
         M = self._tree_sequence.get_num_edgesets()
@@ -256,9 +261,9 @@ class PythonTreeSequence(object):
                 root = st.parent[root]
             st.root = root
             st.index += 1
-            # Add in all the mutations
-            st.mutation_list = [
-                mut for mut in self._mutations if st.left <= mut.position < st.right]
+            # Add in all the sites
+            st.site_list = [
+                site for site in self._sites if st.left <= site.position < st.right]
             yield st
 
 

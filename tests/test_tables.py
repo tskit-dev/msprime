@@ -184,11 +184,16 @@ class CommonTestsMixin(object):
                 input_data[list_col.name] = value
                 input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
             table = self.table_class()
-            table.set_columns(**input_data)
-            for colname, input_array in input_data.items():
-                output_array = getattr(table, colname)
-                self.assertEqual(input_array.shape, output_array.shape)
-                self.assertTrue(np.all(input_array == output_array))
+            for _ in range(5):
+                table.set_columns(**input_data)
+                for colname, input_array in input_data.items():
+                    output_array = getattr(table, colname)
+                    self.assertEqual(input_array.shape, output_array.shape)
+                    self.assertTrue(np.all(input_array == output_array))
+                table.reset()
+                self.assertEqual(table.num_rows, 0)
+                for colname in input_data.keys():
+                    self.assertEqual(list(getattr(table, colname)), [])
 
 
 class TestNodeTable(unittest.TestCase, CommonTestsMixin):

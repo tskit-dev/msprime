@@ -163,13 +163,13 @@ def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
                 [(node, weight_fun([tr.num_tracked_leaves(node) for tr in trs]))
                     for node in trs[0].nodes() if node != root])
             # print(count_nodes)
+            # TODO update this to use sites rather than mutations.
             for mut in trs[0].mutations():
                 # print(mut)
                 for j in range(n_out):
                     # TODO: this is the theoretical method
                     # that assumes we can distinguish recurrent mutations
-                    for mn in mut.nodes:
-                        S[j] += count_nodes[mn][j]
+                    S[j] += count_nodes[mut.node][j]
         else:
             raise(TypeError("Unknown method "+method))
     for j in range(n_out):
@@ -177,7 +177,6 @@ def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
     return S
 
 
-@unittest.skip("mutation interface")
 class BranchStatsTestCase(unittest.TestCase):
     """
     Tests of branch statistic computation.

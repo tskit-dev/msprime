@@ -79,12 +79,19 @@ Migration = collections.namedtuple(
 
 Site = collections.namedtuple(
     "Site",
-    ["position", "ancestral_state"])
+    ["position", "ancestral_state", "index", "mutations"])
 
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["site", "node", "ancestral_state"])
+    ["site", "node", "derived_state"])
+
+
+# This is provided for backwards compatibility with the deprecated mutations()
+# iterator.
+DeprecatedMutation = collections.namedtuple(
+    "DeprecatedMutation",
+    ["position", "node", "index"])
 
 
 Variant = collections.namedtuple(
@@ -259,13 +266,14 @@ class TreeDrawer(object):
         self._leaf_x = 1
         self._assign_x_coordinates(self._tree.get_root())
         self._mutations = []
+        # TODO update to use sites.
         for mutation in tree.mutations():
-            for node in mutation.nodes:
-                x = self._x_coords[node], self._y_coords[node]
-                v = tree.get_parent(node)
-                y = self._x_coords[v], self._y_coords[v]
-                z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
-                self._mutations.append(z)
+            node = mutation.node
+            x = self._x_coords[node], self._y_coords[node]
+            v = tree.get_parent(node)
+            y = self._x_coords[v], self._y_coords[v]
+            z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
+            self._mutations.append(z)
 
     def write(self, path):
         """
@@ -613,7 +621,14 @@ class SparseTree(object):
         :return: The number of mutations on this tree.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_num_mutations()
+        return sum(len(site.mutations) for site in self.sites())
+
+    def sites(self):
+        for ll_site in self._ll_sparse_tree.get_sites():
+            pos, ancestral_state, mutations, index = ll_site
+            yield Site(
+                position=pos, ancestral_state=ancestral_state, index=index,
+                mutations=[Mutation(*mutation) for mutation in mutations])
 
     def mutations(self):
         """
@@ -636,8 +651,11 @@ class SparseTree(object):
             the mutations in this tree.
         :rtype: iter
         """
-        for position, nodes, _type, index in self._ll_sparse_tree.get_mutations():
-            yield Mutation(position, nodes, index, _type)
+        # TODO deprecate
+        for site in self.sites():
+            for mutation in site.mutations:
+                yield DeprecatedMutation(
+                    position=site.position, node=mutation.node, index=site.index)
 
     def _leaf_generator(self, u):
         for v in self.nodes(u):
@@ -800,7 +818,7 @@ class SparseTree(object):
             self.get_interval() == other.get_interval() and
             self.get_root() == other.get_root() and
             self.get_index() == other.get_index() and
-            list(self.mutations()) == list(other.mutations()))
+            list(self.sites()) == list(other.sites()))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -1636,33 +1654,28 @@ class TreeSequence(object):
         return load_coalescence_records(
             samples=samples, records=records, mutations=mutations)
 
-    def copy(self, mutations=None):
+    def copy(self, sites=None):
         # Experimental API. Return a copy of this tree sequence, optionally with
-        # the mutations set to the specified list.
+        # the sites set to the specified list.
         node_table = msprime.NodeTable()
         edgeset_table = msprime.EdgesetTable()
         migration_table = msprime.MigrationTable()
-        mutation_types_table = msprime.SiteTable()
+        site_table = msprime.SiteTable()
         mutation_table = msprime.MutationTable()
         self._ll_tree_sequence.dump_tables(
             nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
-            mutation_types=mutation_types_table, mutations=mutation_table)
-        if mutations is not None:
-            position = []
-            nodes = []
-            nodes_length = []
-            types = []
-            for mutation in mutations:
-                position.append(mutation.position)
-                nodes.extend(mutation.nodes)
-                nodes_length.append(len(mutation.nodes))
-                types.append(mutation.type)
-            mutation_table.set_columns(
-                position=position, nodes=nodes, nodes_length=nodes_length, type=types)
+            sites=site_table, mutations=mutation_table)
+        if sites is not None:
+            site_table.reset()
+            mutation_table.reset()
+            for j, site in enumerate(sites):
+                site_table.add_row(site.position, site.ancestral_state)
+                for mutation in site.mutations:
+                    mutation_table.add_row(j, mutation.node, mutation.derived_state)
         new_ll_ts = _msprime.TreeSequence()
         new_ll_ts.load_tables(
             nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
-            mutation_types=mutation_types_table, mutations=mutation_table)
+            sites=site_table, mutations=mutation_table)
         return TreeSequence(new_ll_ts)
 
     @property
@@ -1777,8 +1790,11 @@ class TreeSequence(object):
         return self._ll_tree_sequence.get_num_trees()
 
     @property
-    def num_mutation_types(self):
-        return self._ll_tree_sequence.get_num_mutation_types()
+    def num_sites(self):
+        return self.get_num_sites()
+
+    def get_num_sites(self):
+        return self._ll_tree_sequence.get_num_sites()
 
     @property
     def num_mutations(self):
@@ -1841,10 +1857,6 @@ class TreeSequence(object):
         for j in range(self.get_num_records()):
             yield CoalescenceRecord(*self._ll_tree_sequence.get_record(j))
 
-    def mutation_types(self):
-        for j in range(self.num_mutation_types):
-            yield Site(*self._ll_tree_sequence.get_mutation_type(j))
-
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
             yield Migration(*self._ll_tree_sequence.get_migration(j))
@@ -1887,6 +1899,13 @@ class TreeSequence(object):
         """
         return _msprime.TreeDiffIterator(self._ll_tree_sequence)
 
+    def sites(self):
+        for j in range(self.num_sites):
+            pos, ancestral_state, mutations, index = self._ll_tree_sequence.get_site(j)
+            yield Site(
+                position=pos, ancestral_state=ancestral_state, index=index,
+                mutations=[Mutation(*mutation) for mutation in mutations])
+
     def mutations(self):
         """
         Returns an iterator over the mutations in this tree sequence. Each
@@ -1908,9 +1927,11 @@ class TreeSequence(object):
             the mutations in this tree sequence.
         :rtype: iter
         """
-        for j in range(self.get_num_mutations()):
-            position, nodes, type_, index = self._ll_tree_sequence.get_mutation(j)
-            yield Mutation(position, nodes, index, type_)
+        # TODO deprecate
+        for site in self.sites():
+            for mutation in site.mutations:
+                yield DeprecatedMutation(
+                    position=site.position, node=mutation.node, index=site.index)
 
     def breakpoints(self):
         """

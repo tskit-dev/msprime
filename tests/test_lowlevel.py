@@ -3170,8 +3170,8 @@ class TestTablesInterface(LowLevelTestCase):
 
         new_sites = _msprime.SiteTable()
         for j in range(ts.get_num_sites()):
-            position, ancestral_state = ts.get_site(j)
-            new_sites.add_row(position, ancestral_state)
+            t = ts.get_site(j)
+            new_sites.add_row(t[0], t[1])
         self.assertEqual(list(new_sites.position), list(sites.position))
         self.assertEqual(list(new_sites.ancestral_state), list(sites.ancestral_state))
 

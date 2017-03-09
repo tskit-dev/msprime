@@ -497,6 +497,40 @@ out:
 }
 
 static PyObject *
+make_mutation(mutation_t *mutation)
+{
+    PyObject *ret = NULL;
+
+    ret = Py_BuildValue("iis", mutation->site, mutation->node, mutation->derived_state);
+    return ret;
+}
+
+static PyObject *
+make_mutation_list(mutation_t *mutations, size_t length)
+{
+    PyObject *ret = NULL;
+    PyObject *t;
+    PyObject *item;
+    size_t j;
+
+    t = PyTuple_New(length);
+    if (t == NULL) {
+        goto out;
+    }
+    for (j = 0; j < length; j++) {
+        item = make_mutation(&mutations[j]);
+        if (item == NULL) {
+            Py_DECREF(t);
+            goto out;
+        }
+        PyTuple_SET_ITEM(t, j, item);
+    }
+    ret = t;
+out:
+    return ret;
+}
+
+static PyObject *
 make_node(node_t *r)
 {
     PyObject *ret = NULL;
@@ -539,19 +573,19 @@ static PyObject *
 make_site(site_t *site)
 {
     PyObject *ret = NULL;
+    PyObject *mutations = NULL;
 
-    ret = Py_BuildValue("ds", site->position, site->ancestral_state);
+    mutations = make_mutation_list(site->mutations, site->mutations_length);
+    if (mutations == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("dsOn", site->position, site->ancestral_state, mutations,
+            site->id);
+out:
+    Py_XDECREF(mutations);
     return ret;
 }
 
-static PyObject *
-make_mutation(mutation_t *mutation)
-{
-    PyObject *ret = NULL;
-
-    ret = Py_BuildValue("iis", mutation->site, mutation->node, mutation->derived_state);
-    return ret;
-}
 
 static PyObject *
 convert_sites(site_t *sites, size_t num_sites)
@@ -972,6 +1006,25 @@ out:
 }
 
 static PyObject *
+NodeTable_reset(NodeTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = node_table_reset(self->node_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
 NodeTable_get_max_rows_increment(NodeTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -1083,6 +1136,8 @@ static PyMethodDef NodeTable_methods[] = {
         "Adds a new row to this table."},
     {"set_columns", (PyCFunction) NodeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the speficied arrays into the columns."},
+    {"reset", (PyCFunction) NodeTable_reset, METH_NOARGS,
+        "Clears this table."},
     {NULL}  /* Sentinel */
 };
 
@@ -1231,7 +1286,6 @@ out:
     return ret;
 }
 
-
 static PyObject *
 EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
 {
@@ -1295,6 +1349,25 @@ out:
     Py_XDECREF(parent_array);
     Py_XDECREF(children_array);
     Py_XDECREF(children_length_array);
+    return ret;
+}
+
+static PyObject *
+EdgesetTable_reset(EdgesetTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (EdgesetTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = edgeset_table_reset(self->edgeset_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
     return ret;
 }
 
@@ -1433,6 +1506,8 @@ static PyMethodDef EdgesetTable_methods[] = {
         "Adds a new row to this table."},
     {"set_columns", (PyCFunction) EdgesetTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the speficied arrays into the columns."},
+    {"reset", (PyCFunction) EdgesetTable_reset, METH_NOARGS,
+        "Clears this table."},
     {NULL}  /* Sentinel */
 };
 
@@ -1604,6 +1679,25 @@ out:
 }
 
 static PyObject *
+MigrationTable_reset(MigrationTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = migration_table_reset(self->migration_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
 MigrationTable_get_max_rows_increment(MigrationTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -1728,6 +1822,8 @@ static PyGetSetDef MigrationTable_getsetters[] = {
 static PyMethodDef MigrationTable_methods[] = {
     {"set_columns", (PyCFunction) MigrationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the speficied arrays into the columns."},
+    {"reset", (PyCFunction) MigrationTable_reset, METH_NOARGS,
+        "Clears this table."},
     {NULL}  /* Sentinel */
 };
 
@@ -1922,6 +2018,26 @@ out:
 }
 
 static PyObject *
+SiteTable_reset(SiteTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (SiteTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = site_table_reset(self->site_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+
+static PyObject *
 SiteTable_get_max_rows_increment(SiteTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -2028,6 +2144,8 @@ static PyMethodDef SiteTable_methods[] = {
         "Adds a new row to this table."},
     {"set_columns", (PyCFunction) SiteTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the speficied arrays into the columns."},
+    {"reset", (PyCFunction) SiteTable_reset, METH_NOARGS,
+        "Clears this table."},
     {NULL}  /* Sentinel */
 };
 
@@ -2226,6 +2344,25 @@ out:
 }
 
 static PyObject *
+MutationTable_reset(MutationTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = mutation_table_reset(self->mutation_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
 MutationTable_get_max_rows_increment(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -2346,6 +2483,8 @@ static PyMethodDef MutationTable_methods[] = {
         "Adds a new row to this table."},
     {"set_columns", (PyCFunction) MutationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the speficied arrays into the columns."},
+    {"reset", (PyCFunction) MutationTable_reset, METH_NOARGS,
+        "Clears this table."},
     {NULL}  /* Sentinel */
 };
 
