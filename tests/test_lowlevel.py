@@ -218,14 +218,14 @@ def populate_tree_sequence(
     nodes = _msprime.NodeTable()
     edgesets = _msprime.EdgesetTable()
     migrations = _msprime.MigrationTable()
-    mutation_types = _msprime.MutationTypeTable()
+    sites = _msprime.SiteTable()
     mutations = _msprime.MutationTable()
     ts = _msprime.TreeSequence()
     sim.populate_tables(nodes, edgesets, migrations, Ne=Ne)
     if mutation_generator is not None:
-        mutation_generator.generate(nodes, edgesets, mutation_types, mutations)
+        mutation_generator.generate(nodes, edgesets, sites, mutations)
     ts.load_tables(
-        nodes, edgesets, migrations, mutation_types, mutations, provenance_strings)
+        nodes, edgesets, migrations, sites, mutations, provenance_strings)
     return ts
 
 
@@ -484,16 +484,16 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         nodes = _msprime.NodeTable()
         edgesets = _msprime.EdgesetTable()
         migrations = _msprime.MigrationTable()
-        mutation_types = _msprime.MutationTypeTable()
+        sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         ts = _msprime.TreeSequence()
         mutgen = _msprime.MutationGenerator(rng, mutation_rate)
         provenance_strings = [
             b"xxxxxxx" * (j + 1) for j in range(num_provenance_strings)]
         sim.populate_tables(nodes, edgesets, migrations)
-        mutgen.generate(nodes, edgesets, mutation_types, mutations)
+        mutgen.generate(nodes, edgesets, sites, mutations)
         ts.load_tables(
-            nodes, edgesets, migrations, mutation_types, mutations,
+            nodes, edgesets, migrations, sites, mutations,
             provenance_strings=provenance_strings)
         self.assertEqual(ts.get_num_nodes(), nodes.num_rows)
         self.assertEqual(ts.get_num_mutations(), mutations.num_rows)
@@ -525,14 +525,14 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         nodes = _msprime.NodeTable()
         edgesets = _msprime.EdgesetTable()
         migrations = _msprime.MigrationTable()
-        mutation_types = _msprime.MutationTypeTable()
+        sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         ts = _msprime.TreeSequence()
         sim.populate_tables(nodes, edgesets, migrations)
         mutation_rate = 10
         mutgen = _msprime.MutationGenerator(_msprime.RandomGenerator(1), mutation_rate)
-        mutgen.generate(nodes, edgesets, mutation_types, mutations)
-        ts.load_tables(nodes, edgesets, migrations, mutation_types, mutations)
+        mutgen.generate(nodes, edgesets, sites, mutations)
+        ts.load_tables(nodes, edgesets, migrations, sites, mutations)
         self.assertGreater(sim.get_num_migrations(), 0)
         self.assertGreater(ts.get_num_mutations(), 0)
         return ts
@@ -2105,6 +2105,7 @@ class TestTreeSequence(LowLevelTestCase):
             pi1 = ts.get_pairwise_diversity(samples)
             self.assertGreaterEqual(pi1, 0)
 
+    @unittest.skip("SKIP simplify")
     def test_simplify(self):
         out = _msprime.TreeSequence()
         for ts in self.get_example_tree_sequences():
@@ -2435,6 +2436,7 @@ class TestHaplotypeGenerator(LowLevelTestCase):
             self.assertEqual(len(h), num_mutations)
 
 
+@unittest.skip("SKIP VariantGenerator")
 class TestVariantGenerator(LowLevelTestCase):
     """
     Tests for the low-level variant generator.
@@ -2554,6 +2556,7 @@ class TestSparseTree(LowLevelTestCase):
                 self.assertRaises(
                     _msprime.LibraryError, _msprime.LeafListIterator, st, 0)
 
+    @unittest.skip("SKIP sites interface.")
     def test_mutations(self):
         for ts in self.get_example_tree_sequences():
             st = _msprime.SparseTree(ts)
@@ -2568,7 +2571,7 @@ class TestSparseTree(LowLevelTestCase):
                     for node in nodes:
                         self.assertTrue(st.get_left() <= position < st.get_right())
                         self.assertNotEqual(st.get_parent(node), 0)
-                        self.assertLess(type_, ts.get_num_mutation_types())
+                        self.assertLess(type_, ts.get_num_sites())
                         self.assertEqual(index, j)
                     j += 1
             self.assertEqual(all_tree_mutations, all_mutations)
@@ -2743,44 +2746,52 @@ class TestSparseTree(LowLevelTestCase):
         ts = self.get_tree_sequence(2, num_loci=200, random_seed=1)
         node_table = _msprime.NodeTable()
         edgeset_table = _msprime.EdgesetTable()
-        mutation_type_table = _msprime.MutationTypeTable()
+        site_table = _msprime.SiteTable()
         mutation_table = _msprime.MutationTable()
         migration_table = _msprime.MigrationTable()
         ts.dump_tables(nodes=node_table, edgesets=edgeset_table)
-        mutation_type_table.add_row("0", "1")
 
         def f(mutations):
             position = []
-            nodes = []
-            nodes_length = []
-            type_ = []
-            for p, n in mutations:
+            node = []
+            site = []
+            ancestral_state = []
+            ancestral_state_length = []
+            derived_state = []
+            derived_state_length = []
+            for j, (p, n) in enumerate(mutations):
+                site.append(j)
                 position.append(p)
-                type_.append(0)
-                nodes.extend(n)
-                nodes_length.append(len(n))
+                ancestral_state.append("0")
+                ancestral_state_length.append(1)
+                derived_state.append("1")
+                derived_state_length.append(1)
+                node.append(n)
+            site_table.set_columns(
+                position=position, ancestral_state=ancestral_state,
+                ancestral_state_length=ancestral_state_length)
             mutation_table.set_columns(
-                position=position, nodes=nodes, nodes_length=nodes_length, type=type_)
+                site=site, node=node, derived_state=derived_state,
+                derived_state_length=derived_state_length)
             ts2 = _msprime.TreeSequence()
             ts2.load_tables(
                 nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
-                mutation_types=mutation_type_table, mutations=mutation_table)
-        self.assertRaises(_msprime.LibraryError, f, [(0.1, (-1,))])
+                sites=site_table, mutations=mutation_table)
+        self.assertRaises(_msprime.LibraryError, f, [(0.1, -1)])
         l = ts.get_sequence_length()
         u = ts.get_num_nodes()
         for bad_node in [u, u + 1, 2 * u]:
-            self.assertRaises(_msprime.LibraryError, f, [(0.1, (bad_node,))])
+            self.assertRaises(_msprime.LibraryError, f, [(0.1, bad_node)])
         for bad_pos in [-1, l, l + 1]:
-            self.assertRaises(_msprime.LibraryError, f, [(l, (0,))])
+            self.assertRaises(_msprime.LibraryError, f, [(l, 0)])
 
     def test_free(self):
         ts = self.get_tree_sequence()
         t = _msprime.SparseTree(
             ts, flags=_msprime.LEAF_COUNTS | _msprime.LEAF_LISTS)
         no_arg_methods = [
-            t.get_root, t.get_sample_size, t.get_index, t.get_left,
-            t.get_right, t.get_num_mutations, t.get_flags, t.get_mutations,
-            t.get_num_mutations, t.get_num_nodes]
+            t.get_root, t.get_sample_size, t.get_index, t.get_left, t.get_right,
+            t.get_num_sites, t.get_flags, t.get_sites, t.get_num_nodes]
         node_arg_methods = [
             t.get_parent, t.get_population, t.get_children, t.get_num_leaves,
             t.get_num_tracked_leaves]
@@ -2868,19 +2879,19 @@ class TestTablesInterface(LowLevelTestCase):
             self.assertEqual(t[4], dest[j])
             self.assertEqual(t[5], time[j])
 
-    def verify_mutation_type_table(self, mutation_types, ts):
+    def verify_site_table(self, sites, ts):
         """
-        Verifies that the specified tree sequence and mutation_types table contain
+        Verifies that the specified tree sequence and sites table contain
         the same data.
         """
-        self.assertEqual(mutation_types.num_rows, ts.get_num_mutation_types())
-        self.assertGreater(mutation_types.num_rows, 0)
-        ancestral_state = mutation_types.ancestral_state
-        derived_state = mutation_types.derived_state
-        for j in range(ts.get_num_mutation_types()):
-            t = ts.get_mutation_type(j)
-            self.assertEqual(t[0], chr(ancestral_state[j]))
-            self.assertEqual(t[1], chr(derived_state[j]))
+        self.assertEqual(sites.num_rows, ts.get_num_sites())
+        self.assertGreater(sites.num_rows, 0)
+        position = sites.position
+        ancestral_state = sites.ancestral_state
+        for j in range(ts.get_num_sites()):
+            t = ts.get_site(j)
+            self.assertEqual(t[0], position[j])
+            self.assertEqual(t[1], chr(ancestral_state[j]))
 
     def verify_mutation_table(self, mutations, ts):
         """
@@ -2889,31 +2900,31 @@ class TestTablesInterface(LowLevelTestCase):
         """
         self.assertEqual(mutations.num_rows, ts.get_num_mutations())
         self.assertGreater(mutations.num_rows, 0)
-        position = mutations.position
-        nodes = mutations.nodes
-        nodes_length = mutations.nodes_length
-        mutation_type = mutations.type
+        site = mutations.site
+        node = mutations.node
+        derived_state = mutations.derived_state
+        derived_state_length = mutations.derived_state_length
         offset = 0
         for j in range(ts.get_num_mutations()):
             t = ts.get_mutation(j)
-            self.assertEqual(t[0], position[j])
-            self.assertEqual(t[2], mutation_type[j])
-            self.assertEqual(len(t[1]), nodes_length[j])
-            for node in t[1]:
-                self.assertEqual(node, nodes[offset])
+            self.assertEqual(t[0], site[j])
+            self.assertEqual(t[1], node[j])
+            self.assertEqual(len(t[2]), derived_state_length[j])
+            for c in t[2]:
+                self.assertEqual(ord(c), derived_state[offset])
                 offset += 1
 
     def test_dump_tables(self):
         ts = self.get_example_migration_tree_sequence()
         nodes = _msprime.NodeTable()
         edgesets = _msprime.EdgesetTable()
-        mutation_types = _msprime.MutationTypeTable()
+        sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         migrations = _msprime.MigrationTable()
         kwargs = {
             "nodes": nodes,
             "edgesets": edgesets,
-            "mutation_types": mutation_types,
+            "sites": sites,
             "mutations": mutations,
             "migrations": migrations,
         }
@@ -2928,7 +2939,7 @@ class TestTablesInterface(LowLevelTestCase):
         kwargs = {
             "nodes": _msprime.NodeTable(),
             "edgesets": _msprime.EdgesetTable(),
-            "mutation_types": _msprime.MutationTypeTable(),
+            "sites": _msprime.SiteTable(),
             "mutations": _msprime.MutationTable(),
             "migrations": _msprime.MigrationTable()
         }
@@ -2948,13 +2959,13 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertRaises(
             TypeError, ts.dump_tables, nodes=_msprime.NodeTable(),
             edgesets=_msprime.EdgesetTable(),
-            mutation_types=_msprime.MutationTypeTable())
+            sites=_msprime.SiteTable())
 
     def test_dump_tables_optional_parameters(self):
         ts = self.get_example_migration_tree_sequence()
         nodes = _msprime.NodeTable()
         edgesets = _msprime.EdgesetTable()
-        mutation_types = _msprime.MutationTypeTable()
+        sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         migrations = _msprime.MigrationTable()
 
@@ -2968,25 +2979,25 @@ class TestTablesInterface(LowLevelTestCase):
         self.verify_migration_table(migrations, ts)
 
         ts.dump_tables(
-            nodes=nodes, edgesets=edgesets, mutation_types=mutation_types,
+            nodes=nodes, edgesets=edgesets, sites=sites,
             mutations=mutations)
         self.verify_node_table(nodes, ts)
         self.verify_edgeset_table(edgesets, ts)
-        self.verify_mutation_type_table(mutation_types, ts)
+        self.verify_site_table(sites, ts)
         self.verify_mutation_table(mutations, ts)
 
     def test_load_tables(self):
         ex_ts = self.get_example_migration_tree_sequence()
         nodes = _msprime.NodeTable()
         edgesets = _msprime.EdgesetTable()
-        mutation_types = _msprime.MutationTypeTable()
+        sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         migrations = _msprime.MigrationTable()
         provenance = [b"sdf", b"wer"]
         kwargs = {
             "nodes": nodes,
             "edgesets": edgesets,
-            "mutation_types": mutation_types,
+            "sites": sites,
             "mutations": mutations,
             "migrations": migrations,
         }
@@ -2997,7 +3008,7 @@ class TestTablesInterface(LowLevelTestCase):
         self.verify_node_table(nodes, ts)
         self.verify_edgeset_table(edgesets, ts)
         self.verify_migration_table(migrations, ts)
-        self.verify_mutation_type_table(mutation_types, ts)
+        self.verify_site_table(sites, ts)
         self.verify_mutation_table(mutations, ts)
         self.assertEqual(ts.get_provenance_strings(), provenance)
 
@@ -3006,7 +3017,7 @@ class TestTablesInterface(LowLevelTestCase):
         kwargs = {
             "nodes": _msprime.NodeTable(),
             "edgesets": _msprime.EdgesetTable(),
-            "mutation_types": _msprime.MutationTypeTable(),
+            "sites": _msprime.SiteTable(),
             "mutations": _msprime.MutationTable(),
             "migrations": _msprime.MigrationTable(),
         }
@@ -3029,17 +3040,17 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertRaises(
             TypeError, ts.load_tables, nodes=_msprime.NodeTable(),
             edgesets=_msprime.EdgesetTable(),
-            mutation_types=_msprime.MutationTypeTable())
+            sites=_msprime.SiteTable())
 
     def test_load_tables_optional_parameters(self):
         ex_ts = self.get_example_migration_tree_sequence()
         nodes = _msprime.NodeTable()
         edgesets = _msprime.EdgesetTable()
-        mutation_types = _msprime.MutationTypeTable()
+        sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         migrations = _msprime.MigrationTable()
         ex_ts.dump_tables(
-            nodes=nodes, edgesets=edgesets, mutation_types=mutation_types,
+            nodes=nodes, edgesets=edgesets, sites=sites,
             mutations=mutations, migrations=migrations)
 
         ts = _msprime.TreeSequence()
@@ -3058,11 +3069,11 @@ class TestTablesInterface(LowLevelTestCase):
 
         ts = _msprime.TreeSequence()
         ts.load_tables(
-            nodes=nodes, edgesets=edgesets, mutation_types=mutation_types,
+            nodes=nodes, edgesets=edgesets, sites=sites,
             mutations=mutations)
         self.verify_node_table(nodes, ts)
         self.verify_edgeset_table(edgesets, ts)
-        self.verify_mutation_type_table(mutation_types, ts)
+        self.verify_site_table(sites, ts)
         self.verify_mutation_table(mutations, ts)
         self.assertEqual(ts.get_num_migrations(), 0)
 
@@ -3130,12 +3141,12 @@ class TestTablesInterface(LowLevelTestCase):
         nodes = _msprime.NodeTable()
         edgesets = _msprime.EdgesetTable()
         mutations = _msprime.MutationTable()
-        mutation_types = _msprime.MutationTypeTable()
+        sites = _msprime.SiteTable()
         ts = self.get_example_migration_tree_sequence()
         ts.dump_tables(
-            nodes=nodes, edgesets=edgesets, mutation_types=mutation_types,
+            nodes=nodes, edgesets=edgesets, sites=sites,
             mutations=mutations)
-        self.assertGreater(mutation_types.num_rows, 0)
+        self.assertGreater(sites.num_rows, 0)
         self.assertGreater(mutations.num_rows, 0)
 
         new_nodes = _msprime.NodeTable()
@@ -3157,24 +3168,21 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertEqual(list(edgesets.parent), list(new_edgesets.parent))
         self.assertEqual(list(edgesets.children), list(new_edgesets.children))
 
-        new_mutation_types = _msprime.MutationTypeTable()
-        for j in range(ts.get_num_mutation_types()):
-            ancestral_state, derived_state = ts.get_mutation_type(j)
-            new_mutation_types.add_row(ancestral_state, derived_state)
-        self.assertEqual(
-            list(new_mutation_types.ancestral_state),
-            list(mutation_types.ancestral_state))
-        self.assertEqual(
-            list(new_mutation_types.derived_state),
-            list(mutation_types.derived_state))
+        new_sites = _msprime.SiteTable()
+        for j in range(ts.get_num_sites()):
+            position, ancestral_state = ts.get_site(j)
+            new_sites.add_row(position, ancestral_state)
+        self.assertEqual(list(new_sites.position), list(sites.position))
+        self.assertEqual(list(new_sites.ancestral_state), list(sites.ancestral_state))
 
         new_mutations = _msprime.MutationTable()
         for j in range(ts.get_num_mutations()):
-            position, nodes, type_, index = ts.get_mutation(j)
-            new_mutations.add_row(position, nodes, type_)
-        self.assertEqual(list(new_mutations.position), list(mutations.position))
-        self.assertEqual(list(new_mutations.nodes), list(mutations.nodes))
-        self.assertEqual(list(new_mutations.type), list(mutations.type))
+            site, node, derived_state = ts.get_mutation(j)
+            new_mutations.add_row(site, node, derived_state)
+        self.assertEqual(list(new_mutations.site), list(mutations.site))
+        self.assertEqual(list(new_mutations.node), list(mutations.node))
+        self.assertEqual(
+            list(new_mutations.derived_state), list(mutations.derived_state))
 
 
 class TestLeafListIterator(LowLevelTestCase):

@@ -77,6 +77,7 @@ class TopologyTestCase(unittest.TestCase):
         self.assertEqual(v1, v2)
 
 
+@unittest.skip("simplify")
 class TestRecordSquashing(TopologyTestCase):
     """
     Tests that we correctly squash adjacent equal records together.
@@ -118,6 +119,7 @@ class TestRecordSquashing(TopologyTestCase):
         self.assertEqual(list(tss.records()), list(ts.records()))
 
 
+@unittest.skip("simplify")
 class TestRedundantBreakpoints(TopologyTestCase):
     """
     Tests for dealing with redundant breakpoints within the tree sequence.
@@ -154,6 +156,7 @@ class TestRedundantBreakpoints(TopologyTestCase):
         self.assertEqual(comparisons, ts_redundant.num_trees)
 
 
+@unittest.skip("simplify")
 class TestUnaryNodes(TopologyTestCase):
     """
     Tests for situations in which we have unary nodes in the tree sequence.
@@ -259,6 +262,7 @@ class TestUnaryNodes(TopologyTestCase):
         self.verify_unary_tree_sequence(ts)
 
 
+@unittest.skip("simplify")
 class TestNonSampleExternalNodes(TopologyTestCase):
     """
     Tests for situations in which we have tips that are not samples.
@@ -319,6 +323,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assert_variants_equal(ts, ts_simplified)
 
 
+@unittest.skip("simplify")
 class TestMultipleRoots(TopologyTestCase):
     """
     Tests for situations where we have multiple roots for the samples.
@@ -515,6 +520,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertIn(t_new.root, roots)
 
 
+@unittest.skip("simplify")
 class TestWithVisuals(TopologyTestCase):
     """
     Some pedantic tests with ascii depictions of what's supposed to happen.

@@ -66,8 +66,8 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
-    mutation_type_table_t *mutation_type_table;
-} MutationTypeTable;
+    site_table_t *site_table;
+} SiteTable;
 
 typedef struct {
     PyObject_HEAD
@@ -536,51 +536,42 @@ make_migration(migration_t *r)
 }
 
 static PyObject *
-make_mutation_type(mutation_type_t *mutation_type)
+make_site(site_t *site)
 {
     PyObject *ret = NULL;
 
-    ret = Py_BuildValue("ss", mutation_type->ancestral_state,
-            mutation_type->derived_state);
+    ret = Py_BuildValue("ds", site->position, site->ancestral_state);
     return ret;
 }
 
 static PyObject *
 make_mutation(mutation_t *mutation)
 {
-    PyObject *nodes = NULL;
     PyObject *ret = NULL;
 
-    nodes = convert_node_id_list(mutation->nodes, mutation->nodes_length);
-    if (nodes == NULL) {
-        goto out;
-    }
-    ret = Py_BuildValue("dOin", mutation->position, nodes,
-           (int) mutation->type, (Py_ssize_t) mutation->index);
-out:
-    Py_XDECREF(nodes);
+    ret = Py_BuildValue("iis", mutation->site, mutation->node, mutation->derived_state);
     return ret;
 }
 
 static PyObject *
-convert_mutations(mutation_t *mutations, size_t num_mutations)
+convert_sites(site_t *sites, size_t num_sites)
 {
     PyObject *ret = NULL;
     PyObject *l = NULL;
-    PyObject *py_mutation = NULL;
+    PyObject *py_site = NULL;
     size_t j;
 
-    l = PyList_New(num_mutations);
+    l = PyList_New(num_sites);
     if (l == NULL) {
         goto out;
     }
-    for (j = 0; j < num_mutations; j++) {
-        py_mutation = make_mutation(&mutations[j]);
-        if (py_mutation == NULL) {
+    for (j = 0; j < num_sites; j++) {
+        py_site = make_site(&sites[j]);
+        if (py_site == NULL) {
             Py_DECREF(l);
             goto out;
         }
-        PyList_SET_ITEM(l, j, py_mutation);
+        PyList_SET_ITEM(l, j, py_site);
     }
     ret = l;
 out:
@@ -1781,16 +1772,16 @@ static PyTypeObject MigrationTableType = {
 
 
 /*===================================================================
- * MutationTypeTable
+ * SiteTable
  *===================================================================
  */
 
 static int
-MutationTypeTable_check_state(MutationTypeTable *self)
+SiteTable_check_state(SiteTable *self)
 {
     int ret = 0;
-    if (self->mutation_type_table == NULL) {
-        PyErr_SetString(PyExc_SystemError, "MutationTypeTable not initialised");
+    if (self->site_table == NULL) {
+        PyErr_SetString(PyExc_SystemError, "SiteTable not initialised");
         ret = -1;
         goto out;
     }
@@ -1799,26 +1790,27 @@ out:
 }
 
 static void
-MutationTypeTable_dealloc(MutationTypeTable* self)
+SiteTable_dealloc(SiteTable* self)
 {
-    if (self->mutation_type_table != NULL) {
-        mutation_type_table_free(self->mutation_type_table);
-        PyMem_Free(self->mutation_type_table);
-        self->mutation_type_table = NULL;
+    if (self->site_table != NULL) {
+        site_table_free(self->site_table);
+        PyMem_Free(self->site_table);
+        self->site_table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static int
-MutationTypeTable_init(MutationTypeTable *self, PyObject *args, PyObject *kwds)
+SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"max_rows_increment", "max_length_increment", NULL};
-    Py_ssize_t max_rows_increment = 1;
-    Py_ssize_t max_length_increment = 1;
+    static char *kwlist[] = {"max_rows_increment",
+        "max_total_ancestral_state_length_increment", NULL};
+    Py_ssize_t max_rows_increment = 1024;
+    Py_ssize_t max_length_increment = 1024;
 
-    self->mutation_type_table = NULL;
+    self->site_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
                 &max_rows_increment, &max_length_increment)) {
         goto out;
@@ -1831,13 +1823,12 @@ MutationTypeTable_init(MutationTypeTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_length_increment must be positive");
         goto out;
     }
-    self->mutation_type_table = PyMem_Malloc(sizeof(mutation_type_table_t));
-    if (self->mutation_type_table == NULL) {
+    self->site_table = PyMem_Malloc(sizeof(site_table_t));
+    if (self->site_table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = mutation_type_table_alloc(self->mutation_type_table,
-            max_rows_increment, max_length_increment, max_length_increment);
+    err = site_table_alloc(self->site_table, max_rows_increment, max_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1848,23 +1839,24 @@ out:
 }
 
 static PyObject *
-MutationTypeTable_add_row(MutationTypeTable *self, PyObject *args, PyObject *kwds)
+SiteTable_add_row(SiteTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     int err;
+    double position;
     char *ancestral_state = NULL;
-    char *derived_state = NULL;
-    static char *kwlist[] = {"ancestral_state", "derived_state", NULL};
+    Py_ssize_t ancestral_state_length;
+    static char *kwlist[] = {"position", "ancestral_state", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "ss", kwlist,
-                &ancestral_state, &derived_state)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "ds#", kwlist,
+                &position, &ancestral_state, &ancestral_state_length)) {
         goto out;
     }
-    if (MutationTypeTable_check_state(self) != 0) {
+    if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    err = mutation_type_table_add_row(self->mutation_type_table, ancestral_state,
-            derived_state);
+    err = site_table_add_row(self->site_table, position, ancestral_state,
+            ancestral_state_length);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1875,38 +1867,33 @@ out:
 }
 
 static PyObject *
-MutationTypeTable_set_columns(MutationTypeTable *self, PyObject *args, PyObject *kwds)
+SiteTable_set_columns(SiteTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     int err;
     size_t num_rows = 0;
-    size_t total_ancestral_state_length, total_derived_state_length;
-    uint32_t *ancestral_state_length, *derived_state_length;
+    size_t total_ancestral_state_length;
+    uint32_t *ancestral_state_length;
+    PyObject *position_input = NULL;
+    PyArrayObject *position_array = NULL;
     PyObject *ancestral_state_input = NULL;
     PyArrayObject *ancestral_state_array = NULL;
     PyObject *ancestral_state_length_input = NULL;
     PyArrayObject *ancestral_state_length_array = NULL;
-    PyObject *derived_state_input = NULL;
-    PyArrayObject *derived_state_array = NULL;
-    PyObject *derived_state_length_input = NULL;
-    PyArrayObject *derived_state_length_array = NULL;
 
-    static char *kwlist[] = {"ancestral_state", "ancestral_state_length",
-        "derived_state", "derived_state_length", NULL};
+    static char *kwlist[] = {"position", "ancestral_state", "ancestral_state_length", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
-                &ancestral_state_input, &ancestral_state_length_input,
-                &derived_state_input, &derived_state_length_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO", kwlist,
+                &position_input, &ancestral_state_input, &ancestral_state_length_input)) {
+        goto out;
+    }
+    position_array = table_read_column_array(position_input, NPY_FLOAT64, &num_rows, false);
+    if (position_array == NULL) {
         goto out;
     }
     ancestral_state_length_array = table_read_column_array(ancestral_state_length_input,
-            NPY_UINT32, &num_rows, false);
-    if (ancestral_state_length_array == NULL) {
-        goto out;
-    }
-    derived_state_length_array = table_read_column_array(derived_state_length_input,
             NPY_UINT32, &num_rows, true);
-    if (derived_state_length_array == NULL) {
+    if (ancestral_state_length_array == NULL) {
         goto out;
     }
     ancestral_state_array = table_read_column_array(ancestral_state_input, NPY_INT8,
@@ -1914,170 +1901,142 @@ MutationTypeTable_set_columns(MutationTypeTable *self, PyObject *args, PyObject 
     if (ancestral_state_array == NULL) {
         goto out;
     }
-    derived_state_array = table_read_column_array(derived_state_input, NPY_INT8,
-            &total_derived_state_length, false);
-    if (derived_state_array == NULL) {
-        goto out;
-    }
-
     ancestral_state_length = PyArray_DATA(ancestral_state_length_array);
-    derived_state_length = PyArray_DATA(derived_state_length_array);
     if (verify_column_sum(num_rows, ancestral_state_length,
                 total_ancestral_state_length) != 0) {
         goto out;
     }
-    if (verify_column_sum(num_rows, ancestral_state_length,
-                total_ancestral_state_length) != 0) {
-        goto out;
-    }
-    err = mutation_type_table_set_columns(self->mutation_type_table, num_rows,
-            PyArray_DATA(ancestral_state_array), ancestral_state_length,
-            PyArray_DATA(derived_state_array), derived_state_length);
+    err = site_table_set_columns(self->site_table, num_rows,
+            PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
+            ancestral_state_length);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
+    Py_XDECREF(position_array);
     Py_XDECREF(ancestral_state_array);
     Py_XDECREF(ancestral_state_length_array);
-    Py_XDECREF(derived_state_array);
-    Py_XDECREF(derived_state_length_array);
     return ret;
 }
 
 static PyObject *
-MutationTypeTable_get_max_rows_increment(MutationTypeTable *self, void *closure)
+SiteTable_get_max_rows_increment(SiteTable *self, void *closure)
 {
     PyObject *ret = NULL;
-    if (MutationTypeTable_check_state(self) != 0) {
+    if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_type_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->max_rows_increment);
 out:
     return ret;
 }
 
 static PyObject *
-MutationTypeTable_get_max_length_increment(MutationTypeTable *self, void *closure)
+SiteTable_get_max_total_ancestral_state_length_increment(SiteTable *self, void *closure)
 {
     PyObject *ret = NULL;
-    if (MutationTypeTable_check_state(self) != 0) {
+    if (SiteTable_check_state(self) != 0) {
         goto out;
     }
     ret = Py_BuildValue("n",
-        (Py_ssize_t) self->mutation_type_table->max_total_ancestral_state_length_increment);
+        (Py_ssize_t) self->site_table->max_total_ancestral_state_length_increment);
 out:
     return ret;
 }
 
 static PyObject *
-MutationTypeTable_get_num_rows(MutationTypeTable *self, void *closure)
+SiteTable_get_num_rows(SiteTable *self, void *closure)
 {
     PyObject *ret = NULL;
-    if (MutationTypeTable_check_state(self) != 0) {
+    if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_type_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->num_rows);
 out:
     return ret;
 }
 
 static PyObject *
-MutationTypeTable_get_ancestral_state(MutationTypeTable *self, void *closure)
+SiteTable_get_position(SiteTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
-    if (MutationTypeTable_check_state(self) != 0) {
-        goto out;
-    }
-    ret = table_get_column_array(
-            self->mutation_type_table->total_ancestral_state_length,
-            self->mutation_type_table->ancestral_state, NPY_INT8, sizeof(char));
-out:
-    return ret;
-}
-
-static PyObject *
-MutationTypeTable_get_derived_state(MutationTypeTable *self, void *closure)
-{
-    PyObject *ret = NULL;
-
-    if (MutationTypeTable_check_state(self) != 0) {
+    if (SiteTable_check_state(self) != 0) {
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_type_table->total_derived_state_length,
-            self->mutation_type_table->derived_state, NPY_INT8, sizeof(char));
+            self->site_table->num_rows,
+            self->site_table->position, NPY_FLOAT64, sizeof(double));
 out:
     return ret;
 }
 
 static PyObject *
-MutationTypeTable_get_ancestral_state_length(MutationTypeTable *self, void *closure)
+SiteTable_get_ancestral_state(SiteTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
-    if (MutationTypeTable_check_state(self) != 0) {
+    if (SiteTable_check_state(self) != 0) {
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_type_table->num_rows,
-            self->mutation_type_table->ancestral_state_length, NPY_UINT32, sizeof(uint32_t));
+            self->site_table->total_ancestral_state_length,
+            self->site_table->ancestral_state, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
 
 static PyObject *
-MutationTypeTable_get_derived_state_length(MutationTypeTable *self, void *closure)
+SiteTable_get_ancestral_state_length(SiteTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
-    if (MutationTypeTable_check_state(self) != 0) {
+    if (SiteTable_check_state(self) != 0) {
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_type_table->num_rows,
-            self->mutation_type_table->derived_state_length, NPY_UINT32, sizeof(uint32_t));
+            self->site_table->num_rows,
+            self->site_table->ancestral_state_length, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
 
-static PyGetSetDef MutationTypeTable_getsetters[] = {
+
+static PyGetSetDef SiteTable_getsetters[] = {
     {"max_rows_increment",
-        (getter) MutationTypeTable_get_max_rows_increment, NULL,
+        (getter) SiteTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"max_length_increment",
-        (getter) MutationTypeTable_get_max_length_increment, NULL,
+    {"max_total_ancestral_state_length_increment",
+        (getter) SiteTable_get_max_total_ancestral_state_length_increment, NULL,
         "The string length increment"},
     {"num_rows",
-        (getter) MutationTypeTable_get_num_rows, NULL,
+        (getter) SiteTable_get_num_rows, NULL,
         "The number of rows in the table."},
-    {"ancestral_state", (getter) MutationTypeTable_get_ancestral_state, NULL,
+    {"position", (getter) SiteTable_get_position, NULL,
+        "The position array."},
+    {"ancestral_state", (getter) SiteTable_get_ancestral_state, NULL,
         "The ancestral state array."},
-    {"derived_state", (getter) MutationTypeTable_get_derived_state, NULL,
-        "The derived state array."},
-    {"ancestral_state_length", (getter) MutationTypeTable_get_ancestral_state_length, NULL,
+    {"ancestral_state_length", (getter) SiteTable_get_ancestral_state_length, NULL,
         "The ancestral state_length array."},
-    {"derived_state_length", (getter) MutationTypeTable_get_derived_state_length, NULL,
-        "The derived state_length array."},
     {NULL}  /* Sentinel */
 };
 
-static PyMethodDef MutationTypeTable_methods[] = {
-    {"add_row", (PyCFunction) MutationTypeTable_add_row, METH_VARARGS|METH_KEYWORDS,
+static PyMethodDef SiteTable_methods[] = {
+    {"add_row", (PyCFunction) SiteTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
-    {"set_columns", (PyCFunction) MutationTypeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
+    {"set_columns", (PyCFunction) SiteTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the speficied arrays into the columns."},
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject MutationTypeTableType = {
+static PyTypeObject SiteTableType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.MutationTypeTable",             /* tp_name */
-    sizeof(MutationTypeTable),             /* tp_basicsize */
+    "_msprime.SiteTable",             /* tp_name */
+    sizeof(SiteTable),             /* tp_basicsize */
     0,                         /* tp_itemsize */
-    (destructor)MutationTypeTable_dealloc, /* tp_dealloc */
+    (destructor)SiteTable_dealloc, /* tp_dealloc */
     0,                         /* tp_print */
     0,                         /* tp_getattr */
     0,                         /* tp_setattr */
@@ -2093,22 +2052,22 @@ static PyTypeObject MutationTypeTableType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "MutationTypeTable objects",           /* tp_doc */
+    "SiteTable objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     0,                     /* tp_iter */
     0,                     /* tp_iternext */
-    MutationTypeTable_methods,             /* tp_methods */
+    SiteTable_methods,             /* tp_methods */
     0,                             /* tp_members */
-    MutationTypeTable_getsetters,           /* tp_getset */
+    SiteTable_getsetters,           /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    (initproc)MutationTypeTable_init,      /* tp_init */
+    (initproc)SiteTable_init,      /* tp_init */
 };
 
 
@@ -2147,21 +2106,21 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {
-        "max_rows_increment", "max_total_nodes_length_increment", NULL};
+        "max_rows_increment", "max_total_derived_state_length_increment", NULL};
     Py_ssize_t max_rows_increment = 1024;
-    Py_ssize_t max_total_nodes_length_increment = 1024;
+    Py_ssize_t max_total_derived_state_length_increment = 1024;
 
     self->mutation_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
-                &max_rows_increment, &max_total_nodes_length_increment)) {
+                &max_rows_increment, &max_total_derived_state_length_increment)) {
         goto out;
     }
     if (max_rows_increment <= 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    if (max_total_nodes_length_increment <= 0) {
-        PyErr_SetString(PyExc_ValueError, "max_total_nodes_length_increment must be positive");
+    if (max_total_derived_state_length_increment <= 0) {
+        PyErr_SetString(PyExc_ValueError, "max_total_derived_state_length_increment must be positive");
         goto out;
     }
     self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
@@ -2170,7 +2129,7 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutation_table_alloc(self->mutation_table, max_rows_increment,
-            max_total_nodes_length_increment);
+            max_total_derived_state_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2185,35 +2144,27 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     int err;
-    double position = 0.0;
-    PyObject * py_nodes;
-    node_id_t *nodes = NULL;
-    int type = 0;
-    size_t num_nodes;
-    static char *kwlist[] = {"position", "nodes", "type", NULL};
+    int site;
+    int node;
+    char *derived_state;
+    Py_ssize_t derived_state_length;
+    static char *kwlist[] = {"site", "node", "derived_state", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "dO!|i", kwlist,
-                &position, &PyTuple_Type, &py_nodes, &type)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "iis#", kwlist,
+                &site, &node, &derived_state, &derived_state_length)) {
         goto out;
     }
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    err = parse_node_tuple(py_nodes, &num_nodes, &nodes);
-    if (err != 0) {
-        goto out;
-    }
-    err = mutation_table_add_row(self->mutation_table, position,
-            (mutation_type_id_t) type, nodes, num_nodes);
+    err = mutation_table_add_row(self->mutation_table, (site_id_t) site,
+            (node_id_t) node, derived_state, derived_state_length);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    if (nodes != NULL) {
-        PyMem_Free(nodes);
-    }
     return ret;
 }
 
@@ -2224,54 +2175,53 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     int err;
     size_t num_rows = 0;
-    size_t total_nodes_length = 0;
-    PyObject *position_input = NULL;
-    PyArrayObject *position_array = NULL;
-    PyObject *nodes_input = NULL;
-    PyArrayObject *nodes_array = NULL;
-    PyObject *nodes_length_input = NULL;
-    PyArrayObject *nodes_length_array = NULL;
-    PyObject *type_input = NULL;
-    PyArrayObject *type_array = NULL;
+    size_t total_derived_state_length = 0;
+    PyObject *site_input = NULL;
+    PyArrayObject *site_array = NULL;
+    PyObject *derived_state_input = NULL;
+    PyArrayObject *derived_state_array = NULL;
+    PyObject *derived_state_length_input = NULL;
+    PyArrayObject *derived_state_length_array = NULL;
+    PyObject *node_input = NULL;
+    PyArrayObject *node_array = NULL;
 
-    static char *kwlist[] = {"position", "type", "nodes", "nodes_length", NULL};
+    static char *kwlist[] = {"site", "node", "derived_state", "derived_state_length", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
-                &position_input, &type_input, &nodes_input, &nodes_length_input)) {
+                &site_input, &node_input, &derived_state_input, &derived_state_length_input)) {
         goto out;
     }
-    position_array = table_read_column_array(position_input, NPY_FLOAT64,
-            &num_rows, false);
-    if (position_array == NULL) {
+    site_array = table_read_column_array(site_input, NPY_INT32, &num_rows, false);
+    if (site_array == NULL) {
         goto out;
     }
-    nodes_array = table_read_column_array(nodes_input, NPY_INT32,
-            &total_nodes_length, false);
-    if (nodes_array == NULL) {
+    derived_state_array = table_read_column_array(derived_state_input, NPY_INT8,
+            &total_derived_state_length, false);
+    if (derived_state_array == NULL) {
         goto out;
     }
-    nodes_length_array = table_read_column_array(nodes_length_input, NPY_UINT32,
-            &num_rows, true);
-    if (nodes_length_array == NULL) {
+    derived_state_length_array = table_read_column_array(derived_state_length_input,
+            NPY_UINT32, &num_rows, true);
+    if (derived_state_length_array == NULL) {
         goto out;
     }
-    type_array = table_read_column_array(type_input, NPY_UINT8, &num_rows, true);
-    if (type_array == NULL) {
+    node_array = table_read_column_array(node_input, NPY_INT32, &num_rows, true);
+    if (node_array == NULL) {
         goto out;
     }
     err = mutation_table_set_columns(self->mutation_table, num_rows,
-            PyArray_DATA(position_array), PyArray_DATA(type_array),
-            PyArray_DATA(nodes_array), PyArray_DATA(nodes_length_array));
+            PyArray_DATA(site_array), PyArray_DATA(node_array),
+            PyArray_DATA(derived_state_array), PyArray_DATA(derived_state_length_array));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    Py_XDECREF(position_array);
-    Py_XDECREF(nodes_array);
-    Py_XDECREF(nodes_length_array);
-    Py_XDECREF(type_array);
+    Py_XDECREF(site_array);
+    Py_XDECREF(derived_state_array);
+    Py_XDECREF(derived_state_length_array);
+    Py_XDECREF(node_array);
     return ret;
 }
 
@@ -2288,13 +2238,14 @@ out:
 }
 
 static PyObject *
-MutationTable_get_max_total_nodes_length_increment(MutationTable *self, void *closure)
+MutationTable_get_max_total_derived_state_length_increment(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_total_nodes_length_increment);
+    ret = Py_BuildValue("n",
+            (Py_ssize_t) self->mutation_table->max_total_derived_state_length_increment);
 out:
     return ret;
 }
@@ -2312,7 +2263,7 @@ out:
 }
 
 static PyObject *
-MutationTable_get_position(MutationTable *self, void *closure)
+MutationTable_get_site(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
@@ -2320,14 +2271,14 @@ MutationTable_get_position(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->position, NPY_FLOAT64,
-            sizeof(double));
+            self->mutation_table->num_rows, self->mutation_table->site, NPY_INT32,
+            sizeof(int32_t));
 out:
     return ret;
 }
 
 static PyObject *
-MutationTable_get_type(MutationTable *self, void *closure)
+MutationTable_get_node(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
@@ -2335,14 +2286,14 @@ MutationTable_get_type(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->type, NPY_UINT8,
-            sizeof(uint8_t));
+            self->mutation_table->num_rows, self->mutation_table->node, NPY_INT32,
+            sizeof(int32_t));
 out:
     return ret;
 }
 
 static PyObject *
-MutationTable_get_nodes(MutationTable *self, void *closure)
+MutationTable_get_derived_state(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
@@ -2350,14 +2301,14 @@ MutationTable_get_nodes(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->total_nodes_length, self->mutation_table->nodes,
-            NPY_INT32, sizeof(int32_t));
+            self->mutation_table->total_derived_state_length, self->mutation_table->derived_state,
+            NPY_INT8, sizeof(char));
 out:
     return ret;
 }
 
 static PyObject *
-MutationTable_get_nodes_length(MutationTable *self, void *closure)
+MutationTable_get_derived_state_length(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
@@ -2365,7 +2316,7 @@ MutationTable_get_nodes_length(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->nodes_length,
+            self->mutation_table->num_rows, self->mutation_table->derived_state_length,
             NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
@@ -2375,16 +2326,18 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows_increment",
         (getter) MutationTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"max_total_nodes_length_increment",
-        (getter) MutationTable_get_max_total_nodes_length_increment, NULL,
-        "The total nodes increment"},
+    {"max_total_derived_state_length_increment",
+        (getter) MutationTable_get_max_total_derived_state_length_increment, NULL,
+        "The total derived_state increment"},
     {"num_rows",
         (getter) MutationTable_get_num_rows, NULL,
         "The number of rows in the table."},
-    {"position", (getter) MutationTable_get_position, NULL, "The position array"},
-    {"type", (getter) MutationTable_get_type, NULL, "The type array"},
-    {"nodes", (getter) MutationTable_get_nodes, NULL, "The nodes array"},
-    {"nodes_length", (getter) MutationTable_get_nodes_length, NULL, "The nodes_length array"},
+    {"site", (getter) MutationTable_get_site, NULL, "The site array"},
+    {"node", (getter) MutationTable_get_node, NULL, "The node array"},
+    {"derived_state", (getter) MutationTable_get_derived_state, NULL,
+        "The derived_state array"},
+    {"derived_state_length", (getter) MutationTable_get_derived_state_length, NULL,
+        "The derived_state_length array"},
     {NULL}  /* Sentinel */
 };
 
@@ -2528,13 +2481,13 @@ MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kw
     NodeTable *nodes = NULL;
     EdgesetTable *edgesets = NULL;
     MutationTable *mutations = NULL;
-    MutationTypeTable *mutation_types = NULL;
-    static char *kwlist[] = {"nodes", "edgesets", "mutation_types", "mutations", NULL};
+    SiteTable *sites = NULL;
+    static char *kwlist[] = {"nodes", "edgesets", "sites", "mutations", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!", kwlist,
             &NodeTableType, &nodes,
             &EdgesetTableType, &edgesets,
-            &MutationTypeTableType, &mutation_types,
+            &SiteTableType, &sites,
             &MutationTableType, &mutations)) {
         goto out;
     }
@@ -2547,7 +2500,7 @@ MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kw
     if (EdgesetTable_check_state(edgesets) != 0) {
         goto out;
     }
-    if (MutationTypeTable_check_state(mutation_types) != 0) {
+    if (SiteTable_check_state(sites) != 0) {
         goto out;
     }
     if (MutationTable_check_state(mutations) != 0) {
@@ -2559,7 +2512,7 @@ MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kw
         handle_library_error(err);
         goto out;
     }
-    err = mutgen_populate_tables(self->mutgen, mutation_types->mutation_type_table,
+    err = mutgen_populate_tables(self->mutgen, sites->site_table,
             mutations->mutation_table);
     if (err != 0) {
         handle_library_error(err);
@@ -3042,7 +2995,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     NodeTable *py_nodes = NULL;
     EdgesetTable *py_edgesets = NULL;
     MigrationTable *py_migrations = NULL;
-    MutationTypeTable *py_mutation_types = NULL;
+    SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
     PyObject *py_provenance_strings = NULL;
     Py_ssize_t num_provenance_strings = 0;
@@ -3051,16 +3004,16 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     edgeset_table_t *edgesets = NULL;
     migration_table_t *migrations = NULL;
     mutation_table_t *mutations = NULL;
-    mutation_type_table_t *mutation_types = NULL;
+    site_table_t *sites = NULL;
 
     static char *kwlist[] = {"nodes", "edgesets", "migrations",
-        "mutation_types", "mutations", "provenance_strings", NULL};
+        "sites", "mutations", "provenance_strings", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!", kwlist,
             &NodeTableType, &py_nodes,
             &EdgesetTableType, &py_edgesets,
             &MigrationTableType, &py_migrations,
-            &MutationTypeTableType, &py_mutation_types,
+            &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
             &PyList_Type, &py_provenance_strings)) {
         goto out;
@@ -3082,11 +3035,11 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         }
         migrations = py_migrations->migration_table;
     }
-    if (py_mutation_types != NULL) {
-        if (MutationTypeTable_check_state(py_mutation_types) != 0) {
+    if (py_sites != NULL) {
+        if (SiteTable_check_state(py_sites) != 0) {
             goto out;
         }
-        mutation_types = py_mutation_types->mutation_type_table;
+        sites = py_sites->site_table;
     }
     if (py_mutations != NULL) {
         if (MutationTable_check_state(py_mutations) != 0) {
@@ -3101,12 +3054,12 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    if ((mutations == NULL) != (mutation_types == NULL)) {
+    if ((mutations == NULL) != (sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both mutations and mutation types");
         goto out;
     }
     err = tree_sequence_load_tables_tmp(self->tree_sequence,
-        nodes, edgesets, migrations, mutation_types, mutations,
+        nodes, edgesets, migrations, sites, mutations,
         num_provenance_strings, provenance_strings);
     if (err != 0) {
         handle_library_error(err);
@@ -3125,23 +3078,23 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     NodeTable *py_nodes = NULL;
     EdgesetTable *py_edgesets = NULL;
     MigrationTable *py_migrations = NULL;
-    MutationTypeTable *py_mutation_types = NULL;
+    SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
     node_table_t *nodes = NULL;
     edgeset_table_t *edgesets = NULL;
     migration_table_t *migrations = NULL;
-    mutation_type_table_t *mutation_types = NULL;
+    site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
     size_t num_provenance_strings = 0;
     char **provenance_strings = NULL;
     static char *kwlist[] = {"nodes", "edgesets", "migrations",
-        "mutation_types", "mutations", NULL};
+        "sites", "mutations", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!", kwlist,
             &NodeTableType, &py_nodes,
             &EdgesetTableType, &py_edgesets,
             &MigrationTableType, &py_migrations,
-            &MutationTypeTableType, &py_mutation_types,
+            &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations)) {
         goto out;
     }
@@ -3162,11 +3115,11 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         }
         migrations = py_migrations->migration_table;
     }
-    if (py_mutation_types != NULL) {
-        if (MutationTypeTable_check_state(py_mutation_types) != 0) {
+    if (py_sites != NULL) {
+        if (SiteTable_check_state(py_sites) != 0) {
             goto out;
         }
-        mutation_types = py_mutation_types->mutation_type_table;
+        sites = py_sites->site_table;
     }
     if (py_mutations != NULL) {
         if (MutationTable_check_state(py_mutations) != 0) {
@@ -3174,12 +3127,12 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         }
         mutations = py_mutations->mutation_table;
     }
-    if ((mutations == NULL) != (mutation_types == NULL)) {
+    if ((mutations == NULL) != (sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both mutations and mutation types");
         goto out;
     }
     err = tree_sequence_dump_tables_tmp(self->tree_sequence,
-        nodes, edgesets, migrations, mutation_types, mutations,
+        nodes, edgesets, migrations, sites, mutations,
         &num_provenance_strings, &provenance_strings);
     if (err != 0) {
         handle_library_error(err);
@@ -3369,12 +3322,12 @@ out:
 }
 
 static PyObject *
-TreeSequence_get_mutation_type(TreeSequence *self, PyObject *args)
+TreeSequence_get_site(TreeSequence *self, PyObject *args)
 {
     int err;
     PyObject *ret = NULL;
     Py_ssize_t record_index, num_records;
-    mutation_type_t record;
+    site_t record;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
@@ -3382,19 +3335,19 @@ TreeSequence_get_mutation_type(TreeSequence *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &record_index)) {
         goto out;
     }
-    num_records = (Py_ssize_t) tree_sequence_get_num_mutation_types(
+    num_records = (Py_ssize_t) tree_sequence_get_num_sites(
         self->tree_sequence);
     if (record_index < 0 || record_index >= num_records) {
         PyErr_SetString(PyExc_IndexError, "record index out of bounds");
         goto out;
     }
-    err = tree_sequence_get_mutation_type(self->tree_sequence,
+    err = tree_sequence_get_site(self->tree_sequence,
             (size_t) record_index, &record);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = make_mutation_type(&record);
+    ret = make_site(&record);
 out:
     return ret;
 }
@@ -3651,16 +3604,16 @@ out:
 }
 
 static PyObject *
-TreeSequence_get_num_mutation_types(TreeSequence  *self)
+TreeSequence_get_num_sites(TreeSequence  *self)
 {
     PyObject *ret = NULL;
-    size_t num_mutation_types;
+    size_t num_sites;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    num_mutation_types = tree_sequence_get_num_mutation_types(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) num_mutation_types);
+    num_sites = tree_sequence_get_num_sites(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_sites);
 out:
     return ret;
 }
@@ -3695,8 +3648,8 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_migration",
         (PyCFunction) TreeSequence_get_migration, METH_VARARGS,
         "Returns the migration record at the specified index."},
-    {"get_mutation_type",
-        (PyCFunction) TreeSequence_get_mutation_type, METH_VARARGS,
+    {"get_site",
+        (PyCFunction) TreeSequence_get_site, METH_VARARGS,
         "Returns the mutation type record at the specified index."},
     {"get_mutation",
         (PyCFunction) TreeSequence_get_mutation, METH_VARARGS,
@@ -3709,8 +3662,8 @@ static PyMethodDef TreeSequence_methods[] = {
         METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
-    {"get_num_mutation_types", (PyCFunction) TreeSequence_get_num_mutation_types,
-        METH_NOARGS, "Returns the number of mutation types" },
+    {"get_num_sites", (PyCFunction) TreeSequence_get_num_sites,
+        METH_NOARGS, "Returns the number of sites" },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
         "Returns the number of mutations" },
     {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
@@ -3894,7 +3847,7 @@ SparseTree_free(SparseTree *self)
         goto out;
     }
     /* This method is need because we have dangling references to
-     * trees after a for loop and we can't run set_mutations.
+     * trees after a for loop and we can't run set_sites.
      */
     sparse_tree_free(self->sparse_tree);
     PyMem_Free(self->sparse_tree);
@@ -4157,28 +4110,27 @@ out:
 }
 
 static PyObject *
-SparseTree_get_mutations(SparseTree *self, PyObject *args)
+SparseTree_get_sites(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    ret = convert_mutations(self->sparse_tree->mutations,
-            self->sparse_tree->num_mutations);
+    ret = convert_sites(self->sparse_tree->sites, self->sparse_tree->sites_length);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_num_mutations(SparseTree  *self)
+SparseTree_get_num_sites(SparseTree  *self)
 {
     PyObject *ret = NULL;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->num_mutations);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->sites_length);
 out:
     return ret;
 }
@@ -4203,12 +4155,12 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the left-most coordinate (inclusive)." },
     {"get_right", (PyCFunction) SparseTree_get_right, METH_NOARGS,
             "Returns the right-most coordinate (exclusive)." },
-    {"get_mutations", (PyCFunction) SparseTree_get_mutations, METH_NOARGS,
-            "Returns the list of mutations on this tree." },
+    {"get_sites", (PyCFunction) SparseTree_get_sites, METH_NOARGS,
+            "Returns the list of sites on this tree." },
     {"get_flags", (PyCFunction) SparseTree_get_flags, METH_NOARGS,
             "Returns the value of the flags variable." },
-    {"get_num_mutations", (PyCFunction) SparseTree_get_num_mutations, METH_NOARGS,
-            "Returns the number of mutations on this tree." },
+    {"get_num_sites", (PyCFunction) SparseTree_get_num_sites, METH_NOARGS,
+            "Returns the number of sites on this tree." },
     {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
             "Returns the parent of node u" },
     {"get_time", (PyCFunction) SparseTree_get_time, METH_VARARGS,
@@ -5249,20 +5201,20 @@ static PyObject *
 VariantGenerator_next(VariantGenerator *self)
 {
     PyObject *ret = NULL;
-    mutation_t *mutation;
+    site_t *site;
     int err;
     char *genotypes = (char *) self->buffer.buf;
 
     if (VariantGenerator_check_state(self) != 0) {
         goto out;
     }
-    err = vargen_next(self->variant_generator, &mutation, genotypes);
+    err = vargen_next(self->variant_generator, &site, genotypes);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     if (err == 1) {
-        ret = make_mutation(mutation);
+        ret = make_site(site);
     }
 out:
     return ret;
@@ -7299,13 +7251,13 @@ init_msprime(void)
     Py_INCREF(&MigrationTableType);
     PyModule_AddObject(module, "MigrationTable", (PyObject *) &MigrationTableType);
 
-    /* MutationTypeTable type */
-    MutationTypeTableType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&MutationTypeTableType) < 0) {
+    /* SiteTable type */
+    SiteTableType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&SiteTableType) < 0) {
         INITERROR;
     }
-    Py_INCREF(&MutationTypeTableType);
-    PyModule_AddObject(module, "MutationTypeTable", (PyObject *) &MutationTypeTableType);
+    Py_INCREF(&SiteTableType);
+    PyModule_AddObject(module, "SiteTable", (PyObject *) &SiteTableType);
 
     /* MutationTable type */
     MutationTableType.tp_new = PyType_GenericNew;

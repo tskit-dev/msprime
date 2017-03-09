@@ -257,28 +257,27 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
     table_class = msprime.EdgesetTable
 
 
-class TestMutationTypeTable(unittest.TestCase, CommonTestsMixin):
-    columns = []
+class TestSiteTable(unittest.TestCase, CommonTestsMixin):
+    columns = [DoubleColumn("position")]
     ragged_list_columns = [
-        (CharColumn("ancestral_state"), UInt32Column("ancestral_state_length")),
-        (CharColumn("derived_state"), UInt32Column("derived_state_length"))]
-    equal_len_columns = [["ancestral_state_length", "derived_state_length"]]
+        (CharColumn("ancestral_state"), UInt32Column("ancestral_state_length"))]
+    equal_len_columns = [["position", "ancestral_state_length"]]
     input_parameters = [
-        ("max_rows_increment", 1),
-        ("max_length_increment", 1)]
-    table_class = msprime.MutationTypeTable
+        ("max_rows_increment", 1024),
+        ("max_total_ancestral_state_length_increment", 1024)]
+    table_class = msprime.SiteTable
 
 
 class TestMutationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
-        DoubleColumn("position"),
-        UInt8Column("type")]
+        Int32Column("site"),
+        Int32Column("node")]
     ragged_list_columns = [
-        (Int32Column("nodes"), UInt32Column("nodes_length"))]
-    equal_len_columns = [["position", "type", "nodes_length"]]
+        (CharColumn("derived_state"), UInt32Column("derived_state_length"))]
+    equal_len_columns = [["site", "node", "derived_state_length"]]
     input_parameters = [
         ("max_rows_increment", 1024),
-        ("max_total_nodes_length_increment", 1024)]
+        ("max_total_derived_state_length_increment", 1024)]
     table_class = msprime.MutationTable
 
 
