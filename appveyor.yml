@@ -1,17 +1,5 @@
-# init:
-#   - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
-
-
 environment:
-
-  # global:
-    # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
-    # /E:ON and /V:ON options are not enabled in the batch script intepreter
-    # See: http://stackoverflow.com/a/13751649/163740
-    # CMD_IN_ENV: "cmd /E:ON /V:ON /C .\\continuous-integration\\appveyor\\run_with_env.cmd"
-
   matrix:
-
     - PYTHON: "C:\\Miniconda35-x64"
       PYTHON_VERSION: "3.5"
       PYTHON_ARCH: "64"
@@ -19,9 +7,6 @@ environment:
       CONDA_NPY: "111"
 
 install:
-  # this installs the appropriate Miniconda (Py2/Py3, 32/64 bit),
-  # as well as pip, conda-build, and the binstar CLI
-  # - powershell .\\continuous-integration\\appveyor\\install.ps1
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
 
 build: false
@@ -36,14 +21,7 @@ test_script:
   # version of Python.
   - "SET MSP_CONDA_PREFIX=%PYTHON%"
   - "python setup.py build_ext --inplace"
-  - "nosetests"
-
+  - "nosetests -vs"
 
 after_test:
   - "python setup.py bdist_wheel"
-
-artifacts:
-  - path: dist\*
-
-# on_finish:
-#   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
