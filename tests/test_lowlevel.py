@@ -28,6 +28,7 @@ import heapq
 import itertools
 import math
 import os
+import platform
 import random
 import sys
 import tempfile
@@ -45,6 +46,7 @@ NULL_NODE = -1
 NULL_POPULATION = -1
 
 IS_PY2 = sys.version_info[0] < 3
+IS_WINDOWS = platform.system() == "Windows"
 
 
 def uniform_recombination_map(sim):
@@ -1891,6 +1893,7 @@ class TestTreeSequence(LowLevelTestCase):
             m2 = [t2.get_mutation(j) for j in range(t2.get_num_mutations())]
             self.assertEqual(m1, m2)
 
+    @unittest.skipIf(IS_WINDOWS, "File permissions on Windows")
     def test_file_errors(self):
         ts1 = self.get_tree_sequence()
 
