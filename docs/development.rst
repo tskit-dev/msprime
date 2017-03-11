@@ -50,8 +50,8 @@ documented in the following sections.
 High-level Python
 *****************
 
-Throughout this document, we assume that the `msprime` package is built and
-run locally _within_ the project directory. That is, `msprime` is _not_ installed
+Throughout this document, we assume that the ``msprime`` package is built and
+run locally _within_ the project directory. That is, ``msprime`` is _not_ installed
 into the Python installation using ``pip install -e`` or setuptools `development
 mode <http://setuptools.readthedocs.io/en/latest/setuptools.html#id23>`_. Please
 ensure that you build the low-level module using (e.g.) ``make ext3`` and that
@@ -271,8 +271,7 @@ This object-oriented structure means that the vast majority of the code is
 fully thread safe. The only exceptions to this rule is the ``msp_strerror``,
 ``tree_sequence_load`` and ``tree_sequence_dump`` functions which are not
 threadsafe due to their interaction with HDF5's error handling code.
-.. I'm not actually that sure if load() and dump() are not threadsafe, but
-.. better to overly paranoid.
+
 
 ++++++++++++++
 Error handling
@@ -325,8 +324,6 @@ It is vital here that ``x`` is initialised to ``NULL`` so that we are guaranteed
 correct behaviour in all cases. For this reason, the convention is to declare all
 pointer variables on a single line and to initialise them to ``NULL`` as part
 of the declaration.
-.. are there C idioms or typical styles that are inconsistent with this convention?
-.. if so, could note them here
 
 Error codes are defined in ``err.h``, and these can be translated into a
 message using ``msp_strerror(err)``.
