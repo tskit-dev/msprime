@@ -1,0 +1,8 @@
+# Extra requirements for the verification.py statistical tester.
+
+dendropy
+matplotlib
+numpy
+pandas
+scipy
+statsmodels

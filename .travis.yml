@@ -31,10 +31,9 @@ install:
   - pip install pip --upgrade
   # We install these requirements here rather than through the requirements.txt
   # file because of issues on readthedocs. First we install Cython so that it
-  # creates a bdist_wheel and then h5py. This allows Travis to cache the builds.
+  # creates a bdist_wheel and then the rest. This allows Travis to cache the builds.
   - pip install Cython
-  - pip install h5py
-  - pip install -r requirements.txt
+  - pip install -r requirements/development.txt
   - CFLAGS=--coverage python setup.py build_ext --inplace
 
 script:

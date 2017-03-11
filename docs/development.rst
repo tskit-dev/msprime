@@ -16,7 +16,7 @@ Quickstart
 - Make a fork of the msprime repo on `GitHub <github.com/jeromekelleher/msprime>`_
 - Clone your fork into a local directory.
 - Install the :ref:`basic requirements <sec-requirements>`.
-- Install the Python development requirements using ``pip install -r requirements.txt``.
+- Install the Python development requirements using ``pip install -r requirements/development.txt``.
 - Build the low level module by running ``make`` in the project root. If you
   are using Python 2.7, run ``make ext2`` and if you are using Python 3.x,
   run ``make ext3``.
@@ -50,8 +50,8 @@ documented in the following sections.
 High-level Python
 *****************
 
-Throughout this document, we assume that the `msprime` package is built and
-run locally _within_ the project directory. That is, `msprime` is _not_ installed
+Throughout this document, we assume that the ``msprime`` package is built and
+run locally _within_ the project directory. That is, ``msprime`` is _not_ installed
 into the Python installation using ``pip install -e`` or setuptools `development
 mode <http://setuptools.readthedocs.io/en/latest/setuptools.html#id23>`_. Please
 ensure that you build the low-level module using (e.g.) ``make ext3`` and that
@@ -271,8 +271,7 @@ This object-oriented structure means that the vast majority of the code is
 fully thread safe. The only exceptions to this rule is the ``msp_strerror``,
 ``tree_sequence_load`` and ``tree_sequence_dump`` functions which are not
 threadsafe due to their interaction with HDF5's error handling code.
-.. I'm not actually that sure if load() and dump() are not threadsafe, but
-.. better to overly paranoid.
+
 
 ++++++++++++++
 Error handling
@@ -325,8 +324,6 @@ It is vital here that ``x`` is initialised to ``NULL`` so that we are guaranteed
 correct behaviour in all cases. For this reason, the convention is to declare all
 pointer variables on a single line and to initialise them to ``NULL`` as part
 of the declaration.
-.. are there C idioms or typical styles that are inconsistent with this convention?
-.. if so, could note them here
 
 Error codes are defined in ``err.h``, and these can be translated into a
 message using ``msp_strerror(err)``.
@@ -446,7 +443,9 @@ new simulation functionality, as subtle statistical bugs can easily slip in
 unnoticed.
 
 The statistical tests are all run via the ``verification.py`` script in the project root.
-To run it use
+The script has some extra dependencies listed in the ``requirements/verification.txt``,
+which can be installed using ``pip install -r`` or ``conda install --file``. Run
+this script using:
 
 .. code-block:: bash
 
@@ -456,11 +455,6 @@ To run it use
 
     The ``verification.py`` currently does not support Python 3 because of odd
     behaviour from dendropy.
-
-The script has a few extra dependencies like ``dendropy``, ``matplotlib`` and
-``statsmodels`` which will need to be installed.
-.. we could drop these in a `verification_requirements.txt` and here say
-.. run `pip install -r verification_requirements.txt` ?
 
 The statistical tests depend on compiled programs in the ``data`` directory.
 This includes a customised version of ``ms`` and a locally compiled version of
