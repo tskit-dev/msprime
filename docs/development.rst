@@ -16,7 +16,7 @@ Quickstart
 - Make a fork of the msprime repo on `GitHub <github.com/jeromekelleher/msprime>`_
 - Clone your fork into a local directory.
 - Install the :ref:`basic requirements <sec-requirements>`.
-- Install the Python development requirements using ``pip install -r requirements.txt``.
+- Install the Python development requirements using ``pip install -r requirements/development.txt``.
 - Build the low level module by running ``make`` in the project root. If you
   are using Python 2.7, run ``make ext2`` and if you are using Python 3.x,
   run ``make ext3``.
@@ -446,7 +446,9 @@ new simulation functionality, as subtle statistical bugs can easily slip in
 unnoticed.
 
 The statistical tests are all run via the ``verification.py`` script in the project root.
-To run it use
+The script has some extra dependencies listed in the ``requirements/verification.txt``,
+which can be installed using ``pip install -r`` or ``conda install --file``. Run
+this script using:
 
 .. code-block:: bash
 
@@ -456,11 +458,6 @@ To run it use
 
     The ``verification.py`` currently does not support Python 3 because of odd
     behaviour from dendropy.
-
-The script has a few extra dependencies like ``dendropy``, ``matplotlib`` and
-``statsmodels`` which will need to be installed.
-.. we could drop these in a `verification_requirements.txt` and here say
-.. run `pip install -r verification_requirements.txt` ?
 
 The statistical tests depend on compiled programs in the ``data`` directory.
 This includes a customised version of ``ms`` and a locally compiled version of
