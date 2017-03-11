@@ -24,7 +24,7 @@ Quickstart
   all pass.
 - Make your changes in a local branch, and open a pull request on GitHub when you
   are ready. Please make sure that (a) the tests pass before you open the PR; and
-  (b) your code passes PEP8 checks (see below for a git commit hook below to ensure this
+  (b) your code passes PEP8 checks (see below for a git commit hook to ensure this
   happens automatically) before opening the PR.
 
 ********
@@ -50,6 +50,13 @@ documented in the following sections.
 High-level Python
 *****************
 
+Throughout this document, we assume that the `msprime` package is built and
+run locally _within_ the project directory. That is, `msprime` is _not_ installed
+into the Python installation using ``pip install -e`` or setuptools `development
+mode <http://setuptools.readthedocs.io/en/latest/setuptools.html#id23>`_. Please
+ensure that you build the low-level module using (e.g.) ``make ext3`` and that
+the shared object file is in the project root.
+
 +++++++++++
 Conventions
 +++++++++++
@@ -68,7 +75,6 @@ should do the trick:
 
     # Run flake8 to check for lint errors.
     exec flake8 --max-line-length 89 setup.py msprime tests
-
 
 +++++++++
 Packaging
@@ -104,7 +110,7 @@ Much of the high-level Python code only exists to provide a simpler interface to
 the low-level ``_msprime`` module. As such, many objects (such as ``TreeSequence``)
 are really just a shallow layer on top of the corresponding low-level object.
 The convention here is to keep a reference to the low-level object via
-an instance variable such as ``self._ll_tree_sequence``.
+a private instance variable such as ``self._ll_tree_sequence``.
 
 +++++++++++++++++++++++
 Command line interfaces
@@ -116,9 +122,9 @@ program. These entry points are registered with ``setuptools`` using the
 ``console_scripts`` argument in ``setup.py``, which allows them to be deployed as
 first-class executable programs in a cross-platform manner.
 
-There are simple scripts in the root of the project (e.g., ``msp_dev.py``)
-which are used for development. For example, to run the development version of
-``mspms``, use ``python mspms_dev.py``.
+There are simple scripts in the root of the project (currently: ``msp_dev.py``,
+``mspms_dev.py``) which are used for development. For example, to run the
+development version of ``mspms`` use ``python mspms_dev.py``.
 
 *********
 C Library
@@ -143,7 +149,7 @@ can be installed using
 
     $ sudo apt-get install libcunit1-dev libconfig-dev
 
-Compile the code using ``make``.
+Compile the code locally run ``make`` in the ``lib`` directory.
 
 
 +++++++++++++++
@@ -187,7 +193,7 @@ simulation to an output file in HDF5 format. For example,
 
 .. code-block:: bash
 
-    $ ./main simulate dev.cfg out.hdf5
+    $ ./main simulate dev.cfg -o out.hdf5
 
 The development configuration file describes the simulation that we want to
 run, and uses the
@@ -220,7 +226,7 @@ e.g.:
 
 While 100% test coverage is not feasible for C code, we aim to cover all code
 that can be reached. (Some classes of error such as malloc failures
-and IO errors are difficult to simulate in C.) Code coverate statistics are
+and IO errors are difficult to simulate in C.) Code coverage statistics are
 automatically tracked using `CodeCov <https://codecov.io/gh/jeromekelleher/msprime/>`_.
 
 ++++++++++++++++++
@@ -262,8 +268,11 @@ Most objects also provide a ``print_state`` method, which is useful for
 debugging.
 
 This object-oriented structure means that the vast majority of the code is
-fully thread safe.
-
+fully thread safe. The only exceptions to this rule is the ``msp_strerror``,
+``tree_sequence_load`` and ``tree_sequence_dump`` functions which are not
+threadsafe due to their interaction with HDF5's error handling code.
+.. I'm not actually that sure if load() and dump() are not threadsafe, but
+.. better to overly paranoid.
 
 ++++++++++++++
 Error handling
@@ -316,6 +325,8 @@ It is vital here that ``x`` is initialised to ``NULL`` so that we are guaranteed
 correct behaviour in all cases. For this reason, the convention is to declare all
 pointer variables on a single line and to initialise them to ``NULL`` as part
 of the declaration.
+.. are there C idioms or typical styles that are inconsistent with this convention?
+.. if so, could note them here
 
 Error codes are defined in ``err.h``, and these can be translated into a
 message using ``msp_strerror(err)``.
@@ -428,10 +439,11 @@ Statistical tests
 *****************
 
 To ensure that ``msprime`` is simulating the correct process we run many statistical
-tests. Since these tests are quite expensive and difficult to automatically
-validate, they are not run as part of CI but instead as a pre-release sanity check.
-They are also very useful to run when developing new simulation functionality,
-as subtle statistical bugs can easily slip in unnoticed.
+tests. Since these tests are quite expensive (taking some hours to run) and
+difficult to automatically validate, they are not run as part of CI but instead
+as a pre-release sanity check. They are also very useful to run when developing
+new simulation functionality, as subtle statistical bugs can easily slip in
+unnoticed.
 
 The statistical tests are all run via the ``verification.py`` script in the project root.
 To run it use
@@ -447,6 +459,8 @@ To run it use
 
 The script has a few extra dependencies like ``dendropy``, ``matplotlib`` and
 ``statsmodels`` which will need to be installed.
+.. we could drop these in a `verification_requirements.txt` and here say
+.. run `pip install -r verification_requirements.txt` ?
 
 The statistical tests depend on compiled programs in the ``data`` directory.
 This includes a customised version of ``ms`` and a locally compiled version of
