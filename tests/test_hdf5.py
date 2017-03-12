@@ -297,7 +297,6 @@ class TestErrors(TestHdf5):
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
-@unittest.skip("HDF5 format tests")
 class TestHdf5Format(TestHdf5):
     """
     Tests on the HDF5 file format.
@@ -319,53 +318,54 @@ class TestHdf5Format(TestHdf5):
         keys = set(root.keys())
         self.assertIn("nodes", keys)
         self.assertIn("edgesets", keys)
-        self.assertIn("mutation_types", keys)
+        self.assertIn("sites", keys)
         self.assertIn("mutations", keys)
+        # Not filled in yet, but the group should be present for forward compatability.
+        self.assertIn("migrations", keys)
 
         if "provenance"in keys:
             # TODO verify provenance
             pass
-        g = root["mutation_types"]
+        g = root["sites"]
         fields = [
-            ("ancestral_state", int8), ("ancestral_state_length", uint32),
-            ("derived_state", int8), ("derived_state_length", uint32)]
-        if ts.num_mutation_types > 0:
+            ("position", float64), ("ancestral_state", int8),
+            ("ancestral_state_length", uint32)]
+        if ts.num_sites > 0:
             for name, dtype in fields:
                 self.assertEqual(len(g[name].shape), 1)
                 self.assertEqual(g[name].dtype, dtype)
             ancestral_state_length = g["ancestral_state_length"]
-            derived_state_length = g["derived_state_length"]
-            self.assertEqual(ancestral_state_length.shape[0], ts.num_mutation_types)
-            self.assertEqual(derived_state_length.shape[0], ts.num_mutation_types)
+            self.assertEqual(ancestral_state_length.shape[0], ts.num_sites)
+            position = list(g["position"])
             ancestral_states = msprime.unpack_strings(
                 g["ancestral_state"], ancestral_state_length)
-            derived_states = msprime.unpack_strings(
-                g["derived_state"], derived_state_length)
-            for j, mutation_type in enumerate(ts.mutation_types()):
-                self.assertEqual(ancestral_states[j], mutation_type.ancestral_state)
-                self.assertEqual(derived_states[j], mutation_type.derived_state)
+            for j, site in enumerate(ts.sites()):
+                self.assertEqual(position[j], site.position)
+                self.assertEqual(ancestral_states[j], site.ancestral_state)
 
         g = root["mutations"]
-        fields = [("position", float64), ("nodes_length", uint32)]
+        fields = [
+            ("site", int32), ("node", int32),
+            ("derived_state", int8), ("derived_state_length", uint32)]
         if ts.num_mutations > 0:
             for name, dtype in fields:
                 self.assertEqual(len(g[name].shape), 1)
                 self.assertEqual(g[name].shape[0], ts.get_num_mutations())
                 self.assertEqual(g[name].dtype, dtype)
-            self.assertEqual(g["nodes"].dtype, int32)
-            flat_nodes = list(g["nodes"])
-            nodes_length = list(g["nodes_length"])
-            position = list(g["position"])
-            nodes = []
-            offset = 0
-            for k in nodes_length:
-                nodes.append(tuple(flat_nodes[offset: offset + k]))
-                offset += k
-            self.assertEqual(len(nodes_length), ts.get_num_mutations())
-            self.assertEqual(len(position), ts.get_num_mutations())
-            for j, mutation in enumerate(ts.mutations()):
-                self.assertEqual(mutation.nodes, nodes[j])
-                self.assertEqual(mutation.position, position[j])
+            derived_state_length = g["derived_state_length"]
+            self.assertEqual(derived_state_length.shape[0], ts.num_mutations)
+            site = g["site"]
+            node = g["node"]
+            derived_state = msprime.unpack_strings(
+                g["derived_state"], derived_state_length)
+            j = 0
+            for s in ts.sites():
+                for mutation in s.mutations:
+                    self.assertEqual(site[j], s.index)
+                    self.assertEqual(mutation.site, site[j])
+                    self.assertEqual(mutation.node, node[j])
+                    self.assertEqual(mutation.derived_state, derived_state[j])
+                    j += 1
         else:
             self.assertEqual(0, len(list(g.keys())))
 
@@ -382,10 +382,10 @@ class TestHdf5Format(TestHdf5):
             self.assertGreater(total_name_length, 0)
         else:
             self.assertEqual(total_name_length, 0)
-        population = [0 for j in range(ts.get_num_nodes())]
-        time = [0 for j in range(ts.get_num_nodes())]
+        population = [0 for _ in range(ts.get_num_nodes())]
+        time = [0 for _ in range(ts.get_num_nodes())]
         # FIXME this will break when we have samples not in 0...n-1
-        flags = [0 for j in range(ts.get_num_nodes())]
+        flags = [0 for _ in range(ts.get_num_nodes())]
         for u in range(ts.get_sample_size()):
             time[u] = ts.get_time(u)
             population[u] = ts.get_population(u)
@@ -476,6 +476,7 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(other_ts.get_provenance(), [])
         self.verify_tree_dump_format(other_ts)
 
+    @unittest.skip("Fix general mutations.")
     def test_general_mutation_example(self):
         self.verify_tree_dump_format(general_mutation_example())
 
