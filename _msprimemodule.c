@@ -580,7 +580,7 @@ make_site(site_t *site)
         goto out;
     }
     ret = Py_BuildValue("dsOn", site->position, site->ancestral_state, mutations,
-            site->id);
+            (Py_ssize_t) site->id);
 out:
     Py_XDECREF(mutations);
     return ret;
@@ -3474,14 +3474,12 @@ TreeSequence_get_site(TreeSequence *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &record_index)) {
         goto out;
     }
-    num_records = (Py_ssize_t) tree_sequence_get_num_sites(
-        self->tree_sequence);
+    num_records = (Py_ssize_t) tree_sequence_get_num_sites(self->tree_sequence);
     if (record_index < 0 || record_index >= num_records) {
         PyErr_SetString(PyExc_IndexError, "record index out of bounds");
         goto out;
     }
-    err = tree_sequence_get_site(self->tree_sequence,
-            (size_t) record_index, &record);
+    err = tree_sequence_get_site(self->tree_sequence, (site_id_t) record_index, &record);
     if (err != 0) {
         handle_library_error(err);
         goto out;
