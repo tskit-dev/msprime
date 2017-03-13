@@ -34,7 +34,14 @@ import msprime
 
 
 def build_tree_sequence(records, mutations=[]):
-    return msprime.load_coalescence_records(records=records, mutations=mutations)
+    # TODO Change over the examples in this file to use the text representation
+    # and remove this function.
+    sites = []
+    for pos, node in mutations:
+        sites.append(msprime.Site(
+            position=pos, index=None, ancestral_state="0", mutations=[
+                msprime.Mutation(node=node, site=None, derived_state="1")]))
+    return msprime.load_coalescence_records(records=records, sites=sites)
 
 
 def path_length(tr, x, y):

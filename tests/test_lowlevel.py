@@ -1947,19 +1947,6 @@ class TestTreeSequence(LowLevelTestCase):
                     max_node = node
             self.assertEqual(max_node + 1, ts.get_num_nodes())
 
-    def test_get_sample(self):
-        for ts in self.get_example_tree_sequences():
-            for bad_type in ["1", None, []]:
-                self.assertRaises(TypeError, ts.get_sample, bad_type)
-            self.assertRaises(IndexError, ts.get_sample, -1)
-            self.assertRaises(IndexError, ts.get_sample, ts.get_sample_size())
-            self.assertRaises(
-                IndexError, ts.get_sample, ts.get_sample_size() + 1)
-            for j in range(ts.get_sample_size()):
-                # We only check for a single sample here. Multi sample
-                # tests are done in test_demography.
-                self.assertEqual(ts.get_sample(j), (0.0, 0))
-
     def verify_dump_equality(self, ts):
         """
         Verifies that we can dump a copy of the specified tree sequence

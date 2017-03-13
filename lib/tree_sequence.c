@@ -900,6 +900,7 @@ static int WARN_UNUSED
 tree_sequence_load_records(tree_sequence_t *self,
         size_t num_samples, sample_t *samples,
         size_t num_coalescence_records, coalescence_record_t *records,
+        size_t num_sites, site_t *sites,
         size_t num_mutations, mutation_t *mutations)
 {
     int ret = MSP_ERR_GENERIC;
@@ -935,16 +936,18 @@ tree_sequence_load_records(tree_sequence_t *self,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    printf("FIXME load_records\n");
-    /* TODO update to work with general mutations */
-    ret = site_table_alloc(site_table, 1, 1);
+    /* Add 1 to avoid init errors. */
+    ret = site_table_alloc(site_table, num_sites + 1, num_sites + 1);
     if (ret != 0) {
         goto out;
     }
-    /* ret = site_table_add_row(site_table, "0", "1"); */
-    /* if (ret != 0) { */
-    /*     goto out; */
-    /* } */
+    for (j = 0; j < num_sites; j++) {
+        ret = site_table_add_row(site_table, sites[j].position,
+                sites[j].ancestral_state, sites[j].ancestral_state_length);
+        if (ret != 0) {
+            goto out;
+        }
+    }
     mutation_table = malloc(sizeof(mutation_table_t));
     if (mutation_table == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -954,7 +957,14 @@ tree_sequence_load_records(tree_sequence_t *self,
     if (ret != 0) {
         goto out;
     }
-
+    for (j = 0; j < num_mutations; j++) {
+        ret = mutation_table_add_row(mutation_table, mutations[j].site,
+                mutations[j].node, mutations[j].derived_state,
+                mutations[j].derived_state_length);
+        if (ret != 0) {
+            goto out;
+        }
+    }
     for (j = 0; j < num_samples; j++) {
         ret = node_table_add_row(node_table, MSP_NODE_IS_SAMPLE,
                 samples[j].time, samples[j].population_id, "");
@@ -979,13 +989,6 @@ tree_sequence_load_records(tree_sequence_t *self,
             goto out;
         }
     }
-    /* for (j = 0; j < num_mutations; j++) { */
-    /*     ret = mutation_table_add_row(mutation_table, mutations[j].position, 0, */
-    /*             mutations[j].nodes, mutations[j].nodes_length); */
-    /*     if (ret != 0) { */
-    /*         goto out; */
-    /*     } */
-    /* } */
     ret = tree_sequence_load_tables_tmp(self, node_table, edgeset_table,
             NULL, site_table, mutation_table, 0, NULL);
 
@@ -2445,32 +2448,29 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     node_id_t *mapping = NULL;
     node_id_t *mapped_children = NULL;
     node_id_t *mapped_children_mem = NULL;
-    node_id_t *output_mutations_nodes_mem = NULL;
     sample_t *sample_objects = NULL;
     active_record_t *active_records = NULL;
     coalescence_record_t *output_records = NULL;
     mutation_t *output_mutations = NULL;
+    site_t *output_sites = NULL;
     node_id_t *I = self->edgesets.indexes.insertion_order;
     node_id_t *O = self->edgesets.indexes.removal_order;
     size_t M = self->edgesets.num_records;
     size_t j, k, next_avl_node, mapped_children_mem_offset, num_output_records,
-           num_output_mutations, max_num_child_nodes, max_num_records;
-           /* output_mutations_mem_offset; */
+           num_output_mutations, max_num_child_nodes, max_num_records,
+           num_output_sites;
     node_id_t u, v, w, h;
     list_len_t c;
-    size_t num_mapped_children; // l;
-    /* node_id_t node_index; */
+    size_t num_mapped_children, l;
     avl_tree_t visited_nodes;
     avl_node_t *avl_node_mem = NULL;
     node_id_t *avl_node_value_mem = NULL;
     avl_node_t *avl_node;
     active_record_t *ar;
     coalescence_record_t *cr;
-    /* mutation_t *mut; */
-    bool equal, activate_record; //, keep;
-    double x;
-    /* double right, x; */
-    /* bool filter_root_mutations = flags & MSP_FILTER_ROOT_MUTATIONS; */
+    bool equal, activate_record, keep, site_added;
+    double right, x;
+    bool filter_root_mutations = flags & MSP_FILTER_ROOT_MUTATIONS;
 
     if (num_samples < 2) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -2490,15 +2490,14 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     max_num_records = 2 * self->edgesets.num_records;
     mapped_children_mem = malloc(max_num_child_nodes * sizeof(node_id_t));
     output_records = malloc(max_num_records * sizeof(coalescence_record_t));
+    output_sites = malloc(self->sites.num_records * sizeof(site_t));
     output_mutations = malloc(self->mutations.num_records * sizeof(mutation_t));
-    /* FIXME!! */
-    output_mutations_nodes_mem = NULL;
     if (parent == NULL || children == NULL || children_length == NULL
             || mapping == NULL || sample_objects == NULL
             || avl_node_mem == NULL || avl_node_value_mem == NULL
             || mapped_children == NULL || active_records == NULL
             || mapped_children_mem == NULL || output_records == NULL
-            || output_mutations == NULL || output_mutations_nodes_mem == NULL) {
+            || output_mutations == NULL || output_sites == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -2528,13 +2527,13 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     }
     avl_init_tree(&visited_nodes, cmp_node_id_t, NULL);
     mapped_children_mem_offset = 0;
-    /* output_mutations_mem_offset = 0; */
     num_output_records = 0;
     num_output_mutations = 0;
+    num_output_sites = 0;
 
     j = 0;
     k = 0;
-    /* l = 0; */
+    l = 0;
     while (j < M) {
         x = self->edgesets.left[I[j]];
         next_avl_node = 0;
@@ -2671,44 +2670,46 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
             }
         }
 
-        printf("FIXME simplify\n");
-        /* /1* Update the mutations for this tree *1/ */
-        /* right = self->edgesets.right[O[k]]; */
-        /* while (l < self->mutations.num_records && self->mutations.position[l] < right) { */
-        /*     node_index = 0; */
-        /*     mut = NULL; */
-        /*     for (c = 0; c < self->mutations.nodes_length[l]; c++) { */
-        /*         u = self->mutations.nodes[l][c]; */
-        /*         if (mapping[u] != MSP_NULL_NODE) { */
-        /*             keep = true; */
-        /*             if (filter_root_mutations) { */
-        /*                 /1* Traverse up the tree until we find either another node in */
-        /*                  * the subset tree or the root *1/ */
-        /*                 v = parent[u]; */
-        /*                 while (v != MSP_NULL_NODE && mapping[v] != v) { */
-        /*                     v = parent[v]; */
-        /*                 } */
-        /*                 keep = v != MSP_NULL_NODE; */
-        /*             } */
-        /*             if (keep) { */
-        /*                 if (node_index == 0) { */
-        /*                     assert(num_output_mutations < self->mutations.num_records); */
-        /*                     mut = &output_mutations[num_output_mutations]; */
-        /*                     num_output_mutations++; */
-        /*                     assert(output_mutations_mem_offset < self->mutations.total_nodes_length); */
-        /*                     mut->nodes = output_mutations_nodes_mem + output_mutations_mem_offset; */
-        /*                 } */
-        /*                 mut->nodes[node_index] = mapping[u]; */
-        /*                 node_index++; */
-        /*                 output_mutations_mem_offset++; */
-        /*                 mut->nodes_length = (list_len_t) node_index; */
-        /*                 mut->position = self->mutations.position[l]; */
-        /*                 mut->type = self->mutations.type[l]; */
-        /*             } */
-        /*         } */
-        /*     } */
-        /*     l++; */
-        /* } */
+        /* Update the mutations for this tree */
+        right = self->edgesets.right[O[k]];
+        while (l < self->sites.num_records && self->sites.position[l] < right) {
+            site_added = false;
+            for (c = 0; c < self->sites.site_mutations_length[l]; c++) {
+                u = self->sites.site_mutations[l][c].node;
+                if (mapping[u] != MSP_NULL_NODE) {
+                    keep = true;
+                    if (filter_root_mutations) {
+                        /* Traverse up the tree until we find either another node in
+                         * the subset tree or the root */
+                        v = parent[u];
+                        while (v != MSP_NULL_NODE && mapping[v] != v) {
+                            v = parent[v];
+                        }
+                        keep = v != MSP_NULL_NODE;
+                    }
+                    if (keep) {
+                        if (! site_added) {
+                            site_added = true;
+                            output_sites[num_output_sites].position = self->sites.position[l];
+                            output_sites[num_output_sites].ancestral_state =
+                                self->sites.ancestral_state[l];
+                            output_sites[num_output_sites].ancestral_state_length =
+                                self->sites.ancestral_state_length[l];
+                            num_output_sites++;
+                        }
+                        output_mutations[num_output_mutations].site =
+                            (site_id_t) num_output_sites - 1;
+                        output_mutations[num_output_mutations].node = mapping[u];
+                        output_mutations[num_output_mutations].derived_state =
+                            self->sites.site_mutations[l][c].derived_state;
+                        output_mutations[num_output_mutations].derived_state_length =
+                            self->sites.site_mutations[l][c].derived_state_length;
+                        num_output_mutations++;
+                    }
+                }
+            }
+            l++;
+        }
     }
 
     /* After the main loop has completed, find all the records that have not
@@ -2747,6 +2748,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     /* Alloc a new tree sequence for these records. */
     ret = tree_sequence_load_records(output, num_samples, sample_objects,
             num_output_records, output_records,
+            num_output_sites, output_sites,
             num_output_mutations, output_mutations);
     if (ret != 0) {
         tree_sequence_free(output);
@@ -2789,8 +2791,8 @@ out:
     if (output_mutations != NULL) {
         free(output_mutations);
     }
-    if (output_mutations_nodes_mem != NULL) {
-        free(output_mutations_nodes_mem);
+    if (output_sites != NULL) {
+        free(output_sites);
     }
     return ret;
 }

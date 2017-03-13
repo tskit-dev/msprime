@@ -38,8 +38,17 @@ def cr(left=0, right=1, node=None, children=None, time=None, population=0):
         population=population)
 
 
-def build_tree_sequence(records, mutations=[]):
-    return msprime.load_coalescence_records(records=records, mutations=mutations)
+def sr(index, position, node):
+    """
+    Convenience short hand for making site records.
+    """
+    return msprime.Site(
+        index=index, position=position, ancestral_state="0", mutations=[
+            msprime.Mutation(node=node, site=index, derived_state="1")])
+
+
+def build_tree_sequence(records, sites=[]):
+    return msprime.load_coalescence_records(records=records, sites=sites)
 
 
 def insert_redundant_breakpoints(ts):
@@ -77,7 +86,6 @@ class TopologyTestCase(unittest.TestCase):
         self.assertEqual(v1, v2)
 
 
-@unittest.skip("simplify")
 class TestRecordSquashing(TopologyTestCase):
     """
     Tests that we correctly squash adjacent equal records together.
@@ -119,7 +127,6 @@ class TestRecordSquashing(TopologyTestCase):
         self.assertEqual(list(tss.records()), list(ts.records()))
 
 
-@unittest.skip("simplify")
 class TestRedundantBreakpoints(TopologyTestCase):
     """
     Tests for dealing with redundant breakpoints within the tree sequence.
@@ -156,7 +163,6 @@ class TestRedundantBreakpoints(TopologyTestCase):
         self.assertEqual(comparisons, ts_redundant.num_trees)
 
 
-@unittest.skip("simplify")
 class TestUnaryNodes(TopologyTestCase):
     """
     Tests for situations in which we have unary nodes in the tree sequence.
@@ -169,10 +175,12 @@ class TestUnaryNodes(TopologyTestCase):
             cr(left=0, right=1, node=4, children=(2, 3), time=2),
             cr(left=0, right=1, node=5, children=(4,), time=3),
         ]
-        mutations = [
-            msprime.Mutation(index=j, position=j * 1 / 5, nodes=(j,), type=0)
+        sites = [
+            msprime.Site(
+                index=j, position=j * 1 / 5, ancestral_state="0",
+                mutations=[msprime.Mutation(node=j, site=j, derived_state="1")])
             for j in range(5)]
-        ts = build_tree_sequence(records, mutations)
+        ts = build_tree_sequence(records, sites)
         self.assertEqual(ts.sample_size, 2)
         self.assertEqual(ts.num_nodes, 6)
         self.assertEqual(ts.num_trees, 1)
@@ -233,7 +241,7 @@ class TestUnaryNodes(TopologyTestCase):
                 left=r.left, right=r.right, population=r.population,
                 node=u, children=tuple(children), time=r.time))
         new_records.sort(key=lambda r: r.time)
-        ts_new = build_tree_sequence(new_records, list(ts.mutations()))
+        ts_new = build_tree_sequence(new_records, list(ts.sites()))
         self.assertGreater(ts_new.num_records, ts.num_records)
         self.assert_haplotypes_equal(ts, ts_new)
         self.assert_variants_equal(ts, ts_new)
@@ -262,7 +270,6 @@ class TestUnaryNodes(TopologyTestCase):
         self.verify_unary_tree_sequence(ts)
 
 
-@unittest.skip("simplify")
 class TestNonSampleExternalNodes(TopologyTestCase):
     """
     Tests for situations in which we have tips that are not samples.
@@ -270,18 +277,18 @@ class TestNonSampleExternalNodes(TopologyTestCase):
     def test_simple_case(self):
         # Simplest case where we have n = 2 and external non-sample nodes.
         records = [cr(node=2, children=(0, 1, 3, 4), time=1)]
-        mutations = [
-            msprime.Mutation(index=0, position=0.1, nodes=(0,), type=0),
-            msprime.Mutation(index=1, position=0.2, nodes=(1,), type=0),
-            msprime.Mutation(index=2, position=0.3, nodes=(3,), type=0),
-            msprime.Mutation(index=3, position=0.4, nodes=(4,), type=0),
+        sites = [
+            sr(0, 0.1, 0),
+            sr(1, 0.2, 1),
+            sr(2, 0.3, 2),
+            sr(3, 0.4, 3),
         ]
-        ts = build_tree_sequence(records, mutations)
+        ts = build_tree_sequence(records, sites)
         self.assertEqual(ts.sample_size, 2)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 5)
         t = next(ts.trees())
-        self.assertEqual(list(t.mutations()), mutations)
+        self.assertEqual(list(t.sites()), sites)
         self.assertEqual(t.parent_dict, {0: 2, 1: 2, 3: 2, 4: 2})
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 3: 0, 4: 0, 2: 1})
         self.assertEqual(t.root, 2)
@@ -293,7 +300,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 1})
         self.assertEqual(t.root, 2)
         # We should have removed the two non-sample mutations.
-        self.assertEqual(list(t.mutations()), mutations[:-2])
+        self.assertEqual(list(t.sites()), sites[:-2])
 
     def test_unary_non_sample_external_nodes(self):
         # Take an ordinary tree sequence and put a bunch of external non
@@ -310,7 +317,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
                 left=r.left, right=r.right, node=r.node, time=r.time,
                 population=r.population, children=children))
             next_node += 1
-        ts_new = build_tree_sequence(new_records, list(ts.mutations()))
+        ts_new = build_tree_sequence(new_records, list(ts.sites()))
         self.assertEqual(ts_new.num_nodes, next_node)
         self.assertEqual(ts_new.sample_size, ts.sample_size)
         self.assert_haplotypes_equal(ts, ts_new)
@@ -323,7 +330,6 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assert_variants_equal(ts, ts_simplified)
 
 
-@unittest.skip("simplify")
 class TestMultipleRoots(TopologyTestCase):
     """
     Tests for situations where we have multiple roots for the samples.
@@ -335,17 +341,17 @@ class TestMultipleRoots(TopologyTestCase):
             cr(left=0, right=1, node=2, children=(0,), time=1),
             cr(left=0, right=1, node=3, children=(1,), time=1),
         ]
-        mutations = [
-            msprime.Mutation(index=0, position=0.1, nodes=(0,), type=0),
-            msprime.Mutation(index=1, position=0.2, nodes=(1,), type=0),
+        sites = [
+            sr(index=0, position=0.1, node=0),
+            sr(index=1, position=0.2, node=1),
         ]
-        ts = build_tree_sequence(records, mutations)
+        ts = build_tree_sequence(records, sites)
         self.assertEqual(ts.num_nodes, 4)
         self.assertEqual(ts.num_trees, 1)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 2, 1: 3})
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 1, 3: 1})
-        self.assertEqual(list(t.mutations()), mutations)
+        self.assertEqual(list(t.sites()), sites)
         self.assertEqual(list(ts.haplotypes()), ["10", "01"])
         self.assertEqual(
             [v.genotypes for v in ts.variants(as_bytes=True)], [b"10", b"01"])
@@ -357,19 +363,19 @@ class TestMultipleRoots(TopologyTestCase):
             cr(left=0, right=1, node=4, children=(0, 1), time=1),
             cr(left=0, right=1, node=5, children=(2, 3), time=2),
         ]
-        mutations = [
-            msprime.Mutation(index=0, position=0.1, nodes=(0,), type=0),
-            msprime.Mutation(index=1, position=0.2, nodes=(1,), type=0),
-            msprime.Mutation(index=2, position=0.3, nodes=(2,), type=0),
-            msprime.Mutation(index=3, position=0.4, nodes=(3,), type=0),
+        sites = [
+            sr(index=0, position=0.1, node=0),
+            sr(index=1, position=0.2, node=1),
+            sr(index=2, position=0.3, node=2),
+            sr(index=3, position=0.4, node=3),
         ]
-        ts = build_tree_sequence(records, mutations)
+        ts = build_tree_sequence(records, sites)
         self.assertEqual(ts.num_nodes, 6)
         self.assertEqual(ts.num_trees, 1)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 2})
-        self.assertEqual(list(t.mutations()), mutations)
+        self.assertEqual(list(t.sites()), sites)
         self.assertEqual(list(ts.haplotypes()), ["1000", "0100", "0010", "0001"])
         self.assertEqual(
             [v.genotypes for v in ts.variants(as_bytes=True)],
@@ -386,7 +392,7 @@ class TestMultipleRoots(TopologyTestCase):
         t = next(ts_simplified.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 2})
-        self.assertEqual(list(t.mutations()), mutations)
+        self.assertEqual(list(t.sites()), sites)
 
     def test_two_reducable_trees(self):
         # We have n = 4 and two trees, with some unary nodes and non-sample leaves
@@ -396,21 +402,21 @@ class TestMultipleRoots(TopologyTestCase):
             cr(left=0, right=1, node=6, children=(4, 5), time=2),
             cr(left=0, right=1, node=7, children=(2, 3, 8), time=3),
         ]
-        mutations = [
-            msprime.Mutation(index=0, position=0.1, nodes=(0,), type=0),
-            msprime.Mutation(index=1, position=0.2, nodes=(1,), type=0),
-            msprime.Mutation(index=2, position=0.3, nodes=(2,), type=0),
-            msprime.Mutation(index=3, position=0.4, nodes=(3,), type=0),
-            msprime.Mutation(index=4, position=0.5, nodes=(8,), type=0),
+        sites = [
+            sr(index=0, position=0.1, node=0),
+            sr(index=1, position=0.2, node=1),
+            sr(index=2, position=0.3, node=2),
+            sr(index=3, position=0.4, node=3),
+            sr(index=4, position=0.5, node=8),
         ]
-        ts = build_tree_sequence(records, mutations)
+        ts = build_tree_sequence(records, sites)
         self.assertEqual(ts.num_nodes, 9)
         self.assertEqual(ts.num_trees, 1)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 5, 2: 7, 3: 7, 4: 6, 5: 6, 8: 7})
         self.assertEqual(
             t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1, 6: 2, 7: 3, 8: 0})
-        self.assertEqual(list(t.mutations()), mutations)
+        self.assertEqual(list(t.sites()), sites)
         self.assertEqual(list(ts.haplotypes()), ["10000", "01000", "00100", "00010"])
         self.assertEqual(
             [v.genotypes for v in ts.variants(as_bytes=True)],
@@ -430,8 +436,8 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(
             [v.genotypes for v in ts_simplified.variants(as_bytes=True)],
             [b"1000", b"0100", b"0010", b"0001"])
-        # The mutation over the non-sample external node should have been discarded.
-        self.assertEqual(list(t.mutations()), mutations[:-1])
+        # The site over the non-sample external node should have been discarded.
+        self.assertEqual(list(t.sites()), sites[:-1])
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 2, 5: 3})
 
@@ -470,20 +476,20 @@ class TestMultipleRoots(TopologyTestCase):
             cr(left=0, right=1, node=4, children=(3,), time=2),
             cr(left=0, right=1, node=5, children=(2,), time=2),
         ]
-        mutations = [
-            msprime.Mutation(index=0, position=0.1, nodes=(0,), type=0),
-            msprime.Mutation(index=1, position=0.2, nodes=(1,), type=0),
-            msprime.Mutation(index=2, position=0.3, nodes=(3,), type=0),
-            msprime.Mutation(index=3, position=0.4, nodes=(4,), type=0),
-            msprime.Mutation(index=4, position=0.5, nodes=(2,), type=0),
-            msprime.Mutation(index=5, position=0.6, nodes=(5,), type=0),
+        sites = [
+            sr(index=0, position=0.1, node=0),
+            sr(index=1, position=0.2, node=1),
+            sr(index=2, position=0.3, node=3),
+            sr(index=3, position=0.4, node=4),
+            sr(index=4, position=0.5, node=2),
+            sr(index=5, position=0.6, node=5),
         ]
-        ts = build_tree_sequence(records, mutations)
+        ts = build_tree_sequence(records, sites)
         self.assertEqual(ts.num_nodes, 6)
         self.assertEqual(ts.num_trees, 1)
-        self.assertEqual(list(ts.mutations()), mutations)
+        self.assertEqual(list(ts.sites()), sites)
         t = next(ts.trees())
-        self.assertEqual(list(t.mutations()), mutations)
+        self.assertEqual(list(t.sites()), sites)
         haplotypes = ["101100", "011100", "000011"]
         variants = [b"100", b"010", b"110", b"110", b"001", b"001"]
         self.assertEqual(list(ts.haplotypes()), haplotypes)
@@ -504,7 +510,7 @@ class TestMultipleRoots(TopologyTestCase):
         ts = msprime.simulate(20, random_seed=self.random_seed, mutation_rate=4)
         self.assertGreater(ts.num_mutations, 5)
         records = list(ts.records())
-        ts_new = build_tree_sequence(records[:-1], list(ts.mutations()))
+        ts_new = build_tree_sequence(records[:-1], list(ts.sites()))
         self.assertEqual(ts.sample_size, ts_new.sample_size)
         self.assertEqual(ts.num_records, ts_new.num_records + 1)
         self.assertEqual(ts.num_trees, ts_new.num_trees)
@@ -520,7 +526,6 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertIn(t_new.root, roots)
 
 
-@unittest.skip("simplify")
 class TestWithVisuals(TopologyTestCase):
     """
     Some pedantic tests with ascii depictions of what's supposed to happen.

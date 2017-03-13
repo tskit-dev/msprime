@@ -3612,35 +3612,6 @@ out:
     return ret;
 }
 
-/* TODO refactor this to be get_node() */
-static PyObject *
-TreeSequence_get_sample(TreeSequence *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    unsigned int u;
-    node_t node;
-    int err;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "I", &u)) {
-        goto out;
-    }
-    if (u >= tree_sequence_get_sample_size(self->tree_sequence)) {
-        PyErr_SetString(PyExc_IndexError, "out of bounds");
-        goto out;
-    }
-    err = tree_sequence_get_node(self->tree_sequence, u, &node);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("id", (int) node.population, node.time);
-out:
-    return ret;
-}
-
 static PyObject *
 TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args,
         PyObject *kwds)
@@ -3807,8 +3778,6 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
         "Returns the sample size" },
-    {"get_sample", (PyCFunction) TreeSequence_get_sample, METH_VARARGS,
-        "Returns a dictionary describing the specified sample." },
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },

@@ -123,11 +123,22 @@ def simplify_tree_sequence(ts, samples):
     """
     if len(samples) < 2:
         raise ValueError("Must have at least two samples")
+    # TODO this algorithm is partially refactored to use the tables API.
+    # It should be updated to properly support non binary mutations and
+    # to also remove references to the CoalescenceRecord object. The algorithm
+    # can also be clarified, as it's quite muddled at the moment what a 'record'
+    # is.
+
+    # TODO remove
+    for site in ts.sites():
+        assert site.ancestral_state == "0"
+        for mutation in site.mutations:
+            assert mutation.derived_state == "1"
 
     num_nodes = ts.get_num_nodes()
     active_records = {}
     new_records = []
-    new_mutations = []
+    site_records = collections.defaultdict(list)
     for tree in ts.trees(tracked_leaves=samples):
         parent = [msprime.NULL_NODE for j in range(num_nodes)]
         children = collections.defaultdict(list)
@@ -164,10 +175,10 @@ def simplify_tree_sequence(ts, samples):
         while parent[subset_root] != msprime.NULL_NODE:
             subset_root = parent[subset_root]
         # Now find the new nodes for all mutations that can be mapped back in
-        for mut in tree.mutations():
+        for site in tree.sites():
             new_nodes = []
-            for node in mut.nodes:
-                stack = [node]
+            for mut in site.mutations:
+                stack = [mut.node]
                 while not len(stack) == 0:
                     u = stack.pop()
                     if parent[u] != msprime.NULL_NODE or u in children:
@@ -176,7 +187,7 @@ def simplify_tree_sequence(ts, samples):
                         break
                     stack.extend(tree.get_children(u))
             if len(new_nodes) > 0:
-                new_mutations.append((mut.position, tuple(new_nodes)))
+                site_records[site.position].extend(new_nodes)
     for record in active_records.values():
         record[1] = ts.get_sequence_length()
         new_records.append(msprime.CoalescenceRecord(*record))
@@ -184,26 +195,40 @@ def simplify_tree_sequence(ts, samples):
 
     # Now compress the nodes.
     node_map = [msprime.NULL_NODE for _ in range(num_nodes)]
+    new_nodes = msprime.NodeTable(num_nodes)
+    new_edgesets = msprime.EdgesetTable(ts.num_edgesets, 2 * ts.num_edgesets)
     for j, u in enumerate(samples):
         node_map[u] = j
-    compressed_records = []
+        node = ts.node(u)
+        new_nodes.add_row(flags=node.flags, time=node.time, population=node.population)
     next_node = len(samples)
     for record in new_records:
-        for node in list(record.children) + [record.node]:
-            if node_map[node] == msprime.NULL_NODE:
-                node_map[node] = next_node
+        for u in list(record.children) + [record.node]:
+            if node_map[u] == msprime.NULL_NODE:
+                node = ts.node(u)
+                new_nodes.add_row(
+                    flags=node.flags, time=node.time, population=node.population)
+                node_map[u] = next_node
                 next_node += 1
         children = tuple(sorted(node_map[c] for c in record.children))
-        compressed_records.append(msprime.CoalescenceRecord(
-            left=record.left, right=record.right, node=node_map[record.node],
-            children=children, time=record.time, population=record.population))
-    compressed_mutations = []
-    for pos, nodes in new_mutations:
-        sorted_nodes = tuple(sorted(node_map[node] for node in nodes))
-        compressed_mutations.append((pos, sorted_nodes))
-    return msprime.load_coalescence_records(
-        samples=[(0, 0) for _ in samples],
-        records=compressed_records, mutations=compressed_mutations)
+        new_edgesets.add_row(
+            left=record.left, right=record.right, parent=node_map[record.node],
+            children=children)
+    new_sites = msprime.SiteTable()
+    new_mutations = msprime.MutationTable()
+    for j, position in enumerate(sorted(site_records.keys())):
+        # We must sort the mapped nodes by nonincreasing time.
+        nodes = sorted(
+            [node_map[u] for u in site_records[position]],
+            key=lambda v: -ts.node(v).time)
+        # TODO get the ancestral_state and derived_state properly.
+        new_sites.add_row(position=position, ancestral_state="0")
+        for node in nodes:
+            new_mutations.add_row(site=j, node=node, derived_state="1")
+
+    return msprime.load_tables(
+        nodes=new_nodes, edgesets=new_edgesets, sites=new_sites,
+        mutations=new_mutations)
 
 
 class TestHarmonicNumber(unittest.TestCase):
@@ -1270,29 +1295,30 @@ class TestTreeSequence(HighLevelTestCase):
         sample_map = {k: j for j, k in enumerate(sample)}
         leaves = {mut.position: [] for mut in ts.mutations()}
         for tree in ts.trees(tracked_leaves=sample):
-            for mut in tree.mutations():
-                for node in mut.nodes:
-                    allele_counts[mut.position] += tree.get_num_tracked_leaves(node)
-                    for u in tree.leaves(node):
+            for site in tree.sites():
+                for mut in site.mutations:
+                    allele_counts[site.position] += tree.get_num_tracked_leaves(mut.node)
+                    for u in tree.leaves(mut.node):
                         if u in sample_map:
-                            leaves[mut.position].append(sample_map[u])
+                            leaves[site.position].append(sample_map[u])
         new_ts = ts.simplify(sample)
+        self.assertLessEqual(new_ts.get_num_sites(), ts.get_num_sites())
         self.assertLessEqual(new_ts.get_num_mutations(), ts.get_num_mutations())
         for tree in new_ts.trees():
-            for mut in tree.mutations():
+            for site in tree.sites():
                 leaf_count = 0
                 new_leaves = []
-                for node in mut.nodes:
-                    leaf_count += tree.get_num_leaves(node)
-                    new_leaves.extend(tree.leaves(node))
-                self.assertEqual(sorted(leaves[mut.position]), sorted(new_leaves))
-                self.assertEqual(leaf_count, allele_counts[mut.position])
+                for mut in site.mutations:
+                    leaf_count += tree.get_num_leaves(mut.node)
+                    new_leaves.extend(tree.leaves(mut.node))
+                self.assertEqual(sorted(leaves[site.position]), sorted(new_leaves))
+                self.assertEqual(leaf_count, allele_counts[site.position])
 
     def verify_simplify_equality(self, ts, sample):
         s1 = ts.simplify(sample)
         s2 = simplify_tree_sequence(ts, sample)
         self.assertEqual(list(s1.records()), list(s2.records()))
-        self.assertEqual(list(s1.mutations()), list(s2.mutations()))
+        self.assertEqual(list(s1.sites()), list(s2.sites()))
         self.assertEqual(list(s1.haplotypes()), list(s2.haplotypes()))
         self.assertEqual(
             list(s1.variants(as_bytes=True)), list(s2.variants(as_bytes=True)))
@@ -1300,14 +1326,13 @@ class TestTreeSequence(HighLevelTestCase):
     def verify_simplify_variants(self, ts, sample):
         subset = ts.simplify(sample)
         s = np.array(sample)
-        full_genotypes = np.empty((ts.get_num_mutations(), ts.get_sample_size()))
-        full_positions = np.empty(ts.get_num_mutations())
+        full_genotypes = np.empty((ts.num_sites, ts.sample_size))
+        full_positions = np.empty(ts.num_sites)
         for variant in ts.variants():
             full_positions[variant.index] = variant.position
             full_genotypes[variant.index] = variant.genotypes
-        subset_genotypes = np.empty(
-            (subset.get_num_mutations(), subset.get_sample_size()))
-        subset_positions = np.empty(subset.get_num_mutations())
+        subset_genotypes = np.empty((subset.num_sites, subset.sample_size))
+        subset_positions = np.empty(subset.num_sites)
         for variant in subset.variants():
             subset_positions[variant.index] = variant.position
             subset_genotypes[variant.index] = variant.genotypes
@@ -1321,13 +1346,12 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(full_positions[j], sp)
             self.assertTrue(np.all(sg == full_genotypes[j][s]))
             j += 1
-        while j < ts.get_num_mutations():
+        while j < ts.num_sites:
             unique = np.unique(full_genotypes[j][s])
             self.assertEqual(unique.shape[0], 1)
             self.assertIn(unique[0], [0, 1])
             j += 1
 
-    @unittest.skip("simplify")
     def test_simplify(self):
         num_mutations = 0
         for ts in self.get_example_tree_sequences():
@@ -2011,6 +2035,7 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_mutations(), 0)
 
 
+@unittest.skip("text mutations")
 class TestNodeOrdering(HighLevelTestCase):
     """
     Verify that we can use any node ordering for internal nodes

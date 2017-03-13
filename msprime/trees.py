@@ -140,7 +140,7 @@ class Edgeset(SimpleContainer):
 
 
 def load_coalescence_records(
-        samples=None, records=None, mutations=None, provenance=[]):
+        samples=None, records=None, sites=None, provenance=[]):
     """
     Temporary function used to create a tree sequence using the 'coalescence records'
     paradigm. This is used a bridge between existing code and the new table based
@@ -183,12 +183,11 @@ def load_coalescence_records(
         children_length=children_length)
     site_table = msprime.SiteTable()
     mutation_table = msprime.MutationTable()
-    if mutations is not None:
-        # The mutations are (position, node, ...) tuples, like DeprecatedMutation
-        for j, mutation in enumerate(mutations):
-            site_table.add_row(mutation[0], "0")
-            mutation_table.add_row(j, mutation[1], "1")
-
+    if sites is not None:
+        for j, site in enumerate(sites):
+            site_table.add_row(site.position, site.ancestral_state)
+            for mutation in site.mutations:
+                mutation_table.add_row(j, mutation.node, mutation.derived_state)
     ll_ts = _msprime.TreeSequence()
     ll_ts.load_tables(
         nodes=node_table, edgesets=edgeset_table, sites=site_table,
@@ -1870,10 +1869,7 @@ class TreeSequence(object):
 
     def nodes(self):
         for j in range(self.num_nodes):
-            flags, time, population, name = self._ll_tree_sequence.get_node(j)
-            yield Node(
-                time=time, population=population, name=name,
-                is_sample=flags & NODE_IS_SAMPLE)
+            yield self.node(j)
 
     def edgesets(self):
         for j in range(self.num_edgesets):
@@ -2205,6 +2201,12 @@ class TreeSequence(object):
             S[j] /= self.get_sequence_length()
         return S
 
+    def node(self, u):
+        flags, time, population, name = self._ll_tree_sequence.get_node(u)
+        return Node(
+            time=time, population=population, name=name,
+            is_sample=flags & NODE_IS_SAMPLE)
+
     def time(self, sample):
         return self.get_time(sample)
 
@@ -2219,8 +2221,8 @@ class TreeSequence(object):
         """
         if sample < 0 or sample >= self.get_sample_size():
             raise ValueError("Sample ID out of bounds")
-        _, time = self._ll_tree_sequence.get_sample(sample)
-        return time
+        node = self.node(sample)
+        return node.time
 
     def population(self, sample):
         return self.get_population(sample)
@@ -2237,8 +2239,8 @@ class TreeSequence(object):
         """
         if sample < 0 or sample >= self.get_sample_size():
             raise ValueError("Sample ID out of bounds")
-        population, _ = self._ll_tree_sequence.get_sample(sample)
-        return population
+        node = self.node(sample)
+        return node.population
 
     def samples(self, population_id=None):
         return self.get_samples(population_id)
