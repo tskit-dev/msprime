@@ -80,19 +80,18 @@ class TestSimulatorThreads(unittest.TestCase):
             self.assertEqual(results[0], result)
 
 
-@unittest.skip("mutation interface")
 class TestLdCalculatorReplicates(unittest.TestCase):
     """
     Tests the LdCalculator object to ensure we get correct results
     when using threads.
     """
-    num_test_mutations = 25
+    num_test_sites = 25
 
     def get_tree_sequence(self):
         ts = msprime.simulate(
             20, mutation_rate=10, recombination_rate=10, random_seed=10)
-        mutations = sorted(random.sample(list(ts.mutations()), self.num_test_mutations))
-        return ts.copy(mutations)
+        sites = sorted(random.sample(list(ts.sites()), self.num_test_sites))
+        return ts.copy(sites)
 
     def test_get_r2_multiple_instances(self):
         # This is the nominal case where we have a separate LdCalculator

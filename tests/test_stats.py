@@ -39,34 +39,35 @@ def get_r2_matrix(ts):
     m = ts.get_num_mutations()
     A = np.zeros((m, m), dtype=float)
     for t1 in ts.trees():
-        for mA in t1.mutations():
-            assert len(mA.nodes) == 1
-            A[mA.index, mA.index] = 1
-            fA = t1.get_num_leaves(mA.nodes[0]) / n
-            leaves = list(t1.leaves(mA.nodes[0]))
+        for sA in t1.sites():
+            assert len(sA.mutations) == 1
+            mA = sA.mutations[0]
+            A[sA.index, sA.index] = 1
+            fA = t1.get_num_leaves(mA.node) / n
+            leaves = list(t1.leaves(mA.node))
             for t2 in ts.trees(tracked_leaves=leaves):
-                for mB in t2.mutations():
-                    assert len(mB.nodes) == 1
-                    if mB.position > mA.position:
-                        fB = t2.get_num_leaves(mB.nodes[0]) / n
-                        fAB = t2.get_num_tracked_leaves(mB.nodes[0]) / n
+                for sB in t2.sites():
+                    assert len(sB.mutations) == 1
+                    mB = sB.mutations[0]
+                    if sB.position > sA.position:
+                        fB = t2.get_num_leaves(mB.node) / n
+                        fAB = t2.get_num_tracked_leaves(mB.node) / n
                         D = fAB - fA * fB
                         r2 = D * D / (fA * fB * (1 - fA) * (1 - fB))
-                        A[mA.index, mB.index] = r2
-                        A[mB.index, mA.index] = r2
+                        A[sA.index, sB.index] = r2
+                        A[sB.index, sA.index] = r2
     return A
 
 
-@unittest.skip("mutations interface")
 class TestLdCalculator(unittest.TestCase):
     """
     Tests for the LdCalculator class.
     """
 
-    num_test_mutations = 50
+    num_test_sites = 50
 
     def verify_matrix(self, ts):
-        m = ts.get_num_mutations()
+        m = ts.get_num_sites()
         ldc = msprime.LdCalculator(ts)
         A = ldc.get_r2_matrix()
         self.assertEqual(A.shape, (m, m))
@@ -136,37 +137,43 @@ class TestLdCalculator(unittest.TestCase):
 
     def test_single_tree_simulated_mutations(self):
         ts = msprime.simulate(20, mutation_rate=10, random_seed=15)
-        mutations = sorted(random.sample(list(ts.mutations()), self.num_test_mutations))
-        ts = ts.copy(mutations)
+        sites = sorted(random.sample(list(ts.sites()), self.num_test_sites))
+        ts = ts.copy(sites)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
 
     def test_single_tree_regular_mutations(self):
-        ts = msprime.simulate(self.num_test_mutations, length=self.num_test_mutations)
-        mutations = [
-            msprime.Mutation(position=j, nodes=(j,), type=0, index=j)
-            for j in range(self.num_test_mutations)]
-        ts = ts.copy(mutations)
+        ts = msprime.simulate(self.num_test_sites, length=self.num_test_sites)
+        sites = [
+            msprime.Site(
+                position=j, index=j, ancestral_state="0",
+                mutations=[msprime.Mutation(site=j, node=j, derived_state="1")])
+            for j in range(self.num_test_sites)]
+        ts = ts.copy(sites)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
 
     def test_tree_sequence_regular_mutations(self):
         ts = msprime.simulate(
-            self.num_test_mutations, recombination_rate=1,
-            length=self.num_test_mutations)
+            self.num_test_sites, recombination_rate=1,
+            length=self.num_test_sites)
         self.assertGreater(ts.get_num_trees(), 10)
-        mutations = [
-            msprime.Mutation(position=j, nodes=(j,), type=0, index=j)
-            for j in range(self.num_test_mutations)]
-        ts = ts.copy(mutations)
+        sites = [
+            msprime.Site(
+                position=j, index=j, ancestral_state="0",
+                mutations=[msprime.Mutation(site=j, node=j, derived_state="1")])
+            for j in range(self.num_test_sites)]
+        ts = ts.copy(sites)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
 
     def test_tree_sequence_simulated_mutations(self):
         ts = msprime.simulate(20, mutation_rate=10, recombination_rate=10)
         self.assertGreater(ts.get_num_trees(), 10)
-        mutations = random.sample(list(ts.mutations()), self.num_test_mutations)
-        ts = ts.copy(sorted(mutations))
+        sites = random.sample(list(ts.sites()), self.num_test_sites)
+        ts = ts.copy(sorted(sites, key=lambda x: x.position))
+        # for site in ts.sites():
+        #     print(site)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
         self.verify_max_mutations(ts)

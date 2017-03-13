@@ -520,7 +520,6 @@ class TestSingleLocusSimulation(HighLevelTestCase):
             st = next(msprime.simulate(n).trees())
             self.verify_sparse_tree(st)
 
-    @unittest.skip("mutations interface")
     def test_models(self):
         # Exponential growth of 0 and constant model should be identical.
         for n in [2, 10, 100]:
@@ -538,7 +537,6 @@ class TestMultiLocusSimulation(HighLevelTestCase):
     """
     Tests on the single locus simulations.
     """
-    @unittest.skip("mutations interface")
     def test_simple_cases(self):
         m = 1
         r = 0.1
@@ -551,7 +549,6 @@ class TestMultiLocusSimulation(HighLevelTestCase):
         for r in [0.001, 0.01]:
             self.verify_sparse_trees(msprime.simulate(n, m, r))
 
-    @unittest.skip("mutations interface")
     def test_nonbinary_cases(self):
         for ts in self.get_bottleneck_examples():
             self.verify_sparse_trees(ts)
@@ -616,7 +613,6 @@ class TestTreeSimulator(HighLevelTestCase):
         self.verify_sparse_trees(tree_sequence)
         self.verify_dump_load(tree_sequence)
 
-    @unittest.skip("mutations interface")
     def test_random_parameters(self):
         num_random_sims = 10
         for j in range(num_random_sims):
@@ -774,15 +770,6 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             B[:, variant.index] = variant.genotypes
         self.assertTrue(np.all(A == B))
         self.verify_haplotypes(n, haplotypes)
-        self.assertEqual(
-            [variant.position for variant in tree_sequence.variants()],
-            [mutation.position for mutation in tree_sequence.mutations()])
-        self.assertEqual(
-            [variant.nodes for variant in tree_sequence.variants()],
-            [mutation.nodes for mutation in tree_sequence.mutations()])
-        self.assertEqual(
-            [variant.index for variant in tree_sequence.variants()],
-            [mutation.index for mutation in tree_sequence.mutations()])
 
     def verify_simulation(self, n, m, r, theta):
         """
@@ -793,7 +780,6 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             n, recombination_map=recomb_map, mutation_rate=theta)
         self.verify_tree_sequence(tree_sequence)
 
-    @unittest.skip("mutation interface")
     def test_random_parameters(self):
         num_random_sims = 10
         for j in range(num_random_sims):
@@ -807,29 +793,34 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         for ts in self.get_bottleneck_examples():
             self.verify_tree_sequence(ts)
 
-    @unittest.skip("copy interface")
     def test_recurrent_mutations_over_leaves(self):
         for ts in self.get_bottleneck_examples():
-            num_mutations = 5
-            mutations = [
-                msprime.Mutation(
-                    index=j, type=0,
-                    position=ts.sequence_length / num_mutations,
-                    nodes=tuple([u for u in range(ts.sample_size)]))
-                for j in range(num_mutations)]
-            ts_new = ts.copy(mutations)
-            ones = "1" * num_mutations
+            num_sites = 5
+            sites = [
+                msprime.Site(
+                    index=j, ancestral_state="0",
+                    position=j * ts.sequence_length / num_sites,
+                    mutations=[
+                        msprime.Mutation(site=j, node=u, derived_state="1")
+                        for u in range(ts.sample_size)])
+                for j in range(num_sites)]
+            ts_new = ts.copy(sites)
+            ones = "1" * num_sites
             for h in ts_new.haplotypes():
                 self.assertEqual(ones, h)
 
-    @unittest.skip("copy interface")
     def test_recurrent_mutations_errors(self):
         for ts in self.get_bottleneck_examples():
             tree = next(ts.trees())
             for u in tree.children(tree.root):
-                mutations = [
-                    msprime.Mutation(index=0, type=0, position=0, nodes=(u, tree.root))]
-                ts_new = ts.copy(mutations)
+                sites = [
+                    msprime.Site(
+                        index=0, position=0, ancestral_state="0",
+                        mutations=[
+                            msprime.Mutation(site=0, node=tree.root, derived_state="1"),
+                            msprime.Mutation(site=0, node=u, derived_state="1"),
+                        ])]
+                ts_new = ts.copy(sites)
                 self.assertRaises(_msprime.LibraryError, ts_new.haplotypes)
 
 
@@ -965,7 +956,6 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
 
-    @unittest.skip("mutations interface")
     def test_tree_diffs(self):
         for ts in self.get_example_tree_sequences():
             self.verify_tree_diffs(ts)
@@ -1133,7 +1123,7 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(convert(mutation.position), splits[0])
                 self.assertEqual(",".join(map(str, mutation.nodes)), splits[1])
 
-    @unittest.skip("mutations interface")
+    @unittest.skip("text mutations interface")
     def test_write_mutations(self):
         some_mutations = False
         for ts in self.get_example_tree_sequences():
@@ -1172,7 +1162,7 @@ class TestTreeSequence(HighLevelTestCase):
             check += 1
         self.assertEqual(check, ts1.get_num_trees())
 
-    @unittest.skip("mutations interface")
+    @unittest.skip("text mutations interface")
     def test_text_record_round_trip(self):
         for ts1 in self.get_example_tree_sequences():
             for header in [True, False]:
@@ -1205,7 +1195,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertAlmostEqual(m1.position, m2.position)
             self.assertEqual(m1.nodes, m2.nodes)
 
-    @unittest.skip("mutations interface")
+    @unittest.skip("text mutations interface")
     def test_text_mutation_round_trip(self):
         records_file = os.path.join(self.temp_dir, "records.txt")
         mutations_file = os.path.join(self.temp_dir, "mutations.txt")
@@ -1248,7 +1238,7 @@ class TestTreeSequence(HighLevelTestCase):
         self.compare_exported_records(tree_sequence, other)
         self.assertEqual(other.num_mutations, 0)
 
-    @unittest.skip("mutation interface")
+    @unittest.skip("text mutation interface")
     def test_dump_load_txt(self):
         for ts in self.get_example_tree_sequences():
             self.verify_dump_load_txt(ts)
@@ -2024,7 +2014,6 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_mutations(), 0)
 
 
-@unittest.skip("mutations interface")
 class TestNodeOrdering(HighLevelTestCase):
     """
     Verify that we can use any node ordering for internal nodes
