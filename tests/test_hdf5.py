@@ -1,4 +1,4 @@
-
+#
 # Copyright (C) 2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
