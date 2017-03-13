@@ -177,10 +177,10 @@ def load_coalescence_records(
     site_table = msprime.SiteTable()
     mutation_table = msprime.MutationTable()
     if mutations is not None:
+        # The mutations are (position, node, ...) tuples, like DeprecatedMutation
         for j, mutation in enumerate(mutations):
             site_table.add_row(mutation[0], "0")
-            for node in mutation[1]:
-                mutation_table.add_row(j, node, "1")
+            mutation_table.add_row(j, mutation[1], "1")
 
     ll_ts = _msprime.TreeSequence()
     ll_ts.load_tables(

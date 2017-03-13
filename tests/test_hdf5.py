@@ -72,10 +72,11 @@ def multi_locus_with_mutation_example():
 def recurrent_mutation_example():
     ts = msprime.simulate(
         10, recombination_rate=1, length=10, random_seed=2)
-    mutations = [msprime.Mutation(
-        position=j, nodes=tuple(k for k in range(j + 1)), index=j, type=0)
+    sites = [msprime.Site(
+        position=j, index=j, ancestral_state="0", mutations=[
+            msprime.Mutation(site=j, node=k, derived_state="1") for k in range(j + 1)])
         for j in range(ts.sample_size)]
-    return ts.copy(mutations)
+    return ts.copy(sites)
 
 
 def general_mutation_example():
@@ -83,15 +84,14 @@ def general_mutation_example():
     nodes = msprime.NodeTable()
     edgesets = msprime.EdgesetTable()
     ts.dump_tables(nodes=nodes, edgesets=edgesets)
-    mutation_types = msprime.MutationTypeTable()
+    sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
-    types = [("A", "T"), ("G", "C"), ("AAA", "C"), ("", "TTTTTT")]
-    for j, (ancestral, derived) in enumerate(types):
-        mutation_types.add_row(ancestral, derived)
-        mutations.add_row(position=j, nodes=(j,), type=j)
+    sites.add_row(position=0, ancestral_state="A")
+    sites.add_row(position=1, ancestral_state="C")
+    mutations.add_row(site=0, node=0, derived_state="T")
+    mutations.add_row(site=1, node=0, derived_state="G")
     return msprime.load_tables(
-        nodes=nodes, edgesets=edgesets, mutation_types=mutation_types,
-        mutations=mutations)
+        nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
 
 
 def migration_example():
@@ -158,7 +158,6 @@ class TestHdf5(unittest.TestCase):
         os.unlink(self.temp_file)
 
 
-@unittest.skip("mutations interface")
 class TestRoundTrip(TestHdf5):
     """
     Tests if we can round trip convert a tree sequence in memory
@@ -169,26 +168,12 @@ class TestRoundTrip(TestHdf5):
         self.assertEqual(ts.get_sample_size(), tsp.get_sample_size())
         self.assertEqual(ts.get_sequence_length(), tsp.get_sequence_length())
         self.assertEqual(ts.get_num_mutations(), tsp.get_num_mutations())
-        j = 0
-        for r1, r2 in zip(ts.records(), tsp.records()):
-            self.assertEqual(r1.left, r2.left)
-            self.assertEqual(r1.right, r2.right)
-            self.assertEqual(r1.node, r2.node)
-            self.assertEqual(r1.time, r2.time)
-            self.assertEqual(r1.children, r2.children)
-            self.assertEqual(r1.population, r2.population)
-            j += 1
-        self.assertEqual(j, ts.get_num_records())
+        self.assertEqual(ts.get_num_sites(), tsp.get_num_sites())
         self.assertEqual(ts.get_num_trees(), tsp.get_num_trees())
-        j = 0
-        for m1, m2 in zip(ts.mutations(), tsp.mutations()):
-            self.assertEqual(m1.position, m2.position)
-            self.assertEqual(m1.nodes, m2.nodes)
-            j += 1
+        self.assertEqual(list(ts.sites()), list(tsp.sites()))
+        self.assertEqual(list(ts.nodes()), list(tsp.nodes()))
+        self.assertEqual(list(ts.edgesets()), list(tsp.edgesets()))
         self.assertEqual(ts.get_num_nodes(), tsp.get_num_nodes())
-        for u in range(ts.get_sample_size()):
-            self.assertEqual(ts.get_population(u), tsp.get_population(u))
-        self.assertEqual(ts.num_trees, tsp.num_trees)
         num_trees = 0
         for t1, t2 in zip(ts.trees(), tsp.trees()):
             self.assertEqual(t1.parent_dict, t2.parent_dict)
@@ -476,7 +461,6 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(other_ts.get_provenance(), [])
         self.verify_tree_dump_format(other_ts)
 
-    @unittest.skip("Fix general mutations.")
     def test_general_mutation_example(self):
         self.verify_tree_dump_format(general_mutation_example())
 

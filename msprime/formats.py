@@ -128,8 +128,8 @@ def _load_legacy_hdf5_v2(root):
         num_mutations = len(node)
         mutations = num_mutations * [None]
         for j in range(num_mutations):
-            mutations[j] = msprime.Mutation(
-                position=position[j], nodes=(node[j],), index=j, type=0)
+            mutations[j] = msprime.DeprecatedMutation(
+                position=position[j], node=node[j], index=j)
 
     provenance.append(_get_upgrade_provenance(root))
     return msprime.load_coalescence_records(
@@ -175,8 +175,8 @@ def _load_legacy_hdf5_v3(root):
         num_mutations = len(node)
         mutations = num_mutations * [None]
         for j in range(num_mutations):
-            mutations[j] = msprime.Mutation(
-                position=position[j], nodes=(node[j],), index=j, type=0)
+            mutations[j] = msprime.DeprecatedMutation(
+                position=position[j], node=node[j], index=j)
 
     provenance = []
     if "provenance" in root:
@@ -250,15 +250,15 @@ def _dump_legacy_hdf5_v2(tree_sequence, root):
     samples.create_dataset("time", (l, ), data=time, dtype=float)
     samples.create_dataset("population", (l, ), data=population, dtype="u1")
     if tree_sequence.get_num_mutations() > 0:
-        if tree_sequence.num_mutation_types > 1:
-            raise ValueError("v2 does not support non-binary mutations")
         node = []
         position = []
-        for mutation in tree_sequence.mutations():
-            if len(mutation.nodes) != 1:
+        for site in tree_sequence.sites():
+            if len(site.mutations) != 1:
                 raise ValueError("v2 does not support recurrent mutations")
-            node.append(mutation.nodes[0])
-            position.append(mutation.position)
+            if site.ancestral_state != "0" or site.mutations[0].derived_state != "1":
+                raise ValueError("v2 does not support non-binary mutations")
+            position.append(site.position)
+            node.append(site.mutations[0].node)
         l = len(node)
         mutations = root.create_group("mutations")
         mutations.attrs["environment"] = json.dumps({"msprime_version": 0})
@@ -322,15 +322,15 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
 
     node = []
     position = []
-    for mutation in tree_sequence.mutations():
-        if len(mutation.nodes) != 1:
-            raise ValueError("Recurrent mutations not supported")
-        node.append(mutation.nodes[0])
-        position.append(mutation.position)
+    for site in tree_sequence.sites():
+        if len(site.mutations) != 1:
+            raise ValueError("v3 does not support recurrent mutations")
+        if site.ancestral_state != "0" or site.mutations[0].derived_state != "1":
+            raise ValueError("v3 does not support non-binary mutations")
+        position.append(site.position)
+        node.append(site.mutations[0].node)
     l = len(position)
     if l > 0:
-        if tree_sequence.num_mutation_types > 1:
-            raise ValueError("v3 does not support non-binary mutations")
         mutations = root.create_group("mutations")
         mutations.create_dataset("position", (l, ), data=position, dtype=float)
         mutations.create_dataset("node", (l, ), data=node, dtype="u4")

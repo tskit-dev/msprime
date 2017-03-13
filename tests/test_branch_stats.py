@@ -334,16 +334,16 @@ class BranchStatsTestCase(unittest.TestCase):
                 time=1.0, population=0)]
 
         mutations = [
-            (0.05, (4,)),
-            (0.1, (0,)),
-            (0.11, (2,)),
-            (0.15, (0,)),
-            (0.151, (1,)),
-            (0.3, (1,)),
-            (0.6, (2,)),
-            (0.9, (0,)),
-            (0.95, (1,)),
-            (0.951, (2,))]
+            (0.05, 4),
+            (0.1, 0),
+            (0.11, 2),
+            (0.15, 0),
+            (0.151, 1),
+            (0.3, 1),
+            (0.6, 2),
+            (0.9, 0),
+            (0.95, 1),
+            (0.951, 2)]
         ts = build_tree_sequence(records, mutations)
 
         self.check_pairwise_diversity(ts)
