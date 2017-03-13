@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 #
 # This file is part of msprime.
 #
@@ -17,17 +17,11 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Msprime is a reimplementation of Hudson's classical ms simulator for
-modern datasets.
+Exceptions defined in mprime.
 """
-from __future__ import print_function
-from __future__ import division
 
-from _msprime import FORWARD  # NOQA
-from _msprime import REVERSE  # NOQA
 
-from msprime.environment import __version__  # NOQA
-from msprime.formats import *  # NOQA
-from msprime.trees import *  # NOQA
-from msprime.stats import *  # NOQA
-from msprime.exceptions import *  # NOQA
+class DuplicatePositionsError(Exception):
+    """
+    Duplicate positions in the list of sites.
+    """

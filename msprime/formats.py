@@ -36,6 +36,7 @@ except ImportError:
 
 
 import msprime
+import msprime.exceptions as exceptions
 
 
 def _check_h5py():
@@ -78,23 +79,35 @@ def _get_upgrade_provenance(root):
     return s.encode()
 
 
-def _convert_hdf5_mutations(mutations_group, sites, mutations):
+def _convert_hdf5_mutations(
+        mutations_group, sites, mutations, remove_duplicate_positions):
     """
     Loads the v2/v3 into the specified tables.
     """
-    num_mutations = mutations_group["position"].shape[0]
+    position = np.array(mutations_group["position"])
+    node = np.array(mutations_group["node"], dtype=np.int32)
+    unique_position, index = np.unique(position, return_index=True)
+    if unique_position.shape != position.shape:
+        if remove_duplicate_positions:
+            position = position[index]
+            node = node[index]
+        else:
+            # TODO add the number of duplicates so that we can improve the
+            # error message.
+            raise exceptions.DuplicatePositionsError()
+    num_mutations = position.shape[0]
     sites.set_columns(
-        position=mutations_group["position"],
+        position=position,
         ancestral_state=ord("0") * np.ones(num_mutations, dtype=np.int8),
         ancestral_state_length=np.ones(num_mutations, dtype=np.uint32))
     mutations.set_columns(
+        node=node,
         site=np.arange(num_mutations, dtype=np.int32),
-        node=mutations_group["node"],
         derived_state=ord("1") * np.ones(num_mutations, dtype=np.int8),
         derived_state_length=np.ones(num_mutations, dtype=np.uint32))
 
 
-def _load_legacy_hdf5_v2(root):
+def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     # Get the coalescence records
     trees_group = root["trees"]
     provenance = [
@@ -133,7 +146,8 @@ def _load_legacy_hdf5_v2(root):
     mutations = msprime.MutationTable()
     if "mutations" in root:
         mutations_group = root["mutations"]
-        _convert_hdf5_mutations(mutations_group, sites, mutations)
+        _convert_hdf5_mutations(
+            mutations_group, sites, mutations, remove_duplicate_positions)
         provenance.append(
             _get_v2_provenance("generate_mutations", mutations_group.attrs))
     provenance.append(_get_upgrade_provenance(root))
@@ -142,7 +156,7 @@ def _load_legacy_hdf5_v2(root):
         provenance_strings=provenance)
 
 
-def _load_legacy_hdf5_v3(root):
+def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
     # get the trees group for the records and samples
     trees_group = root["trees"]
     nodes_group = trees_group["nodes"]
@@ -173,7 +187,8 @@ def _load_legacy_hdf5_v3(root):
     sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
     if "mutations" in root:
-        _convert_hdf5_mutations(root["mutations"], sites, mutations)
+        _convert_hdf5_mutations(
+            root["mutations"], sites, mutations, remove_duplicate_positions)
     provenance = []
     if "provenance" in root:
         provenance = list(root["provenance"])
@@ -183,10 +198,14 @@ def _load_legacy_hdf5_v3(root):
         provenance_strings=provenance)
 
 
-def load_legacy(filename):
+def load_legacy(filename, remove_duplicate_positions=False):
     """
     Reads the specified msprime HDF5 file and returns a tree sequence. This
     method is only intended to be used to read old format HDF5 files.
+
+    If remove_duplicate_positions is True, remove all sites (except the
+    first) that contain duplicate positions. If this is False, any input
+    files that contain duplicate positions will raise an DuplicatePositionsError.
     """
     _check_h5py()
     loaders = {
@@ -200,7 +219,7 @@ def load_legacy(filename):
     if format_version[0] not in loaders:
         raise ValueError("Version {} not supported for loading".format(format_version))
     try:
-        ts = loaders[format_version[0]](root)
+        ts = loaders[format_version[0]](root, remove_duplicate_positions)
     finally:
         root.close()
     return ts
@@ -353,5 +372,3 @@ def dump_legacy(tree_sequence, filename, version=3):
         dumpers[version](tree_sequence, root)
     finally:
         root.close()
-    import shutil
-    shutil.copyfile(filename, "tmp.hdf5")

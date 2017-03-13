@@ -758,8 +758,19 @@ def mspms_main(arg_list=None):
 #######################################################
 
 
+def exit(message):
+    sys.exit(message)
+
+
 def run_upgrade(args):
-    tree_sequence = msprime.load_legacy(args.source)
+    try:
+        tree_sequence = msprime.load_legacy(args.source, args.remove_duplicate_positions)
+    except msprime.DuplicatePositionsError:
+        exit(
+            "Error: Duplicate mutation positions in the source file detected.\n\n"
+            "This is not supported in the current file format. Running \"upgrade -d\" "
+            "will remove these duplicate positions. However, this will result in loss "
+            "of data from the original file!")
     tree_sequence.dump(args.destination)
 
 
@@ -918,6 +929,9 @@ def get_msp_parser():
         "source", help="The source msprime history file in legacy HDF5 format")
     upgrade_parser.add_argument(
         "destination", help="The filename of the upgraded copy.")
+    upgrade_parser.add_argument(
+        "--remove-duplicate-positions", "-d", action="store_true", default=False,
+        help="Remove any duplicated mutation positions in the source file. ")
     upgrade_parser.set_defaults(runner=run_upgrade)
 
     return parser

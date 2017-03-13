@@ -35,6 +35,7 @@ except ImportError:
     pass
 
 import h5py
+import numpy as np
 
 import msprime
 import _msprime
@@ -252,6 +253,40 @@ class TestRoundTrip(TestHdf5):
         with silence_stderr():
             tsp = msprime.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
+
+    def test_duplicate_mutation_positions_single_value(self):
+        ts = multi_locus_with_mutation_example()
+        for version in [2, 3]:
+            msprime.dump_legacy(ts, self.temp_file, version=version)
+            root = h5py.File(self.temp_file, "r+")
+            root['mutations/position'][:] = 0
+            root.close()
+            with silence_stderr():
+                self.assertRaises(
+                    msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
+                tsp = msprime.load_legacy(
+                    self.temp_file, remove_duplicate_positions=True)
+            self.assertEqual(tsp.num_sites, 1)
+            sites = list(tsp.sites())
+            self.assertEqual(sites[0].position, 0)
+
+    def test_duplicate_mutation_positions(self):
+        ts = multi_locus_with_mutation_example()
+        for version in [2, 3]:
+            msprime.dump_legacy(ts, self.temp_file, version=version)
+            root = h5py.File(self.temp_file, "r+")
+            position = np.array(root['mutations/position'])
+            position[0] = position[1]
+            root['mutations/position'][:] = position
+            root.close()
+            with silence_stderr():
+                self.assertRaises(
+                    msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
+                tsp = msprime.load_legacy(
+                    self.temp_file, remove_duplicate_positions=True)
+            self.assertEqual(tsp.num_sites, position.shape[0] - 1)
+            position_after = list(s.position for s in tsp.sites())
+            self.assertEqual(list(position[1:]), position_after)
 
 
 class TestErrors(TestHdf5):
