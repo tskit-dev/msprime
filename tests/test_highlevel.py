@@ -649,7 +649,6 @@ class TestTreeSimulator(HighLevelTestCase):
             ValueError, msprime.TreeSimulator, [(0, 0)], recomb_map)
 
 
-@unittest.skip("variant interface")
 class TestVariantGenerator(HighLevelTestCase):
     """
     Tests the variants() method to ensure the output is consistent.
@@ -678,14 +677,11 @@ class TestVariantGenerator(HighLevelTestCase):
             row = np.fromstring(variant.genotypes, np.uint8) - ord('0')
             self.assertTrue(np.all(A[j] == row))
 
-    @unittest.skip("Update variant to include mutation type info")
-    def test_mutation_information(self):
+    def test_site_information(self):
         ts = self.get_tree_sequence()
-        for mutation, variant in zip(ts.mutations(), ts.variants()):
-            self.assertEqual(mutation.position, variant.position)
-            self.assertEqual(mutation.nodes, variant.nodes)
-            self.assertEqual(mutation.index, variant.index)
-            self.assertEqual(mutation, variant[:-1])
+        for site, variant in zip(ts.sites(), ts.variants()):
+            self.assertEqual(site.position, variant.position)
+            self.assertEqual(site, variant.site)
 
     def test_no_mutations(self):
         ts = msprime.simulate(10)
@@ -693,30 +689,29 @@ class TestVariantGenerator(HighLevelTestCase):
         variants = list(ts.variants())
         self.assertEqual(len(variants), 0)
 
-    @unittest.skip("variant interface")
     def test_recurrent_mutations_over_leaves(self):
         ts = self.get_tree_sequence()
         num_sites = 5
         sites = [
             msprime.Site(
                 index=j, ancestral_state="0",
-                position=ts.sequence_length / num_sites,
+                position=j * ts.sequence_length / num_sites,
                 mutations=[
                     msprime.Mutation(site=j, node=u, derived_state="1")
                     for u in range(ts.sample_size)])
             for j in range(num_sites)]
         ts = ts.copy(sites)
-        # Note: this has been partially updated to work with sites but not tested.
-        # variants = list(ts.variants(as_bytes=True))
-        # self.assertEqual(len(variants), num_sites)
-        # for mutation, variant in zip(mutations, variants):
-        #     self.assertEqual(mutation.position, variant.position)
-        #     self.assertEqual(mutation.nodes, variant.nodes)
-        #     self.assertEqual(mutation.index, variant.index)
-        #     self.assertEqual(variant.genotypes, b'1' * ts.sample_size)
-        # # Now try without as_bytes
-        # for variant in ts.variants():
-        #     self.assertTrue(np.all(variant.genotypes == np.ones(ts.sample_size)))
+        sites = list(ts.sites())
+        variants = list(ts.variants(as_bytes=True))
+        self.assertEqual(len(variants), num_sites)
+        for site, variant in zip(sites, variants):
+            self.assertEqual(site.position, variant.position)
+            self.assertEqual(site, variant.site)
+            self.assertEqual(site.index, variant.index)
+            self.assertEqual(variant.genotypes, b'1' * ts.sample_size)
+        # Now try without as_bytes
+        for variant in ts.variants():
+            self.assertTrue(np.all(variant.genotypes == np.ones(ts.sample_size)))
 
     def test_recurrent_mutations_errors(self):
         ts = self.get_tree_sequence()
@@ -724,9 +719,11 @@ class TestVariantGenerator(HighLevelTestCase):
         for u in tree.nodes():
             for leaf in tree.leaves(u):
                 if leaf != u:
-                    mutations = [
-                        msprime.Mutation(index=0, type=0, position=0, nodes=(leaf, u))]
-            ts_new = ts.copy(mutations)
+                    site = msprime.Site(
+                        index=0, ancestral_state="0", position=0, mutations=[
+                            msprime.Mutation(site=0, derived_state="1", node=u),
+                            msprime.Mutation(site=0, derived_state="1", node=leaf)])
+            ts_new = ts.copy(sites=[site])
             self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
 
 

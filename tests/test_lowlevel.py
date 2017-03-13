@@ -2436,7 +2436,6 @@ class TestHaplotypeGenerator(LowLevelTestCase):
             self.assertEqual(len(h), num_mutations)
 
 
-@unittest.skip("SKIP VariantGenerator")
 class TestVariantGenerator(LowLevelTestCase):
     """
     Tests for the low-level variant generator.
@@ -2498,9 +2497,9 @@ class TestVariantGenerator(LowLevelTestCase):
         buff = bytearray(ts.get_sample_size())
         variants = list(_msprime.VariantGenerator(ts, buff))
         self.assertGreater(len(variants), 0)
-        self.assertEqual(len(variants), ts.get_num_mutations())
-        mutations = [ts.get_mutation(j) for j in range(ts.get_num_mutations())]
-        self.assertEqual(variants, mutations)
+        self.assertEqual(len(variants), ts.get_num_sites())
+        sites = [ts.get_site(j) for j in range(ts.get_num_sites())]
+        self.assertEqual(variants, sites)
         for _ in _msprime.VariantGenerator(ts, buff):
             self.assertEqual(len(buff), ts.get_sample_size())
             for b in buff:
@@ -2556,25 +2555,24 @@ class TestSparseTree(LowLevelTestCase):
                 self.assertRaises(
                     _msprime.LibraryError, _msprime.LeafListIterator, st, 0)
 
-    @unittest.skip("SKIP sites interface.")
-    def test_mutations(self):
+    def test_sites(self):
         for ts in self.get_example_tree_sequences():
             st = _msprime.SparseTree(ts)
-            all_mutations = [ts.get_mutation(j) for j in range(ts.get_num_mutations())]
-            all_tree_mutations = []
+            all_sites = [ts.get_site(j) for j in range(ts.get_num_sites())]
+            all_tree_sites = []
             j = 0
             for st in _msprime.SparseTreeIterator(st):
-                tree_mutations = st.get_mutations()
-                self.assertEqual(st.get_num_mutations(), len(tree_mutations))
-                all_tree_mutations.extend(tree_mutations)
-                for position, nodes, type_, index in tree_mutations:
-                    for node in nodes:
-                        self.assertTrue(st.get_left() <= position < st.get_right())
-                        self.assertNotEqual(st.get_parent(node), 0)
-                        self.assertLess(type_, ts.get_num_sites())
-                        self.assertEqual(index, j)
+                tree_sites = st.get_sites()
+                self.assertEqual(st.get_num_sites(), len(tree_sites))
+                all_tree_sites.extend(tree_sites)
+                for position, ancestral_state, mutations, index in tree_sites:
+                    self.assertTrue(st.get_left() <= position < st.get_right())
+                    self.assertEqual(index, j)
+                    for site, node, derived_state in mutations:
+                        self.assertEqual(site, index)
+                        self.assertNotEqual(st.get_parent(node), NULL_NODE)
                     j += 1
-            self.assertEqual(all_tree_mutations, all_mutations)
+            self.assertEqual(all_tree_sites, all_sites)
 
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.SparseTree)

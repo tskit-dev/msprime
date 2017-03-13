@@ -94,9 +94,16 @@ DeprecatedMutation = collections.namedtuple(
     ["position", "node", "index"])
 
 
+# This form was chosen to try to break as little of existing code as possible.
+# It seems likely that the `node` member was not used for much in this
+# iterator, so that it shouldn't break too much if we replace this with the
+# underlying site. The position and index values are retained for compatability,
+# although they are not redundant. There is a wider question about what the
+# genotypes values should be when we have non binary mutations, and whether
+# this is a viable long-term API.
 Variant = collections.namedtuple(
     "Variant",
-    ["position", "nodes", "index", "genotypes"])
+    ["position", "site", "index", "genotypes"])
 
 
 Sample = collections.namedtuple(
@@ -2057,19 +2064,27 @@ class TreeSequence(object):
         :return: An iterator of all :math:`(x, u, j, g)` tuples defining
             the variants in this tree sequence.
         """
+        # TODO finalise API and documnent. See comments for the Variant type
+        # for discussion on why the present form was chosen.
         n = self.get_sample_size()
         genotypes_buffer = bytearray(n)
         iterator = _msprime.VariantGenerator(
             self._ll_tree_sequence, genotypes_buffer, as_bytes)
         if as_bytes:
-            for position, nodes, type_, index in iterator:
+            for pos, ancestral_state, mutations, index in iterator:
+                site = Site(
+                    position=pos, ancestral_state=ancestral_state, index=index,
+                    mutations=[Mutation(*mutation) for mutation in mutations])
                 g = bytes(genotypes_buffer)
-                yield Variant(position=position, nodes=nodes, index=index, genotypes=g)
+                yield Variant(position=pos, site=site, index=index, genotypes=g)
         else:
             check_numpy()
             g = np.frombuffer(genotypes_buffer, "u1", n)
-            for position, nodes, type_, index in iterator:
-                yield Variant(position=position, nodes=nodes, index=index, genotypes=g)
+            for pos, ancestral_state, mutations, index in iterator:
+                site = Site(
+                    position=pos, ancestral_state=ancestral_state, index=index,
+                    mutations=[Mutation(*mutation) for mutation in mutations])
+                yield Variant(position=pos, site=site, index=index, genotypes=g)
 
     def pairwise_diversity(self, samples=None):
         return self.get_pairwise_diversity(samples)
