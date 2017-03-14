@@ -30,6 +30,7 @@ except ImportError:
     pass
 
 import collections
+import gzip
 import itertools
 import json
 import math
@@ -269,82 +270,6 @@ class TestAlmostEqual(unittest.TestCase):
             self.assertNotAlmostEqual(a, b)
             self.assertFalse(
                 msprime.almost_equal(a, b, abs_tol=1e-9))
-
-
-class TestMsCommandLine(tests.MsprimeTestCase):
-    """
-    Tests the output of the get_ms_command_line method.
-    """
-    def test_executable(self):
-        L = 1
-        recomb_map = msprime.RecombinationMap.uniform_map(
-            length=L, rate=0, num_loci=L)
-        sim = msprime.simulator_factory(10, recombination_map=recomb_map)
-        line = sim.get_ms_command_line()
-        self.assertEqual(line[0], "ms")
-        line = sim.get_ms_command_line("otherms")
-        self.assertEqual(line[0], "otherms")
-
-    def test_sample_size(self):
-        L = 1
-        recomb_map = msprime.RecombinationMap.uniform_map(
-            length=L, rate=0, num_loci=L)
-        for n in [2, 10, 100]:
-            sim = msprime.simulator_factory(n, recombination_map=recomb_map)
-            self.assertEqual(sim.get_ms_command_line()[1], str(n))
-
-    def test_recombination(self):
-        for L in [10, 100, 1000]:
-            for r in [0.125, 1.0, 10]:
-                rho = r * L
-                recomb_map = msprime.RecombinationMap.uniform_map(
-                    length=L, rate=r, num_loci=L)
-                sim = msprime.simulator_factory(
-                    10, recombination_map=recomb_map)
-                args = sim.get_ms_command_line()
-                self.assertEqual(args[-3], "-r")
-                self.assertEqual(float(args[-2]), float(str(rho)))
-                self.assertEqual(float(args[-1]), L)
-
-    def test_mutation(self):
-        for L in [1, 10, 100, 1000]:
-            for u in [0.125, 1.0, 10]:
-                mu = u * L * 4
-                recomb_map = msprime.RecombinationMap.uniform_map(
-                    length=L, rate=0, num_loci=L)
-                sim = msprime.simulator_factory(
-                    10, recombination_map=recomb_map)
-                args = sim.get_ms_command_line(mutation_rate=u)
-                self.assertEqual(args[-2], "-t")
-                self.assertEqual(float(args[-1]), mu)
-
-    def test_trees(self):
-        r = 0
-        L = 1
-        recomb_map = msprime.RecombinationMap.uniform_map(
-            length=L, rate=r, num_loci=L)
-        sim = msprime.simulator_factory(
-            10, recombination_map=recomb_map)
-        self.assertIn("-T", sim.get_ms_command_line())
-        self.assertIn("-T", sim.get_ms_command_line(output_trees=True))
-        self.assertNotIn("-T", sim.get_ms_command_line(output_trees=False))
-        self.assertIn("-T", sim.get_ms_command_line(mutation_rate=1.0))
-        self.assertIn("-T", sim.get_ms_command_line(
-            mutation_rate=1.0, output_trees=True))
-        self.assertNotIn("-T", sim.get_ms_command_line(
-            mutation_rate=1.0, output_trees=False))
-
-    def test_num_replicates(self):
-        L = 1
-        for j in [1, 100, 1000]:
-            recomb_map = msprime.RecombinationMap.uniform_map(
-                length=L, rate=0, num_loci=L)
-            sim = msprime.simulator_factory(
-                10, recombination_map=recomb_map)
-            args = sim.get_ms_command_line(num_replicates=j)
-            self.assertEqual(str(j), args[2])
-
-    # TODO Test population models.
 
 
 class HighLevelTestCase(tests.MsprimeTestCase):
@@ -1705,7 +1630,7 @@ class TestRecombinationMap(HighLevelTestCase):
         rm = msprime.RecombinationMap([0, 0.5, 0.6, 1], [2, 1, 2, 0], 100)
         self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
 
-    def test_read_hapmap(self):
+    def test_read_hapmap_simple(self):
         with open(self.temp_file, "w+") as f:
             print("HEADER", file=f)
             print("chr1 0 1", file=f)
@@ -1714,6 +1639,29 @@ class TestRecombinationMap(HighLevelTestCase):
         rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
         self.assertEqual(rm.get_positions(), [0, 1, 2])
         self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
+
+    def test_read_hapmap_nonzero_start(self):
+        with open(self.temp_file, "w+") as f:
+            print("HEADER", file=f)
+            print("chr1 1 5 x", file=f)
+            print("s    2 0 x x x", file=f)
+        rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
+        self.assertEqual(rm.get_positions(), [0, 1, 2])
+        self.assertEqual(rm.get_rates(), [0, 5e-8, 0])
+
+    def test_read_hapmap_gzipped(self):
+        try:
+            filename = self.temp_file + ".gz"
+            with gzip.open(filename, "w+") as f:
+                print("HEADER", file=f)
+                print("chr1 0 1", file=f)
+                print("chr1 1 5.5", file=f)
+                print("s    2 0", file=f)
+            rm = msprime.RecombinationMap.read_hapmap(filename)
+            self.assertEqual(rm.get_positions(), [0, 1, 2])
+            self.assertEqual(rm.get_rates(), [1e-8, 5.5e-8, 0])
+        finally:
+            os.unlink(filename)
 
 
 class TestSimulatorFactory(unittest.TestCase):

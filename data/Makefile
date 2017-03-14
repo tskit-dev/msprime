@@ -1,4 +1,4 @@
-all: scrm ms ms_summary_stats
+all: scrm ms 
 
 scrm:
 	wget https://github.com/scrm/scrm/releases/download/v1.7.2/scrm-src.tar.gz

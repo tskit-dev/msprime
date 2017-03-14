@@ -1545,46 +1545,6 @@ class TreeSimulator(object):
         if self._ll_sim is not None:
             self._ll_sim.reset()
 
-    def get_ms_command_line(
-            self, executable="ms", num_replicates=1, output_trees=True,
-            mutation_rate=None):
-        """
-        Returns an command line for ms that is equivalent to the parameters
-        for this simulator.
-
-        :param str executable: The path to the ms-compatible binary.
-        :param int num_relicates: The number of replicates to simulate.
-        :param float mutation_rate: The rate of mutation per generation.
-        :return: A list of command line arguments that can be used to invoke
-            ms with equivalent parameters to this simulator.
-        :rtype: list
-        """
-        L = self._recombination_map.get_length()
-        m = self._recombination_map.get_num_loci()
-        if m != L:
-            raise ValueError(
-                "Only recombination maps where L = m are supported")
-        r = self._recombination_map.get_total_recombination_rate()
-        rho = r
-        args = [executable, str(self._sample_size), str(num_replicates)]
-        if output_trees:
-            args += ["-T"]
-        if rho > 0 or L > 1:
-            args += ["-r", str(rho), str(L)]
-        if mutation_rate is not None:
-            scaled_mutation_rate = (
-                mutation_rate * 4 * self.get_effective_population_size() * L)
-            args += ["-t", str(scaled_mutation_rate)]
-        for conf in self._population_configurations:
-            if conf.growth_rate > 0:
-                args.extend(["-G", str(conf.growth_rate)])
-        if len(self._population_configurations) > 1:
-            # TODO add -I arguments
-            assert False
-        for event in self._demographic_events:
-            args.extend(event.get_ms_arguments())
-        return args
-
 
 class TreeSequence(object):
     """
@@ -1645,9 +1605,6 @@ class TreeSequence(object):
 
     def get_provenance(self):
         return self._ll_tree_sequence.get_provenance_strings()
-
-    def add_provenance(self, provenance):
-        self._ll_tree_sequence.add_provenance_string(provenance)
 
     def newick_trees(self, precision=3, breakpoints=None, Ne=1):
         # TODO document this method.
@@ -2464,9 +2421,6 @@ class DemographicEvent(object):
     def _get_scaled_time(self, Ne):
         return generations_to_coalescent(self.time, Ne)
 
-    def __str__(self):
-        raise NotImplementedError()
-
 
 class PopulationParametersChange(DemographicEvent):
     """
@@ -2512,9 +2466,6 @@ class PopulationParametersChange(DemographicEvent):
             ret["initial_size"] = self.initial_size / Ne
         return ret
 
-    def get_ms_arguments(self):
-        raise NotImplementedError()
-
     def __str__(self):
         s = "Population parameter change for {}: ".format(self.population_id)
         if self.initial_size is not None:
@@ -2553,9 +2504,6 @@ class MigrationRateChange(DemographicEvent):
             "migration_rate": scaled_rate,
             "matrix_index": matrix_index
         }
-
-    def get_ms_arguments(self):
-        raise NotImplemented()
 
     def __str__(self):
         if self.matrix_index is None:
@@ -2599,9 +2547,6 @@ class MassMigration(DemographicEvent):
             "proportion": self.proportion
         }
 
-    def get_ms_arguments(self):
-        raise NotImplemented()
-
     def __str__(self):
         return (
             "Mass migration: lineages move from {} to {} with "
@@ -2623,9 +2568,6 @@ class SimpleBottleneck(DemographicEvent):
             "population_id": self.population_id,
             "proportion": self.proportion
         }
-
-    def get_ms_arguments(self):
-        raise NotImplemented()
 
     def __str__(self):
         return (
@@ -2649,9 +2591,6 @@ class InstantaneousBottleneck(DemographicEvent):
             "population_id": self.population_id,
             "strength": generations_to_coalescent(self.strength, Ne)
         }
-
-    def get_ms_arguments(self):
-        raise NotImplemented()
 
     def __str__(self):
         return (
