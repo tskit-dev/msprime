@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2016-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -148,7 +148,8 @@ out:
 }
 
 static int WARN_UNUSED
-vcf_converter_write_record(vcf_converter_t *self, unsigned long pos)
+vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
+        const char *ancestral_state, const char *derived_state)
 {
     int ret = MSP_ERR_GENERIC;
     int written;
@@ -181,19 +182,19 @@ vcf_converter_convert_positions(vcf_converter_t *self, tree_sequence_t *tree_seq
 {
     int ret = 0;
     unsigned long pos;
-    mutation_t mut;
+    site_t site;
     /* VCF is 1-based, so we must make sure we never have a 0 coordinate */
     unsigned long last_position = 0;
     size_t j;
 
-    for (j = 0; j < self->num_mutations; j++) {
-        ret = tree_sequence_get_mutation(tree_sequence, j, &mut);
+    for (j = 0; j < self->num_sites; j++) {
+        ret = tree_sequence_get_site(tree_sequence, (site_id_t) j, &site);
         if (ret != 0) {
             goto out;
         }
         /* update pos. We use a simple algorithm to ensure positions
          * are unique. */
-        pos = (unsigned long) round(mut.position);
+        pos = (unsigned long) round(site.position);
         if (pos <= last_position) {
             pos = last_position + 1;
         }
@@ -216,14 +217,19 @@ vcf_converter_next(vcf_converter_t *self, char **record)
 {
     int ret = -1;
     int err;
-    mutation_t *mut;
+    site_t *site;
 
-    ret = vargen_next(self->vargen, &mut, self->genotypes);
+    ret = vargen_next(self->vargen, &site, self->genotypes);
     if (ret < 0) {
         goto out;
     }
     if (ret == 1) {
-        err = vcf_converter_write_record(self, self->positions[mut->index]);
+        if (site->mutations_length != 1) {
+            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            goto out;
+        }
+        err = vcf_converter_write_record(self, self->positions[site->id],
+                site->ancestral_state, site->mutations[0].derived_state);
         if (err != 0) {
             ret = err;
             goto out;
@@ -257,8 +263,8 @@ vcf_converter_alloc(vcf_converter_t *self,
     if (ret != 0) {
         goto out;
     }
-    self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
-    self->positions = malloc(self->num_mutations * sizeof(unsigned long));
+    self->num_sites = tree_sequence_get_num_sites(tree_sequence);
+    self->positions = malloc(self->num_sites * sizeof(unsigned long));
     if (self->positions == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -269,10 +275,10 @@ vcf_converter_alloc(vcf_converter_t *self,
     }
     self->contig_length =
         (unsigned long) round(tree_sequence_get_sequence_length(tree_sequence));
-    if (self->num_mutations > 0) {
+    if (self->num_sites > 0) {
         self->contig_length = GSL_MAX(
             self->contig_length,
-            self->positions[self->num_mutations - 1]);
+            self->positions[self->num_sites - 1]);
     }
     ret = vcf_converter_make_header(self);
     if (ret != 0) {

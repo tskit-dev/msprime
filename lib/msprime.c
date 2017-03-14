@@ -63,6 +63,9 @@ msp_strerror(int err)
     const char *ret = "Unknown error";
 
     switch (err) {
+        case 0:
+            ret = "Normal exit condition. This is not an error!";
+            goto out;
         case MSP_ERR_NO_MEMORY:
             ret = "Out of memory.";
             break;
@@ -199,14 +202,14 @@ msp_strerror(int err)
         case MSP_ERR_NOT_INITIALISED:
             ret = "object not initialised. Please file a bug report.";
             break;
-        case MSP_ERR_MUTATIONS_NOT_POSITION_SORTED:
-            ret = "Mutations must be sorted by position";
-            break;
+        /* case MSP_ERR_MUTATIONS_NOT_POSITION_SORTED: */
+        /*     ret = "Mutations must be sorted by position"; */
+        /*     break; */
         case MSP_ERR_UNSORTED_MUTATION_NODES:
-            ret = "Mutations nodes must be in sorted order.";
+            ret = "Mutations within a site must be sorted in nonincreasing time order.";
             break;
         case MSP_ERR_DUPLICATE_MUTATION_NODES:
-            ret = "Mutations nodes must be unique.";
+            ret = "Cannot have more than one mutation at a node for a given site.";
             break;
         case MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED:
             ret = "Only binary mutations are supported for this operation.";
@@ -223,6 +226,30 @@ msp_strerror(int err)
             break;
         case MSP_ERR_BAD_CHILDREN_ARRAY:
             ret = "Malformed array of children.";
+            break;
+        case MSP_ERR_SITE_OUT_OF_BOUNDS:
+            ret = "Site out of bounds";
+            break;
+        case MSP_ERR_NODE_OUT_OF_BOUNDS:
+            ret = "Node out of bounds";
+            break;
+        case MSP_ERR_LENGTH_MISMATCH:
+            ret = "Mismatch in stored total column length and sum of row lengths";
+            break;
+        case MSP_ERR_BAD_ALPHABET:
+            ret = "Uknown alphabet provided.";
+            break;
+        case MSP_ERR_NON_SINGLE_CHAR_MUTATION:
+            ret = "Only single char mutations supported.";
+            break;
+        case MSP_ERR_UNSORTED_SITES:
+            ret = "Sites must be provided in strictly increasing position order.";
+            break;
+        case MSP_ERR_BAD_SITE_POSITION:
+            ret = "Sites positions must be between 0 and sequence_length";
+            break;
+        case MSP_ERR_UNSORTED_MUTATIONS:
+            ret = "Mutations must be provided in nondecreasing site order";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {
@@ -2667,7 +2694,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             right = recomb_map_genetic_to_phys(recomb_map, cr->right);
         }
         ret = edgeset_table_add_row(edgesets, left, right, cr->node,
-                cr->num_children, cr->children);
+                cr->children, cr->num_children);
     }
     /* Add in the migration records */
     for (j = 0; j < self->num_migrations; j++) {

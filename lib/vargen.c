@@ -29,7 +29,7 @@ void
 vargen_print_state(vargen_t *self, FILE *out)
 {
     fprintf(out, "vargen state\n");
-    fprintf(out, "tree_mutation_index = %d\n", (int) self->tree_mutation_index);
+    fprintf(out, "tree_site_index = %d\n", (int) self->tree_site_index);
 }
 
 static int
@@ -43,7 +43,7 @@ vargen_next_tree(vargen_t *self)
     } else if (ret < 0) {
         goto out;
     }
-    self->tree_mutation_index = 0;
+    self->tree_site_index = 0;
 out:
     return ret;
 }
@@ -55,9 +55,18 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
 
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(vargen_t));
+    /* For now, the logic only supports infinite sites binary mutations. We need to
+     * think about how to structure this API to support the general case (lots of
+     * mutations happening along the tree) without making it too inefficient and
+     * breaking too much code.
+     */
+    if (tree_sequence_get_alphabet(tree_sequence) != MSP_ALPHABET_BINARY) {
+        ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
+        goto out;
+    }
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
-    self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
+    self->num_sites = tree_sequence_get_num_sites(tree_sequence);
     self->tree_sequence = tree_sequence;
     self->flags = flags;
 
@@ -66,7 +75,7 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
         goto out;
     }
     self->finished = 0;
-    self->tree_mutation_index = 0;
+    self->tree_site_index = 0;
     ret = sparse_tree_first(&self->tree);
     if (ret < 0) {
         goto out;
@@ -84,16 +93,15 @@ vargen_free(vargen_t *self)
 }
 
 static int
-vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes,
-        char ancestral, char derived)
+vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char ancestral, char derived)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
     bool not_done;
-    uint32_t j;
+    list_len_t j;
 
-    for (j = 0; j < mut->num_nodes; j++) {
-        ret = sparse_tree_get_leaf_list(&self->tree, mut->nodes[j], &w, &tail);
+    for (j = 0; j < site->mutations_length; j++) {
+        ret = sparse_tree_get_leaf_list(&self->tree, site->mutations[j].node, &w, &tail);
         if (ret != 0) {
             goto out;
         }
@@ -101,7 +109,7 @@ vargen_apply_tree_mutation(vargen_t *self, mutation_t *mut, char *genotypes,
             not_done = true;
             while (not_done) {
                 assert(w != NULL);
-                assert(w->node < (node_id_t)self->sample_size);
+                assert(w->node < (node_id_t) self->sample_size);
                 if (genotypes[w->node] != ancestral) {
                     ret = MSP_ERR_INCONSISTENT_MUTATIONS;
                     goto out;
@@ -117,15 +125,16 @@ out:
 }
 
 int
-vargen_next(vargen_t *self, mutation_t **mutation, char *genotypes)
+vargen_next(vargen_t *self, site_t **site, char *genotypes)
 {
     int ret = 0;
+
     bool not_done = true;
-    mutation_t *m;
+    site_t *s;
     char ancestral, derived;
 
     if (!self->finished) {
-        while (not_done && self->tree_mutation_index == self->tree.num_mutations) {
+        while (not_done && self->tree_site_index == self->tree.sites_length) {
             ret = vargen_next_tree(self);
             if (ret < 0) {
                 goto out;
@@ -133,25 +142,25 @@ vargen_next(vargen_t *self, mutation_t **mutation, char *genotypes)
             not_done = ret == 1;
         }
         if (not_done) {
-            m = &self->tree.mutations[self->tree_mutation_index];
-            ancestral = m->ancestral_state;
-            derived = m->derived_state;
-            if (!self->flags & MSP_GENOTYPES_AS_CHAR) {
-                /* TODO how do we gracefully do this for non binary mutations? */
-                if (ancestral != '0' || derived != '1') {
-                    ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
-                    goto out;
-                }
-                ancestral = 0;
-                derived = 1;
+            s = &self->tree.sites[self->tree_site_index];
+            /* For now, we can only deal with standard infinite sites mutations. */
+            if (s->mutations_length != 1 && s->ancestral_state[0] != '0') {
+                ret = MSP_ERR_UNSUPPORTED_OPERATION;
+                goto out;
+            }
+            ancestral = 0;
+            derived = 1;
+            if (self->flags & MSP_GENOTYPES_AS_CHAR) {
+                ancestral = '0';
+                derived = '1';
             }
             memset(genotypes, ancestral, self->sample_size);
-            ret = vargen_apply_tree_mutation(self, m, genotypes, ancestral, derived);
+            ret = vargen_apply_tree_site(self, s, genotypes, ancestral, derived);
             if (ret != 0) {
                 goto out;
             }
-            self->tree_mutation_index++;
-            *mutation = m;
+            self->tree_site_index++;
+            *site = s;
             ret = 1;
         }
     }

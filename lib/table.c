@@ -29,6 +29,8 @@
 
 #define DEFAULT_MAX_ROWS_INCREMENT 1024
 
+#define TABLE_SEP "-----------------------------------------\n"
+
 
 static int
 expand_column(void **column, size_t new_max_rows, size_t element_size)
@@ -52,21 +54,21 @@ out:
 
 int
 node_table_alloc(node_table_t *self, size_t max_rows_increment,
-        size_t max_name_length_increment)
+        size_t max_total_name_length_increment)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(node_table_t));
-    if (max_rows_increment == 0 || max_name_length_increment == 0) {
+    if (max_rows_increment == 0 || max_total_name_length_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->max_rows_increment = max_rows_increment;
-    self->max_name_length_increment = max_name_length_increment;
+    self->max_total_name_length_increment = max_total_name_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    self->max_name_length = 0;
-    self->name_length = 0;
+    self->max_total_name_length = 0;
+    self->total_name_length = 0;
 out:
     return ret;
 }
@@ -90,6 +92,10 @@ node_table_expand_fixed_columns(node_table_t *self, size_t new_size)
         if (ret != 0) {
             goto out;
         }
+        ret = expand_column((void **) &self->name_length, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
         self->max_rows = new_size;
     }
 out:
@@ -101,12 +107,12 @@ node_table_expand_name(node_table_t *self, size_t new_size)
 {
     int ret = 0;
 
-    if (new_size > self->max_name_length) {
+    if (new_size > self->max_total_name_length) {
         ret = expand_column((void **) &self->name, new_size, sizeof(char *));
         if (ret != 0) {
             goto out;
         }
-        self->max_name_length = new_size;
+        self->max_total_name_length = new_size;
     }
 out:
     return ret;
@@ -114,15 +120,16 @@ out:
 
 int
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, size_t name_length, char *name)
+        population_id_t *population, char *name, uint32_t *name_length)
 {
     int ret;
+    size_t j, total_name_length;
 
     if (flags == NULL || time == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (name == NULL && name_length > 0) {
+    if ((name == NULL) != (name_length == NULL)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -132,29 +139,28 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
     }
     memcpy(self->flags, flags, num_rows * sizeof(uint32_t));
     memcpy(self->time, time, num_rows * sizeof(double));
+    if (name == NULL) {
+        self->total_name_length = 0;
+        memset(self->name_length, 0, num_rows * sizeof(uint32_t));
+    } else {
+        memcpy(self->name_length, name_length, num_rows * sizeof(uint32_t));
+        total_name_length = 0;
+        for (j = 0; j < num_rows; j++) {
+            total_name_length += name_length[j];
+        }
+        ret = node_table_expand_name(self, total_name_length);
+        if (ret != 0) {
+            goto out;
+        }
+        memcpy(self->name, name, total_name_length * sizeof(char));
+        self->total_name_length = total_name_length;
+    }
     if (population == NULL) {
         memset(self->population, 0xff, num_rows * sizeof(population_id_t));
     } else {
         memcpy(self->population, population, num_rows * sizeof(population_id_t));
     }
     self->num_rows = num_rows;
-    if (name != NULL) {
-        ret = node_table_expand_name(self, name_length);
-        if (ret != 0) {
-            goto out;
-        }
-        memcpy(self->name, name, name_length * sizeof(char));
-        self->name_length = name_length;
-    } else {
-        /* If input name is NULL fill the column with NULLs to designate
-         * all names as the empty string. */
-        ret = node_table_expand_name(self, num_rows);
-        if (ret != 0) {
-            goto out;
-        }
-        memset(self->name, '\0', num_rows * sizeof(char));
-        self->name_length = num_rows;
-    }
 out:
     return ret;
 }
@@ -177,22 +183,20 @@ node_table_add_row(node_table_t *self, uint32_t flags, double time,
             goto out;
         }
     }
-    /* include the sentinel \0 */
-    name_length = 1 + strlen(name);
-    while (self->name_length + name_length
-            >= self->max_name_length) {
-        new_size = self->max_name_length + self->max_name_length_increment;
+    name_length = strlen(name);
+    while (self->total_name_length + name_length >= self->max_total_name_length) {
+        new_size = self->max_total_name_length + self->max_total_name_length_increment;
         ret = node_table_expand_name(self, new_size);
         if (ret != 0) {
             goto out;
         }
     }
-    memcpy(self->name + self->name_length, name, name_length);
-    self->name_length += name_length;
-
+    memcpy(self->name + self->total_name_length, name, name_length);
+    self->total_name_length += name_length;
     self->flags[self->num_rows] = flags;
     self->time[self->num_rows] = time;
     self->population[self->num_rows] = population;
+    self->name_length[self->num_rows] = (uint32_t) name_length;
     self->num_rows++;
 out:
     return ret;
@@ -202,7 +206,7 @@ int
 node_table_reset(node_table_t *self)
 {
     self->num_rows = 0;
-    self->name_length = 0;
+    self->total_name_length = 0;
     return 0;
 }
 
@@ -213,32 +217,35 @@ node_table_free(node_table_t *self)
     msp_safe_free(self->time);
     msp_safe_free(self->population);
     msp_safe_free(self->name);
+    msp_safe_free(self->name_length);
     return 0;
 }
 
 void
 node_table_print_state(node_table_t *self, FILE *out)
 {
-    size_t j, k;
-    const char *name;
+    size_t j, k, offset;
 
-    fprintf(out, "node_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "node_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "\tindex\tflags\ttime\tpopulation\tname\n");
-    assert(self->name_length == 0 || self->name_length >= self->num_rows);
-
-    k = 0;
+    fprintf(out, "total_name_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->total_name_length,
+            (int) self->max_total_name_length,
+            (int) self->max_total_name_length_increment);
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tflags\ttime\tpopulation\tname_length\tname\n");
+    offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%d\t%f\t%d\t", (int) j, self->flags[j], self->time[j],
-                (int) self->population[j]);
-        if (self->name_length == 0) {
-            name = "NULL";
-        } else {
-            assert(k < self->name_length);
-            name = self->name + k;
-            k += 1 + strlen(name);
+        fprintf(out, "%d\t%d\t%f\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
+                (int) self->population[j], self->name_length[j]);
+        for (k = 0; k < self->name_length[j]; k++) {
+            assert(offset < self->total_name_length);
+            fprintf(out, "%c", self->name[offset]);
+            offset++;
         }
-        fprintf(out, "%s\n", name);
+        fprintf(out, "\n");
     }
 }
 
@@ -248,21 +255,21 @@ node_table_print_state(node_table_t *self, FILE *out)
 
 int
 edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
-        size_t max_children_length_increment)
+        size_t max_total_children_length_increment)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(edgeset_table_t));
-    if (max_rows_increment == 0 || max_children_length_increment == 0) {
+    if (max_rows_increment == 0 || max_total_children_length_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->max_rows_increment = max_rows_increment;
-    self->max_children_length_increment = max_children_length_increment;
+    self->max_total_children_length_increment = max_total_children_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    self->max_children_length = 0;
-    self->children_length = 0;
+    self->max_total_children_length = 0;
+    self->total_children_length = 0;
 out:
     return ret;
 }
@@ -285,6 +292,11 @@ edgeset_table_expand_main_columns(edgeset_table_t *self, size_t new_size)
         if (ret != 0) {
             goto out;
         }
+        ret = expand_column((void **) &self->children_length, new_size,
+                sizeof(list_len_t));
+        if (ret != 0) {
+            goto out;
+        }
         self->max_rows = new_size;
     }
 out:
@@ -296,25 +308,24 @@ edgeset_table_expand_children(edgeset_table_t *self, size_t new_size)
 {
     int ret = 0;
 
-    if (new_size > self->max_children_length) {
+    if (new_size > self->max_total_children_length) {
         ret = expand_column((void **) &self->children, new_size, sizeof(node_id_t));
         if (ret != 0) {
             goto out;
         }
-        self->max_children_length = new_size;
+        self->max_total_children_length = new_size;
     }
 out:
     return ret;
 }
 
 int
-edgeset_table_add_row(edgeset_table_t *self, double left,
-        double right, node_id_t parent, size_t num_children,
-        node_id_t *children)
+edgeset_table_add_row(edgeset_table_t *self, double left, double right,
+        node_id_t parent, node_id_t *children, list_len_t children_length)
 {
     int ret = 0;
 
-    if (num_children == 0) {
+    if (children_length == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -326,9 +337,10 @@ edgeset_table_add_row(edgeset_table_t *self, double left,
         }
     }
     /* Need the loop here in case we have a very large number of children */
-    while (1 + self->children_length + num_children >= self->max_children_length) {
+    while (self->total_children_length + children_length
+            >= self->max_total_children_length) {
         ret = edgeset_table_expand_children(self,
-            self->max_children_length + self->max_children_length_increment);
+            self->max_total_children_length + self->max_total_children_length_increment);
         if (ret != 0) {
             goto out;
         }
@@ -336,10 +348,10 @@ edgeset_table_add_row(edgeset_table_t *self, double left,
     self->left[self->num_rows] = left;
     self->right[self->num_rows] = right;
     self->parent[self->num_rows] = parent;
-    memcpy(self->children + self->children_length, children,
-            num_children * sizeof(node_id_t));
-    self->children[self->children_length + num_children] = MSP_NULL_NODE;
-    self->children_length += 1 + num_children;
+    memcpy(self->children + self->total_children_length, children,
+            children_length * sizeof(node_id_t));
+    self->children_length[self->num_rows] = children_length;
+    self->total_children_length += children_length;
     self->num_rows++;
 out:
     return ret;
@@ -348,28 +360,35 @@ out:
 int
 edgeset_table_set_columns(edgeset_table_t *self,
         size_t num_rows, double *left, double *right, node_id_t *parent,
-        size_t children_length, node_id_t *children)
+        node_id_t *children, list_len_t *children_length)
 {
     int ret;
+    list_len_t j;
+    size_t total_children_length = 0;
 
-    if (left == NULL || right == NULL || parent == NULL || children == NULL) {
+    if (left == NULL || right == NULL || parent == NULL || children == NULL
+            || children_length == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
+    }
+    for (j = 0; j < num_rows; j++) {
+        total_children_length += children_length[j];
     }
     ret = edgeset_table_expand_main_columns(self, num_rows);
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_expand_children(self, children_length);
+    ret = edgeset_table_expand_children(self, total_children_length);
     if (ret != 0) {
         goto out;
     }
     memcpy(self->left, left, num_rows * sizeof(double));
     memcpy(self->right, right, num_rows * sizeof(double));
     memcpy(self->parent, parent, num_rows * sizeof(node_id_t));
-    memcpy(self->children, children, children_length * sizeof(node_id_t));
+    memcpy(self->children, children, total_children_length * sizeof(node_id_t));
+    memcpy(self->children_length, children_length, num_rows * sizeof(list_len_t));
     self->num_rows = num_rows;
-    self->children_length = children_length;
+    self->total_children_length += total_children_length;
 out:
     return ret;
 }
@@ -378,7 +397,7 @@ int
 edgeset_table_reset(edgeset_table_t *self)
 {
     self->num_rows = 0;
-    self->children_length = 0;
+    self->total_children_length = 0;
     return 0;
 }
 
@@ -389,6 +408,7 @@ edgeset_table_free(edgeset_table_t *self)
     msp_safe_free(self->right);
     msp_safe_free(self->parent);
     msp_safe_free(self->children);
+    msp_safe_free(self->children_length);
     return 0;
 }
 
@@ -396,65 +416,73 @@ void
 edgeset_table_print_state(edgeset_table_t *self, FILE *out)
 {
     size_t j, offset;
+    list_len_t k;
 
-    fprintf(out,
-        "edgeset_table: %p:num_rows=%d,max_rows=%d,max_rows_increment%d,"
-        "children_length=%d,max_children_length=%d,max_children_length_increment=%d\n",
-            (void *) self, (int) self->num_rows, (int) self->max_rows,
-            (int) self->max_rows_increment, (int) self->children_length,
-            (int) self->max_children_length, (int) self->max_children_length_increment);
-    fprintf(out, "\tindex\tleft\tright\tparent\tchildren\n");
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "edgeset_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
+    fprintf(out, "total_children_length   = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->total_children_length,
+            (int) self->max_total_children_length,
+            (int) self->max_total_children_length_increment);
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tleft\tright\tparent\tchildren_length\tchildren\n");
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%.3f\t%.3f\t%d\t", (int) j, self->left[j], self->right[j],
-                (int) self->parent[j]);
-        while (offset < self->children_length
-                && self->children[offset] != MSP_NULL_NODE) {
+        fprintf(out, "%d\t%.3f\t%.3f\t%d\t%d\t", (int) j, self->left[j], self->right[j],
+                (int) self->parent[j], self->children_length[j]);
+        for (k = 0; k < self->children_length[j]; k++) {
+            assert(offset < self->total_children_length);
             fprintf(out, "%d", (int) self->children[offset]);
-            assert(offset < self->children_length - 1);
-            if (self->children[offset + 1] != MSP_NULL_NODE) {
+            offset++;
+            if (k < self->children_length[j] - 1) {
                 fprintf(out, ",");
             }
-            offset++;
         }
-        offset++;
         fprintf(out, "\n");
     }
-    assert(offset == self->children_length);
+    assert(offset == self->total_children_length);
 }
 
 /*************************
- * mutation table
+ * site table
  *************************/
 
 int
-mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        size_t max_nodes_length_increment)
+site_table_alloc(site_table_t *self, size_t max_rows_increment,
+        size_t max_total_ancestral_state_length_increment)
 {
     int ret = 0;
 
-    memset(self, 0, sizeof(mutation_table_t));
-    if (max_rows_increment == 0 || max_nodes_length_increment == 0) {
+    memset(self, 0, sizeof(site_table_t));
+    if (max_rows_increment == 0 || max_total_ancestral_state_length_increment == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->max_rows_increment = max_rows_increment;
-    self->max_nodes_length_increment = max_nodes_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    self->max_nodes_length = 0;
-    self->nodes_length = 0;
+    self->max_total_ancestral_state_length_increment =
+        max_total_ancestral_state_length_increment;
+    self->max_total_ancestral_state_length = 0;
+    self->total_ancestral_state_length = 0;
 out:
     return ret;
 }
 
 static int
-mutation_table_expand_main_columns(mutation_table_t *self, size_t new_size)
+site_table_expand_main_columns(site_table_t *self, size_t new_size)
 {
     int ret = 0;
 
     if (new_size > self->max_rows) {
         ret = expand_column((void **) &self->position, new_size, sizeof(double));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->ancestral_state_length, new_size,
+                sizeof(uint32_t));
         if (ret != 0) {
             goto out;
         }
@@ -465,32 +493,223 @@ out:
 }
 
 static int
-mutation_table_expand_nodes(mutation_table_t *self, size_t new_size)
+site_table_expand_ancestral_state(site_table_t *self, size_t new_size)
 {
     int ret = 0;
 
-    if (new_size > self->max_nodes_length) {
-        ret = expand_column((void **) &self->nodes, new_size, sizeof(node_id_t));
+    if (new_size > self->max_total_ancestral_state_length) {
+        ret = expand_column((void **) &self->ancestral_state, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
         }
-        self->max_nodes_length = new_size;
+        self->max_total_ancestral_state_length = new_size;
     }
 out:
     return ret;
 }
 
 int
-mutation_table_add_row(mutation_table_t *self, double position, size_t num_nodes,
-        node_id_t *nodes)
+site_table_add_row(site_table_t *self, double position, const char *ancestral_state,
+        list_len_t ancestral_state_length)
 {
     int ret = 0;
     size_t new_size;
 
-    if (num_nodes == 0) {
+    if (self->num_rows == self->max_rows) {
+        new_size = self->max_rows + self->max_rows_increment;
+        ret = site_table_expand_main_columns(self, new_size);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    while (self->total_ancestral_state_length + ancestral_state_length >=
+            self->max_total_ancestral_state_length) {
+        ret = site_table_expand_ancestral_state(self,
+                self->max_total_ancestral_state_length +
+                self->max_total_ancestral_state_length_increment);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    self->position[self->num_rows] = position;
+    self->ancestral_state_length[self->num_rows] = (uint32_t) ancestral_state_length;
+    memcpy(self->ancestral_state + self->total_ancestral_state_length,
+            ancestral_state, ancestral_state_length);
+    self->total_ancestral_state_length += ancestral_state_length;
+    self->num_rows++;
+out:
+    return ret;
+}
+
+int
+site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
+        const char *ancestral_state, list_len_t *ancestral_state_length)
+{
+    int ret = 0;
+    size_t total_ancestral_state_length = 0;
+    size_t j;
+
+    if (position == NULL || ancestral_state == NULL || ancestral_state_length == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+
+    for (j = 0; j < num_rows; j++) {
+        total_ancestral_state_length += ancestral_state_length[j];
+    }
+    ret = site_table_expand_main_columns(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = site_table_expand_ancestral_state(self, total_ancestral_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->position, position, num_rows * sizeof(double));
+    memcpy(self->ancestral_state, ancestral_state,
+            total_ancestral_state_length * sizeof(char));
+    memcpy(self->ancestral_state_length, ancestral_state_length,
+            num_rows * sizeof(uint32_t));
+    self->num_rows = num_rows;
+    self->total_ancestral_state_length = total_ancestral_state_length;
+out:
+    return ret;
+}
+
+bool
+site_table_equal(site_table_t *self, site_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows
+            && self->total_ancestral_state_length == other->total_ancestral_state_length) {
+        ret = memcmp(self->position, other->position,
+                self->num_rows * sizeof(double)) == 0
+            && memcmp(self->ancestral_state_length, other->ancestral_state_length,
+                    self->num_rows * sizeof(list_len_t)) == 0
+            && memcmp(self->ancestral_state, other->ancestral_state,
+                    self->total_ancestral_state_length * sizeof(char)) == 0;
+    }
+    return ret;
+}
+
+int
+site_table_reset(site_table_t *self)
+{
+    self->num_rows = 0;
+    self->total_ancestral_state_length = 0;
+    return 0;
+}
+
+int
+site_table_free(site_table_t *self)
+{
+    msp_safe_free(self->position);
+    msp_safe_free(self->ancestral_state);
+    msp_safe_free(self->ancestral_state_length);
+    return 0;
+}
+
+void
+site_table_print_state(site_table_t *self, FILE *out)
+{
+    size_t j, k, ancestral_state_offset;
+
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "site_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
+    fprintf(out, "total_ancestral_state_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->total_ancestral_state_length,
+            (int) self->max_total_ancestral_state_length,
+            (int) self->max_total_ancestral_state_length_increment);
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tposition\tancestral_state_length\tancestral_state\n");
+    ancestral_state_offset = 0;
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "%d\t%f\t%d\t", (int) j, self->position[j],
+                self->ancestral_state_length[j]);
+        for (k = 0; k < self->ancestral_state_length[j]; k++) {
+            fprintf(out, "%c", self->ancestral_state[ancestral_state_offset]);
+            ancestral_state_offset++;
+        }
+        fprintf(out, "\n");
+    }
+}
+
+/*************************
+ * mutation table
+ *************************/
+
+int
+mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
+        size_t max_total_derived_state_length_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(mutation_table_t));
+    if (max_rows_increment == 0 || max_total_derived_state_length_increment == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->max_rows_increment = max_rows_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    self->max_total_derived_state_length_increment =
+        max_total_derived_state_length_increment;
+    self->max_total_derived_state_length = 0;
+    self->total_derived_state_length = 0;
+out:
+    return ret;
+}
+
+static int
+mutation_table_expand_main_columns(mutation_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_rows) {
+        ret = expand_column((void **) &self->site, new_size, sizeof(site_id_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->node, new_size, sizeof(node_id_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->derived_state_length, new_size,
+                sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_rows = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
+mutation_table_expand_derived_state(mutation_table_t *self, size_t new_size)
+{
+    int ret = 0;
+
+    if (new_size > self->max_total_derived_state_length) {
+        ret = expand_column((void **) &self->derived_state, new_size, sizeof(char));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_total_derived_state_length = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
+        const char *derived_state, list_len_t derived_state_length)
+{
+    int ret = 0;
+    size_t new_size;
+
     if (self->num_rows == self->max_rows) {
         new_size = self->max_rows + self->max_rows_increment;
         ret = mutation_table_expand_main_columns(self, new_size);
@@ -498,29 +717,36 @@ mutation_table_add_row(mutation_table_t *self, double position, size_t num_nodes
             goto out;
         }
     }
-    while (1 + self->nodes_length + num_nodes >= self->max_nodes_length) {
-        new_size = 1 + self->max_nodes_length + self->max_nodes_length_increment;
-        ret = mutation_table_expand_nodes(self, new_size);
+    while (self->total_derived_state_length + derived_state_length >=
+            self->max_total_derived_state_length) {
+        ret = mutation_table_expand_derived_state(self,
+                self->max_total_derived_state_length +
+                self->max_total_derived_state_length_increment);
         if (ret != 0) {
             goto out;
         }
     }
-    self->position[self->num_rows] = position;
-    memcpy(self->nodes + self->nodes_length, nodes, num_nodes * sizeof(node_id_t));
-    self->nodes[self->nodes_length + num_nodes] = MSP_NULL_NODE;
-    self->nodes_length += 1 + num_nodes;
+    self->site[self->num_rows] = site;
+    self->node[self->num_rows] = node;
+    self->derived_state_length[self->num_rows] = (list_len_t) derived_state_length;
+    memcpy(self->derived_state + self->total_derived_state_length, derived_state,
+            derived_state_length * sizeof(char));
+    self->total_derived_state_length += derived_state_length;
     self->num_rows++;
 out:
     return ret;
 }
 
 int
-mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *position,
-        size_t nodes_length, node_id_t *nodes)
+mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
+        node_id_t *node, const char *derived_state, uint32_t *derived_state_length)
 {
     int ret = 0;
+    size_t total_derived_state_length = 0;
+    size_t j;
 
-    if (position == NULL || nodes == NULL) {
+    if (site == NULL || node == NULL || derived_state == NULL
+            || derived_state_length == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -528,15 +754,36 @@ mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *posi
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_expand_nodes(self, nodes_length);
+    for (j = 0; j < num_rows; j++) {
+        total_derived_state_length += (size_t) derived_state_length[j];
+    }
+    ret = mutation_table_expand_derived_state(self, total_derived_state_length);
     if (ret != 0) {
         goto out;
     }
-    memcpy(self->position, position, num_rows * sizeof(double));
-    memcpy(self->nodes, nodes, nodes_length * sizeof(node_id_t));
+    memcpy(self->site, site, num_rows * sizeof(site_id_t));
+    memcpy(self->node, node, num_rows * sizeof(node_id_t));
+    memcpy(self->derived_state_length, derived_state_length, num_rows * sizeof(node_id_t));
+    memcpy(self->derived_state, derived_state, total_derived_state_length * sizeof(char));
     self->num_rows = num_rows;
-    self->nodes_length = nodes_length;
+    self->total_derived_state_length = total_derived_state_length;
 out:
+    return ret;
+}
+
+bool
+mutation_table_equal(mutation_table_t *self, mutation_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows
+            && self->total_derived_state_length == other->total_derived_state_length) {
+        ret = memcmp(self->site, other->site, self->num_rows * sizeof(site_id_t)) == 0
+            && memcmp(self->node, other->node, self->num_rows * sizeof(node_id_t)) == 0
+            && memcmp(self->derived_state_length, other->derived_state_length,
+                    self->num_rows * sizeof(list_len_t)) == 0
+            && memcmp(self->derived_state, other->derived_state,
+                    self->total_derived_state_length * sizeof(char)) == 0;
+    }
     return ret;
 }
 
@@ -544,37 +791,43 @@ int
 mutation_table_reset(mutation_table_t *self)
 {
     self->num_rows = 0;
-    self->nodes_length = 0;
+    self->total_derived_state_length = 0;
     return 0;
 }
 
 int
 mutation_table_free(mutation_table_t *self)
 {
-    msp_safe_free(self->position);
-    msp_safe_free(self->nodes);
+    msp_safe_free(self->node);
+    msp_safe_free(self->site);
+    msp_safe_free(self->derived_state);
+    msp_safe_free(self->derived_state_length);
     return 0;
 }
 
 void
 mutation_table_print_state(mutation_table_t *self, FILE *out)
 {
-    size_t j, offset;
+    size_t j, k, offset;
 
-    fprintf(out, "mutation_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "mutation_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "\tindex\tposition\tnodes\n");
+    fprintf(out, "derived_state_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->total_derived_state_length,
+            (int) self->max_total_derived_state_length,
+            (int) self->max_total_derived_state_length_increment);
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tsite\tnode\tderived_state_length\tderived_state\n");
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%f\t", (int) j, self->position[j]);
-        while (self->nodes[offset] != MSP_NULL_NODE) {
-            fprintf(out, "%d", (int) self->nodes[offset]);
+        fprintf(out, "%d\t%d\t%d\t%d\t", (int) j, self->site[j], self->node[j],
+                self->derived_state_length[j]);
+        for (k = 0; k < self->derived_state_length[j]; k++) {
+            fprintf(out, "%c", self->derived_state[offset]);
             offset++;
-            if (self->nodes[offset] != MSP_NULL_NODE) {
-                fprintf(out, ",");
-            }
         }
-        offset++;
         fprintf(out, "\n");
     }
 }
@@ -712,11 +965,14 @@ migration_table_print_state(migration_table_t *self, FILE *out)
 {
     size_t j;
 
-    fprintf(out, "migration_table: %p:%d\t%d\t%d\n", (void *) self,
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "migration_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "\tindex\tleft\tright\tnode\tsource\tdest\tpopulation\n");
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tleft\tright\tnode\tsource\tdest\tpopulation\n");
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "\t%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
+        fprintf(out, "%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
                 self->right[j], (int) self->node[j], (int) self->source[j],
                 (int) self->dest[j], self->time[j]);
     }

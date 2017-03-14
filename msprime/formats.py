@@ -36,6 +36,7 @@ except ImportError:
 
 
 import msprime
+import msprime.exceptions as exceptions
 
 
 def _check_h5py():
@@ -78,119 +79,133 @@ def _get_upgrade_provenance(root):
     return s.encode()
 
 
-def _load_legacy_hdf5_v2(root):
+def _convert_hdf5_mutations(
+        mutations_group, sites, mutations, remove_duplicate_positions):
+    """
+    Loads the v2/v3 into the specified tables.
+    """
+    position = np.array(mutations_group["position"])
+    node = np.array(mutations_group["node"], dtype=np.int32)
+    unique_position, index = np.unique(position, return_index=True)
+    if unique_position.shape != position.shape:
+        if remove_duplicate_positions:
+            position = position[index]
+            node = node[index]
+        else:
+            # TODO add the number of duplicates so that we can improve the
+            # error message.
+            raise exceptions.DuplicatePositionsError()
+    num_mutations = position.shape[0]
+    sites.set_columns(
+        position=position,
+        ancestral_state=ord("0") * np.ones(num_mutations, dtype=np.int8),
+        ancestral_state_length=np.ones(num_mutations, dtype=np.uint32))
+    mutations.set_columns(
+        node=node,
+        site=np.arange(num_mutations, dtype=np.int32),
+        derived_state=ord("1") * np.ones(num_mutations, dtype=np.int8),
+        derived_state_length=np.ones(num_mutations, dtype=np.uint32))
+
+
+def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     # Get the coalescence records
     trees_group = root["trees"]
     provenance = [
         _get_v2_provenance("generate_trees", trees_group.attrs),
     ]
-    left = np.array(trees_group["left"])
-    right = np.array(trees_group["right"])
-    node = np.array(trees_group["node"])
-    children = np.array(trees_group["children"])
-    population = np.array(trees_group["population"])
-    time = np.array(trees_group["time"])
-    num_records = len(left)
-    records = num_records * [None]
-    for j in range(num_records):
-        records[j] = msprime.CoalescenceRecord(
-            left=left[j], right=right[j], node=node[j],
-            children=tuple(children[j]), time=time[j],
-            population=population[j])
+    cr_node = np.array(trees_group["node"], dtype=np.int32)
+    children = np.array(trees_group["children"], dtype=np.int32).flatten()
+    edgesets = msprime.EdgesetTable()
+    edgesets.set_columns(
+        left=trees_group["left"],
+        right=trees_group["right"],
+        parent=cr_node,
+        children=children,
+        children_length=2 * np.ones(cr_node.shape, dtype=np.uint32))
 
-    # Get the samples (if present)
-    samples = None
+    num_nodes = max(np.max(children), np.max(cr_node)) + 1
+    sample_size = np.min(cr_node)
+    flags = np.zeros(num_nodes, dtype=np.uint32)
+    population = np.zeros(num_nodes, dtype=np.int32)
+    time = np.zeros(num_nodes, dtype=np.float64)
+    flags[:sample_size] = msprime.NODE_IS_SAMPLE
+    cr_population = np.array(trees_group["population"], dtype=np.int32)
+    cr_time = np.array(trees_group["time"])
+    time[cr_node] = cr_time
+    population[cr_node] = cr_population
     if "samples" in root:
         samples_group = root["samples"]
-        population = np.array(samples_group["population"])
-        time = None
+        population[:sample_size] = samples_group["population"]
         if "time" in samples_group:
-            time = np.array(samples_group["time"])
-        sample_size = len(population)
-        samples = sample_size * [None]
-        for j in range(sample_size):
-            t = 0
-            if time is not None:
-                t = time[j]
-            samples[j] = msprime.Sample(population=population[j], time=t)
-    else:
-        sample_size = min(record.node for record in records)
-        samples = [msprime.Sample(0, 0) for _ in range(sample_size)]
+            time[:sample_size] = samples_group["time"]
+    nodes = msprime.NodeTable()
+    nodes.set_columns(
+        flags=flags, population=population, time=time)
 
-    # Get the mutations (if present)
-    mutations = []
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
     if "mutations" in root:
         mutations_group = root["mutations"]
+        _convert_hdf5_mutations(
+            mutations_group, sites, mutations, remove_duplicate_positions)
         provenance.append(
             _get_v2_provenance("generate_mutations", mutations_group.attrs))
-        position = np.array(mutations_group["position"])
-        node = np.array(mutations_group["node"])
-        num_mutations = len(node)
-        mutations = num_mutations * [None]
-        for j in range(num_mutations):
-            mutations[j] = msprime.Mutation(
-                position=position[j], nodes=(node[j],), index=j)
-
     provenance.append(_get_upgrade_provenance(root))
-    return msprime.load_coalescence_records(
-        samples=samples, records=records, mutations=mutations,
-        provenance=provenance)
+    return msprime.load_tables(
+        nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations,
+        provenance_strings=provenance)
 
 
-def _load_legacy_hdf5_v3(root):
+def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
     # get the trees group for the records and samples
     trees_group = root["trees"]
     nodes_group = trees_group["nodes"]
     time = np.array(nodes_group["time"])
-    population = np.array(nodes_group["population"])
 
     breakpoints = np.array(trees_group["breakpoints"])
     records_group = trees_group["records"]
-    left = np.array(records_group["left"])
-    right = np.array(records_group["right"])
-    record_node = np.array(records_group["node"])
-    flat_children = np.array(records_group["children"])
-    num_children = np.array(records_group["num_children"])
-    num_records = left.shape[0]
-    records = [None for _ in range(num_records)]
-    offset = 0
-    for j in range(num_records):
-        children = tuple(flat_children[offset: offset + num_children[j]])
-        offset += num_children[j]
-        u = record_node[j]
-        records[j] = msprime.CoalescenceRecord(
-            left=breakpoints[left[j]], right=breakpoints[right[j]], node=u,
-            children=children, time=time[u], population=population[u])
-
+    left_indexes = np.array(records_group["left"])
+    right_indexes = np.array(records_group["right"])
+    record_node = np.array(records_group["node"], dtype=np.int32)
+    num_nodes = time.shape[0]
     sample_size = np.min(record_node)
-    samples = [
-        msprime.Sample(time=time[v], population=population[v])
-        for v in range(sample_size)]
+    flags = np.zeros(num_nodes, dtype=np.uint32)
+    flags[:sample_size] = msprime.NODE_IS_SAMPLE
 
-    mutations = []
+    nodes = msprime.NodeTable()
+    nodes.set_columns(
+        flags=flags,
+        time=nodes_group["time"],
+        population=nodes_group["population"])
+    edgesets = msprime.EdgesetTable()
+    edgesets.set_columns(
+        left=breakpoints[left_indexes],
+        right=breakpoints[right_indexes],
+        parent=record_node,
+        children=records_group["children"],
+        children_length=records_group["num_children"])
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
     if "mutations" in root:
-        mutations_group = root["mutations"]
-        position = np.array(mutations_group["position"])
-        node = np.array(mutations_group["node"])
-        num_mutations = len(node)
-        mutations = num_mutations * [None]
-        for j in range(num_mutations):
-            mutations[j] = msprime.Mutation(
-                position=position[j], nodes=(node[j],), index=j)
-
+        _convert_hdf5_mutations(
+            root["mutations"], sites, mutations, remove_duplicate_positions)
     provenance = []
     if "provenance" in root:
         provenance = list(root["provenance"])
     provenance.append(_get_upgrade_provenance(root))
-    return msprime.load_coalescence_records(
-        samples=samples, records=records, mutations=mutations,
-        provenance=provenance)
+    return msprime.load_tables(
+        nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations,
+        provenance_strings=provenance)
 
 
-def load_legacy(filename):
+def load_legacy(filename, remove_duplicate_positions=False):
     """
     Reads the specified msprime HDF5 file and returns a tree sequence. This
     method is only intended to be used to read old format HDF5 files.
+
+    If remove_duplicate_positions is True, remove all sites (except the
+    first) that contain duplicate positions. If this is False, any input
+    files that contain duplicate positions will raise an DuplicatePositionsError.
     """
     _check_h5py()
     loaders = {
@@ -204,7 +219,7 @@ def load_legacy(filename):
     if format_version[0] not in loaders:
         raise ValueError("Version {} not supported for loading".format(format_version))
     try:
-        ts = loaders[format_version[0]](root)
+        ts = loaders[format_version[0]](root, remove_duplicate_positions)
     finally:
         root.close()
     return ts
@@ -252,11 +267,13 @@ def _dump_legacy_hdf5_v2(tree_sequence, root):
     if tree_sequence.get_num_mutations() > 0:
         node = []
         position = []
-        for mutation in tree_sequence.mutations():
-            if len(mutation.nodes) != 1:
+        for site in tree_sequence.sites():
+            if len(site.mutations) != 1:
                 raise ValueError("v2 does not support recurrent mutations")
-            node.append(mutation.nodes[0])
-            position.append(mutation.position)
+            if site.ancestral_state != "0" or site.mutations[0].derived_state != "1":
+                raise ValueError("v2 does not support non-binary mutations")
+            position.append(site.position)
+            node.append(site.mutations[0].node)
         l = len(node)
         mutations = root.create_group("mutations")
         mutations.attrs["environment"] = json.dumps({"msprime_version": 0})
@@ -320,11 +337,13 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
 
     node = []
     position = []
-    for mutation in tree_sequence.mutations():
-        if len(mutation.nodes) != 1:
-            raise ValueError("Recurrent mutations not supported")
-        node.append(mutation.nodes[0])
-        position.append(mutation.position)
+    for site in tree_sequence.sites():
+        if len(site.mutations) != 1:
+            raise ValueError("v3 does not support recurrent mutations")
+        if site.ancestral_state != "0" or site.mutations[0].derived_state != "1":
+            raise ValueError("v3 does not support non-binary mutations")
+        position.append(site.position)
+        node.append(site.mutations[0].node)
     l = len(position)
     if l > 0:
         mutations = root.create_group("mutations")
@@ -353,5 +372,3 @@ def dump_legacy(tree_sequence, filename, version=3):
         dumpers[version](tree_sequence, root)
     finally:
         root.close()
-    import shutil
-    shutil.copyfile(filename, "tmp.hdf5")

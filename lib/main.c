@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2015-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
 **
 ** This file is part of msprime.
 **
@@ -36,6 +36,7 @@
  */
 
 typedef struct {
+    int alphabet;
     double mutation_rate;
 } mutation_params_t;
 
@@ -467,12 +468,16 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    /* Set the mutation rate */
     if (config_lookup_float(config,
             "mutation_rate", &mutation_params->mutation_rate)
             == CONFIG_FALSE) {
         fatal_error("mutation_rate is a required parameter");
     }
+    if (config_lookup_int(config, "mutation_alphabet", &int_tmp)
+            == CONFIG_FALSE) {
+        fatal_error("mutation_alphabet is a required parameter.");
+    }
+    mutation_params->alphabet = int_tmp;
     if (config_lookup_int(config, "avl_node_block_size", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("avl_node_block_size is a required parameter");
@@ -544,20 +549,22 @@ print_variants(tree_sequence_t *ts)
     int ret = 0;
     vargen_t vg;
     uint32_t j, k;
-    mutation_t *mut;
+    site_t *site;
     char *genotypes = malloc(tree_sequence_get_sample_size(ts) * sizeof(char));
 
     if (genotypes == NULL) {
         fatal_error("no memory");
     }
-    printf("variants (%d) \n", (int) ts->mutations.num_records);
+    printf("variants (%d) \n", (int) ts->sites.num_records);
     ret = vargen_alloc(&vg, ts, 0);
     if (ret != 0) {
         fatal_library_error(ret, "vargen_alloc");
     }
     j = 0;
-    while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) {
-        printf("%d\t%f\t", j, mut->position);
+    while ((ret = vargen_next(&vg, &site, genotypes)) == 1) {
+        assert(site->mutations_length == 1);
+        printf("%d\t%f\t%s\t%s\t", j, site->position, site->ancestral_state,
+                site->mutations[0].derived_state);
         for (k = 0; k < tree_sequence_get_sample_size(ts); k++) {
             printf("%d", genotypes[k]);
         }
@@ -567,11 +574,11 @@ print_variants(tree_sequence_t *ts)
     if (ret != 0) {
         fatal_library_error(ret, "vargen_next");
     }
-    if (j != ts->mutations.num_records) {
-        printf("ERROR!! missing variants %d %d\n", j, (int) ts->mutations.num_records);
+    if (j != ts->sites.num_records) {
+        printf("ERROR!! missing variants %d %d\n", j, (int) ts->sites.num_records);
     }
 
-    while ((ret = vargen_next(&vg, &mut, genotypes)) == 1) {
+    while ((ret = vargen_next(&vg, &site, genotypes)) == 1) {
         /* this should never happen as the iterators should always
          * fail after they finish. */
         assert(0);
@@ -607,9 +614,9 @@ static void
 print_ld_matrix(tree_sequence_t *ts)
 {
     int ret;
-    size_t num_mutations = tree_sequence_get_num_mutations(ts);
-    mutation_t mA, mB;
-    double *r2 = malloc(num_mutations * sizeof(double));
+    size_t num_sites = tree_sequence_get_num_sites(ts);
+    site_t sA, sB;
+    double *r2 = malloc(num_sites * sizeof(double));
     size_t j, k, num_r2_values;
     ld_calc_t ld_calc;
 
@@ -622,24 +629,23 @@ print_ld_matrix(tree_sequence_t *ts)
         fatal_library_error(ret, "ld_calc_alloc");
     }
     ld_calc_print_state(&ld_calc, stdout);
-    for (j = 0; j < num_mutations; j++) {
-        ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_mutations,
+    for (j = 0; j < num_sites; j++) {
+        ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_sites,
                 DBL_MAX, r2, &num_r2_values);
         if (ret != 0) {
             fatal_library_error(ret, "ld_calc_get_r2_array");
         }
         for (k = 0; k < num_r2_values; k++) {
-            ret = tree_sequence_get_mutation(ts, j, &mA);
+            ret = tree_sequence_get_site(ts, (site_id_t) j, &sA);
             if (ret != 0) {
-                fatal_library_error(ret, "get_mutation");
+                fatal_library_error(ret, "get_site");
             }
-            ret = tree_sequence_get_mutation(ts, j + k + 1, &mB);
+            ret = tree_sequence_get_site(ts, (site_id_t) (j + k + 1), &sB);
             if (ret != 0) {
-                fatal_library_error(ret, "get_mutation");
+                fatal_library_error(ret, "get_site");
             }
             printf("%d\t%f\t%d\t%f\t%.3f\n",
-                (int) mA.index, mA.position,
-                (int) mB.index, mB.position, r2[k]);
+                (int) sA.id, sA.position, (int) sB.id, sB.position, r2[k]);
         }
     }
     free(r2);
@@ -725,30 +731,31 @@ print_newick_trees(tree_sequence_t *ts)
 }
 
 static void
-print_tree_sequence(tree_sequence_t *ts)
+print_tree_sequence(tree_sequence_t *ts, int verbose)
 {
     int ret = 0;
     sparse_tree_t tree;
 
     tree_sequence_print_state(ts, stdout);
-    /* sparse trees */
-    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS);
-    if (ret != 0) {
-        goto out;
-    }
-    for (ret = sparse_tree_first(&tree); ret == 1;
-            ret = sparse_tree_next(&tree)) {
-        printf("New tree: %d: %f (%d)\n", (int) tree.index,
-                tree.right - tree.left, (int) tree.num_nodes);
-        /* sparse_tree_print_state(&tree, stdout); */
-    }
-    if (ret < 0) {
-        goto out;
-    }
-    sparse_tree_free(&tree);
-out:
-    if (ret != 0) {
-        fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
+    if (verbose > 0) {
+        printf("========================\n");
+        printf("trees\n");
+        printf("========================\n");
+        ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS);
+        if (ret != 0) {
+            fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
+        }
+        for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
+            printf("-------------------------\n");
+            printf("New tree: %d: %f (%d)\n", (int) tree.index,
+                    tree.right - tree.left, (int) tree.num_nodes);
+            printf("-------------------------\n");
+            sparse_tree_print_state(&tree, stdout);
+        }
+        if (ret < 0) {
+            fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
+        }
+        sparse_tree_free(&tree);
     }
 }
 
@@ -766,13 +773,14 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     const char *provenance[] = {"main.simulate"};
     node_table_t *nodes = malloc(sizeof(node_table_t));
     edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
+    site_table_t *sites = malloc(sizeof(site_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
     migration_table_t *migrations = malloc(sizeof(migration_table_t));
 
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL || nodes == NULL || edgesets == NULL
-            || mutations == NULL || migrations == NULL) {
+            || sites == NULL || mutations == NULL || migrations == NULL) {
         goto out;
     }
     ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
@@ -787,6 +795,10 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
+    ret = site_table_alloc(sites, 1, 1);
+    if (ret != 0) {
+        goto out;
+    }
     ret = mutation_table_alloc(mutations, 10, 10);
     if (ret != 0) {
         goto out;
@@ -795,7 +807,8 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng);
+    ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng,
+            mutation_params.alphabet);
     if (ret != 0) {
         goto out;
     }
@@ -839,12 +852,12 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_populate_tables(mutgen, mutations);
+        ret = mutgen_populate_tables(mutgen, sites, mutations);
         if (ret != 0) {
             goto out;
         }
         ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
-                mutations, 1, (char **) &provenance);
+                sites, mutations, 1, (char **) &provenance);
         if (ret != 0) {
             goto out;
         }
@@ -857,6 +870,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (verbose >= 1) {
             node_table_print_state(nodes, stdout);
             edgeset_table_print_state(edgesets, stdout);
+            site_table_print_state(sites, stdout);
             mutation_table_print_state(mutations, stdout);
             migration_table_print_state(migrations, stdout);
             printf("-----------------\n");
@@ -896,6 +910,10 @@ out:
     if (mutations != NULL) {
         mutation_table_free(mutations);
         free(mutations);
+    }
+    if (sites != NULL) {
+        site_table_free(sites);
+        free(sites);
     }
     if (migrations != NULL) {
         migration_table_free(migrations);
@@ -965,7 +983,7 @@ run_print(const char *filename, int verbose)
     tree_sequence_t ts;
 
     load_tree_sequence(&ts, filename);
-    print_tree_sequence(&ts);
+    print_tree_sequence(&ts, verbose);
     tree_sequence_free(&ts);
 }
 

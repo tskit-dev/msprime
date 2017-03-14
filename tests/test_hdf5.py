@@ -73,10 +73,26 @@ def multi_locus_with_mutation_example():
 def recurrent_mutation_example():
     ts = msprime.simulate(
         10, recombination_rate=1, length=10, random_seed=2)
-    mutations = [msprime.Mutation(
-        position=j, nodes=tuple(k for k in range(j + 1)), index=j)
+    sites = [msprime.Site(
+        position=j, index=j, ancestral_state="0", mutations=[
+            msprime.Mutation(site=j, node=k, derived_state="1") for k in range(j + 1)])
         for j in range(ts.sample_size)]
-    return ts.copy(mutations)
+    return ts.copy(sites)
+
+
+def general_mutation_example():
+    ts = msprime.simulate(10, recombination_rate=1, length=10, random_seed=2)
+    nodes = msprime.NodeTable()
+    edgesets = msprime.EdgesetTable()
+    ts.dump_tables(nodes=nodes, edgesets=edgesets)
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
+    sites.add_row(position=0, ancestral_state="A")
+    sites.add_row(position=1, ancestral_state="C")
+    mutations.add_row(site=0, node=0, derived_state="T")
+    mutations.add_row(site=1, node=0, derived_state="G")
+    return msprime.load_tables(
+        nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
 
 
 def migration_example():
@@ -123,9 +139,10 @@ def node_name_example():
     edgesets = msprime.EdgesetTable()
     ts.dump_tables(nodes=nodes, edgesets=edgesets)
     new_nodes = msprime.NodeTable()
-    names = ["n_{}".format(u).encode() for u in range(ts.num_nodes)]
-    packed = np.frombuffer(b'\0'.join(names + [b""]), dtype=np.int8)
-    new_nodes.set_columns(name=packed, flags=nodes.flags, time=nodes.time)
+    names = ["n_{}".format(u) for u in range(ts.num_nodes)]
+    packed, length = msprime.pack_strings(names)
+    new_nodes.set_columns(
+        name=packed, name_length=length, flags=nodes.flags, time=nodes.time)
     return msprime.load_tables(
         nodes=new_nodes, edgesets=edgesets, provenance_strings=[b"sdf"])
 
@@ -152,26 +169,12 @@ class TestRoundTrip(TestHdf5):
         self.assertEqual(ts.get_sample_size(), tsp.get_sample_size())
         self.assertEqual(ts.get_sequence_length(), tsp.get_sequence_length())
         self.assertEqual(ts.get_num_mutations(), tsp.get_num_mutations())
-        j = 0
-        for r1, r2 in zip(ts.records(), tsp.records()):
-            self.assertEqual(r1.left, r2.left)
-            self.assertEqual(r1.right, r2.right)
-            self.assertEqual(r1.node, r2.node)
-            self.assertEqual(r1.time, r2.time)
-            self.assertEqual(r1.children, r2.children)
-            self.assertEqual(r1.population, r2.population)
-            j += 1
-        self.assertEqual(j, ts.get_num_records())
+        self.assertEqual(ts.get_num_sites(), tsp.get_num_sites())
         self.assertEqual(ts.get_num_trees(), tsp.get_num_trees())
-        j = 0
-        for m1, m2 in zip(ts.mutations(), tsp.mutations()):
-            self.assertEqual(m1.position, m2.position)
-            self.assertEqual(m1.nodes, m2.nodes)
-            j += 1
+        self.assertEqual(list(ts.sites()), list(tsp.sites()))
+        self.assertEqual(list(ts.nodes()), list(tsp.nodes()))
+        self.assertEqual(list(ts.edgesets()), list(tsp.edgesets()))
         self.assertEqual(ts.get_num_nodes(), tsp.get_num_nodes())
-        for u in range(ts.get_sample_size()):
-            self.assertEqual(ts.get_population(u), tsp.get_population(u))
-        self.assertEqual(ts.num_trees, tsp.num_trees)
         num_trees = 0
         for t1, t2 in zip(ts.trees(), tsp.trees()):
             self.assertEqual(t1.parent_dict, t2.parent_dict)
@@ -235,6 +238,12 @@ class TestRoundTrip(TestHdf5):
             self.assertRaises(
                 ValueError, msprime.dump_legacy, ts, self.temp_file, version)
 
+    def test_general_mutation_example(self):
+        ts = general_mutation_example()
+        for version in [2, 3]:
+            self.assertRaises(
+                ValueError, msprime.dump_legacy, ts, self.temp_file, version)
+
     def test_v2_no_samples(self):
         ts = multi_locus_with_mutation_example()
         msprime.dump_legacy(ts, self.temp_file, version=2)
@@ -244,6 +253,40 @@ class TestRoundTrip(TestHdf5):
         with silence_stderr():
             tsp = msprime.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
+
+    def test_duplicate_mutation_positions_single_value(self):
+        ts = multi_locus_with_mutation_example()
+        for version in [2, 3]:
+            msprime.dump_legacy(ts, self.temp_file, version=version)
+            root = h5py.File(self.temp_file, "r+")
+            root['mutations/position'][:] = 0
+            root.close()
+            with silence_stderr():
+                self.assertRaises(
+                    msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
+                tsp = msprime.load_legacy(
+                    self.temp_file, remove_duplicate_positions=True)
+            self.assertEqual(tsp.num_sites, 1)
+            sites = list(tsp.sites())
+            self.assertEqual(sites[0].position, 0)
+
+    def test_duplicate_mutation_positions(self):
+        ts = multi_locus_with_mutation_example()
+        for version in [2, 3]:
+            msprime.dump_legacy(ts, self.temp_file, version=version)
+            root = h5py.File(self.temp_file, "r+")
+            position = np.array(root['mutations/position'])
+            position[0] = position[1]
+            root['mutations/position'][:] = position
+            root.close()
+            with silence_stderr():
+                self.assertRaises(
+                    msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
+                tsp = msprime.load_legacy(
+                    self.temp_file, remove_duplicate_positions=True)
+            self.assertEqual(tsp.num_sites, position.shape[0] - 1)
+            position_after = list(s.position for s in tsp.sites())
+            self.assertEqual(list(position[1:]), position_after)
 
 
 class TestErrors(TestHdf5):
@@ -290,34 +333,59 @@ class TestHdf5Format(TestHdf5):
         root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 5)
+        self.assertEqual(format_version[0], 6)
         self.assertEqual(format_version[1], 0)
         keys = set(root.keys())
         self.assertIn("nodes", keys)
         self.assertIn("edgesets", keys)
-        self.assertIn("provenance", keys)
+        self.assertIn("sites", keys)
         self.assertIn("mutations", keys)
+        # Not filled in yet, but the group should be present for forward compatability.
+        self.assertIn("migrations", keys)
+
+        if "provenance"in keys:
+            # TODO verify provenance
+            pass
+        g = root["sites"]
+        fields = [
+            ("position", float64), ("ancestral_state", int8),
+            ("ancestral_state_length", uint32)]
+        if ts.num_sites > 0:
+            for name, dtype in fields:
+                self.assertEqual(len(g[name].shape), 1)
+                self.assertEqual(g[name].dtype, dtype)
+            ancestral_state_length = g["ancestral_state_length"]
+            self.assertEqual(ancestral_state_length.shape[0], ts.num_sites)
+            position = list(g["position"])
+            ancestral_states = msprime.unpack_strings(
+                g["ancestral_state"], ancestral_state_length)
+            for j, site in enumerate(ts.sites()):
+                self.assertEqual(position[j], site.position)
+                self.assertEqual(ancestral_states[j], site.ancestral_state)
+
         g = root["mutations"]
-        fields = [("position", float64), ("num_nodes", int32)]
+        fields = [
+            ("site", int32), ("node", int32),
+            ("derived_state", int8), ("derived_state_length", uint32)]
         if ts.num_mutations > 0:
             for name, dtype in fields:
                 self.assertEqual(len(g[name].shape), 1)
                 self.assertEqual(g[name].shape[0], ts.get_num_mutations())
                 self.assertEqual(g[name].dtype, dtype)
-            self.assertEqual(g["nodes"].dtype, int32)
-            flat_nodes = list(g["nodes"])
-            num_nodes = list(g["num_nodes"])
-            position = list(g["position"])
-            nodes = []
-            offset = 0
-            for k in num_nodes:
-                nodes.append(tuple(flat_nodes[offset: offset + k]))
-                offset += k
-            self.assertEqual(len(num_nodes), ts.get_num_mutations())
-            self.assertEqual(len(position), ts.get_num_mutations())
-            for j, mutation in enumerate(ts.mutations()):
-                self.assertEqual(mutation.nodes, nodes[j])
-                self.assertEqual(mutation.position, position[j])
+            derived_state_length = g["derived_state_length"]
+            self.assertEqual(derived_state_length.shape[0], ts.num_mutations)
+            site = g["site"]
+            node = g["node"]
+            derived_state = msprime.unpack_strings(
+                g["derived_state"], derived_state_length)
+            j = 0
+            for s in ts.sites():
+                for mutation in s.mutations:
+                    self.assertEqual(site[j], s.index)
+                    self.assertEqual(mutation.site, site[j])
+                    self.assertEqual(mutation.node, node[j])
+                    self.assertEqual(mutation.derived_state, derived_state[j])
+                    j += 1
         else:
             self.assertEqual(0, len(list(g.keys())))
 
@@ -334,10 +402,10 @@ class TestHdf5Format(TestHdf5):
             self.assertGreater(total_name_length, 0)
         else:
             self.assertEqual(total_name_length, 0)
-        population = [0 for j in range(ts.get_num_nodes())]
-        time = [0 for j in range(ts.get_num_nodes())]
+        population = [0 for _ in range(ts.get_num_nodes())]
+        time = [0 for _ in range(ts.get_num_nodes())]
         # FIXME this will break when we have samples not in 0...n-1
-        flags = [0 for j in range(ts.get_num_nodes())]
+        flags = [0 for _ in range(ts.get_num_nodes())]
         for u in range(ts.get_sample_size()):
             time[u] = ts.get_time(u)
             population[u] = ts.get_population(u)
@@ -352,21 +420,21 @@ class TestHdf5Format(TestHdf5):
         edgesets_group = root["edgesets"]
         self.assertEqual(
             set(edgesets_group.keys()),
-            {"indexes", "num_children", "children", "left", "right", "parent"})
+            {"indexes", "children_length", "children", "left", "right", "parent"})
 
         self.assertEqual(edgesets_group["left"].dtype, float64)
         self.assertEqual(edgesets_group["right"].dtype, float64)
         self.assertEqual(edgesets_group["parent"].dtype, int32)
         self.assertEqual(edgesets_group["children"].dtype, int32)
-        self.assertEqual(edgesets_group["num_children"].dtype, int32)
+        self.assertEqual(edgesets_group["children_length"].dtype, uint32)
         left = list(edgesets_group["left"])
         right = list(edgesets_group["right"])
         parent = list(edgesets_group["parent"])
-        num_children = list(edgesets_group["num_children"])
+        children_length = list(edgesets_group["children_length"])
         flat_children = list(edgesets_group["children"])
         children = []
         offset = 0
-        for k in num_children:
+        for k in children_length:
             children.append(tuple(flat_children[offset: offset + k]))
             offset += k
 
@@ -374,7 +442,7 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(len(left), ts.get_num_records())
         self.assertEqual(len(right), ts.get_num_records())
         self.assertEqual(len(parent), ts.get_num_records())
-        self.assertEqual(len(num_children), ts.get_num_records())
+        self.assertEqual(len(children_length), ts.get_num_records())
         for j, record in enumerate(ts.records()):
             self.assertEqual(record.left, left[j])
             self.assertEqual(record.right, right[j])
@@ -426,6 +494,10 @@ class TestHdf5Format(TestHdf5):
         del hfile
         other_ts = msprime.load(self.temp_file)
         self.assertEqual(other_ts.get_provenance(), [])
+        self.verify_tree_dump_format(other_ts)
+
+    def test_general_mutation_example(self):
+        self.verify_tree_dump_format(general_mutation_example())
 
 
 class TestHdf5FormatErrors(TestHdf5):

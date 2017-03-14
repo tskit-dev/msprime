@@ -40,15 +40,25 @@ hapgen_print_state(hapgen_t *self, FILE *out)
     size_t j, k;
 
     fprintf(out, "Hapgen state\n");
-    fprintf(out, "num_mutations = %d\n", (int) self->num_mutations);
-    fprintf(out, "words_per_row = %d\n", (int) self->words_per_row);
-    fprintf(out, "haplotype matrix\n");
-    for (j = 0; j < self->sample_size; j++) {
-        for (k = 0; k < self->words_per_row; k++) {
-            fprintf(out, "%llu ", (unsigned long long)
-                    self->haplotype_matrix[j * self->words_per_row + k]);
+    fprintf(out, "sample_size = %d\n", (int) self->sample_size);
+    fprintf(out, "num_sites = %d\n", (int) self->num_sites);
+    fprintf(out, "binary = %d\n", self->binary);
+    if (self->binary) {
+        fprintf(out, "words_per_row = %d\n", (int) self->words_per_row);
+        fprintf(out, "binary_haplotype matrix\n");
+        for (j = 0; j < self->sample_size; j++) {
+            for (k = 0; k < self->words_per_row; k++) {
+                fprintf(out, "%llu ", (unsigned long long)
+                        self->binary_haplotype_matrix[j * self->words_per_row + k]);
+            }
+            fprintf(out, "\n");
         }
-        fprintf(out, "\n");
+    } else {
+        fprintf(out, "haplotype matrix\n");
+        for (j = 0; j < self->sample_size; j++) {
+            fprintf(out, "%s\n",
+                self->ascii_haplotype_matrix + (j * (self->num_sites + 1)));
+        }
     }
     hapgen_check_state(self);
 }
@@ -63,37 +73,63 @@ hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
     size_t index = row * self->words_per_row + word;
 
     assert(word < self->words_per_row);
-    if ((self->haplotype_matrix[index] & (1ULL << bit)) != 0) {
+    if ((self->binary_haplotype_matrix[index] & (1ULL << bit)) != 0) {
         ret = MSP_ERR_INCONSISTENT_MUTATIONS;
         goto out;
     }
-    self->haplotype_matrix[index] |= 1ULL << bit;
+    self->binary_haplotype_matrix[index] |= 1ULL << bit;
 out:
     return ret;
 }
 
+static inline int
+hapgen_set_state(hapgen_t *self, size_t row, size_t column, const char *state)
+{
+    int ret = 0;
+    size_t index = row * (self->num_sites + 1) + column;
+
+    self->ascii_haplotype_matrix[index] = state[0];
+    return ret;
+}
+
+static inline int
+hapgen_update_leaf(hapgen_t * self, node_id_t node, site_id_t site,
+        const char *derived_state)
+{
+    int ret = 0;
+
+    if (self->binary) {
+        ret = hapgen_set_bit(self, (size_t) node, (size_t) site);
+    } else {
+        ret = hapgen_set_state(self, (size_t) node, (size_t) site, derived_state);
+    }
+    return ret;
+}
+
 static int
-hapgen_apply_tree_mutation(hapgen_t *self, mutation_t *mut)
+hapgen_apply_tree_site(hapgen_t *self, site_t *site)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
     bool not_done;
-    uint32_t j;
+    list_len_t j;
+    const char *derived_state;
 
-    if (mut->ancestral_state != '0' || mut->derived_state != '1') {
-        ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
-        goto out;
-    }
-    for (j = 0; j < mut->num_nodes; j++) {
-        ret = sparse_tree_get_leaf_list(&self->tree, mut->nodes[j], &w, &tail);
+    for (j = 0; j < site->mutations_length; j++) {
+        ret = sparse_tree_get_leaf_list(&self->tree, site->mutations[j].node, &w, &tail);
         if (ret != 0) {
             goto out;
         }
+        if (site->mutations[j].derived_state_length != 1) {
+            ret = MSP_ERR_NON_SINGLE_CHAR_MUTATION;
+            goto out;
+        }
+        derived_state = site->mutations[j].derived_state;
         if (w != NULL) {
             not_done = true;
             while (not_done) {
                 assert(w != NULL);
-                ret = hapgen_set_bit(self, (size_t) w->node, mut->index);
+                ret = hapgen_update_leaf(self, w->node, site->id, derived_state);
                 if (ret != 0) {
                     goto out;
                 }
@@ -110,12 +146,18 @@ static int
 hapgen_generate_all_haplotypes(hapgen_t *self)
 {
     int ret = 0;
-    size_t j;
+    list_len_t j;
+    list_len_t num_sites = 0;
+    site_t *sites = NULL;
     sparse_tree_t *t = &self->tree;
 
     for (ret = sparse_tree_first(t); ret == 1; ret = sparse_tree_next(t)) {
-        for (j = 0; j < t->num_mutations; j++) {
-            ret = hapgen_apply_tree_mutation(self, &t->mutations[j]);
+        ret = sparse_tree_get_sites(t, &sites, &num_sites);
+        if (ret != 0) {
+            goto out;
+        }
+        for (j = 0; j < num_sites; j++) {
+            ret = hapgen_apply_tree_site(self, &sites[j]);
             if (ret != 0) {
                 goto out;
             }
@@ -128,34 +170,63 @@ out:
 int
 hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
 {
-    int ret = MSP_ERR_NO_MEMORY;
+    int ret = 0;
+    size_t j, k;
+    site_t site;
 
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(hapgen_t));
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
-    self->num_mutations = tree_sequence_get_num_mutations(tree_sequence);
+    self->num_sites = tree_sequence_get_num_sites(tree_sequence);
     self->tree_sequence = tree_sequence;
 
+    self->binary = tree_sequence_get_alphabet(tree_sequence) == MSP_ALPHABET_BINARY;
     ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
     if (ret != 0) {
         goto out;
     }
-    /* set up the haplotype binary matrix */
-    /* The number of words per row is the number of mutations divided by 64 */
-    self->words_per_row = (self->num_mutations / HG_WORD_SIZE) + 1;
-    self->haplotype_matrix = calloc(self->words_per_row * self->sample_size,
-            sizeof(uint64_t));
-    self->haplotype = malloc(self->words_per_row * HG_WORD_SIZE + 1);
-    if (self->haplotype_matrix == NULL || self->haplotype == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
+    if (self->binary) {
+        /* set up the haplotype binary matrix */
+        /* The number of words per row is the number of mutations divided by 64 */
+        self->words_per_row = (self->num_sites / HG_WORD_SIZE) + 1;
+        self->binary_haplotype_matrix = calloc(self->words_per_row * self->sample_size,
+                sizeof(uint64_t));
+        /* We malloc an extra few bytes here to simplify the conversion algorithm */
+        self->output_haplotype = malloc(self->words_per_row * HG_WORD_SIZE + 1);
+        if (self->binary_haplotype_matrix == NULL || self->output_haplotype == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+    } else {
+        self->ascii_haplotype_matrix = malloc(
+                self->sample_size * (self->num_sites + 1) * sizeof(char));
+        if (self->ascii_haplotype_matrix == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        /* Set the NULL string ends. */
+        for (j = 0; j < self->sample_size; j++) {
+            self->ascii_haplotype_matrix[
+                (j + 1) * (self->num_sites + 1) - 1] = '\0';
+        }
+        /* For each site set the ancestral type */
+        for (k = 0; k < self->num_sites; k++) {
+            ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) k, &site);
+            if (ret != 0) {
+                goto out;
+            }
+            if (site.ancestral_state_length != 1) {
+                ret = MSP_ERR_NON_SINGLE_CHAR_MUTATION;
+                goto out;
+            }
+            for (j = 0; j < self->sample_size; j++) {
+                self->ascii_haplotype_matrix[j * (self->num_sites + 1) + k] =
+                    site.ancestral_state[0];
+            }
+        }
     }
     ret = hapgen_generate_all_haplotypes(self);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = 0;
 out:
     return ret;
 }
@@ -163,11 +234,14 @@ out:
 int
 hapgen_free(hapgen_t *self)
 {
-    if (self->haplotype_matrix != NULL) {
-        free(self->haplotype_matrix);
+    if (self->binary_haplotype_matrix != NULL) {
+        free(self->binary_haplotype_matrix);
     }
-    if (self->haplotype != NULL) {
-        free(self->haplotype);
+    if (self->output_haplotype != NULL) {
+        free(self->output_haplotype);
+    }
+    if (self->ascii_haplotype_matrix != NULL) {
+        free(self->ascii_haplotype_matrix);
     }
     sparse_tree_free(&self->tree);
     return 0;
@@ -184,17 +258,22 @@ hapgen_get_haplotype(hapgen_t *self, node_id_t sample_id, char **haplotype)
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    l = 0;
-    for (j = 0; j < self->words_per_row; j++) {
-        word_index = ((size_t) sample_id) * self->words_per_row + j;
-        word = self->haplotype_matrix[word_index];
-        for (k = 0; k < HG_WORD_SIZE; k++) {
-            self->haplotype[l] = (word >> k) & 1ULL ? '1': '0';
-            l++;
+    if (self->binary) {
+        l = 0;
+        for (j = 0; j < self->words_per_row; j++) {
+            word_index = ((size_t) sample_id) * self->words_per_row + j;
+            word = self->binary_haplotype_matrix[word_index];
+            for (k = 0; k < HG_WORD_SIZE; k++) {
+                self->output_haplotype[l] = (word >> k) & 1ULL ? '1': '0';
+                l++;
+            }
         }
+        self->output_haplotype[self->num_sites] = '\0';
+        *haplotype = self->output_haplotype;
+    } else {
+        *haplotype = self->ascii_haplotype_matrix
+            + ((size_t) sample_id) * (self->num_sites + 1);
     }
-    self->haplotype[self->num_mutations] = '\0';
-    *haplotype = self->haplotype;
 out:
     return ret;
 }

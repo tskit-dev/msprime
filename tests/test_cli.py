@@ -33,6 +33,8 @@ import unittest
 import msprime
 import msprime.cli as cli
 
+import h5py
+
 # We're forced to do this because dendropy doesn't support Python 3.
 _dendropy_available = True
 try:
@@ -1274,6 +1276,7 @@ class TestMspArgumentParser(unittest.TestCase):
             cmd, source, destination])
         self.assertEqual(args.source, source)
         self.assertEqual(args.destination, destination)
+        self.assertEqual(args.remove_duplicate_positions, False)
 
 
 class TestMspSimulateOutput(unittest.TestCase):
@@ -1334,6 +1337,7 @@ class TestMspConversionOutput(unittest.TestCase):
             output = f.read().splitlines()
         self.assertEqual(output, output_records)
 
+    @unittest.skip("text IO")
     def test_records(self):
         cmd = "records"
         precision = 6
@@ -1374,6 +1378,7 @@ class TestMspConversionOutput(unittest.TestCase):
             output = f.read().splitlines()
         self.assertEqual(output, output_mutations)
 
+    @unittest.skip("text mutations interface")
     def test_mutations(self):
         cmd = "mutations"
         stdout, stderr = capture_output(cli.msp_main, [
@@ -1466,19 +1471,23 @@ class TestUpgrade(TestCli):
     Tests the results of the upgrade operation to ensure they are
     correct.
     """
+    def setUp(self):
+        fd, self.legacy_file_name = tempfile.mkstemp(prefix="msp_cli", suffix=".hdf5")
+        os.close(fd)
+        fd, self.current_file_name = tempfile.mkstemp(prefix="msp_cli", suffix=".hdf5")
+        os.close(fd)
+
+    def tearDown(self):
+        os.unlink(self.legacy_file_name)
+        os.unlink(self.current_file_name)
+
     def test_conversion(self):
         ts1 = msprime.simulate(10)
         for version in [2, 3]:
-            legacy_file_name = self.temp_file + ".legacy"
-            current_file_name = self.temp_file + ".current"
-            try:
-                msprime.dump_legacy(ts1, legacy_file_name, version=version)
-                stdout, stderr = capture_output(
-                    cli.msp_main, ["upgrade", legacy_file_name, current_file_name])
-                ts2 = msprime.load(current_file_name)
-            finally:
-                os.unlink(legacy_file_name)
-                os.unlink(current_file_name)
+            msprime.dump_legacy(ts1, self.legacy_file_name, version=version)
+            stdout, stderr = capture_output(
+                cli.msp_main, ["upgrade", self.legacy_file_name, self.current_file_name])
+            ts2 = msprime.load(self.current_file_name)
             self.assertEqual(stdout, "")
             # We get some cruft on stderr that comes from h5py. This only happens
             # because we're mixing h5py and msprime for this test, so we can ignore
@@ -1489,3 +1498,23 @@ class TestUpgrade(TestCli):
             self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
             self.assertEqual(ts1.get_num_records(), ts2.get_num_records())
             self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())
+
+    def test_duplicate_positions(self):
+        ts = msprime.simulate(10, mutation_rate=10)
+        for version in [2, 3]:
+            msprime.dump_legacy(ts, self.legacy_file_name, version=version)
+            root = h5py.File(self.legacy_file_name, "r+")
+            root['mutations/position'][:] = 0
+            root.close()
+            stdout, stderr = capture_output(
+                cli.msp_main,
+                ["upgrade", "-d", self.legacy_file_name, self.current_file_name])
+            self.assertEqual(stdout, "")
+            tsp = msprime.load(self.current_file_name)
+            self.assertEqual(tsp.sample_size, ts.sample_size)
+            self.assertEqual(tsp.num_sites, 1)
+
+    @unittest.skip("CLI error testing")
+    def test_duplicate_positions_error(self):
+        # TODO implement the check that we handle the error condition correctly.
+        pass

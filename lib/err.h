@@ -72,7 +72,7 @@
 #define MSP_ERR_BAD_RECORD_INTERVAL                                 -41
 #define MSP_ERR_ZERO_RECORDS                                        -42
 #define MSP_ERR_NOT_INITIALISED                                     -43
-#define MSP_ERR_MUTATIONS_NOT_POSITION_SORTED                       -44
+/* #define MSP_ERR_MUTATIONS_NOT_POSITION_SORTED                       -44 */
 #define MSP_ERR_UNSORTED_MUTATION_NODES                             -45
 #define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
 #define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
@@ -83,6 +83,14 @@
 #define MSP_ERR_COORDINATE_NOT_FOUND                                -52
 #define MSP_ERR_BAD_NODES_ARRAY                                     -53
 #define MSP_ERR_BAD_CHILDREN_ARRAY                                  -54
+#define MSP_ERR_SITE_OUT_OF_BOUNDS                                  -55
+#define MSP_ERR_NODE_OUT_OF_BOUNDS                                  -56
+#define MSP_ERR_LENGTH_MISMATCH                                     -57
+#define MSP_ERR_BAD_ALPHABET                                        -58
+#define MSP_ERR_NON_SINGLE_CHAR_MUTATION                            -59
+#define MSP_ERR_UNSORTED_SITES                                      -60
+#define MSP_ERR_BAD_SITE_POSITION                                   -61
+#define MSP_ERR_UNSORTED_MUTATIONS                                  -62
 
 /* TODO need to go through these and rename all the COALESCENCE_RECORD ones to
  * have better names. There are also unused error numbers here which should be

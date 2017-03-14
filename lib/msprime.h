@@ -34,9 +34,10 @@
 #include "fenwick.h"
 
 /* Flags for tree sequence dump/load */
-#define MSP_ZLIB_COMPRESSION 1
+#define MSP_DUMP_ZLIB_COMPRESSION 1
+#define MSP_LOAD_EXTENDED_CHECKS  1
 
-#define MSP_FILE_FORMAT_VERSION_MAJOR 5
+#define MSP_FILE_FORMAT_VERSION_MAJOR 6
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */
@@ -49,6 +50,9 @@
 #define MSP_DIR_REVERSE -1
 
 #define MSP_GENOTYPES_AS_CHAR 1
+
+#define MSP_ALPHABET_BINARY 0
+#define MSP_ALPHABET_ASCII  1
 
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
@@ -69,42 +73,61 @@
 
 typedef int32_t node_id_t;
 typedef int32_t population_id_t;
+typedef int32_t site_id_t;
+typedef int32_t mutation_id_t;
+typedef uint32_t list_len_t;
 
 typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
-    size_t nodes_length;
-    size_t max_nodes_length;
-    size_t max_nodes_length_increment;
-    node_id_t *nodes;
+    size_t total_ancestral_state_length;
+    size_t max_total_ancestral_state_length;
+    size_t max_total_ancestral_state_length_increment;
+    char *ancestral_state;
+    list_len_t *ancestral_state_length;
     double *position;
+} site_table_t;
+
+typedef struct {
+    size_t num_rows;
+    size_t max_rows;
+    size_t max_rows_increment;
+    size_t total_derived_state_length;
+    size_t max_total_derived_state_length;
+    size_t max_total_derived_state_length_increment;
+    node_id_t *node;
+    site_id_t *site;
+    char *derived_state;
+    list_len_t *derived_state_length;
 } mutation_table_t;
 
 typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
-    size_t name_length;
-    size_t max_name_length;
-    size_t max_name_length_increment;
+    size_t total_name_length;
+    size_t max_total_name_length;
+    size_t max_total_name_length_increment;
     uint32_t *flags;
     double *time;
     population_id_t *population;
     char *name;
+    list_len_t *name_length;
 } node_table_t;
 
 typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
-    size_t children_length;
-    size_t max_children_length;
-    size_t max_children_length_increment;
+    size_t total_children_length;
+    size_t max_total_children_length;
+    size_t max_total_children_length_increment;
     double *left;
     double *right;
     node_id_t *parent;
     node_id_t *children;
+    list_len_t *children_length;
 } edgeset_table_t;
 
 typedef struct {
@@ -118,7 +141,6 @@ typedef struct {
     double *right;
     double *time;
 } migration_table_t;
-
 
 typedef struct segment_t_t {
     population_id_t population_id;
@@ -333,19 +355,28 @@ typedef struct {
 } node_t;
 
 typedef struct {
-    double position;
-    /* TODO should we rename this to ID and change to mutation_id_t ? */
+    mutation_id_t id;
+    site_id_t site;
+    node_id_t node;
+    const char *derived_state;
+    list_len_t derived_state_length;
+    // TODO remove this and change to ID?
     size_t index;
-    size_t num_nodes;
-    node_id_t *nodes;
-    char ancestral_state;
-    char derived_state;
 } mutation_t;
 
 typedef struct {
-    size_t num_children;
+    site_id_t id;
+    double position;
+    char *ancestral_state;
+    list_len_t ancestral_state_length;
+    mutation_t *mutations;
+    list_len_t mutations_length;
+} site_t;
+
+typedef struct {
     node_id_t parent;
     node_id_t *children;
+    list_len_t children_length;
     double left;
     double right;
     double time;
@@ -357,6 +388,7 @@ typedef struct {
     size_t sample_size;
     size_t num_trees;
     double sequence_length;
+    int alphabet;
     struct {
         size_t num_records;
         size_t max_num_records;
@@ -365,19 +397,20 @@ typedef struct {
         uint32_t *flags;
         population_id_t *population;
         double *time;
-        uint32_t *name_length;
+        list_len_t *name_length;
         char **name;
         char *name_mem;
     } nodes;
+
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t total_children;
-        size_t max_total_children;
+        size_t total_children_length;
+        size_t max_total_children_length;
         double *left;
         double *right;
         node_id_t *parent;
-        node_id_t *num_children;
+        list_len_t *children_length;
         node_id_t **children;
         node_id_t *children_mem;
         struct {
@@ -385,21 +418,36 @@ typedef struct {
             node_id_t *removal_order;
         } indexes;
     } edgesets;
+
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t total_nodes;
-        size_t max_total_nodes;
-        node_id_t *nodes_mem;
-        node_id_t **nodes;
-        node_id_t *num_nodes;
+        size_t total_ancestral_state_length;
+        size_t max_total_ancestral_state_length;
+        char **ancestral_state;
+        char *ancestral_state_mem;
+        list_len_t *ancestral_state_length;
         double *position;
-        char *ancestral_state;
-        char *derived_state;
-        node_id_t *num_tree_mutations;
-        mutation_t *tree_mutations_mem;
-        mutation_t **tree_mutations;
+        site_t *tree_sites_mem;
+        site_t **tree_sites;
+        list_len_t *tree_sites_length;
+        mutation_t *site_mutations_mem;
+        mutation_t **site_mutations;
+        list_len_t *site_mutations_length;
+    } sites;
+
+    struct {
+        size_t num_records;
+        size_t max_num_records;
+        size_t total_derived_state_length;
+        size_t max_total_derived_state_length;
+        node_id_t *node;
+        site_id_t *site;
+        char **derived_state;
+        char *derived_state_mem;
+        list_len_t *derived_state_length;
     } mutations;
+
     struct {
         size_t num_records;
         size_t max_num_records;
@@ -410,6 +458,7 @@ typedef struct {
         double *right;
         double *time;
     } migrations;
+
     char **provenance_strings;
     size_t num_provenance_strings;
     size_t max_num_provenance_strings;
@@ -455,7 +504,8 @@ typedef struct {
     double right;
     population_id_t *population;
     node_id_t *parent;
-    node_id_t *num_children;
+    /* TODO Change this to children_length for consistency with the tree sequence */
+    list_len_t *num_children;
     node_id_t **children;
     double *time;
     size_t index;
@@ -475,9 +525,9 @@ typedef struct {
     /* traversal stacks */
     node_id_t *stack1;
     node_id_t *stack2;
-    /* mutation storage */
-    mutation_t *mutations;
-    size_t num_mutations;
+    /* The sites on this tree */
+    site_t *sites;
+    list_len_t sites_length;
     /* Counters needed for next() and prev() transformations. */
     int direction;
     node_id_t left_index;
@@ -507,21 +557,24 @@ typedef struct {
 typedef struct {
     size_t sample_size;
     double sequence_length;
-    size_t num_mutations;
+    size_t num_sites;
     tree_sequence_t *tree_sequence;
-    /* the haplotype binary matrix */
+    /* The haplotype binary matrix. This is an optimised special case. */
+    bool binary;
     size_t words_per_row;
-    uint64_t *haplotype_matrix;
-    char *haplotype;
+    uint64_t *binary_haplotype_matrix;
+    char *output_haplotype;
+    /* The general haplotype matrix. */
+    char *ascii_haplotype_matrix;
     sparse_tree_t tree;
 } hapgen_t;
 
 typedef struct {
     size_t sample_size;
     double sequence_length;
-    size_t num_mutations;
+    size_t num_sites;
     tree_sequence_t *tree_sequence;
-    size_t tree_mutation_index;
+    size_t tree_site_index;
     int finished;
     sparse_tree_t tree;
     int flags;
@@ -537,7 +590,7 @@ typedef struct {
     char *vcf_genotypes;
     size_t vcf_genotypes_size;
     size_t record_size;
-    size_t num_mutations;
+    size_t num_sites;
     unsigned long contig_length;
     unsigned long *positions;
     vargen_t *vargen;
@@ -546,19 +599,27 @@ typedef struct {
 typedef struct {
     sparse_tree_t *outer_tree;
     sparse_tree_t *inner_tree;
-    size_t num_mutations;
+    size_t num_sites;
     int tree_changed;
     tree_sequence_t *tree_sequence;
 } ld_calc_t;
 
 typedef struct {
+    double position;
+    node_id_t node;
+    const char *ancestral_state;
+    const char *derived_state;
+} infinite_sites_mutation_t;
+
+typedef struct {
+    int alphabet;
     gsl_rng *rng;
     double mutation_rate;
     size_t num_mutations;
     size_t max_num_mutations;
     size_t mutation_block_size;
-    mutation_t *mutations;
-    object_heap_t node_heap;
+    site_table_t *sites;
+    infinite_sites_mutation_t *mutations;
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
@@ -644,12 +705,12 @@ int tree_sequence_initialise(tree_sequence_t *self);
  * with provenance. */
 int tree_sequence_load_tables_tmp(tree_sequence_t *self,
         node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
-        mutation_table_t *mutations, size_t num_provenance_strings,
-        char **provenance_strings);
+        site_table_t *sites, mutation_table_t *mutations,
+        size_t num_provenance_strings, char **provenance_strings);
 int tree_sequence_dump_tables_tmp(tree_sequence_t *self, node_table_t *node_table,
         edgeset_table_t *edgeset_table, migration_table_t *migration_table,
-        mutation_table_t *mutations, size_t *num_provenance_strings,
-        char ***provenance_strings);
+        site_table_t *sites, mutation_table_t *mutations,
+        size_t *num_provenance_strings, char ***provenance_strings);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
@@ -658,17 +719,22 @@ size_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
 size_t tree_sequence_get_num_edgesets(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
+size_t tree_sequence_get_num_sites(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
+int tree_sequence_get_alphabet(tree_sequence_t *self);
 
 int tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node);
 int tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgeset);
 int tree_sequence_get_migration(tree_sequence_t *self, size_t index,
         migration_t *migration);
-int tree_sequence_get_mutation(tree_sequence_t *self, size_t index,
+int tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *site);
+int tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id,
         mutation_t *mutation);
+int tree_sequence_get_site_mutations(tree_sequence_t *self, site_id_t site_id,
+        mutation_t **mutations, list_len_t *mutations_length);
 
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);
@@ -706,8 +772,7 @@ int sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, node_id_t u,
         size_t *num_tracked_leaves);
 int sparse_tree_get_leaf_list(sparse_tree_t *self, node_id_t u,
         leaf_list_node_t **head, leaf_list_node_t **tail);
-int sparse_tree_get_mutations(sparse_tree_t *self, size_t *num_mutations,
-        mutation_t **mutations);
+int sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, list_len_t *sites_length);
 void sparse_tree_print_state(sparse_tree_t *self, FILE *out);
 /* Method for positioning the tree in the sequence. */
 int sparse_tree_first(sparse_tree_t *self);
@@ -743,7 +808,7 @@ int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self, FILE *out);
 
 int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags);
-int vargen_next(vargen_t *self, mutation_t **mutation, char *genotypes);
+int vargen_next(vargen_t *self, site_t **site, char *genotypes);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self, FILE *out);
 
@@ -765,16 +830,15 @@ int recomb_map_get_rates(recomb_map_t *self, double *rates);
 
 void recomb_map_print_state(recomb_map_t *self, FILE *out);
 
-int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng);
+int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
+        int alphabet);
 int mutgen_free(mutgen_t *self);
 /* TODO finalise this interface */
 int mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
         edgeset_table_t *edgesets);
-int mutgen_populate_tables(mutgen_t *self, mutation_table_t *mutations);
+int mutgen_populate_tables(mutgen_t *self, site_table_t *sites,
+        mutation_table_t *mutations);
 int mutgen_set_mutation_block_size(mutgen_t *self, size_t mutation_block_size);
-size_t mutgen_get_num_mutations(mutgen_t *self);
-size_t mutgen_get_total_nodes(mutgen_t *self);
-int mutgen_get_mutations(mutgen_t *self, mutation_t **mutations);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
@@ -782,27 +846,42 @@ int node_table_alloc(node_table_t *self, size_t max_rows_increment,
 int node_table_add_row(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *name);
 int node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, size_t total_name_length, char *name);
+        population_id_t *population, char *name, list_len_t *name_length);
 int node_table_reset(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
 
 int edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
-        size_t max_children_length_increment);
+        size_t max_total_children_length_increment);
 int edgeset_table_add_row(edgeset_table_t *self, double left, double right,
-        node_id_t parent, size_t num_children, node_id_t *children);
+        node_id_t parent, node_id_t *children, list_len_t children_length);
 int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, double *left,
-        double *right, node_id_t *parent, size_t children_length, node_id_t *children);
+        double *right, node_id_t *parent, node_id_t *children,
+        list_len_t *children_length);
 int edgeset_table_reset(edgeset_table_t *self);
 int edgeset_table_free(edgeset_table_t *self);
 void edgeset_table_print_state(edgeset_table_t *self, FILE *out);
 
+int site_table_alloc(site_table_t *self, size_t max_rows_increment,
+        size_t max_total_ancestral_state_length_increment);
+int site_table_add_row(site_table_t *self, double position, const char *ancestral_state,
+        list_len_t ancestral_state_length);
+int site_table_set_columns(site_table_t *self, size_t num_rows,
+        double *position, const char *ancestral_state, list_len_t *ancestral_state_length);
+bool site_table_equal(site_table_t *self, site_table_t *other);
+int site_table_reset(site_table_t *self);
+int site_table_free(site_table_t *self);
+void site_table_print_state(site_table_t *self, FILE *out);
+
+void mutation_table_print_state(mutation_table_t *self, FILE *out);
 int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        size_t max_total_nodes_increment);
-int mutation_table_add_row(mutation_table_t *self, double position,
-        size_t num_nodes, node_id_t *nodes);
-int mutation_table_set_columns(mutation_table_t *self, size_t num_rows, double *position,
-        size_t total_nodes, node_id_t *nodes);
+        size_t max_total_derived_state_length_increment);
+int mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
+        const char *derived_state, list_len_t derived_state_length);
+int mutation_table_set_columns(mutation_table_t *self, size_t num_rows,
+        site_id_t *site, node_id_t *node, const char *derived_state,
+        list_len_t *derived_state_length);
+bool mutation_table_equal(mutation_table_t *self, mutation_table_t *other);
 int mutation_table_reset(mutation_table_t *self);
 int mutation_table_free(mutation_table_t *self);
 void mutation_table_print_state(mutation_table_t *self, FILE *out);

@@ -23,11 +23,21 @@ between simulations and the tree sequence.
 from __future__ import print_function
 from __future__ import division
 
+import random
+import string
 import unittest
 
 import numpy as np
 
 import msprime
+
+
+def random_string(max_length):
+    """
+    Returns a random character string of the specified maximum length.
+    """
+    length = random.randint(0, max_length)
+    return "".join(random.choice(string.printable) for _ in range(length))
 
 
 class Column(object):
@@ -38,6 +48,11 @@ class Column(object):
 class Int32Column(Column):
     def get_input(self, n):
         return np.arange(n, dtype=np.int32)
+
+
+class UInt8Column(Column):
+    def get_input(self, n):
+        return np.arange(n, dtype=np.uint8)
 
 
 class UInt32Column(Column):
@@ -70,7 +85,7 @@ class CommonTestsMixin(object):
 
     def test_input_parameters_errors(self):
         self.assertGreater(len(self.input_parameters), 0)
-        for param in self.input_parameters:
+        for param, _ in self.input_parameters:
             for bad_value in [-1, 0, -2**10]:
                 self.assertRaises(ValueError, self.table_class, **{param: bad_value})
             for bad_type in [None, ValueError, "ser"]:
@@ -78,13 +93,34 @@ class CommonTestsMixin(object):
 
     def test_input_parameter_values(self):
         self.assertGreater(len(self.input_parameters), 0)
-        for param in self.input_parameters:
+        for param, _ in self.input_parameters:
             for v in [1, 100, 256]:
                 table = self.table_class(**{param: v})
                 self.assertEqual(getattr(table, param), v)
 
+    def test_set_columns_string_errors(self):
+        inputs = {c.name: c.get_input(1) for c in self.columns}
+        for list_col, length_col in self.ragged_list_columns:
+            value = list_col.get_input(1)
+            inputs[list_col.name] = value
+            inputs[length_col.name] = [1]
+        # Make sure this works.
+        table = self.table_class()
+        table.set_columns(**inputs)
+        for list_col, length_col in self.ragged_list_columns:
+            kwargs = dict(inputs)
+            del kwargs[list_col.name]
+            self.assertRaises(TypeError, table.set_columns, **kwargs)
+            kwargs = dict(inputs)
+            del kwargs[length_col.name]
+            self.assertRaises(TypeError, table.set_columns, **kwargs)
+
     def test_set_columns_interface(self):
         kwargs = {c.name: c.get_input(1) for c in self.columns}
+        for list_col, length_col in self.ragged_list_columns:
+            value = list_col.get_input(1)
+            kwargs[list_col.name] = value
+            kwargs[length_col.name] = [1]
         # Make sure this works.
         table = self.table_class()
         table.set_columns(**kwargs)
@@ -103,6 +139,12 @@ class CommonTestsMixin(object):
         num_rows = 100
         input_data = {col.name: col.get_input(num_rows) for col in self.columns}
         col_map = {col.name: col for col in self.columns}
+        for list_col, length_col in self.ragged_list_columns:
+            value = list_col.get_input(num_rows)
+            input_data[list_col.name] = value
+            input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
+            col_map[list_col.name] = list_col
+            col_map[length_col.name] = length_col
         table = self.table_class()
         table.set_columns(**input_data)
         for equal_len_col_set in self.equal_len_columns:
@@ -116,7 +158,7 @@ class CommonTestsMixin(object):
         table = self.table_class()
         with self.assertRaises(AttributeError):
             table.num_rows = 10
-        for param in self.input_parameters:
+        for param, default in self.input_parameters:
             with self.assertRaises(AttributeError):
                 setattr(table, param, 2)
         for col in self.columns:
@@ -127,8 +169,8 @@ class CommonTestsMixin(object):
     def test_defaults(self):
         table = self.table_class()
         self.assertEqual(table.num_rows, 0)
-        for param in self.input_parameters:
-            self.assertEqual(getattr(table, param), 1024)
+        for param, default in self.input_parameters:
+            self.assertEqual(getattr(table, param), default)
         for col in self.columns:
             array = getattr(table, col.name)
             self.assertEqual(array.shape, (0,))
@@ -137,12 +179,21 @@ class CommonTestsMixin(object):
         for num_rows in [0, 10, 100, 1000]:
             input_data = {
                 col.name: col.get_input(num_rows) for col in self.columns}
+            for list_col, length_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
+                input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
             table = self.table_class()
-            table.set_columns(**input_data)
-            for colname, input_array in input_data.items():
-                output_array = getattr(table, colname)
-                self.assertEqual(input_array.shape, output_array.shape)
-                self.assertTrue(np.all(input_array == output_array))
+            for _ in range(5):
+                table.set_columns(**input_data)
+                for colname, input_array in input_data.items():
+                    output_array = getattr(table, colname)
+                    self.assertEqual(input_array.shape, output_array.shape)
+                    self.assertTrue(np.all(input_array == output_array))
+                table.reset()
+                self.assertEqual(table.num_rows, 0)
+                for colname in input_data.keys():
+                    self.assertEqual(list(getattr(table, colname)), [])
 
 
 class TestNodeTable(unittest.TestCase, CommonTestsMixin):
@@ -150,24 +201,51 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         UInt32Column("flags"),
         DoubleColumn("time"),
-        Int32Column("population"),
-        CharColumn("name")]
-    input_parameters = ["max_rows_increment"]
-    equal_len_columns = [["time", "flags", "population"]]
+        Int32Column("population")]
+    ragged_list_columns = [(CharColumn("name"),  UInt32Column("name_length"))]
+    input_parameters = [("max_rows_increment", 1024)]
+    equal_len_columns = [["time", "flags", "population", "name_length"]]
     table_class = msprime.NodeTable
 
-    def test_variable_stuff(self):
-        flags = np.arange(3, dtype=np.uint32)
-        time = np.arange(3)
-        names = [b"one", b"two", b"three"]
-        packed = np.frombuffer(b'\0'.join(names + [b""]), dtype=np.int8)
-        table = msprime.NodeTable()
-        table.set_columns(flags=flags, time=time, name=packed)
-        self.assertTrue(np.all(table.flags == flags))
-        self.assertTrue(np.all(table.time == time))
-        self.assertTrue(np.all(table.name == packed))
-        unpacked = table.name.tostring().split(b"\0")[:-1]
-        self.assertEqual(unpacked, names)
+    def test_optional_population(self):
+        for num_rows in [0, 10, 100]:
+            names = [str(j) for j in range(num_rows)]
+            name, name_length = msprime.pack_strings(names)
+            flags = list(range(num_rows))
+            time = list(range(num_rows))
+            table = msprime.NodeTable()
+            table.set_columns(
+                name=name, name_length=name_length, flags=flags, time=time)
+            self.assertEqual(list(table.population), [-1 for _ in range(num_rows)])
+            self.assertEqual(list(table.flags), flags)
+            self.assertEqual(list(table.time), time)
+            self.assertEqual(list(table.name), list(name))
+            self.assertEqual(list(table.name_length), list(name_length))
+
+    def test_random_names(self):
+        for num_rows in [0, 10, 100]:
+            names = [random_string(10) for _ in range(num_rows)]
+            name, name_length = msprime.pack_strings(names)
+            flags = list(range(num_rows))
+            time = list(range(num_rows))
+            table = msprime.NodeTable()
+            table.set_columns(
+                name=name, name_length=name_length, flags=flags, time=time)
+            self.assertEqual(list(table.flags), flags)
+            self.assertEqual(list(table.time), time)
+            self.assertEqual(list(table.name), list(name))
+            self.assertEqual(list(table.name_length), list(name_length))
+            unpacked_names = msprime.unpack_strings(table.name, table.name_length)
+            self.assertEqual(names, unpacked_names)
+
+    def test_optional_names(self):
+        for num_rows in [0, 10, 100]:
+            flags = list(range(num_rows))
+            time = list(range(num_rows))
+            table = msprime.NodeTable()
+            table.set_columns(flags=flags, time=time)
+            self.assertEqual(len(list(table.name)), 0)
+            self.assertEqual(list(table.name_length), [0 for _ in range(num_rows)])
 
 
 class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
@@ -175,23 +253,40 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("left"),
         DoubleColumn("right"),
-        Int32Column("parent"),
-        Int32Column("children")]
-    equal_len_columns = [["left", "right", "parent"]]
-    input_parameters = ["max_rows_increment", "max_children_length_increment"]
+        Int32Column("parent")]
+    ragged_list_columns = [(Int32Column("children"), UInt32Column("children_length"))]
+    equal_len_columns = [["left", "right", "parent", "children_length"]]
+    input_parameters = [
+        ("max_rows_increment", 1024),
+        ("max_children_length_increment", 1024)]
     table_class = msprime.EdgesetTable
 
 
-class TestMutationsTable(unittest.TestCase, CommonTestsMixin):
+class TestSiteTable(unittest.TestCase, CommonTestsMixin):
+    columns = [DoubleColumn("position")]
+    ragged_list_columns = [
+        (CharColumn("ancestral_state"), UInt32Column("ancestral_state_length"))]
+    equal_len_columns = [["position", "ancestral_state_length"]]
+    input_parameters = [
+        ("max_rows_increment", 1024),
+        ("max_total_ancestral_state_length_increment", 1024)]
+    table_class = msprime.SiteTable
+
+
+class TestMutationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
-        DoubleColumn("position"),
-        Int32Column("nodes")]
-    equal_len_columns = [["position"]]
-    input_parameters = ["max_rows_increment", "max_nodes_length_increment"]
+        Int32Column("site"),
+        Int32Column("node")]
+    ragged_list_columns = [
+        (CharColumn("derived_state"), UInt32Column("derived_state_length"))]
+    equal_len_columns = [["site", "node", "derived_state_length"]]
+    input_parameters = [
+        ("max_rows_increment", 1024),
+        ("max_total_derived_state_length_increment", 1024)]
     table_class = msprime.MutationTable
 
 
-class TestMigrationsTable(unittest.TestCase, CommonTestsMixin):
+class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("left"),
         DoubleColumn("right"),
@@ -199,6 +294,40 @@ class TestMigrationsTable(unittest.TestCase, CommonTestsMixin):
         Int32Column("source"),
         Int32Column("dest"),
         DoubleColumn("time")]
-    input_parameters = ["max_rows_increment"]
+    ragged_list_columns = []
+    input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]
     table_class = msprime.MigrationTable
+
+
+class TestStringPacking(unittest.TestCase):
+    """
+    Tests the code for packing and unpacking strings into numpy arrays.
+    """
+
+    def test_simple_case(self):
+        strings = ["hello", "world"]
+        packed, length = msprime.pack_strings(strings)
+        self.assertEqual(list(length), [5, 5])
+        self.assertEqual(packed.shape, (10,))
+        returned = msprime.unpack_strings(packed, length)
+        self.assertEqual(returned, strings)
+
+    def verify_packing(self, strings):
+        packed, length = msprime.pack_strings(strings)
+        self.assertEqual(packed.dtype, np.int8)
+        self.assertEqual(length.dtype, np.uint32)
+        self.assertEqual(list(length), [len(s) for s in strings])
+        self.assertEqual(packed.shape[0], np.sum(length))
+        returned = msprime.unpack_strings(packed, length)
+        self.assertEqual(strings, returned)
+
+    def test_regular_cases(self):
+        for n in range(10):
+            strings = ["a" * j for j in range(n)]
+            self.verify_packing(strings)
+
+    def test_random_cases(self):
+        for n in range(100):
+            strings = [random_string(10) for _ in range(n)]
+            self.verify_packing(strings)

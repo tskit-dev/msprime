@@ -34,7 +34,14 @@ import msprime
 
 
 def build_tree_sequence(records, mutations=[]):
-    return msprime.load_coalescence_records(records=records, mutations=mutations)
+    # TODO Change over the examples in this file to use the text representation
+    # and remove this function.
+    sites = []
+    for pos, node in mutations:
+        sites.append(msprime.Site(
+            position=pos, index=None, ancestral_state="0", mutations=[
+                msprime.Mutation(node=node, site=None, derived_state="1")]))
+    return msprime.load_coalescence_records(records=records, sites=sites)
 
 
 def path_length(tr, x, y):
@@ -163,13 +170,13 @@ def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
                 [(node, weight_fun([tr.num_tracked_leaves(node) for tr in trs]))
                     for node in trs[0].nodes() if node != root])
             # print(count_nodes)
+            # TODO update this to use sites rather than mutations.
             for mut in trs[0].mutations():
                 # print(mut)
                 for j in range(n_out):
                     # TODO: this is the theoretical method
                     # that assumes we can distinguish recurrent mutations
-                    for mn in mut.nodes:
-                        S[j] += count_nodes[mn][j]
+                    S[j] += count_nodes[mut.node][j]
         else:
             raise(TypeError("Unknown method "+method))
     for j in range(n_out):
@@ -334,16 +341,16 @@ class BranchStatsTestCase(unittest.TestCase):
                 time=1.0, population=0)]
 
         mutations = [
-            (0.05, (4,)),
-            (0.1, (0,)),
-            (0.11, (2,)),
-            (0.15, (0,)),
-            (0.151, (1,)),
-            (0.3, (1,)),
-            (0.6, (2,)),
-            (0.9, (0,)),
-            (0.95, (1,)),
-            (0.951, (2,))]
+            (0.05, 4),
+            (0.1, 0),
+            (0.11, 2),
+            (0.15, 0),
+            (0.151, 1),
+            (0.3, 1),
+            (0.6, 2),
+            (0.9, 0),
+            (0.95, 1),
+            (0.951, 2)]
         ts = build_tree_sequence(records, mutations)
 
         self.check_pairwise_diversity(ts)

@@ -53,6 +53,7 @@ from _msprime import MutationGenerator
 from _msprime import NodeTable
 from _msprime import EdgesetTable
 from _msprime import MigrationTable
+from _msprime import SiteTable
 from _msprime import MutationTable
 from _msprime import NODE_IS_SAMPLE
 
@@ -75,14 +76,34 @@ Migration = collections.namedtuple(
     "Migration",
     ["left", "right", "node", "source", "dest", "time"])
 
+
+Site = collections.namedtuple(
+    "Site",
+    ["position", "ancestral_state", "index", "mutations"])
+
+
 Mutation = collections.namedtuple(
     "Mutation",
-    ["position", "nodes", "index"])
+    ["site", "node", "derived_state"])
 
 
+# This is provided for backwards compatibility with the deprecated mutations()
+# iterator.
+DeprecatedMutation = collections.namedtuple(
+    "DeprecatedMutation",
+    ["position", "node", "index"])
+
+
+# This form was chosen to try to break as little of existing code as possible.
+# It seems likely that the `node` member was not used for much in this
+# iterator, so that it shouldn't break too much if we replace this with the
+# underlying site. The position and index values are retained for compatability,
+# although they are not redundant. There is a wider question about what the
+# genotypes values should be when we have non binary mutations, and whether
+# this is a viable long-term API.
 Variant = collections.namedtuple(
     "Variant",
-    ["position", "nodes", "index", "genotypes"])
+    ["position", "site", "index", "genotypes"])
 
 
 Sample = collections.namedtuple(
@@ -119,7 +140,7 @@ class Edgeset(SimpleContainer):
 
 
 def load_coalescence_records(
-        samples=None, records=None, mutations=None, provenance=[]):
+        samples=None, records=None, sites=None, provenance=[]):
     """
     Temporary function used to create a tree sequence using the 'coalescence records'
     paradigm. This is used a bridge between existing code and the new table based
@@ -144,6 +165,7 @@ def load_coalescence_records(
     right = []
     parent = []
     children = []
+    children_length = []
     for record in records:
         time[record.node] = record.time
         population[record.node] = record.population
@@ -151,23 +173,54 @@ def load_coalescence_records(
         right.append(record.right)
         parent.append(record.node)
         children.extend(record.children)
-        children.append(msprime.NULL_NODE)
+        children_length.append(len(record.children))
 
     node_table = msprime.NodeTable()
     node_table.set_columns(flags=flags, time=time, population=population)
     edgeset_table = msprime.EdgesetTable()
-    edgeset_table.set_columns(left=left, right=right, parent=parent, children=children)
+    edgeset_table.set_columns(
+        left=left, right=right, parent=parent, children=children,
+        children_length=children_length)
+    site_table = msprime.SiteTable()
     mutation_table = msprime.MutationTable()
-    if mutations is not None:
-        for mutation in mutations:
-            mutation_table.add_row(mutation[0], mutation[1])
-
+    if sites is not None:
+        for j, site in enumerate(sites):
+            site_table.add_row(site.position, site.ancestral_state)
+            for mutation in site.mutations:
+                mutation_table.add_row(j, mutation.node, mutation.derived_state)
     ll_ts = _msprime.TreeSequence()
     ll_ts.load_tables(
-        nodes=node_table, edgesets=edgeset_table, mutations=mutation_table,
-        provenance_strings=provenance)
+        nodes=node_table, edgesets=edgeset_table, sites=site_table,
+        mutations=mutation_table, provenance_strings=provenance)
     ts = msprime.TreeSequence(ll_ts)
     return ts
+
+
+def pack_strings(strings):
+    """
+    Packs the specified list of strings into a flattened numpy array of characters
+    and corresponding lengths.
+    """
+    check_numpy()
+    lengths = np.array([len(s) for s in strings], dtype=np.uint32)
+    encoded = ("".join(strings)).encode()
+    return np.fromstring(encoded, dtype=np.int8), lengths
+
+
+def unpack_strings(packed, length):
+    """
+    Unpacks a list of string from the specified numpy arrays of packed character
+    data and corresponding lengths.
+    """
+    # This could be done a lot more efficiently...
+    check_numpy()
+    ret = []
+    offset = 0
+    for l in length:
+        raw = packed[offset: offset + l].tostring()
+        ret.append(raw.decode())
+        offset += l
+    return ret
 
 
 def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
@@ -219,13 +272,14 @@ class TreeDrawer(object):
         self._leaf_x = 1
         self._assign_x_coordinates(self._tree.get_root())
         self._mutations = []
+        # TODO update to use sites.
         for mutation in tree.mutations():
-            for node in mutation.nodes:
-                x = self._x_coords[node], self._y_coords[node]
-                v = tree.get_parent(node)
-                y = self._x_coords[v], self._y_coords[v]
-                z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
-                self._mutations.append(z)
+            node = mutation.node
+            x = self._x_coords[node], self._y_coords[node]
+            v = tree.get_parent(node)
+            y = self._x_coords[v], self._y_coords[v]
+            z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
+            self._mutations.append(z)
 
     def write(self, path):
         """
@@ -573,7 +627,14 @@ class SparseTree(object):
         :return: The number of mutations on this tree.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_num_mutations()
+        return sum(len(site.mutations) for site in self.sites())
+
+    def sites(self):
+        for ll_site in self._ll_sparse_tree.get_sites():
+            pos, ancestral_state, mutations, index = ll_site
+            yield Site(
+                position=pos, ancestral_state=ancestral_state, index=index,
+                mutations=[Mutation(*mutation) for mutation in mutations])
 
     def mutations(self):
         """
@@ -596,8 +657,11 @@ class SparseTree(object):
             the mutations in this tree.
         :rtype: iter
         """
-        for position, nodes, index in self._ll_sparse_tree.get_mutations():
-            yield Mutation(position, nodes, index)
+        # TODO deprecate
+        for site in self.sites():
+            for mutation in site.mutations:
+                yield DeprecatedMutation(
+                    position=site.position, node=mutation.node, index=site.index)
 
     def _leaf_generator(self, u):
         for v in self.nodes(u):
@@ -760,7 +824,7 @@ class SparseTree(object):
             self.get_interval() == other.get_interval() and
             self.get_root() == other.get_root() and
             self.get_index() == other.get_index() and
-            list(self.mutations()) == list(other.mutations()))
+            list(self.sites()) == list(other.sites()))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -1101,10 +1165,11 @@ def load_txt(records_file, mutations_file=None):
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    return TreeSequence.load_records(records_file, mutations_file)
+    # TODO reimplement this using something like load_str and document.
+    raise NotImplementedError("load_txt needs to be reimplemented")
 
 
-def load_str(nodes, edgesets):
+def load_str(nodes, edgesets, sites=None, mutations=None):
     # Initial implementation. This is very rough and will need to be much
     # more carefully written before release. The load_txt method will be replaced
     # with an implementation like this eventually, and this function might be
@@ -1132,6 +1197,7 @@ def load_str(nodes, edgesets):
             children = tuple(map(int, split[3].split(",")))
             edgeset_table.add_row(
                 left=left, right=right, parent=parent, children=children)
+
     return load_tables(nodes=node_table, edgesets=edgeset_table)
 
 
@@ -1176,6 +1242,7 @@ class TreeSimulator(object):
         self.node_table = NodeTable(block_size)
         self.edgeset_table = EdgesetTable(block_size)
         self.migration_table = MigrationTable(block_size)
+        self.mutation_type_table = SiteTable(1)
         self.mutation_table = MutationTable(block_size)
 
     def set_random_generator(self, random_generator):
@@ -1462,11 +1529,13 @@ class TreeSimulator(object):
             Ne=Ne, recombination_map=ll_recomb_map)
         if mutation_generator is not None:
             mutation_generator.generate(
-                self.node_table, self.edgeset_table, self.mutation_table)
+                self.node_table, self.edgeset_table, self.mutation_type_table,
+                self.mutation_table)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.load_tables(
             self.node_table, self.edgeset_table, self.migration_table,
-            self.mutation_table, provenance_strings=provenance_strings)
+            self.mutation_type_table, self.mutation_table,
+            provenance_strings=provenance_strings)
         return TreeSequence(ll_tree_sequence)
 
     def reset(self):
@@ -1475,46 +1544,6 @@ class TreeSimulator(object):
         """
         if self._ll_sim is not None:
             self._ll_sim.reset()
-
-    def get_ms_command_line(
-            self, executable="ms", num_replicates=1, output_trees=True,
-            mutation_rate=None):
-        """
-        Returns an command line for ms that is equivalent to the parameters
-        for this simulator.
-
-        :param str executable: The path to the ms-compatible binary.
-        :param int num_relicates: The number of replicates to simulate.
-        :param float mutation_rate: The rate of mutation per generation.
-        :return: A list of command line arguments that can be used to invoke
-            ms with equivalent parameters to this simulator.
-        :rtype: list
-        """
-        L = self._recombination_map.get_length()
-        m = self._recombination_map.get_num_loci()
-        if m != L:
-            raise ValueError(
-                "Only recombination maps where L = m are supported")
-        r = self._recombination_map.get_total_recombination_rate()
-        rho = r
-        args = [executable, str(self._sample_size), str(num_replicates)]
-        if output_trees:
-            args += ["-T"]
-        if rho > 0 or L > 1:
-            args += ["-r", str(rho), str(L)]
-        if mutation_rate is not None:
-            scaled_mutation_rate = (
-                mutation_rate * 4 * self.get_effective_population_size() * L)
-            args += ["-t", str(scaled_mutation_rate)]
-        for conf in self._population_configurations:
-            if conf.growth_rate > 0:
-                args.extend(["-G", str(conf.growth_rate)])
-        if len(self._population_configurations) > 1:
-            # TODO add -I arguments
-            assert False
-        for event in self._demographic_events:
-            args.extend(event.get_ms_arguments())
-        return args
 
 
 class TreeSequence(object):
@@ -1546,75 +1575,28 @@ class TreeSequence(object):
         ts.load_tables(**kwargs)
         return TreeSequence(ts)
 
-    @classmethod
-    def parse_record(cls, line):
-        tokens = line.split()
-        left = float(tokens[0])
-        right = float(tokens[1])
-        node = int(tokens[2])
-        children = tuple(map(int, tokens[3].split(",")))
-        time = float(tokens[4])
-        population = int(tokens[5])
-        return CoalescenceRecord(
-            left, right, node, children, time, population)
-
-    @classmethod
-    def parse_mutation(cls, line):
-        tokens = line.split()
-        position = float(tokens[0])
-        nodes = tuple(map(int, tokens[1].split(",")))
-        return Mutation(position=position, nodes=nodes, index=0)
-
-    @classmethod
-    def load_records(cls, records_file_path, mutations_file_path=None):
-        records = []
-        with open(records_file_path, "r") as records_file:
-            line = next(records_file, None)
-            if line is not None:
-                if not line.startswith("left"):
-                    records.append(cls.parse_record(line))
-                for line in records_file:
-                    records.append(cls.parse_record(line))
-        if len(records) == 0:
-            raise ValueError("No records in file.")
-        mutations = []
-        if mutations_file_path is not None:
-            with open(mutations_file_path, "r") as mutations_file:
-                line = next(mutations_file, None)
-                if line is not None:
-                    if not line.startswith("position"):
-                        mutations.append(cls.parse_mutation(line))
-                    for line in mutations_file:
-                        mutations.append(cls.parse_mutation(line))
-
-        # Get the samples for these records.
-        num_samples = min(r.node for r in records)
-        samples = [Sample(0, 0) for _ in range(num_samples)]
-        return load_coalescence_records(
-            samples=samples, records=records, mutations=mutations)
-
-    def copy(self, mutations=None):
+    def copy(self, sites=None):
         # Experimental API. Return a copy of this tree sequence, optionally with
-        # the mutations set to the specified list.
+        # the sites set to the specified list.
         node_table = msprime.NodeTable()
         edgeset_table = msprime.EdgesetTable()
         migration_table = msprime.MigrationTable()
+        site_table = msprime.SiteTable()
         mutation_table = msprime.MutationTable()
         self._ll_tree_sequence.dump_tables(
             nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
-            mutations=mutation_table)
-        if mutations is not None:
-            position = []
-            nodes = []
-            for mutation in mutations:
-                position.append(mutation[0])
-                nodes.extend(mutation[1])
-                nodes.append(msprime.NULL_NODE)
-            mutation_table.set_columns(position=position, nodes=nodes)
+            sites=site_table, mutations=mutation_table)
+        if sites is not None:
+            site_table.reset()
+            mutation_table.reset()
+            for j, site in enumerate(sites):
+                site_table.add_row(site.position, site.ancestral_state)
+                for mutation in site.mutations:
+                    mutation_table.add_row(j, mutation.node, mutation.derived_state)
         new_ll_ts = _msprime.TreeSequence()
         new_ll_ts.load_tables(
             nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
-            mutations=mutation_table)
+            sites=site_table, mutations=mutation_table)
         return TreeSequence(new_ll_ts)
 
     @property
@@ -1623,9 +1605,6 @@ class TreeSequence(object):
 
     def get_provenance(self):
         return self._ll_tree_sequence.get_provenance_strings()
-
-    def add_provenance(self, provenance):
-        self._ll_tree_sequence.add_provenance_string(provenance)
 
     def newick_trees(self, precision=3, breakpoints=None, Ne=1):
         # TODO document this method.
@@ -1729,6 +1708,13 @@ class TreeSequence(object):
         return self._ll_tree_sequence.get_num_trees()
 
     @property
+    def num_sites(self):
+        return self.get_num_sites()
+
+    def get_num_sites(self):
+        return self._ll_tree_sequence.get_num_sites()
+
+    @property
     def num_mutations(self):
         return self.get_num_mutations()
 
@@ -1795,10 +1781,7 @@ class TreeSequence(object):
 
     def nodes(self):
         for j in range(self.num_nodes):
-            flags, time, population, name = self._ll_tree_sequence.get_node(j)
-            yield Node(
-                time=time, population=population, name=name,
-                is_sample=flags & NODE_IS_SAMPLE)
+            yield self.node(j)
 
     def edgesets(self):
         for j in range(self.num_edgesets):
@@ -1831,6 +1814,13 @@ class TreeSequence(object):
         """
         return _msprime.TreeDiffIterator(self._ll_tree_sequence)
 
+    def sites(self):
+        for j in range(self.num_sites):
+            pos, ancestral_state, mutations, index = self._ll_tree_sequence.get_site(j)
+            yield Site(
+                position=pos, ancestral_state=ancestral_state, index=index,
+                mutations=[Mutation(*mutation) for mutation in mutations])
+
     def mutations(self):
         """
         Returns an iterator over the mutations in this tree sequence. Each
@@ -1852,9 +1842,11 @@ class TreeSequence(object):
             the mutations in this tree sequence.
         :rtype: iter
         """
-        for j in range(self.get_num_mutations()):
-            position, node, index = self._ll_tree_sequence.get_mutation(j)
-            yield Mutation(position, node, index)
+        # TODO deprecate
+        for site in self.sites():
+            for mutation in site.mutations:
+                yield DeprecatedMutation(
+                    position=site.position, node=mutation.node, index=site.index)
 
     def breakpoints(self):
         """
@@ -1980,19 +1972,27 @@ class TreeSequence(object):
         :return: An iterator of all :math:`(x, u, j, g)` tuples defining
             the variants in this tree sequence.
         """
+        # TODO finalise API and documnent. See comments for the Variant type
+        # for discussion on why the present form was chosen.
         n = self.get_sample_size()
         genotypes_buffer = bytearray(n)
         iterator = _msprime.VariantGenerator(
             self._ll_tree_sequence, genotypes_buffer, as_bytes)
         if as_bytes:
-            for position, nodes, index in iterator:
+            for pos, ancestral_state, mutations, index in iterator:
+                site = Site(
+                    position=pos, ancestral_state=ancestral_state, index=index,
+                    mutations=[Mutation(*mutation) for mutation in mutations])
                 g = bytes(genotypes_buffer)
-                yield Variant(position=position, nodes=nodes, index=index, genotypes=g)
+                yield Variant(position=pos, site=site, index=index, genotypes=g)
         else:
             check_numpy()
             g = np.frombuffer(genotypes_buffer, "u1", n)
-            for position, nodes, index in iterator:
-                yield Variant(position=position, nodes=nodes, index=index, genotypes=g)
+            for pos, ancestral_state, mutations, index in iterator:
+                site = Site(
+                    position=pos, ancestral_state=ancestral_state, index=index,
+                    mutations=[Mutation(*mutation) for mutation in mutations])
+                yield Variant(position=pos, site=site, index=index, genotypes=g)
 
     def pairwise_diversity(self, samples=None):
         return self.get_pairwise_diversity(samples)
@@ -2113,6 +2113,12 @@ class TreeSequence(object):
             S[j] /= self.get_sequence_length()
         return S
 
+    def node(self, u):
+        flags, time, population, name = self._ll_tree_sequence.get_node(u)
+        return Node(
+            time=time, population=population, name=name,
+            is_sample=flags & NODE_IS_SAMPLE)
+
     def time(self, sample):
         return self.get_time(sample)
 
@@ -2127,8 +2133,8 @@ class TreeSequence(object):
         """
         if sample < 0 or sample >= self.get_sample_size():
             raise ValueError("Sample ID out of bounds")
-        _, time = self._ll_tree_sequence.get_sample(sample)
-        return time
+        node = self.node(sample)
+        return node.time
 
     def population(self, sample):
         return self.get_population(sample)
@@ -2145,8 +2151,8 @@ class TreeSequence(object):
         """
         if sample < 0 or sample >= self.get_sample_size():
             raise ValueError("Sample ID out of bounds")
-        population, _ = self._ll_tree_sequence.get_sample(sample)
-        return population
+        node = self.node(sample)
+        return node.population
 
     def samples(self, population_id=None):
         return self.get_samples(population_id)
@@ -2166,50 +2172,6 @@ class TreeSequence(object):
             samples = [
                 u for u in samples if self.get_population(u) == population_id]
         return samples
-
-    def write_records(self, output, header=True, precision=6):
-        """
-        Writes the records for this tree sequence to the specified file in a
-        tab-separated format. If ``header`` is True, the first line of this
-        file contains the names of the columns, i.e., ``left``, ``right``,
-        ``node``, ``children``, ``time`` and ``population``. After the optional
-        header, the records are written to the file in tab-separated form in
-        order of non-decreasing time. The ``left``, ``right`` and ``time``
-        fields are base 10 floating point values printed to the specified
-        ``precision``. The ``node`` and ``population`` fields are base 10
-        integers. The ``children`` column is a comma-separated list of base 10
-        integers, which must contain at least two values.
-
-        Example usage:
-
-        >>> with open("records.txt", "w") as records_file:
-        >>>     tree_sequence.write_records(records_file)
-
-        :param File output: The file-like object to write the tab separated
-            output.
-        :param bool header: If True, write a header describing the column
-            names in the output.
-        :param int precision: The number of decimal places to print out for
-            floating point columns.
-        """
-        if header:
-            print(
-                "left", "right", "node", "children",
-                "time", "population", sep="\t", file=output)
-        for record in self.records():
-            children = ",".join(str(c) for c in record.children)
-            row = (
-                "{left:.{precision}f}\t"
-                "{right:.{precision}f}\t"
-                "{node}\t"
-                "{children}\t"
-                "{time:.{precision}f}\t"
-                "{population}\t").format(
-                    precision=precision,
-                    left=record.left, right=record.right,
-                    node=record.node, children=children,
-                    time=record.time, population=record.population)
-            print(row, file=output)
 
     def write_mutations(self, output, header=True, precision=6):
         """
@@ -2236,17 +2198,8 @@ class TreeSequence(object):
         :param int precision: The number of decimal places to print out for
             floating point columns.
         """
-        if header:
-            print("position", "nodes", sep="\t", file=output)
-        for mutation in self.mutations():
-            nodes = ",".join(str(u) for u in mutation.nodes)
-            row = (
-                "{position:.{precision}f}\t"
-                "{nodes:}\t").format(
-                    precision=precision,
-                    position=mutation.position,
-                    nodes=nodes)
-            print(row, file=output)
+        # TODO this should be reimplemented and replaces with dump_txt method.
+        raise NotImplementedError("Reimplement for new text IO methods")
 
     def write_vcf(self, output, ploidy=1):
         """
@@ -2468,9 +2421,6 @@ class DemographicEvent(object):
     def _get_scaled_time(self, Ne):
         return generations_to_coalescent(self.time, Ne)
 
-    def __str__(self):
-        raise NotImplementedError()
-
 
 class PopulationParametersChange(DemographicEvent):
     """
@@ -2516,9 +2466,6 @@ class PopulationParametersChange(DemographicEvent):
             ret["initial_size"] = self.initial_size / Ne
         return ret
 
-    def get_ms_arguments(self):
-        raise NotImplementedError()
-
     def __str__(self):
         s = "Population parameter change for {}: ".format(self.population_id)
         if self.initial_size is not None:
@@ -2557,9 +2504,6 @@ class MigrationRateChange(DemographicEvent):
             "migration_rate": scaled_rate,
             "matrix_index": matrix_index
         }
-
-    def get_ms_arguments(self):
-        raise NotImplemented()
 
     def __str__(self):
         if self.matrix_index is None:
@@ -2603,9 +2547,6 @@ class MassMigration(DemographicEvent):
             "proportion": self.proportion
         }
 
-    def get_ms_arguments(self):
-        raise NotImplemented()
-
     def __str__(self):
         return (
             "Mass migration: lineages move from {} to {} with "
@@ -2627,9 +2568,6 @@ class SimpleBottleneck(DemographicEvent):
             "population_id": self.population_id,
             "proportion": self.proportion
         }
-
-    def get_ms_arguments(self):
-        raise NotImplemented()
 
     def __str__(self):
         return (
@@ -2653,9 +2591,6 @@ class InstantaneousBottleneck(DemographicEvent):
             "population_id": self.population_id,
             "strength": generations_to_coalescent(self.strength, Ne)
         }
-
-    def get_ms_arguments(self):
-        raise NotImplemented()
 
     def __str__(self):
         return (
