@@ -1653,10 +1653,10 @@ class TestRecombinationMap(HighLevelTestCase):
         try:
             filename = self.temp_file + ".gz"
             with gzip.open(filename, "w+") as f:
-                print("HEADER", file=f)
-                print("chr1 0 1", file=f)
-                print("chr1 1 5.5", file=f)
-                print("s    2 0", file=f)
+                f.write(b"HEADER\n")
+                f.write(b"chr1 0 1\n")
+                f.write(b"chr1 1 5.5\n")
+                f.write(b"s    2 0\n")
             rm = msprime.RecombinationMap.read_hapmap(filename)
             self.assertEqual(rm.get_positions(), [0, 1, 2])
             self.assertEqual(rm.get_rates(), [1e-8, 5.5e-8, 0])
