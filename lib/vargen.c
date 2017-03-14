@@ -93,14 +93,18 @@ vargen_free(vargen_t *self)
 }
 
 static int
-vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char ancestral, char derived)
+vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state_offset)
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
     bool not_done;
     list_len_t j;
+    char derived;
+    char ancestral = (char) (site->ancestral_state[0] - state_offset);
 
+    memset(genotypes, ancestral, self->sample_size);
     for (j = 0; j < site->mutations_length; j++) {
+        derived = (char) (site->mutations[j].derived_state[0] - state_offset);
         ret = sparse_tree_get_leaf_list(&self->tree, site->mutations[j].node, &w, &tail);
         if (ret != 0) {
             goto out;
@@ -110,10 +114,6 @@ vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char ances
             while (not_done) {
                 assert(w != NULL);
                 assert(w->node < (node_id_t) self->sample_size);
-                if (genotypes[w->node] != ancestral) {
-                    ret = MSP_ERR_INCONSISTENT_MUTATIONS;
-                    goto out;
-                }
                 genotypes[w->node] = derived;
                 not_done = w != tail;
                 w = w->next;
@@ -131,8 +131,11 @@ vargen_next(vargen_t *self, site_t **site, char *genotypes)
 
     bool not_done = true;
     site_t *s;
-    char ancestral, derived;
+    char offset = 0;
 
+    if (! (self->flags & MSP_GENOTYPES_AS_CHAR)) {
+       offset = '0';
+    }
     if (!self->finished) {
         while (not_done && self->tree_site_index == self->tree.sites_length) {
             ret = vargen_next_tree(self);
@@ -143,19 +146,7 @@ vargen_next(vargen_t *self, site_t **site, char *genotypes)
         }
         if (not_done) {
             s = &self->tree.sites[self->tree_site_index];
-            /* For now, we can only deal with standard infinite sites mutations. */
-            if (s->mutations_length != 1 && s->ancestral_state[0] != '0') {
-                ret = MSP_ERR_UNSUPPORTED_OPERATION;
-                goto out;
-            }
-            ancestral = 0;
-            derived = 1;
-            if (self->flags & MSP_GENOTYPES_AS_CHAR) {
-                ancestral = '0';
-                derived = '1';
-            }
-            memset(genotypes, ancestral, self->sample_size);
-            ret = vargen_apply_tree_site(self, s, genotypes, ancestral, derived);
+            ret = vargen_apply_tree_site(self, s, genotypes, offset);
             if (ret != 0) {
                 goto out;
             }

@@ -663,6 +663,7 @@ class TestVariantGenerator(HighLevelTestCase):
         for variant in ts.variants():
             self.assertTrue(np.all(variant.genotypes == np.ones(ts.sample_size)))
 
+    @unittest.skip("detecting inconsistent mutations")
     def test_recurrent_mutations_errors(self):
         ts = self.get_tree_sequence()
         tree = next(ts.trees())
@@ -675,6 +676,11 @@ class TestVariantGenerator(HighLevelTestCase):
                             msprime.Mutation(site=0, derived_state="1", node=leaf)])
             ts_new = ts.copy(sites=[site])
             self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
+
+    @unittest.skip("TODO")
+    def test_back_mutations(self):
+        pass
+        # TODO
 
 
 class TestHaplotypeGenerator(HighLevelTestCase):
