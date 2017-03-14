@@ -1117,6 +1117,7 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(convert(record.time), splits[4])
                 self.assertEqual(record.population, int(splits[5]))
 
+    @unittest.skip("text IO")
     def test_write_records(self):
         for ts in self.get_example_tree_sequences():
             for precision in [2, 7]:
@@ -1194,6 +1195,7 @@ class TestTreeSequence(HighLevelTestCase):
                     ts2 = msprime.TreeSequence.load_records(self.temp_file)
                     self.compare_exported_records(ts1, ts2)
 
+    @unittest.skip("text mutations interface")
     def test_text_records_empty_file(self):
         with open(self.temp_file, "w+") as f:
             f.flush()

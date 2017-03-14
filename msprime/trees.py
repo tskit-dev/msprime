@@ -1165,10 +1165,11 @@ def load_txt(records_file, mutations_file=None):
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    return TreeSequence.load_records(records_file, mutations_file)
+    # TODO reimplement this using something like load_str and document.
+    raise NotImplementedError("load_txt needs to be reimplemented")
 
 
-def load_str(nodes, edgesets):
+def load_str(nodes, edgesets, sites=None, mutations=None):
     # Initial implementation. This is very rough and will need to be much
     # more carefully written before release. The load_txt method will be replaced
     # with an implementation like this eventually, and this function might be
@@ -1196,6 +1197,7 @@ def load_str(nodes, edgesets):
             children = tuple(map(int, split[3].split(",")))
             edgeset_table.add_row(
                 left=left, right=right, parent=parent, children=children)
+
     return load_tables(nodes=node_table, edgesets=edgeset_table)
 
 
@@ -1612,53 +1614,6 @@ class TreeSequence(object):
         ts = _msprime.TreeSequence()
         ts.load_tables(**kwargs)
         return TreeSequence(ts)
-
-    @classmethod
-    def parse_record(cls, line):
-        tokens = line.split()
-        left = float(tokens[0])
-        right = float(tokens[1])
-        node = int(tokens[2])
-        children = tuple(map(int, tokens[3].split(",")))
-        time = float(tokens[4])
-        population = int(tokens[5])
-        return CoalescenceRecord(
-            left, right, node, children, time, population)
-
-    @classmethod
-    def parse_mutation(cls, line):
-        tokens = line.split()
-        position = float(tokens[0])
-        nodes = tuple(map(int, tokens[1].split(",")))
-        return Mutation(position=position, nodes=nodes, index=0, type=0)
-
-    @classmethod
-    def load_records(cls, records_file_path, mutations_file_path=None):
-        records = []
-        with open(records_file_path, "r") as records_file:
-            line = next(records_file, None)
-            if line is not None:
-                if not line.startswith("left"):
-                    records.append(cls.parse_record(line))
-                for line in records_file:
-                    records.append(cls.parse_record(line))
-        if len(records) == 0:
-            raise ValueError("No records in file.")
-        mutations = []
-        if mutations_file_path is not None:
-            with open(mutations_file_path, "r") as mutations_file:
-                line = next(mutations_file, None)
-                if line is not None:
-                    if not line.startswith("position"):
-                        mutations.append(cls.parse_mutation(line))
-                    for line in mutations_file:
-                        mutations.append(cls.parse_mutation(line))
-
-        # Get the samples for these records.
-        num_samples = min(r.node for r in records)
-        samples = [Sample(0, 0) for _ in range(num_samples)]
-        return load_coalescence_records(
-            samples=samples, records=records, mutations=mutations)
 
     def copy(self, sites=None):
         # Experimental API. Return a copy of this tree sequence, optionally with
@@ -2261,50 +2216,6 @@ class TreeSequence(object):
                 u for u in samples if self.get_population(u) == population_id]
         return samples
 
-    def write_records(self, output, header=True, precision=6):
-        """
-        Writes the records for this tree sequence to the specified file in a
-        tab-separated format. If ``header`` is True, the first line of this
-        file contains the names of the columns, i.e., ``left``, ``right``,
-        ``node``, ``children``, ``time`` and ``population``. After the optional
-        header, the records are written to the file in tab-separated form in
-        order of non-decreasing time. The ``left``, ``right`` and ``time``
-        fields are base 10 floating point values printed to the specified
-        ``precision``. The ``node`` and ``population`` fields are base 10
-        integers. The ``children`` column is a comma-separated list of base 10
-        integers, which must contain at least two values.
-
-        Example usage:
-
-        >>> with open("records.txt", "w") as records_file:
-        >>>     tree_sequence.write_records(records_file)
-
-        :param File output: The file-like object to write the tab separated
-            output.
-        :param bool header: If True, write a header describing the column
-            names in the output.
-        :param int precision: The number of decimal places to print out for
-            floating point columns.
-        """
-        if header:
-            print(
-                "left", "right", "node", "children",
-                "time", "population", sep="\t", file=output)
-        for record in self.records():
-            children = ",".join(str(c) for c in record.children)
-            row = (
-                "{left:.{precision}f}\t"
-                "{right:.{precision}f}\t"
-                "{node}\t"
-                "{children}\t"
-                "{time:.{precision}f}\t"
-                "{population}\t").format(
-                    precision=precision,
-                    left=record.left, right=record.right,
-                    node=record.node, children=children,
-                    time=record.time, population=record.population)
-            print(row, file=output)
-
     def write_mutations(self, output, header=True, precision=6):
         """
         Writes the mutations for this tree sequence to the specified file in a
@@ -2330,17 +2241,8 @@ class TreeSequence(object):
         :param int precision: The number of decimal places to print out for
             floating point columns.
         """
-        if header:
-            print("position", "nodes", sep="\t", file=output)
-        for mutation in self.mutations():
-            nodes = ",".join(str(u) for u in mutation.nodes)
-            row = (
-                "{position:.{precision}f}\t"
-                "{nodes:}\t").format(
-                    precision=precision,
-                    position=mutation.position,
-                    nodes=nodes)
-            print(row, file=output)
+        # TODO this should be reimplemented and replaces with dump_txt method.
+        raise NotImplementedError("Reimplement for new text IO methods")
 
     def write_vcf(self, output, ploidy=1):
         """

@@ -1337,6 +1337,7 @@ class TestMspConversionOutput(unittest.TestCase):
             output = f.read().splitlines()
         self.assertEqual(output, output_records)
 
+    @unittest.skip("text IO")
     def test_records(self):
         cmd = "records"
         precision = 6

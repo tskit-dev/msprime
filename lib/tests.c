@@ -3461,51 +3461,55 @@ test_single_tree_simplify(void)
     tree_sequence_free(&ts);
 }
 
-/* static void */
-/* test_single_tree_inconsistent_mutations(void) */
-/* { */
-/*     int ret = 0; */
-/*     const char *nodes = */
-/*         "1  0   0\n" */
-/*         "1  0   0\n" */
-/*         "1  0   0\n" */
-/*         "1  0   0\n" */
-/*         "0  1   0\n" */
-/*         "0  2   0\n" */
-/*         "0  3   0\n"; */
-/*     const char *edgesets = */
-/*         "0  1   4   0,1\n" */
-/*         "0  1   5   2,3\n" */
-/*         "0  1   6   4,5\n"; */
-/*     const char *mutation_types = "0 1"; */
-/*     const char *mutations = */
-/*         "0.0    0\n" */
-/*         "0.1    1\n" */
-/*         "0.2    0,4\n"; */
-/*     tree_sequence_t ts; */
-/*     char genotypes[5]; */
-/*     mutation_t *mut; */
-/*     vargen_t vargen; */
-/*     hapgen_t hapgen; */
+static void
+test_single_tree_inconsistent_mutations(void)
+{
+    int ret = 0;
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n"
+        "0  2   0\n"
+        "0  3   0\n";
+    const char *edgesets =
+        "0  1   4   0,1\n"
+        "0  1   5   2,3\n"
+        "0  1   6   4,5\n";
+    const char *sites =
+        "0.0     0\n"
+        "0.1     0\n"
+        "0.2     0\n";
+    const char *mutations =
+        "0    0     1\n"
+        "1    1     1\n"
+        "2    4     1\n"
+        "2    0     1\n";
+    tree_sequence_t ts;
+    char genotypes[5];
+    site_t *site;
+    vargen_t vargen;
+    hapgen_t hapgen;
 
-/*     tree_sequence_from_text(&ts, nodes, edgesets, NULL, mutation_types, mutations, NULL); */
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, sites, mutations, NULL);
 
-/*     ret = hapgen_alloc(&hapgen, &ts); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS); */
-/*     ret = hapgen_free(&hapgen); */
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
+    ret = hapgen_free(&hapgen);
 
-/*     ret = vargen_alloc(&vargen, &ts, 0); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*     ret = vargen_next(&vargen, &mut, genotypes); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*     ret = vargen_next(&vargen, &mut, genotypes); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*     ret = vargen_next(&vargen, &mut, genotypes); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS); */
-/*     ret = vargen_free(&vargen); */
+    ret = vargen_alloc(&vargen, &ts, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
+    ret = vargen_free(&vargen);
 
-/*     tree_sequence_free(&ts); */
-/* } */
+    tree_sequence_free(&ts);
+}
 
 static void
 test_single_unary_tree_hapgen(void)
@@ -5949,56 +5953,56 @@ main(int argc, char **argv)
     CU_pTest test;
     CU_pSuite suite;
     CU_TestInfo tests[] = {
-        {"fenwick_tree", test_fenwick},
-        {"vcf", test_vcf},
-        {"vcf_no_mutations", test_vcf_no_mutations},
-        {"simple_recombination_map", test_simple_recomb_map},
-        {"recombination_map_errors", test_recomb_map_errors},
-        {"recombination_map_examples", test_recomb_map_examples},
-        {"node_names", test_node_names},
-        {"simplest_records", test_simplest_records},
-        {"simplest_nonbinary_records", test_simplest_nonbinary_records},
-        {"simplest_unary_records", test_simplest_unary_records},
-        {"simplest_non_sample_leaf_records", test_simplest_non_sample_leaf_records},
-        {"simplest_degenerate_multiple_root_records",
+        {"test_fenwick_tree", test_fenwick},
+        {"test_vcf", test_vcf},
+        {"test_vcf_no_mutations", test_vcf_no_mutations},
+        {"test_simple_recombination_map", test_simple_recomb_map},
+        {"test_recombination_map_errors", test_recomb_map_errors},
+        {"test_recombination_map_examples", test_recomb_map_examples},
+        {"test_node_names", test_node_names},
+        {"test_simplest_records", test_simplest_records},
+        {"test_simplest_nonbinary_records", test_simplest_nonbinary_records},
+        {"test_simplest_unary_records", test_simplest_unary_records},
+        {"test_simplest_non_sample_leaf_records", test_simplest_non_sample_leaf_records},
+        {"test_simplest_degenerate_multiple_root_records",
             test_simplest_degenerate_multiple_root_records},
-        {"simplest_multiple_root_records", test_simplest_multiple_root_records},
-        {"simplest_root_mutations", test_simplest_root_mutations},
-        {"simplest_bad_records", test_simplest_bad_records},
-        {"alphabet_detection", test_alphabet_detection},
-        {"single_tree_good_records", test_single_tree_good_records},
-        {"single_nonbinary_tree_good_records",
+        {"test_simplest_multiple_root_records", test_simplest_multiple_root_records},
+        {"test_simplest_root_mutations", test_simplest_root_mutations},
+        {"test_simplest_bad_records", test_simplest_bad_records},
+        {"test_alphabet_detection", test_alphabet_detection},
+        {"test_single_tree_good_records", test_single_tree_good_records},
+        {"test_single_nonbinary_tree_good_records",
             test_single_nonbinary_tree_good_records},
-        {"single_tree_bad_records", test_single_tree_bad_records},
-        {"single_tree_good_mutations", test_single_tree_good_mutations},
-        {"single_tree_bad_mutations", test_single_tree_bad_mutations},
-        {"single_tree_iter", test_single_tree_iter},
-        {"single_nonbinary_tree_iter", test_single_nonbinary_tree_iter},
-        {"single_tree_iter_times", test_single_tree_iter_times},
-        {"single_tree_hapgen", test_single_tree_hapgen},
-        {"single_tree_vargen", test_single_tree_vargen},
-        {"single_tree_simplify", test_single_tree_simplify},
-        /* {"single_tree_inconsistent_mutations", test_single_tree_inconsistent_mutations}, */
-        {"single_unary_tree_hapgen", test_single_unary_tree_hapgen},
-        {"single_tree_mutgen", test_single_tree_mutgen},
-        {"sparse_tree_errors", test_sparse_tree_errors},
-        {"tree_sequence_iter", test_tree_sequence_iter},
-        {"leaf_sets", test_leaf_sets},
-        {"nonbinary_leaf_sets", test_nonbinary_leaf_sets},
-        {"nonbinary_tree_sequence_iter", test_nonbinary_tree_sequence_iter},
-        {"unary_tree_sequence_iter", test_unary_tree_sequence_iter},
-        {"left_to_right_tree_sequence_iter", test_left_to_right_tree_sequence_iter},
-        {"tree_sequence_bad_records", test_tree_sequence_bad_records},
-        {"tree_sequence_diff_iter", test_tree_sequence_diff_iter},
-        {"nonbinary_tree_sequence_diff_iter",
+        {"test_single_tree_bad_records", test_single_tree_bad_records},
+        {"test_single_tree_good_mutations", test_single_tree_good_mutations},
+        {"test_single_tree_bad_mutations", test_single_tree_bad_mutations},
+        {"test_single_tree_iter", test_single_tree_iter},
+        {"test_single_nonbinary_tree_iter", test_single_nonbinary_tree_iter},
+        {"test_single_tree_iter_times", test_single_tree_iter_times},
+        {"test_single_tree_hapgen", test_single_tree_hapgen},
+        {"test_single_tree_vargen", test_single_tree_vargen},
+        {"test_single_tree_simplify", test_single_tree_simplify},
+        {"test_single_tree_inconsistent_mutations", test_single_tree_inconsistent_mutations},
+        {"test_single_unary_tree_hapgen", test_single_unary_tree_hapgen},
+        {"test_single_tree_mutgen", test_single_tree_mutgen},
+        {"test_sparse_tree_errors", test_sparse_tree_errors},
+        {"test_tree_sequence_iter", test_tree_sequence_iter},
+        {"test_leaf_sets", test_leaf_sets},
+        {"test_nonbinary_leaf_sets", test_nonbinary_leaf_sets},
+        {"test_nonbinary_tree_sequence_iter", test_nonbinary_tree_sequence_iter},
+        {"test_unary_tree_sequence_iter", test_unary_tree_sequence_iter},
+        {"test_left_to_right_tree_sequence_iter", test_left_to_right_tree_sequence_iter},
+        {"test_tree_sequence_bad_records", test_tree_sequence_bad_records},
+        {"test_tree_sequence_diff_iter", test_tree_sequence_diff_iter},
+        {"test_nonbinary_tree_sequence_diff_iter",
             test_nonbinary_tree_sequence_diff_iter},
-        {"unary_tree_sequence_diff_iter",
+        {"test_unary_tree_sequence_diff_iter",
             test_unary_tree_sequence_diff_iter},
-        {"diff_iter_from_examples", test_diff_iter_from_examples},
-        {"tree_iter_from_examples", test_tree_iter_from_examples},
-        {"tree_equals_from_examples", test_tree_equals_from_examples},
-        {"tree_next_and_prev_from_examples", test_next_prev_from_examples},
-        {"leaf_sets_from_examples", test_leaf_sets_from_examples},
+        {"test_diff_iter_from_examples", test_diff_iter_from_examples},
+        {"test_tree_iter_from_examples", test_tree_iter_from_examples},
+        {"test_tree_equals_from_examples", test_tree_equals_from_examples},
+        {"test_tree_next_and_prev_from_examples", test_next_prev_from_examples},
+        {"test_leaf_sets_from_examples", test_leaf_sets_from_examples},
         {"test_hapgen_from_examples", test_hapgen_from_examples},
         {"test_vargen_from_examples", test_vargen_from_examples},
         {"test_newick_from_examples", test_newick_from_examples},
@@ -6009,19 +6013,19 @@ main(int argc, char **argv)
         {"test_save_hdf5", test_save_hdf5},
         {"test_dump_tables", test_dump_tables},
         {"test_dump_tables_hdf5", test_dump_tables_hdf5},
-        {"single_locus_two_populations", test_single_locus_two_populations},
-        {"many_populations", test_single_locus_many_populations},
-        {"historical_samples", test_single_locus_historical_sample},
-        {"simulator_getters/setters", test_simulator_getters_setters},
-        {"model_errors", test_simulator_model_errors},
-        {"demographic_events", test_simulator_demographic_events},
-        {"single_locus_simulation", test_single_locus_simulation},
-        {"simulation_memory_limit", test_simulation_memory_limit},
-        {"multi_locus_simulation", test_multi_locus_simulation},
-        {"simulation_replicates", test_simulation_replicates},
-        {"bottleneck_simulation", test_bottleneck_simulation},
-        {"multiple_mergers_simulation", test_multiple_mergers_simulation},
-        {"large_bottleneck_simulation", test_large_bottleneck_simulation},
+        {"test_single_locus_two_populations", test_single_locus_two_populations},
+        {"test_many_populations", test_single_locus_many_populations},
+        {"test_historical_samples", test_single_locus_historical_sample},
+        {"test_simulator_getters/setters", test_simulator_getters_setters},
+        {"test_model_errors", test_simulator_model_errors},
+        {"test_demographic_events", test_simulator_demographic_events},
+        {"test_single_locus_simulation", test_single_locus_simulation},
+        {"test_simulation_memory_limit", test_simulation_memory_limit},
+        {"test_multi_locus_simulation", test_multi_locus_simulation},
+        {"test_simulation_replicates", test_simulation_replicates},
+        {"test_bottleneck_simulation", test_bottleneck_simulation},
+        {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
+        {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
         {"test_error_messages", test_strerror},
         {"test_node_table", test_node_table},
         {"test_edgeset_table", test_edgeset_table},
