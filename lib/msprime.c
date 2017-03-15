@@ -215,8 +215,7 @@ msp_strerror(int err)
             ret = "Only binary mutations are supported for this operation.";
             break;
         case MSP_ERR_INCONSISTENT_MUTATIONS:
-            ret = "Overlapping subtrees in recurrent mutation: "
-                "ancestral state not consistent";
+            ret = "Inconsistent mutations: state already equal to derived state.";
             break;
         case MSP_ERR_COORDINATE_NOT_FOUND:
             ret = "Coordinate not found.";

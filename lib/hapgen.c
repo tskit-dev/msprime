@@ -71,10 +71,10 @@ hapgen_set_bit(hapgen_t *self, size_t row, size_t column, const char *derived_st
     size_t word = column / HG_WORD_SIZE;
     size_t bit = column % HG_WORD_SIZE;
     size_t index = row * self->words_per_row + word;
-    uint64_t value = derived_state[0] == '0'? 0: 1;
+    int current_value = (self->binary_haplotype_matrix[index] & (1ULL << bit)) != 0;
+    int new_state = derived_state[0] - '0';
 
-    assert(word < self->words_per_row);
-    if ((self->binary_haplotype_matrix[index] & (1ULL << bit)) != (value + 1) % 2) {
+    if (current_value == new_state) {
         ret = MSP_ERR_INCONSISTENT_MUTATIONS;
         goto out;
     }

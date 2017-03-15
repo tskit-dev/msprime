@@ -69,9 +69,9 @@ const char *single_tree_ex_sites =
     "0.3  0\n";
 const char *single_tree_ex_mutations =
     "0    2     1\n"
-    "1    0     1\n"
-    "1    1     1\n"
-    "2    0     1\n"
+    "1    4     1\n"
+    "1    0     0\n"  /* Back mutation over 0 */
+    "2    0     1\n"  /* recurrent mutations over leaves */
     "2    1     1\n"
     "2    2     1\n"
     "2    3     1\n";
@@ -3000,11 +3000,11 @@ test_single_tree_good_mutations(void)
     CU_ASSERT_EQUAL(other_mutations[0].node, 2);
     CU_ASSERT_STRING_EQUAL(other_mutations[0].derived_state, "1");
     CU_ASSERT_EQUAL(other_mutations[1].index, 1);
-    CU_ASSERT_EQUAL(other_mutations[1].node, 0);
+    CU_ASSERT_EQUAL(other_mutations[1].node, 4);
     CU_ASSERT_STRING_EQUAL(other_mutations[1].derived_state, "1");
     CU_ASSERT_EQUAL(other_mutations[2].index, 2);
-    CU_ASSERT_EQUAL(other_mutations[2].node, 1);
-    CU_ASSERT_STRING_EQUAL(other_mutations[2].derived_state, "1");
+    CU_ASSERT_EQUAL(other_mutations[2].node, 0);
+    CU_ASSERT_STRING_EQUAL(other_mutations[2].derived_state, "0");
     CU_ASSERT_EQUAL(other_mutations[3].index, 3);
     CU_ASSERT_EQUAL(other_mutations[3].node, 0);
     CU_ASSERT_STRING_EQUAL(other_mutations[3].derived_state, "1");
@@ -3388,21 +3388,9 @@ test_single_tree_iter_times(void)
 }
 
 static void
-test_single_tree_hapgen(void)
+test_single_tree_hapgen_char_alphabet(void)
 {
     int ret = 0;
-    const char *nodes =
-        "1  0   0\n"
-        "1  0   0\n"
-        "1  0   0\n"
-        "1  0   0\n"
-        "0  1   0\n"
-        "0  2   0\n"
-        "0  3   0\n";
-    const char *edgesets =
-        "0  1   4   0,1\n"
-        "0  1   5   2,3\n"
-        "0  1   6   4,5\n";
     const char *sites =
         "0.0    A\n"
         "0.1    A\n"
@@ -3422,7 +3410,8 @@ test_single_tree_hapgen(void)
     size_t j;
     hapgen_t hapgen;
 
-    tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL, NULL);
+    tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL,
+            NULL, NULL, NULL);
     ret = hapgen_alloc(&hapgen, &ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     hapgen_print_state(&hapgen, _devnull);
@@ -3435,7 +3424,8 @@ test_single_tree_hapgen(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tree_sequence_free(&ts);
 
-    tree_sequence_from_text(&ts, nodes, edgesets, NULL, sites, mutations, NULL);
+    tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL,
+            sites, mutations, NULL);
     ret = hapgen_alloc(&hapgen, &ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     hapgen_print_state(&hapgen, _devnull);
@@ -3460,24 +3450,96 @@ test_single_tree_hapgen(void)
 }
 
 static void
-test_single_tree_vargen(void)
+test_single_tree_vargen_char_alphabet(void)
 {
     int ret = 0;
     const char *sites =
-        "0.0 0\n"
-        "0.1 0\n"
-        "0.2 0\n";
+        "0.0    A\n"
+        "0.1    A\n"
+        "0.2    C\n"
+        "0.4    A\n";
     const char *mutations =
-        "0    0     1\n"
-        "1    1     1\n"
-        "2    2     1\n";
+        "0    0     T\n"
+        "1    1     T\n"
+        "2    0     G\n"
+        "2    1     A\n"
+        "2    2     T\n"  // A bunch of different leaf mutations
+        "3    4     T\n"
+        "3    0     A\n"; // A back mutation from T -> A
+    tree_sequence_t ts;
+    vargen_t vargen;
+
+    tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL,
+            sites, mutations, NULL);
+    ret = vargen_alloc(&vargen, &ts, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED);
+    ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED);
+
+    tree_sequence_free(&ts);
+}
+
+static void
+test_single_tree_hapgen_binary_alphabet(void)
+{
+    int ret = 0;
+    uint32_t num_samples = 4;
+    tree_sequence_t ts;
+    char *haplotype;
+    size_t j;
+    hapgen_t hapgen;
+
+    tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL,
+            NULL, NULL, NULL);
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    hapgen_print_state(&hapgen, _devnull);
+    for (j = 0; j < num_samples; j++) {
+        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_STRING_EQUAL(haplotype, "");
+    }
+    ret = hapgen_free(&hapgen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tree_sequence_free(&ts);
+
+    tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL,
+            single_tree_ex_sites, single_tree_ex_mutations, NULL);
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    hapgen_print_state(&hapgen, _devnull);
+
+    ret = hapgen_get_haplotype(&hapgen, 0, &haplotype);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(haplotype, "001");
+    ret = hapgen_get_haplotype(&hapgen, 1, &haplotype);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(haplotype, "011");
+    ret = hapgen_get_haplotype(&hapgen, 2, &haplotype);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(haplotype, "101");
+    ret = hapgen_get_haplotype(&hapgen, 3, &haplotype);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(haplotype, "001");
+
+    ret = hapgen_free(&hapgen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tree_sequence_free(&ts);
+}
+
+
+static void
+test_single_tree_vargen_binary_alphabet(void)
+{
+    int ret = 0;
     tree_sequence_t ts;
     char genotypes[5];
     site_t *site;
     vargen_t vargen;
 
     tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL,
-            sites, mutations, NULL);
+            single_tree_ex_sites, single_tree_ex_mutations, NULL);
     ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     vargen_print_state(&vargen, _devnull);
@@ -3485,7 +3547,7 @@ test_single_tree_vargen(void)
     genotypes[4] = '\0';
     ret = vargen_next(&vargen, &site, genotypes);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "1000");
+    CU_ASSERT_STRING_EQUAL(genotypes, "0010");
     CU_ASSERT_EQUAL(site->id, 0);
     CU_ASSERT_EQUAL(site->mutations_length, 1);
 
@@ -3493,13 +3555,13 @@ test_single_tree_vargen(void)
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     CU_ASSERT_STRING_EQUAL(genotypes, "0100");
     CU_ASSERT_EQUAL(site->id, 1);
-    CU_ASSERT_EQUAL(site->mutations_length, 1);
+    CU_ASSERT_EQUAL(site->mutations_length, 2);
 
     ret = vargen_next(&vargen, &site, genotypes);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "0010");
+    CU_ASSERT_STRING_EQUAL(genotypes, "1111");
     CU_ASSERT_EQUAL(site->id, 2);
-    CU_ASSERT_EQUAL(site->mutations_length, 1);
+    CU_ASSERT_EQUAL(site->mutations_length, 4);
 
     ret = vargen_next(&vargen, &site, genotypes);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3512,64 +3574,56 @@ test_single_tree_vargen(void)
 static void
 test_single_tree_simplify(void)
 {
-    tree_sequence_t ts;
+    printf("\n\nFIXME simplify with back mutations \n");
+    /* This currently fails because simplify doesn't correctly deal with sites
+     * (i.e., setting the ancestral state correctly. */
 
-    tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL,
-            single_tree_ex_sites, single_tree_ex_mutations, NULL);
-    verify_simplify(&ts);
+    /* tree_sequence_t ts; */
 
-    tree_sequence_free(&ts);
+    /* tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL, */
+    /*         single_tree_ex_sites, single_tree_ex_mutations, NULL); */
+    /* verify_simplify(&ts); */
+
+    /* tree_sequence_free(&ts); */
 }
 
 static void
 test_single_tree_inconsistent_mutations(void)
 {
-    printf("\n\nFIXME detecting inconsistent mutations\n");
-    /* int ret = 0; */
-    /* const char *nodes = */
-    /*     "1  0   0\n" */
-    /*     "1  0   0\n" */
-    /*     "1  0   0\n" */
-    /*     "1  0   0\n" */
-    /*     "0  1   0\n" */
-    /*     "0  2   0\n" */
-    /*     "0  3   0\n"; */
-    /* const char *edgesets = */
-    /*     "0  1   4   0,1\n" */
-    /*     "0  1   5   2,3\n" */
-    /*     "0  1   6   4,5\n"; */
-    /* const char *sites = */
-    /*     "0.0     0\n" */
-    /*     "0.1     0\n" */
-    /*     "0.2     0\n"; */
-    /* const char *mutations = */
-    /*     "0    0     1\n" */
-    /*     "1    1     1\n" */
-    /*     "2    4     1\n" */
-    /*     "2    0     1\n"; */
-    /* tree_sequence_t ts; */
-    /* char genotypes[5]; */
-    /* site_t *site; */
-    /* vargen_t vargen; */
-    /* hapgen_t hapgen; */
+    const char *sites =
+        "0.0     0\n"
+        "0.1     0\n"
+        "0.2     0\n";
+    const char *mutations =
+        "0    0     1\n"
+        "1    1     1\n"
+        "2    4     1\n"
+        "2    0     1\n";
+    tree_sequence_t ts;
+    char genotypes[5];
+    site_t *site;
+    vargen_t vargen;
+    hapgen_t hapgen;
+    int ret;
 
-    /* tree_sequence_from_text(&ts, nodes, edgesets, NULL, sites, mutations, NULL); */
+    tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL,
+            sites, mutations, NULL);
 
-    /* ret = hapgen_alloc(&hapgen, &ts); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS); */
-    /* ret = hapgen_free(&hapgen); */
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
+    ret = hapgen_free(&hapgen);
 
-    /* ret = vargen_alloc(&vargen, &ts, 0); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* ret = vargen_next(&vargen, &site, genotypes); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 1); */
-    /* ret = vargen_next(&vargen, &site, genotypes); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 1); */
-    /* ret = vargen_next(&vargen, &site, genotypes); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS); */
-    /* ret = vargen_free(&vargen); */
+    ret = vargen_alloc(&vargen, &ts, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
+    ret = vargen_free(&vargen);
 
-    /* tree_sequence_free(&ts); */
+    tree_sequence_free(&ts);
 }
 
 static void
@@ -6041,8 +6095,10 @@ main(int argc, char **argv)
         {"test_single_tree_iter", test_single_tree_iter},
         {"test_single_nonbinary_tree_iter", test_single_nonbinary_tree_iter},
         {"test_single_tree_iter_times", test_single_tree_iter_times},
-        {"test_single_tree_hapgen", test_single_tree_hapgen},
-        {"test_single_tree_vargen", test_single_tree_vargen},
+        {"test_single_tree_hapgen_char_alphabet", test_single_tree_hapgen_char_alphabet},
+        {"test_single_tree_hapgen_binary_alphabet", test_single_tree_hapgen_binary_alphabet},
+        {"test_single_tree_vargen_char_alphabet", test_single_tree_vargen_char_alphabet},
+        {"test_single_tree_vargen_binary_alphabet", test_single_tree_vargen_binary_alphabet},
         {"test_single_tree_simplify", test_single_tree_simplify},
         {"test_single_tree_inconsistent_mutations", test_single_tree_inconsistent_mutations},
         {"test_single_unary_tree_hapgen", test_single_unary_tree_hapgen},

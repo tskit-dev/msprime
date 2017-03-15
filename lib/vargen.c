@@ -114,6 +114,10 @@ vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state
             while (not_done) {
                 assert(w != NULL);
                 assert(w->node < (node_id_t) self->sample_size);
+                if (genotypes[w->node] == derived) {
+                    ret = MSP_ERR_INCONSISTENT_MUTATIONS;
+                    goto out;
+                }
                 genotypes[w->node] = derived;
                 not_done = w != tail;
                 w = w->next;
