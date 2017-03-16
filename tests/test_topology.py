@@ -469,6 +469,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 2, 5: 3})
 
+    @unittest.skip("simplify on root mutations")
     def test_mutations_over_roots(self):
         # Mutations over root nodes should be ok when we have multiple roots.
         records = [

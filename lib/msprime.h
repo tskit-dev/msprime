@@ -41,7 +41,7 @@
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */
-#define MSP_FILTER_ROOT_MUTATIONS 1
+#define MSP_FILTER_INVARIANT_SITES 1
 
 #define MSP_LEAF_COUNTS  1
 #define MSP_LEAF_LISTS   2
@@ -367,7 +367,7 @@ typedef struct {
 typedef struct {
     site_id_t id;
     double position;
-    char *ancestral_state;
+    const char *ancestral_state;
     list_len_t ancestral_state_length;
     mutation_t *mutations;
     list_len_t mutations_length;

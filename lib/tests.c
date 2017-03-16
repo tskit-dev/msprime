@@ -504,6 +504,9 @@ verify_vargen(tree_sequence_t *ts)
         }
         j++;
     }
+    if (ret != 0) {
+        tree_sequence_print_state(ts, stdout);
+    }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(j, num_sites);
     CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &site, genotypes), 0);
@@ -652,7 +655,13 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
     sparse_tree_free(&full_tree);
 
     /* Check some other operations on the subset */
-    verify_vargen(subset);
+    if (tree_sequence_get_alphabet(subset) == MSP_ALPHABET_BINARY) {
+        /* TODO the binary alphabet is currently equivalent to strict
+         * infinite sites, so if have a site with a 1 ancestral state
+         * it will have the CHAR alphabet, which vargen doesn't support.
+         */
+        verify_vargen(subset);
+    }
     verify_hapgen(subset);
 }
 
@@ -665,7 +674,7 @@ verify_simplify(tree_sequence_t *ts)
     size_t j;
     node_id_t *sample = malloc(n * sizeof(node_id_t));
     tree_sequence_t subset;
-    int flags = MSP_FILTER_ROOT_MUTATIONS;
+    int flags = MSP_FILTER_INVARIANT_SITES;
 
     CU_ASSERT_FATAL(sample != NULL);
     for (j = 0; j < n; j++) {
@@ -919,22 +928,26 @@ get_example_nonbinary_tree_sequences(void)
 }
 
 tree_sequence_t *
-make_recurrent_mutations_copy(tree_sequence_t *ts)
+make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
 {
     int ret;
-    uint32_t n = tree_sequence_get_sample_size(ts);
-    size_t j, k, num_provenance_strings;
+    size_t num_provenance_strings;
     size_t alloc_size = 8192;
-    uint32_t max_nodes = 1024;
-    uint32_t num_nodes;
     char **provenance_strings;
     tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
+    sparse_tree_t tree;
     node_table_t nodes;
     edgeset_table_t edgesets;
     migration_table_t migrations;
     mutation_table_t mutations;
     site_table_t sites;
+    node_id_t *stack;
+    node_id_t u;
+    site_id_t site_id;
+    char *state = NULL;
+    int stack_top = 0;
 
+    CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, alloc_size, alloc_size);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
@@ -945,21 +958,47 @@ make_recurrent_mutations_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, alloc_size, alloc_size);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_FATAL(new_ts != NULL);
+    ret = sparse_tree_alloc(&tree, ts, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    state = malloc(tree_sequence_get_num_nodes(ts) * sizeof(char));
+    CU_ASSERT_FATAL(state != NULL);
+
+    stack = tree.stack1;
+    site_id = 0;
+    for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
+        ret = site_table_add_row(&sites, tree.left, "0", 1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        /* Traverse down the tree */
+        stack_top = 0;
+        stack[0] = tree.root;
+        state[tree.root] = 0;
+        while (stack_top >= 0) {
+            u = stack[stack_top];
+            stack_top--;
+            if (u != tree.root) {
+                state[u] = (state[u] + 1) % 2;
+                ret = mutation_table_add_row(&mutations, site_id, u,
+                        state[u] == 0? "0": "1", 1);
+                CU_ASSERT_EQUAL_FATAL(ret, 0);
+            }
+            /* To ensure that the mutations are sorted in time order, we only
+             * traverse down the left-most path to the leaf. This means we
+             * don't really need a stack at all, but we may extend this to a full
+             * traversal in the future. */
+            if (tree.num_children[u] > 0) {
+                stack_top++;
+                stack[stack_top] = tree.children[u][0];
+                state[tree.children[u][0]] = state[u];
+            }
+        }
+        site_id++;
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_dump_tables_tmp(ts, &nodes, &edgesets,
-            &migrations, &sites, &mutations, &num_provenance_strings,
+            &migrations, NULL, NULL, &num_provenance_strings,
             &provenance_strings);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_reset(&mutations);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    for (j = 0; j < n; j++) {
-        num_nodes = GSL_MIN(j + 1, max_nodes);
-        for (k = 0; k < num_nodes; k++) {
-            ret = mutation_table_add_row(&mutations, j, k, "1", 1);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-        }
-    }
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(new_ts, &nodes, &edgesets, &migrations,
@@ -971,6 +1010,8 @@ make_recurrent_mutations_copy(tree_sequence_t *ts)
     migration_table_free(&migrations);
     site_table_free(&sites);
     mutation_table_free(&mutations);
+    sparse_tree_free(&tree);
+    free(state);
     return new_ts;
 }
 
@@ -991,7 +1032,7 @@ get_example_tree_sequences(int include_nonbinary)
             MSP_ALPHABET_BINARY);
     ret[3] = get_example_tree_sequence(10, 0, UINT32_MAX, 10.0,
             9.31322575049e-08, 10.0, 0, NULL, MSP_ALPHABET_BINARY);
-    ret[4] = make_recurrent_mutations_copy(ret[0]);
+    ret[4] = make_recurrent_and_back_mutations_copy(ret[0]);
     k = 5;
     if (include_nonbinary) {
         nonbinary = get_example_nonbinary_tree_sequences();
@@ -2596,11 +2637,11 @@ test_simplest_root_mutations(void)
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&simplified), 1);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 1);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&simplified), 1);
     tree_sequence_free(&simplified);
 
-    flags = MSP_FILTER_ROOT_MUTATIONS;
+    flags = MSP_FILTER_INVARIANT_SITES;
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 2, flags, &simplified);
@@ -3139,14 +3180,17 @@ test_single_tree_bad_mutations(void)
     mutation_table.node[0] = 0;
 
     /* Two mutations at the same node for a given site */
-    mutation_table.node[2] = 1;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_MUTATION_NODES);
-    tree_sequence_free(&ts);
-    mutation_table.node[2] = 0;
+    /* FIXME: this condition was relaxed because of the difficulty in maintaining
+     * it for the outputs of simplify(). This should be fixed and reinstated though.
+     */
+    /* mutation_table.node[2] = 1; */
+    /* ret = tree_sequence_initialise(&ts); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, */
+    /*         &site_table, &mutation_table, 0, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_MUTATION_NODES); */
+    /* tree_sequence_free(&ts); */
+    /* mutation_table.node[2] = 0; */
 
     /* Unsorted nodes */
     mutation_table.node[3] = 5;
@@ -3574,17 +3618,13 @@ test_single_tree_vargen_binary_alphabet(void)
 static void
 test_single_tree_simplify(void)
 {
-    printf("\n\nFIXME simplify with back mutations \n");
-    /* This currently fails because simplify doesn't correctly deal with sites
-     * (i.e., setting the ancestral state correctly. */
+    tree_sequence_t ts;
 
-    /* tree_sequence_t ts; */
+    tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL,
+            single_tree_ex_sites, single_tree_ex_mutations, NULL);
+    verify_simplify(&ts);
 
-    /* tree_sequence_from_text(&ts, single_tree_ex_nodes, single_tree_ex_edgesets, NULL, */
-    /*         single_tree_ex_sites, single_tree_ex_mutations, NULL); */
-    /* verify_simplify(&ts); */
-
-    /* tree_sequence_free(&ts); */
+    tree_sequence_free(&ts);
 }
 
 static void
