@@ -557,7 +557,7 @@ tree_sequence_check(tree_sequence_t *self)
     node_id_t child, node;
     list_len_t j, k;
     size_t num_coordinates = self->edgesets.num_records + 1;
-    double t1, t2, left, *result;
+    double left, *result;
     double *coordinates = malloc(num_coordinates * sizeof(double));
 
     if (coordinates == NULL) {
@@ -666,12 +666,15 @@ tree_sequence_check(tree_sequence_t *self)
                 goto out;
             }
             if (self->mutations.site[j - 1] == self->mutations.site[j]) {
-                t1 = self->nodes.time[self->mutations.node[j - 1]];
-                t2 = self->nodes.time[self->mutations.node[j]];
-                if (t1 < t2) {
-                    ret = MSP_ERR_UNSORTED_MUTATION_NODES;
-                    goto out;
-                }
+                /* Also relaxing this assumption because it's too difficult to
+                 * enforce after simplify() has been called.
+                 */
+                /* t1 = self->nodes.time[self->mutations.node[j - 1]]; */
+                /* t2 = self->nodes.time[self->mutations.node[j]]; */
+                /* if (t1 < t2) { */
+                /*     ret = MSP_ERR_UNSORTED_MUTATION_NODES; */
+                /*     goto out; */
+                /* } */
                 /* We are relaxing this condition for now, but might want to
                  * reinstate it later. The issue arises in simplify, where we
                  * can't easily derive the correct mutations when there are

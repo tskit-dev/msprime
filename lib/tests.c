@@ -3193,14 +3193,17 @@ test_single_tree_bad_mutations(void)
     /* mutation_table.node[2] = 0; */
 
     /* Unsorted nodes */
-    mutation_table.node[3] = 5;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATION_NODES);
-    tree_sequence_free(&ts);
-    mutation_table.node[3] = 1;
+    /* FIXME: this condition was relaxed because it's too difficult to maintain
+     * on the output of simplify.
+     */
+    /* mutation_table.node[3] = 5; */
+    /* ret = tree_sequence_initialise(&ts); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL, */
+    /*         &site_table, &mutation_table, 0, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATION_NODES); */
+    /* tree_sequence_free(&ts); */
+    /* mutation_table.node[3] = 1; */
 
     /* Check to make sure we've maintained legal mutations */
     ret = tree_sequence_initialise(&ts);
