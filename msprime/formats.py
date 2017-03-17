@@ -352,7 +352,8 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
 
     provenance = tree_sequence.get_provenance()
     if len(provenance) > 0:
-        root.create_dataset("provenance", (len(provenance), ), data=provenance)
+        dt = h5py.special_dtype(vlen=bytes)
+        root.create_dataset("provenance", (len(provenance), ), data=provenance, dtype=dt)
 
 
 def dump_legacy(tree_sequence, filename, version=3):
