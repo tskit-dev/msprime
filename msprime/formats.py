@@ -54,11 +54,11 @@ def _get_v2_provenance(command, attrs):
     # Try to get the provenance strings. Malformed JSON should not prevent us
     # from finishing the conversion.
     try:
-        environment = json.loads(attrs["environment"])
+        environment = json.loads(str(attrs["environment"]))
     except ValueError:
         logging.warn("Failed to convert environment provenance")
     try:
-        parameters = json.loads(attrs["parameters"])
+        parameters = json.loads(str(attrs["parameters"]))
     except ValueError:
         logging.warn("Failed to convert parameters provenance")
     provenance = msprime.get_provenance_dict(command, parameters)
