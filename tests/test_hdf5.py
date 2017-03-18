@@ -159,6 +159,34 @@ class TestHdf5(unittest.TestCase):
         os.unlink(self.temp_file)
 
 
+class TestLoadLegacyExamples(TestHdf5):
+    """
+    Tests using the saved legacy file examples to ensure we can load them.
+    """
+    def verify_tree_sequence(self, ts):
+        # Just some quick checks to make sure the tree sequence makes sense.
+        self.assertGreater(ts.sample_size, 0)
+        self.assertGreater(ts.num_edgesets, 0)
+        self.assertGreater(ts.num_sites, 0)
+        self.assertGreater(ts.num_mutations, 0)
+        self.assertGreater(ts.sequence_length, 0)
+        for t in ts.trees():
+            l, r = t.interval
+            self.assertGreater(r, l)
+            for site in t.sites():
+                self.assertTrue(l <= site.position < r)
+                for mut in site.mutations:
+                    self.assertEqual(mut.site, site.index)
+
+    def test_msprime_v_0_4_0(self):
+        ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.4.0_v3.1.hdf5")
+        self.verify_tree_sequence(ts)
+
+    def test_msprime_v_0_3_0(self):
+        ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.3.0_v2.0.hdf5")
+        self.verify_tree_sequence(ts)
+
+
 class TestRoundTrip(TestHdf5):
     """
     Tests if we can round trip convert a tree sequence in memory
