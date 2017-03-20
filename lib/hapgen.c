@@ -64,20 +64,21 @@ hapgen_print_state(hapgen_t *self, FILE *out)
 }
 
 static inline int
-hapgen_set_bit(hapgen_t *self, size_t row, size_t column)
+hapgen_set_bit(hapgen_t *self, size_t row, size_t column, const char *derived_state)
 {
     int ret = 0;
     /* get the word that column falls in */
     size_t word = column / HG_WORD_SIZE;
     size_t bit = column % HG_WORD_SIZE;
     size_t index = row * self->words_per_row + word;
+    int current_value = (self->binary_haplotype_matrix[index] & (1ULL << bit)) != 0;
+    int new_state = derived_state[0] - '0';
 
-    assert(word < self->words_per_row);
-    if ((self->binary_haplotype_matrix[index] & (1ULL << bit)) != 0) {
+    if (current_value == new_state) {
         ret = MSP_ERR_INCONSISTENT_MUTATIONS;
         goto out;
     }
-    self->binary_haplotype_matrix[index] |= 1ULL << bit;
+    self->binary_haplotype_matrix[index] ^= 1Ull << bit;
 out:
     return ret;
 }
@@ -99,7 +100,7 @@ hapgen_update_leaf(hapgen_t * self, node_id_t node, site_id_t site,
     int ret = 0;
 
     if (self->binary) {
-        ret = hapgen_set_bit(self, (size_t) node, (size_t) site);
+        ret = hapgen_set_bit(self, (size_t) node, (size_t) site, derived_state);
     } else {
         ret = hapgen_set_state(self, (size_t) node, (size_t) site, derived_state);
     }

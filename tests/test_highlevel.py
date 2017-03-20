@@ -232,6 +232,39 @@ def simplify_tree_sequence(ts, samples):
         mutations=new_mutations)
 
 
+def make_alternating_back_mutations(ts):
+    """
+    Returns a copy of the specified tree sequence with a sequence of
+    alternating mutations along each path in each tree.
+    """
+    nodes = msprime.NodeTable()
+    edgesets = msprime.EdgesetTable()
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
+
+    site = 0
+    for tree in ts.trees():
+        sites.add_row(position=tree.interval[0], ancestral_state="0")
+        state = {tree.root: 0}
+        for u in tree.nodes():
+            if u != tree.root:
+                state[u] = (state[u] + 1) % 2
+            for v in tree.children(u):
+                state[v] = state[u]
+        del state[tree.root]
+        # Ensure we have some variation in our samples.
+        s = sum(state[u] for u in tree.leaves(tree.root))
+        if s == 0 or s == tree.sample_size:
+            del state[next(tree.leaves(tree.root))]
+        site_mutations = sorted([(-tree.time(u), u) for u in state.keys()])
+        for _, u in sorted(site_mutations):
+            mutations.add_row(site, u, str(state[u]))
+        site += 1
+    ts.dump_tables(nodes=nodes, edgesets=edgesets)
+    return msprime.load_tables(
+        nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
+
+
 class TestHarmonicNumber(unittest.TestCase):
     """
     Tests for the harmonic number calculation.
@@ -298,6 +331,16 @@ class HighLevelTestCase(tests.MsprimeTestCase):
                 demographic_events=bottlenecks,
                 random_seed=n)
             yield ts
+
+    def get_back_mutation_examples(self):
+        """
+        Returns an iterator of example tree sequences with nonbinary
+        trees.
+        """
+        ts = msprime.simulate(10, random_seed=1)
+        yield make_alternating_back_mutations(ts)
+        for ts in self.get_bottleneck_examples():
+            yield make_alternating_back_mutations(ts)
 
     def verify_sparse_tree_mrcas(self, st):
         # Check the mrcas
@@ -705,8 +748,8 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             self.assertEqual(zeros + ones, n)
 
     def verify_tree_sequence(self, tree_sequence):
-        n = tree_sequence.get_sample_size()
-        m = tree_sequence.get_num_mutations()
+        n = tree_sequence.sample_size
+        m = tree_sequence.num_sites
         haplotypes = list(tree_sequence.haplotypes())
         A = np.zeros((n, m), dtype='u1')
         B = np.zeros((n, m), dtype='u1')
@@ -769,6 +812,10 @@ class TestHaplotypeGenerator(HighLevelTestCase):
                         ])]
                 ts_new = ts.copy(sites)
                 self.assertRaises(_msprime.LibraryError, ts_new.haplotypes)
+
+    def test_back_mutations(self):
+        for ts in self.get_back_mutation_examples():
+            self.verify_tree_sequence(ts)
 
 
 class TestNewickConversion(HighLevelTestCase):
@@ -878,17 +925,9 @@ class TestTreeSequence(HighLevelTestCase):
                     yield ts
         for ts in self.get_bottleneck_examples():
             yield ts
-        # Make an example with recurrent mutations
-        n = 10
-        ts = msprime.simulate(n, length=n, recombination_rate=1)
+        ts = msprime.simulate(30, length=20, recombination_rate=1)
         self.assertGreater(ts.num_trees, 1)
-        sites = [
-            msprime.Site(
-                index=j, position=j, ancestral_state='0',
-                mutations=[msprime.Mutation(
-                    site=j, node=u, derived_state='1') for u in range(j + 1)])
-            for j in range(ts.sample_size)]
-        yield ts.copy(sites=sites)
+        yield make_alternating_back_mutations(ts)
 
     def test_sparse_trees(self):
         for ts in self.get_example_tree_sequences():
@@ -1279,6 +1318,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertIn(unique[0], [0, 1])
             j += 1
 
+    @unittest.skip("simplify with lots of back mutations")
     def test_simplify(self):
         num_mutations = 0
         for ts in self.get_example_tree_sequences():
@@ -1380,7 +1420,7 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertGreater(len(site.mutations), 0)
                 for mutation in site.mutations:
                     self.assertEqual(mutation.site, site.index)
-                    self.assertEqual(mutation.derived_state, '1')
+                    self.assertIn(mutation.derived_state, ['0', '1'])
                     self.assertTrue(0 <= mutation.node < ts.num_nodes)
                 some_sites = True
         self.assertTrue(some_sites)

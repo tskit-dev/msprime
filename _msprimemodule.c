@@ -3656,11 +3656,11 @@ TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     PyObject *py_samples = NULL;
-    static char *kwlist[] = {"output", "samples", "filter_root_mutations", NULL};
+    static char *kwlist[] = {"output", "samples", "filter_invariant_sites", NULL};
     node_id_t *samples = NULL;
     size_t num_samples = 0;
     TreeSequence *output = NULL;
-    int filter_root_mutations = 1;
+    int filter_invariant_sites = 1;
     int flags = 0;
     int err;
 
@@ -3670,7 +3670,7 @@ TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|i", kwlist,
             &TreeSequenceType, &output,
             &PyList_Type, &py_samples,
-            &filter_root_mutations)) {
+            &filter_invariant_sites)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(output) != 0) {
@@ -3679,8 +3679,8 @@ TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
         goto out;
     }
-    if (filter_root_mutations) {
-        flags |= MSP_FILTER_ROOT_MUTATIONS;
+    if (filter_invariant_sites) {
+        flags |= MSP_FILTER_INVARIANT_SITES;
     }
     err = tree_sequence_simplify(
         self->tree_sequence, samples, (uint32_t) num_samples, flags, output->tree_sequence);

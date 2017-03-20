@@ -557,7 +557,7 @@ tree_sequence_check(tree_sequence_t *self)
     node_id_t child, node;
     list_len_t j, k;
     size_t num_coordinates = self->edgesets.num_records + 1;
-    double t1, t2, left, *result;
+    double left, *result;
     double *coordinates = malloc(num_coordinates * sizeof(double));
 
     if (coordinates == NULL) {
@@ -666,17 +666,24 @@ tree_sequence_check(tree_sequence_t *self)
                 goto out;
             }
             if (self->mutations.site[j - 1] == self->mutations.site[j]) {
-                t1 = self->nodes.time[self->mutations.node[j - 1]];
-                t2 = self->nodes.time[self->mutations.node[j]];
-                if (t1 < t2) {
-                    ret = MSP_ERR_UNSORTED_MUTATION_NODES;
-                    goto out;
-                }
+                /* Also relaxing this assumption because it's too difficult to
+                 * enforce after simplify() has been called.
+                 */
+                /* t1 = self->nodes.time[self->mutations.node[j - 1]]; */
+                /* t2 = self->nodes.time[self->mutations.node[j]]; */
+                /* if (t1 < t2) { */
+                /*     ret = MSP_ERR_UNSORTED_MUTATION_NODES; */
+                /*     goto out; */
+                /* } */
+                /* We are relaxing this condition for now, but might want to
+                 * reinstate it later. The issue arises in simplify, where we
+                 * can't easily derive the correct mutations when there are
+                 * lots of them along a path. */
                 /* Within a site, nodes must be unique */
-                if (self->mutations.node[j - 1] == self->mutations.node[j]) {
-                    ret = MSP_ERR_DUPLICATE_MUTATION_NODES;
-                    goto out;
-                }
+                /* if (self->mutations.node[j - 1] == self->mutations.node[j]) { */
+                /*     ret = MSP_ERR_DUPLICATE_MUTATION_NODES; */
+                /*     goto out; */
+                /* } */
             }
         }
     }
@@ -989,6 +996,11 @@ tree_sequence_load_records(tree_sequence_t *self,
             goto out;
         }
     }
+    /* node_table_print_state(node_table, stdout); */
+    /* edgeset_table_print_state(edgeset_table, stdout); */
+    /* site_table_print_state(site_table, stdout); */
+    /* mutation_table_print_state(mutation_table, stdout); */
+
     ret = tree_sequence_load_tables_tmp(self, node_table, edgeset_table,
             NULL, site_table, mutation_table, 0, NULL);
 
@@ -2426,6 +2438,41 @@ out:
     return ret;
 }
 
+static int
+tree_sequence_compress_sites(tree_sequence_t *self,
+        mutation_t *mutations, size_t num_mutations,
+        site_t *sites, size_t *ret_num_sites)
+{
+    int ret = 0;
+    size_t output_num_sites = 0;
+    size_t j, k;
+    bool invariant_site;
+
+    /* TODO we should also compress the mutations, but there are situations
+     * where we cannot remove mutations without knowing what the state of a
+     * given node is. It seems hard to do this without having a full tree
+     * traversal (which is too expensive). For now, we accept that there
+     * may be multiple mutations at a given node.
+     */
+
+    /* Go through the sites and remove any that don't have any mutations. */
+    k = 0;
+    for (j = 0; j < self->sites.num_records; j++) {
+        invariant_site = true;
+        while (k < num_mutations && mutations[k].site == (site_id_t) j) {
+            mutations[k].site = (site_id_t) output_num_sites;
+            invariant_site = false;
+            k++;
+        }
+        if (! invariant_site) {
+            sites[output_num_sites] = sites[j];
+            output_num_sites++;
+        }
+    }
+    *ret_num_sites = output_num_sites;
+    return ret;
+}
+
 /* TODO this needs to be updated to use the new tables/edgesets API. We currently
  * use coalescence_records because it makes it simpler for sorting records by time.
  * This should really be spun into its own class, as this function is far too long.
@@ -2468,9 +2515,9 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     avl_node_t *avl_node;
     active_record_t *ar;
     coalescence_record_t *cr;
-    bool equal, activate_record, keep, site_added;
+    bool equal, activate_record;
     double right, x;
-    bool filter_root_mutations = flags & MSP_FILTER_ROOT_MUTATIONS;
+    bool filter_invariant_sites = flags & MSP_FILTER_INVARIANT_SITES;
 
     if (num_samples < 2) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -2529,7 +2576,6 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     mapped_children_mem_offset = 0;
     num_output_records = 0;
     num_output_mutations = 0;
-    num_output_sites = 0;
 
     j = 0;
     k = 0;
@@ -2673,32 +2719,27 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
         /* Update the mutations for this tree */
         right = self->edgesets.right[O[k]];
         while (l < self->sites.num_records && self->sites.position[l] < right) {
-            site_added = false;
+            output_sites[l].position = self->sites.position[l];
+            output_sites[l].ancestral_state = self->sites.ancestral_state[l];
+            output_sites[l].ancestral_state_length = self->sites.ancestral_state_length[l];
             for (c = 0; c < self->sites.site_mutations_length[l]; c++) {
                 u = self->sites.site_mutations[l][c].node;
                 if (mapping[u] != MSP_NULL_NODE) {
-                    keep = true;
-                    if (filter_root_mutations) {
-                        /* Traverse up the tree until we find either another node in
-                         * the subset tree or the root */
-                        v = parent[u];
-                        while (v != MSP_NULL_NODE && mapping[v] != v) {
-                            v = parent[v];
-                        }
-                        keep = v != MSP_NULL_NODE;
+                    /* Traverse up the tree until we find either another node in
+                     * the subset tree or the root */
+                    v = parent[u];
+                    while (v != MSP_NULL_NODE && mapping[v] != v) {
+                        v = parent[v];
                     }
-                    if (keep) {
-                        if (! site_added) {
-                            site_added = true;
-                            output_sites[num_output_sites].position = self->sites.position[l];
-                            output_sites[num_output_sites].ancestral_state =
-                                self->sites.ancestral_state[l];
-                            output_sites[num_output_sites].ancestral_state_length =
-                                self->sites.ancestral_state_length[l];
-                            num_output_sites++;
-                        }
-                        output_mutations[num_output_mutations].site =
-                            (site_id_t) num_output_sites - 1;
+                    if (v == MSP_NULL_NODE) {
+                        /* This mutation was above the root, and so we must change the
+                         * ancestral state of the site accordingly. */
+                        output_sites[l].ancestral_state =
+                            self->sites.site_mutations[l][c].derived_state;
+                        output_sites[l].ancestral_state_length =
+                            self->sites.site_mutations[l][c].derived_state_length;
+                    } else {
+                        output_mutations[num_output_mutations].site = (site_id_t) l;
                         output_mutations[num_output_mutations].node = mapping[u];
                         output_mutations[num_output_mutations].derived_state =
                             self->sites.site_mutations[l][c].derived_state;
@@ -2744,6 +2785,14 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
             num_output_mutations);
     if (ret != 0) {
         goto out;
+    }
+    num_output_sites = self->sites.num_records;
+    if (filter_invariant_sites) {
+        ret = tree_sequence_compress_sites(self, output_mutations, num_output_mutations,
+                output_sites, &num_output_sites);
+        if (ret != 0) {
+            goto out;
+        }
     }
     /* Alloc a new tree sequence for these records. */
     ret = tree_sequence_load_records(output, num_samples, sample_objects,
