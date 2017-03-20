@@ -24,6 +24,7 @@ from __future__ import division
 
 import unittest
 import itertools
+import six
 
 import msprime
 import _msprime
@@ -91,18 +92,18 @@ class TestRecordSquashing(TopologyTestCase):
     Tests that we correctly squash adjacent equal records together.
     """
     def test_single_record(self):
-        nodes = """\
+        nodes = six.StringIO("""\
         id  is_sample   time
         0   1           0
         1   1           0
         2   0           1
-        """
-        edgesets = """\
+        """)
+        edgesets = six.StringIO("""\
         left    right   parent  children
         0       1       2       0,1
         1       2       2       0,1
-        """
-        ts = msprime.load_str(nodes, edgesets)
+        """)
+        ts = msprime.load_text(nodes, edgesets)
         tss = ts.simplify()
         self.assertEqual(list(tss.nodes()), list(ts.nodes()))
         simplified_edgesets = list(tss.edgesets())
@@ -664,7 +665,7 @@ class TestWithVisuals(TopologyTestCase):
         # 0.0    0     1           2           1   0       2          0   1           2
         #
         #          (0.0, 0.2),               (0.2, 0.8),              (0.8, 1.0)
-        nodes = """\
+        nodes = six.StringIO("""\
         id  is_sample   time
         0   1           0
         1   1           0
@@ -674,8 +675,8 @@ class TestWithVisuals(TopologyTestCase):
         5   0           0.5
         6   0           0.7
         7   0           1.0
-        """
-        edgesets = """\
+        """)
+        edgesets = six.StringIO("""\
         left    right   parent  children
         0.0     0.2     4       2,3
         0.2     0.8     4       0,2
@@ -684,8 +685,8 @@ class TestWithVisuals(TopologyTestCase):
         0.8     1.0     6       0,5
         0.0     0.2     6       5
         0.0     0.2     7       0,6
-        """
-        ts = msprime.load_str(nodes, edgesets)
+        """)
+        ts = msprime.load_text(nodes, edgesets)
         true_trees = [
             {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: 7, 7: -1},
             {0: 4, 1: 5, 2: 4, 3: -1, 4: 5, 5: -1, 6: -1, 7: -1},
@@ -759,7 +760,7 @@ class TestWithVisuals(TopologyTestCase):
             {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 7, 9: 6, 10: 8},
             {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 3, 7: 5, 8: 7, 9: 6, 10: 8}
         ]
-        nodes = """\
+        nodes = six.StringIO("""\
         id      is_sample   time
         0       1           0
         1       1           0
@@ -772,8 +773,8 @@ class TestWithVisuals(TopologyTestCase):
         8       0           2
         9       0           1
         10      0           1
-        """
-        edgesets = """\
+        """)
+        edgesets = six.StringIO("""\
         left    right   parent  children
         0.5     1.0     10      1
         0.0     0.4     10      2
@@ -793,8 +794,8 @@ class TestWithVisuals(TopologyTestCase):
         0.9     1.0     3       4,5,6
         0.1     0.9     3       4,5
         0.0     0.1     3       4,5,7
-        """
-        ts = msprime.load_str(nodes, edgesets)
+        """)
+        ts = msprime.load_text(nodes, edgesets)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, len(true_trees))

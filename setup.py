@@ -167,7 +167,7 @@ setup(
             'msp=msprime.cli:msp_main',
         ]
     },
-    install_requires=["six", "svgwrite"],
+    install_requires=["svgwrite"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU LGPLv3+",
