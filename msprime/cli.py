@@ -79,12 +79,6 @@ def add_history_file_argument(parser):
         "history_file", help="The msprime history file in HDF5 format")
 
 
-def add_header_argument(parser):
-    parser.add_argument(
-        "--header", "-H", action="store_true", default=False,
-        help="Print a header line in the output.")
-
-
 def add_precision_argument(parser):
     parser.add_argument(
         "--precision", "-p", type=int, default=6,
@@ -793,19 +787,29 @@ def run_dump_variants(args):
         print("{}".format(variant.genotypes.decode()))
 
 
-def run_dump_records(args):
+def run_dump_nodes(args):
     tree_sequence = msprime.load(args.history_file)
-    tree_sequence.write_records(sys.stdout, args.header, args.precision)
+    tree_sequence.dump_text(nodes=sys.stdout, precision=args.precision)
+
+
+def run_dump_edgesets(args):
+    tree_sequence = msprime.load(args.history_file)
+    tree_sequence.dump_text(edgesets=sys.stdout, precision=args.precision)
+
+
+def run_dump_sites(args):
+    tree_sequence = msprime.load(args.history_file)
+    tree_sequence.dump_text(sites=sys.stdout, precision=args.precision)
+
+
+def run_dump_mutations(args):
+    tree_sequence = msprime.load(args.history_file)
+    tree_sequence.dump_text(mutations=sys.stdout, precision=args.precision)
 
 
 def run_dump_vcf(args):
     tree_sequence = msprime.load(args.history_file)
     tree_sequence.write_vcf(sys.stdout, args.ploidy)
-
-
-def run_dump_mutations(args):
-    tree_sequence = msprime.load(args.history_file)
-    tree_sequence.write_mutations(sys.stdout, args.header, args.precision)
 
 
 def run_dump_macs(args):
@@ -835,106 +839,118 @@ def run_simulate(args):
 
 
 def get_msp_parser():
-    parser = argparse.ArgumentParser(
+    top_parser = argparse.ArgumentParser(
         description="Command line interface for msprime.",
         epilog=msprime_citation_text)
-    parser.add_argument(
+    top_parser.add_argument(
         "-V", "--version", action='version',
         version='%(prog)s {}'.format(msprime.__version__))
     # This is required to get uniform behaviour in Python2 and Python3
-    subparsers = parser.add_subparsers(dest="subcommand")
+    subparsers = top_parser.add_subparsers(dest="subcommand")
     subparsers.required = True
 
-    simulate_parser = subparsers.add_parser(
+    parser = subparsers.add_parser(
         "simulate",
         help="Run the simulation")
-    add_sample_size_argument(simulate_parser)
-    add_history_file_argument(simulate_parser)
-    simulate_parser.add_argument(
+    add_sample_size_argument(parser)
+    add_history_file_argument(parser)
+    parser.add_argument(
         "--length", "-L", type=float, default=1,
         help="The length of the simulated region in base pairs.")
-    simulate_parser.add_argument(
+    parser.add_argument(
         "--recombination-rate", "-r", type=float, default=0,
         help="The recombination rate per base per generation")
-    simulate_parser.add_argument(
+    parser.add_argument(
         "--mutation-rate", "-u", type=float, default=0,
         help="The mutation rate per base per generation")
-    simulate_parser.add_argument(
+    parser.add_argument(
         "--effective-population-size", "-N", type=float, default=1,
         help="The effective population size Ne")
-    simulate_parser.add_argument(
+    parser.add_argument(
         "--random-seed", "-s", type=int, default=None,
         help="The random seed. If not specified one is chosen randomly")
-    simulate_parser.add_argument(
+    parser.add_argument(
         "--compress", "-z", action="store_true",
         help="Enable HDF5's transparent zlib compression")
-    simulate_parser.set_defaults(runner=run_simulate)
+    parser.set_defaults(runner=run_simulate)
 
-    vcf_parser = subparsers.add_parser(
+    parser = subparsers.add_parser(
         "vcf",
         help="Write the tree sequence out in VCF format.")
-    add_history_file_argument(vcf_parser)
-    vcf_parser.add_argument(
+    add_history_file_argument(parser)
+    parser.add_argument(
         "--ploidy", "-P", type=int, default=1,
         help="The ploidy level of samples")
-    vcf_parser.set_defaults(runner=run_dump_vcf)
+    parser.set_defaults(runner=run_dump_vcf)
 
-    records_parser = subparsers.add_parser(
-        "records",
-        help="Dump records in tabular format.")
-    add_history_file_argument(records_parser)
-    add_header_argument(records_parser)
-    add_precision_argument(records_parser)
-    records_parser.set_defaults(runner=run_dump_records)
+    parser = subparsers.add_parser(
+        "nodes",
+        help="Dump nodes in tabular format.")
+    add_history_file_argument(parser)
+    add_precision_argument(parser)
+    parser.set_defaults(runner=run_dump_nodes)
 
-    mutations_parser = subparsers.add_parser(
+    parser = subparsers.add_parser(
+        "edgesets",
+        help="Dump edgesets in tabular format.")
+    add_history_file_argument(parser)
+    add_precision_argument(parser)
+    parser.set_defaults(runner=run_dump_edgesets)
+
+    parser = subparsers.add_parser(
+        "sites",
+        help="Dump sites in tabular format.")
+    add_history_file_argument(parser)
+    add_precision_argument(parser)
+    parser.set_defaults(runner=run_dump_sites)
+
+    parser = subparsers.add_parser(
         "mutations",
         help="Dump mutations in tabular format.")
-    add_history_file_argument(mutations_parser)
-    add_header_argument(mutations_parser)
-    add_precision_argument(mutations_parser)
-    mutations_parser.set_defaults(runner=run_dump_mutations)
+    add_history_file_argument(parser)
+    add_precision_argument(parser)
+    parser.set_defaults(runner=run_dump_mutations)
 
-    haplotypes_parser = subparsers.add_parser(
+    parser = subparsers.add_parser(
         "haplotypes",
         help="Dump haplotypes in text format.")
-    add_history_file_argument(haplotypes_parser)
-    haplotypes_parser.set_defaults(runner=run_dump_haplotypes)
+    add_history_file_argument(parser)
+    parser.set_defaults(runner=run_dump_haplotypes)
 
-    variants_parser = subparsers.add_parser(
+    parser = subparsers.add_parser(
         "variants",
         help="Dump variants in text format.")
-    add_history_file_argument(variants_parser)
-    variants_parser.set_defaults(runner=run_dump_variants)
+    add_history_file_argument(parser)
+    parser.set_defaults(runner=run_dump_variants)
 
-    macs_parser = subparsers.add_parser(
+    parser = subparsers.add_parser(
         "macs",
         help="Dump results in MaCS format.")
-    add_history_file_argument(macs_parser)
-    macs_parser.set_defaults(runner=run_dump_macs)
+    add_history_file_argument(parser)
+    parser.set_defaults(runner=run_dump_macs)
 
-    newick_parser = subparsers.add_parser(
+    parser = subparsers.add_parser(
         "newick",
         help="Dump results in newick format.")
-    add_history_file_argument(newick_parser)
-    newick_parser.add_argument(
+    add_history_file_argument(parser)
+    parser.add_argument(
         "--precision", "-p", type=int, default=3,
         help="The number of decimal places in branch lengths")
-    newick_parser.set_defaults(runner=run_dump_newick)
+    parser.set_defaults(runner=run_dump_newick)
 
-    upgrade_parser = subparsers.add_parser(
+    parser = subparsers.add_parser(
         "upgrade",
         help="Upgrade legacy HDF5 files to the latest version.")
-    upgrade_parser.add_argument(
+    parser.add_argument(
         "source", help="The source msprime history file in legacy HDF5 format")
-    upgrade_parser.add_argument(
+    parser.add_argument(
         "destination", help="The filename of the upgraded copy.")
-    upgrade_parser.add_argument(
+    parser.add_argument(
         "--remove-duplicate-positions", "-d", action="store_true", default=False,
         help="Remove any duplicated mutation positions in the source file. ")
-    upgrade_parser.set_defaults(runner=run_upgrade)
+    parser.set_defaults(runner=run_upgrade)
 
-    return parser
+    return top_parser
 
 
 def msp_main(arg_list=None):

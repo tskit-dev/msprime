@@ -1710,31 +1710,33 @@ class TreeSequence(object):
         self._ll_tree_sequence.dump_tables(**kwargs)
 
     def dump_text(
-            self, nodes, edgesets, sites=None, mutations=None, precision=6):
+            self, nodes=None, edgesets=None, sites=None, mutations=None, precision=6):
         # TODO document.
 
         # Nodes
-        print("is_sample", "time", "population", sep="\t", file=nodes)
-        for node in self.nodes():
-            row = (
-                "{is_sample:d}\t"
-                "{time:.{precision}f}\t"
-                "{population:d}\t").format(
-                    precision=precision, is_sample=node.is_sample(), time=node.time,
-                    population=node.population)
-            print(row, file=nodes)
+        if nodes is not None:
+            print("is_sample", "time", "population", sep="\t", file=nodes)
+            for node in self.nodes():
+                row = (
+                    "{is_sample:d}\t"
+                    "{time:.{precision}f}\t"
+                    "{population:d}\t").format(
+                        precision=precision, is_sample=node.is_sample(), time=node.time,
+                        population=node.population)
+                print(row, file=nodes)
 
-        print("left", "right", "parent", "children", sep="\t", file=edgesets)
-        for edgeset in self.edgesets():
-            children = ",".join(str(u) for u in edgeset.children)
-            row = (
-                "{left:.{precision}f}\t"
-                "{right:.{precision}f}\t"
-                "{parent:d}\t"
-                "{children}").format(
-                    precision=precision, left=edgeset.left, right=edgeset.right,
-                    parent=edgeset.parent, children=children)
-            print(row, file=edgesets)
+        if edgesets is not None:
+            print("left", "right", "parent", "children", sep="\t", file=edgesets)
+            for edgeset in self.edgesets():
+                children = ",".join(str(u) for u in edgeset.children)
+                row = (
+                    "{left:.{precision}f}\t"
+                    "{right:.{precision}f}\t"
+                    "{parent:d}\t"
+                    "{children}").format(
+                        precision=precision, left=edgeset.left, right=edgeset.right,
+                        parent=edgeset.parent, children=children)
+                print(row, file=edgesets)
 
         if sites is not None:
             # Sites
