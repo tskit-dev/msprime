@@ -104,6 +104,11 @@ Sample = collections.namedtuple(
     ["population", "time"])
 
 
+TableTuple = collections.namedtuple(
+    "TableTuple",
+    ["nodes", "edgesets", "migrations", "sites", "mutations"])
+
+
 class SimpleContainer(object):
 
     def __eq__(self, other):
@@ -149,7 +154,7 @@ class NodeTable(_msprime.NodeTable):
         population = self.population
         ret = "id\tflags\tpopulation\ttime\n"
         for j in range(self.num_rows):
-            ret += "{}\t{}\t{}\t\t{:.8f}\n".format(j, flags[j], population[j], time[j])
+            ret += "{}\t{}\t{}\t\t{:.14f}\n".format(j, flags[j], population[j], time[j])
         return ret[:-1]
 
 
@@ -1771,11 +1776,27 @@ class TreeSequence(object):
         """
         self._ll_tree_sequence.dump(path, zlib_compression)
 
-    def dump_tables(self, **kwargs):
-        # TODO document and fix up the interface. We should return the
-        # tables in a named tuple and alloc new ones if they are not
-        # provided.
-        self._ll_tree_sequence.dump_tables(**kwargs)
+    def dump_tables(
+            self, nodes=None, edgesets=None, migrations=None, sites=None,
+            mutations=None):
+        # TODO document this and test the semantics to passing in new tables
+        # as well as returning the updated tables.
+        if nodes is None:
+            nodes = NodeTable()
+        if edgesets is None:
+            edgesets = EdgesetTable()
+        if migrations is None:
+            migrations = MigrationTable()
+        if sites is None:
+            sites = SiteTable()
+        if mutations is None:
+            mutations = MutationTable()
+        self._ll_tree_sequence.dump_tables(
+            nodes=nodes, edgesets=edgesets, migrations=migrations, sites=sites,
+            mutations=mutations)
+        return TableTuple(
+            nodes=nodes, edgesets=edgesets, migrations=migrations, sites=sites,
+            mutations=mutations)
 
     def dump_text(
             self, nodes=None, edgesets=None, sites=None, mutations=None, precision=6):
