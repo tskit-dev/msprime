@@ -1160,17 +1160,22 @@ class TestTreeSequence(HighLevelTestCase):
                     self.verify_simplify_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
-    @unittest.skip("simplify")
     def test_simplify_bugs(self):
         prefix = "tests/data/simplify-bugs/"
         j = 1
         while True:
-            records_file = os.path.join(prefix, "{:02d}_records.txt".format(j))
-            if not os.path.exists(records_file):
+            nodes_file = os.path.join(prefix, "{:02d}-nodes.txt".format(j))
+            if not os.path.exists(nodes_file):
                 break
-
-            mutations_file = os.path.join(prefix, "{:02d}_mutations.txt".format(j))
-            ts = msprime.load_txt(records_file, mutations_file)
+            edgesets_file = os.path.join(prefix, "{:02d}-edgesets.txt".format(j))
+            sites_file = os.path.join(prefix, "{:02d}-sites.txt".format(j))
+            mutations_file = os.path.join(prefix, "{:02d}-mutations.txt".format(j))
+            with open(nodes_file) as nodes, \
+                    open(edgesets_file) as edgesets,\
+                    open(sites_file) as sites,\
+                    open(mutations_file) as mutations:
+                ts = msprime.load_text(
+                    nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
             samples = list(range(ts.sample_size))
             self.verify_simplify_equality(ts, samples)
             self.verify_simplify_topology(ts, samples)
