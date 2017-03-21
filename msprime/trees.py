@@ -213,63 +213,6 @@ class MutationTable(_msprime.MutationTable):
         return ret[:-1]
 
 
-def load_coalescence_records(
-        samples=None, records=None, sites=None, provenance=[]):
-    """
-    Temporary function used to create a tree sequence using the 'coalescence records'
-    paradigm. This is used a bridge between existing code and the new table based
-    APIs.
-    """
-    num_nodes = -1
-    for r in records:
-        num_nodes = max(r.node, num_nodes, max(r.children))
-    num_nodes += 1
-    if samples is None:
-        n = max(2, min(r.node for r in records))
-    else:
-        n = len(samples)
-    flags = [int(j < n) for j in range(num_nodes)]
-    time = [0 for j in range(num_nodes)]
-    population = [0 for j in range(num_nodes)]
-    if samples is not None:
-        for j, (p, t) in enumerate(samples):
-            time[j] = t
-            population[j] = p
-    left = []
-    right = []
-    parent = []
-    children = []
-    children_length = []
-    for record in records:
-        time[record.node] = record.time
-        population[record.node] = record.population
-        left.append(record.left)
-        right.append(record.right)
-        parent.append(record.node)
-        children.extend(record.children)
-        children_length.append(len(record.children))
-
-    node_table = msprime.NodeTable()
-    node_table.set_columns(flags=flags, time=time, population=population)
-    edgeset_table = msprime.EdgesetTable()
-    edgeset_table.set_columns(
-        left=left, right=right, parent=parent, children=children,
-        children_length=children_length)
-    site_table = msprime.SiteTable()
-    mutation_table = msprime.MutationTable()
-    if sites is not None:
-        for j, site in enumerate(sites):
-            site_table.add_row(site.position, site.ancestral_state)
-            for mutation in site.mutations:
-                mutation_table.add_row(j, mutation.node, mutation.derived_state)
-    ll_ts = _msprime.TreeSequence()
-    ll_ts.load_tables(
-        nodes=node_table, edgesets=edgeset_table, sites=site_table,
-        mutations=mutation_table, provenance_strings=provenance)
-    ts = msprime.TreeSequence(ll_ts)
-    return ts
-
-
 def pack_strings(strings):
     """
     Packs the specified list of strings into a flattened numpy array of characters

@@ -2047,28 +2047,28 @@ class TestNodeOrdering(HighLevelTestCase):
         self.assertEqual(ts1.get_num_records(), j)
 
     def verify_random_permutation(self, ts):
-        n = ts.get_sample_size()
+        n = ts.sample_size
         node_map = {}
-        for j in range(ts.get_sample_size()):
+        for j in range(n):
             node_map[j] = j
-        internal_nodes = list(range(n, ts.get_num_nodes()))
+        internal_nodes = list(range(n, ts.num_nodes))
         random.shuffle(internal_nodes)
         for j, node in enumerate(internal_nodes):
             node_map[n + j] = node
-        new_records = []
-        for record in ts.records():
-            new_record = msprime.CoalescenceRecord(
-                left=record.left,
-                right=record.right,
-                time=record.time,
-                population=record.population,
-                node=node_map[record.node],
+        node_table = msprime.NodeTable()
+        # Insert the new nodes into the table.
+        inv_node_map = {v: k for k, v in node_map.items()}
+        for j in range(ts.num_nodes):
+            node = ts.node(inv_node_map[j])
+            node_table.add_row(
+                flags=node.flags, time=node.time, population=node.population)
+        edgeset_table = msprime.EdgesetTable()
+        for e in ts.edgesets():
+            edgeset_table.add_row(
+                left=e.left, right=e.right, parent=node_map[e.parent],
                 children=tuple(
-                    sorted([node_map[c] for c in record.children])))
-            new_records.append(new_record)
-        other_ts = msprime.load_coalescence_records(
-            samples=[(0, 0) for _ in range(ts.sample_size)],
-            records=new_records)
+                    sorted([node_map[c] for c in e.children])))
+        other_ts = msprime.load_tables(nodes=node_table, edgesets=edgeset_table)
 
         self.assertEqual(ts.get_num_trees(), other_ts.get_num_trees())
         self.assertEqual(ts.get_sample_size(), other_ts.get_sample_size())
