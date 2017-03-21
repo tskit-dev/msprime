@@ -70,21 +70,6 @@ file from the records stored in the older file and is non-destructive.
     :nodefault:
 
 ++++++++++++
-msp records
-++++++++++++
-
-:command:`msp records` is a command line interface to the
-:meth:`msprime.TreeSequence.write_records` method. It prints out the
-variants stored in the history file in VCF format.
-
-.. argparse::
-    :module: msprime.cli
-    :func: get_msp_parser
-    :prog: msp
-    :path: records
-    :nodefault:
-
-++++++++++++
 msp vcf
 ++++++++++++
 
@@ -99,37 +84,22 @@ vcf in a history file in a tab-delimited text format.
     :path: vcf
     :nodefault:
 
-+++++++++++++
-msp mutations
-+++++++++++++
-
-:command:`msp mutations` is a command line interface to the
-:meth:`msprime.TreeSequence.mutations` method. It prints out the coalescence
-mutations in a history file in a tab-delimited text format.
-
-.. argparse::
-    :module: msprime.cli
-    :func: get_msp_parser
-    :prog: msp
-    :path: mutations
-    :nodefault:
-
 ++++++++++
 msp newick
 ++++++++++
 
-:command:`msp mutations` prints out the marginal genealogies in the tree
+:command:`msp newick` prints out the marginal genealogies in the tree
 sequence in newick format.
 
 .. argparse::
     :module: msprime.cli
     :func: get_msp_parser
     :prog: msp
-    :path: mutations
+    :path: newick
     :nodefault:
 
-
-
+.. todo::
+    Document the nodes, edgesets, sites and mutations commands.
 
 .. _sec-mspms:
 
