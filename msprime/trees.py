@@ -48,11 +48,6 @@ import msprime.environment
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
-from _msprime import NodeTable
-from _msprime import EdgesetTable
-from _msprime import MigrationTable
-from _msprime import SiteTable
-from _msprime import MutationTable
 from _msprime import NODE_IS_SAMPLE
 
 NULL_NODE = -1
@@ -138,6 +133,79 @@ class Edgeset(SimpleContainer):
         self.right = right
         self.parent = parent
         self.children = children
+
+
+#############################################
+# Table definitions. The classes here are thin wrappers for the low-level classes,
+# and basically just exist for debugging purposes.
+#############################################
+
+
+class NodeTable(_msprime.NodeTable):
+    # TODO document
+    def __str__(self):
+        time = self.time
+        flags = self.flags
+        population = self.population
+        ret = "id\tflags\tpopulation\ttime\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{}\t{}\t\t{:.8f}\n".format(j, flags[j], population[j], time[j])
+        return ret[:-1]
+
+
+class EdgesetTable(_msprime.EdgesetTable):
+    def __str__(self):
+        left = self.left
+        right = self.right
+        parent = self.parent
+        children = self.children
+        children_length = self.children_length
+        ret = "id\tleft\t\tright\t\tparent\tchildren\n"
+        offset = 0
+        for j in range(self.num_rows):
+            row_children = children[offset: offset + children_length[j]]
+            offset += children_length[j]
+            ret += "{}\t{:.8f}\t{:.8f}\t{}\t{}\n".format(
+                j, left[j], right[j], parent[j], ",".join(map(str, row_children)))
+        return ret[:-1]
+
+
+class MigrationTable(_msprime.MigrationTable):
+    def __str__(self):
+        left = self.left
+        right = self.right
+        node = self.node
+        source = self.source
+        dest = self.dest
+        time = self.time
+        ret = "id\tleft\tright\tnode\tsource\tdest\ttime\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{:.8f}\t{:.8f}\t{}\t{}\t{}\t{:.8f}\n".format(
+                j, left[j], right[j], node[j], source[j], dest[j], time[j])
+        return ret[:-1]
+
+
+class SiteTable(_msprime.SiteTable):
+    def __str__(self):
+        position = self.position
+        ancestral_state = unpack_strings(
+            self.ancestral_state, self.ancestral_state_length)
+        ret = "id\tposition\tancestral_state\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{:.8f}\t{}\n".format(j, position[j], ancestral_state[j])
+        return ret[:-1]
+
+
+class MutationTable(_msprime.MutationTable):
+    def __str__(self):
+        site = self.site
+        node = self.node
+        derived_state = unpack_strings(
+            self.derived_state, self.derived_state_length)
+        ret = "id\tsite\tnode\tderived_state\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{}\t{}\t{}\n".format(j, site[j], node[j], derived_state[j])
+        return ret[:-1]
 
 
 def load_coalescence_records(
