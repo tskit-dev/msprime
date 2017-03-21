@@ -29,8 +29,6 @@ import math
 import random
 import sys
 
-import six
-
 try:
     import svgwrite
     _svgwrite_imported = True
@@ -50,11 +48,6 @@ import msprime.environment
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
-from _msprime import NodeTable
-from _msprime import EdgesetTable
-from _msprime import MigrationTable
-from _msprime import SiteTable
-from _msprime import MutationTable
 from _msprime import NODE_IS_SAMPLE
 
 NULL_NODE = -1
@@ -111,6 +104,11 @@ Sample = collections.namedtuple(
     ["population", "time"])
 
 
+TableTuple = collections.namedtuple(
+    "TableTuple",
+    ["nodes", "edgesets", "migrations", "sites", "mutations"])
+
+
 class SimpleContainer(object):
 
     def __eq__(self, other):
@@ -130,6 +128,9 @@ class Node(SimpleContainer):
         if is_sample:
             self.flags |= NODE_IS_SAMPLE
 
+    def is_sample(self):
+        return self.flags & NODE_IS_SAMPLE
+
 
 class Edgeset(SimpleContainer):
     def __init__(self, parent, children, left=0, right=1):
@@ -139,61 +140,77 @@ class Edgeset(SimpleContainer):
         self.children = children
 
 
-def load_coalescence_records(
-        samples=None, records=None, sites=None, provenance=[]):
-    """
-    Temporary function used to create a tree sequence using the 'coalescence records'
-    paradigm. This is used a bridge between existing code and the new table based
-    APIs.
-    """
-    num_nodes = -1
-    for r in records:
-        num_nodes = max(r.node, num_nodes, max(r.children))
-    num_nodes += 1
-    if samples is None:
-        n = max(2, min(r.node for r in records))
-    else:
-        n = len(samples)
-    flags = [int(j < n) for j in range(num_nodes)]
-    time = [0 for j in range(num_nodes)]
-    population = [0 for j in range(num_nodes)]
-    if samples is not None:
-        for j, (p, t) in enumerate(samples):
-            time[j] = t
-            population[j] = p
-    left = []
-    right = []
-    parent = []
-    children = []
-    children_length = []
-    for record in records:
-        time[record.node] = record.time
-        population[record.node] = record.population
-        left.append(record.left)
-        right.append(record.right)
-        parent.append(record.node)
-        children.extend(record.children)
-        children_length.append(len(record.children))
+#############################################
+# Table definitions. The classes here are thin wrappers for the low-level classes,
+# and basically just exist for debugging purposes.
+#############################################
 
-    node_table = msprime.NodeTable()
-    node_table.set_columns(flags=flags, time=time, population=population)
-    edgeset_table = msprime.EdgesetTable()
-    edgeset_table.set_columns(
-        left=left, right=right, parent=parent, children=children,
-        children_length=children_length)
-    site_table = msprime.SiteTable()
-    mutation_table = msprime.MutationTable()
-    if sites is not None:
-        for j, site in enumerate(sites):
-            site_table.add_row(site.position, site.ancestral_state)
-            for mutation in site.mutations:
-                mutation_table.add_row(j, mutation.node, mutation.derived_state)
-    ll_ts = _msprime.TreeSequence()
-    ll_ts.load_tables(
-        nodes=node_table, edgesets=edgeset_table, sites=site_table,
-        mutations=mutation_table, provenance_strings=provenance)
-    ts = msprime.TreeSequence(ll_ts)
-    return ts
+
+class NodeTable(_msprime.NodeTable):
+    # TODO document
+    def __str__(self):
+        time = self.time
+        flags = self.flags
+        population = self.population
+        ret = "id\tflags\tpopulation\ttime\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{}\t{}\t\t{:.14f}\n".format(j, flags[j], population[j], time[j])
+        return ret[:-1]
+
+
+class EdgesetTable(_msprime.EdgesetTable):
+    def __str__(self):
+        left = self.left
+        right = self.right
+        parent = self.parent
+        children = self.children
+        children_length = self.children_length
+        ret = "id\tleft\t\tright\t\tparent\tchildren\n"
+        offset = 0
+        for j in range(self.num_rows):
+            row_children = children[offset: offset + children_length[j]]
+            offset += children_length[j]
+            ret += "{}\t{:.8f}\t{:.8f}\t{}\t{}\n".format(
+                j, left[j], right[j], parent[j], ",".join(map(str, row_children)))
+        return ret[:-1]
+
+
+class MigrationTable(_msprime.MigrationTable):
+    def __str__(self):
+        left = self.left
+        right = self.right
+        node = self.node
+        source = self.source
+        dest = self.dest
+        time = self.time
+        ret = "id\tleft\tright\tnode\tsource\tdest\ttime\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{:.8f}\t{:.8f}\t{}\t{}\t{}\t{:.8f}\n".format(
+                j, left[j], right[j], node[j], source[j], dest[j], time[j])
+        return ret[:-1]
+
+
+class SiteTable(_msprime.SiteTable):
+    def __str__(self):
+        position = self.position
+        ancestral_state = unpack_strings(
+            self.ancestral_state, self.ancestral_state_length)
+        ret = "id\tposition\tancestral_state\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{:.8f}\t{}\n".format(j, position[j], ancestral_state[j])
+        return ret[:-1]
+
+
+class MutationTable(_msprime.MutationTable):
+    def __str__(self):
+        site = self.site
+        node = self.node
+        derived_state = unpack_strings(
+            self.derived_state, self.derived_state_length)
+        ret = "id\tsite\tnode\tderived_state\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{}\t{}\t{}\n".format(j, site[j], node[j], derived_state[j])
+        return ret[:-1]
 
 
 def pack_strings(strings):
@@ -1090,7 +1107,95 @@ def load_tables(*args, **kwargs):
     return TreeSequence.load_tables(*args, **kwargs)
 
 
-def load_txt(records_file, mutations_file=None):
+def parse_nodes(source):
+    """
+    Parse the specified file-like object and return a NodeTable instance.
+    """
+    # Read the header and find the indexes of the required fields.
+    table = NodeTable()
+    header = source.readline().split()
+    is_sample_index = header.index("is_sample")
+    time_index = header.index("time")
+    population_index = None
+    try:
+        population_index = header.index("population")
+    except ValueError:
+        pass
+    for line in source:
+        tokens = line.split()
+        if len(tokens) > 0:
+            is_sample = int(tokens[is_sample_index])
+            time = float(tokens[time_index])
+            flags = 0
+            if is_sample != 0:
+                flags |= NODE_IS_SAMPLE
+            population = NULL_POPULATION
+            if population_index is not None:
+                population = int(tokens[population_index])
+            table.add_row(flags=flags, time=time, population=population)
+    return table
+
+
+def parse_edgesets(source):
+    """
+    Parse the specified file-like object and return a EdgesetTableTable instance.
+    """
+    table = EdgesetTable()
+    header = source.readline().split()
+    left_index = header.index("left")
+    right_index = header.index("right")
+    parent_index = header.index("parent")
+    children_index = header.index("children")
+    table = EdgesetTable()
+    for line in source:
+        tokens = line.split()
+        if len(tokens) > 0:
+            left = float(tokens[left_index])
+            right = float(tokens[right_index])
+            parent = int(tokens[parent_index])
+            children = tuple(map(int, tokens[children_index].split(",")))
+            table.add_row(
+                left=left, right=right, parent=parent, children=children)
+    return table
+
+
+def parse_sites(source):
+    """
+    Parse the specified file-like object and return a SiteTable instance.
+    """
+    header = source.readline().split()
+    position_index = header.index("position")
+    ancestral_state_index = header.index("ancestral_state")
+    table = SiteTable()
+    for line in source:
+        tokens = line.split()
+        if len(tokens) > 0:
+            position = float(tokens[position_index])
+            ancestral_state = tokens[ancestral_state_index]
+            table.add_row(position=position, ancestral_state=ancestral_state)
+    return table
+
+
+def parse_mutations(source):
+    """
+    Parse the specified file-like object and return a MutationTable instance.
+    """
+    header = source.readline().split()
+    site_index = header.index("site")
+    node_index = header.index("node")
+    derived_state_index = header.index("derived_state")
+    table = MutationTable()
+    for line in source:
+        tokens = line.split()
+        if len(tokens) > 0:
+            site = int(tokens[site_index])
+            node = int(tokens[node_index])
+            derived_state = tokens[derived_state_index]
+            table.add_row(site=site, node=node, derived_state=derived_state)
+    return table
+
+
+def load_text(nodes, edgesets, sites=None, mutations=None):
     """
     Loads a tree sequence from the specified file paths. The files input here
     are in a simple whitespace delimited tabular format such as output by the
@@ -1165,40 +1270,17 @@ def load_txt(records_file, mutations_file=None):
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    # TODO reimplement this using something like load_str and document.
-    raise NotImplementedError("load_txt needs to be reimplemented")
-
-
-def load_str(nodes, edgesets, sites=None, mutations=None):
-    # Initial implementation. This is very rough and will need to be much
-    # more carefully written before release. The load_txt method will be replaced
-    # with an implementation like this eventually, and this function might be
-    # removed entirely.
-    f = six.StringIO(nodes)
-    # Read the first line to get the header
-    header = f.readline()
-    assert len(header) > 0
-    cols = [("id", np.uint32), ("is_sample", np.uint32), ("time", np.float64)]
-    node_id, is_sample, time = np.loadtxt(f, dtype=cols, unpack=True)
-    # TODO
-    # - verify node_id is an arange(0, n)
-    # - check the header columns and parse the input accordingly
-    node_table = NodeTable()
-    node_table.set_columns(flags=is_sample, time=time)
-
-    lines = edgesets.splitlines()
-    edgeset_table = EdgesetTable(len(lines), 2 * len(lines))
-    for line in lines[1:]:
-        split = line.split()
-        if len(split) > 0:
-            left = float(split[0])
-            right = float(split[1])
-            parent = int(split[2])
-            children = tuple(map(int, split[3].split(",")))
-            edgeset_table.add_row(
-                left=left, right=right, parent=parent, children=children)
-
-    return load_tables(nodes=node_table, edgesets=edgeset_table)
+    node_table = parse_nodes(nodes)
+    edgeset_table = parse_edgesets(edgesets)
+    site_table = SiteTable()
+    mutation_table = MutationTable()
+    if sites is not None:
+        site_table = parse_sites(sites)
+    if mutations is not None:
+        mutation_table = parse_mutations(mutations)
+    return load_tables(
+        nodes=node_table, edgesets=edgeset_table, sites=site_table,
+        mutations=mutation_table)
 
 
 class TreeSimulator(object):
@@ -1637,8 +1719,79 @@ class TreeSequence(object):
         """
         self._ll_tree_sequence.dump(path, zlib_compression)
 
-    def dump_tables(self, **kwargs):
-        self._ll_tree_sequence.dump_tables(**kwargs)
+    def dump_tables(
+            self, nodes=None, edgesets=None, migrations=None, sites=None,
+            mutations=None):
+        # TODO document this and test the semantics to passing in new tables
+        # as well as returning the updated tables.
+        if nodes is None:
+            nodes = NodeTable()
+        if edgesets is None:
+            edgesets = EdgesetTable()
+        if migrations is None:
+            migrations = MigrationTable()
+        if sites is None:
+            sites = SiteTable()
+        if mutations is None:
+            mutations = MutationTable()
+        self._ll_tree_sequence.dump_tables(
+            nodes=nodes, edgesets=edgesets, migrations=migrations, sites=sites,
+            mutations=mutations)
+        return TableTuple(
+            nodes=nodes, edgesets=edgesets, migrations=migrations, sites=sites,
+            mutations=mutations)
+
+    def dump_text(
+            self, nodes=None, edgesets=None, sites=None, mutations=None, precision=6):
+        # TODO document.
+
+        # Nodes
+        if nodes is not None:
+            print("is_sample", "time", "population", sep="\t", file=nodes)
+            for node in self.nodes():
+                row = (
+                    "{is_sample:d}\t"
+                    "{time:.{precision}f}\t"
+                    "{population:d}\t").format(
+                        precision=precision, is_sample=node.is_sample(), time=node.time,
+                        population=node.population)
+                print(row, file=nodes)
+
+        if edgesets is not None:
+            print("left", "right", "parent", "children", sep="\t", file=edgesets)
+            for edgeset in self.edgesets():
+                children = ",".join(str(u) for u in edgeset.children)
+                row = (
+                    "{left:.{precision}f}\t"
+                    "{right:.{precision}f}\t"
+                    "{parent:d}\t"
+                    "{children}").format(
+                        precision=precision, left=edgeset.left, right=edgeset.right,
+                        parent=edgeset.parent, children=children)
+                print(row, file=edgesets)
+
+        if sites is not None:
+            # Sites
+            print("position", "ancestral_state", sep="\t", file=sites)
+            for site in self.sites():
+                row = (
+                    "{position:.{precision}f}\t"
+                    "{ancestral_state}").format(
+                        precision=precision, position=site.position,
+                        ancestral_state=site.ancestral_state)
+                print(row, file=sites)
+
+        if mutations is not None:
+            print("site", "node", "derived_state", sep="\t", file=mutations)
+            for site in self.sites():
+                for mutation in site.mutations:
+                    row = (
+                        "{site}\t"
+                        "{node}\t"
+                        "{derived_state}").format(
+                            site=mutation.site, node=mutation.node,
+                            derived_state=mutation.derived_state)
+                    print(row, file=mutations)
 
     @property
     def sample_size(self):
@@ -2172,34 +2325,6 @@ class TreeSequence(object):
             samples = [
                 u for u in samples if self.get_population(u) == population_id]
         return samples
-
-    def write_mutations(self, output, header=True, precision=6):
-        """
-        Writes the mutations for this tree sequence to the specified file in a
-        tab-separated format. If ``header`` is True, the first line of this
-        file contains the names of the columns, i.e., ``position`` and
-        ``node``. The ``position`` field describes the location of the mutation
-        along the sequence in chromosome coordinates, and the ``node`` field
-        defines the node over which the mutation occurs. After the optional
-        header, the records are written to the file in tab-separated form in
-        order of non-decreasing position. The ``position`` field is a base 10
-        floating point value printed to the specified ``precision``. The
-        ``node`` field is a base 10 integer.
-
-        Example usage:
-
-        >>> with open("mutations.txt", "w") as mutations_file:
-        >>>     tree_sequence.write_mutations(mutations_file)
-
-        :param File output: The file-like object to write the tab separated
-            output.
-        :param bool header: If True, write a header describing the column
-            names in the output.
-        :param int precision: The number of decimal places to print out for
-            floating point columns.
-        """
-        # TODO this should be reimplemented and replaces with dump_txt method.
-        raise NotImplementedError("Reimplement for new text IO methods")
 
     def write_vcf(self, output, ploidy=1):
         """

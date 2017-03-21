@@ -583,6 +583,10 @@ tree_sequence_check(tree_sequence_t *self)
             ret = MSP_ERR_NULL_NODE_IN_RECORD;
             goto out;
         }
+        if (node < 0 || node >= (node_id_t) self->nodes.num_records) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
         if (self->edgesets.children_length[j] < 1) {
             ret = MSP_ERR_ZERO_CHILDREN;
             goto out;
@@ -600,6 +604,10 @@ tree_sequence_check(tree_sequence_t *self)
             child = self->edgesets.children[j][k];
             if (child == MSP_NULL_NODE) {
                 ret = MSP_ERR_NULL_NODE_IN_RECORD;
+                goto out;
+            }
+            if (child < 0 || child >= (node_id_t) self->nodes.num_records) {
+                ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
                 goto out;
             }
             /* Children must be in ascending order */

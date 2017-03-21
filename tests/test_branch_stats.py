@@ -26,22 +26,13 @@ from __future__ import division
 import unittest
 import random
 
+import six
+
 import msprime
 
 ##
 # This tests implementation of the algorithm described in branch-lengths-methods.md
 ##
-
-
-def build_tree_sequence(records, mutations=[]):
-    # TODO Change over the examples in this file to use the text representation
-    # and remove this function.
-    sites = []
-    for pos, node in mutations:
-        sites.append(msprime.Site(
-            position=pos, index=None, ancestral_state="0", mutations=[
-                msprime.Mutation(node=node, site=None, derived_state="1")]))
-    return msprime.load_coalescence_records(records=records, sites=sites)
 
 
 def path_length(tr, x, y):
@@ -315,44 +306,56 @@ class BranchStatsTestCase(unittest.TestCase):
         # 0.0   0     1       2        1   0   2       0   1       2
         #          (0.0, 0.2),        (0.2, 0.8),       (0.8, 1.0)
         #
-
         true_diversity_01 = 2*(1 * (0.2-0) + 0.5 * (0.8-0.2) + 0.7 * (1.0-0.8))
         true_diversity_02 = 2*(1 * (0.2-0) + 0.4 * (0.8-0.2) + 0.7 * (1.0-0.8))
         true_diversity_12 = 2*(0.5 * (0.2-0) + 0.5 * (0.8-0.2) + 0.5 * (1.0-0.8))
-
-        records = [
-            msprime.CoalescenceRecord(
-                left=0.2, right=0.8, node=3, children=(0, 2),
-                time=0.4, population=0),
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=4, children=(1, 2),
-                time=0.5, population=0),
-            msprime.CoalescenceRecord(
-                left=0.2, right=0.8, node=4, children=(1, 3),
-                time=0.5, population=0),
-            msprime.CoalescenceRecord(
-                left=0.8, right=1.0, node=4, children=(1, 2),
-                time=0.5, population=0),
-            msprime.CoalescenceRecord(
-                left=0.8, right=1.0, node=5, children=(0, 4),
-                time=0.7, population=0),
-            msprime.CoalescenceRecord(
-                left=0.0, right=0.2, node=6, children=(0, 4),
-                time=1.0, population=0)]
-
-        mutations = [
-            (0.05, 4),
-            (0.1, 0),
-            (0.11, 2),
-            (0.15, 0),
-            (0.151, 1),
-            (0.3, 1),
-            (0.6, 2),
-            (0.9, 0),
-            (0.95, 1),
-            (0.951, 2)]
-        ts = build_tree_sequence(records, mutations)
-
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           0
+        3       0           0.4
+        4       0           0.5
+        5       0           0.7
+        6       0           1.0
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0.2     0.8     3       0,2
+        0.0     0.2     4       1,2
+        0.2     0.8     4       1,3
+        0.8     1.0     4       1,2
+        0.8     1.0     5       0,4
+        0.0     0.2     6       0,4
+        """)
+        sites = six.StringIO("""\
+        id  position    ancestral_state
+        0   0.05        0
+        1   0.1         0
+        2   0.11        0
+        3   0.15        0
+        4   0.151       0
+        5   0.3         0
+        6   0.6         0
+        7   0.9         0
+        8   0.95        0
+        9   0.951       0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state
+        0       4       1
+        1       0       1
+        2       2       1
+        3       0       1
+        4       1       1
+        5       1       1
+        6       2       1
+        7       0       1
+        8       1       1
+        9       2       1
+        """)
+        ts = msprime.load_text(
+            nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
         self.check_Y_stat(ts)
@@ -442,69 +445,47 @@ class BranchStatsTestCase(unittest.TestCase):
         # divergence betw 0 and 2
         true_diversity_02 = 2*(0.2*5 + 0.2*4 + 0.3*5 + 0.1*4 + 0.2*5)
         # mean divergence between 0, 1 and 0, 2
-        true_mean_diversity = (0 + true_diversity_02
-                               + true_diversity_01 + true_diversity_12)/4
+        true_mean_diversity = (
+                0 + true_diversity_02 + true_diversity_01 + true_diversity_12) / 4
         # Y(0;1, 2)
         true_Y = 0.2*4 + 0.2*(4+2) + 0.2*4 + 0.2*2 + 0.2*(5+1)
 
-        records = [
-                msprime.CoalescenceRecord(
-                    left=0.5, right=1.0, node=10, children=(1,),
-                    time=5.0-4.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.4, node=10, children=(2,),
-                    time=5.0-4.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.6, right=1.0, node=9, children=(0,),
-                    time=5.0-4.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.5, node=9, children=(1,),
-                    time=5.0-4.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.8, right=1.0, node=8, children=(10,),
-                    time=5.0-3.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.2, right=0.8, node=8, children=(9, 10),
-                    time=5.0-3.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.2, node=8, children=(9,),
-                    time=5.0-3.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.7, right=1.0, node=7, children=(8,),
-                    time=5.0-2.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.2, node=7, children=(10,),
-                    time=5.0-2.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.8, right=1.0, node=6, children=(9,),
-                    time=5.0-2.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.7, node=6, children=(8,),
-                    time=5.0-2.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.4, right=1.0, node=5, children=(2, 7),
-                    time=5.0-1.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.1, right=0.4, node=5, children=(7,),
-                    time=5.0-1.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.6, right=0.9, node=4, children=(6,),
-                    time=5.0-1.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.0, right=0.6, node=4, children=(0, 6),
-                    time=5.0-1.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.9, right=1.0, node=3, children=(4, 5, 6),
-                    time=5.0-0.0, population=0),
-                msprime.CoalescenceRecord(
-                    left=0.1, right=0.9, node=3, children=(4, 5),
-                    time=5.0-0.0, population=0),
-                msprime.CoalescenceRecord(
-                        left=0.0, right=0.1, node=3, children=(4, 5, 7),
-                        time=5.0-0.0, population=0),
-               ]
-
-        ts = build_tree_sequence(records)
+        nodes = six.StringIO("""\
+        is_sample       time    population
+        1       0.000000        0
+        1       0.000000        0
+        1       0.000000        0
+        0       5.000000        0
+        0       4.000000        0
+        0       4.000000        0
+        0       3.000000        0
+        0       3.000000        0
+        0       2.000000        0
+        0       1.000000        0
+        0       1.000000        0
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0.500000        1.000000        10      1
+        0.000000        0.400000        10      2
+        0.600000        1.000000        9       0
+        0.000000        0.500000        9       1
+        0.800000        1.000000        8       10
+        0.200000        0.800000        8       9,10
+        0.000000        0.200000        8       9
+        0.700000        1.000000        7       8
+        0.000000        0.200000        7       10
+        0.800000        1.000000        6       9
+        0.000000        0.700000        6       8
+        0.400000        1.000000        5       2,7
+        0.100000        0.400000        5       7
+        0.600000        0.900000        4       6
+        0.000000        0.600000        4       0,6
+        0.900000        1.000000        3       4,5,6
+        0.100000        0.900000        3       4,5
+        0.000000        0.100000        3       4,5,7
+        """)
+        ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
 
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)

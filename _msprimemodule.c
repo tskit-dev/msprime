@@ -1161,7 +1161,8 @@ static PyTypeObject NodeTableType = {
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
     "NodeTable objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
@@ -1531,7 +1532,8 @@ static PyTypeObject EdgesetTableType = {
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
     "EdgesetTable objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
@@ -1847,7 +1849,8 @@ static PyTypeObject MigrationTableType = {
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
     "MigrationTable objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
@@ -2169,7 +2172,8 @@ static PyTypeObject SiteTableType = {
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
     "SiteTable objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
@@ -2508,7 +2512,8 @@ static PyTypeObject MutationTableType = {
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
     "MutationTable objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */

@@ -75,7 +75,6 @@ class CommonTestsMixin(object):
     Abstract base class for common table tests. Because of the design of unittest,
     we have to make this a mixin.
     """
-
     def test_max_rows_increment(self):
         for bad_value in [-1, 0, -2**10]:
             self.assertRaises(ValueError, self.table_class, max_rows_increment=bad_value)
@@ -194,6 +193,19 @@ class CommonTestsMixin(object):
                 self.assertEqual(table.num_rows, 0)
                 for colname in input_data.keys():
                     self.assertEqual(list(getattr(table, colname)), [])
+
+    def test_str(self):
+        for num_rows in [0, 10]:
+            input_data = {
+                col.name: col.get_input(num_rows) for col in self.columns}
+            for list_col, length_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
+                input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
+            table = self.table_class()
+            table.set_columns(**input_data)
+            s = str(table)
+            self.assertEqual(len(s.splitlines()), num_rows + 1)
 
 
 class TestNodeTable(unittest.TestCase, CommonTestsMixin):
