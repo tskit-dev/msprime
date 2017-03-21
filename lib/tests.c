@@ -2823,6 +2823,26 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     edgeset_table.parent[0] = 2;
 
+    /* parent not in nodes list */
+    node_table.num_rows = 2;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    tree_sequence_free(&ts);
+    node_table.num_rows = 3;
+
+    /* parent negative */
+    edgeset_table.parent[0] = -2;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    tree_sequence_free(&ts);
+    edgeset_table.parent[0] = 2;
+
     /* Null child */
     edgeset_table.children[0] = MSP_NULL_NODE;
     ret = tree_sequence_initialise(&ts);
@@ -2830,6 +2850,26 @@ test_simplest_bad_records(void)
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             NULL, NULL, 0, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_NODE_IN_RECORD);
+    tree_sequence_free(&ts);
+    edgeset_table.children[0] = 0;
+
+    /* child node reference out of bounds */
+    edgeset_table.children[0] = 3;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    tree_sequence_free(&ts);
+    edgeset_table.children[0] = 0;
+
+    /* child node reference negative */
+    edgeset_table.children[0] = -2;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     edgeset_table.children[0] = 0;
 
