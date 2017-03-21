@@ -25,6 +25,7 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics_int.h>
+#include <gsl/gsl_sf.h>
 
 #include <hdf5.h>
 
@@ -449,6 +450,7 @@ msp_set_simulation_model_dirac(msp_t *self, double psi)
         goto out;
     }
     self->model.params.dirac_coalescent.psi = psi;
+    self->model.params.dirac_coalescent.const_c = 1.0; // hard coded const_c value
 out:
     return ret;
 }
@@ -1620,6 +1622,7 @@ msp_recombination_event(msp_t *self)
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
     l = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
+    //printf( "l = %d, num_links = %d\n", (int)l, (int)num_links);
     assert(l > 0 && l <= num_links);
     segment_id = fenwick_find(&self->links, l);
     t = fenwick_get_cumulative_sum(&self->links, segment_id);
@@ -2116,6 +2119,37 @@ msp_common_ancestor_event(msp_t *self, population_id_t population_id)
 }
 
 
+/* This calculates the rate given by Eq (2) in the notes
+ */
+static double
+msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int b)
+{
+    unsigned int l, n_block;
+    double psi = self->model.params.dirac_coalescent.psi;
+    double c = self->model.params.dirac_coalescent.const_c;
+    double ret = 0;
+
+    assert(b > 0);
+    assert(psi > 0);
+    assert(psi < 1);
+    assert(c >= 0);
+
+    n_block = GSL_MIN(b, 4);
+    for (l = 0; l < n_block; l++){
+        ret += gsl_sf_exp(gsl_sf_lnchoose(b, l) +
+                           gsl_sf_log(4.0) +
+                           (double)l * gsl_sf_log(psi/4.0) +
+                           (double)(b-l) * gsl_sf_log(1-psi));
+    }
+
+
+    ret = 1 - ret;
+    ret *= c*4.0/pow(psi,2.0);
+    ret += b * (b-1) / 2;
+
+    return ret;
+}
+
 static int WARN_UNUSED
 msp_multiple_merger_common_ancestor_event(msp_t *self)
 {
@@ -2129,49 +2163,51 @@ msp_multiple_merger_common_ancestor_event(msp_t *self)
     /* This is just an example to show how to perform the two regimes. With probability 1/2
      * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
      */
-    if (gsl_rng_uniform(self->rng) < 0.5) {
-        /* Choose x and y */
-        n = avl_count(ancestors);
-        j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
-        x_node = avl_at(ancestors, j);
-        assert(x_node != NULL);
-        x = (segment_t *) x_node->item;
-        avl_unlink_node(ancestors, x_node);
-        j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
-        y_node = avl_at(ancestors, j);
-        assert(y_node != NULL);
-        y = (segment_t *) y_node->item;
-        avl_unlink_node(ancestors, y_node);
-        self->num_ca_events++;
-        msp_free_avl_node(self, x_node);
-        msp_free_avl_node(self, y_node);
-        ret = msp_merge_two_ancestors(self, 0, x, y);
-    } else {
-        /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
-         * of being included. This isn't how things will work for the real simulation,
-         * but it should show how the machinery of merging lots of ancestors should work.
-         */
-        avl_init_tree(&Q, cmp_segment_queue, NULL);
-        node = ancestors->head;
-        while (node != NULL) {
-            next = node->next;
-            if (gsl_rng_uniform(self->rng) < 0.5) {
-                u = (segment_t *) node->item;
-                avl_unlink_node(ancestors, node);
-                msp_free_avl_node(self, node);
-                q_node = msp_alloc_avl_node(self);
-                if (q_node == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
+    if (self->model.type == MSP_MODEL_DIRAC){
+        if (gsl_rng_uniform(self->rng) < (1/(1.0 + self->model.params.dirac_coalescent.const_c))) {
+            /* Choose x and y */
+            n = avl_count(ancestors);
+            j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
+            x_node = avl_at(ancestors, j);
+            assert(x_node != NULL);
+            x = (segment_t *) x_node->item;
+            avl_unlink_node(ancestors, x_node);
+            j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
+            y_node = avl_at(ancestors, j);
+            assert(y_node != NULL);
+            y = (segment_t *) y_node->item;
+            avl_unlink_node(ancestors, y_node);
+            self->num_ca_events++;
+            msp_free_avl_node(self, x_node);
+            msp_free_avl_node(self, y_node);
+            ret = msp_merge_two_ancestors(self, 0, x, y);
+        } else {
+            /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
+             * of being included. This isn't how things will work for the real simulation,
+             * but it should show how the machinery of merging lots of ancestors should work.
+             */
+            avl_init_tree(&Q, cmp_segment_queue, NULL);
+            node = ancestors->head;
+            while (node != NULL) {
+                next = node->next;
+                if (gsl_rng_uniform(self->rng) < self->model.params.dirac_coalescent.psi / 4.0) {
+                    u = (segment_t *) node->item;
+                    avl_unlink_node(ancestors, node);
+                    msp_free_avl_node(self, node);
+                    q_node = msp_alloc_avl_node(self);
+                    if (q_node == NULL) {
+                        ret = MSP_ERR_NO_MEMORY;
+                        goto out;
+                    }
+                    avl_init_node(q_node, u);
+                    q_node = avl_insert_node(&Q, q_node);
+                    assert(q_node != NULL);
                 }
-                avl_init_node(q_node, u);
-                q_node = avl_insert_node(&Q, q_node);
-                assert(q_node != NULL);
+                node = next;
             }
-            node = next;
+            /* Now that we have filled Q in the correct way, we can merge the ancestors. */
+            ret = msp_merge_ancestors(self, &Q, 0);
         }
-        /* Now that we have filled Q in the correct way, we can merge the ancestors. */
-        ret = msp_merge_ancestors(self, &Q, 0);
     }
 out:
     return ret;
@@ -2392,6 +2428,30 @@ msp_get_common_ancestor_waiting_time(msp_t *self, uint32_t population_id)
             (uint32_t) avl_count(&pop->ancestors));
 }
 
+static double
+msp_get_multiple_merger_waiting_time(msp_t *self, uint32_t population_id,
+        unsigned int k) // k used for k-merger
+{
+    double ret = DBL_MAX;
+    population_t *pop = &self->populations[population_id];
+    unsigned int n = avl_count(&pop->ancestors);
+    //double t = self->time;
+    double u;
+    double mm_rate = 0.0;
+
+    if (self->model.type == MSP_MODEL_DIRAC){
+        mm_rate = msp_compute_lambda_Xi_dirac(self, n);
+    }
+
+    if (mm_rate > 0.0) {
+        u = gsl_ran_exponential(self->rng, 1.0/mm_rate)/2.0;
+        ret = u; // staying away from population size for now
+                 // ret = pop->initial_size * u;
+    }
+
+    return ret;
+}
+
 static int WARN_UNUSED
 msp_sanity_check(msp_t *self, int64_t num_links)
 {
@@ -2561,7 +2621,7 @@ static int WARN_UNUSED
 msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda, t_wait, ca_t_wait, re_t_wait, n;
+    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait;
     int64_t num_links;
     unsigned long events = 0;
 
@@ -2584,10 +2644,13 @@ msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long 
             re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
         }
         /* Common ancestors */
-        n = (double) avl_count(&self->populations[0].ancestors);
-        lambda = n * (n - 1.0);
-        ca_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
-
+        ca_t_wait = DBL_MAX;
+        // Staying away from population structure for now
+        uint32_t single_population_idx = 0;
+        t_temp = msp_get_multiple_merger_waiting_time(self, single_population_idx, 0); // Not sure what to set for k? k-merger?
+        if (t_temp < ca_t_wait) {
+            ca_t_wait = t_temp;
+        }
         t_wait = GSL_MIN(re_t_wait, ca_t_wait);
         self->time += t_wait;
         if (re_t_wait == t_wait) {
@@ -2595,6 +2658,7 @@ msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long 
         } else if (ca_t_wait == t_wait) {
             ret = msp_multiple_merger_common_ancestor_event(self);
         }
+        /* Migration ??? */
         if (ret != 0) {
             goto out;
         }

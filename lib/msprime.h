@@ -221,6 +221,7 @@ typedef struct {
 
 typedef struct {
     double psi;
+    double const_c; // constant
 } dirac_coalescent_t;
 
 typedef struct {

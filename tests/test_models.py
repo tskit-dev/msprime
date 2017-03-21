@@ -176,7 +176,7 @@ class TestMultipleMergerModels(unittest.TestCase):
     Runs tests on the multiple merger coalescent models.
     """
     def test_dirac_coalescent(self):
-        model = msprime.DiracCoalescent(5)
+        model = msprime.DiracCoalescent(0.3)
         ts = msprime.simulate(sample_size=10, model=model)
         # TODO real tests
         self.assertTrue(ts is not None)

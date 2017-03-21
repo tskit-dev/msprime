@@ -2281,7 +2281,8 @@ test_multiple_mergers_simulation(void)
         CU_ASSERT_EQUAL(ret, 0);
         /* TODO what are good parameters here?? */
         if (j == 0) {
-            ret = msp_set_simulation_model_dirac(msp, 1.0);
+            // Use psi = 0.5 for now, but should definitely test for 0 and 1 cases
+            ret = msp_set_simulation_model_dirac(msp, 0.5);
         } else {
             ret = msp_set_simulation_model_beta(msp, 1.0, 10.0);
         }
