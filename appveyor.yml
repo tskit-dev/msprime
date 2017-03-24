@@ -6,6 +6,12 @@ environment:
       CONDA_PY: "35"
       CONDA_NPY: "111"
 
+    - PYTHON: "C:\\Miniconda35"
+      PYTHON_VERSION: "3.5"
+      PYTHON_ARCH: "32"
+      CONDA_PY: "35"
+      CONDA_NPY: "111"
+
 install:
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
 

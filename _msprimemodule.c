@@ -2898,8 +2898,8 @@ RecombinationMap_get_num_loci(RecombinationMap *self)
     if (RecombinationMap_check_recomb_map(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) recomb_map_get_num_loci(self->recomb_map));
+    ret = Py_BuildValue("k",
+        (unsigned long) recomb_map_get_num_loci(self->recomb_map));
 out:
     return ret;
 }
@@ -6066,7 +6066,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sample_t *samples = NULL;
     /* parameter defaults */
     Py_ssize_t sample_size = 2;
-    Py_ssize_t num_loci = 1;
+    unsigned long num_loci = 1;
     double scaled_recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
@@ -6078,7 +6078,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|ndO!O!O!O!nnnnnni", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnnnni", kwlist,
             &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
             &num_loci, &scaled_recombination_rate,
@@ -6268,7 +6268,7 @@ Simulator_get_num_loci(Simulator *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_loci(self->sim));
+    ret = Py_BuildValue("k", (unsigned long) msp_get_num_loci(self->sim));
 out:
     return ret;
 }
