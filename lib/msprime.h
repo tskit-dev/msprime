@@ -221,7 +221,7 @@ typedef struct {
 
 typedef struct {
     double psi;
-    double const_c; // constant
+    double c; // constant
 } dirac_coalescent_t;
 
 typedef struct {
@@ -626,7 +626,7 @@ typedef struct {
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
 int msp_set_simulation_model_non_parametric(msp_t *self, int model);
-int msp_set_simulation_model_dirac(msp_t *self, double psi);
+int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
 int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);

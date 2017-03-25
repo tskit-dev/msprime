@@ -2282,7 +2282,7 @@ test_multiple_mergers_simulation(void)
         /* TODO what are good parameters here?? */
         if (j == 0) {
             // Use psi = 0.5 for now, but should definitely test for 0 and 1 cases
-            ret = msp_set_simulation_model_dirac(msp, 0.5);
+            ret = msp_set_simulation_model_dirac(msp, 0.5, 1);
         } else {
             ret = msp_set_simulation_model_beta(msp, 1.0, 10.0);
         }

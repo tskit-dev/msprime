@@ -440,7 +440,7 @@ out:
 }
 
 int
-msp_set_simulation_model_dirac(msp_t *self, double psi)
+msp_set_simulation_model_dirac(msp_t *self, double psi, double c)
 {
     int ret = 0;
 
@@ -450,7 +450,7 @@ msp_set_simulation_model_dirac(msp_t *self, double psi)
         goto out;
     }
     self->model.params.dirac_coalescent.psi = psi;
-    self->model.params.dirac_coalescent.const_c = 1.0; // hard coded const_c value
+    self->model.params.dirac_coalescent.c = c;
 out:
     return ret;
 }
@@ -2126,7 +2126,7 @@ msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int b)
 {
     unsigned int l, n_block;
     double psi = self->model.params.dirac_coalescent.psi;
-    double c = self->model.params.dirac_coalescent.const_c;
+    double c = self->model.params.dirac_coalescent.c;
     double ret = 0;
 
     assert(b > 0);
@@ -2164,7 +2164,7 @@ msp_multiple_merger_common_ancestor_event(msp_t *self)
      * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
      */
     if (self->model.type == MSP_MODEL_DIRAC){
-        if (gsl_rng_uniform(self->rng) < (1/(1.0 + self->model.params.dirac_coalescent.const_c))) {
+        if (gsl_rng_uniform(self->rng) < (1/(1.0 + self->model.params.dirac_coalescent.c))) {
             /* Choose x and y */
             n = avl_count(ancestors);
             j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
