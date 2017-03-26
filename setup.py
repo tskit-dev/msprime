@@ -55,7 +55,9 @@ class PathConfigurator(object):
         self._check_hdf5_version()
         self._attempt_pkgconfig()
         if CONDA_PREFIX is not None:
-            prefix = os.path.join(CONDA_PREFIX, "Library")
+            prefix = CONDA_PREFIX
+            if IS_WINDOWS:
+                prefix = os.path.join(prefix, "Library")
             self.library_dirs.append(os.path.join(prefix, "lib"))
             self.include_dirs.append(os.path.join(prefix, "include"))
 

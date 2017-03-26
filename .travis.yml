@@ -1,60 +1,51 @@
-sudo: false
-
 cache:
-  apt: true
   pip: true
   directories:
     - $HOME/.cache/pip
     - $HOME/.local
 
-addons:
-  apt:
-    packages:
-      - libgsl0-dev
-      - libhdf5-serial-dev
-      - libcunit1-dev
-      - python-h5py
-      - graphviz
-      - doxygen
-
 language: python
 
-python:
-  - "2.7"
-  - "3.3"
-  - "3.4"
-  - "3.5"
-  - "3.6"
+matrix:
+  include:
+    - os: linux
+      python: 2.7
+    - os: linux
+      python: 3.3
+    - os: linux
+      python: 3.4
+    - os: linux
+      python: 3.5
+    - os: linux
+      python: 3.6
+    - os: osx
+      language: generic
 
 install:
-  # Install newer version of pip to take advantage of bdist_wheel cache.
-  - pip install pip --upgrade
-  # We install these requirements here rather than through the requirements.txt
-  # file because of issues on readthedocs. First we install Cython so that it
-  # creates a bdist_wheel and then the rest. This allows Travis to cache the builds.
-  - pip install Cython
+  # We do this conditionally because it saves us some downloading if the
+  # version is the same.
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      curl https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh > miniconda.sh;
+      export TRAVIS_PYTHON_VERSION="3.6";
+    elif [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
+    else
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+    fi
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda config --add channels conda-forge
+  - conda update -q conda
+  - conda info -a
+
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
+  - source activate test-environment
+  - export MSP_CONDA_PREFIX="$HOME/miniconda/envs/test-environment"
+  - conda install --yes --file=requirements/appveyor.txt
   - pip install -r requirements/development.txt
-  - CFLAGS=--coverage python setup.py build_ext --inplace
+  - python setup.py install
 
 script:
-  - flake8 --max-line-length 89 setup.py msprime tests
-  - nosetests -v --with-coverage --cover-package msprime
-      --cover-branches --cover-erase --cover-xml
-      --cover-inclusive tests
-  - codecov -X gcov -F python
-  - rm .coverage
-
-  # Now run the low-level tests.
-  - make -C lib travis-tests
-  - ./lib/tests 
-  # Run gcov manually, as the one used in codecov doesn't work here.
-  - gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
-  - find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
-  - codecov -X gcov -F C
-
-  # Only make the docs on a recent version of Python to avoid problems with Sphinx.
-  - if [[ $TRAVIS_PYTHON_VERSION == 3.4 ]]; then make -C docs; fi
-  # Make sure we can install successfully.
-  - python setup.py sdist
-  - pip install dist/msprime*.tar.gz --no-cache-dir
-  - cd docs/ && doxygen > /dev/null && cd ..
+  - nosetests -vs
