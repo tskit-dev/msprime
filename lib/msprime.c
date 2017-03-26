@@ -2126,8 +2126,8 @@ double compute_falling_factorial_log(double m)
     double l = 0.0;
     double ret = 1.0;
     while (l < m){
-        ret *= (4 - l + 1);
         l++;
+        ret *= (4 - l + 1);
     }
     return gsl_sf_log(ret);
 }
@@ -2224,6 +2224,56 @@ msp_multiple_merger_common_ancestor_event(msp_t *self)
             /* Now that we have filled Q in the correct way, we can merge the ancestors. */
             ret = msp_merge_ancestors(self, &Q, 0);
         }
+    } else if (self->model.type == MSP_MODEL_BETA){
+    /* This is just an example to show how to perform the two regimes. With probability 1/2
+     * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
+     */
+        if (gsl_rng_uniform(self->rng) < 0.5) {
+            /* Choose x and y */
+            n = avl_count(ancestors);
+            j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
+            x_node = avl_at(ancestors, j);
+            assert(x_node != NULL);
+            x = (segment_t *) x_node->item;
+            avl_unlink_node(ancestors, x_node);
+            j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
+            y_node = avl_at(ancestors, j);
+            assert(y_node != NULL);
+            y = (segment_t *) y_node->item;
+            avl_unlink_node(ancestors, y_node);
+            self->num_ca_events++;
+            msp_free_avl_node(self, x_node);
+            msp_free_avl_node(self, y_node);
+            ret = msp_merge_two_ancestors(self, 0, x, y);
+        } else {
+            /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
+             * of being included. This isn't how things will work for the real simulation,
+             * but it should show how the machinery of merging lots of ancestors should work.
+             */
+            avl_init_tree(&Q, cmp_segment_queue, NULL);
+            node = ancestors->head;
+            while (node != NULL) {
+                next = node->next;
+                if (gsl_rng_uniform(self->rng) < 0.5) {
+                    u = (segment_t *) node->item;
+                    avl_unlink_node(ancestors, node);
+                    msp_free_avl_node(self, node);
+                    q_node = msp_alloc_avl_node(self);
+                    if (q_node == NULL) {
+                        ret = MSP_ERR_NO_MEMORY;
+                        goto out;
+                    }
+                    avl_init_node(q_node, u);
+                    q_node = avl_insert_node(&Q, q_node);
+                    assert(q_node != NULL);
+                }
+                node = next;
+            }
+            /* Now that we have filled Q in the correct way, we can merge the ancestors. */
+            ret = msp_merge_ancestors(self, &Q, 0);
+        }
+    } else {
+        ret = MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT;
     }
 out:
     return ret;
@@ -2457,6 +2507,10 @@ msp_get_multiple_merger_waiting_time(msp_t *self, uint32_t population_id,
 
     if (self->model.type == MSP_MODEL_DIRAC){
         mm_rate = msp_compute_lambda_Xi_dirac(self, n);
+    }
+
+    if (self->model.type == MSP_MODEL_BETA){ // TODO NEED TO BE CHANGED!!!!
+        mm_rate = 1.0;  // TODO NEED TO BE CHANGED!!!!
     }
 
     if (mm_rate > 0.0) {
