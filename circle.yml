@@ -1,0 +1,7 @@
+machine:
+  python:
+    version: 3.6.0
+dependencies:
+  pre:
+    - sudo apt-get update; sudo apt-get install libgsl0-dev libhdf5-serial-dev 
+    - pip install -r requirements/development.txt
