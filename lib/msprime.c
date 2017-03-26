@@ -2119,16 +2119,32 @@ msp_common_ancestor_event(msp_t *self, population_id_t population_id)
 }
 
 
+double compute_falling_factorial_log(double m)
+{
+    //  (n)_m = n(n-1)(n-2)... (n-m + 1)  and  (n)_0 := 1
+    // n = 4
+    double l = 0.0;
+    double ret = 1.0;
+    while (l < m){
+        ret *= (4 - l + 1);
+        l++;
+    }
+    return gsl_sf_log(ret);
+}
+
+
 /* This calculates the rate given by Eq (2) in the notes
  */
 static double
-msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int b)
+msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int num_ancestors)
 {
-    unsigned int l, n_block;
+    unsigned int l;
+    double n_block;
     double psi = self->model.params.dirac_coalescent.psi;
     double c = self->model.params.dirac_coalescent.c;
     double ret = 0;
 
+    double b = num_ancestors;
     assert(b > 0);
     assert(psi > 0);
     assert(psi < 1);
@@ -2136,10 +2152,10 @@ msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int b)
 
     n_block = GSL_MIN(b, 4);
     for (l = 0; l < n_block; l++){
-        ret += gsl_sf_exp(gsl_sf_lnchoose(b, l) +
-                           gsl_sf_log(4.0) +
-                           (double)l * gsl_sf_log(psi/4.0) +
-                           (double)(b-l) * gsl_sf_log(1-psi));
+        ret += gsl_sf_exp(gsl_sf_lnchoose(num_ancestors, l) +
+                           compute_falling_factorial_log(l) +
+                           l * gsl_sf_log(psi/4.0) +
+                           (b-l) * gsl_sf_log(1-psi));
     }
 
 

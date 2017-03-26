@@ -900,6 +900,8 @@ void migration_table_print_state(migration_table_t *self, FILE *out);
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 
+double compute_falling_factorial_log(double m);
+
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 
 
