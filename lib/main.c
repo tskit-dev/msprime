@@ -482,31 +482,49 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
             == CONFIG_FALSE) {
         fatal_error("avl_node_block_size is a required parameter");
     }
-    msp_set_avl_node_block_size(msp, (size_t) int_tmp);
+    ret = msp_set_avl_node_block_size(msp, (size_t) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     if (config_lookup_int(config, "segment_block_size", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("segment_block_size is a required parameter");
     }
-    msp_set_segment_block_size(msp, (size_t) int_tmp);
+    ret = msp_set_segment_block_size(msp, (size_t) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     if (config_lookup_int(config, "node_mapping_block_size", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("node_mapping_block_size is a required parameter");
     }
-    msp_set_node_mapping_block_size(msp, (size_t) int_tmp);
+    ret = msp_set_node_mapping_block_size(msp, (size_t) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     if (config_lookup_int(config, "coalescence_record_block_size", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("coalescence_record_block_size is a required parameter");
     }
-    msp_set_coalescence_record_block_size(msp, (size_t) int_tmp);
+    ret = msp_set_coalescence_record_block_size(msp, (size_t) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     if (config_lookup_int(config, "max_memory", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("max_memory is a required parameter");
     }
-    msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
+    ret = msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     if (config_lookup_int(config, "store_migrations", &int_tmp) == CONFIG_FALSE) {
         fatal_error("store_migrations is a required parameter");
     }
-    msp_set_store_migrations(msp, (bool) int_tmp);
+    ret = msp_set_store_migrations(msp, (bool) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     t = config_lookup(config, "model");
     if (t == NULL) {
         fatal_error("model not specified");

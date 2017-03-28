@@ -2733,7 +2733,7 @@ test_simplest_bad_records(void)
 
     ret = node_table_alloc(&node_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(nodes, &node_table);
@@ -3002,7 +3002,7 @@ test_single_tree_bad_records(void)
 
     ret = node_table_alloc(&node_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(single_tree_ex_nodes, &node_table);
@@ -3123,11 +3123,11 @@ test_single_tree_bad_mutations(void)
 
     ret = node_table_alloc(&node_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    site_table_alloc(&site_table, 1, 1);
+    ret = site_table_alloc(&site_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    mutation_table_alloc(&mutation_table, 1, 1);
+    ret = mutation_table_alloc(&mutation_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(single_tree_ex_nodes, &node_table);
@@ -4608,7 +4608,7 @@ test_tree_sequence_bad_records(void)
 
     ret = node_table_alloc(&node_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(paper_ex_nodes, &node_table);
@@ -5363,8 +5363,10 @@ test_save_empty_hdf5(void)
     int ret;
     tree_sequence_t ts1, ts2;
 
-    tree_sequence_initialise(&ts1);
-    tree_sequence_initialise(&ts2);
+    ret = tree_sequence_initialise(&ts1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_initialise(&ts2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_dump(&ts1, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_empty_tree_sequence(&ts1);
@@ -5489,6 +5491,7 @@ test_dump_tables(void)
         ret = tree_sequence_load_tables_tmp(&ts2, &nodes, &edgesets,
                 &migrations, NULL, NULL, num_provenance_strings,
                 provenance_strings);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_tree_sequences_equal(ts1, &ts2, true, false, true);
         CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_num_mutations(&ts2), 0);
