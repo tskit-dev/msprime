@@ -1,7 +1,7 @@
 # msprime
 
 [![Travis](https://img.shields.io/travis/jeromekelleher/msprime/master.svg)](https://travis-ci.org/jeromekelleher/msprime) [![AppVeyor](https://ci.appveyor.com/api/projects/status/7u35hb93h0hmo000/branch/master?svg=true
-)](https://ci.appveyor.com/project/jeromekelleher/msprime/branch/master) [![CodeCov](https://img.shields.io/codecov/c/github/jeromekelleher/msprime.svg)](https://codecov.io/gh/jeromekelleher/msprime) [![Read the docs](https://readthedocs.org/projects/msprime/badge/?version=latest)](http://msprime.readthedocs.io/en/latest/?badge=latest)
+)](https://ci.appveyor.com/project/jeromekelleher/msprime/branch/master) [![CircleCI](https://circleci.com/gh/jeromekelleher/msprime.svg?style=shield)](https://circleci.com/gh/jeromekelleher/msprime) [![CodeCov](https://img.shields.io/codecov/c/github/jeromekelleher/msprime.svg)](https://codecov.io/gh/jeromekelleher/msprime) [![Read the docs](https://readthedocs.org/projects/msprime/badge/?version=latest)](http://msprime.readthedocs.io/en/latest/?badge=latest)
 
 ``msprime`` is a Python API and command line interface for simulating the 
 coalescent with recombination. Please see the 
