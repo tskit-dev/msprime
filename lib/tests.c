@@ -4141,134 +4141,134 @@ typedef struct {
     uint32_t count;
 } leaf_count_test_t;
 
-/* static void */
-/* verify_leaf_counts(tree_sequence_t *ts, size_t num_tests, */
-/*         leaf_count_test_t *tests) */
-/* { */
-/*     int ret; */
-/*     size_t j, num_leaves, n, k; */
-/*     node_id_t *tracked_leaves = NULL; */
-/*     sparse_tree_t tree; */
-/*     leaf_list_node_t *u, *head, *tail; */
+static void
+verify_leaf_counts(tree_sequence_t *ts, size_t num_tests,
+        leaf_count_test_t *tests)
+{
+    int ret;
+    size_t j, num_leaves, n, k;
+    node_id_t *tracked_leaves = NULL;
+    sparse_tree_t tree;
+    leaf_list_node_t *u, *head, *tail;
 
-/*     n = tree_sequence_get_sample_size(ts); */
+    n = tree_sequence_get_sample_size(ts);
 
-/*     /1* First run without the MSP_LEAF_COUNTS feature *1/ */
-/*     ret = sparse_tree_alloc(&tree, ts, 0); */
-/*     CU_ASSERT_EQUAL(ret, 0); */
-/*     ret = sparse_tree_first(&tree); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*     for (j = 0; j < num_tests; j++) { */
-/*         while (tree.index < tests[j].tree_index) { */
-/*             ret = sparse_tree_next(&tree); */
-/*             CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*         } */
-/*         ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL(tests[j].count, num_leaves); */
-/*         /1* all operations depending on tracked leaves should fail. *1/ */
-/*         ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves); */
-/*         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION); */
-/*         ret = sparse_tree_get_leaf_list(&tree, 0, NULL, NULL); */
-/*         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION); */
-/*     } */
-/*     sparse_tree_free(&tree); */
+    /* First run without the MSP_LEAF_COUNTS feature */
+    ret = sparse_tree_alloc(&tree, ts, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&tree);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    for (j = 0; j < num_tests; j++) {
+        while (tree.index < tests[j].tree_index) {
+            ret = sparse_tree_next(&tree);
+            CU_ASSERT_EQUAL_FATAL(ret, 1);
+        }
+        ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
+        /* all operations depending on tracked leaves should fail. */
+        ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        ret = sparse_tree_get_leaf_list(&tree, 0, NULL, NULL);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+    }
+    sparse_tree_free(&tree);
 
-/*     /1* Now run with MSP_LEAF_COUNTS but with no leaves tracked. *1/ */
-/*     ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS); */
-/*     CU_ASSERT_EQUAL(ret, 0); */
-/*     ret = sparse_tree_first(&tree); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*     for (j = 0; j < num_tests; j++) { */
-/*         while (tree.index < tests[j].tree_index) { */
-/*             ret = sparse_tree_next(&tree); */
-/*             CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*         } */
-/*         ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL(tests[j].count, num_leaves); */
-/*         /1* all operations depending on tracked leaves should fail. *1/ */
-/*         ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves); */
-/*         CU_ASSERT_EQUAL(ret, 0); */
-/*         CU_ASSERT_EQUAL(num_leaves, 0); */
-/*         /1* Getting leaf lists should still fail, as it's not enabled. *1/ */
-/*         ret = sparse_tree_get_leaf_list(&tree, 0, NULL, NULL); */
-/*         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION); */
-/*     } */
-/*     sparse_tree_free(&tree); */
+    /* Now run with MSP_LEAF_COUNTS but with no leaves tracked. */
+    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&tree);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    for (j = 0; j < num_tests; j++) {
+        while (tree.index < tests[j].tree_index) {
+            ret = sparse_tree_next(&tree);
+            CU_ASSERT_EQUAL_FATAL(ret, 1);
+        }
+        ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
+        /* all operations depending on tracked leaves should fail. */
+        ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(num_leaves, 0);
+        /* Getting leaf lists should still fail, as it's not enabled. */
+        ret = sparse_tree_get_leaf_list(&tree, 0, NULL, NULL);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+    }
+    sparse_tree_free(&tree);
 
-/*     /1* Run with MSP_LEAF_LISTS, but without MSP_LEAF_COUNTS *1/ */
-/*     ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_LISTS); */
-/*     CU_ASSERT_EQUAL(ret, 0); */
-/*     ret = sparse_tree_first(&tree); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*     for (j = 0; j < num_tests; j++) { */
-/*         while (tree.index < tests[j].tree_index) { */
-/*             ret = sparse_tree_next(&tree); */
-/*             CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*         } */
-/*         ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL(tests[j].count, num_leaves); */
-/*         /1* all operations depending on tracked leaves should fail. *1/ */
-/*         ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves); */
-/*         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION); */
-/*         /1* Getting leaf lists should still fail, as it's not enabled. *1/ */
-/*         ret = sparse_tree_get_leaf_list(&tree, tests[j].node, &head, &tail); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         u = head; */
-/*         k = 0; */
-/*         while (1) { */
-/*             k++; */
-/*             if (u == tail) { */
-/*                 break; */
-/*             } */
-/*             u = u->next; */
-/*         } */
-/*         CU_ASSERT_EQUAL(tests[j].count, k); */
-/*     } */
-/*     sparse_tree_free(&tree); */
+    /* Run with MSP_LEAF_LISTS, but without MSP_LEAF_COUNTS */
+    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_LISTS);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&tree);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    for (j = 0; j < num_tests; j++) {
+        while (tree.index < tests[j].tree_index) {
+            ret = sparse_tree_next(&tree);
+            CU_ASSERT_EQUAL_FATAL(ret, 1);
+        }
+        ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
+        /* all operations depending on tracked leaves should fail. */
+        ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        /* Getting leaf lists should still fail, as it's not enabled. */
+        ret = sparse_tree_get_leaf_list(&tree, tests[j].node, &head, &tail);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        u = head;
+        k = 0;
+        while (1) {
+            k++;
+            if (u == tail) {
+                break;
+            }
+            u = u->next;
+        }
+        CU_ASSERT_EQUAL(tests[j].count, k);
+    }
+    sparse_tree_free(&tree);
 
-/*     /1* Now use MSP_LEAF_COUNTS|MSP_LEAF_LISTS *1/ */
-/*     tracked_leaves = malloc(n * sizeof(node_id_t)); */
-/*     for (j = 0; j < n; j++) { */
-/*         tracked_leaves[j] = j; */
-/*     } */
-/*     ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS|MSP_LEAF_LISTS); */
-/*     CU_ASSERT_EQUAL(ret, 0); */
-/*     ret = sparse_tree_set_tracked_leaves(&tree, n, tracked_leaves); */
-/*     CU_ASSERT_EQUAL(ret, 0); */
-/*     ret = sparse_tree_first(&tree); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*     for (j = 0; j < num_tests; j++) { */
-/*         while (tree.index < tests[j].tree_index) { */
-/*             ret = sparse_tree_next(&tree); */
-/*             CU_ASSERT_EQUAL_FATAL(ret, 1); */
-/*         } */
-/*         ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         CU_ASSERT_EQUAL(tests[j].count, num_leaves); */
-/*         /1* We're tracking all leaves, so the count should be the same *1/ */
-/*         ret = sparse_tree_get_num_tracked_leaves(&tree, tests[j].node, */
-/*                 &num_leaves); */
-/*         CU_ASSERT_EQUAL(ret, 0); */
-/*         CU_ASSERT_EQUAL(tests[j].count, num_leaves); */
-/*         ret = sparse_tree_get_leaf_list(&tree, tests[j].node, &head, &tail); */
-/*         CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*         u = head; */
-/*         k = 0; */
-/*         while (1) { */
-/*             k++; */
-/*             if (u == tail) { */
-/*                 break; */
-/*             } */
-/*             u = u->next; */
-/*         } */
-/*         CU_ASSERT_EQUAL(tests[j].count, k); */
-/*     } */
-/*     sparse_tree_free(&tree); */
-/*     free(tracked_leaves); */
-/* } */
+    /* Now use MSP_LEAF_COUNTS|MSP_LEAF_LISTS */
+    tracked_leaves = malloc(n * sizeof(node_id_t));
+    for (j = 0; j < n; j++) {
+        tracked_leaves[j] = j;
+    }
+    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS|MSP_LEAF_LISTS);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_set_tracked_leaves(&tree, n, tracked_leaves);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&tree);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    for (j = 0; j < num_tests; j++) {
+        while (tree.index < tests[j].tree_index) {
+            ret = sparse_tree_next(&tree);
+            CU_ASSERT_EQUAL_FATAL(ret, 1);
+        }
+        ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
+        /* We're tracking all leaves, so the count should be the same */
+        ret = sparse_tree_get_num_tracked_leaves(&tree, tests[j].node,
+                &num_leaves);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
+        ret = sparse_tree_get_leaf_list(&tree, tests[j].node, &head, &tail);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        u = head;
+        k = 0;
+        while (1) {
+            k++;
+            if (u == tail) {
+                break;
+            }
+            u = u->next;
+        }
+        CU_ASSERT_EQUAL(tests[j].count, k);
+    }
+    sparse_tree_free(&tree);
+    free(tracked_leaves);
+}
 
 
 static void
@@ -4562,40 +4562,34 @@ verify_tree_next_prev(tree_sequence_t *ts)
 static void
 test_leaf_sets(void)
 {
-    printf("\n\nFIXME leaf_sets\n\n");
-    /* int ret; */
-    /* leaf_count_test_t tests[] = { */
-    /*     {0, 0, 1}, {0, 5, 2}, {0, 6, 3}, */
-    /*     {1, 4, 2}, {1, 5, 3}, {1, 6, 4}}; */
-    /* uint32_t num_tests = 6; */
-    /* tree_sequence_t ts; */
+    leaf_count_test_t tests[] = {
+        {0, 0, 1}, {0, 5, 2}, {0, 6, 3},
+        {1, 4, 2}, {1, 5, 3}, {1, 6, 4}};
+    uint32_t num_tests = 6;
+    tree_sequence_t ts;
 
-    /* tree_sequence_from_text(&ts, paper_ex_nodes, paper_ex_edgesets, NULL, NULL, NULL, NULL); */
-    /* CU_ASSERT_EQUAL(ret, 0); */
-    /* verify_leaf_counts(&ts, num_tests, tests); */
-    /* verify_leaf_sets(&ts); */
+    tree_sequence_from_text(&ts, paper_ex_nodes, paper_ex_edgesets, NULL, NULL, NULL, NULL);
+    verify_leaf_counts(&ts, num_tests, tests);
+    verify_leaf_sets(&ts);
 
-    /* tree_sequence_free(&ts); */
+    tree_sequence_free(&ts);
 }
 
 static void
 test_nonbinary_leaf_sets(void)
 {
-    printf("\n\nFIXME nonbinary_leaf_sets\n\n");
-    /* int ret; */
-    /* leaf_count_test_t tests[] = { */
-    /*     {0, 0, 1}, {0, 8, 4}, {0, 9, 5}, {0, 10, 3}, {0, 12, 8}, */
-    /*     {1, 5, 1}, {1, 8, 4}, {1, 9, 5}, {0, 10, 2}, {0, 11, 1}}; */
-    /* uint32_t num_tests = 8; */
-    /* tree_sequence_t ts; */
+    leaf_count_test_t tests[] = {
+        {0, 0, 1}, {0, 8, 4}, {0, 9, 5}, {0, 10, 3}, {0, 12, 8},
+        {1, 5, 1}, {1, 8, 4}, {1, 9, 5}, {0, 10, 2}, {0, 11, 1}};
+    uint32_t num_tests = 8;
+    tree_sequence_t ts;
 
-    /* tree_sequence_from_text(&ts, nonbinary_ex_nodes, nonbinary_ex_edgesets, NULL, */
-    /*         NULL, NULL, NULL); */
-    /* CU_ASSERT_EQUAL(ret, 0); */
-    /* verify_leaf_counts(&ts, num_tests, tests); */
-    /* verify_leaf_sets(&ts); */
+    tree_sequence_from_text(&ts, nonbinary_ex_nodes, nonbinary_ex_edgesets, NULL,
+            NULL, NULL, NULL);
+    verify_leaf_counts(&ts, num_tests, tests);
+    verify_leaf_sets(&ts);
 
-    /* tree_sequence_free(&ts); */
+    tree_sequence_free(&ts);
 }
 
 static void
