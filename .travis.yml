@@ -43,8 +43,8 @@ install:
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
   - export MSP_CONDA_PREFIX="$HOME/miniconda/envs/test-environment"
-  - conda install --yes --file=requirements/appveyor.txt
-  - pip install -r requirements/development.txt
+  - conda install --yes --file=requirements/conda-minimal.txt
+  - pip install -r requirements/tests-pypi.txt
   - python setup.py install
 
 script:

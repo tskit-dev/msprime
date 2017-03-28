@@ -15,7 +15,7 @@ build: false
 
 test_script:
   - "conda config --add channels conda-forge"
-  - "conda install --yes --file=requirements/appveyor.txt"
+  - "conda install --yes --file=requirements/conda-minimal.txt"
   - "pip install svgwrite"  # svgwrite isn't available in conda
   - "pip install PyVCF"  
 
