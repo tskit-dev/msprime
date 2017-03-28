@@ -28,7 +28,6 @@ test:
     - find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
     - codecov -X gcov -F C
     # Make sure the docs build.
-    # FIXME docs are failing because of problem with Mock.
-    # - make -C docs
+    - make -C docs
     # Make sure we can build a distribution tarball.
     - python setup.py sdist
