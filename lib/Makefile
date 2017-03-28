@@ -38,9 +38,9 @@ tags:
 clean:
 	rm -f main tests *.o *.gcda *.gcno
 
-travis-tests: CC=gcc
-travis-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage 
-travis-tests: tests 
+ubuntu-tests: CC=gcc
+ubuntu-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage 
+ubuntu-tests: tests 
 
 coverity-tests: CC=gcc 
 coverity-tests: CFLAGS+=-I/usr/include/hdf5/serial

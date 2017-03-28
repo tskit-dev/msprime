@@ -1,7 +1,33 @@
 machine:
   python:
-    version: 3.6.0
+    version: 3.5.2
+
 dependencies:
-  pre:
-    - sudo apt-get update; sudo apt-get install libgsl0-dev libhdf5-serial-dev 
+  override:
+    - sudo apt-get update
+    - sudo apt-get install libgsl0-dev libhdf5-serial-dev libcunit1-dev libconfig-dev
     - pip install -r requirements/development.txt
+
+compile:
+  override:
+    - CFLAGS=--coverage python setup.py build_ext --inplace
+    - make -C lib ubuntu-tests
+
+test:
+  override:
+    - flake8 --max-line-length 89 setup.py msprime tests
+    - nosetests -v --with-coverage --cover-package msprime
+        --cover-branches --cover-erase --cover-xml
+        --cover-inclusive tests
+    - codecov -X gcov -F python
+    - rm .coverage
+    # Run the low-level tests.
+    - ./lib/tests 
+    # Run gcov manually, as the one used in codecov doesn't work here.
+    - gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
+    - find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
+    - codecov -X gcov -F C
+    # Make sure the docs build.
+    - make -C docs
+    # Make sure we can build a distribution tarball.
+    - python setup.py sdist

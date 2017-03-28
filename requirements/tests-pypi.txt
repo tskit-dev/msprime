@@ -1,0 +1,16 @@
+# Extra requirements from Pip that we need to run the tests.
+nose
+numpy
+six
+# TODO we're pinning the version here because of problems on Travis.
+# versions weren't correctly being set for v1.12.1
+setuptools_scm == 1.11.1
+svgwrite
+# Seems to be a problem with Python 3. svgwrite imports
+# pyparsing.
+pyparsing < 2.1
+# We need pysam and PyVCF for testing VCF output.
+# Pin pysam at 0.9 version as there are problems with building py33 version
+# on travis.
+pysam==0.9.1.4
+PyVCF
