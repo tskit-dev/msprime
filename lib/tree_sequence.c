@@ -260,7 +260,7 @@ tree_sequence_alloc_mutations(tree_sequence_t *self)
         self->sites.site_mutations_length = malloc(size * sizeof(list_len_t));
         self->sites.site_mutations = malloc(size * sizeof(mutation_t *));
         self->sites.tree_sites_mem = malloc(size * sizeof(site_t));
-        if (self->sites.ancestral_state_length == NULL
+        if (self->sites.ancestral_state == NULL
                 || self->sites.ancestral_state_length == NULL
                 || self->sites.position == NULL
                 || self->sites.site_mutations == NULL
@@ -501,7 +501,7 @@ tree_sequence_free(tree_sequence_t *self)
         for (j = 0; j < self->num_provenance_strings; j++) {
             free(self->provenance_strings[j]);
         }
-        free(self->provenance_strings);
+        msp_safe_free(self->provenance_strings);
     }
     msp_safe_free(self->nodes.flags);
     msp_safe_free(self->nodes.population);
