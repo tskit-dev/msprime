@@ -45,7 +45,15 @@ install:
   - export MSP_CONDA_PREFIX="$HOME/miniconda/envs/test-environment"
   - conda install --yes --file=requirements/conda-minimal.txt
   - pip install -r requirements/tests-pypi.txt
-  - python setup.py install
+  # We need to run build_ext here first as odd things happen with the tests on
+  # version numbers otherwise.
+  - python setup.py build_ext
+  - pip install .
 
 script:
   - nosetests -vs
+  # We also want to see if we can build without numpy.
+  - conda uninstall numpy -y
+  - rm -fR build
+  - pip install . --upgrade --force-reinstall
+  - nosetests -vs tests/test_cli.py:TestMspmsOutput

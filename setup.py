@@ -34,7 +34,11 @@ IS_WINDOWS = platform.system() == "Windows"
 HAVE_NUMPY = False
 try:
     import numpy as np
-    HAVE_NUMPY = True
+    version = tuple(map(int, np.__version__.split(".")))
+    if version < (1, 7, 0):
+        warn("numpy version is too old: version 1.7 or newer needed")
+    else:
+        HAVE_NUMPY = True
 except ImportError:
     warn("numpy not available. Some features will not work.")
 
