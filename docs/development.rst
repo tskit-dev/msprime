@@ -35,8 +35,8 @@ Three different continuous integration providers are used, which run different
 combinations of tests on different platforms:
 
 1. `Travis CI <https://travis-ci.org/>`_ runs tests on Linux and OSX using the
-    `Conda <https://conda.io/docs/>`__ infrastructure for the system level
-    requirements. All supported versions of Python are tested here.
+   `Conda <https://conda.io/docs/>`__ infrastructure for the system level
+   requirements. All supported versions of Python are tested here.
 
 2. `CircleCI <https://circleci.com/>`_ Runs all Python tests using the apt-get
    infrastructure for system requirements. Additionally, the low-level tests
