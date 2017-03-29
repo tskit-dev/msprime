@@ -24,8 +24,23 @@ import platform
 import os
 import os.path
 
+
+def warn(message):
+    print("Warning:", message)
+
+
 CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
 IS_WINDOWS = platform.system() == "Windows"
+HAVE_NUMPY = False
+try:
+    import numpy as np
+    version = tuple(map(int, np.__version__.split(".")))
+    if version < (1, 7, 0):
+        warn("numpy version is too old: version 1.7 or newer needed")
+    else:
+        HAVE_NUMPY = True
+except ImportError:
+    warn("numpy not available. Some features will not work.")
 
 # First, we try to use setuptools. If it's not available locally,
 # we fall back on ez_setup.
@@ -43,17 +58,26 @@ class PathConfigurator(object):
     on various platforms.
     """
     def __init__(self):
-        # TODO add numpy to the install_requires??
-        # NB: interesting approach taken by statsmodels of
-        # programattically updating install_requires
-        # to avoid force-upgrading user installs of numpy, scipy, etc
-        # https://github.com/statsmodels/statsmodels/blob/master/setup.py#L124
-        import numpy as np
-        # TODO: make some other guesses for this...
-        self.include_dirs = [np.get_include()]
+        self.include_dirs = []
         self.library_dirs = []
-        self._check_hdf5_version()
-        self._attempt_pkgconfig()
+        if HAVE_NUMPY:
+            self.include_dirs = [np.get_include()]
+        try:
+            self._check_hdf5_version()
+        except OSError as e:
+            warn("Error occured checking HDF5 version: {}".format(e))
+        # On Unix systems with the correct tools installed we can detect the
+        # paths for include and library files.
+        try:
+            self._configure_hdf5()
+        except OSError as e:
+            warn("Error occured getting HDF5 path config: {}".format(e))
+        try:
+            self._configure_gsl()
+        except OSError as e:
+            warn("Error occured getting GSL path config: {}".format(e))
+        # If the conda prefix is defined, then we are compiling in a conda
+        # context. All include and lib paths should come from within this prefix.
         if CONDA_PREFIX is not None:
             prefix = CONDA_PREFIX
             if IS_WINDOWS:
@@ -61,44 +85,36 @@ class PathConfigurator(object):
             self.library_dirs.append(os.path.join(prefix, "lib"))
             self.include_dirs.append(os.path.join(prefix, "include"))
 
+    def _run_command(self, args):
+        return subprocess.check_output(args, universal_newlines=True)
+
     def _check_hdf5_version(self):
-        # TODO add h5py to the install_requires?
-        try:
-            output = subprocess.check_output(["h5ls", "-V"]).split()
-            version_str = output[2]
-            version = list(map(int, version_str.split(b".")[:2]))
-            if version < [1, 8]:
-                # TODO is there a better exception to raise here?
-                raise ValueError(
-                    "hdf5 version {} found; we need 1.8.0 or greater".format(
-                        version_str))
-        except OSError as e:
-            if e.errno == 2:
-                print("Cannot find h5ls: is HDF5 installed?:")
-            else:
-                print("Error occured running h5ls:", e)
+        output = self._run_command(["h5ls", "-V"]).split()
+        version_str = output[2]
+        version = list(map(int, version_str.split(".")[:2]))
+        if version < [1, 8]:
+            # TODO is there a better exception to raise here?
+            raise ValueError(
+                "hdf5 version {} found; we need 1.8.0 or greater".format(
+                    version_str))
 
-    def _run_pkgconfig(self, cmd):
-        pkgconfig = "pkg-config"
-        packages = ["gsl", "hdf5"]
-        cmd = [pkgconfig] + cmd + packages
-        output = subprocess.check_output(cmd).split()
-        # Strip off the leading -I or -L
-        return [arg[2:].decode() for arg in output]
+    def _configure_hdf5(self):
+        output = self._run_command(["h5cc", "-show"]).split()
+        for token in output:
+            if token.startswith("-I"):
+                self.include_dirs.append(token[2:])
+            elif token.startswith("-L"):
+                self.library_dirs.append(token[2:])
 
-    def _get_pkgconfig_list(self, option):
-        ret = []
-        try:
-            ret = self._run_pkgconfig([option])
-        except OSError as e:
-            print("pkg-config error (not installed?):", e)
-        except subprocess.CalledProcessError as e:
-            print("pkg-config failed:", e)
-        return ret
-
-    def _attempt_pkgconfig(self):
-        self.library_dirs.extend(self._get_pkgconfig_list("--libs-only-L"))
-        self.include_dirs.extend(self._get_pkgconfig_list("--cflags-only-I"))
+    def _configure_gsl(self):
+        output = self._run_command(["gsl-config", "--cflags"]).split()
+        if len(output) > 0:
+            token = output[0]
+            self.include_dirs.append(token[2:])
+        output = self._run_command(["gsl-config", "--libs"]).split()
+        for token in output:
+            if token.startswith("-L"):
+                self.library_dirs.append(token[2:])
 
 
 # Now, setup the extension module. We have to do some quirky workarounds
@@ -132,23 +148,25 @@ class DefineMacros(object):
                 ("GSL_DLL", None), ("WIN32", None),
                 # This is needed for HDF5 to link properly.
                 ("H5_BUILT_AS_DYNAMIC_LIB", None)]
+        if HAVE_NUMPY:
+            l += [("HAVE_NUMPY", None)]
         return l[index]
 
 
 configurator = PathConfigurator()
-d = "lib/"
+source_files = [
+    "msprime.c", "fenwick.c", "avl.c", "tree_sequence.c",
+    "object_heap.c", "newick.c", "hapgen.c", "recomb_map.c", "mutgen.c",
+    "vargen.c", "vcf.c", "ld.c", "table.c"]
+libdir = "lib"
 _msprime_module = Extension(
     '_msprime',
-    sources=[
-        "_msprimemodule.c", d + "msprime.c", d + "fenwick.c", d + "avl.c",
-        d + "tree_sequence.c", d + "object_heap.c", d + "newick.c",
-        d + "hapgen.c", d + "recomb_map.c", d + "mutgen.c",
-        d + "vargen.c", d + "vcf.c", d + "ld.c", d + "table.c"],
+    sources=["_msprimemodule.c"] + [os.path.join(libdir, f) for f in source_files],
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
     define_macros=DefineMacros(),
     libraries=["gsl", "gslcblas", "hdf5"],
-    include_dirs=[d] + configurator.include_dirs,
+    include_dirs=[libdir] + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
 )
 
@@ -172,25 +190,25 @@ setup(
     install_requires=["svgwrite"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
-    license="GNU LGPLv3+",
-    platforms=["POSIX"],
+    license="GNU GPL",
+    platforms=["POSIX", "Windows", "MacOS X"],
     classifiers=[
         "Programming Language :: C",
         "Programming Language :: Python",
         "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.1",
-        "Programming Language :: Python :: 3.2",
         "Programming Language :: Python :: 3.3",
+        "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
         "Development Status :: 4 - Beta",
         "Environment :: Other Environment",
         "Intended Audience :: Science/Research",
-        (
-            "License :: OSI Approved :: GNU Lesser General Public License "
-            "v3 or later (LGPLv3+)"
-        ),
+        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"
         "Operating System :: POSIX",
+        "Operating System :: MacOS :: MacOS X",
+        "Operating System :: Microsoft :: Windows",
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],

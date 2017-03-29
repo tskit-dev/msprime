@@ -33,7 +33,11 @@ import unittest
 import msprime
 import msprime.cli as cli
 
-import h5py
+_h5py_available = True
+try:
+    import h5py
+except ImportError:
+    _h5py_available = False
 
 # We're forced to do this because dendropy doesn't support Python 3.
 _dendropy_available = True
@@ -1519,6 +1523,7 @@ class TestMspConversionOutput(unittest.TestCase):
                 self.assertEqual(col[j], haplotypes[j][site])
 
 
+@unittest.skipIf(not _h5py_available, "h5py not installed, skipping upgrade tests")
 class TestUpgrade(TestCli):
     """
     Tests the results of the upgrade operation to ensure they are
