@@ -34,16 +34,16 @@ Continuous integration tests
 Three different continuous integration providers are used, which run different
 combinations of tests on different platforms:
 
-1. [Travis CI](https://travis-ci.org/) runs tests on Linux and OSX using the
-    [Conda](https://conda.io/docs/) infrastructure for the system level
+1. `Travis CI <https://travis-ci.org/>`_ runs tests on Linux and OSX using the
+    `Conda <https://conda.io/docs/>`__ infrastructure for the system level
     requirements. All supported versions of Python are tested here.
 
-2. [CircleCI](https://circleci.com/) Runs all Python tests using the apt-get
+2. `CircleCI <https://circleci.com/>`_ Runs all Python tests using the apt-get
    infrastructure for system requirements. Additionally, the low-level tests
-   are run, coverage statistics calculated using [CodeCov](https://codecov.io/gh),
+   are run, coverage statistics calculated using `CodeCov <https://codecov.io/gh>`__,
    and the documentation built.
 
-3. [AppVeyor](https://www.appveyor.com/) Runs Python tests on 32 and 64 bit
+3. `AppVeyor <https://www.appveyor.com/>`_ Runs Python tests on 32 and 64 bit
    Windows using conda.
 
 
