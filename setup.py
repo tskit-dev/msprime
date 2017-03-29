@@ -34,6 +34,7 @@ IS_WINDOWS = platform.system() == "Windows"
 HAVE_NUMPY = False
 try:
     import numpy as np
+    HAVE_NUMPY = True
 except ImportError:
     warn("numpy not available. Some features will not work.")
 
@@ -57,15 +58,20 @@ class PathConfigurator(object):
         self.library_dirs = []
         if HAVE_NUMPY:
             self.include_dirs = [np.get_include()]
-        self._check_hdf5_version()
+        try:
+            self._check_hdf5_version()
+        except OSError as e:
+            warn("Error occured checking HDF5 version: {}".format(e))
         # On Unix systems with the correct tools installed we can detect the
         # paths for include and library files.
         try:
             self._configure_hdf5()
+        except OSError as e:
+            warn("Error occured getting HDF5 path config: {}".format(e))
+        try:
             self._configure_gsl()
-        except OSError:
-            # These tools may not be installed, which should result in OSErrors.
-            pass
+        except OSError as e:
+            warn("Error occured getting GSL path config: {}".format(e))
         # If the conda prefix is defined, then we are compiling in a conda
         # context. All include and lib paths should come from within this prefix.
         if CONDA_PREFIX is not None:
@@ -75,32 +81,13 @@ class PathConfigurator(object):
             self.library_dirs.append(os.path.join(prefix, "lib"))
             self.include_dirs.append(os.path.join(prefix, "include"))
 
-    def _run_hdf5_helper(self, program, args):
-        try:
-            output = subprocess.check_output([program] + args)
-        except OSError as e:
-            if e.errno == 2:
-                warn("Cannot find {}: is HDF5 installed?:".format(program))
-            else:
-                warn("Error occured running {}:{}".format(program, e))
-            raise e
-        return output
-
-    def _run_gsl_helper(self, program, args):
-        try:
-            output = subprocess.check_output([program] + args)
-        except OSError as e:
-            if e.errno == 2:
-                warn("Cannot find {}: is GSL installed?:".format(program))
-            else:
-                warn("Error occured running {}:{}".format(program, e))
-            raise e
-        return output
+    def _run_command(self, args):
+        return subprocess.check_output(args, universal_newlines=True)
 
     def _check_hdf5_version(self):
-        output = self._run_hdf5_helper("h5ls", ["-V"]).split()
+        output = self._run_command(["h5ls", "-V"]).split()
         version_str = output[2]
-        version = list(map(int, version_str.split(b".")[:2]))
+        version = list(map(int, version_str.split(".")[:2]))
         if version < [1, 8]:
             # TODO is there a better exception to raise here?
             raise ValueError(
@@ -108,7 +95,7 @@ class PathConfigurator(object):
                     version_str))
 
     def _configure_hdf5(self):
-        output = self._run_hdf5_helper("h5cc", ["-show"]).split()
+        output = self._run_command(["h5cc", "-show"]).split()
         for token in output:
             if token.startswith("-I"):
                 self.include_dirs.append(token[2:])
@@ -116,11 +103,11 @@ class PathConfigurator(object):
                 self.library_dirs.append(token[2:])
 
     def _configure_gsl(self):
-        output = self._run_gsl_helper("gsl-config", ["--cflags"]).split()
+        output = self._run_command(["gsl-config", "--cflags"]).split()
         if len(output) > 0:
             token = output[0]
             self.include_dirs.append(token[2:])
-        output = self._run_gsl_helper("gsl-config", ["--libs"]).split()
+        output = self._run_command(["gsl-config", "--libs"]).split()
         for token in output:
             if token.startswith("-L"):
                 self.library_dirs.append(token[2:])
