@@ -620,6 +620,7 @@ typedef struct {
     size_t mutation_block_size;
     site_table_t *sites;
     infinite_sites_mutation_t *mutations;
+    object_heap_t avl_node_heap;
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
