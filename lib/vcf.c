@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+** Copyright (C) 2016-2017 University of Oxford
 **
 ** This file is part of msprime.
 **
