@@ -25,6 +25,7 @@
 
 #include "err.h"
 #include "msprime.h"
+#include "object_heap.h"
 
 typedef struct {
     const char *ancestral_state;
@@ -50,6 +51,13 @@ static const mutation_type_t acgt_mutation_types[] = {
     {"T", "C"},
     {"T", "G"},
 };
+
+static int
+cmp_double(const void *a, const void *b) {
+    const double *ia = (const double *) a;
+    const double *ib = (const double *) b;
+    return (*ia > *ib) - (*ia < *ib);
+}
 
 static int
 cmp_infinite_sites_mutation(const void *a, const void *b) {
@@ -79,12 +87,14 @@ mutgen_print_state(mutgen_t *self, FILE *out)
                 self->mutations[j].node, self->mutations[j].ancestral_state,
                 self->mutations[j].derived_state);
     }
+    object_heap_print_state(&self->avl_node_heap, out);
     mutgen_check_state(self);
 }
 
 
 int WARN_UNUSED
-mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet)
+mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
+        size_t mutation_block_size)
 {
     int ret = 0;
 
@@ -94,13 +104,24 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet)
         ret = MSP_ERR_BAD_ALPHABET;
         goto out;
     }
+    if (mutation_block_size == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->alphabet = alphabet;
     self->mutation_rate = mutation_rate;
     self->rng = rng;
+    self->mutation_block_size = mutation_block_size;
     self->num_mutations = 0;
-    self->mutation_block_size = 1024 * 1024;
     self->max_num_mutations = 0;
     self->mutations = NULL;
+    /* The AVL node heap stores both the avl node and the double payload
+     * in adjacent memory */
+    ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t) + sizeof(double),
+           self->mutation_block_size, NULL);
+    if (ret != 0) {
+        goto out;
+    }
 out:
     return ret;
 }
@@ -109,18 +130,29 @@ int
 mutgen_free(mutgen_t *self)
 {
     msp_safe_free(self->mutations);
+    object_heap_free(&self->avl_node_heap);
     return 0;
 }
 
-int WARN_UNUSED
-mutgen_set_mutation_block_size(mutgen_t *self, size_t mutation_block_size)
+static inline avl_node_t * WARN_UNUSED
+mutgen_alloc_avl_node(mutgen_t *self, double position)
 {
-    int ret = 0;
-    if (mutation_block_size == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
+    avl_node_t *ret = NULL;
+    double *value;
+
+    if (object_heap_empty(&self->avl_node_heap)) {
+        if (object_heap_expand(&self->avl_node_heap) != 0) {
+            goto out;
+        }
+    }
+    ret = (avl_node_t *) object_heap_alloc_object(&self->avl_node_heap);
+    if (ret == NULL) {
         goto out;
     }
-    self->mutation_block_size = mutation_block_size;
+    /* We store the double value after the node */
+    value = (double *) (ret + 1);
+    *value = position;
+    avl_init_node(ret, value);
 out:
     return ret;
 }
@@ -168,6 +200,8 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
     unsigned long num_mutation_types;
     const char *ancestral_state, *derived_state;
     unsigned long type;
+    avl_tree_t positions;
+    avl_node_t *avl_node;
 
     if (self->alphabet == MSP_ALPHABET_BINARY) {
         mutation_types = binary_mutation_types;
@@ -177,6 +211,7 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
         num_mutation_types = 12;
     }
 
+    avl_init_tree(&positions, cmp_double, NULL);
     self->num_mutations = 0;
     offset = 0;
     for (j = 0; j < edgesets->num_rows; j++) {
@@ -194,7 +229,20 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
             mu = branch_length * distance * self->mutation_rate;
             branch_mutations = gsl_ran_poisson(self->rng, mu);
             for (l = 0; l < branch_mutations; l++) {
-                position = gsl_ran_flat(self->rng, left, right);
+                /* Rejection sample positions until we get one we haven't seen before. */
+                do {
+                    position = gsl_ran_flat(self->rng, left, right);
+                    avl_node = avl_search(&positions, &position);
+                    if (avl_node != NULL) {
+                        printf("REJECTING %f\n", position);
+                    }
+                } while (avl_node != NULL);
+                avl_node = mutgen_alloc_avl_node(self, position);
+                if (avl_node == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                avl_insert_node(&positions, avl_node);
                 assert(left <= position && position < right);
                 type = gsl_rng_uniform_int(self->rng, num_mutation_types);
                 ancestral_state = mutation_types[type].ancestral_state;
@@ -209,6 +257,11 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
     }
     qsort(self->mutations, self->num_mutations, sizeof(infinite_sites_mutation_t),
             cmp_infinite_sites_mutation);
+    assert(avl_count(&positions) == self->num_mutations);
+    /* Free up the AVL nodes */
+    for (avl_node = positions.head; avl_node != NULL; avl_node = avl_node->next) {
+        object_heap_free_object(&self->avl_node_heap, avl_node);
+    }
     ret = 0;
 out:
     return ret;

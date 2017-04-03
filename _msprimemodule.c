@@ -2615,6 +2615,7 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
+    size_t block_size = 1024 * 1024;
     static char *kwlist[] = {"random_generator", "mutation_rate", NULL};
     double mutation_rate = 0;
     RandomGenerator *random_generator = NULL;
@@ -2640,7 +2641,7 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng,
-            MSP_ALPHABET_BINARY);
+            MSP_ALPHABET_BINARY, block_size);
     if (err != 0) {
         handle_library_error(err);
         goto out;

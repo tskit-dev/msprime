@@ -817,7 +817,7 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = mutation_table_alloc(mutations, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
 
-    ret = mutgen_alloc(mutgen, mutation_rate, rng, alphabet);
+    ret = mutgen_alloc(mutgen, mutation_rate, rng, alphabet, 10);
     CU_ASSERT_EQUAL(ret, 0);
     /* initialise the samples to zero for the default configuration */
     memset(samples, 0, sample_size * sizeof(sample_t));
@@ -2066,9 +2066,7 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, mutation_rate, rng, MSP_ALPHABET_BINARY);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = mutgen_set_mutation_block_size(&mutgen, 3);
+    ret = mutgen_alloc(&mutgen, mutation_rate, rng, MSP_ALPHABET_BINARY, 3);
     CU_ASSERT_EQUAL(ret, 0);
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL(ret, 0);
@@ -3815,7 +3813,7 @@ test_single_tree_mutgen(void)
     ret = mutation_table_alloc(&mutations_after, 100, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = mutgen_alloc(&mutgen, 0.0, rng, MSP_ALPHABET_BINARY);
+    ret = mutgen_alloc(&mutgen, 0.0, rng, MSP_ALPHABET_BINARY, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate_tables_tmp(&mutgen, &node_table, &edgeset_table);
     CU_ASSERT_EQUAL(ret, 0);
@@ -3827,7 +3825,7 @@ test_single_tree_mutgen(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     gsl_rng_set(rng, 1);
-    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY);
+    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate_tables_tmp(&mutgen, &node_table, &edgeset_table);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3850,12 +3848,10 @@ test_single_tree_mutgen(void)
      * block size.
      */
     gsl_rng_set(rng, 1);
-    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_mutation_block_size(&mutgen, 0);
+    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = mutgen_set_mutation_block_size(&mutgen, 1);
-    CU_ASSERT_EQUAL(ret, 0);
+    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate_tables_tmp(&mutgen, &node_table, &edgeset_table);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_populate_tables(&mutgen, &sites_after, &mutations_after);

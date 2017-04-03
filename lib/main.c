@@ -826,7 +826,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         goto out;
     }
     ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng,
-            mutation_params.alphabet);
+            mutation_params.alphabet, 1024);
     if (ret != 0) {
         goto out;
     }

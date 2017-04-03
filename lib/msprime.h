@@ -620,6 +620,7 @@ typedef struct {
     size_t mutation_block_size;
     site_table_t *sites;
     infinite_sites_mutation_t *mutations;
+    object_heap_t avl_node_heap;
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
@@ -831,14 +832,13 @@ int recomb_map_get_rates(recomb_map_t *self, double *rates);
 void recomb_map_print_state(recomb_map_t *self, FILE *out);
 
 int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
-        int alphabet);
+        int alphabet, size_t mutation_block_size);
 int mutgen_free(mutgen_t *self);
 /* TODO finalise this interface */
 int mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
         edgeset_table_t *edgesets);
 int mutgen_populate_tables(mutgen_t *self, site_table_t *sites,
         mutation_table_t *mutations);
-int mutgen_set_mutation_block_size(mutgen_t *self, size_t mutation_block_size);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
