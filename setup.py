@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2017 Jerome Kelleher <jerome.kelleher@well.ox.ac.uk>
+# Copyright (C) 2015-2017 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -190,7 +190,7 @@ setup(
     install_requires=["svgwrite"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
-    license="GNU GPL",
+    license="GNU GPLv3+",
     platforms=["POSIX", "Windows", "MacOS X"],
     classifiers=[
         "Programming Language :: C",
