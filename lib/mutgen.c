@@ -93,7 +93,8 @@ mutgen_print_state(mutgen_t *self, FILE *out)
 
 
 int WARN_UNUSED
-mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet)
+mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
+        size_t mutation_block_size)
 {
     int ret = 0;
 
@@ -103,12 +104,15 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet)
         ret = MSP_ERR_BAD_ALPHABET;
         goto out;
     }
+    if (mutation_block_size == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->alphabet = alphabet;
     self->mutation_rate = mutation_rate;
     self->rng = rng;
+    self->mutation_block_size = mutation_block_size;
     self->num_mutations = 0;
-    /* TODO change this API to be fixed at creation time */
-    self->mutation_block_size = 1024 * 1024;
     self->max_num_mutations = 0;
     self->mutations = NULL;
     /* The AVL node heap stores both the avl node and the double payload
@@ -128,19 +132,6 @@ mutgen_free(mutgen_t *self)
     msp_safe_free(self->mutations);
     object_heap_free(&self->avl_node_heap);
     return 0;
-}
-
-int WARN_UNUSED
-mutgen_set_mutation_block_size(mutgen_t *self, size_t mutation_block_size)
-{
-    int ret = 0;
-    if (mutation_block_size == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->mutation_block_size = mutation_block_size;
-out:
-    return ret;
 }
 
 static inline avl_node_t * WARN_UNUSED
