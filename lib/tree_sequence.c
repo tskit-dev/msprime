@@ -2540,8 +2540,11 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     avl_node_value_mem = malloc(self->nodes.num_records * sizeof(node_id_t));
     active_records = malloc(self->nodes.num_records * sizeof(active_record_t));
     mapped_children = malloc(self->nodes.num_records * sizeof(node_id_t));
-    /* TODO work out better bounds for these values */
-    max_num_child_nodes = 2 * self->edgesets.total_children_length;
+    /* TODO these bounds aren't safe, as we can always construct pathological
+     * examples that will exceed them. When we're refactoring this into an
+     * class, we should replace this with a stack that can grow.
+     */
+    max_num_child_nodes = 4 * self->edgesets.total_children_length;
     max_num_records = 2 * self->edgesets.num_records;
     mapped_children_mem = malloc(max_num_child_nodes * sizeof(node_id_t));
     output_records = malloc(max_num_records * sizeof(coalescence_record_t));
