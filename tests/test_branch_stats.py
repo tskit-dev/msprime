@@ -45,19 +45,31 @@ def path_length(tr, x, y):
     return L
 
 
-def branch_length_diversity(ts, X, Y):
+def branch_length_diversity(ts, X, Y, begin=0.0, end=None):
     '''
     Computes average pairwise diversity between a random choice from x
-    and a random choice from y.
+    and a random choice from y over the window specified.
     '''
+    if end is None:
+        end = ts.sequence_length
     S = 0
     for tr in ts.trees():
+        if tr.interval[1] < begin:
+            continue
+        if tr.interval[0] > end:
+            break
         SS = 0
         for x in X:
             for y in Y:
                 SS += path_length(tr, x, y)
-        S += SS*tr.length
-    return S/(ts.sequence_length*len(X)*len(Y))
+        S += SS*(min(end, tr.interval[1]) - max(begin, tr.interval[0]))
+    return S/((end-begin)*len(X)*len(Y))
+
+
+def branch_length_diversity_window(ts, X, Y, windows):
+    out = [branch_length_diversity(ts, X, Y, windows[k], windows[k+1])
+           for k in range(len(windows)-1)]
+    return out
 
 
 def branch_length_Y(ts, x, y, z):
@@ -205,10 +217,44 @@ class BranchStatsTestCase(unittest.TestCase):
                  branch_length_diversity(ts, A[0], A[2]),
                  branch_length_diversity(ts, A[1], A[2])])
         self.assertListAlmostEqual(
-                ts.branch_stats_vector(A, f),
+                ts.branch_stats_vector(A, f)[0],
                 [branch_length_diversity(ts, A[0], A[1]),
                  branch_length_diversity(ts, A[0], A[2]),
                  branch_length_diversity(ts, A[1], A[2])])
+
+    def check_windowization(self, ts):
+        samples = random.sample(ts.samples(), 2)
+        A_one = [[samples[0]], [samples[1]]]
+        A_many = [random.sample(ts.samples(), 2),
+                  random.sample(ts.samples(), 2)]
+        some_breaks = list(set([0.0, ts.sequence_length/2, ts.sequence_length] +
+                               random.sample(list(ts.breakpoints()), 5)))
+        some_breaks.sort()
+        tiny_breaks = ([(k / 4) * list(ts.breakpoints())[1] for k in range(4)] +
+                       [ts.sequence_length])
+        wins = [[0.0, ts.sequence_length],
+                [0.0, ts.sequence_length/2, ts.sequence_length],
+                tiny_breaks,
+                some_breaks]
+
+        with self.assertRaises(ValueError):
+                ts.branch_stats_vector(A_one, lambda x: 1.0,
+                                       windows=[0.0, 1.0, ts.sequence_length+1.1])
+
+        for A in (A_one, A_many):
+            for windows in wins:
+                n = [len(a) for a in A]
+
+                def f(x):
+                    return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(n[0]*n[1])
+
+                tsdiv_v = ts.branch_stats_vector(A, lambda x: [f(x)], windows)
+                tsdiv_vx = [x[0] for x in tsdiv_v]
+                tsdiv = ts.branch_stats_windowed(A, f, windows)
+                pydiv = branch_length_diversity_window(ts, A[0], A[1], windows)
+                self.assertEqual(len(tsdiv), len(windows)-1)
+                self.assertListAlmostEqual(tsdiv, pydiv)
+                self.assertListEqual(tsdiv, tsdiv_vx)
 
     def check_pairwise_diversity(self, ts):
         samples = random.sample(ts.samples(), 2)
@@ -292,6 +338,10 @@ class BranchStatsTestCase(unittest.TestCase):
     def test_vectorization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_vectorization(ts)
+
+    def test_windowization(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
+        self.check_windowization(ts)
 
     def test_case_1(self):
         # With mutations:

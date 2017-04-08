@@ -2179,11 +2179,11 @@ class TreeSequence(object):
         and averages this across the tree sequence, weighted by genomic length.
         '''
         out = self.branch_stats_vector(leaf_sets, lambda x: [weight_fun(x)])
-        if len(out) > 1:
+        if len(out) != 1 or len(out[0]) != 1:
             raise ValueError("Expecting output of length 1.")
-        return out[0]
+        return out[0][0]
 
-    def branch_stats_vector(self, leaf_sets, weight_fun):
+    def branch_stats_windowed(self, leaf_sets, weight_fun, windows=None):
         '''
         Here leaf_sets is a list of lists of leaves, and weight_fun is a function
         whose argument is a list of integers of the same length as leaf_sets
@@ -2192,22 +2192,58 @@ class TreeSequence(object):
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
         '''
+        if windows is None:
+            windows = (0, self.sequence_length)
+        out = self.branch_stats_vector(leaf_sets, lambda x: [weight_fun(x)], windows)
+        if len(out[0]) != 1:
+            raise ValueError("Expecting output of length 1.")
+        return [x[0] for x in out]
+
+    def branch_stats_vector(self, leaf_sets, weight_fun, windows=None):
+        '''
+        Here leaf_sets is a list of lists of leaves, and weight_fun is a function
+        whose argument is a list of integers of the same length as leaf_sets
+        that returns a boolean.  A branch in a tree is weighted by weight_fun(x),
+        where x[i] is the number of leaves in leaf_sets[i] below that
+        branch.  This finds the sum of all counted branches for each tree,
+        and averages this across the tree sequence, weighted by genomic length.
+
+        It does this separately for each window [windows[i], windows[i+1])
+        and returns the values in a vector.
+        '''
+        if windows is None:
+            windows = (0, self.sequence_length)
         for U in leaf_sets:
             if max([U.count(x) for x in set(U)]) > 1:
                 raise ValueError(
                     "elements of leaf_sets cannot contain repeated elements.")
+        num_windows = len(windows) - 1
+        if windows[0] != 0.0:
+            raise ValueError(
+                "Windows must start at the start of the sequence (at 0.0).")
+        if windows[-1] != self.sequence_length:
+            raise ValueError(
+                "Windows must extend to the end of the sequence.")
+        for k in range(num_windows-1):
+            if windows[k+1] <= windows[k]:
+                raise ValueError(
+                    "Windows must be increasing.")
         # initialize
         num_leaf_sets = len(leaf_sets)
         n_out = len(weight_fun([0 for a in range(num_leaf_sets)]))
         # print("leaf_sets:", leaf_sets)
         # print("n_out:",n_out)
-        S = [0.0 for j in range(n_out)]
+        S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         L = [0.0 for j in range(n_out)]
         N = self.num_nodes
         X = [[int(u in a) for a in leaf_sets] for u in range(N)]
         # we will essentially construct the tree
         pi = [-1 for j in range(N)]
         node_time = [0.0 for u in range(N)]
+        # keep track of where we are for the windows
+        chrom_pos = 0.0
+        # index of *left-hand* end of the current window
+        window_num = 0
         for length, records_out, records_in in self.diffs():
             for sign, records in ((-1, records_out), (+1, records_in)):
                 for node, children, time in records:
@@ -2260,10 +2296,25 @@ class TreeSequence(object):
                             next_u = pi[next_u]
                     # print("\t",X, "-->", L)
             # print("next tree:",L,length)
-            for j in range(n_out):
-                S[j] += L[j] * length
-        for j in range(n_out):
-            S[j] /= self.get_sequence_length()
+            while chrom_pos + length >= windows[window_num + 1]:
+                # wrap up the last window
+                this_length = windows[window_num + 1] - chrom_pos
+                window_length = windows[window_num + 1] - windows[window_num]
+                for j in range(n_out):
+                    S[window_num][j] += L[j] * this_length
+                    S[window_num][j] /= window_length
+                length -= this_length
+                # start the next
+                if window_num < num_windows - 1:
+                    window_num += 1
+                    chrom_pos = windows[window_num]
+                else:
+                    # skips the else statement below
+                    break
+            else:
+                for j in range(n_out):
+                    S[window_num][j] += L[j] * length
+                chrom_pos += length
         return S
 
     def node(self, u):
