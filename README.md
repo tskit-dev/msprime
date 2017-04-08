@@ -5,7 +5,7 @@
 
 ``msprime`` is a Python API and command line interface for simulating the 
 coalescent with recombination. Please see the 
-[documentation](https://msprime.readthedocs.org/en/latest/>)
+[documentation](https://msprime.readthedocs.org/en/latest/)
 for further information and 
 [installation instructions](https://msprime.readthedocs.org/en/latest/installation.html).
 
@@ -15,5 +15,5 @@ to get started.
 
 If you use ``msprime`` in your work, please cite the [PLOS Computational
 Biology](http://dx.doi.org/10.1371/journal.pcbi.1004842) paper.
-See [here](https://msprime.readthedocs.org/en/latest/CITATION.html>) for
+See [here](https://msprime.readthedocs.org/en/latest/CITATION.html) for
 full citation details.
