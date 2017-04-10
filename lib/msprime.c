@@ -1237,8 +1237,9 @@ msp_print_state(msp_t *self, FILE *out)
                 self->model.params.beta_coalescent.alpha,
                 self->model.params.beta_coalescent.truncation_point);
     } else if (self->model.type == MSP_MODEL_DIRAC) {
-        fprintf(out, "\tdirac coalescent parameters: psi = %f\n",
-                self->model.params.dirac_coalescent.psi);
+        fprintf(out, "\tdirac coalescent parameters: psi = %f, c = %f\n",
+                self->model.params.dirac_coalescent.psi,
+                self->model.params.dirac_coalescent.c);
     }
     fprintf(out, "used_memory = %f MiB\n", (double) self->used_memory / gig);
     fprintf(out, "max_memory  = %f MiB\n", (double) self->max_memory / gig);

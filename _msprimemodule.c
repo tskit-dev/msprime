@@ -6286,6 +6286,15 @@ Simulator_get_model(Simulator *self)
         }
         Py_DECREF(value);
         value = NULL;
+        value = Py_BuildValue("d", model->params.dirac_coalescent.c);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "c", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
     } else if (model->type == MSP_MODEL_BETA) {
         value = Py_BuildValue("d", model->params.beta_coalescent.alpha);
         if (value == NULL) {
