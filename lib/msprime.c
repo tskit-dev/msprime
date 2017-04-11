@@ -2171,8 +2171,8 @@ static int WARN_UNUSED
 msp_multiple_merger_common_ancestor_event_dirac(msp_t *self)
 {
     int ret = 0;
-    uint32_t j, n;
-    avl_tree_t *ancestors, Q;
+    uint32_t j, n, max_pot_size, pot_index;
+    avl_tree_t *ancestors, Q[4];
     avl_node_t *x_node, *y_node, *node, *next, *q_node;
     segment_t *x, *y, *u;
 
@@ -2202,11 +2202,14 @@ msp_multiple_merger_common_ancestor_event_dirac(msp_t *self)
          * of being included. This isn't how things will work for the real simulation,
          * but it should show how the machinery of merging lots of ancestors should work.
          */
-        avl_init_tree(&Q, cmp_segment_queue, NULL);
+        for (pot_index = 0; pot_index < 4; pot_index++){
+            avl_init_tree(&Q[pot_index], cmp_segment_queue, NULL);
+        }
         node = ancestors->head;
         while (node != NULL) {
             next = node->next;
             if (gsl_rng_uniform(self->rng) < self->model.params.dirac_coalescent.psi / 4.0) {
+                pot_index = (uint32_t) gsl_rng_uniform_int(self->rng, 4);
                 u = (segment_t *) node->item;
                 avl_unlink_node(ancestors, node);
                 msp_free_avl_node(self, node);
@@ -2216,13 +2219,24 @@ msp_multiple_merger_common_ancestor_event_dirac(msp_t *self)
                     goto out;
                 }
                 avl_init_node(q_node, u);
-                q_node = avl_insert_node(&Q, q_node);
+                q_node = avl_insert_node(&Q[pot_index], q_node);
                 assert(q_node != NULL);
             }
             node = next;
         }
+
+        max_pot_size = avl_count(&Q[0]);
         /* Now that we have filled Q in the correct way, we can merge the ancestors. */
-        ret = msp_merge_ancestors(self, &Q, 0);
+        for (pot_index = 0; pot_index < 4; pot_index++){
+            max_pot_size = GSL_MAX(max_pot_size, avl_count(&Q[pot_index]));
+            ret = msp_merge_ancestors(self, &Q[pot_index], 0);
+            if (ret < 0) {
+                goto out;
+            }
+        }
+        if (max_pot_size < 2){
+            ret = 1;
+        }
     }
 out:
     return ret;
@@ -2239,9 +2253,6 @@ msp_multiple_merger_common_ancestor_event_beta(msp_t *self)
     segment_t *x, *y, *u;
 
     ancestors = &self->populations[0].ancestors;
-    /* This is just an example to show how to perform the two regimes. With probability 1/2
-     * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
-     */
     /* This is just an example to show how to perform the two regimes. With probability 1/2
      * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
      */
@@ -2292,7 +2303,6 @@ msp_multiple_merger_common_ancestor_event_beta(msp_t *self)
 out:
     return ret;
 }
-
 
 static int WARN_UNUSED
 msp_migration_event(msp_t *self, population_id_t source_pop, population_id_t dest_pop)
@@ -2743,6 +2753,10 @@ msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long 
         } else if (ca_t_wait == t_wait) {
             if (self->model.type == MSP_MODEL_DIRAC){
                 ret = msp_multiple_merger_common_ancestor_event_dirac(self);
+                if (ret==1){
+                    /* No coalescences happened, and we must cancel this event */
+                    self->time -= t_wait;
+                }
             } else if (self->model.type == MSP_MODEL_BETA){
                 ret = msp_multiple_merger_common_ancestor_event_beta(self);
             } else {
@@ -2750,7 +2764,7 @@ msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long 
             }
         }
         /* Migration ??? */
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
     }
