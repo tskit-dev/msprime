@@ -238,8 +238,8 @@ class BranchStatsTestCase(unittest.TestCase):
                 some_breaks]
 
         with self.assertRaises(ValueError):
-                ts.branch_stats_vector(A_one, lambda x: 1.0,
-                                       windows=[0.0, 1.0, ts.sequence_length+1.1])
+            ts.branch_stats_vector(A_one, lambda x: 1.0,
+                                   windows=[0.0, 1.0, ts.sequence_length+1.1])
 
         for A in (A_one, A_many):
             for windows in wins:
@@ -581,3 +581,27 @@ class BranchStatsTestCase(unittest.TestCase):
         self.assertAlmostEqual(branch_length_Y(ts, 0, 1, 2), true_Y)
         self.assertAlmostEqual(ts.branch_stats(A, f), true_Y)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f), true_Y)
+
+    def test_branch_stats_vector_interface(self):
+        ts = msprime.simulate(10)
+
+        def f(x):
+            return [1.0]
+
+        # Duplicated leaves raise an error
+        self.assertRaises(ValueError, ts.branch_stats_vector, [[1, 1]], f)
+        self.assertRaises(ValueError, ts.branch_stats_vector, [[1], [2, 2]], f)
+        # Make sure the basic call doesn't throw an exception
+        ts.branch_stats_vector([[1, 2]], f)
+        # Check for bad windows
+        for bad_start in [-1, 1, 1e-7]:
+            self.assertRaises(
+                ValueError, ts.branch_stats_vector, [[1, 2]], f,
+                [bad_start, ts.sequence_length])
+        for bad_end in [0, ts.sequence_length - 1, ts.sequence_length + 1]:
+            self.assertRaises(
+                ValueError, ts.branch_stats_vector, [[1, 2]], f,
+                [0, bad_end])
+        # Windows must be increasing.
+        self.assertRaises(
+            ValueError, ts.branch_stats_vector, [[1, 2]], f, [0, 1, 1])

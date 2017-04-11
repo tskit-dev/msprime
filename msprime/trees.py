@@ -2179,8 +2179,7 @@ class TreeSequence(object):
         and averages this across the tree sequence, weighted by genomic length.
         '''
         out = self.branch_stats_vector(leaf_sets, lambda x: [weight_fun(x)])
-        if len(out) != 1 or len(out[0]) != 1:
-            raise ValueError("Expecting output of length 1.")
+        assert len(out) == 1 and len(out[0]) == 1
         return out[0][0]
 
     def branch_stats_windowed(self, leaf_sets, weight_fun, windows=None):
@@ -2192,11 +2191,8 @@ class TreeSequence(object):
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
         '''
-        if windows is None:
-            windows = (0, self.sequence_length)
         out = self.branch_stats_vector(leaf_sets, lambda x: [weight_fun(x)], windows)
-        if len(out[0]) != 1:
-            raise ValueError("Expecting output of length 1.")
+        assert len(out[0]) == 1
         return [x[0] for x in out]
 
     def branch_stats_vector(self, leaf_sets, weight_fun, windows=None):
@@ -2214,7 +2210,7 @@ class TreeSequence(object):
         if windows is None:
             windows = (0, self.sequence_length)
         for U in leaf_sets:
-            if max([U.count(x) for x in set(U)]) > 1:
+            if len(U) != len(set(U)):
                 raise ValueError(
                     "elements of leaf_sets cannot contain repeated elements.")
         num_windows = len(windows) - 1
@@ -2222,12 +2218,10 @@ class TreeSequence(object):
             raise ValueError(
                 "Windows must start at the start of the sequence (at 0.0).")
         if windows[-1] != self.sequence_length:
-            raise ValueError(
-                "Windows must extend to the end of the sequence.")
-        for k in range(num_windows-1):
-            if windows[k+1] <= windows[k]:
-                raise ValueError(
-                    "Windows must be increasing.")
+            raise ValueError("Windows must extend to the end of the sequence.")
+        for k in range(num_windows):
+            if windows[k + 1] <= windows[k]:
+                raise ValueError("Windows must be increasing.")
         # initialize
         num_leaf_sets = len(leaf_sets)
         n_out = len(weight_fun([0 for a in range(num_leaf_sets)]))
