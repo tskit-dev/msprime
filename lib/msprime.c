@@ -2168,7 +2168,7 @@ msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int num_ancestors)
 }
 
 static int WARN_UNUSED
-msp_multiple_merger_common_ancestor_event(msp_t *self)
+msp_multiple_merger_common_ancestor_event_dirac(msp_t *self)
 {
     int ret = 0;
     uint32_t j, n;
@@ -2180,105 +2180,119 @@ msp_multiple_merger_common_ancestor_event(msp_t *self)
     /* This is just an example to show how to perform the two regimes. With probability 1/2
      * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
      */
-    if (self->model.type == MSP_MODEL_DIRAC){
-        if (gsl_rng_uniform(self->rng) < (1/(1.0 + self->model.params.dirac_coalescent.c))) {
-            /* Choose x and y */
-            n = avl_count(ancestors);
-            j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
-            x_node = avl_at(ancestors, j);
-            assert(x_node != NULL);
-            x = (segment_t *) x_node->item;
-            avl_unlink_node(ancestors, x_node);
-            j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
-            y_node = avl_at(ancestors, j);
-            assert(y_node != NULL);
-            y = (segment_t *) y_node->item;
-            avl_unlink_node(ancestors, y_node);
-            self->num_ca_events++;
-            msp_free_avl_node(self, x_node);
-            msp_free_avl_node(self, y_node);
-            ret = msp_merge_two_ancestors(self, 0, x, y);
-        } else {
-            /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
-             * of being included. This isn't how things will work for the real simulation,
-             * but it should show how the machinery of merging lots of ancestors should work.
-             */
-            avl_init_tree(&Q, cmp_segment_queue, NULL);
-            node = ancestors->head;
-            while (node != NULL) {
-                next = node->next;
-                if (gsl_rng_uniform(self->rng) < self->model.params.dirac_coalescent.psi / 4.0) {
-                    u = (segment_t *) node->item;
-                    avl_unlink_node(ancestors, node);
-                    msp_free_avl_node(self, node);
-                    q_node = msp_alloc_avl_node(self);
-                    if (q_node == NULL) {
-                        ret = MSP_ERR_NO_MEMORY;
-                        goto out;
-                    }
-                    avl_init_node(q_node, u);
-                    q_node = avl_insert_node(&Q, q_node);
-                    assert(q_node != NULL);
-                }
-                node = next;
-            }
-            /* Now that we have filled Q in the correct way, we can merge the ancestors. */
-            ret = msp_merge_ancestors(self, &Q, 0);
-        }
-    } else if (self->model.type == MSP_MODEL_BETA){
-    /* This is just an example to show how to perform the two regimes. With probability 1/2
-     * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
-     */
-        if (gsl_rng_uniform(self->rng) < 0.5) {
-            /* Choose x and y */
-            n = avl_count(ancestors);
-            j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
-            x_node = avl_at(ancestors, j);
-            assert(x_node != NULL);
-            x = (segment_t *) x_node->item;
-            avl_unlink_node(ancestors, x_node);
-            j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
-            y_node = avl_at(ancestors, j);
-            assert(y_node != NULL);
-            y = (segment_t *) y_node->item;
-            avl_unlink_node(ancestors, y_node);
-            self->num_ca_events++;
-            msp_free_avl_node(self, x_node);
-            msp_free_avl_node(self, y_node);
-            ret = msp_merge_two_ancestors(self, 0, x, y);
-        } else {
-            /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
-             * of being included. This isn't how things will work for the real simulation,
-             * but it should show how the machinery of merging lots of ancestors should work.
-             */
-            avl_init_tree(&Q, cmp_segment_queue, NULL);
-            node = ancestors->head;
-            while (node != NULL) {
-                next = node->next;
-                if (gsl_rng_uniform(self->rng) < 0.5) {
-                    u = (segment_t *) node->item;
-                    avl_unlink_node(ancestors, node);
-                    msp_free_avl_node(self, node);
-                    q_node = msp_alloc_avl_node(self);
-                    if (q_node == NULL) {
-                        ret = MSP_ERR_NO_MEMORY;
-                        goto out;
-                    }
-                    avl_init_node(q_node, u);
-                    q_node = avl_insert_node(&Q, q_node);
-                    assert(q_node != NULL);
-                }
-                node = next;
-            }
-            /* Now that we have filled Q in the correct way, we can merge the ancestors. */
-            ret = msp_merge_ancestors(self, &Q, 0);
-        }
+    if (gsl_rng_uniform(self->rng) < (1/(1.0 + self->model.params.dirac_coalescent.c))) {
+        /* Choose x and y */
+        n = avl_count(ancestors);
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
+        x_node = avl_at(ancestors, j);
+        assert(x_node != NULL);
+        x = (segment_t *) x_node->item;
+        avl_unlink_node(ancestors, x_node);
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
+        y_node = avl_at(ancestors, j);
+        assert(y_node != NULL);
+        y = (segment_t *) y_node->item;
+        avl_unlink_node(ancestors, y_node);
+        self->num_ca_events++;
+        msp_free_avl_node(self, x_node);
+        msp_free_avl_node(self, y_node);
+        ret = msp_merge_two_ancestors(self, 0, x, y);
     } else {
-        ret = MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT;
+        /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
+         * of being included. This isn't how things will work for the real simulation,
+         * but it should show how the machinery of merging lots of ancestors should work.
+         */
+        avl_init_tree(&Q, cmp_segment_queue, NULL);
+        node = ancestors->head;
+        while (node != NULL) {
+            next = node->next;
+            if (gsl_rng_uniform(self->rng) < self->model.params.dirac_coalescent.psi / 4.0) {
+                u = (segment_t *) node->item;
+                avl_unlink_node(ancestors, node);
+                msp_free_avl_node(self, node);
+                q_node = msp_alloc_avl_node(self);
+                if (q_node == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                avl_init_node(q_node, u);
+                q_node = avl_insert_node(&Q, q_node);
+                assert(q_node != NULL);
+            }
+            node = next;
+        }
+        /* Now that we have filled Q in the correct way, we can merge the ancestors. */
+        ret = msp_merge_ancestors(self, &Q, 0);
     }
 out:
     return ret;
 }
+
+
+static int WARN_UNUSED
+msp_multiple_merger_common_ancestor_event_beta(msp_t *self)
+{
+    int ret = 0;
+    uint32_t j, n;
+    avl_tree_t *ancestors, Q;
+    avl_node_t *x_node, *y_node, *node, *next, *q_node;
+    segment_t *x, *y, *u;
+
+    ancestors = &self->populations[0].ancestors;
+    /* This is just an example to show how to perform the two regimes. With probability 1/2
+     * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
+     */
+    /* This is just an example to show how to perform the two regimes. With probability 1/2
+     * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
+     */
+    if (gsl_rng_uniform(self->rng) < 0.5) {
+        /* Choose x and y */
+        n = avl_count(ancestors);
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
+        x_node = avl_at(ancestors, j);
+        assert(x_node != NULL);
+        x = (segment_t *) x_node->item;
+        avl_unlink_node(ancestors, x_node);
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
+        y_node = avl_at(ancestors, j);
+        assert(y_node != NULL);
+        y = (segment_t *) y_node->item;
+        avl_unlink_node(ancestors, y_node);
+        self->num_ca_events++;
+        msp_free_avl_node(self, x_node);
+        msp_free_avl_node(self, y_node);
+        ret = msp_merge_two_ancestors(self, 0, x, y);
+    } else {
+        /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
+         * of being included. This isn't how things will work for the real simulation,
+         * but it should show how the machinery of merging lots of ancestors should work.
+         */
+        avl_init_tree(&Q, cmp_segment_queue, NULL);
+        node = ancestors->head;
+        while (node != NULL) {
+            next = node->next;
+            if (gsl_rng_uniform(self->rng) < 0.5) {
+                u = (segment_t *) node->item;
+                avl_unlink_node(ancestors, node);
+                msp_free_avl_node(self, node);
+                q_node = msp_alloc_avl_node(self);
+                if (q_node == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                avl_init_node(q_node, u);
+                q_node = avl_insert_node(&Q, q_node);
+                assert(q_node != NULL);
+            }
+            node = next;
+        }
+        /* Now that we have filled Q in the correct way, we can merge the ancestors. */
+        ret = msp_merge_ancestors(self, &Q, 0);
+    }
+out:
+    return ret;
+}
+
 
 static int WARN_UNUSED
 msp_migration_event(msp_t *self, population_id_t source_pop, population_id_t dest_pop)
@@ -2508,10 +2522,10 @@ msp_get_multiple_merger_waiting_time(msp_t *self, uint32_t population_id,
 
     if (self->model.type == MSP_MODEL_DIRAC){
         mm_rate = msp_compute_lambda_Xi_dirac(self, n);
-    }
-
-    if (self->model.type == MSP_MODEL_BETA){ // TODO NEED TO BE CHANGED!!!!
+    } else if (self->model.type == MSP_MODEL_BETA){ // TODO NEED TO BE CHANGED!!!!
         mm_rate = 1.0;  // TODO NEED TO BE CHANGED!!!!
+    } else {
+        ret = MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT;
     }
 
     if (mm_rate > 0.0) {
@@ -2727,7 +2741,13 @@ msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long 
         if (re_t_wait == t_wait) {
             ret = msp_recombination_event(self);
         } else if (ca_t_wait == t_wait) {
-            ret = msp_multiple_merger_common_ancestor_event(self);
+            if (self->model.type == MSP_MODEL_DIRAC){
+                ret = msp_multiple_merger_common_ancestor_event_dirac(self);
+            } else if (self->model.type == MSP_MODEL_BETA){
+                ret = msp_multiple_merger_common_ancestor_event_beta(self);
+            } else {
+                ret = MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT;
+            }
         }
         /* Migration ??? */
         if (ret != 0) {
