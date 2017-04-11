@@ -2119,8 +2119,8 @@ msp_common_ancestor_event(msp_t *self, population_id_t population_id)
     return ret;
 }
 
-
-double compute_falling_factorial_log(double m)
+double
+compute_falling_factorial_log(double m)
 {
     //  (n)_m = n(n-1)(n-2)... (n-m + 1)  and  (n)_0 := 1
     // n = 4
@@ -2133,37 +2133,31 @@ double compute_falling_factorial_log(double m)
     return gsl_sf_log(ret);
 }
 
-
 /* This calculates the rate given by Eq (2) in the notes
  */
 static double
 msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int num_ancestors)
 {
     unsigned int l;
-    double n_block;
     double psi = self->model.params.dirac_coalescent.psi;
     double c = self->model.params.dirac_coalescent.c;
     double ret = 0;
-
     double b = num_ancestors;
+
     assert(b > 0);
     assert(psi > 0);
     assert(psi < 1);
     assert(c >= 0);
 
-    n_block = GSL_MIN(b, 4);
-    for (l = 0; l < n_block; l++){
-        ret += gsl_sf_exp(gsl_sf_lnchoose(num_ancestors, l) +
-                           compute_falling_factorial_log(l) +
-                           l * gsl_sf_log(psi/4.0) +
-                           (b-l) * gsl_sf_log(1-psi));
+    for (l = 0; l < GSL_MIN(num_ancestors, 4); l++){
+        ret += gsl_sf_exp(gsl_sf_lnchoose(num_ancestors, l)
+                + compute_falling_factorial_log(l)
+                + l * gsl_sf_log(psi / 4.0)
+                + (b - l) * gsl_sf_log(1 - psi));
     }
-
-
     ret = 1 - ret;
-    ret *= c*4.0/pow(psi,2.0);
-    ret += b * (b-1) / 2;
-
+    ret *= c * 4.0 / gsl_pow_2(psi);
+    ret += b * (b - 1) / 2;
     return ret;
 }
 
@@ -2171,16 +2165,14 @@ static int WARN_UNUSED
 msp_multiple_merger_common_ancestor_event_dirac(msp_t *self)
 {
     int ret = 0;
-    uint32_t j, n, max_pot_size, pot_index;
-    avl_tree_t *ancestors, Q[4];
+    uint32_t j, n, max_pot_size;
+    const uint32_t num_pots = 4;
+    avl_tree_t *ancestors, Q[num_pots];
     avl_node_t *x_node, *y_node, *node, *next, *q_node;
     segment_t *x, *y, *u;
 
     ancestors = &self->populations[0].ancestors;
-    /* This is just an example to show how to perform the two regimes. With probability 1/2
-     * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
-     */
-    if (gsl_rng_uniform(self->rng) < (1/(1.0 + self->model.params.dirac_coalescent.c))) {
+    if (gsl_rng_uniform(self->rng) < (1 / (1.0 + self->model.params.dirac_coalescent.c))) {
         /* Choose x and y */
         n = avl_count(ancestors);
         j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
@@ -2198,18 +2190,18 @@ msp_multiple_merger_common_ancestor_event_dirac(msp_t *self)
         msp_free_avl_node(self, y_node);
         ret = msp_merge_two_ancestors(self, 0, x, y);
     } else {
-        /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
-         * of being included. This isn't how things will work for the real simulation,
-         * but it should show how the machinery of merging lots of ancestors should work.
+        /* In the multiple merger regime we have four different 'pots' that
+         * lineages get assigned to, where all lineages in a given pot are merged into
+         * a common ancestor.
          */
-        for (pot_index = 0; pot_index < 4; pot_index++){
-            avl_init_tree(&Q[pot_index], cmp_segment_queue, NULL);
+        for (j = 0; j < num_pots; j++){
+            avl_init_tree(&Q[j], cmp_segment_queue, NULL);
         }
         node = ancestors->head;
         while (node != NULL) {
             next = node->next;
+            /* With probability psi / 4, a given lineage participates in this event. */
             if (gsl_rng_uniform(self->rng) < self->model.params.dirac_coalescent.psi / 4.0) {
-                pot_index = (uint32_t) gsl_rng_uniform_int(self->rng, 4);
                 u = (segment_t *) node->item;
                 avl_unlink_node(ancestors, node);
                 msp_free_avl_node(self, node);
@@ -2219,21 +2211,27 @@ msp_multiple_merger_common_ancestor_event_dirac(msp_t *self)
                     goto out;
                 }
                 avl_init_node(q_node, u);
-                q_node = avl_insert_node(&Q[pot_index], q_node);
+                /* Now assign this ancestor to a uniformly chosen pot */
+                j = (uint32_t) gsl_rng_uniform_int(self->rng, num_pots);
+                q_node = avl_insert_node(&Q[j], q_node);
                 assert(q_node != NULL);
             }
             node = next;
         }
-
-        max_pot_size = avl_count(&Q[0]);
-        /* Now that we have filled Q in the correct way, we can merge the ancestors. */
-        for (pot_index = 0; pot_index < 4; pot_index++){
-            max_pot_size = GSL_MAX(max_pot_size, avl_count(&Q[pot_index]));
-            ret = msp_merge_ancestors(self, &Q[pot_index], 0);
+        /* All the lineages that have been assigned to the particular pots can now be
+         * merged.
+         */
+        max_pot_size = 0;
+        for (j = 0; j < num_pots; j++){
+            max_pot_size = GSL_MAX(max_pot_size, avl_count(&Q[j]));
+            ret = msp_merge_ancestors(self, &Q[j], 0);
             if (ret < 0) {
                 goto out;
             }
         }
+        /* If no coalescence has occured, we need to signal this back to the calling
+         * function so that the event can be 'cancelled'. This is done by returning 1.
+         */
         if (max_pot_size < 2){
             ret = 1;
         }
@@ -2241,7 +2239,6 @@ msp_multiple_merger_common_ancestor_event_dirac(msp_t *self)
 out:
     return ret;
 }
-
 
 static int WARN_UNUSED
 msp_multiple_merger_common_ancestor_event_beta(msp_t *self)
@@ -2520,28 +2517,27 @@ msp_get_common_ancestor_waiting_time(msp_t *self, uint32_t population_id)
 }
 
 static double
-msp_get_multiple_merger_waiting_time(msp_t *self, uint32_t population_id,
-        unsigned int k) // k used for k-merger
+msp_get_multiple_merger_waiting_time(msp_t *self, uint32_t population_id)
 {
     double ret = DBL_MAX;
     population_t *pop = &self->populations[population_id];
     unsigned int n = avl_count(&pop->ancestors);
-    //double t = self->time;
     double u;
     double mm_rate = 0.0;
 
     if (self->model.type == MSP_MODEL_DIRAC){
         mm_rate = msp_compute_lambda_Xi_dirac(self, n);
-    } else if (self->model.type == MSP_MODEL_BETA){ // TODO NEED TO BE CHANGED!!!!
-        mm_rate = 1.0;  // TODO NEED TO BE CHANGED!!!!
+    } else if (self->model.type == MSP_MODEL_BETA){
+        // TODO NEED TO BE CHANGED!!!!
+        mm_rate = 1.0;
     } else {
         ret = MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT;
     }
-
     if (mm_rate > 0.0) {
-        u = gsl_ran_exponential(self->rng, 1.0/mm_rate)/2.0;
-        ret = u; // staying away from population size for now
-                 // ret = pop->initial_size * u;
+        u = gsl_ran_exponential(self->rng, 1.0 / mm_rate) / 2.0;
+        ret = u;
+        // staying away from population size for now
+        // ret = pop->initial_size * u;
     }
 
     return ret;
@@ -2740,9 +2736,7 @@ msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long 
         }
         /* Common ancestors */
         ca_t_wait = DBL_MAX;
-        // Staying away from population structure for now
-        uint32_t single_population_idx = 0;
-        t_temp = msp_get_multiple_merger_waiting_time(self, single_population_idx, 0); // Not sure what to set for k? k-merger?
+        t_temp = msp_get_multiple_merger_waiting_time(self, 0);
         if (t_temp < ca_t_wait) {
             ca_t_wait = t_temp;
         }
@@ -2751,9 +2745,9 @@ msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long 
         if (re_t_wait == t_wait) {
             ret = msp_recombination_event(self);
         } else if (ca_t_wait == t_wait) {
-            if (self->model.type == MSP_MODEL_DIRAC){
+            if (self->model.type == MSP_MODEL_DIRAC) {
                 ret = msp_multiple_merger_common_ancestor_event_dirac(self);
-                if (ret==1){
+                if (ret == 1) {
                     /* No coalescences happened, and we must cancel this event */
                     self->time -= t_wait;
                 }
