@@ -236,7 +236,7 @@ def simplify_tree_sequence(ts, samples):
     for record in active_records.values():
         record[1] = ts.get_sequence_length()
         new_records.append(msprime.CoalescenceRecord(*record))
-    new_records.sort(key=lambda r: r.time)
+    new_records.sort(key=lambda r: (r.time, r.node, r.left))
 
     # Now compress the nodes.
     node_map = [msprime.NULL_NODE for _ in range(num_nodes)]

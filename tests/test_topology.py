@@ -971,3 +971,151 @@ class TestWithVisuals(TopologyTestCase):
         self.verify_simplify_topology(ts, [0, 1])
         self.verify_simplify_topology(ts, [1, 2])
         self.verify_simplify_topology(ts, [2, 0])
+
+    def test_tricky_switches(self):
+        # suppose the topology has:
+        # left right parent children
+        #  0.0   0.5      6      0,1
+        #  0.5   1.0      6      4,5
+        #  0.0   0.4      7      2,3
+        #
+        # --------------------------
+        #
+        #        12         .        12         .        12         .
+        #       /  \        .       /  \        .       /  \        .
+        #     11    \       .      /    \       .      /    \       .
+        #     / \    \      .     /     10      .     /     10      .
+        #    /   \    \     .    /     /  \     .    /     /  \     .
+        #   6     7    8    .   6     9    8    .   6     9    8    .
+        #  / \   / \   /\   .  / \   / \   /\   .  / \   / \   /\   .
+        # 0   1 2   3 4  5  . 0   1 2   3 4  5  . 4   5 2   3 0  1  .
+        #                   .                   .                   .
+        # 0.0              0.4                 0.5                 1.0
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           0
+        3       1           0
+        4       1           0
+        5       1           0
+        6       0           1
+        7       0           1
+        8       0           1
+        9       0           1
+        10      0           2
+        11      0           3
+        12      0           4
+        """)
+        edgesets = six.StringIO("""\
+        left right parent children
+        0.0  0.5   6      0,1
+        0.5  1.0   6      4,5
+        0.0  0.4   7      2,3
+        0.0  0.5   8      4,5
+        0.5  1.0   8      0,1
+        0.4  1.0   9      2,3
+        0.4  1.0   10     8,9
+        0.0  0.4   11     6,7
+        0.0  0.4   12     8,11
+        0.4  1.0   12     6,10
+        """)
+        true_trees = [
+                {0: 6, 1: 6, 2: 7, 3: 7, 4: 8, 5: 8, 6: 11,
+                    7: 11, 8: 12, 9: -1, 10: -1, 11: 12, 12: -1},
+                {0: 6, 1: 6, 2: 9, 3: 9, 4: 8, 5: 8, 6: 12,
+                    7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1},
+                {0: 8, 1: 8, 2: 9, 3: 9, 4: 6, 5: 6, 6: 12,
+                    7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1}
+        ]
+        ts = msprime.load_text(nodes, edgesets)
+        tree_dicts = [t.parent_dict for t in ts.trees()]
+        self.assertEqual(ts.sample_size, 6)
+        self.assertEqual(ts.num_trees, len(true_trees))
+        self.assertEqual(ts.num_nodes, 13)
+        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
+        # check topologies agree:
+        for a, t in zip(true_trees, tree_dicts):
+            for k in a.keys():
+                if k in t.keys():
+                    self.assertEqual(t[k], a[k])
+                else:
+                    self.assertEqual(a[k], msprime.NULL_NODE)
+        self.verify_simplify_topology(ts, [0, 2])
+        self.verify_simplify_topology(ts, [0, 4])
+        self.verify_simplify_topology(ts, [2, 4])
+
+    def test_tricky_simplify(self):
+        # Continue as above but invoke simplfy:
+        #
+        #         12         .          12         .
+        #        /  \        .         /  \        .
+        #      11    \       .       11    \       .
+        #      / \    \      .       / \    \      .
+        #    13   \    \     .      /  15    \     .
+        #    / \   \    \    .     /   / \    \    .
+        #   6  14   7    8   .    6  14   7    8   .
+        #  / \     / \   /\  .   / \     / \   /\  .
+        # 0   1   2   3 4  5 .  0   1   2   3 4  5 .
+        #                    .                     .
+        # 0.0               0.1                   0.4
+        #
+        #  .        12         .        12         .
+        #  .       /  \        .       /  \        .
+        #  .      /    \       .      /    \       .
+        #  .     /     10      .     /     10      .
+        #  .    /     /  \     .    /     /  \     .
+        #  .   6     9    8    .   6     9    8    .
+        #  .  / \   / \   /\   .  / \   / \   /\   .
+        #  . 0   1 2   3 4  5  . 4   5 2   3 0  1  .
+        #  .                   .                   .
+        # 0.4                 0.5                 1.0
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           0
+        3       1           0
+        4       1           0
+        5       1           0
+        6       0           1
+        7       0           1
+        8       0           1
+        9       0           1
+        10      0           2
+        11      0           3
+        12      0           4
+        13      0           2
+        14      0           1
+        15      0           2
+        """)
+        edgesets = six.StringIO("""\
+        left right parent children
+        0.0  0.5   6      0,1
+        0.5  1.0   6      4,5
+        0.0  0.4   7      2,3
+        0.0  0.5   8      4,5
+        0.5  1.0   8      0,1
+        0.4  1.0   9      2,3
+        0.4  1.0   10     8,9
+        0.0  0.1   13     6,14
+        0.1  0.4   15     7,14
+        0.0  0.1   11     7,13
+        0.1  0.4   11     6,15
+        0.0  0.4   12     8,11
+        0.4  1.0   12     6,10
+        """)
+        true_trees = [
+                {0: 6, 1: 6, 2: 7, 3: 7, 4: 8, 5: 8, 6: 11,
+                    7: 11, 8: 12, 9: -1, 10: -1, 11: 12, 12: -1},
+                {0: 6, 1: 6, 2: 9, 3: 9, 4: 8, 5: 8, 6: 12,
+                    7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1},
+                {0: 8, 1: 8, 2: 9, 3: 9, 4: 6, 5: 6, 6: 12,
+                    7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1}
+        ]
+        big_ts = msprime.load_text(nodes, edgesets)
+        self.assertEqual(big_ts.num_trees, 1+len(true_trees))
+        self.assertEqual(big_ts.num_nodes, 16)
+        ts = big_ts.simplify()
+        self.assertEqual(ts.sample_size, 6)
+        self.assertEqual(ts.num_nodes, 13)
