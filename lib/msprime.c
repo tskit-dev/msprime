@@ -2167,7 +2167,7 @@ msp_multiple_merger_common_ancestor_event_dirac(msp_t *self)
     int ret = 0;
     uint32_t j, n, max_pot_size;
     const uint32_t num_pots = 4;
-    avl_tree_t *ancestors, Q[num_pots];
+    avl_tree_t *ancestors, Q[4]; /* MSVC won't let us use num_pots here */
     avl_node_t *x_node, *y_node, *node, *next, *q_node;
     segment_t *x, *y, *u;
 
