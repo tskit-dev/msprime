@@ -5768,7 +5768,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *beta_s = NULL;
     PyObject *value;
     int is_hudson, is_smc, is_smc_prime, is_dirac, is_beta;
-    double psi, alpha, truncation_point;
+    double psi, c, alpha, truncation_point;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -5836,8 +5836,13 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
             goto out;
         }
         psi = PyFloat_AsDouble(value);
+        value = get_dict_number(py_model, "c");
+        if (value == NULL) {
+            goto out;
+        }
+        c = PyFloat_AsDouble(value);
         /* TODO range checking on psi */
-        err = msp_set_simulation_model_dirac(self->sim, psi);
+        err = msp_set_simulation_model_dirac(self->sim, psi, c);
     }
 
     is_beta = PyObject_RichCompareBool(py_name, beta_s, Py_EQ);
@@ -6277,6 +6282,15 @@ Simulator_get_model(Simulator *self)
             goto out;
         }
         if (PyDict_SetItemString(d, "psi", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
+        value = Py_BuildValue("d", model->params.dirac_coalescent.c);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "c", value) != 0) {
             goto out;
         }
         Py_DECREF(value);

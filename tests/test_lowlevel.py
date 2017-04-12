@@ -1173,14 +1173,17 @@ class TestSimulator(LowLevelTestCase):
                 get_samples(sample_size),
                 _msprime.RandomGenerator(random_seed), **kwargs)
         for bad_type in [None, str, "sdf"]:
-            model = get_simulation_model("dirac", psi=bad_type)
+            model = get_simulation_model("dirac", psi=bad_type, c=1.0)
+            self.assertRaises(TypeError, f, model=model)
+            model = get_simulation_model("dirac", psi=0.5, c=bad_type)
             self.assertRaises(TypeError, f, model=model)
         self.assertRaises(ValueError, f, model=get_simulation_model("dirac"))
         # TODO check for bad values when range checking is done.
-        for psi in [1.0, 2.2, 1e-4]:
-            model = get_simulation_model("dirac", psi=psi)
-            sim = f(model=model)
-            self.assertEqual(sim.get_model(), model)
+        for psi in [0.99, 0.2, 1e-4]:
+            for c in [5.0, 1e2, 1e-4]:
+                model = get_simulation_model("dirac", psi=psi, c=c)
+                sim = f(model=model)
+                self.assertEqual(sim.get_model(), model)
 
     def test_beta_simulation_model(self):
 

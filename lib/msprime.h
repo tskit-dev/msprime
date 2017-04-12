@@ -221,6 +221,7 @@ typedef struct {
 
 typedef struct {
     double psi;
+    double c; // constant
 } dirac_coalescent_t;
 
 typedef struct {
@@ -625,7 +626,7 @@ typedef struct {
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
 int msp_set_simulation_model_non_parametric(msp_t *self, int model);
-int msp_set_simulation_model_dirac(msp_t *self, double psi);
+int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
 int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
@@ -898,6 +899,8 @@ void migration_table_print_state(migration_table_t *self, FILE *out);
 
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
+
+double compute_falling_factorial_log(double m);
 
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 
