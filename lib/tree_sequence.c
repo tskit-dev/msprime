@@ -67,8 +67,13 @@ cmp_record_time_left(const void *a, const void *b) {
     const coalescence_record_t *ca = (const coalescence_record_t *) a;
     const coalescence_record_t *cb = (const coalescence_record_t *) b;
     int ret = (ca->time > cb->time) - (ca->time < cb->time);
+    /* If time values are equal, sort by the node */
     if (ret == 0) {
-        ret = (ca->left > cb->left) - (ca->left < cb->left);
+        ret = (ca->node > cb->node) - (ca->node < cb->node);
+        /* If the nodes are equal, sort by the left coordinate. */
+        if (ret == 0) {
+            ret = (ca->left > cb->left) - (ca->left < cb->left);
+        }
     }
     return ret;
 }
@@ -987,6 +992,7 @@ tree_sequence_load_records(tree_sequence_t *self,
             goto out;
         }
     }
+
     last_node = 0;
     for (j = 0; j < num_coalescence_records; j++) {
         cr = &records[j];

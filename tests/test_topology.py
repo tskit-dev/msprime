@@ -1116,7 +1116,6 @@ class TestWithVisuals(TopologyTestCase):
         big_ts = msprime.load_text(nodes, edgesets)
         self.assertEqual(big_ts.num_trees, 1+len(true_trees))
         self.assertEqual(big_ts.num_nodes, 16)
-        # 'Aborts' test on this next step:
         ts = big_ts.simplify()
         self.assertEqual(ts.sample_size, 6)
         self.assertEqual(ts.num_nodes, 13)
