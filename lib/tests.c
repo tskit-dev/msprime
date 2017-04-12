@@ -2260,6 +2260,11 @@ test_large_bottleneck_simulation(void)
 static void
 test_multiple_mergers_simulation(void)
 {
+    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(0), 0, 0.000000);
+    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(1), 1.386294, 0.000001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(2), 2.484907, 0.000001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(3), 3.178054, 0.000001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(4), 3.178054, 0.000001);
     int ret;
     size_t j;
     uint32_t n = 100;
@@ -2281,7 +2286,8 @@ test_multiple_mergers_simulation(void)
         CU_ASSERT_EQUAL(ret, 0);
         /* TODO what are good parameters here?? */
         if (j == 0) {
-            ret = msp_set_simulation_model_dirac(msp, 1.0);
+            // Use psi = 0.5 for now, but should definitely test for 0 and 1 cases
+            ret = msp_set_simulation_model_dirac(msp, 0.5, 1);
         } else {
             ret = msp_set_simulation_model_beta(msp, 1.0, 10.0);
         }

@@ -164,11 +164,13 @@ class TestParametricModels(unittest.TestCase):
                 "truncation_point": truncation_point})
 
     def test_dirac_coalescent_parameters(self):
-        for psi in [-1, 0, 1.1]:
-            model = msprime.DiracCoalescent(psi)
-            self.assertEqual(model.psi, psi)
-            d = model.get_ll_representation()
-            self.assertEqual(d, {"name": "dirac", "psi": psi})
+        for psi in [0.01, 0.5, 0.99]:
+            for c in [1e-6, 1.0, 1e2]:
+                model = msprime.DiracCoalescent(psi, c)
+                self.assertEqual(model.psi, psi)
+                self.assertEqual(model.c, c)
+                d = model.get_ll_representation()
+                self.assertEqual(d, {"name": "dirac", "psi": psi, "c": c})
 
 
 class TestMultipleMergerModels(unittest.TestCase):
@@ -176,13 +178,13 @@ class TestMultipleMergerModels(unittest.TestCase):
     Runs tests on the multiple merger coalescent models.
     """
     def test_dirac_coalescent(self):
-        model = msprime.DiracCoalescent(5)
+        model = msprime.DiracCoalescent(0.3, 10)
         ts = msprime.simulate(sample_size=10, model=model)
         # TODO real tests
         self.assertTrue(ts is not None)
 
     def test_beta_coalescent(self):
-        model = msprime.BetaCoalescent(5)
+        model = msprime.BetaCoalescent(5, 10)
         ts = msprime.simulate(sample_size=10, model=model)
         # TODO real tests
         self.assertTrue(ts is not None)
