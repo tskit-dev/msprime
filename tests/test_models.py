@@ -38,6 +38,7 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
     def test_hudson(self):
         threshold = 20
         sim = msprime.simulator_factory(sample_size=10, recombination_rate=5)
+        sim.set_random_generator(msprime.RandomGenerator(2))
         sim.run()
         self.assertGreater(sim.get_num_common_ancestor_events(), threshold)
         self.assertGreater(sim.get_num_recombination_events(), threshold)
@@ -55,6 +56,7 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
             threshold = 20
             sim = msprime.simulator_factory(
                 sample_size=10, recombination_rate=5, model=model)
+            sim.set_random_generator(msprime.RandomGenerator(3))
             sim.run()
             self.assertGreater(sim.get_num_common_ancestor_events(), threshold)
             self.assertGreater(sim.get_num_recombination_events(), threshold)
@@ -177,6 +179,33 @@ class TestMultipleMergerModels(unittest.TestCase):
     """
     Runs tests on the multiple merger coalescent models.
     """
+    def test_dirac_coalescent_kingman_regime(self):
+        # When c=0, we should a kingman coalescent and no multiple mergers.
+        model = msprime.DiracCoalescent(psi=0.5, c=0)
+        ts = msprime.simulate(sample_size=10, model=model, random_seed=2)
+        for e in ts.edgesets():
+            self.assertEqual(len(e.children), 2)
+
+    def test_dirac_coalescent_lambda_regime(self):
+        # With large c and psi ~ 1, we should be guaranteed some multiple mergers.
+        model = msprime.DiracCoalescent(psi=0.999, c=1000)
+        ts = msprime.simulate(sample_size=100, model=model, random_seed=4)
+        non_binary = False
+        for e in ts.edgesets():
+            if len(e.children) > 2:
+                non_binary = True
+        self.assertTrue(non_binary)
+
+    def test_dirac_coalescent_lambda_regime_recombination(self):
+        model = msprime.DiracCoalescent(psi=0.999, c=1)
+        ts = msprime.simulate(
+            sample_size=100, recombination_rate=100, model=model, random_seed=3)
+        non_binary = False
+        for e in ts.edgesets():
+            if len(e.children) > 2:
+                non_binary = True
+        self.assertTrue(non_binary)
+
     def test_dirac_coalescent(self):
         model = msprime.DiracCoalescent(0.3, 10)
         ts = msprime.simulate(sample_size=10, model=model)

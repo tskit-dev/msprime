@@ -1178,7 +1178,12 @@ class TestSimulator(LowLevelTestCase):
             model = get_simulation_model("dirac", psi=0.5, c=bad_type)
             self.assertRaises(TypeError, f, model=model)
         self.assertRaises(ValueError, f, model=get_simulation_model("dirac"))
-        # TODO check for bad values when range checking is done.
+        for bad_psi in [-1, 0, -1e-6, 1, 1e6]:
+            self.assertRaises(
+                ValueError, f, model=get_simulation_model("dirac", c=1, psi=bad_psi))
+        for bad_c in [-1, -1e-6]:
+            self.assertRaises(
+                ValueError, f, model=get_simulation_model("dirac", psi=0.5, c=bad_c))
         for psi in [0.99, 0.2, 1e-4]:
             for c in [5.0, 1e2, 1e-4]:
                 model = get_simulation_model("dirac", psi=psi, c=c)
