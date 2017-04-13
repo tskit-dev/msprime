@@ -2138,26 +2138,39 @@ compute_falling_factorial_log(double m)
 static double
 msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int num_ancestors)
 {
-    unsigned int l;
+    unsigned int l, m;
     double psi = self->model.params.dirac_coalescent.psi;
     double c = self->model.params.dirac_coalescent.c;
     double ret = 0;
     double b = num_ancestors;
+    m = GSL_MIN(num_ancestors, 4);
+    double r[m+1];
 
     assert(b > 0);
     assert(psi > 0);
     assert(psi < 1);
     assert(c >= 0);
 
-    for (l = 0; l < GSL_MIN(num_ancestors, 4); l++){
-        ret += gsl_sf_exp(gsl_sf_lnchoose(num_ancestors, l)
-                + compute_falling_factorial_log(l)
-                + l * gsl_sf_log(psi / 4.0)
-                + (b - l) * gsl_sf_log(1 - psi));
+    r[0] = b * gsl_sf_log(1 - psi);
+    double r_max = r[0];
+    for (l = 1; l <= m; l++){
+        double double_l = l;
+        r[l] = gsl_sf_lnchoose(num_ancestors, l)
+                + compute_falling_factorial_log(double_l)
+                + double_l * gsl_sf_log(psi / 4.0)
+                + (b - double_l) * gsl_sf_log(1 - psi);
+        r_max = GSL_MAX(r_max, r[l]);
     }
+
+    for (l = 0; l <= m; l++)  {
+    ret += exp(r[l] - r_max);
+    }
+    ret = exp(r_max + log(ret));
+
     ret = 1 - ret;
     ret *= c * 4.0 / gsl_pow_2(psi);
     ret += b * (b - 1) / 2;
+
     return ret;
 }
 
