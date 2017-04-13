@@ -2824,8 +2824,9 @@ class DiracCoalescent(ParametricSimulationModel):
     name = "dirac"
 
     # TODO What is a meaningful default for this value? See above.
-    def __init__(self, psi=1):
+    def __init__(self, psi=0.5, c=10.0):
         self.psi = psi
+        self.c = c
 
 
 class Population(object):

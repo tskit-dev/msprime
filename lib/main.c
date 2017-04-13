@@ -117,7 +117,7 @@ read_model_config(msp_t *msp, config_t *config)
     config_setting_t *setting = config_lookup(config, "model");
     config_setting_t *s;
     const char *name;
-    double psi, alpha, truncation_point;
+    double psi, c, alpha, truncation_point;
 
     if (setting == NULL) {
         fatal_error("model is a required parameter");
@@ -142,7 +142,12 @@ read_model_config(msp_t *msp, config_t *config)
             fatal_error("dirac model psi not specified");
         }
         psi = config_setting_get_float(s);
-        ret = msp_set_simulation_model_dirac(msp, psi);
+        s = config_setting_get_member(setting, "c");
+        if (s == NULL) {
+            fatal_error("dirac model c not specified");
+        }
+        c = config_setting_get_float(s);
+        ret = msp_set_simulation_model_dirac(msp, psi, c);
     } else if (strcmp(name, "beta") == 0) {
         s = config_setting_get_member(setting, "alpha");
         if (s == NULL) {
