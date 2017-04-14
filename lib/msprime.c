@@ -2120,15 +2120,15 @@ msp_common_ancestor_event(msp_t *self, population_id_t population_id)
 }
 
 double
-compute_falling_factorial_log(double m)
+compute_falling_factorial_log(unsigned int m)
 {
-    //  (n)_m = n(n-1)(n-2)... (n-m + 1)  and  (n)_0 := 1
+    // (n)_m = n(n-1)(n-2)... (n-m + 1)  and  (n)_0 := 1
     // n = 4
-    double l = 0.0;
+    unsigned int l = 0;
     double ret = 1.0;
     while (l < m){
         l++;
-        ret *= (4 - l + 1);
+        ret *= (4.0 - l + 1.0);
     }
     return gsl_sf_log(ret);
 }
@@ -2139,31 +2139,34 @@ static double
 msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int num_ancestors)
 {
     unsigned int l, m;
+    double r[5], r_max;
     double psi = self->model.params.dirac_coalescent.psi;
     double c = self->model.params.dirac_coalescent.c;
-    double ret = 0;
     double b = num_ancestors;
-    m = GSL_MIN(num_ancestors, 4);
-    double r[m+1];
+    double ret = 0;
 
     assert(b > 0);
     assert(psi > 0);
     assert(psi < 1);
     assert(c >= 0);
 
+    m = GSL_MIN(num_ancestors, 4);
+    /* An underflow error occurs because of the large exponent (b-l). We use the
+     * LSE trick to approximate this caculation. For details, see at
+     * https://en.wikipedia.org/wiki/LogSumExp
+     */
     r[0] = b * gsl_sf_log(1 - psi);
-    double r_max = r[0];
+    r_max = r[0];
     for (l = 1; l <= m; l++){
-        double double_l = l;
         r[l] = gsl_sf_lnchoose(num_ancestors, l)
-                + compute_falling_factorial_log(double_l)
-                + double_l * gsl_sf_log(psi / 4.0)
-                + (b - double_l) * gsl_sf_log(1 - psi);
+                + compute_falling_factorial_log(l)
+                + l * gsl_sf_log(psi / 4.0)
+                + (b - l) * gsl_sf_log(1 - psi);
         r_max = GSL_MAX(r_max, r[l]);
     }
 
     for (l = 0; l <= m; l++)  {
-    ret += exp(r[l] - r_max);
+        ret += exp(r[l] - r_max);
     }
     ret = exp(r_max + log(ret));
 
