@@ -274,6 +274,22 @@ class BranchStatsTestCase(unittest.TestCase):
                     ts.branch_stats(A, f),
                     branch_length_diversity(ts, A[0], A[1]))
 
+    def check_tmrca_matrix(self, ts):
+        A = [random.sample(ts.samples(), 3),
+             random.sample(ts.samples(), 2),
+             random.sample(ts.samples(), 1)]
+        windows = [0.0, ts.sequence_length/2, ts.sequence_length]
+        ts_values = ts.get_mean_tmrca(A, windows)
+        self.assertListEqual([len(x) for x in ts_values], [6, 6])
+        assert(len(A[2]) == 1)
+        self.assertListEqual([x[5] for x in ts_values], [0.0, 0.0])
+        here_values = [[branch_length_diversity(ts, A[i], A[j], begin=windows[k],
+                                                end=windows[k+1])
+                        for i in range(len(A)) for j in range(i, len(A))]
+                       for k in range(len(windows)-1)]
+        for k in range(len(windows)-1):
+            self.assertListAlmostEqual(here_values[k], ts_values[k])
+
     def check_pairwise_diversity_mutations(self, ts):
         samples = random.sample(ts.samples(), 2)
         A = [[samples[0]], [samples[1]]]
@@ -342,6 +358,13 @@ class BranchStatsTestCase(unittest.TestCase):
     def test_windowization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_windowization(ts)
+
+    def test_derived_functions(self):
+        '''
+        Test implementation of statistics using these functions.
+        '''
+        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
+        self.check_tmrca_matrix(ts)
 
     def test_case_1(self):
         # With mutations:

@@ -2199,6 +2199,38 @@ class TreeSequence(object):
             leaves = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(leaves)
 
+    def get_mean_tmrca(self, leaf_sets, windows):
+        """
+        Finds the mean time to most recent common ancestor between pairs of samples
+        from each group of leaves and in each window. Returns the upper triangle
+        (including the diagonal) in row-major order, so if the output is `x`, then:
+
+        j=0
+        for m in range(len(leaf_sets)):
+            for n in range(m,len(leaf_sets)):
+                trmca[m,n] = tmrca[n,m] = x[i][j]
+                j += 1
+
+        will fill out the matrix of mean TMRCAs in the `i`th window between (and
+        within) each group of leaves in `leaf_sets` in the matrix `tmrca`.  If
+        an element of `leaf_sets` has only one element, the corresponding
+        diagonal will be 0.
+
+        :param list leaf_sets: A list of sets of IDs of leaves.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of the upper triangle of mean TMRCA values in row-major
+            order, including the diagonal.
+        """
+        nleaves = len(leaf_sets)
+        n = [len(x) for x in leaf_sets]
+
+        def f(x):
+            return [float(x[i]*(n[j]-x[j]) + (n[i]-x[i])*x[j])/float(n[i]*n[j])
+                    for i in range(nleaves) for j in range(i, nleaves)]
+
+        return self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+
     def branch_stats(self, leaf_sets, weight_fun):
         '''
         Here leaf_sets is a list of lists of leaves, and weight_fun is a function
@@ -2235,7 +2267,7 @@ class TreeSequence(object):
         and averages this across the tree sequence, weighted by genomic length.
 
         It does this separately for each window [windows[i], windows[i+1])
-        and returns the values in a vector.
+        and returns the values in a list.
         '''
         if windows is None:
             windows = (0, self.sequence_length)
