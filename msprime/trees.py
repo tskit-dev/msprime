@@ -2205,18 +2205,18 @@ class TreeSequence(object):
         from each group of leaves and in each window. Returns the upper triangle
         (including the diagonal) in row-major order, so if the output is `x`, then:
 
-        > j=0
-        > for m in range(len(leaf_sets)):
-        >     for n in range(m,len(leaf_sets)):
-        >         trmca[m,n] = tmrca[n,m] = x[i][j]
-        >         j += 1
+        >>> j=0
+        >>> for m in range(len(leaf_sets)):
+        >>>     for n in range(m,len(leaf_sets)):
+        >>>         trmca[m,n] = tmrca[n,m] = x[i][j]
+        >>>         j += 1
 
         will fill out the matrix of mean TMRCAs in the `i`th window between (and
         within) each group of leaves in `leaf_sets` in the matrix `tmrca`.
         Alternatively, if `names` labels the leaf_sets, the output labels are:
 
-        > [".".join(names[i],names[j]) for i in range(len(names))
-        >         for j in range(i,len(names))]
+        >>> [".".join(names[i],names[j]) for i in range(len(names))
+        >>>         for j in range(i,len(names))]
 
         If an element of `leaf_sets` has only one element, the corresponding
         diagonal will be 0.
@@ -2280,6 +2280,8 @@ class TreeSequence(object):
             if len(U) != len(set(U)):
                 raise ValueError(
                     "elements of leaf_sets cannot contain repeated elements.")
+            for u in U:
+                assert(type(u) is int)
         num_windows = len(windows) - 1
         if windows[0] != 0.0:
             raise ValueError(
