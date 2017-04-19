@@ -576,8 +576,7 @@ tree_sequence_check(tree_sequence_t *self)
     qsort(coordinates, num_coordinates, sizeof(double), cmp_double);
 
     if (coordinates[0] != 0.0) {
-        /* TODO specific error for this */
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        ret = MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO;
         goto out;
     }
 
@@ -640,8 +639,7 @@ tree_sequence_check(tree_sequence_t *self)
         }
     }
     if (self->edgesets.num_records > 0 && left != 0) {
-	/* TODO specific error for this */
-        ret = MSP_ERR_BAD_EDGESET;
+        ret = MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO;
         goto out;
     }
 
