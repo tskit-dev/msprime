@@ -55,7 +55,7 @@
 #define MSP_ERR_ASSERTION_FAILED                                    -24
 #define MSP_ERR_SOURCE_DEST_EQUAL                                   -25
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
-#define MSP_ERR_BAD_COALESCENCE_RECORDS                             -27
+#define MSP_ERR_BAD_EDGESET                                         -27
 #define MSP_ERR_BAD_SAMPLES                                         -28
 #define MSP_ERR_NONBINARY_NEWICK                                    -29
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30

@@ -558,7 +558,7 @@ tree_sequence_get_provenance_strings(tree_sequence_t *self,
 static int
 tree_sequence_check(tree_sequence_t *self)
 {
-    int ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+    int ret = MSP_ERR_BAD_EDGESET;
     node_id_t child, node;
     list_len_t j, k;
     size_t num_coordinates = self->edgesets.num_records + 1;
@@ -640,7 +640,8 @@ tree_sequence_check(tree_sequence_t *self)
         }
     }
     if (self->edgesets.num_records > 0 && left != 0) {
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+	/* TODO specific error for this */
+        ret = MSP_ERR_BAD_EDGESET;
         goto out;
     }
 
