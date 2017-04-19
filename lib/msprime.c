@@ -139,8 +139,8 @@ msp_strerror(int err)
         case MSP_ERR_BAD_COALESCENCE_RECORDS_SEQUENCE_LENGTH:
             ret = "Bad coalescence records in file: Sequence length is zero.";
             break;
-        case MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT:
-            ret = "Bad coalescence records in file: right coordinate not matching any left coordinate.";
+        case MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT:
+            ret = "Bad edgeset in file: right coordinate not matching any left coordinate.";
             break;
         case MSP_ERR_BAD_COALESCENCE_RECORDS:
             ret = "Bad coalescence records in file.";

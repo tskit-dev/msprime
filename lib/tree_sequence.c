@@ -635,7 +635,7 @@ tree_sequence_check(tree_sequence_t *self)
         result = bsearch(self->edgesets.right + j, coordinates, num_coordinates,
                 sizeof(double), cmp_double);
         if (result == NULL) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT;
+            ret = MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT;
             goto out;
         }
     }

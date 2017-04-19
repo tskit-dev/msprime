@@ -79,7 +79,7 @@
 #define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
 #define MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE                 -49
 #define MSP_ERR_BAD_COALESCENCE_RECORDS_SEQUENCE_LENGTH             -50
-#define MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT            -51
+#define MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT                       -51
 #define MSP_ERR_COORDINATE_NOT_FOUND                                -52
 #define MSP_ERR_BAD_NODES_ARRAY                                     -53
 #define MSP_ERR_BAD_CHILDREN_ARRAY                                  -54
