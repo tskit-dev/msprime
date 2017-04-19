@@ -92,7 +92,6 @@
 #define MSP_ERR_BAD_SITE_POSITION                                   -61
 #define MSP_ERR_UNSORTED_MUTATIONS                                  -62
 #define MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT                -63
-#define MSP_ERR_BAD_COALESCENCE_RECORDS_SEQUENCE_LENGTH             -64
 
 /* TODO need to go through these and rename all the COALESCENCE_RECORD ones to
  * have better names. There are also unused error numbers here which should be
