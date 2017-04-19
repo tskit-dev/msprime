@@ -1,66 +1,61 @@
 import msprime
 import math
 
-def add_stepfuns(funs, add_fun, parent, time, empty=-1):
+def add_paintings(paintings, add_fun, parent, time, empty=-1):
     """
-    "add" a collection of stepfunctions
-    using add_fun(values, left, right, time)
+    'Add' a collection of paintings using add_fun(colors, left, right, parent,
+    time) to produce the new color.
     """
-    nfuns = len(funs)
-    if nfuns == 1:
-        return funs[0]
-    breaks = [0.0]
-    values = []
-    # records which interval we are on for each function
-    inds = [0 for _ in funs]
+    if len(paintings) == 1:
+        return paintings[0]
+    # remove the empty ones, they are just trouble
+    paints = [p for p in paintings if len(p) > 0]
+    # print(paints)
+    new_paint = []
+    if len(paints) == 0:
+        return new_paint
+    np = len(paints)
+    not_done = [True for _ in paints]
+    # records which interval we are on for each painting
+    inds = [0 for _ in paints]
+    # and whether we are inside the interval or in the space before it
+    inside = [(x[0][0] == 0.0) for x in paints]
     # next breakpoint for each function (they all start at 0.0)
-    nexts = [x[0][1] for x in funs]
-    # current values for each function
-    current = [x[1][0] for x in funs]
-    not_done = [True for k in range(nfuns)]
+    nexts = [(x[0][1] if z else x[0][0]) for x,z in zip(paints, inside)]
+    # current colors for each painting
+    current = [(x[0][2] if z else empty) for x,z in zip(paints, inside)]
     last_break = 0.0
     while any(not_done):
         next_break = min(nexts)
-        breaks.append(next_break)
-        values.append(add_fun(current, last_break, next_break, parent, time))
-        for k in range(nfuns):
+        this_color = add_fun(current, left=last_break, right=next_break,
+                             parent=parent, time=time)
+        # print(last_break, "---", next_break, "-->", this_color)
+        # print("  ", not_done, inds, inside, nexts, current)
+        if this_color is not empty:
+            new_paint.append([last_break, next_break, this_color])
+        for k in range(np):
             if nexts[k] == next_break:
-                if inds[k] == len(funs[k][1]) - 1:
+                if not inside[k]:
+                    nexts[k] = paints[k][inds[k]][1]
+                    inside[k] = True
+                    current[k] = paints[k][inds[k]][2]
+                elif inds[k] == len(paints[k]) - 1:
                     not_done[k] = False
+                    nexts[k] = math.inf
+                    current[k] = empty
                 else:
                     inds[k] += 1
-                    nexts[k] = funs[k][0][inds[k]+1]
-                    current[k] = funs[k][1][inds[k]]
+                    next_left = paints[k][inds[k]][0]
+                    if next_left == next_break:
+                        nexts[k] = paints[k][inds[k]][1]
+                        current[k] = paints[k][inds[k]][2]
+                    else:
+                        inside[k] = False
+                        nexts[k] = next_left
+                        current[k] = empty
         last_break = next_break
-    return (breaks, values)
-
-def intervals_to_stepfun(intervals, empty=-1):
-    """
-    Given a list of (left,right,value) tuples, with left >= 0,
-    return a tuple (breaks,values), where the function takes value[k] 
-    on interval [breaks[k],breaks[k+1]), with breaks[0] = 0.0 always.  
-    Any interval not specified in intervals takes the value 'empty'
-    (including the last semi-infinite interval).
-    """
-    # print("i to st", intervals)
-    breaks = [0.0]
-    values = []
-    for left, right, value in intervals:
-        if left > breaks[-1]:
-            breaks.append(left)
-            values.append(empty)
-        breaks.append(right)
-        values.append(value)
-    breaks.append(math.inf)
-    values.append(empty)
-    return (breaks,values)
-
-def stepfun_to_intervals(stepfun, empty=-1):
-    out = []
-    for k in range(len(stepfun[1])):
-        if stepfun[1][k] is not empty:
-            out.append((stepfun[0][k], stepfun[0][k+1], stepfun[1][k]))
-    return out
+    # print(new_paint)
+    return new_paint
 
 def remove_paint(painting, left, right):
     """
@@ -140,17 +135,12 @@ def simplify(ts, samples):
         # print(edge)
         # here need to remove all painted segments overlapping this segment from children
         # and insert merged painting into parent
+        # print("merging:", merge_segments)
         merge_segments = [remove_paint(painting[child], edge.left, edge.right) 
                             for child in edge.children if child in painting]
-        # print("merging:", merge_segments)
-        merge_stepfuns = [intervals_to_stepfun(x) for x in merge_segments]
-        # for f in merge_stepfuns:
-        #     print("- ", f)
-        merged_stepfun = add_stepfuns(merge_stepfuns, add_fun=add_colors, 
-                                      parent=edge.parent,
-                                      time=orig_nodes.time[edge.parent])
-        # print("-->", merged_stepfun)
-        merged_segments = stepfun_to_intervals(merged_stepfun)
+        merged_segments = add_paintings(merge_segments, add_fun=add_colors,
+                                        parent=edge.parent,
+                                        time=orig_nodes.time[edge.parent])
         # print("------>", merged_segments)
         if edge.parent not in painting:
             painting[edge.parent] = []
@@ -160,69 +150,3 @@ def simplify(ts, samples):
     new_ts = msprime.load_tables(nodes=nodes, edgesets=edgesets)
     return new_ts
 
-
-###
-# attempt #1 - using intervals only
-###
-
-def add_paint_intervals(painting, additions, pot):
-    """
-    Step through the intervals in the two paintings:
-    * removing everything from old
-    * if old does not overlap with anything in new, add old to new.
-    * if old does overlap, add a new interval with a new color from the pot to new
-    """
-    k = 0
-    paint_left = painting[k].left
-    add_k = 0
-    while add_k < len(additions):
-        while k < len(painting) and painting[k].right <= additions[add_k].left:
-            # [-paint-]
-            #           [--add--]
-            k += 1
-        if k == len(painting):
-            # nothing overlapping left in painting
-            painting.extend(additions)
-            break
-        if additions[add_k].right <= painting[k].left:
-            # [-add-]
-            #         [--paint--]
-            painting.insert(k,(additions[add_k].left, additions[add_k].right, additions[add_k].color))
-            k += 1
-            add_k += 1
-            continue
-        if additions[add_k].left > painting[k].left:
-            #     [-add-?
-            # [--paint--?
-            painting.insert(k+1, (additions[add_k].left, painting[k].right, painting[k].color))
-            painting[k].right = additions[add_k].left
-            k += 1
-            continue
-        elif additions[add_k].left < painting[k].left:
-            # [----add---?
-            #   [--paint-?
-            painting.insert(k, (additions[add_k].left, painting[k].left, additions[add_k].color))
-            k += 1
-            additions[add_k].left = painting[k].left
-            # DO NOT continue as we haven't updated additions[add_k]
-        # ok now we are finally in this situation:
-        # [--add---?
-        # [--paint-?
-        merge_color = next(pot)
-        merge_right = min(painting[k].right, additions[add_k].right)
-        # new record to output!
-        merges.append((painting[k].left, merge_right, merge_color))
-        if painting[k].right > additions[add_k].right:
-            # [--add---]
-            # [--paint----]
-            painting[k].left = additions[add_k].right
-            painting.insert(k, (additions[add_k].left, additions[add_k].right, next(pot)))
-            k += 1
-            add_k += 1
-            continue
-        if painting[k].right > add_right:
-            # [-----add-----]
-            # [--paint--]
-            k += 1
-            additions[add_k].left = painting[k].right
-            continue
