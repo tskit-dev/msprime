@@ -720,7 +720,7 @@ tree_sequence_init_nodes(tree_sequence_t *self)
         }
     }
     if (self->nodes.num_records > 0 && self->sample_size == 0) {
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE;
+        ret = MSP_ERR_INSUFFICIENT_SAMPLES;
         goto out;
     }
 out:

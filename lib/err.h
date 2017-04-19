@@ -77,7 +77,7 @@
 #define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
 #define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
 #define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
-#define MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE                 -49
+#define MSP_ERR_INSUFFICIENT_SAMPLES                                -49
 #define MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO                         -50
 #define MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT                       -51
 #define MSP_ERR_COORDINATE_NOT_FOUND                                -52
@@ -92,10 +92,5 @@
 #define MSP_ERR_BAD_SITE_POSITION                                   -61
 #define MSP_ERR_UNSORTED_MUTATIONS                                  -62
 #define MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT                -63
-
-/* TODO need to go through these and rename all the COALESCENCE_RECORD ones to
- * have better names. There are also unused error numbers here which should be
- * reused.
- */
 
 #endif /*__ERR_H__*/
