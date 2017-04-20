@@ -2785,6 +2785,16 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     edgeset_table.right[0]= 1.0;
 
+    /* Bad left endpoint*/
+    edgeset_table.left[0] = 1.0;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO);
+    tree_sequence_free(&ts);
+    edgeset_table.left[0]= 0.0;
+
     /* Equal nodes in the children */
     edgeset_table.children[0] = 1;
     ret = tree_sequence_initialise(&ts);
@@ -2886,6 +2896,20 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_CHILDREN_ARRAY);
     tree_sequence_free(&ts);
     edgeset_table.total_children_length = 2;
+
+    /* sample size of 1 */
+    /* TODO - obvious (?) way to follow approach in
+     * 94c4ac6df115f0d16143fd133aeaf2eccff87a70
+     * does not work here
+     */
+    /* node_table.flags[0] = 0;
+     * ret = tree_sequence_initialise(&ts);
+     * ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+     *       NULL, NULL, 0, NULL);
+     * CU_ASSERT_EQUAL(ret, MSP_ERR_INSUFFICIENT_SAMPLES);
+     * tree_sequence_free(&ts);
+     *node_table.flags[0] = 1;
+     */
 
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_initialise(&ts);
