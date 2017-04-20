@@ -1554,7 +1554,7 @@ class TestUpgrade(TestCli):
             # Quick checks to ensure we have the right tree sequence.
             # More thorough checks are done elsewhere.
             self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
-            self.assertEqual(ts1.get_num_records(), ts2.get_num_records())
+            self.assertEqual(ts1.num_edgesets, ts2.num_edgesets)
             self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())
 
     def test_duplicate_positions(self):

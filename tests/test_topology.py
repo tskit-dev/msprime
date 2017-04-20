@@ -43,7 +43,7 @@ def insert_redundant_breakpoints(ts):
         tables.edgesets.add_row(
             left=x, right=r.right, children=r.children, parent=r.parent)
     new_ts = msprime.load_tables(**tables._asdict())
-    assert new_ts.num_records == 2 * ts.num_records
+    assert new_ts.num_edgesets == 2 * ts.num_edgesets
     return new_ts
 
 
@@ -129,7 +129,7 @@ class TestRedundantBreakpoints(TopologyTestCase):
         self.assertEqual(ts.sample_size, ts_redundant.sample_size)
         self.assertEqual(ts.sequence_length, ts_redundant.sequence_length)
         self.assertGreater(ts_redundant.num_trees, ts.num_trees)
-        self.assertGreater(ts_redundant.num_records, ts.num_records)
+        self.assertGreater(ts_redundant.num_edgesets, ts.num_edgesets)
         redundant_trees = ts_redundant.trees()
         redundant_t = next(redundant_trees)
         comparisons = 0
@@ -216,7 +216,7 @@ class TestUnaryNodes(TopologyTestCase):
         self.assertEqual(t.mrca(0, 1), root)
         self.assertEqual(t.tmrca(0, 1), root_time)
         ts_simplified = ts.simplify()
-        self.assertEqual(ts_simplified.num_records, 1)
+        self.assertEqual(ts_simplified.num_edgesets, 1)
         t = next(ts_simplified.trees())
         self.assertEqual(t.mrca(0, 1), 2)
         self.assertEqual(t.tmrca(0, 1), root_time)
@@ -254,7 +254,7 @@ class TestUnaryNodes(TopologyTestCase):
             tables.edgesets.add_row(
                 left=e.left, right=e.right, children=e.children, parent=e.parent)
         ts_new = msprime.load_tables(**tables._asdict())
-        self.assertGreater(ts_new.num_records, ts.num_records)
+        self.assertGreater(ts_new.num_edgesets, ts.num_edgesets)
         self.assert_haplotypes_equal(ts, ts_new)
         self.assert_variants_equal(ts, ts_new)
         ts_simplified = ts_new.simplify()
@@ -651,7 +651,7 @@ class TestMultipleRoots(TopologyTestCase):
             children=tables.edgesets.children[:-tables.edgesets.children_length[-1]])
         ts_new = msprime.load_tables(**tables._asdict())
         self.assertEqual(ts.sample_size, ts_new.sample_size)
-        self.assertEqual(ts.num_records, ts_new.num_records + 1)
+        self.assertEqual(ts.num_edgesets, ts_new.num_edgesets + 1)
         self.assertEqual(ts.num_trees, ts_new.num_trees)
         self.assert_haplotypes_equal(ts, ts_new)
         self.assert_variants_equal(ts, ts_new)
