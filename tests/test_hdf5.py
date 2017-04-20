@@ -193,7 +193,7 @@ class TestRoundTrip(TestHdf5):
     through a V2 file format and a V3 format.
     """
     def verify_tree_sequences_equal(self, ts, tsp):
-        self.assertEqual(ts.get_num_records(), tsp.get_num_records())
+        self.assertEqual(ts.num_edgesets, tsp.num_edgesets)
         self.assertEqual(ts.get_sample_size(), tsp.get_sample_size())
         self.assertEqual(ts.get_sequence_length(), tsp.get_sequence_length())
         self.assertEqual(ts.get_num_mutations(), tsp.get_num_mutations())
@@ -438,9 +438,11 @@ class TestHdf5Format(TestHdf5):
             time[u] = ts.get_time(u)
             population[u] = ts.get_population(u)
             flags[u] = 1  # FIXME
-        for record in ts.records():
-            time[record.node] = record.time
-            population[record.node] = record.population
+        for i, node in enumerate(ts.nodes()):
+            # TODO - so this means we assume nodes are densely numbered in
+            # increasing order
+            time[i] = node.time
+            population[i] = node.population
         self.assertEqual(time, list(nodes_group["time"]))
         self.assertEqual(population, list(nodes_group["population"]))
         self.assertEqual(flags, list(nodes_group["flags"]))
@@ -466,15 +468,14 @@ class TestHdf5Format(TestHdf5):
             children.append(tuple(flat_children[offset: offset + k]))
             offset += k
 
-        # TODO use the edgesets() APIs
-        self.assertEqual(len(left), ts.get_num_records())
-        self.assertEqual(len(right), ts.get_num_records())
-        self.assertEqual(len(parent), ts.get_num_records())
-        self.assertEqual(len(children_length), ts.get_num_records())
-        for j, record in enumerate(ts.records()):
+        self.assertEqual(len(left), ts.num_edgesets)
+        self.assertEqual(len(right), ts.num_edgesets)
+        self.assertEqual(len(parent), ts.num_edgesets)
+        self.assertEqual(len(children_length), ts.num_edgesets)
+        for j, record in enumerate(ts.edgesets()):
             self.assertEqual(record.left, left[j])
             self.assertEqual(record.right, right[j])
-            self.assertEqual(record.node, parent[j])
+            self.assertEqual(record.parent, parent[j])
             self.assertEqual(record.children, children[j])
 
         indexes_group = edgesets_group["indexes"]
@@ -483,10 +484,10 @@ class TestHdf5Format(TestHdf5):
         for field in indexes_group.keys():
             self.assertEqual(indexes_group[field].dtype, int32)
         I = sorted(
-            range(ts.get_num_records()),
+            range(ts.num_edgesets),
             key=lambda j: (left[j], time[parent[j]]))
         O = sorted(
-            range(ts.get_num_records()),
+            range(ts.num_edgesets),
             key=lambda j: (right[j], -time[parent[j]]))
         self.assertEqual(I, list(indexes_group["insertion_order"]))
         self.assertEqual(O, list(indexes_group["removal_order"]))

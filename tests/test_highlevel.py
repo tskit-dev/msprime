@@ -586,8 +586,8 @@ class TestTreeSimulator(HighLevelTestCase):
         """
         tree_sequence.dump(self.temp_file)
         other = msprime.load(self.temp_file)
-        records = list(tree_sequence.records())
-        other_records = list(other.records())
+        records = list(tree_sequence.edgesets())
+        other_records = list(other.edgesets())
         self.assertEqual(records, other_records)
         haplotypes = list(tree_sequence.haplotypes())
         other_haplotypes = list(other.haplotypes())
@@ -613,7 +613,7 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertGreater(sim.get_max_memory(), 0)
         tree_sequence = sim.get_tree_sequence()
         t = 0.0
-        for record in tree_sequence.records():
+        for record in tree_sequence.nodes():
             if record.time > t:
                 t = record.time
         self.assertEqual(sim.get_time(), t)
@@ -1109,7 +1109,8 @@ class TestTreeSequence(HighLevelTestCase):
     def verify_simplify_equality(self, ts, sample):
         s1 = ts.simplify(sample)
         s2 = simplify_tree_sequence(ts, sample)
-        self.assertEqual(list(s1.records()), list(s2.records()))
+        self.assertEqual(list(s1.edgesets()), list(s2.edgesets()))
+        self.assertEqual(list(s1.nodes()), list(s2.nodes()))
         self.assertEqual(list(s1.sites()), list(s2.sites()))
         self.assertEqual(list(s1.haplotypes()), list(s2.haplotypes()))
         self.assertEqual(
@@ -1191,7 +1192,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_provenance(), ts.provenance)
             self.assertEqual(ts.get_sample_size(), ts.sample_size)
             self.assertEqual(ts.get_sequence_length(), ts.sequence_length)
-            self.assertEqual(ts.get_num_records(), ts.num_records)
+            self.assertEqual(ts.num_edgesets, ts.num_records)
             self.assertEqual(ts.get_num_trees(), ts.num_trees)
             self.assertEqual(ts.get_num_mutations(), ts.num_mutations)
             self.assertEqual(ts.get_num_nodes(), ts.num_nodes)
@@ -1211,13 +1212,15 @@ class TestTreeSequence(HighLevelTestCase):
         for ts1 in get_example_tree_sequences():
             ts2 = ts1.copy()
             self.assertNotEqual(id(ts1), id(ts2))
-            self.assertEqual(list(ts1.records()), list(ts2.records()))
+            self.assertEqual(list(ts1.edgesets()), list(ts2.edgesets()))
+            self.assertEqual(list(ts1.nodes()), list(ts2.nodes()))
             self.assertEqual(list(ts1.mutations()), list(ts2.mutations()))
             site_lists = [[], list(ts1.sites())[:-1]]
             for sites in site_lists:
                 ts2 = ts1.copy(sites=sites)
                 self.assertNotEqual(id(ts1), id(ts2))
-                self.assertEqual(list(ts1.records()), list(ts2.records()))
+                self.assertEqual(list(ts1.edgesets()), list(ts2.edgesets()))
+                self.assertEqual(list(ts1.nodes()), list(ts2.nodes()))
                 self.assertEqual(sites, list(ts2.sites()))
 
     def test_generate_mutations_on_tree_sequence(self):
@@ -2036,20 +2039,27 @@ class TestNodeOrdering(HighLevelTestCase):
         self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
         self.assertEqual(ts1.get_num_nodes(), ts2.get_num_nodes())
         j = 0
-        for r1, r2 in zip(ts1.records(), ts2.records()):
-            self.assertEqual(r1.node, r2.node)
+        for r1, r2 in zip(ts1.edgesets(), ts2.edgesets()):
+            self.assertEqual(r1.parent, r2.parent)
             self.assertEqual(r1.children, r2.children)
-            self.assertEqual(r1.population, r2.population)
             if approx:
                 self.assertAlmostEqual(r1.left, r2.left)
                 self.assertAlmostEqual(r1.right, r2.right)
-                self.assertAlmostEqual(r1.time, r2.time)
             else:
                 self.assertEqual(r1.left, r2.left)
                 self.assertEqual(r1.right, r2.right)
-                self.assertEqual(r1.time, r2.time)
             j += 1
-        self.assertEqual(ts1.get_num_records(), j)
+        self.assertEqual(ts1.num_edgesets, j)
+        j = 0
+        for n1, n2 in zip(ts1.nodes(), ts2.nodes()):
+            self.assertEqual(n1.name, n2.name)
+            self.assertEqual(n1.population, n2.population)
+            if approx:
+                self.assertAlmostEqual(n1.time, n2.time)
+            else:
+                self.assertEqual(n1.time, n2.time)
+            j += 1
+        self.assertEqual(ts1.num_nodes, j)
 
     def verify_random_permutation(self, ts):
         n = ts.sample_size
@@ -2127,7 +2137,7 @@ class TestNodeOrdering(HighLevelTestCase):
                 msprime.SimpleBottleneck(time=0.5, proportion=1)])
         # Make sure this really has some non-binary nodes
         found = False
-        for r in ts.records():
+        for r in ts.edgesets():
             if len(r.children) > 2:
                 found = True
         self.assertTrue(found)
