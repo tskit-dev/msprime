@@ -706,6 +706,7 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
     size_t num_edgesets, num_migrations;
     node_t node;
     sample_t *samples;
+    node_id_t *sample_ids;
 
     CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_num_edgesets(tree_seq),
@@ -717,9 +718,6 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
             tree_sequence_get_num_migrations(tree_seq),
             msp_get_num_migrations(msp));
     CU_ASSERT_FATAL(tree_sequence_get_num_nodes(tree_seq) >= sample_size);
-    /* CU_ASSERT_EQUAL_FATAL( */
-    /*         tree_sequence_get_num_mutations(tree_seq), */
-    /*         mutgen_get_num_mutations(mutgen)); */
     ret = msp_get_coalescence_records(msp, &sim_records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     num_edgesets = msp_get_num_coalescence_records(msp);
@@ -757,6 +755,12 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(node.population, samples[j].population_id);
         CU_ASSERT_EQUAL(node.time, samples[j].time);
+    }
+    /* Samples should always be 0..n - 1 here for simulations */
+    ret = tree_sequence_get_samples(tree_seq, &sample_ids);
+    CU_ASSERT_FATAL(sample_ids != NULL);
+    for (j = 0; j < sample_size; j++) {
+        CU_ASSERT_EQUAL(j, sample_ids[j]);
     }
     mutgen_print_state(mutgen, _devnull);
     tree_sequence_print_state(tree_seq, _devnull);
@@ -2720,6 +2724,55 @@ test_simplest_back_mutations(void)
     tree_sequence_free(&ts);
 }
 
+static void
+test_simplest_non_contigous_samples(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "0  1   0\n"
+        "1  0   0";
+    const char *edgesets =
+        "0  1   1   0,2\n";
+    const char *sites =
+        "0.5  0\n"
+        "0.75 0\n";
+    const char *mutations =
+        "0    2     1\n"
+        "1    0     1";
+    const char *haplotypes[] = {"01", "10"};
+    char *haplotype;
+    unsigned int j;
+    node_id_t *samples;
+    int ret;
+
+    tree_sequence_t ts;
+    hapgen_t hapgen;
+
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, sites, mutations, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
+
+    ret = tree_sequence_get_samples(&ts, &samples);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_FATAL(samples != NULL);
+
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    hapgen_print_state(&hapgen, _devnull);
+    for (j = 0; j < 2; j++) {
+        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+        printf("FIXME: haplotype = %s: %s\n", haplotype, haplotypes[j]);
+        CU_ASSERT_EQUAL(ret, 0);
+        /* CU_ASSERT_STRING_EQUAL(haplotype, haplotypes[j]); */
+    }
+    hapgen_free(&hapgen);
+
+    tree_sequence_free(&ts);
+}
 
 static void
 test_simplest_bad_records(void)
@@ -2906,18 +2959,6 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_INSUFFICIENT_SAMPLES);
     tree_sequence_free(&ts);
     node_table.flags[0] = 1;
-
-    /* sample not 0, ..., n - 1*/
-    node_table.flags[0] = 0;
-    node_table.flags[2] = 1;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
-       NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_SAMPLES_NOT_CONTIGUOUS);
-    tree_sequence_free(&ts);
-    node_table.flags[0] = 1;
-    node_table.flags[2] = 0;
 
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_initialise(&ts);
@@ -6200,6 +6241,7 @@ main(int argc, char **argv)
         {"test_simplest_multiple_root_records", test_simplest_multiple_root_records},
         {"test_simplest_root_mutations", test_simplest_root_mutations},
         {"test_simplest_back_mutations", test_simplest_back_mutations},
+        {"test_simplest_non_contigous_samples", test_simplest_non_contigous_samples},
         {"test_simplest_bad_records", test_simplest_bad_records},
         {"test_alphabet_detection", test_alphabet_detection},
         {"test_single_tree_good_records", test_single_tree_good_records},

@@ -386,10 +386,12 @@ typedef struct {
 /* Tree sequences */
 typedef struct {
     uint32_t initialised_magic;
-    size_t sample_size;
     size_t num_trees;
     double sequence_length;
     int alphabet;
+    size_t sample_size;
+    size_t max_sample_size;
+    node_id_t *samples;
     struct {
         size_t num_records;
         size_t max_num_records;
@@ -735,8 +737,7 @@ int tree_sequence_get_migration(tree_sequence_t *self, size_t index,
 int tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *site);
 int tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id,
         mutation_t *mutation);
-int tree_sequence_get_site_mutations(tree_sequence_t *self, site_id_t site_id,
-        mutation_t **mutations, list_len_t *mutations_length);
+int tree_sequence_get_samples(tree_sequence_t *self, node_id_t **samples);
 
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);

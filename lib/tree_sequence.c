@@ -155,10 +155,13 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     site_t site;
 
     fprintf(out, "tree_sequence state\n");
-    fprintf(out, "sample_size = %d\n", (int) self->sample_size);
     fprintf(out, "num_trees = %d\n", (int) self->num_trees);
     fprintf(out, "alphabet = %d\n", (int) self->alphabet);
     fprintf(out, "sequence_length = %f\n", self->sequence_length);
+    fprintf(out, "samples = (%d)\n", (int) self->sample_size);
+    for (j = 0; j < self->sample_size; j++) {
+        fprintf(out, "\t%d\n", (int) self->samples[j]);
+    }
     fprintf(out, "provenance = (%d)\n", (int) self->num_provenance_strings);
     for (j = 0; j < self->num_provenance_strings; j++) {
         fprintf(out, "\t'%s'\n", self->provenance_strings[j]);
@@ -224,6 +227,8 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     }
 
     fprintf(out, "memory\n");
+    fprintf(out, "\tsample_size = %d\n", (int) self->sample_size);
+    fprintf(out, "\tmax_sample_size = %d\n", (int) self->max_sample_size);
     fprintf(out, "\tnodes.num_records = %d\n", (int) self->nodes.num_records);
     fprintf(out, "\tnodes.max_num_records = %d\n", (int) self->nodes.max_num_records);
     fprintf(out, "\tedgesets.num_records = %d\n", (int) self->edgesets.num_records);
@@ -484,6 +489,7 @@ tree_sequence_alloc(tree_sequence_t *self)
     if (ret != 0) {
         goto out;
     }
+
     ret = 0;
 out:
     return ret;
@@ -508,6 +514,7 @@ tree_sequence_free(tree_sequence_t *self)
         }
         msp_safe_free(self->provenance_strings);
     }
+    msp_safe_free(self->samples);
     msp_safe_free(self->nodes.flags);
     msp_safe_free(self->nodes.population);
     msp_safe_free(self->nodes.time);
@@ -710,9 +717,10 @@ out:
 static int
 tree_sequence_init_nodes(tree_sequence_t *self)
 {
-    size_t j;
+    size_t j, k, size;
     int ret = 0;
 
+    /* Determine the sample size */
     self->sample_size = 0;
     for (j = 0; j < self->nodes.num_records; j++) {
         if (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE) {
@@ -723,14 +731,28 @@ tree_sequence_init_nodes(tree_sequence_t *self)
         ret = MSP_ERR_INSUFFICIENT_SAMPLES;
         goto out;
     }
-    /* Samples must be 0 to n */
-    /* TODO remove this restriction and error code. */
-    for (j = 0; j < self->sample_size; j++) {
-        if (! (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE)) {
-            ret = MSP_ERR_SAMPLES_NOT_CONTIGUOUS;
+    /* We alloc the samples list here because it is a special case; we don't know
+     * how big it is until we've read in the data.
+     */
+
+    if (self->sample_size > self->max_sample_size) {
+        size = self->sample_size;
+        msp_safe_free(self->samples);
+        self->samples = malloc(size * sizeof(node_id_t));
+        if (self->samples == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
+        self->max_sample_size = size;
     }
+    k = 0;
+    for (j = 0; j < self->nodes.num_records; j++) {
+        if (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE) {
+            self->samples[k] = (node_id_t) j;
+            k++;
+        }
+    }
+    assert(k == self->sample_size);
 out:
     return ret;
 }
@@ -2408,6 +2430,13 @@ tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *record)
     record->mutations_length = self->sites.site_mutations_length[id];
 out:
     return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_get_samples(tree_sequence_t *self, node_id_t **samples)
+{
+    *samples = self->samples;
+    return 0;
 }
 
 /* Compress the node space in the specified set of records and mutations.
