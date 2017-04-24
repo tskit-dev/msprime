@@ -133,8 +133,11 @@ msp_strerror(int err)
         case MSP_ERR_BAD_RECOMBINATION_MAP:
             ret = "Bad recombination map provided.";
             break;
-	case MSP_ERR_INSUFFICIENT_SAMPLES:
-            ret = "No sampled nodes. At least two samples needed.";
+        case MSP_ERR_INSUFFICIENT_SAMPLES:
+            ret = "At least two samples needed.";
+            break;
+        case MSP_ERR_SAMPLES_NOT_CONTIGUOUS:
+            ret = "Samples must be nodes 0, ..., n - 1";
             break;
         case MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT:
             ret = "Bad edgeset in file: right coordinate not matching any left coordinate.";

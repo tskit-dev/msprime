@@ -719,9 +719,17 @@ tree_sequence_init_nodes(tree_sequence_t *self)
             self->sample_size++;
         }
     }
-    if (self->nodes.num_records > 0 && self->sample_size == 0) {
+    if (self->nodes.num_records > 0 && self->sample_size < 2) {
         ret = MSP_ERR_INSUFFICIENT_SAMPLES;
         goto out;
+    }
+    /* Samples must be 0 to n */
+    /* TODO remove this restriction and error code. */
+    for (j = 0; j < self->sample_size; j++) {
+        if (! (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE)) {
+            ret = MSP_ERR_SAMPLES_NOT_CONTIGUOUS;
+            goto out;
+        }
     }
 out:
     return ret;
