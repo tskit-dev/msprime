@@ -133,17 +133,19 @@ msp_strerror(int err)
         case MSP_ERR_BAD_RECOMBINATION_MAP:
             ret = "Bad recombination map provided.";
             break;
-        case MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE:
-            ret = "Bad coalescence records in file: Samples must be labeled 0...n-1 and not be internal nodes.";
+        case MSP_ERR_INSUFFICIENT_SAMPLES:
+            ret = "At least two samples needed.";
             break;
-        case MSP_ERR_BAD_COALESCENCE_RECORDS_SEQUENCE_LENGTH:
-            ret = "Bad coalescence records in file: Sequence length is zero.";
+        case MSP_ERR_SAMPLES_NOT_CONTIGUOUS:
+            ret = "Samples must be nodes 0, ..., n - 1";
             break;
-        case MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT:
-            ret = "Bad coalescence records in file: right coordinate not matching any left coordinate.";
+        case MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT:
+            ret = "Bad edgeset in file: right coordinate not matching any left coordinate.";
             break;
-        case MSP_ERR_BAD_COALESCENCE_RECORDS:
-            ret = "Bad coalescence records in file.";
+        case MSP_ERR_BAD_EDGESET:
+            ret = "Bad edgeset in file.";
+        case MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO:
+            ret = "Bad edgeset in file: no left coordinate starts at zero.";
             break;
         case MSP_ERR_ZERO_RECORDS:
             ret = "At least one record must be supplied";

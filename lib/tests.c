@@ -2785,6 +2785,16 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     edgeset_table.right[0]= 1.0;
 
+    /* Bad left endpoint*/
+    edgeset_table.left[0] = 1.0;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO);
+    tree_sequence_free(&ts);
+    edgeset_table.left[0]= 0.0;
+
     /* Equal nodes in the children */
     edgeset_table.children[0] = 1;
     ret = tree_sequence_initialise(&ts);
@@ -2886,6 +2896,28 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_CHILDREN_ARRAY);
     tree_sequence_free(&ts);
     edgeset_table.total_children_length = 2;
+
+    /* sample size of 1 */
+    node_table.flags[0] = 0;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+       NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_INSUFFICIENT_SAMPLES);
+    tree_sequence_free(&ts);
+    node_table.flags[0] = 1;
+
+    /* sample not 0, ..., n - 1*/
+    node_table.flags[0] = 0;
+    node_table.flags[2] = 1;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+       NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_SAMPLES_NOT_CONTIGUOUS);
+    tree_sequence_free(&ts);
+    node_table.flags[0] = 1;
+    node_table.flags[2] = 0;
 
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_initialise(&ts);
@@ -4663,7 +4695,7 @@ test_tree_sequence_bad_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT);
     tree_sequence_free(&ts);
     edgeset_table.right[1] = 2.0;
 
@@ -4675,7 +4707,7 @@ test_tree_sequence_bad_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT);
     tree_sequence_free(&ts);
     edgeset_table.left[0] = 2;
     edgeset_table.left[2] = 2;
@@ -4687,7 +4719,7 @@ test_tree_sequence_bad_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT);
     tree_sequence_free(&ts);
     edgeset_table.left[4] = 7;
 
@@ -4697,7 +4729,7 @@ test_tree_sequence_bad_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
             NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT);
     tree_sequence_free(&ts);
     edgeset_table.left[4] = 7;
 

@@ -558,7 +558,7 @@ tree_sequence_get_provenance_strings(tree_sequence_t *self,
 static int
 tree_sequence_check(tree_sequence_t *self)
 {
-    int ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+    int ret = MSP_ERR_BAD_EDGESET;
     node_id_t child, node;
     list_len_t j, k;
     size_t num_coordinates = self->edgesets.num_records + 1;
@@ -576,8 +576,7 @@ tree_sequence_check(tree_sequence_t *self)
     qsort(coordinates, num_coordinates, sizeof(double), cmp_double);
 
     if (coordinates[0] != 0.0) {
-        /* TODO specific error for this */
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        ret = MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO;
         goto out;
     }
 
@@ -635,12 +634,12 @@ tree_sequence_check(tree_sequence_t *self)
         result = bsearch(self->edgesets.right + j, coordinates, num_coordinates,
                 sizeof(double), cmp_double);
         if (result == NULL) {
-            ret = MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT;
+            ret = MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT;
             goto out;
         }
     }
     if (self->edgesets.num_records > 0 && left != 0) {
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS;
+        ret = MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO;
         goto out;
     }
 
@@ -720,9 +719,17 @@ tree_sequence_init_nodes(tree_sequence_t *self)
             self->sample_size++;
         }
     }
-    if (self->nodes.num_records > 0 && self->sample_size == 0) {
-        ret = MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE;
+    if (self->nodes.num_records > 0 && self->sample_size < 2) {
+        ret = MSP_ERR_INSUFFICIENT_SAMPLES;
         goto out;
+    }
+    /* Samples must be 0 to n */
+    /* TODO remove this restriction and error code. */
+    for (j = 0; j < self->sample_size; j++) {
+        if (! (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE)) {
+            ret = MSP_ERR_SAMPLES_NOT_CONTIGUOUS;
+            goto out;
+        }
     }
 out:
     return ret;

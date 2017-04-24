@@ -55,7 +55,7 @@
 #define MSP_ERR_ASSERTION_FAILED                                    -24
 #define MSP_ERR_SOURCE_DEST_EQUAL                                   -25
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
-#define MSP_ERR_BAD_COALESCENCE_RECORDS                             -27
+#define MSP_ERR_BAD_EDGESET                                         -27
 #define MSP_ERR_BAD_SAMPLES                                         -28
 #define MSP_ERR_NONBINARY_NEWICK                                    -29
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
@@ -72,14 +72,14 @@
 #define MSP_ERR_BAD_RECORD_INTERVAL                                 -41
 #define MSP_ERR_ZERO_RECORDS                                        -42
 #define MSP_ERR_NOT_INITIALISED                                     -43
-/* #define MSP_ERR_MUTATIONS_NOT_POSITION_SORTED                       -44 */
+#define MSP_ERR_SAMPLES_NOT_CONTIGUOUS                              -44
 #define MSP_ERR_UNSORTED_MUTATION_NODES                             -45
 #define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
 #define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
 #define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
-#define MSP_ERR_BAD_COALESCENCE_RECORDS_SAMPLE_SIZE                 -49
-#define MSP_ERR_BAD_COALESCENCE_RECORDS_SEQUENCE_LENGTH             -50
-#define MSP_ERR_BAD_COALESCENCE_RECORD_NONMATCHING_RIGHT            -51
+#define MSP_ERR_INSUFFICIENT_SAMPLES                                -49
+#define MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO                         -50
+#define MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT                       -51
 #define MSP_ERR_COORDINATE_NOT_FOUND                                -52
 #define MSP_ERR_BAD_NODES_ARRAY                                     -53
 #define MSP_ERR_BAD_CHILDREN_ARRAY                                  -54
@@ -92,10 +92,5 @@
 #define MSP_ERR_BAD_SITE_POSITION                                   -61
 #define MSP_ERR_UNSORTED_MUTATIONS                                  -62
 #define MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT                -63
-
-/* TODO need to go through these and rename all the COALESCENCE_RECORD ones to
- * have better names. There are also unused error numbers here which should be
- * reused.
- */
 
 #endif /*__ERR_H__*/
