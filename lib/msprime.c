@@ -77,7 +77,7 @@ msp_strerror(int err)
             ret = "File format error";
             break;
         case MSP_ERR_BAD_STATE:
-            ret = "Bad simulator state. initialise or reset must be called.";
+            ret = "Bad simulator state. Initialise or reset must be called.";
             break;
         case MSP_ERR_NEWICK_OVERFLOW:
             ret = "Newick string generation overflow.";
@@ -86,10 +86,10 @@ msp_strerror(int err)
             ret = "Demographic events must be time sorted.";
             break;
         case MSP_ERR_POPULATION_OVERFLOW:
-            ret = "Population Overflow occured.";
+            ret = "Population Overflow occurred.";
             break;
         case MSP_ERR_LINKS_OVERFLOW:
-            ret = "Links Overflow occured.";
+            ret = "Links Overflow occurred.";
             break;
         case MSP_ERR_OUT_OF_BOUNDS:
             ret = "Array index out of bounds";
@@ -160,10 +160,10 @@ msp_strerror(int err)
             ret = "Null node in coalescence record.";
             break;
         case MSP_ERR_BAD_NODE_TIME_ORDERING:
-            ret = "Node times must be stictly increasing within a tree.";
+            ret = "Node times must be strictly increasing within a tree.";
             break;
         case MSP_ERR_RECORDS_NOT_TIME_SORTED:
-            ret = "Records must be sorted in nondecreasing time order.";
+            ret = "Records must be sorted in non-decreasing time order.";
             break;
         case MSP_ERR_INCONSISTENT_NODE_TIMES:
             ret = "Times associated with nodes not consistent between records";
@@ -209,7 +209,7 @@ msp_strerror(int err)
         /*     ret = "Mutations must be sorted by position"; */
         /*     break; */
         case MSP_ERR_UNSORTED_MUTATION_NODES:
-            ret = "Mutations within a site must be sorted in nonincreasing time order.";
+            ret = "Mutations within a site must be sorted in non-increasing time order.";
             break;
         case MSP_ERR_DUPLICATE_MUTATION_NODES:
             ret = "Cannot have more than one mutation at a node for a given site.";
@@ -239,7 +239,7 @@ msp_strerror(int err)
             ret = "Mismatch in stored total column length and sum of row lengths";
             break;
         case MSP_ERR_BAD_ALPHABET:
-            ret = "Uknown alphabet provided.";
+            ret = "Unknown alphabet provided.";
             break;
         case MSP_ERR_NON_SINGLE_CHAR_MUTATION:
             ret = "Only single char mutations supported.";
@@ -251,7 +251,7 @@ msp_strerror(int err)
             ret = "Sites positions must be between 0 and sequence_length";
             break;
         case MSP_ERR_UNSORTED_MUTATIONS:
-            ret = "Mutations must be provided in nondecreasing site order";
+            ret = "Mutations must be provided in non-decreasing site order";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {
@@ -270,7 +270,7 @@ msp_strerror(int err)
             ret = _hdf5_error;
             break;
         default:
-            ret = "Error occured generating error string. Please file a bug "
+            ret = "Error occurred generating error string. Please file a bug "
                 "report!";
             break;
     }
@@ -1891,7 +1891,7 @@ out:
 
 /* Merge the specified set of ancestors into a single ancestor. This is a
  * generalisation of the msp_common_ancestor_event method where we allow
- * any number of ancestors to merge. The avl tree is a priority queue in
+ * any number of ancestors to merge. The AVL tree is a priority queue in
  * sorted by left coordinate.
  */
 static int WARN_UNUSED
@@ -2154,7 +2154,7 @@ msp_compute_lambda_Xi_dirac(msp_t *self, unsigned int num_ancestors)
 
     m = GSL_MIN(num_ancestors, 4);
     /* An underflow error occurs because of the large exponent (b-l). We use the
-     * LSE trick to approximate this caculation. For details, see at
+     * LSE trick to approximate this calculation. For details, see at
      * https://en.wikipedia.org/wiki/LogSumExp
      */
     r[0] = b * gsl_sf_log(1 - psi);
@@ -2289,7 +2289,7 @@ msp_multiple_merger_common_ancestor_event_beta(msp_t *self)
         msp_free_avl_node(self, y_node);
         ret = msp_merge_two_ancestors(self, 0, x, y);
     } else {
-        /* This is the Lambda coalescent regime. Every individual has a probablity 1/2
+        /* This is the Lambda coalescent regime. Every individual has a probability 1/2
          * of being included. This isn't how things will work for the real simulation,
          * but it should show how the machinery of merging lots of ancestors should work.
          */
@@ -3173,7 +3173,7 @@ msp_change_single_population_parameters(msp_t *self, size_t population_id,
     pop = &self->populations[population_id];
     /* If initial_size is not specified, calculate the initial_size of the
      * population over the coming time period based on the growth rate over
-     * the preceeding period.
+     * the preceding period.
      */
     if (gsl_isnan(initial_size)) {
         dt = time - pop->start_time;
@@ -3376,7 +3376,7 @@ msp_mass_migration(msp_t *self, demographic_event_t *event)
         goto out;
     }
     /*
-     * Move lineages from source to dest with propabality p.
+     * Move lineages from source to dest with probability p.
      */
     pop = &self->populations[source].ancestors;
     node = pop->head;
