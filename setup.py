@@ -23,14 +23,14 @@ import subprocess
 import platform
 import os
 import os.path
-
-
-def warn(message):
-    print("Warning:", message)
+from warnings import warn
 
 
 CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
 IS_WINDOWS = platform.system() == "Windows"
+
+# NOTE: sadly these warnings won't work to warn users installing with pip
+# https://github.com/pypa/pip/issues/2933
 HAVE_NUMPY = False
 try:
     import numpy as np
