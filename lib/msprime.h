@@ -501,6 +501,7 @@ typedef struct {
     size_t sample_size;
     size_t num_nodes;
     int flags;
+    node_id_t *samples;
     node_id_t root;
     /* Left and right physical coordinates of the tree */
     double left;
@@ -729,6 +730,7 @@ size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 int tree_sequence_get_alphabet(tree_sequence_t *self);
+bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);
 
 int tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node);
 int tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgeset);

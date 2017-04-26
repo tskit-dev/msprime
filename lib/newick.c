@@ -460,8 +460,13 @@ newick_converter_alloc(newick_converter_t *self,
     int ret = -1;
     uint32_t j;
     avl_node_t *avl_node;
+    node_id_t *samples;
 
     memset(self, 0, sizeof(newick_converter_t));
+    ret = tree_sequence_get_samples(tree_sequence, &samples);
+    if (ret != 0) {
+        goto out;
+    }
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->precision = precision;
@@ -480,6 +485,11 @@ newick_converter_alloc(newick_converter_t *self,
     avl_init_tree(&self->tree, cmp_newick_tree_node, NULL);
     /* Add in the leaf nodes */
     for (j = 0; j < self->sample_size; j++) {
+        /* We don't support arbitrary samples here */
+        if (samples[j] != (node_id_t) j) {
+            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            goto out;
+        }
         avl_node = newick_converter_alloc_avl_node(self, (node_id_t) j, 0.0);
         if (avl_node == NULL) {
             ret = MSP_ERR_NO_MEMORY;

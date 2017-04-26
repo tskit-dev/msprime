@@ -174,6 +174,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     int ret = 0;
     size_t j, k;
     site_t site;
+    node_id_t *samples;
 
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(hapgen_t));
@@ -181,6 +182,18 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->num_sites = tree_sequence_get_num_sites(tree_sequence);
     self->tree_sequence = tree_sequence;
+
+    ret = tree_sequence_get_samples(tree_sequence, &samples);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Check for non simple samples */
+    for (j = 0; j < self->sample_size; j++) {
+        if (samples[j] != (node_id_t) j) {
+            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            goto out;
+        }
+    }
 
     self->binary = tree_sequence_get_alphabet(tree_sequence) == MSP_ALPHABET_BINARY;
     ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);

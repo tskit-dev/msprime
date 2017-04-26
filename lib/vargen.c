@@ -52,6 +52,8 @@ int
 vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
 {
     int ret = MSP_ERR_NO_MEMORY;
+    node_id_t *samples;
+    size_t j;
 
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(vargen_t));
@@ -70,6 +72,17 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
     self->tree_sequence = tree_sequence;
     self->flags = flags;
 
+    /* For now, just disallow non {0, ..., n - 1} samples outright */
+    ret = tree_sequence_get_samples(tree_sequence, &samples);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->sample_size; j++) {
+        if (samples[j] != (node_id_t) j) {
+            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            goto out;
+        }
+    }
     ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
     if (ret != 0) {
         goto out;
@@ -113,7 +126,7 @@ vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state
             not_done = true;
             while (not_done) {
                 assert(w != NULL);
-                assert(w->node < (node_id_t) self->sample_size);
+                assert(w->node >= 0 && w->node < (node_id_t) self->sample_size);
                 if (genotypes[w->node] == derived) {
                     ret = MSP_ERR_INCONSISTENT_MUTATIONS;
                     goto out;
