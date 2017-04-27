@@ -2039,6 +2039,12 @@ class TestTreeSequence(LowLevelTestCase):
         for j in [0, 10, 10**6]:
             self.assertRaises(IndexError, ts.get_migration, num_records + j)
 
+    def test_get_samples(self):
+        ts = self.get_example_migration_tree_sequence()
+        # get_samples takes no arguments.
+        self.assertRaises(TypeError, ts.get_samples, 0)
+        self.assertEqual(list(range(ts.get_sample_size())), ts.get_samples())
+
     def test_migrations(self):
         sim = get_example_simulator(10, num_populations=3, store_migrations=True)
         sim.run()
@@ -2100,7 +2106,6 @@ class TestTreeSequence(LowLevelTestCase):
             pi1 = ts.get_pairwise_diversity(samples)
             self.assertGreaterEqual(pi1, 0)
 
-    @unittest.skip("SKIP simplify")
     def test_simplify(self):
         out = _msprime.TreeSequence()
         for ts in self.get_example_tree_sequences():
@@ -2110,6 +2115,8 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertRaises(ValueError, ts.simplify, out, [])
             self.assertRaises(ValueError, ts.simplify, out, [0])
             self.assertRaises(ValueError, ts.simplify, out, [0, ts.get_sample_size()])
+            self.assertRaises(ValueError, ts.simplify, out, [0, -1])
+            self.assertRaises(ValueError, ts.simplify, out, [0, ts.get_num_nodes()])
             self.assertRaises(_msprime.LibraryError, ts.simplify, out, [0, 0])
             s1 = _msprime.TreeSequence()
             ts.simplify(s1, [0, 1])

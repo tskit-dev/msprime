@@ -50,7 +50,7 @@ import _msprime
 import tests
 
 
-def get_example_tree_sequences():
+def get_example_tree_sequences(back_mutations=True):
     for n in [2, 3, 10, 100]:
         for m in [1, 2, 32]:
             for rho in [0, 0.1, 0.5]:
@@ -62,7 +62,8 @@ def get_example_tree_sequences():
         yield ts
     ts = msprime.simulate(30, length=20, recombination_rate=1)
     assert ts.num_trees > 1
-    yield make_alternating_back_mutations(ts)
+    if back_mutations:
+        yield make_alternating_back_mutations(ts)
 
 
 def get_bottleneck_examples():
@@ -113,7 +114,7 @@ def get_pairwise_diversity(tree_sequence, samples=None):
     and should return identical results.
     """
     if samples is None:
-        tracked_leaves = list(range(tree_sequence.get_sample_size()))
+        tracked_leaves = tree_sequence.get_samples()
     else:
         tracked_leaves = list(samples)
     if len(tracked_leaves) < 2:
@@ -937,6 +938,12 @@ class TestTreeSequence(HighLevelTestCase):
     def test_sparse_trees(self):
         for ts in get_example_tree_sequences():
             self.verify_sparse_trees(ts)
+
+    def test_mutations(self):
+        # TODO enable the back_mutations here once this has been implemented
+        # for pi and variants.
+        for ts in get_example_tree_sequences(back_mutations=False):
+            self.verify_mutations(ts)
 
     def verify_tree_diffs(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())

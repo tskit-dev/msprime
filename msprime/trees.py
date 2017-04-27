@@ -523,13 +523,13 @@ class SparseTree(object):
     def is_leaf(self, u):
         """
         Returns True if the specified node is a leaf. A node :math:`u` is a
-        leaf if :math:`0 \leq u < n` for a sample size :math:`n`.
+        leaf if it has zero children.
 
         :param int u: The node of interest.
         :return: True if u is a leaf node.
         :rtype: bool
         """
-        return 0 <= u < self.get_sample_size()
+        return len(self.children(u)) == 0
 
     @property
     def num_nodes(self):
@@ -2164,7 +2164,7 @@ class TreeSequence(object):
         :rtype: float
         """
         if samples is None:
-            leaves = list(range(self.get_sample_size()))
+            leaves = self.samples()
         else:
             leaves = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(leaves)
@@ -2365,7 +2365,7 @@ class TreeSequence(object):
             If None, return samples from all populations.
         :rtype: list
         """
-        samples = list(range(self.get_sample_size()))
+        samples = self._ll_tree_sequence.get_samples()
         if population_id is not None:
             samples = [
                 u for u in samples if self.get_population(u) == population_id]
