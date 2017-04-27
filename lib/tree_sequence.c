@@ -168,11 +168,12 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     }
     fprintf(out, "nodes (%d)\n", (int) self->nodes.num_records);
     for (j = 0; j < self->nodes.num_records; j++) {
-        fprintf(out, "\t%d\t%d\t%d\t%f\t%s\n", (int) j,
+        fprintf(out, "\t%d\t%d\t%d\t%f\t'%s'\t%d\n", (int) j,
                 self->nodes.flags[j],
                 (int) self->nodes.population[j],
                 self->nodes.time[j],
-                self->nodes.name[j]);
+                self->nodes.name[j],
+                self->nodes.sample_index_map[j]);
     }
     fprintf(out, "edgesets = (%d records)\n", (int) self->edgesets.num_records);
     for (j = 0; j < self->edgesets.num_records; j++) {
@@ -356,16 +357,19 @@ tree_sequence_alloc_trees(tree_sequence_t *self)
         msp_safe_free(self->nodes.flags);
         msp_safe_free(self->nodes.name);
         msp_safe_free(self->nodes.name_length);
+        msp_safe_free(self->nodes.sample_index_map);
         self->nodes.flags = malloc(size * sizeof(uint32_t));
         self->nodes.time = malloc(size * sizeof(double));
         self->nodes.population = malloc(size * sizeof(population_id_t));
         self->nodes.name = malloc(size * sizeof(char *));
         self->nodes.name_length = malloc(size * sizeof(size_t));
+        self->nodes.sample_index_map = malloc(size * sizeof(node_id_t));
         if (self->nodes.flags == NULL
                 || self->nodes.time == NULL
                 || self->nodes.population == NULL
                 || self->nodes.name == NULL
-                || self->nodes.name_length == NULL) {
+                || self->nodes.name_length == NULL
+                || self->nodes.sample_index_map == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
@@ -522,6 +526,7 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->nodes.name);
     msp_safe_free(self->nodes.name_mem);
     msp_safe_free(self->nodes.name_length);
+    msp_safe_free(self->nodes.sample_index_map);
     msp_safe_free(self->edgesets.left);
     msp_safe_free(self->edgesets.right);
     msp_safe_free(self->edgesets.children);
@@ -735,7 +740,6 @@ tree_sequence_init_nodes(tree_sequence_t *self)
     /* We alloc the samples list here because it is a special case; we don't know
      * how big it is until we've read in the data.
      */
-
     if (self->sample_size > self->max_sample_size) {
         size = self->sample_size;
         msp_safe_free(self->samples);
@@ -748,8 +752,10 @@ tree_sequence_init_nodes(tree_sequence_t *self)
     }
     k = 0;
     for (j = 0; j < self->nodes.num_records; j++) {
+        self->nodes.sample_index_map[j] = -1;
         if (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE) {
             self->samples[k] = (node_id_t) j;
+            self->nodes.sample_index_map[j] = (node_id_t) k;
             k++;
         }
     }
@@ -2446,6 +2452,13 @@ int WARN_UNUSED
 tree_sequence_get_samples(tree_sequence_t *self, node_id_t **samples)
 {
     *samples = self->samples;
+    return 0;
+}
+
+int WARN_UNUSED
+tree_sequence_get_sample_index_map(tree_sequence_t *self, node_id_t **sample_index_map)
+{
+    *sample_index_map = self->nodes.sample_index_map;
     return 0;
 }
 

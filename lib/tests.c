@@ -2838,7 +2838,6 @@ test_simplest_general_samples(void)
 
     tree_sequence_t ts, simplified;
     hapgen_t hapgen;
-    vargen_t vargen;
     newick_converter_t nc;
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, sites, mutations, NULL);
@@ -2855,14 +2854,18 @@ test_simplest_general_samples(void)
     CU_ASSERT_EQUAL(samples[0], 0);
     CU_ASSERT_EQUAL(samples[1], 2);
 
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    hapgen_print_state(&hapgen, _devnull);
+    for (j = 0; j < 2; j++) {
+        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_STRING_EQUAL(haplotype, haplotypes[j]);
+    }
+    hapgen_free(&hapgen);
+
     /* For now, all these methods fail when we have non 0...n - 1 samples.
      * They are not difficult to fix though. */
-    ret = hapgen_alloc(&hapgen, &ts);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-    hapgen_free(&hapgen);
-    ret = vargen_alloc(&vargen, &ts, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-    vargen_free(&vargen);
     ret = newick_converter_alloc(&nc, &ts, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
     newick_converter_free(&nc);
@@ -5211,11 +5214,7 @@ test_hapgen_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (j == 5) {
-            printf("\nFIXME hapgen general samples\n");
-        } else {
-            verify_hapgen(examples[j]);
-        }
+        verify_hapgen(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -5374,12 +5373,6 @@ test_vargen_from_examples(void)
     for (j = 0; examples[j] != NULL; j++) {
         if (j == 4) {
             printf("\n\nFIXME multiple mutation vargen\n");
-            tree_sequence_free(examples[j]);
-            free(examples[j]);
-            continue;
-        }
-        if (j == 5) {
-            printf("FIXME arbitrary samples vargen\n");
             tree_sequence_free(examples[j]);
             free(examples[j]);
             continue;
@@ -5693,12 +5686,8 @@ test_save_hdf5(void)
             /* FIXME storing migrations */
             verify_tree_sequences_equal(ts1, &ts2, false, true, true);
             tree_sequence_print_state(&ts2, _devnull);
-            if (j == 5) {
-                printf("\nFIXME: vargen/hapgen HDF5 general samples\n");
-            } else {
-                verify_hapgen(&ts2);
-                verify_vargen(&ts2);
-            }
+            verify_hapgen(&ts2);
+            verify_vargen(&ts2);
             tree_sequence_free(&ts2);
         }
         tree_sequence_free(ts1);

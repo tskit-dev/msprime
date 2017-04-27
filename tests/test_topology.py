@@ -372,8 +372,10 @@ class TestGeneralSamples(TopologyTestCase):
         t = next(ts.trees())
         self.assertEqual(t.root, 0)
         self.assertEqual(t.parent_dict, {1: 0, 2: 1, 3: 1, 4: 0})
-        self.assertRaises(_msprime.LibraryError, ts.haplotypes)
-        self.assertRaises(_msprime.LibraryError, list, ts.variants())
+        H = list(ts.haplotypes())
+        self.assertEqual(H[0], "1001")
+        self.assertEqual(H[1], "0101")
+        self.assertEqual(H[2], "0010")
         self.assertRaises(_msprime.LibraryError, list, ts.newick_trees())
 
         tss = ts.simplify()
@@ -402,13 +404,16 @@ class TestGeneralSamples(TopologyTestCase):
         node_map = list(range(ts.num_nodes))
         random.shuffle(node_map)
         # Change the permutation so that the relative order of samples is maintained.
-        # Then, we should get back exactly the same tree sequence after simplify.
+        # Then, we should get back exactly the same tree sequence after simplify
+        # and haplotypes and variants are also equal.
         samples = sorted(node_map[:ts.sample_size])
         node_map = samples + node_map[ts.sample_size:]
         permuted = permute_nodes(ts, node_map)
         self.assertEqual(permuted.samples(), samples)
-        self.assertRaises(_msprime.LibraryError, permuted.haplotypes)
-        self.assertRaises(_msprime.LibraryError, list, permuted.variants())
+        self.assertEqual(list(permuted.haplotypes()), list(ts.haplotypes()))
+        self.assertEqual(
+            [v.genotypes for v in permuted.variants(as_bytes=True)],
+            [v.genotypes for v in ts.variants(as_bytes=True)])
         self.assertEqual(ts.num_trees, permuted.num_trees)
         j = 0
         for t1, t2 in zip(ts.trees(), permuted.trees()):

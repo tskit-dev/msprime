@@ -403,6 +403,7 @@ typedef struct {
         list_len_t *name_length;
         char **name;
         char *name_mem;
+        node_id_t *sample_index_map;
     } nodes;
 
     struct {
@@ -563,6 +564,7 @@ typedef struct {
     double sequence_length;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
+    node_id_t *sample_index_map;
     /* The haplotype binary matrix. This is an optimised special case. */
     bool binary;
     size_t words_per_row;
@@ -578,6 +580,7 @@ typedef struct {
     double sequence_length;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
+    node_id_t *sample_index_map;
     size_t tree_site_index;
     int finished;
     sparse_tree_t tree;
@@ -740,6 +743,8 @@ int tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *site);
 int tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id,
         mutation_t *mutation);
 int tree_sequence_get_samples(tree_sequence_t *self, node_id_t **samples);
+int tree_sequence_get_sample_index_map(tree_sequence_t *self,
+        node_id_t **sample_index_map);
 
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);
