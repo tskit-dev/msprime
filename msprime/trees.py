@@ -2320,7 +2320,6 @@ class TreeSequence(object):
     def time(self, sample):
         return self.get_time(sample)
 
-    # TODO refactor these methods to take node arguments not samples.
     def get_time(self, sample):
         """
         Returns the time that the specified sample ID was sampled at.
@@ -2329,7 +2328,7 @@ class TreeSequence(object):
         :return: The time at which the specified sample was drawn.
         :rtype: int
         """
-        if sample < 0 or sample >= self.get_sample_size():
+        if sample < 0 or sample >= self.get_num_nodes():
             raise ValueError("Sample ID out of bounds")
         node = self.node(sample)
         return node.time
