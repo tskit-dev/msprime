@@ -1450,3 +1450,82 @@ class TestWithVisuals(TopologyTestCase):
                     self.assertEqual(a[k], msprime.NULL_NODE)
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
+
+    def test_sampled_node(self):
+        # currently internal nodes can't be samples
+        # but this one doesn't error
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0.1
+        2       1           0.2
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0.0     1.0     2       0,1
+        """)
+        self.assertRaises(_msprime.LibraryError, msprime.load_text,
+                          nodes=nodes, edgesets=edgesets)
+        # ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        # self.verify_simplify_topology(ts, [0, 1, 2])
+
+    def test_just_sampled_node(self):
+        # currently internal nodes can't be samples
+        # but this one loads OK, just can't be simplified
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       0           0
+        1       1           0.1
+        2       1           0.2
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0.0     1.0     2       0,1
+        """)
+        self.assertRaises(_msprime.LibraryError, msprime.load_text,
+                          nodes=nodes, edgesets=edgesets)
+        # ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        # self.assertRaises(_msprime.LibraryError, ts.simplify)
+
+    def test_simplify_sampled_node(self):
+        # 1.0             7
+        # 0.7            / \                      8                     6
+        #               /   \                    / \                   / \
+        # 0.5          /     5                  /   5                 /   5
+        #             /     /*\                /   /*\               /   /*\
+        # 0.4        /     /   4              /   /   4             /   /   4
+        #           /     /   / \            /   /   / \           /   /   / \
+        # 0.2      /     /   3   \          3   /   /   \         /   /   3   \
+        #         /     1    *    2         *  1   /     2       /   1    *    2
+        # 0.0    0      *         *            *  0      *      0    *         *
+        #
+        #          (0.0, 0.2),                 (0.2, 0.8),         (0.8, 1.0)
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       0           0
+        1       1           0.1
+        2       1           0.1
+        3       1           0.2
+        4       0           0.4
+        5       1           0.5
+        6       0           0.7
+        7       0           1.0
+        8       0           0.8
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0.0     0.2     4       2,3
+        0.2     0.8     4       0,2
+        0.8     1.0     4       2,3
+        0.0     1.0     5       1,4
+        0.8     1.0     6       0,5
+        0.2     0.8     8       3,5
+        0.0     0.2     7       0,5
+        """)
+        self.assertRaises(_msprime.LibraryError, msprime.load_text,
+                          nodes=nodes, edgesets=edgesets)
+        # ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        # self.assertRaises(_msprime.LibraryError, ts.simplify)
+        # otherwise simplify fails with
+        #   python3: lib/tree_sequence.c:1036: tree_sequence_load_records:
+        #             Assertion `cr->node > last_node' failed.

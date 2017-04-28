@@ -1078,7 +1078,7 @@ static int WARN_UNUSED
 tree_sequence_build_indexes(tree_sequence_t *self)
 {
     int ret = MSP_ERR_GENERIC;
-    size_t j;
+    size_t j, k;
     double x;
     index_sort_t *sort_buff = NULL;
 
@@ -1090,6 +1090,12 @@ tree_sequence_build_indexes(tree_sequence_t *self)
     /* sort by left and increasing time to give us the order in which
      * records should be inserted */
     for (j = 0; j < self->edgesets.num_records; j++) {
+        /* Check that no sampled nodes are internal. */
+        k = self->edgesets.parent[j];
+        if (self->nodes.flags[k] & MSP_NODE_IS_SAMPLE) {
+            ret = MSP_ERR_NODE_SAMPLE;
+            goto out;
+        }
         sort_buff[j].index = (node_id_t ) j;
         x = self->edgesets.left[j];
         sort_buff[j].value = x;
