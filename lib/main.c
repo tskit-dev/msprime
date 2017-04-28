@@ -702,19 +702,21 @@ print_stats(tree_sequence_t *ts)
 }
 
 static void
-print_vcf(tree_sequence_t *ts, unsigned int ploidy)
+print_vcf(tree_sequence_t *ts, unsigned int ploidy, const char *chrom, int verbose)
 {
     int ret = 0;
     char *record = NULL;
     char *header = NULL;
     vcf_converter_t vc;
 
-    ret = vcf_converter_alloc(&vc, ts, ploidy);
+    ret = vcf_converter_alloc(&vc, ts, ploidy, chrom);
     if (ret != 0) {
         fatal_library_error(ret, "vcf alloc");
     }
-    vcf_converter_print_state(&vc, stdout);
-    printf("START VCF\n");
+    if (verbose > 0) {
+        vcf_converter_print_state(&vc, stdout);
+        printf("START VCF\n");
+    }
     ret = vcf_converter_get_header(&vc, &header);
     if (ret != 0) {
         fatal_library_error(ret, "vcf get header");
@@ -991,12 +993,12 @@ run_variants(const char *filename, int verbose)
 }
 
 static void
-run_vcf(const char *filename, int verbose)
+run_vcf(const char *filename, int verbose, int ploidy, const char *chrom)
 {
     tree_sequence_t ts;
 
     load_tree_sequence(&ts, filename);
-    print_vcf(&ts, 1);
+    print_vcf(&ts, (unsigned int) ploidy, chrom, verbose);
     tree_sequence_free(&ts);
 }
 
@@ -1109,8 +1111,12 @@ main(int argc, char** argv)
     struct arg_rex *cmd5 = arg_rex1(NULL, NULL, "vcf", NULL, REG_ICASE, NULL);
     struct arg_lit *verbose5 = arg_lit0("v", "verbose", NULL);
     struct arg_file *infiles5 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_int *ploidy5 = arg_int0("p", "ploidy", "<ploidy>",
+            "Ploidy level of the VCF");
+    struct arg_str *chrom5 = arg_str0("c", "chrom", "<chrom>",
+            "Value for the CHROM column in the VCF (default='1')");
     struct arg_end *end5 = arg_end(20);
-    void* argtable5[] = {cmd5, verbose5, infiles5, end5};
+    void* argtable5[] = {cmd5, verbose5, infiles5, ploidy5, chrom5, end5};
     int nerrors5;
 
     /* SYNTAX 6: print  [-v] <input-file> */
@@ -1152,6 +1158,8 @@ main(int argc, char** argv)
     /* Set defaults */
     replicates1->ival[0] = 1;
     output1->filename[0] = NULL;
+    ploidy5->ival[0] = 1;
+    chrom5->sval[0] = "1";
 
     nerrors1 = arg_parse(argc, argv, argtable1);
     nerrors2 = arg_parse(argc, argv, argtable2);
@@ -1173,7 +1181,7 @@ main(int argc, char** argv)
     } else if (nerrors4 == 0) {
         run_variants(infiles4->filename[0], verbose4->count);
     } else if (nerrors5 == 0) {
-        run_vcf(infiles5->filename[0], verbose5->count);
+        run_vcf(infiles5->filename[0], verbose5->count, ploidy5->ival[0], chrom5->sval[0]);
     } else if (nerrors6 == 0) {
         run_print(infiles6->filename[0], verbose6->count);
     } else if (nerrors7 == 0) {

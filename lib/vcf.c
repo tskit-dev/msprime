@@ -121,7 +121,7 @@ vcf_converter_make_record(vcf_converter_t *self)
     self->vcf_genotypes_size = 2 * self->sample_size + 1;
     /* it's not worth working out exactly what size the record prefix
      * will be. 1K is plenty for us */
-    self->record_size = 1024 + self->vcf_genotypes_size;
+    self->record_size = 1024 + strlen(self->chrom) + self->vcf_genotypes_size;
     self->record = malloc(self->record_size);
     self->vcf_genotypes = malloc(self->vcf_genotypes_size);
     self->genotypes = malloc(self->sample_size * sizeof(char));
@@ -156,9 +156,9 @@ vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
     uint32_t j, k;
     size_t offset;
     unsigned int p = self->ploidy;
-    const char *template = "1\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t";
+    const char *template = "%s\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t";
 
-    written = snprintf(self->record, self->record_size, template, pos);
+    written = snprintf(self->record, self->record_size, template, self->chrom, pos);
     if (written < 0) {
         ret = MSP_ERR_IO;
         goto out;
@@ -242,12 +242,13 @@ out:
 
 int WARN_UNUSED
 vcf_converter_alloc(vcf_converter_t *self,
-        tree_sequence_t *tree_sequence, unsigned int ploidy)
+        tree_sequence_t *tree_sequence, unsigned int ploidy, const char *chrom)
 {
     int ret = -1;
 
     memset(self, 0, sizeof(vcf_converter_t));
     self->ploidy = ploidy;
+    self->chrom = chrom;
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     if (ploidy < 1 || self->sample_size % ploidy != 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;

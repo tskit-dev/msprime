@@ -591,6 +591,7 @@ typedef struct {
     size_t sample_size;
     size_t num_vcf_samples;
     unsigned int ploidy;
+    const char *chrom;
     char *genotypes;
     char *header;
     char *record;
@@ -798,7 +799,7 @@ int newick_converter_free(newick_converter_t *self);
 void newick_converter_print_state(newick_converter_t *self, FILE *out);
 
 int vcf_converter_alloc(vcf_converter_t *self,
-        tree_sequence_t *tree_sequence, unsigned ploidy);
+        tree_sequence_t *tree_sequence, unsigned int ploidy, const char *chrom);
 int vcf_converter_get_header(vcf_converter_t *self, char **header);
 int vcf_converter_next(vcf_converter_t *self, char **record);
 int vcf_converter_free(vcf_converter_t *self);
