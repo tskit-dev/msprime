@@ -591,12 +591,12 @@ typedef struct {
     size_t sample_size;
     size_t num_vcf_samples;
     unsigned int ploidy;
-    const char *chrom;
     char *genotypes;
     char *header;
     char *record;
     char *vcf_genotypes;
     size_t vcf_genotypes_size;
+    size_t contig_id_size;
     size_t record_size;
     size_t num_sites;
     unsigned long contig_length;

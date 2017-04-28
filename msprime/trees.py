@@ -2371,7 +2371,7 @@ class TreeSequence(object):
                 u for u in samples if self.get_population(u) == population_id]
         return samples
 
-    def write_vcf(self, output, ploidy=1):
+    def write_vcf(self, output, ploidy=1, contig_id="1"):
         """
         Writes a VCF formatted file to the specified file-like object. If a
         ploidy value is supplied, allele values are combined among adjacent
@@ -2392,12 +2392,14 @@ class TreeSequence(object):
         :param File output: The file-like object to write the VCF output.
         :param int ploidy: The ploidy of the individual samples in the
             VCF. This sample size must be divisible by ploidy.
+        :param str contig_id: The value of the CHROM column in the output VCF.
         """
         if ploidy < 1:
             raise ValueError("Ploidy must be >= sample size")
         if self.get_sample_size() % ploidy != 0:
             raise ValueError("Sample size must be divisible by ploidy")
-        converter = _msprime.VcfConverter(self._ll_tree_sequence, ploidy)
+        converter = _msprime.VcfConverter(
+            self._ll_tree_sequence, ploidy=ploidy, contig_id=contig_id)
         output.write(converter.get_header())
         for record in converter:
             output.write(record)

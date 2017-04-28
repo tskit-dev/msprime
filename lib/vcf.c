@@ -41,14 +41,14 @@ vcf_converter_print_state(vcf_converter_t *self, FILE* out)
 }
 
 static int WARN_UNUSED
-vcf_converter_make_header(vcf_converter_t *self)
+vcf_converter_make_header(vcf_converter_t *self, const char *contig_id)
 {
     int ret = MSP_ERR_GENERIC;
     const char *header_prefix_template =
         "##fileformat=VCFv4.2\n"
         "##source=msprime " MSP_LIBRARY_VERSION_STR "\n"
         "##FILTER=<ID=PASS,Description=\"All filters passed\">\n"
-        "##contig=<ID=1,length=%lu>\n"
+        "##contig=<ID=%s,length=%lu>\n"
         "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
     char* header_prefix = NULL;
@@ -57,7 +57,7 @@ vcf_converter_make_header(vcf_converter_t *self)
     uint32_t j;
     int written;
 
-    written = snprintf(NULL, 0, header_prefix_template, self->contig_length);
+    written = snprintf(NULL, 0, header_prefix_template, contig_id, self->contig_length);
     if (written < 0) {
         ret = MSP_ERR_IO;
         goto out;
@@ -69,7 +69,7 @@ vcf_converter_make_header(vcf_converter_t *self)
         goto out;
     }
     written = snprintf(header_prefix, buffer_size, header_prefix_template,
-            self->contig_length);
+            contig_id, self->contig_length);
     if (written < 0) {
         ret = MSP_ERR_IO;
         goto out;
@@ -111,7 +111,7 @@ out:
 }
 
 static int WARN_UNUSED
-vcf_converter_make_record(vcf_converter_t *self)
+vcf_converter_make_record(vcf_converter_t *self, const char *contig_id)
 {
     int ret = MSP_ERR_GENERIC;
     unsigned int ploidy = self->ploidy;
@@ -121,7 +121,7 @@ vcf_converter_make_record(vcf_converter_t *self)
     self->vcf_genotypes_size = 2 * self->sample_size + 1;
     /* it's not worth working out exactly what size the record prefix
      * will be. 1K is plenty for us */
-    self->record_size = 1024 + strlen(self->chrom) + self->vcf_genotypes_size;
+    self->record_size = 1024 + self->contig_id_size + self->vcf_genotypes_size;
     self->record = malloc(self->record_size);
     self->vcf_genotypes = malloc(self->vcf_genotypes_size);
     self->genotypes = malloc(self->sample_size * sizeof(char));
@@ -130,6 +130,7 @@ vcf_converter_make_record(vcf_converter_t *self)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    memcpy(self->record, contig_id, self->contig_id_size);
     /* Set up the vcf_genotypes string. We don't want to have to put
      * in tabs and |s for every row so we insert them at the start.
      */
@@ -156,14 +157,16 @@ vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
     uint32_t j, k;
     size_t offset;
     unsigned int p = self->ploidy;
-    const char *template = "%s\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t";
+    const char *template = "\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t";
 
-    written = snprintf(self->record, self->record_size, template, self->chrom, pos);
+    /* CHROM was written at init time as it is constant */
+    written = snprintf(self->record + self->contig_id_size,
+            self->record_size - self->contig_id_size, template, pos);
     if (written < 0) {
         ret = MSP_ERR_IO;
         goto out;
     }
-    offset = (size_t) written;
+    offset = self->contig_id_size + (size_t) written;
 
     for (j = 0; j < self->num_vcf_samples; j++) {
         for (k = 0; k < p; k++) {
@@ -242,13 +245,13 @@ out:
 
 int WARN_UNUSED
 vcf_converter_alloc(vcf_converter_t *self,
-        tree_sequence_t *tree_sequence, unsigned int ploidy, const char *chrom)
+        tree_sequence_t *tree_sequence, unsigned int ploidy, const char *contig_id)
 {
     int ret = -1;
 
     memset(self, 0, sizeof(vcf_converter_t));
     self->ploidy = ploidy;
-    self->chrom = chrom;
+    self->contig_id_size = strlen(contig_id);
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     if (ploidy < 1 || self->sample_size % ploidy != 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -281,12 +284,12 @@ vcf_converter_alloc(vcf_converter_t *self,
             self->contig_length,
             self->positions[self->num_sites - 1]);
     }
-    ret = vcf_converter_make_header(self);
+    ret = vcf_converter_make_header(self, contig_id);
     if (ret != 0) {
         goto out;
     }
     if (tree_sequence_get_num_edgesets(tree_sequence) > 0) {
-        ret = vcf_converter_make_record(self);
+        ret = vcf_converter_make_record(self, contig_id);
         if (ret != 0) {
             goto out;
         }

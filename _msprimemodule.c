@@ -5033,14 +5033,15 @@ VcfConverter_init(VcfConverter *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "ploidy", NULL};
+    static char *kwlist[] = {"tree_sequence", "ploidy", "contig_id", NULL};
     unsigned int ploidy = 1;
+    const char *contig_id = "1";
     TreeSequence *tree_sequence;
 
     self->vcf_converter = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|I", kwlist,
-            &TreeSequenceType, &tree_sequence, &ploidy)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|Is", kwlist,
+            &TreeSequenceType, &tree_sequence, &ploidy, &contig_id)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -5052,13 +5053,17 @@ VcfConverter_init(VcfConverter *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "Ploidy must be >= 1");
         goto out;
     }
+    if (strlen(contig_id) == 0) {
+        PyErr_SetString(PyExc_ValueError, "contig_id cannot be the empty string");
+        goto out;
+    }
     self->vcf_converter = PyMem_Malloc(sizeof(vcf_converter_t));
     if (self->vcf_converter == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     err = vcf_converter_alloc(self->vcf_converter,
-            self->tree_sequence->tree_sequence, ploidy);
+            self->tree_sequence->tree_sequence, ploidy, contig_id);
     if (err != 0) {
         handle_library_error(err);
         goto out;
