@@ -2317,38 +2317,38 @@ class TreeSequence(object):
             time=time, population=population, name=name,
             is_sample=flags & NODE_IS_SAMPLE)
 
-    def time(self, sample):
-        return self.get_time(sample)
+    def time(self, u):
+        return self.get_time(u)
 
-    def get_time(self, sample):
+    def get_time(self, u):
         """
-        Returns the time that the specified sample ID was sampled at.
+        Returns the time that the specified ID was alive at.
 
-        :param int sample: The sample ID of interest.
-        :return: The time at which the specified sample was drawn.
+        :param int u: The individual ID of interest.
+        :return: The time at which the specified individual was alive at.
         :rtype: int
         """
-        if sample < 0 or sample >= self.get_num_nodes():
-            raise ValueError("Sample ID out of bounds")
-        node = self.node(sample)
+        if u < 0 or u >= self.get_num_nodes():
+            raise ValueError("ID out of bounds")
+        node = self.node(u)
         return node.time
 
-    def population(self, sample):
-        return self.get_population(sample)
+    def population(self, u):
+        return self.get_population(u)
 
-    def get_population(self, sample):
+    def get_population(self, u):
         """
         Returns the population ID for the specified sample ID.
 
-        :param int sample: The sample ID of interest.
-        :return: The population ID where the specified sample was drawn.
+        :param int u: The individual  ID of interest.
+        :return: The population ID where the specified individual lived.
             Returns :const:`.NULL_POPULATION` if no population information
             is available.
         :rtype: int
         """
-        if sample < 0 or sample >= self.get_sample_size():
-            raise ValueError("Sample ID out of bounds")
-        node = self.node(sample)
+        if u < 0 or u >= self.get_num_nodes():
+            raise ValueError("ID out of bounds")
+        node = self.node(u)
         return node.population
 
     def samples(self, population_id=None):
