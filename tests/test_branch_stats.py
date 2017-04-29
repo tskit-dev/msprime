@@ -338,6 +338,16 @@ class BranchStatsTestCase(unittest.TestCase):
                     branch_stats_node_iter(ts, A, f, method='length'),
                     branch_length_f4(ts, A[0], A[1], A[2], A[3]))
 
+    def test_errors(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=10)
+        n = ts.num_nodes
+        self.assertRaises(AssertionError,
+                          ts.get_mean_tmrca, [[0], [1.12]], [0, ts.sequence_length])
+        self.assertRaises(AssertionError,
+                          ts.get_mean_tmrca, [[n], [n+1]], [0, ts.sequence_length])
+        self.assertRaises(AssertionError,
+                          ts.get_mean_tmrca, [[0], [11]], [0, ts.sequence_length])
+
     def test_pairwise_diversity(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_pairwise_diversity(ts)

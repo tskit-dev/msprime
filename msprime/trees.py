@@ -2282,6 +2282,8 @@ class TreeSequence(object):
                     "elements of leaf_sets cannot contain repeated elements.")
             for u in U:
                 assert(type(u) is int)
+                assert(u >= 0 and u < self.num_nodes)
+                assert(self.node(u).is_sample())
         num_windows = len(windows) - 1
         if windows[0] != 0.0:
             raise ValueError(
