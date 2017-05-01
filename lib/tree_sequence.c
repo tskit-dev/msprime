@@ -2179,7 +2179,7 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         dims = fields[j].size;
         dataspace_id = H5Screate_simple(1, &dims, NULL);
         if (dataspace_id < 0) {
-            status = dataspace_id;
+            status = (herr_t) dataspace_id;
             goto out;
         }
         attr_id = H5Acreate(file_id, fields[j].name,
