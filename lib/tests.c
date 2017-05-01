@@ -3081,6 +3081,16 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     node_table.flags[0] = 1;
 
+    /* internal node sampled */
+    node_table.flags[2] = 1;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+       NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_SAMPLE_INTERNAL);
+    tree_sequence_free(&ts);
+    node_table.flags[2] = 0;
+
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
