@@ -155,20 +155,25 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     site_t site;
 
     fprintf(out, "tree_sequence state\n");
-    fprintf(out, "sample_size = %d\n", (int) self->sample_size);
     fprintf(out, "num_trees = %d\n", (int) self->num_trees);
     fprintf(out, "alphabet = %d\n", (int) self->alphabet);
     fprintf(out, "sequence_length = %f\n", self->sequence_length);
+    fprintf(out, "samples = (%d)\n", (int) self->sample_size);
+    for (j = 0; j < self->sample_size; j++) {
+        fprintf(out, "\t%d\n", (int) self->samples[j]);
+    }
     fprintf(out, "provenance = (%d)\n", (int) self->num_provenance_strings);
     for (j = 0; j < self->num_provenance_strings; j++) {
         fprintf(out, "\t'%s'\n", self->provenance_strings[j]);
     }
     fprintf(out, "nodes (%d)\n", (int) self->nodes.num_records);
     for (j = 0; j < self->nodes.num_records; j++) {
-        fprintf(out, "\t%d\t%d\t%f\t%s\n", (int) j,
+        fprintf(out, "\t%d\t%d\t%d\t%f\t'%s'\t%d\n", (int) j,
+                self->nodes.flags[j],
                 (int) self->nodes.population[j],
                 self->nodes.time[j],
-                self->nodes.name[j]);
+                self->nodes.name[j],
+                self->nodes.sample_index_map[j]);
     }
     fprintf(out, "edgesets = (%d records)\n", (int) self->edgesets.num_records);
     for (j = 0; j < self->edgesets.num_records; j++) {
@@ -224,6 +229,8 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     }
 
     fprintf(out, "memory\n");
+    fprintf(out, "\tsample_size = %d\n", (int) self->sample_size);
+    fprintf(out, "\tmax_sample_size = %d\n", (int) self->max_sample_size);
     fprintf(out, "\tnodes.num_records = %d\n", (int) self->nodes.num_records);
     fprintf(out, "\tnodes.max_num_records = %d\n", (int) self->nodes.max_num_records);
     fprintf(out, "\tedgesets.num_records = %d\n", (int) self->edgesets.num_records);
@@ -350,16 +357,19 @@ tree_sequence_alloc_trees(tree_sequence_t *self)
         msp_safe_free(self->nodes.flags);
         msp_safe_free(self->nodes.name);
         msp_safe_free(self->nodes.name_length);
+        msp_safe_free(self->nodes.sample_index_map);
         self->nodes.flags = malloc(size * sizeof(uint32_t));
         self->nodes.time = malloc(size * sizeof(double));
         self->nodes.population = malloc(size * sizeof(population_id_t));
         self->nodes.name = malloc(size * sizeof(char *));
         self->nodes.name_length = malloc(size * sizeof(size_t));
+        self->nodes.sample_index_map = malloc(size * sizeof(node_id_t));
         if (self->nodes.flags == NULL
                 || self->nodes.time == NULL
                 || self->nodes.population == NULL
                 || self->nodes.name == NULL
-                || self->nodes.name_length == NULL) {
+                || self->nodes.name_length == NULL
+                || self->nodes.sample_index_map == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
@@ -484,6 +494,7 @@ tree_sequence_alloc(tree_sequence_t *self)
     if (ret != 0) {
         goto out;
     }
+
     ret = 0;
 out:
     return ret;
@@ -508,12 +519,14 @@ tree_sequence_free(tree_sequence_t *self)
         }
         msp_safe_free(self->provenance_strings);
     }
+    msp_safe_free(self->samples);
     msp_safe_free(self->nodes.flags);
     msp_safe_free(self->nodes.population);
     msp_safe_free(self->nodes.time);
     msp_safe_free(self->nodes.name);
     msp_safe_free(self->nodes.name_mem);
     msp_safe_free(self->nodes.name_length);
+    msp_safe_free(self->nodes.sample_index_map);
     msp_safe_free(self->edgesets.left);
     msp_safe_free(self->edgesets.right);
     msp_safe_free(self->edgesets.children);
@@ -710,9 +723,10 @@ out:
 static int
 tree_sequence_init_nodes(tree_sequence_t *self)
 {
-    size_t j;
+    size_t j, k, size;
     int ret = 0;
 
+    /* Determine the sample size */
     self->sample_size = 0;
     for (j = 0; j < self->nodes.num_records; j++) {
         if (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE) {
@@ -723,14 +737,29 @@ tree_sequence_init_nodes(tree_sequence_t *self)
         ret = MSP_ERR_INSUFFICIENT_SAMPLES;
         goto out;
     }
-    /* Samples must be 0 to n */
-    /* TODO remove this restriction and error code. */
-    for (j = 0; j < self->sample_size; j++) {
-        if (! (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE)) {
-            ret = MSP_ERR_SAMPLES_NOT_CONTIGUOUS;
+    /* We alloc the samples list here because it is a special case; we don't know
+     * how big it is until we've read in the data.
+     */
+    if (self->sample_size > self->max_sample_size) {
+        size = self->sample_size;
+        msp_safe_free(self->samples);
+        self->samples = malloc(size * sizeof(node_id_t));
+        if (self->samples == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
+        self->max_sample_size = size;
     }
+    k = 0;
+    for (j = 0; j < self->nodes.num_records; j++) {
+        self->nodes.sample_index_map[j] = -1;
+        if (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE) {
+            self->samples[k] = (node_id_t) j;
+            self->nodes.sample_index_map[j] = (node_id_t) k;
+            k++;
+        }
+    }
+    assert(k == self->sample_size);
 out:
     return ret;
 }
@@ -1244,7 +1273,6 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
     size_t *num_provenance_strings, char ***provenance_strings)
 {
     int ret = -1;
-    uint32_t flags;
     size_t j;
     double left, right;
 
@@ -1263,8 +1291,7 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         goto out;
     }
     for (j = 0; j < self->nodes.num_records; j++) {
-        flags = j < self->sample_size? MSP_NODE_IS_SAMPLE: 0;
-        ret = node_table_add_row(nodes, flags,
+        ret = node_table_add_row(nodes, self->nodes.flags[j],
                 self->nodes.time[j], self->nodes.population[j],
                 self->nodes.name[j]);
         if (ret != 0) {
@@ -2257,6 +2284,17 @@ tree_sequence_get_num_trees(tree_sequence_t *self)
     return self->num_trees;
 }
 
+bool
+tree_sequence_is_sample(tree_sequence_t *self, node_id_t u)
+{
+    bool ret = false;
+
+    if (u >= 0 && u < (node_id_t) self->nodes.num_records) {
+        ret = self->nodes.flags[u] & MSP_NODE_IS_SAMPLE;
+    }
+    return ret;
+}
+
 /* Accessors for records */
 
 int WARN_UNUSED
@@ -2408,6 +2446,20 @@ tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *record)
     record->mutations_length = self->sites.site_mutations_length[id];
 out:
     return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_get_samples(tree_sequence_t *self, node_id_t **samples)
+{
+    *samples = self->samples;
+    return 0;
+}
+
+int WARN_UNUSED
+tree_sequence_get_sample_index_map(tree_sequence_t *self, node_id_t **sample_index_map)
+{
+    *sample_index_map = self->nodes.sample_index_map;
+    return 0;
 }
 
 /* Compress the node space in the specified set of records and mutations.
@@ -2584,7 +2636,11 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     }
     for (j = 0; j < num_samples; j++) {
         u = samples[j];
-        if (u < 0 || u >= (node_id_t) self->sample_size) {
+        if (u < 0 || u >= (node_id_t) self->nodes.num_records) {
+            ret = MSP_ERR_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (!(self->nodes.flags[u] & MSP_NODE_IS_SAMPLE)) {
             ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
@@ -3009,27 +3065,55 @@ sparse_tree_clear(sparse_tree_t *self)
 {
     int ret = 0;
     size_t N = self->num_nodes;
-    size_t n = self->sample_size;
+    size_t j;
+    node_id_t u;
+    leaf_list_node_t *w;
 
     self->left = 0;
     self->right = 0;
     self->root = 0;
     self->index = (size_t) -1;
+    /* TODO we should profile this method to see if just doing a single loop over
+     * the nodes would be more efficient than multiple memsets.
+     */
     memset(self->parent, 0xff, N * sizeof(node_id_t));
-    memset(self->population + n, 0xff, (N - n) * sizeof(population_id_t));
-    memset(self->time + n, 0, (N - n) * sizeof(double));
-    memset(self->num_children + n, 0, (N - n) * sizeof(node_id_t));
-    memset(self->children + n, 0, (N - n) * sizeof(node_id_t *));
+    memset(self->population, 0xff, N * sizeof(population_id_t));
+    memset(self->time, 0, N * sizeof(double));
+    memset(self->num_children, 0, N * sizeof(node_id_t));
+    memset(self->children, 0, N * sizeof(node_id_t *));
     if (self->flags & MSP_LEAF_COUNTS) {
-        memset(self->num_leaves + n, 0, (N - n) * sizeof(node_id_t));
-        memset(self->num_tracked_leaves + n, 0, (N - n) * sizeof(node_id_t));
+        memset(self->num_leaves, 0, N * sizeof(node_id_t));
         memset(self->marked, 0, N * sizeof(uint8_t));
+        /* We can't reset the tracked leaves via memset because we don't
+         * know where the tracked samples are.
+         */
+        for (j = 0; j < self->num_nodes; j++) {
+            if (! tree_sequence_is_sample(self->tree_sequence, (node_id_t) j)) {
+                self->num_tracked_leaves[j] = 0;
+            }
+        }
     }
     if (self->flags & MSP_LEAF_LISTS) {
-        memset(self->leaf_list_head + n, 0,
-                (N - n) * sizeof(leaf_list_node_t *));
-        memset(self->leaf_list_tail + n, 0,
-                (N - n) * sizeof(leaf_list_node_t *));
+        memset(self->leaf_list_head, 0, N * sizeof(leaf_list_node_t *));
+        memset(self->leaf_list_tail, 0, N * sizeof(leaf_list_node_t *));
+    }
+    /* Set the sample attributes */
+    for (j = 0; j < self->sample_size; j++) {
+        u = self->samples[j];
+        self->population[u] = self->tree_sequence->nodes.population[u];
+        self->time[u] = self->tree_sequence->nodes.time[u];
+        self->children[u] = NULL;
+        self->num_children[u] = 0;
+        if (self->flags & MSP_LEAF_COUNTS) {
+            self->num_leaves[u] = 1;
+        }
+        if (self->flags & MSP_LEAF_LISTS) {
+            w = &self->leaf_list_node_mem[j];
+            w->next = NULL;
+            w->node = (node_id_t) u;
+            self->leaf_list_head[u] = w;
+            self->leaf_list_tail[u] = w;
+        }
     }
     return ret;
 }
@@ -3038,9 +3122,8 @@ int WARN_UNUSED
 sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags)
 {
     int ret = MSP_ERR_NO_MEMORY;
-    size_t j, sample_size;
+    size_t sample_size;
     size_t num_nodes;
-    leaf_list_node_t *w;
 
     memset(self, 0, sizeof(sparse_tree_t));
     if (tree_sequence == NULL) {
@@ -3052,6 +3135,7 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     self->num_nodes = num_nodes;
     self->sample_size = sample_size;
     self->tree_sequence = tree_sequence;
+    self->samples = tree_sequence->samples;
     self->flags = flags;
     self->parent = malloc(num_nodes * sizeof(node_id_t));
     self->population = malloc(num_nodes * sizeof(population_id_t));
@@ -3077,33 +3161,15 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
                 || self->marked == NULL) {
             goto out;
         }
-        for (j = 0; j < sample_size; j++) {
-            self->num_leaves[j] = 1;
-        }
     }
     if (self->flags & MSP_LEAF_LISTS) {
         self->leaf_list_head = calloc(num_nodes, sizeof(leaf_list_node_t *));
         self->leaf_list_tail = calloc(num_nodes, sizeof(leaf_list_node_t *));
-        self->leaf_list_node_mem = calloc(sample_size,
-                sizeof(leaf_list_node_t));
+        self->leaf_list_node_mem = calloc(sample_size, sizeof(leaf_list_node_t));
         if (self->leaf_list_head == NULL || self->leaf_list_tail == NULL
                 || self->leaf_list_node_mem == NULL) {
             goto out;
         }
-        for (j = 0; j < sample_size; j++) {
-            w = &self->leaf_list_node_mem[j];
-            w->next = NULL;
-            w->node = (node_id_t) j;
-            self->leaf_list_head[j] = w;
-            self->leaf_list_tail[j] = w;
-        }
-    }
-    /* Set the sample attributes */
-    for (j = 0; j < self->sample_size; j++) {
-        self->population[j] = self->tree_sequence->nodes.population[j];
-        self->time[j] = self->tree_sequence->nodes.time[j];
-        self->children[j] = NULL;
-        self->num_children[j] = 0;
     }
     ret = sparse_tree_clear(self);
 out:
@@ -3187,8 +3253,12 @@ sparse_tree_set_tracked_leaves(sparse_tree_t *self, size_t num_tracked_leaves,
     }
     for (j = 0; j < num_tracked_leaves; j++) {
         u = tracked_leaves[j];
-        if (u < 0 || u >= (node_id_t) self->sample_size) {
+        if (u < 0 || u >= (node_id_t) self->num_nodes) {
             ret = MSP_ERR_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (! tree_sequence_is_sample(self->tree_sequence, u)) {
+            ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
         if (self->num_tracked_leaves[u] != 0) {
@@ -3241,13 +3311,11 @@ out:
     return ret;
 }
 
-
 int WARN_UNUSED
 sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
 {
     int ret = MSP_ERR_GENERIC;
     size_t N = self->num_nodes;
-    size_t n = self->sample_size;
 
     if (self == source) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -3274,8 +3342,7 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
             ret = MSP_ERR_UNSUPPORTED_OPERATION;
             goto out;
         }
-        memcpy(self->num_leaves + n, source->num_leaves + n,
-                (N - n) * sizeof(node_id_t));
+        memcpy(self->num_leaves, source->num_leaves, N * sizeof(node_id_t));
     }
     if (self->flags & MSP_LEAF_LISTS) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
@@ -3311,13 +3378,10 @@ sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
         && self->sites_length == other->sites_length
         && self->sites == other->sites
         && memcmp(self->parent, other->parent, N * sizeof(node_id_t)) == 0
-        && memcmp(self->population, other->population,
-                N * sizeof(population_id_t)) == 0
+        && memcmp(self->population, other->population, N * sizeof(population_id_t)) == 0
         && memcmp(self->time, other->time, N * sizeof(double)) ==  0
-        && memcmp(self->num_children, other->num_children,
-                N * sizeof(node_id_t)) == 0
-        && memcmp(self->children, other->children,
-                N * sizeof(node_id_t *)) == 0;
+        && memcmp(self->num_children, other->num_children, N * sizeof(node_id_t)) == 0
+        && memcmp(self->children, other->children, N * sizeof(node_id_t *)) == 0;
     if (condition) {
         ret = 0;
     }
@@ -3334,7 +3398,6 @@ sparse_tree_check_node(sparse_tree_t *self, node_id_t u)
     }
     return ret;
 }
-
 
 int WARN_UNUSED
 sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v,
@@ -3399,7 +3462,7 @@ sparse_tree_get_num_leaves_by_traversal(sparse_tree_t *self, node_id_t u,
     while (stack_top >= 0) {
         v = stack[stack_top];
         stack_top--;
-        if (v < (node_id_t) self->sample_size) {
+        if (tree_sequence_is_sample(self->tree_sequence, v)) {
             count++;
         }
         for (c = 0; c < self->num_children[v]; c++) {
@@ -3538,9 +3601,9 @@ sparse_tree_check_state(sparse_tree_t *self)
     site_t site;
 
     for (j = 0; j < self->sample_size; j++) {
-        u = (node_id_t) j;
+        u = self->samples[j];
         assert(self->time[u] >= 0.0);
-        assert(self->num_children[j] == 0);
+        assert(self->num_children[u] == 0);
         while (self->parent[u] != MSP_NULL_NODE) {
             v = self->parent[u];
             found = 0;

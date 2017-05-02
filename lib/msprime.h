@@ -386,10 +386,12 @@ typedef struct {
 /* Tree sequences */
 typedef struct {
     uint32_t initialised_magic;
-    size_t sample_size;
     size_t num_trees;
     double sequence_length;
     int alphabet;
+    size_t sample_size;
+    size_t max_sample_size;
+    node_id_t *samples;
     struct {
         size_t num_records;
         size_t max_num_records;
@@ -401,6 +403,7 @@ typedef struct {
         list_len_t *name_length;
         char **name;
         char *name_mem;
+        node_id_t *sample_index_map;
     } nodes;
 
     struct {
@@ -499,6 +502,7 @@ typedef struct {
     size_t sample_size;
     size_t num_nodes;
     int flags;
+    node_id_t *samples;
     node_id_t root;
     /* Left and right physical coordinates of the tree */
     double left;
@@ -560,6 +564,7 @@ typedef struct {
     double sequence_length;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
+    node_id_t *sample_index_map;
     /* The haplotype binary matrix. This is an optimised special case. */
     bool binary;
     size_t words_per_row;
@@ -575,6 +580,7 @@ typedef struct {
     double sequence_length;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
+    node_id_t *sample_index_map;
     size_t tree_site_index;
     int finished;
     sparse_tree_t tree;
@@ -727,6 +733,7 @@ size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_sample_size(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 int tree_sequence_get_alphabet(tree_sequence_t *self);
+bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);
 
 int tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node);
 int tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgeset);
@@ -735,8 +742,9 @@ int tree_sequence_get_migration(tree_sequence_t *self, size_t index,
 int tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *site);
 int tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id,
         mutation_t *mutation);
-int tree_sequence_get_site_mutations(tree_sequence_t *self, site_id_t site_id,
-        mutation_t **mutations, list_len_t *mutations_length);
+int tree_sequence_get_samples(tree_sequence_t *self, node_id_t **samples);
+int tree_sequence_get_sample_index_map(tree_sequence_t *self,
+        node_id_t **sample_index_map);
 
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);

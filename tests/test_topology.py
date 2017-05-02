@@ -22,12 +22,55 @@ Test cases for the supported topological variations and operations.
 from __future__ import print_function
 from __future__ import division
 
+try:
+    # We use the zip as iterator functionality here.
+    from future_builtins import zip
+except ImportError:
+    # This fails for Python 3.x, but that's fine.
+    pass
+
 import unittest
 import itertools
+import random
 import six
 
 import msprime
 import _msprime
+
+
+def permute_nodes(ts, node_map):
+    """
+    Returns a copy of the specified tree sequence such that the nodes are
+    permuted according to the specified map.
+    """
+    # Mapping from nodes in the new tree sequence back to nodes in the original
+    reverse_map = [0 for _ in node_map]
+    for j in range(ts.num_nodes):
+        reverse_map[node_map[j]] = j
+    old_nodes = list(ts.nodes())
+    new_nodes = msprime.NodeTable()
+    for j in range(ts.num_nodes):
+        old_node = old_nodes[reverse_map[j]]
+        new_nodes.add_row(
+            flags=old_node.flags, name=old_node.name,
+            population=old_node.population, time=old_node.time)
+    new_edgesets = msprime.EdgesetTable()
+    for edgeset in ts.edgesets():
+        new_edgesets.add_row(
+            left=edgeset.left, right=edgeset.right, parent=node_map[edgeset.parent],
+            children=tuple(sorted([node_map[c] for c in edgeset.children])))
+    new_sites = msprime.SiteTable()
+    new_mutations = msprime.MutationTable()
+    for site in ts.sites():
+        new_sites.add_row(
+            position=site.position, ancestral_state=site.ancestral_state)
+        for mutation in site.mutations:
+            new_mutations.add_row(
+                site=site.index, derived_state=mutation.derived_state,
+                node=node_map[mutation.node])
+    return msprime.load_tables(
+        nodes=new_nodes, edgesets=new_edgesets, sites=new_sites,
+        mutations=new_mutations)
 
 
 def insert_redundant_breakpoints(ts):
@@ -280,6 +323,143 @@ class TestUnaryNodes(TopologyTestCase):
                 found = True
         self.assertTrue(found)
         self.verify_unary_tree_sequence(ts)
+
+
+class TestGeneralSamples(TopologyTestCase):
+    """
+    Test cases in which we have samples at arbitrary nodes (i.e., not at
+    {0,...,n - 1}).
+    """
+    def test_simple_case(self):
+        # Simple case where we have n = 3 and samples starting at n.
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       0           2
+        1       0           1
+        2       1           0
+        3       1           0
+        4       1           0
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0       1       1       2,3
+        0       1       0       1,4
+        """)
+        sites = six.StringIO("""\
+        position    ancestral_state
+        0.1     0
+        0.2     0
+        0.3     0
+        0.4     0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state
+        0       2       1
+        1       3       1
+        2       4       1
+        3       1       1
+        """)
+        ts = msprime.load_text(
+            nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
+
+        self.assertEqual(ts.sample_size, 3)
+        self.assertEqual(ts.samples(), [2, 3, 4])
+        self.assertEqual(ts.num_nodes, 5)
+        self.assertEqual(ts.num_nodes, 5)
+        self.assertEqual(ts.num_sites, 4)
+        self.assertEqual(ts.num_mutations, 4)
+        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
+        t = next(ts.trees())
+        self.assertEqual(t.root, 0)
+        self.assertEqual(t.parent_dict, {1: 0, 2: 1, 3: 1, 4: 0})
+        H = list(ts.haplotypes())
+        self.assertEqual(H[0], "1001")
+        self.assertEqual(H[1], "0101")
+        self.assertEqual(H[2], "0010")
+        self.assertRaises(_msprime.LibraryError, list, ts.newick_trees())
+
+        tss = ts.simplify()
+        # We should have the same tree sequence just with canonicalised nodes.
+        self.assertEqual(tss.sample_size, 3)
+        self.assertEqual(tss.samples(), [0, 1, 2])
+        self.assertEqual(tss.num_nodes, 5)
+        self.assertEqual(tss.num_trees, 1)
+        self.assertEqual(tss.num_sites, 4)
+        self.assertEqual(tss.num_mutations, 4)
+        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
+        t = next(tss.trees())
+        self.assertEqual(t.root, 4)
+        self.assertEqual(t.parent_dict, {0: 3, 1: 3, 2: 4, 3: 4})
+        H = list(tss.haplotypes())
+        self.assertEqual(H[0], "1001")
+        self.assertEqual(H[1], "0101")
+        self.assertEqual(H[2], "0010")
+
+    def verify_permuted_nodes(self, ts):
+        """
+        Take the specified tree sequence and permute the nodes, verifying that we
+        get back a tree sequence with the correct properties.
+        """
+        # Mapping from the original nodes into nodes in the new tree sequence.
+        node_map = list(range(ts.num_nodes))
+        random.shuffle(node_map)
+        # Change the permutation so that the relative order of samples is maintained.
+        # Then, we should get back exactly the same tree sequence after simplify
+        # and haplotypes and variants are also equal.
+        samples = sorted(node_map[:ts.sample_size])
+        node_map = samples + node_map[ts.sample_size:]
+        permuted = permute_nodes(ts, node_map)
+        self.assertEqual(permuted.samples(), samples)
+        self.assertEqual(list(permuted.haplotypes()), list(ts.haplotypes()))
+        self.assertEqual(
+            [v.genotypes for v in permuted.variants(as_bytes=True)],
+            [v.genotypes for v in ts.variants(as_bytes=True)])
+        self.assertEqual(ts.num_trees, permuted.num_trees)
+        j = 0
+        for t1, t2 in zip(ts.trees(), permuted.trees()):
+            t1_dict = {node_map[k]: node_map[v] for k, v in t1.parent_dict.items()}
+            self.assertEqual(node_map[t1.root], t2.root)
+            self.assertEqual(t1_dict, t2.parent_dict)
+            for u1 in t1.nodes():
+                u2 = node_map[u1]
+                self.assertEqual(
+                    sorted([node_map[v] for v in t1.leaves(u1)]),
+                    sorted(list(t2.leaves(u2))))
+            j += 1
+        self.assertEqual(j, ts.num_trees)
+
+        # The simplified version of the permuted tree sequence should be in canonical
+        # form, and identical to the original.
+        simplified = permuted.simplify()
+        self.assertEqual(simplified.samples(), ts.samples())
+        self.assertEqual(list(simplified.nodes()), list(ts.nodes()))
+        self.assertEqual(list(simplified.edgesets()), list(ts.edgesets()))
+        self.assertEqual(list(simplified.sites()), list(ts.sites()))
+        self.assertEqual(list(simplified.haplotypes()), list(ts.haplotypes()))
+        self.assertEqual(
+            list(simplified.variants(as_bytes=True)), list(ts.variants(as_bytes=True)))
+
+    def test_single_tree_permuted_nodes(self):
+        ts = msprime.simulate(10,  mutation_rate=5, random_seed=self.random_seed)
+        self.verify_permuted_nodes(ts)
+
+    def test_binary_tree_sequence_permuted_nodes(self):
+        ts = msprime.simulate(
+            20, recombination_rate=5, mutation_rate=5, random_seed=self.random_seed)
+        self.verify_permuted_nodes(ts)
+
+    def test_nonbinary_tree_sequence_permuted_nodes(self):
+        demographic_events = [
+            msprime.SimpleBottleneck(time=1.0, proportion=0.95)]
+        ts = msprime.simulate(
+            20, recombination_rate=10, mutation_rate=5,
+            demographic_events=demographic_events, random_seed=self.random_seed)
+        found = False
+        for r in ts.records():
+            if len(r.children) > 2:
+                found = True
+        self.assertTrue(found)
+        self.verify_permuted_nodes(ts)
 
 
 class TestNonSampleExternalNodes(TopologyTestCase):

@@ -69,6 +69,10 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
     self->num_sites = tree_sequence_get_num_sites(tree_sequence);
     self->tree_sequence = tree_sequence;
     self->flags = flags;
+    ret = tree_sequence_get_sample_index_map(tree_sequence, &self->sample_index_map);
+    if (ret != 0) {
+        goto out;
+    }
 
     ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
     if (ret != 0) {
@@ -97,6 +101,7 @@ vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state
 {
     int ret = 0;
     leaf_list_node_t *w, *tail;
+    node_id_t sample_index;
     bool not_done;
     list_len_t j;
     char derived;
@@ -113,12 +118,13 @@ vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state
             not_done = true;
             while (not_done) {
                 assert(w != NULL);
-                assert(w->node < (node_id_t) self->sample_size);
-                if (genotypes[w->node] == derived) {
+                sample_index = self->sample_index_map[w->node];
+                assert(sample_index >= 0);
+                if (genotypes[sample_index] == derived) {
                     ret = MSP_ERR_INCONSISTENT_MUTATIONS;
                     goto out;
                 }
-                genotypes[w->node] = derived;
+                genotypes[sample_index] = derived;
                 not_done = w != tail;
                 w = w->next;
             }

@@ -182,7 +182,6 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
     size_t j;
     Py_ssize_t num_samples_local;
     node_id_t *samples_local = NULL;
-    uint32_t n = tree_sequence_get_sample_size(ts);
 
     num_samples_local = PyList_Size(py_samples);
     if (num_samples_local < 2) {
@@ -201,12 +200,12 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
             goto out;
         }
         samples_local[j] = (node_id_t) PyLong_AsLong(item);
-        if (samples_local[j] < 0) {
-            PyErr_SetString(PyExc_ValueError, "sample IDs must be >= 0");
+        if (samples_local[j] < 0 || samples_local[j] >= tree_sequence_get_num_nodes(ts)) {
+            PyErr_SetString(PyExc_ValueError, "node ID out of bounds");
             goto out;
         }
-        if (samples_local[j] >= n) {
-            PyErr_SetString(PyExc_ValueError, "sample ids must be < sample_size");
+        if (! tree_sequence_is_sample(ts, samples_local[j])) {
+            PyErr_SetString(PyExc_ValueError, "Specified node is not a sample");
             goto out;
         }
     }
@@ -3666,8 +3665,42 @@ out:
 }
 
 static PyObject *
-TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args,
-        PyObject *kwds)
+TreeSequence_get_samples(TreeSequence *self)
+{
+    PyObject *ret = NULL;
+    node_id_t *samples;
+    PyObject *py_samples = NULL;
+    PyObject *py_int = NULL;
+    size_t j, n;
+    int err;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    n = tree_sequence_get_sample_size(self->tree_sequence);
+    err = tree_sequence_get_samples(self->tree_sequence, &samples);
+    if (err != 0) {
+        handle_library_error(err);
+    }
+    py_samples = PyList_New(n);
+    if (py_samples == NULL) {
+        goto out;
+    }
+    for (j = 0; j < n; j++) {
+        py_int = Py_BuildValue("i", (int) samples[j]);
+        if (py_int == NULL) {
+            Py_DECREF(py_samples);
+            goto out;
+        }
+        PyList_SET_ITEM(py_samples, j, py_int);
+    }
+    ret = py_samples;
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_pairwise_diversity(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     PyObject *py_samples = NULL;
@@ -3831,6 +3864,8 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the number of unique nodes in the tree sequence." },
     {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
         "Returns the sample size" },
+    {"get_samples", (PyCFunction) TreeSequence_get_samples, METH_NOARGS,
+        "Returns the samples." },
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
