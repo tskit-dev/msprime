@@ -768,6 +768,7 @@ static int
 tree_sequence_init_edgesets(tree_sequence_t *self)
 {
     int ret = 0;
+    node_id_t u;
     size_t j, offset;
 
     offset = 0;
@@ -780,6 +781,12 @@ tree_sequence_init_edgesets(tree_sequence_t *self)
         }
         self->edgesets.children[j] = self->edgesets.children_mem + offset;
         offset += (size_t) self->edgesets.children_length[j];
+        /* Check that no sampled nodes are internal. */
+        u = self->edgesets.parent[j];
+        if (u >= 0 && self->nodes.flags[u] & MSP_NODE_IS_SAMPLE) {
+            ret = MSP_ERR_NODE_SAMPLE_INTERNAL;
+            goto out;
+        }
     }
 out:
     return ret;
@@ -2172,7 +2179,7 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         dims = fields[j].size;
         dataspace_id = H5Screate_simple(1, &dims, NULL);
         if (dataspace_id < 0) {
-            status = dataspace_id;
+            status = (herr_t) dataspace_id;
             goto out;
         }
         attr_id = H5Acreate(file_id, fields[j].name,
