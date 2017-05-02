@@ -768,6 +768,7 @@ static int
 tree_sequence_init_edgesets(tree_sequence_t *self)
 {
     int ret = 0;
+    node_id_t u;
     size_t j, offset;
 
     offset = 0;
@@ -780,6 +781,12 @@ tree_sequence_init_edgesets(tree_sequence_t *self)
         }
         self->edgesets.children[j] = self->edgesets.children_mem + offset;
         offset += (size_t) self->edgesets.children_length[j];
+        /* Check that no sampled nodes are internal. */
+        u = self->edgesets.parent[j];
+        if (u >= 0 && self->nodes.flags[u] & MSP_NODE_IS_SAMPLE) {
+            ret = MSP_ERR_NODE_SAMPLE_INTERNAL;
+            goto out;
+        }
     }
 out:
     return ret;
@@ -1079,7 +1086,6 @@ tree_sequence_build_indexes(tree_sequence_t *self)
 {
     int ret = MSP_ERR_GENERIC;
     size_t j;
-    node_id_t u;
     double x;
     index_sort_t *sort_buff = NULL;
 
@@ -1091,12 +1097,6 @@ tree_sequence_build_indexes(tree_sequence_t *self)
     /* sort by left and increasing time to give us the order in which
      * records should be inserted */
     for (j = 0; j < self->edgesets.num_records; j++) {
-        /* Check that no sampled nodes are internal. */
-        u = self->edgesets.parent[j];
-        if (u >= 0 && self->nodes.flags[u] & MSP_NODE_IS_SAMPLE) {
-            ret = MSP_ERR_NODE_SAMPLE_INTERNAL;
-            goto out;
-        }
         sort_buff[j].index = (node_id_t ) j;
         x = self->edgesets.left[j];
         sort_buff[j].value = x;

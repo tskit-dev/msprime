@@ -1451,9 +1451,8 @@ class TestWithVisuals(TopologyTestCase):
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
 
-    def test_sampled_node(self):
-        # currently internal nodes can't be samples
-        # but this one doesn't error
+    def test_internal_sampled_node_simple_case(self):
+        # Internal nodes cannot be samples.
         nodes = six.StringIO("""\
         id      is_sample   time
         0       1           0
@@ -1464,30 +1463,10 @@ class TestWithVisuals(TopologyTestCase):
         left    right   parent  children
         0.0     1.0     2       0,1
         """)
-        self.assertRaises(_msprime.LibraryError, msprime.load_text,
-                          nodes=nodes, edgesets=edgesets)
-        # ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
-        # self.verify_simplify_topology(ts, [0, 1, 2])
+        self.assertRaises(
+            _msprime.LibraryError, msprime.load_text, nodes=nodes, edgesets=edgesets)
 
-    def test_just_sampled_node(self):
-        # currently internal nodes can't be samples
-        # but this one loads OK, just can't be simplified
-        nodes = six.StringIO("""\
-        id      is_sample   time
-        0       0           0
-        1       1           0.1
-        2       1           0.2
-        """)
-        edgesets = six.StringIO("""\
-        left    right   parent  children
-        0.0     1.0     2       0,1
-        """)
-        self.assertRaises(_msprime.LibraryError, msprime.load_text,
-                          nodes=nodes, edgesets=edgesets)
-        # ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
-        # self.assertRaises(_msprime.LibraryError, ts.simplify)
-
-    def test_simplify_sampled_node(self):
+    def test_internal_sampled_node(self):
         # 1.0             7
         # 0.7            / \                      8                     6
         #               /   \                    / \                   / \
@@ -1522,10 +1501,5 @@ class TestWithVisuals(TopologyTestCase):
         0.2     0.8     8       3,5
         0.0     0.2     7       0,5
         """)
-        self.assertRaises(_msprime.LibraryError, msprime.load_text,
-                          nodes=nodes, edgesets=edgesets)
-        # ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
-        # self.assertRaises(_msprime.LibraryError, ts.simplify)
-        # otherwise simplify fails with
-        #   python3: lib/tree_sequence.c:1036: tree_sequence_load_records:
-        #             Assertion `cr->node > last_node' failed.
+        self.assertRaises(
+            _msprime.LibraryError, msprime.load_text, nodes=nodes, edgesets=edgesets)
