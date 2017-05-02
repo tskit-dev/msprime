@@ -2255,6 +2255,9 @@ class TestVcfConverter(LowLevelTestCase):
         for bad_type in [None, "", [], {}]:
             self.assertRaises(
                 TypeError, _msprime.VcfConverter, ts, ploidy=bad_type)
+        for bad_type in [None, 0, [], {}]:
+            self.assertRaises(
+                TypeError, _msprime.VcfConverter, ts, contig_id=bad_type)
         converter = _msprime.VcfConverter(ts)
         before = converter.get_header() + "".join(converter)
         self.assertGreater(len(before), 0)
@@ -2268,8 +2271,24 @@ class TestVcfConverter(LowLevelTestCase):
         ts = self.get_tree_sequence(sample_size=10)
         for bad_ploidy in [-1, 3, 4, 11, 20, 10**6]:
             self.assertRaises(
-                _msprime.LibraryError, _msprime.VcfConverter, ts,
-                bad_ploidy)
+                _msprime.LibraryError, _msprime.VcfConverter, ts, ploidy=bad_ploidy)
+        # 0 is caught as a ValueError before getting to the library code.
+        self.assertRaises(ValueError, _msprime.VcfConverter, ts, ploidy=0)
+
+    def test_contig_id(self):
+        ts = self.get_tree_sequence(sample_size=10)
+        self.assertRaises(ValueError, _msprime.VcfConverter, ts, contig_id="")
+        for contig_id in ["1", "chr1", 8192 * "x"]:
+            converter = _msprime.VcfConverter(ts, contig_id=contig_id)
+            for row in converter:
+                self.assertTrue(row.startswith(contig_id))
+        # Try to be nasty and break things.
+        s = 1024 * "1234"
+        converter = _msprime.VcfConverter(ts, contig_id=s)
+        del s
+        del ts
+        for row in converter:
+            self.assertTrue(row.startswith("1234"))
 
     def test_positions(self):
         # Make sure we successfully discretise the positions when

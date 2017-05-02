@@ -1181,7 +1181,7 @@ verify_vcf_converter(tree_sequence_t *ts, unsigned int ploidy)
     vcf_converter_t vc;
     unsigned int num_variants;
 
-    ret = vcf_converter_alloc(&vc, ts, ploidy);
+    ret = vcf_converter_alloc(&vc, ts, ploidy, "chr1234");
     CU_ASSERT_FATAL(ret ==  0);
     vcf_converter_print_state(&vc, _devnull);
     ret = vcf_converter_get_header(&vc, &str);
@@ -1189,7 +1189,7 @@ verify_vcf_converter(tree_sequence_t *ts, unsigned int ploidy)
     CU_ASSERT_NSTRING_EQUAL("##", str, 2);
     num_variants = 0;
     while ((ret = vcf_converter_next(&vc, &str)) == 1) {
-        CU_ASSERT_NSTRING_EQUAL("1\t", str, 2);
+        CU_ASSERT_NSTRING_EQUAL("chr1234\t", str, 2);
         num_variants++;
     }
     CU_ASSERT_EQUAL(ret, 0);
@@ -1209,11 +1209,11 @@ test_vcf(void)
     CU_ASSERT_FATAL(ts != NULL);
     CU_ASSERT_FATAL(vc != NULL);
 
-    ret = vcf_converter_alloc(vc, ts, 0);
+    ret = vcf_converter_alloc(vc, ts, 0, "1");
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = vcf_converter_alloc(vc, ts, 3);
+    ret = vcf_converter_alloc(vc, ts, 3, "1");
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = vcf_converter_alloc(vc, ts, 11);
+    ret = vcf_converter_alloc(vc, ts, 11, "1");
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     for (ploidy = 1; ploidy < 3; ploidy++) {
@@ -1238,7 +1238,7 @@ test_vcf_no_mutations(void)
     CU_ASSERT_FATAL(vc != NULL);
     CU_ASSERT_EQUAL_FATAL(tree_sequence_get_num_mutations(ts), 0);
 
-    ret = vcf_converter_alloc(vc, ts, 1);
+    ret = vcf_converter_alloc(vc, ts, 1, "1");
     CU_ASSERT_FATAL(ret ==  0);
     vcf_converter_print_state(vc, _devnull);
     ret = vcf_converter_get_header(vc, &str);

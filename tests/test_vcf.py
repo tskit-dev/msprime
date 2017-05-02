@@ -46,20 +46,23 @@ test_data = []
 def setUp():
     Datum = collections.namedtuple(
         "Datum",
-        ["tree_sequence", "ploidy", "vcf_file", "sample_names"])
+        ["tree_sequence", "ploidy", "contig_id", "vcf_file", "sample_names"])
     L = 100
     for ploidy in [1, 2, 3, 5]:
-        for n in [2, 10]:
-            for rho in [0, 0.5]:
-                for mu in [0, 1.0]:
-                    ts = msprime.simulate(
-                        n * ploidy, length=L, recombination_rate=rho, mutation_rate=mu)
-                    fd, file_name = tempfile.mkstemp(prefix="msprime_vcf_")
-                    os.close(fd)
-                    with open(file_name, "w") as f:
-                        ts.write_vcf(f, ploidy)
-                    sample_names = ["msp_{}".format(j) for j in range(n)]
-                    test_data.append(Datum(ts, ploidy, file_name, sample_names))
+        for contig_id in ["1", "x" * 8]:
+            for n in [2, 10]:
+                for rho in [0, 0.5]:
+                    for mu in [0, 1.0]:
+                        ts = msprime.simulate(
+                            n * ploidy, length=L, recombination_rate=rho,
+                            mutation_rate=mu)
+                        fd, file_name = tempfile.mkstemp(prefix="msprime_vcf_")
+                        os.close(fd)
+                        with open(file_name, "w") as f:
+                            ts.write_vcf(f, ploidy, contig_id)
+                        sample_names = ["msp_{}".format(j) for j in range(n)]
+                        test_data.append(
+                            Datum(ts, ploidy, contig_id, file_name, sample_names))
 
 
 def tearDown():
@@ -67,7 +70,7 @@ def tearDown():
         os.unlink(datum.vcf_file)
 
 
-def write_vcf(tree_sequence, output, ploidy):
+def write_vcf(tree_sequence, output, ploidy, contig_id):
     """
     Writes a VCF using the sample algorithm as the low level code.
     """
@@ -91,7 +94,7 @@ def write_vcf(tree_sequence, output, ploidy):
     print(
         '##FILTER=<ID=PASS,Description="All filters passed">',
         file=output)
-    print("##contig=<ID=1,length={}>".format(contig_length), file=output)
+    print("##contig=<ID={},length={}>".format(contig_id, contig_length), file=output)
     print(
         '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
         file=output)
@@ -104,7 +107,7 @@ def write_vcf(tree_sequence, output, ploidy):
     for variant in tree_sequence.variants():
         pos = positions[variant.index]
         print(
-            "1", pos, ".", "A", "T", ".", "PASS", ".", "GT",
+            contig_id, pos, ".", "A", "T", ".", "PASS", ".", "GT",
             sep="\t", end="", file=output)
         for j in range(n):
             genotype = "|".join(
@@ -123,7 +126,7 @@ class TestEquality(unittest.TestCase):
     def test_equal(self):
         for datum in test_data:
             with tempfile.TemporaryFile("w+") as f:
-                write_vcf(datum.tree_sequence, f, datum.ploidy)
+                write_vcf(datum.tree_sequence, f, datum.ploidy, datum.contig_id)
                 f.seek(0)
                 vcf1 = f.read()
             with open(datum.vcf_file) as f:
@@ -139,8 +142,8 @@ class TestHeaderParsers(unittest.TestCase):
         for datum in test_data:
             reader = vcf.Reader(filename=datum.vcf_file)
             self.assertEqual(len(reader.contigs), 1)
-            contig = reader.contigs["1"]
-            self.assertEqual(contig.id, "1")
+            contig = reader.contigs[datum.contig_id]
+            self.assertEqual(contig.id, datum.contig_id)
             self.assertGreater(contig.length, 0)
             self.assertEqual(len(reader.alts), 0)
             self.assertEqual(len(reader.filters), 1)
@@ -160,7 +163,7 @@ class TestHeaderParsers(unittest.TestCase):
             header = bcf_file.header
             self.assertEqual(len(header.contigs), 1)
             contig = header.contigs[0]
-            self.assertEqual(contig.name, "1")
+            self.assertEqual(contig.name, datum.contig_id)
             self.assertGreater(contig.length, 0)
             self.assertEqual(len(header.filters), 1)
             p = header.filters["PASS"]
