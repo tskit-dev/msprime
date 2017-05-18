@@ -978,6 +978,21 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             self.verify_tracked_leaves(ts)
 
+    def verify_leaves(self, ts):
+        # We should get the same list of leaves if we use the low-level
+        # leaf lists or a simple traversal.
+        leaves1 = []
+        for t in ts.trees(leaf_lists=False):
+            leaves1.append(list(t.leaves(t.root)))
+        leaves2 = []
+        for t in ts.trees(leaf_lists=True):
+            leaves2.append(list(t.leaves(t.root)))
+        self.assertEqual(leaves1, leaves2)
+
+    def test_leaves(self):
+        for ts in get_example_tree_sequences():
+            self.verify_leaves(ts)
+
     def test_trees_interface(self):
         ts = list(get_example_tree_sequences())[0]
         # The defaults should make sense and count leaves.
