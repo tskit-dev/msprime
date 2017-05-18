@@ -17,9 +17,13 @@ import numpy as np
 import statsmodels.api as sm
 import matplotlib
 
+from six.moves import StringIO
+
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
 from matplotlib import pyplot
+
+import msprime
 
 
 class FenwickTree(object):
@@ -743,15 +747,22 @@ class Simulator(object):
                     c += 1
             assert c == self.n - 1
 
-    def write_records(self, out):
+    def write_text(self, nodes_file, edgesets_file):
         """
         Writes the records out as text.
         """
-        for left, right, u, children, time in self.C:
+        num_nodes = max(r[2] for r in self.C) + 1
+        time = [0 for _ in range(num_nodes)]
+        print("is_sample\ttime", file=nodes_file)
+        print("left\tright\tparent\tchildren", file=edgesets_file)
+        for left, right, u, children, t in self.C:
+            time[u] = t
             print(
                 left, right, u, ",".join(str(c) for c in sorted(children)),
-                time, 0, sep="\t", file=out)
-
+                sep="\t", file=edgesets_file)
+        for u in range(num_nodes):
+            print(
+                int(u < self.n), time[u], sep="\t", file=nodes_file)
 
 class Tree(object):
     """
@@ -929,25 +940,15 @@ def count_leaves(l, r, u, c, t, S):
         yield pi, beta
 
 class LeafListNode(object):
-    def __init__(self, value, next=None):
+    def __init__(self, value):
         self.value = value
-        self.next = next
+        self.next = None
+        self.prev = None
 
     def __str__(self):
+        prev = -1 if self.prev is None else self.prev.value
         next = -1 if self.next is None else self.next.value
-        return "{}->{}".format(self.value, next)
-
-
-def propagate_leaf_loss(u, pi, xi, head, tail):
-    # Invalidate the head and tail pointers above u that depend
-    # on this node.
-    non_null = [v for v in xi[u] if head[v] is not None]
-    num_children = len(non_null)
-    print("\tu = ", u, "non_null = ", non_null)
-    for j in range(1, num_children):
-        tail[non_null[j - 1]].next = None
-    head[u] = None
-    tail[u] = None
+        return "{}->{}->{}".format(prev, self.value, next)
 
 
 def update_leaf_lists(u, pi, xi, head, tail):
@@ -961,6 +962,7 @@ def update_leaf_lists(u, pi, xi, head, tail):
                     tail[u] = tail[v]
                 else:
                     tail[u].next = head[v]
+                    head[v].prev = tail[u]
                     tail[u] = tail[v]
         u = pi[u]
 
@@ -1042,6 +1044,22 @@ def check_consistency(n, pi, xi, head, tail, S):
                 print("ERROR")
                 print(list_leaves)
                 print(node_leaves)
+            # check reversed traversal
+            list_leaves = []
+            x = tail[u]
+            while True:
+                if x.value in list_leaves:
+                    print("ERROR!!!", x.value, "already in leaf list at index",
+                            list_leaves.index(x.value), "len = ", len(list_leaves))
+                    break
+                list_leaves.append(x.value)
+                if x == head[u]:
+                    break
+                x = x.prev
+            if list_leaves != list(reversed(node_leaves)):
+                print("ERROR")
+                print(list_leaves)
+                print(node_leaves)
         # assert list_leaves == node_leaves
         # print(list_leaves)
         # print(list_leaves == node_leaves)
@@ -1073,6 +1091,7 @@ def nodes(root, xi):
         stack.extend(reversed(xi[u]))
         yield u
 
+
 def leaves(u, xi):
     """
     Returns an iterator over the leaves below the specified node.
@@ -1082,39 +1101,68 @@ def leaves(u, xi):
             yield v
 
 
+def leaf_list(u, head, tail, forwards=True):
+    """
+    Returns the list of leaves for the specified node.
+    """
+    ret = []
+    if forwards:
+        v = head[u]
+        while True:
+            ret.append(v.value)
+            if v == tail[u]:
+                break
+            v = v.next
+    else:
+        v = tail[u]
+        while True:
+            ret.append(v.value)
+            if v == head[u]:
+                break
+            v = v.prev
+    return ret
+
+
 def run_trees(args):
     process_trees(args.history_file)
 
 
-def process_trees(records_file):
-    # Read in the records
+def process_trees(ts):
+    # Process the specified msprime tree sequence using local algorithms.
     l = []
     r = []
     u = []
     c = []
     t = []
-    with open(records_file) as f:
-        for line in f:
-            toks = line.split()
-            l.append(float(toks[0]))
-            r.append(float(toks[1]))
-            u.append(int(toks[2]))
-            children = list(map(int, toks[3].split(",")))
-            c.append(children)
-            t.append(float(toks[4]))
+    for e in ts.edgesets():
+        l.append(e.left)
+        r.append(e.right)
+        u.append(e.parent)
+        c.append(e.children)
+        t.append(ts.time(e.parent))
     # N = len(l)
     # print("Trees:")
     # for pi in generate_trees(l, r, u, c, t):
     #     print(pi)
 
-    n = min(u)
-    # S = set(range(n))
-    S = set([1, 2, 3])
+    n = ts.sample_size
+    S = set(range(n))
+    # S = set([1, 2, 3])
     # # print("Counts:")
     # # for pi, beta in count_leaves(l, r, u, c, t, S):
     # #     print("\t", beta)
     # print("Counts:")
+    all_leaves = [list(tree.leaves(tree.root)) for tree in ts.trees()]
+    j = 0
     for pi, xi, head, tail in leaf_sets(l, r, u, c, t, S):
+        root = 0
+        while pi[root] != -1:
+            root = pi[root]
+        other_leaves = leaf_list(root, head, tail)
+        assert all_leaves[j] == other_leaves
+        other_leaves = leaf_list(root, head, tail, forwards=False)
+        assert list(reversed(all_leaves[j])) == other_leaves
+        j += 1
         check_consistency(n, pi, xi, head, tail, S)
         # print(pi)
         # print(xi)
@@ -1149,11 +1197,13 @@ def run_simulate(args):
         args.migration_matrix_element_change,
         args.bottleneck, 10000)
     s.simulate()
-    # TEMP
-    with tempfile.NamedTemporaryFile(prefix="msp_alg") as f:
-        s.write_records(f)
-        f.flush()
-        process_trees(f.name)
+    nodes_file = StringIO()
+    edgesets_file = StringIO()
+    s.write_text(nodes_file, edgesets_file)
+    nodes_file.seek(0)
+    edgesets_file.seek(0)
+    ts = msprime.load_text(nodes_file, edgesets_file)
+    process_trees(ts)
 
 def add_simulator_arguments(parser):
     parser.add_argument("sample_size", type=int)
