@@ -2282,7 +2282,6 @@ class TreeSequence(object):
                     "elements of leaf_sets cannot contain repeated elements.")
             for u in U:
                 assert(type(u) is int)
-                assert(u >= 0 and u < self.num_nodes)
                 assert(self.node(u).is_sample())
         num_windows = len(windows) - 1
         if windows[0] != 0.0:
@@ -2296,10 +2295,10 @@ class TreeSequence(object):
         # initialize
         num_leaf_sets = len(leaf_sets)
         n_out = len(weight_fun([0 for a in range(num_leaf_sets)]))
-        # print("leaf_sets:", leaf_sets)
-        # print("n_out:",n_out)
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         L = [0.0 for j in range(n_out)]
+        # print("leaf_sets:", leaf_sets)
+        # print("n_out:",n_out)
         N = self.num_nodes
         X = [[int(u in a) for a in leaf_sets] for u in range(N)]
         # we will essentially construct the tree
