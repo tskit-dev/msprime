@@ -340,13 +340,18 @@ class BranchStatsTestCase(unittest.TestCase):
 
     def test_errors(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=10)
-        n = ts.num_nodes
         self.assertRaises(AssertionError,
                           ts.get_mean_tmrca, [[0], [1.12]], [0, ts.sequence_length])
         self.assertRaises(AssertionError,
-                          ts.get_mean_tmrca, [[n], [n+1]], [0, ts.sequence_length])
-        self.assertRaises(AssertionError,
                           ts.get_mean_tmrca, [[0], [11]], [0, ts.sequence_length])
+        self.assertRaises(ValueError,
+                          ts.get_mean_tmrca, [[0], [1]], [0, ts.sequence_length/2])
+        self.assertRaises(ValueError,
+                          ts.get_mean_tmrca, [[0], [1]], [ts.sequence_length/2,
+                                                          ts.sequence_length])
+        self.assertRaises(ValueError,
+                          ts.get_mean_tmrca, [[0], [1]], [0.0, 2.0, 1.0,
+                                                          ts.sequence_length])
 
     def test_pairwise_diversity(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
