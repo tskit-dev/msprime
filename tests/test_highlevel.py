@@ -1317,6 +1317,27 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             self.assertEqual(convert(node.time), splits[1])
             self.assertEqual(str(node.population), splits[2])
 
+    def verify_samples_format(self, ts, samples_file, precision):
+        """
+        Verifies that the samples we output have the correct form:
+        same as nodes, but with first column equal to 'id'.
+        """
+        def convert(v):
+            return "{:.{}f}".format(v, precision)
+        output_nodes = samples_file.read().splitlines()
+        self.assertEqual(len(output_nodes) - 1, len(ts.samples()))
+        self.assertEqual(
+            list(output_nodes[0].split()),
+            ["id", "is_sample", "time", "population"])
+        sample_nodes = [ts.node(x) for x in ts.samples()]
+        for node_id, node, line in zip(sample_nodes, ts.sample_nodes(),
+                                       output_nodes[1:]):
+            splits = line.split("\t")
+            self.assertEqual(str(node_id), splits[0])
+            self.assertEqual(str(node.is_sample()), splits[1])
+            self.assertEqual(convert(node.time), splits[2])
+            self.assertEqual(str(node.population), splits[3])
+
     def verify_edgesets_format(self, ts, edgesets_file, precision):
         """
         Verifies that the edgesets we output have the correct form.
@@ -1375,13 +1396,16 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
                 edgesets_file = six.StringIO()
                 sites_file = six.StringIO()
                 mutations_file = six.StringIO()
+                samples_file = six.StringIO()
                 ts.dump_text(
                     nodes=nodes_file, edgesets=edgesets_file, sites=sites_file,
-                    mutations=mutations_file, precision=precision)
+                    mutations=mutations_file, samples=samples_file,
+                    precision=precision)
                 nodes_file.seek(0)
                 edgesets_file.seek(0)
                 sites_file.seek(0)
                 mutations_file.seek(0)
+                samples_file.seek(0)
                 self.verify_nodes_format(ts, nodes_file, precision)
                 self.verify_edgesets_format(ts, edgesets_file, precision)
                 self.verify_sites_format(ts, sites_file, precision)

@@ -1742,10 +1742,22 @@ class TreeSequence(object):
             mutations=mutations)
 
     def dump_text(
-            self, nodes=None, edgesets=None, sites=None, mutations=None, precision=6):
-        # TODO document.
+            self, nodes=None, edgesets=None, sites=None, mutations=None, samples=None,
+            precision=6):
+        """
+        Writes a text representation of the tables underlying the tree sequence
+        to the specified connections.
 
-        # Nodes
+        :param stream nodes: The file-like object (having a .write() method) to write
+            the NodeTable to.
+        :param stream edgesets: The file-like object to write the EdgesetTable to.
+        :param stream sites: The file-like object to write the SiteTable to.
+        :param stream mutations: The file-like object to write the MutationTable to.
+        :param stream samples: The file-like object to write the subset of the NodeTable
+            describing the samples to, with an extra column, `id`.
+        :param int precision: The number of digits of precision.
+        """
+
         if nodes is not None:
             print("is_sample", "time", "population", sep="\t", file=nodes)
             for node in self.nodes():
@@ -1771,7 +1783,6 @@ class TreeSequence(object):
                 print(row, file=edgesets)
 
         if sites is not None:
-            # Sites
             print("position", "ancestral_state", sep="\t", file=sites)
             for site in self.sites():
                 row = (
@@ -1792,6 +1803,19 @@ class TreeSequence(object):
                             site=mutation.site, node=mutation.node,
                             derived_state=mutation.derived_state)
                     print(row, file=mutations)
+
+        if samples is not None:
+            print("id", "is_sample", "time", "population", sep="\t", file=samples)
+            for node_id in self.samples():
+                node = self.node(node_id)
+                row = (
+                    "{node_id:d}\t"
+                    "{is_sample:d}\t"
+                    "{time:.{precision}f}\t"
+                    "{population:d}\t").format(
+                        precision=precision, is_sample=node.is_sample(), time=node.time,
+                        population=node.population, node_id=node_id)
+                print(row, file=samples)
 
     @property
     def sample_size(self):
