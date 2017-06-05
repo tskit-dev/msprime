@@ -1468,6 +1468,12 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/edgesets/children", 0, self->edgesets.total_children_length},
         {"/edgesets/indexes/insertion_order", 1, self->edgesets.num_records},
         {"/edgesets/indexes/removal_order", 1, self->edgesets.num_records},
+        {"/migrations/left", 1, self->migrations.num_records},
+        {"/migrations/right", 1, self->migrations.num_records},
+        {"/migrations/node", 1, self->migrations.num_records},
+        {"/migrations/source", 1, self->migrations.num_records},
+        {"/migrations/dest", 1, self->migrations.num_records},
+        {"/migrations/time", 1, self->migrations.num_records},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
@@ -1589,6 +1595,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/nodes/name", &name_length},
         {"/edgesets/left", &self->edgesets.num_records},
         {"/edgesets/children", &self->edgesets.total_children_length},
+        {"/migrations/left", &self->migrations.num_records},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_read);
     size_t j;
@@ -1680,6 +1687,12 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
             self->edgesets.indexes.insertion_order},
         {"/edgesets/indexes/removal_order", H5T_NATIVE_INT32,
             self->edgesets.indexes.removal_order},
+        {"/migrations/left", H5T_NATIVE_DOUBLE, self->migrations.left},
+        {"/migrations/right", H5T_NATIVE_DOUBLE, self->migrations.right},
+        {"/migrations/node", H5T_NATIVE_INT32, self->migrations.node},
+        {"/migrations/source", H5T_NATIVE_INT32, self->migrations.source},
+        {"/migrations/dest", H5T_NATIVE_INT32, self->migrations.dest},
+        {"/migrations/time", H5T_NATIVE_DOUBLE, self->migrations.time},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
     size_t j;
@@ -1940,6 +1953,24 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/mutations/derived_state_length",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->mutations.num_records, self->mutations.derived_state_length},
+        {"/migrations/left",
+            H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
+            self->migrations.num_records, self->migrations.left},
+        {"/migrations/right",
+            H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
+            self->migrations.num_records, self->migrations.right},
+        {"/migrations/time",
+            H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE,
+            self->migrations.num_records, self->migrations.time},
+        {"/migrations/node",
+            H5T_STD_I32LE, H5T_NATIVE_INT32,
+            self->migrations.num_records, self->migrations.node},
+        {"/migrations/source",
+            H5T_STD_I32LE, H5T_NATIVE_INT32,
+            self->migrations.num_records, self->migrations.source},
+        {"/migrations/dest",
+            H5T_STD_I32LE, H5T_NATIVE_INT32,
+            self->migrations.num_records, self->migrations.dest},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
     struct _hdf5_group_write {

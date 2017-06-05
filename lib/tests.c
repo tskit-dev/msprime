@@ -5693,8 +5693,7 @@ test_save_hdf5(void)
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = tree_sequence_load(&ts2, _tmp_file_name, MSP_LOAD_EXTENDED_CHECKS);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            /* FIXME storing migrations */
-            verify_tree_sequences_equal(ts1, &ts2, false, true, true);
+            verify_tree_sequences_equal(ts1, &ts2, true, true, true);
             tree_sequence_print_state(&ts2, _devnull);
             verify_hapgen(&ts2);
             verify_vargen(&ts2);
@@ -5850,8 +5849,7 @@ test_dump_tables_hdf5(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load(&ts3, _tmp_file_name, MSP_LOAD_EXTENDED_CHECKS);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        /* FIXME storing migrations */
-        verify_tree_sequences_equal(ts1, &ts3, false, true, true);
+        verify_tree_sequences_equal(ts1, &ts3, true, true, true);
         tree_sequence_print_state(&ts2, _devnull);
 
         tree_sequence_free(&ts2);

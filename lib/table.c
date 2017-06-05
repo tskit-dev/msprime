@@ -970,7 +970,7 @@ migration_table_print_state(migration_table_t *self, FILE *out)
     fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tleft\tright\tnode\tsource\tdest\tpopulation\n");
+    fprintf(out, "index\tleft\tright\tnode\tsource\tdest\ttime\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
                 self->right[j], (int) self->node[j], (int) self->source[j],
