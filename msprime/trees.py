@@ -1819,7 +1819,7 @@ class TreeSequence(object):
                 "{node_id:d}\t"
                 "{is_sample:d}\t"
                 "{time:.{precision}f}\t"
-                "{population:d}\t").format(
+                "{population:d}").format(
                     precision=precision, is_sample=node.is_sample(), time=node.time,
                     population=node.population, node_id=node_id)
             print(row, file=samples)
