@@ -1330,7 +1330,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             list(output_nodes[0].split()),
             ["id", "is_sample", "time", "population"])
         sample_nodes = [ts.node(x) for x in ts.samples()]
-        for node_id, node, line in zip(sample_nodes, ts.sample_nodes(),
+        for node_id, node, line in zip(ts.samples(), sample_nodes,
                                        output_nodes[1:]):
             splits = line.split("\t")
             self.assertEqual(str(node_id), splits[0])
@@ -1396,20 +1396,25 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
                 edgesets_file = six.StringIO()
                 sites_file = six.StringIO()
                 mutations_file = six.StringIO()
-                samples_file = six.StringIO()
                 ts.dump_text(
                     nodes=nodes_file, edgesets=edgesets_file, sites=sites_file,
-                    mutations=mutations_file, samples=samples_file,
-                    precision=precision)
+                    mutations=mutations_file, precision=precision)
                 nodes_file.seek(0)
                 edgesets_file.seek(0)
                 sites_file.seek(0)
                 mutations_file.seek(0)
-                samples_file.seek(0)
                 self.verify_nodes_format(ts, nodes_file, precision)
                 self.verify_edgesets_format(ts, edgesets_file, precision)
                 self.verify_sites_format(ts, sites_file, precision)
                 self.verify_mutations_format(ts, mutations_file, precision)
+
+    def test_dump_samples_text(self):
+        for ts in get_example_tree_sequences():
+            for precision in [2, 7]:
+                samples_file = six.StringIO()
+                ts.dump_samples_text(samples_file, precision=precision)
+                samples_file.seek(0)
+                self.verify_samples_format(ts, samples_file, precision)
 
     def verify_approximate_equality(self, ts1, ts2):
         """
