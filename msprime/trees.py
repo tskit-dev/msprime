@@ -1742,8 +1742,7 @@ class TreeSequence(object):
             mutations=mutations)
 
     def dump_text(
-            self, nodes=None, edgesets=None, sites=None, mutations=None, samples=None,
-            precision=6):
+            self, nodes=None, edgesets=None, sites=None, mutations=None, precision=6):
         """
         Writes a text representation of the tables underlying the tree sequence
         to the specified connections.
