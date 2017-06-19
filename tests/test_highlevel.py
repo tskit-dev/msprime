@@ -1317,6 +1317,27 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             self.assertEqual(convert(node.time), splits[1])
             self.assertEqual(str(node.population), splits[2])
 
+    def verify_samples_format(self, ts, samples_file, precision):
+        """
+        Verifies that the samples we output have the correct form:
+        same as nodes, but with first column equal to 'id'.
+        """
+        def convert(v):
+            return "{:.{}f}".format(v, precision)
+        output_nodes = samples_file.read().splitlines()
+        self.assertEqual(len(output_nodes) - 1, len(ts.samples()))
+        self.assertEqual(
+            list(output_nodes[0].split()),
+            ["id", "is_sample", "time", "population"])
+        sample_nodes = [ts.node(x) for x in ts.samples()]
+        for node_id, node, line in zip(ts.samples(), sample_nodes,
+                                       output_nodes[1:]):
+            splits = line.split("\t")
+            self.assertEqual(str(node_id), splits[0])
+            self.assertEqual(str(node.is_sample()), splits[1])
+            self.assertEqual(convert(node.time), splits[2])
+            self.assertEqual(str(node.population), splits[3])
+
     def verify_edgesets_format(self, ts, edgesets_file, precision):
         """
         Verifies that the edgesets we output have the correct form.
@@ -1386,6 +1407,14 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
                 self.verify_edgesets_format(ts, edgesets_file, precision)
                 self.verify_sites_format(ts, sites_file, precision)
                 self.verify_mutations_format(ts, mutations_file, precision)
+
+    def test_dump_samples_text(self):
+        for ts in get_example_tree_sequences():
+            for precision in [2, 7]:
+                samples_file = six.StringIO()
+                ts.dump_samples_text(samples_file, precision=precision)
+                samples_file.seek(0)
+                self.verify_samples_format(ts, samples_file, precision)
 
     def verify_approximate_equality(self, ts1, ts2):
         """
