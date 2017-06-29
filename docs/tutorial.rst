@@ -208,7 +208,7 @@ which returns the number of leaves underneath a particular node.
 For example,::
 
     >>> for tree in tree_sequence.trees():
-    ...    for position, node in tree.mutations():
+    ...    for mutation in tree.mutations():
     ...        print("Mutation @ position {} has frequency {}".format(
     ...            mutation.position,
     ...            tree.get_num_leaves(mutation.node) / tree.get_sample_size()))
