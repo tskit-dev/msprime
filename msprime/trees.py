@@ -2199,7 +2199,7 @@ class TreeSequence(object):
             leaves = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(leaves)
 
-    def get_mean_tmrca(self, leaf_sets, windows):
+    def mean_pairwise_tmrca(self, leaf_sets, windows):
         """
         Finds the mean time to most recent common ancestor between pairs of samples
         from each group of leaves and in each window. Returns the upper triangle

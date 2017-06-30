@@ -279,7 +279,7 @@ class BranchStatsTestCase(unittest.TestCase):
              random.sample(ts.samples(), 2),
              random.sample(ts.samples(), 1)]
         windows = [0.0, ts.sequence_length/2, ts.sequence_length]
-        ts_values = ts.get_mean_tmrca(A, windows)
+        ts_values = ts.mean_pairwise_tmrca(A, windows)
         self.assertListEqual([len(x) for x in ts_values], [6, 6])
         assert(len(A[2]) == 1)
         self.assertListEqual([x[5] for x in ts_values], [0.0, 0.0])
@@ -341,16 +341,16 @@ class BranchStatsTestCase(unittest.TestCase):
     def test_errors(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=10)
         self.assertRaises(AssertionError,
-                          ts.get_mean_tmrca, [[0], [1.12]], [0, ts.sequence_length])
+                          ts.mean_pairwise_tmrca, [[0], [1.12]], [0, ts.sequence_length])
         self.assertRaises(AssertionError,
-                          ts.get_mean_tmrca, [[0], [11]], [0, ts.sequence_length])
+                          ts.mean_pairwise_tmrca, [[0], [11]], [0, ts.sequence_length])
         self.assertRaises(ValueError,
-                          ts.get_mean_tmrca, [[0], [1]], [0, ts.sequence_length/2])
+                          ts.mean_pairwise_tmrca, [[0], [1]], [0, ts.sequence_length/2])
         self.assertRaises(ValueError,
-                          ts.get_mean_tmrca, [[0], [1]], [ts.sequence_length/2,
+                          ts.mean_pairwise_tmrca, [[0], [1]], [ts.sequence_length/2,
                                                           ts.sequence_length])
         self.assertRaises(ValueError,
-                          ts.get_mean_tmrca, [[0], [1]], [0.0, 2.0, 1.0,
+                          ts.mean_pairwise_tmrca, [[0], [1]], [0.0, 2.0, 1.0,
                                                           ts.sequence_length])
 
     def test_pairwise_diversity(self):
