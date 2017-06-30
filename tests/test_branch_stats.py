@@ -305,7 +305,7 @@ class BranchStatsTestCase(unittest.TestCase):
         self.assertListEqual([len(x) for x in ts_values], [6, 6])
         assert(len(A[2]) == 1)
         self.assertListEqual([x[5] for x in ts_values], [0.0, 0.0])
-        here_values = [[branch_length_Y(ts, A[i], A[j], begin=windows[k],
+        here_values = [[branch_length_Y(ts, A[j], A[i], A[i], begin=windows[k],
                                                 end=windows[k+1])
                         for i in range(len(A)) for j in range(i, len(A))]
                        for k in range(len(windows)-1)]

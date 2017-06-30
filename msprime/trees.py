@@ -2243,7 +2243,8 @@ class TreeSequence(object):
     @staticmethod
     def _f3(x1, x2, xX, n1, n2, nX):
         # use relation to f2. see Table 1 of Peters 2016 10.1534/genetics.115.183913
-        return 1/2 * (TreeSequence._f2(x1, xX, n1, nX) + 
+        # the order of arguments there is f3(pX; p1, p2) and differs here
+        return 1/2 * (TreeSequence._f2(x1, xX, n1, nX) +
                       TreeSequence._f2(x2, xX, n2, xX) -
                       TreeSequence._f2(x1, x2, n1, n2))
 
@@ -2266,7 +2267,7 @@ class TreeSequence(object):
         n = [len(x) for x in leaf_sets]
 
         def f(x):
-            return [TreeSequence._f3(x[i], x[i], x[j], x[i], x[i], x[j])
+            return [TreeSequence._f3(x[i], x[i], x[j], n[i], n[i], n[j])
                     for i in range(nleaves) for j in range(i, nleaves)]
 
         return self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
