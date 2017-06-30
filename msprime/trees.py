@@ -289,14 +289,18 @@ class TreeDrawer(object):
         self._leaf_x = 1
         self._assign_x_coordinates(self._tree.get_root())
         self._mutations = []
-        # TODO update to use sites.
-        for mutation in tree.mutations():
-            node = mutation.node
-            x = self._x_coords[node], self._y_coords[node]
-            v = tree.get_parent(node)
-            y = self._x_coords[v], self._y_coords[v]
-            z = (x[0] + y[0]) / 2, (x[1] + y[1]) / 2
-            self._mutations.append(z)
+        node_mutations = collections.defaultdict(list)
+        for site in tree.sites():
+            for mutation in site.mutations:
+                node_mutations[mutation.node].append(mutation)
+        for child, mutations in node_mutations.items():
+            n = len(mutations)
+            parent = tree.parent(child)
+            x = self._x_coords[child], self._y_coords[parent]
+            y = self._x_coords[child], self._y_coords[child]
+            for k, mutation in enumerate(mutations):
+                z = x[0], (k + 1) * (x[1] + y[1]) / (n + 1)
+                self._mutations.append(z)
 
     def write(self, path):
         """
@@ -306,7 +310,7 @@ class TreeDrawer(object):
         dwg = svgwrite.Drawing(
             path, size=(self._width, self._height), debug=True)
         lines = dwg.add(dwg.g(id='lines', stroke='black'))
-        labels = dwg.add(dwg.g(font_size=14))
+        labels = dwg.add(dwg.g(font_size=14, text_anchor="middle"))
         for u in self._tree.nodes():
             v = self._tree.get_parent(u)
             x = self._x_coords[u], self._y_coords[u]
@@ -315,11 +319,11 @@ class TreeDrawer(object):
             dy = None
             if self._tree.is_leaf(u):
                 dy = [20]
-                dx = [-4]
-            elif v == 0:
+            elif v == msprime.NULL_NODE:
                 dy = [-5]
             else:
-                dx = [-20]
+                dx = [-10]
+                dy = [-5]
             labels.add(dwg.text(str(u), x, dx=dx, dy=dy))
             if self._show_times and self._tree.is_internal(u):
                 dx[0] += 25
@@ -329,9 +333,12 @@ class TreeDrawer(object):
                 )
             if v != NULL_NODE:
                 y = self._x_coords[v], self._y_coords[v]
-                lines.add(dwg.line(x, y))
+                lines.add(dwg.line(x, (x[0], y[1])))
+                lines.add(dwg.line((x[0], y[1]), y))
         for x in self._mutations:
-            dwg.add(dwg.rect(insert=x, size=(6, 6), fill="red"))
+            r = 3
+            dwg.add(dwg.rect(
+                insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
         dwg.save()
 
     def _assign_x_coordinates(self, node):
