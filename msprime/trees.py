@@ -2231,7 +2231,42 @@ class TreeSequence(object):
         n = [len(x) for x in leaf_sets]
 
         def f(x):
-            return [float(x[i]*(n[j]-x[j]) + (n[i]-x[i])*x[j])/float(n[i]*n[j])
+            return [TreeSequence._f2(x[i], x[j], n[i], n[j])
+                    for i in range(nleaves) for j in range(i, nleaves)]
+
+        return self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+
+    @staticmethod
+    def _f2(x1, x2, n1, n2):
+        return float(x1 * (n2-x2) + (n1-x1)*x2)/float(n1 * n2)
+
+    @staticmethod
+    def _f3(x1, x2, xX, n1, n2, nX):
+        # use relation to f2. see Table 1 of Peters 2016 10.1534/genetics.115.183913
+        return 1/2 * (TreeSequence._f2(x1, xX, n1, nX) + 
+                      TreeSequence._f2(x2, xX, n2, xX) -
+                      TreeSequence._f2(x1, x2, n1, n2))
+
+    def mean_pairwise_f3(self, leaf_sets, windows):
+        """
+        Finds the Patterson's f3 between duos of samples from each group of
+        leaves and single samples from each other group of leaves in each window.
+
+        Returns the upper triangle (including the diagonal) in row-major order.
+        See :method:`.mean_pairwise_tmrca` for details on the shape of the
+        output.
+
+        :param list leaf_sets: A list of sets of IDs of leaves.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of the upper triangle of F3(p2; p1, p1) values in row-major
+            order, including the diagonal.
+        """
+        nleaves = len(leaf_sets)
+        n = [len(x) for x in leaf_sets]
+
+        def f(x):
+            return [TreeSequence._f3(x[i], x[i], x[j], x[i], x[i], x[j])
                     for i in range(nleaves) for j in range(i, nleaves)]
 
         return self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)

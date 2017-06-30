@@ -72,9 +72,15 @@ def branch_length_diversity_window(ts, X, Y, windows):
     return out
 
 
-def branch_length_Y(ts, x, y, z):
+def branch_length_Y(ts, x, y, z, begin=0.0, end=None):
+    if end is None:
+        end = ts.sequence_length
     S = 0
     for tr in ts.trees():
+        if tr.interval[1] < begin:
+            continue
+        if tr.interval[0] > end:
+            break
         xy_mrca = tr.mrca(x, y)
         xz_mrca = tr.mrca(x, z)
         yz_mrca = tr.mrca(y, z)
@@ -93,7 +99,7 @@ def branch_length_Y(ts, x, y, z):
             #  / /\
             # z x  y
             S += path_length(tr, x, xy_mrca)*tr.length
-    return S/ts.sequence_length
+    return S/(end-begin)
 
 
 def branch_length_f4(ts, A, B, C, D):
@@ -290,6 +296,22 @@ class BranchStatsTestCase(unittest.TestCase):
         for k in range(len(windows)-1):
             self.assertListAlmostEqual(here_values[k], ts_values[k])
 
+    def check_f3_matrix(self, ts):
+        A = [random.sample(ts.samples(), 3),
+             random.sample(ts.samples(), 2),
+             random.sample(ts.samples(), 1)]
+        windows = [0.0, ts.sequence_length/2, ts.sequence_length]
+        ts_values = ts.mean_pairwise_f3(A, windows)
+        self.assertListEqual([len(x) for x in ts_values], [6, 6])
+        assert(len(A[2]) == 1)
+        self.assertListEqual([x[5] for x in ts_values], [0.0, 0.0])
+        here_values = [[branch_length_Y(ts, A[i], A[j], begin=windows[k],
+                                                end=windows[k+1])
+                        for i in range(len(A)) for j in range(i, len(A))]
+                       for k in range(len(windows)-1)]
+        for k in range(len(windows)-1):
+            self.assertListAlmostEqual(here_values[k], ts_values[k])
+
     def check_pairwise_diversity_mutations(self, ts):
         samples = random.sample(ts.samples(), 2)
         A = [[samples[0]], [samples[1]]]
@@ -380,6 +402,7 @@ class BranchStatsTestCase(unittest.TestCase):
         '''
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_tmrca_matrix(ts)
+        self.check_f3_matrix(ts)
 
     def test_case_1(self):
         # With mutations:
