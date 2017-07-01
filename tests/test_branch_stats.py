@@ -341,22 +341,6 @@ class BranchStatsTestCase(unittest.TestCase):
         for k in range(len(windows)-1):
             self.assertArrayAlmostEqual(here_values[k], ts_matrix_values[k])
 
-    def check_f3_matrix(self, ts):
-        A = [random.sample(ts.samples(), 3),
-             random.sample(ts.samples(), 2),
-             random.sample(ts.samples(), 1)]
-        windows = [0.0, ts.sequence_length/2, ts.sequence_length]
-        ts_values = ts.mean_pairwise_f3(A, windows)
-        self.assertListEqual([len(x) for x in ts_values], [6, 6])
-        assert(len(A[2]) == 1)
-        self.assertListEqual([x[5] for x in ts_values], [0.0, 0.0])
-        here_values = [[branch_length_Y(ts, A[j], A[i], A[i], begin=windows[k],
-                                        end=windows[k+1])
-                        for i in range(len(A)) for j in range(i, len(A))]
-                       for k in range(len(windows)-1)]
-        for k in range(len(windows)-1):
-            self.assertListAlmostEqual(here_values[k], ts_values[k])
-
     def check_pairwise_diversity_mutations(self, ts):
         samples = random.sample(ts.samples(), 2)
         A = [[samples[0]], [samples[1]]]
@@ -447,7 +431,6 @@ class BranchStatsTestCase(unittest.TestCase):
         '''
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_tmrca_matrix(ts)
-        self.check_f3_matrix(ts)
 
     def test_case_1(self):
         # With mutations:
