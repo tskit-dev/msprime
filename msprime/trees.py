@@ -2202,14 +2202,16 @@ class TreeSequence(object):
     def mean_pairwise_tmrca(self, leaf_sets, windows):
         """
         Finds the mean time to most recent common ancestor between pairs of samples
-        from each group of leaves and in each window. Returns the upper triangle
-        (including the diagonal) in row-major order, so if the output is `x`, then:
+        as described in mean_pairwise_tmrca_matrix (which uses this function).
+        Returns the upper triangle (including the diagonal) in row-major order,
+        so if the output is `x`, then:
 
-        >>> j=0
-        >>> for m in range(len(leaf_sets)):
-        >>>     for n in range(m,len(leaf_sets)):
-        >>>         trmca[m,n] = tmrca[n,m] = x[i][j]
-        >>>         j += 1
+        >>> k=0
+        >>> for w in range(len(windows)-1):
+        >>>     for i in range(len(leaf_sets)):
+        >>>         for j in range(i,len(leaf_sets)):
+        >>>             trmca[i,j] = tmrca[j,i] = x[w][k]
+        >>>             k += 1
 
         will fill out the matrix of mean TMRCAs in the `i`th window between (and
         within) each group of leaves in `leaf_sets` in the matrix `tmrca`.
@@ -2218,8 +2220,52 @@ class TreeSequence(object):
         >>> [".".join(names[i],names[j]) for i in range(len(names))
         >>>         for j in range(i,len(names))]
 
-        If an element of `leaf_sets` has only one element, the corresponding
-        diagonal will be 0.
+        :param list leaf_sets: A list of sets of IDs of leaves.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of the upper triangle of mean TMRCA values in row-major
+            order, including the diagonal.
+        """
+        ns = len(leaf_sets)
+        n = [len(x) for x in leaf_sets]
+
+        def f(x):
+            return [float(x[i]*(n[j]-x[j]) + (n[i]-x[i])*x[j])
+                    for i in range(ns) for j in range(i, ns)]
+
+        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        # move this division outside of f(x) so it only has to happen once
+        # corrects the diagonal for self comparisons
+        # and note factor of two for tree length -> real time
+        for w in range(len(windows)-1):
+            k = 0
+            for i in range(ns):
+                for j in range(i, ns):
+                    if i == j:
+                        if n[i] == 1:
+                            out[w][k] = np.nan
+                        else:
+                            out[w][k] /= float(2 * n[i] * (n[i] - 1))
+                    else:
+                        out[w][k] /= float(2 * n[i] * n[j])
+                    k += 1
+
+        return out
+
+    def mean_pairwise_tmrca_matrix(self, leaf_sets, windows):
+        """
+        Finds the mean time to most recent common ancestor between pairs of
+        samples from each set of leaves and in each window. Returns a numpy
+        array indexed by (window, leaf_set, leaf_set).  Diagonal entries are
+        corrected so that the value gives the mean pairwise TMRCA for *distinct*
+        samples, but it is not checked whether the leaf_sets are disjoint
+        (so offdiagonals are not corrected).  For this reason, if an element of
+        `leaf_sets` has only one element, the corresponding diagonal will be
+        NaN.
+
+        The mean TMRCA between two samples is defined to be one-half the length
+        of all edges separating them in the tree at a uniformly chosen position
+        on the genome.
 
         :param list leaf_sets: A list of sets of IDs of leaves.
         :param iterable windows: The breakpoints of the windows (including start
@@ -2227,50 +2273,107 @@ class TreeSequence(object):
         :return: A list of the upper triangle of mean TMRCA values in row-major
             order, including the diagonal.
         """
-        nleaves = len(leaf_sets)
-        n = [len(x) for x in leaf_sets]
+        x = self.mean_pairwise_tmrca(leaf_sets, windows)
+        ns = len(leaf_sets)
+        nw = len(windows) - 1
+        A = np.ones((nw, ns, ns), dtype=float)
+        for w in range(nw):
+            k = 0
+            for i in range(ns):
+                for j in range(i, ns):
+                    A[w, i, j] = A[w, j, i] = x[w][k]
+                    k += 1
+        return A
 
-        def f(x):
-            return [TreeSequence._f2(x[i], x[j], n[i], n[j])
-                    for i in range(nleaves) for j in range(i, nleaves)]
-
-        return self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
-
-    @staticmethod
-    def _f2(x1, x2, n1, n2):
-        return float(x1 * (n2-x2) + (n1-x1)*x2)/float(n1 * n2)
-
-    @staticmethod
-    def _f3(x1, x2, xX, n1, n2, nX):
-        # use relation to f2. see Table 1 of Peters 2016 10.1534/genetics.115.183913
-        # the order of arguments there is f3(pX; p1, p2) and differs here
-        return 1/2 * (TreeSequence._f2(x1, xX, n1, nX) +
-                      TreeSequence._f2(x2, xX, n2, xX) -
-                      TreeSequence._f2(x1, x2, n1, n2))
-
-    def mean_pairwise_f3(self, leaf_sets, windows):
+    def Y(self, leaf_sets, windows):
         """
-        Finds the Patterson's f3 between duos of samples from each group of
-        leaves and single samples from each other group of leaves in each window.
+        Finds the 'Y' statistic between the three groups of leaves
+        in leaf_sets. The leaf_sets should be disjoint (the computation works
+        fine, but if not the result depends on the amount of overlap).
+        If the leaf_sets are A, B, and C, then the result gives the mean total
+        length of any edge in the tree between a and the most recent common
+        ancestor of b and c, where a, b, and c are random draws from A, B, and
+        C respectively.
 
-        Returns the upper triangle (including the diagonal) in row-major order.
-        See :method:`.mean_pairwise_tmrca` for details on the shape of the
-        output.
-
-        :param list leaf_sets: A list of sets of IDs of leaves.
+        :param list leaf_sets: A list of *three* sets of IDs of leaves: (A,B,C).
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
-        :return: A list of the upper triangle of F3(p2; p1, p1) values in row-major
-            order, including the diagonal.
+        :return: A list of numeric values computed separately on each window.
         """
-        nleaves = len(leaf_sets)
+        ns = len(leaf_sets)
+        assert(ns == 3)
         n = [len(x) for x in leaf_sets]
 
         def f(x):
-            return [TreeSequence._f3(x[i], x[i], x[j], n[i], n[i], n[j])
-                    for i in range(nleaves) for j in range(i, nleaves)]
+            return [float(x[0] * (n[1] - x[1]) * (n[2] - x[2])
+                          + (n[0] - x[0]) * x[1] * x[2])]
 
-        return self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        # move this division outside of f(x) so it only has to happen once
+        # corrects the diagonal for self comparisons
+        for w in range(len(windows)-1):
+            out[w] /= float(n[0] * n[1] * n[2])
+
+        return out
+
+    def f4(self, leaf_sets, windows):
+        """
+        Finds the Patterson's f4 statistics between the four groups of leaves
+        in leaf_sets. The leaf_sets should be disjoint (the computation works
+        fine, but if not the result depends on the amount of overlap).
+
+        :param list leaf_sets: A list of four sets of IDs of leaves: (A,B,C,D)
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of values of f4(A,B;C,D) computed separately on each window.
+        """
+        ns = len(leaf_sets)
+        assert(ns == 4)
+        n = [len(x) for x in leaf_sets]
+
+        def f(x):
+            return [float((x[0] * n[1] - x[1] * n[0]) * (x[2] * n[3] - x[3] * n[2]))]
+
+        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        # move this division outside of f(x) so it only has to happen once
+        # corrects the diagonal for self comparisons
+        for w in range(len(windows)-1):
+            out[w] /= float(n[0] * n[1] * n[2] * n[3])
+
+        return out
+
+    def f3(self, leaf_sets, windows):
+        """
+        Finds the Patterson's f3 statistics between the three groups of leaves
+        in leaf_sets. The leaf_sets should be disjoint (the computation works
+        fine, but if not the result depends on the amount of overlap).
+
+        f3(A;B,C) is f4(A,B;A,C) corrected to not include self comparisons.
+
+        :param list leaf_sets: A list of *three* sets of IDs of leaves: (A,B,C),
+            with the first set having at least two samples.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of values of f3(A,B,C) computed separately on each window.
+        """
+        ns = len(leaf_sets)
+        assert(ns == 3)
+        n = [len(x) for x in leaf_sets]
+        assert(n[0] > 1)
+
+        def f(x):
+            return [float(x[0] * (x[0] - 1) * (n[1] - x[1]) * (n[2] - x[2])
+                          + (n[0] - x[0]) * (n[0] - x[0] + 1) * x[1] * x[2]
+                          - x[0] * (n[0] - x[0]) * (n[1] - x[1]) * x[2]
+                          - (n[0] - x[0]) * x[0] * x[1] * (n[2] - x[2]))]
+
+        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        # move this division outside of f(x) so it only has to happen once
+        # corrects the diagonal for self comparisons
+        for w in range(len(windows)-1):
+            out[w] /= float(n[0] * (n[0]-1) * n[1] * n[2])
+
+        return out
 
     def branch_stats(self, leaf_sets, weight_fun):
         '''
