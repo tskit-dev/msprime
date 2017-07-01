@@ -26,6 +26,9 @@ from __future__ import division
 import unittest
 import random
 
+import numpy as np
+import numpy.testing as nt
+
 import six
 
 import msprime
@@ -72,9 +75,15 @@ def branch_length_diversity_window(ts, X, Y, windows):
     return out
 
 
-def branch_length_Y(ts, x, y, z):
+def branch_length_Y(ts, x, y, z, begin=0.0, end=None):
+    if end is None:
+        end = ts.sequence_length
     S = 0
     for tr in ts.trees():
+        if tr.interval[1] < begin:
+            continue
+        if tr.interval[0] > end:
+            break
         xy_mrca = tr.mrca(x, y)
         xz_mrca = tr.mrca(x, z)
         yz_mrca = tr.mrca(y, z)
@@ -93,7 +102,7 @@ def branch_length_Y(ts, x, y, z):
             #  / /\
             # z x  y
             S += path_length(tr, x, xy_mrca)*tr.length
-    return S/ts.sequence_length
+    return S/(end-begin)
 
 
 def branch_length_f4(ts, A, B, C, D):
@@ -187,6 +196,22 @@ def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
     return S
 
 
+def upper_tri_to_matrix(x):
+    """
+    Given x, a vector of entries of the upper triangle of a matrix
+    in row-major order, including the diagonal, return the corresponding matrix.
+    """
+    # n^2 + n = 2 u => n = (-1 + sqrt(1 + 8*u))/2
+    n = int((np.sqrt(1 + 8 * len(x)) - 1)/2.0)
+    out = np.ones((n, n))
+    k = 0
+    for i in range(n):
+        for j in range(i, n):
+            out[i, j] = out[j, i] = x[k]
+            k += 1
+    return out
+
+
 class BranchStatsTestCase(unittest.TestCase):
     """
     Tests of branch statistic computation.
@@ -196,6 +221,12 @@ class BranchStatsTestCase(unittest.TestCase):
     def assertListAlmostEqual(self, x, y):
         for a, b in zip(x, y):
             self.assertAlmostEqual(a, b)
+
+    def assertArrayEqual(self, x, y):
+        nt.assert_equal(x, y)
+
+    def assertArrayAlmostEqual(self, x, y):
+        nt.assert_array_almost_equal(x, y)
 
     def check_vectorization(self, ts):
         samples = random.sample(ts.samples(), 3)
@@ -274,6 +305,42 @@ class BranchStatsTestCase(unittest.TestCase):
                     ts.branch_stats(A, f),
                     branch_length_diversity(ts, A[0], A[1]))
 
+    def check_tmrca_matrix(self, ts):
+        # nonoverlapping leaves
+        leaves = random.sample(ts.samples(), 6)
+        A = [leaves[0:3], leaves[3:5], leaves[5:6]]
+        windows = [0.0, ts.sequence_length/2, ts.sequence_length]
+        ts_values = ts.mean_pairwise_tmrca(A, windows)
+        ts_matrix_values = ts.mean_pairwise_tmrca_matrix(A, windows)
+        self.assertListEqual([len(x) for x in ts_values], [len(leaves), len(leaves)])
+        assert(len(A[2]) == 1)
+        self.assertListEqual([x[5] for x in ts_values], [np.nan, np.nan])
+        self.assertEqual(len(ts_values), len(ts_matrix_values))
+        for w in range(len(ts_values)):
+            self.assertArrayEqual(
+                    ts_matrix_values[w, :, :],
+                    upper_tri_to_matrix(ts_values[w]))
+        here_values = np.array([[[branch_length_diversity(ts, A[i], A[j],
+                                                          begin=windows[k],
+                                                          end=windows[k+1])
+                                  for i in range(len(A))]
+                                 for j in range(len(A))]
+                                for k in range(len(windows)-1)])
+        print(here_values)
+        print(here_values.shape)
+        for k in range(len(windows)-1):
+            for i in range(len(A)):
+                for j in range(len(A)):
+                    if i == j:
+                        if len(A[i]) == 1:
+                            here_values[k, i, i] = np.nan
+                        else:
+                            here_values[k, i, i] /= 2.0 * (len(A[i])-1)/len(A[i])
+                    else:
+                        here_values[k, j, i] /= 2.0
+        for k in range(len(windows)-1):
+            self.assertArrayAlmostEqual(here_values[k], ts_matrix_values[k])
+
     def check_pairwise_diversity_mutations(self, ts):
         samples = random.sample(ts.samples(), 2)
         A = [[samples[0]], [samples[1]]]
@@ -322,6 +389,21 @@ class BranchStatsTestCase(unittest.TestCase):
                     branch_stats_node_iter(ts, A, f, method='length'),
                     branch_length_f4(ts, A[0], A[1], A[2], A[3]))
 
+    def test_errors(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=10)
+        self.assertRaises(AssertionError,
+                          ts.mean_pairwise_tmrca, [[0], [1.12]], [0, ts.sequence_length])
+        self.assertRaises(AssertionError,
+                          ts.mean_pairwise_tmrca, [[0], [11]], [0, ts.sequence_length])
+        self.assertRaises(ValueError,
+                          ts.mean_pairwise_tmrca, [[0], [1]], [0, ts.sequence_length/2])
+        self.assertRaises(ValueError,
+                          ts.mean_pairwise_tmrca, [[0], [1]], [ts.sequence_length/2,
+                                                               ts.sequence_length])
+        self.assertRaises(ValueError,
+                          ts.mean_pairwise_tmrca, [[0], [1]], [0.0, 2.0, 1.0,
+                                                               ts.sequence_length])
+
     def test_pairwise_diversity(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_pairwise_diversity(ts)
@@ -342,6 +424,13 @@ class BranchStatsTestCase(unittest.TestCase):
     def test_windowization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_windowization(ts)
+
+    def test_derived_functions(self):
+        '''
+        Test implementation of statistics using these functions.
+        '''
+        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
+        self.check_tmrca_matrix(ts)
 
     def test_case_1(self):
         # With mutations:
