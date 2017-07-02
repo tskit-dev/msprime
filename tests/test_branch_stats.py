@@ -75,7 +75,7 @@ def branch_length_diversity_window(ts, X, Y, windows):
     return out
 
 
-def branch_length_Y(ts, x, y, z, begin=0.0, end=None):
+def branch_length_Y(ts, X, Y, Z, begin=0.0, end=None):
     if end is None:
         end = ts.sequence_length
     S = 0
@@ -85,25 +85,28 @@ def branch_length_Y(ts, x, y, z, begin=0.0, end=None):
         if tr.interval[0] > end:
             break
         this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
-        xy_mrca = tr.mrca(x, y)
-        xz_mrca = tr.mrca(x, z)
-        yz_mrca = tr.mrca(y, z)
-        if xy_mrca == xz_mrca:
-            #   /\
-            #  / /\
-            # x y  z
-            S += path_length(tr, x, yz_mrca) * this_length
-        elif xy_mrca == yz_mrca:
-            #   /\
-            #  / /\
-            # y x  z
-            S += path_length(tr, x, xz_mrca) * this_length
-        elif xz_mrca == yz_mrca:
-            #   /\
-            #  / /\
-            # z x  y
-            S += path_length(tr, x, xy_mrca) * this_length
-    return S/(end-begin)
+        for x in X:
+            for y in Y:
+                for z in Z:
+                    xy_mrca = tr.mrca(x, y)
+                    xz_mrca = tr.mrca(x, z)
+                    yz_mrca = tr.mrca(y, z)
+                    if xy_mrca == xz_mrca:
+                        #   /\
+                        #  / /\
+                        # x y  z
+                        S += path_length(tr, x, yz_mrca) * this_length
+                    elif xy_mrca == yz_mrca:
+                        #   /\
+                        #  / /\
+                        # y x  z
+                        S += path_length(tr, x, xz_mrca) * this_length
+                    elif xz_mrca == yz_mrca:
+                        #   /\
+                        #  / /\
+                        # z x  y
+                        S += path_length(tr, x, xy_mrca) * this_length
+    return S/((end - begin) * len(X) * len(Y) * len(Z))
 
 
 def branch_length_f4(ts, A, B, C, D, begin=0.0, end=None):
@@ -384,8 +387,6 @@ class BranchStatsTestCase(unittest.TestCase):
         here_values = [branch_length_f3(ts, A[0], A[1], A[2], begin=windows[k],
                                         end=windows[k+1])
                        for k in range(len(windows)-1)]
-        print("here:", here_values)
-        print("there:", [x[0] for x in ts_values])
         self.assertListAlmostEqual(here_values, [x[0] for x in ts_values])
 
     def check_pairwise_diversity_mutations(self, ts):
@@ -401,18 +402,27 @@ class BranchStatsTestCase(unittest.TestCase):
                 ts.pairwise_diversity(samples=samples))
 
     def check_Y_stat(self, ts):
-        samples = random.sample(ts.samples(), 3)
-        A = [[samples[0]], [samples[1]], [samples[2]]]
+        samples = random.sample(ts.samples(), 6)
+        A = [[samples[0]], [samples[1]], [samples[2], samples[3]],
+             [samples[4], samples[5]]]
         windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
-        here_values = [branch_length_Y(ts, samples[0], samples[1], samples[2],
+        here_values = [branch_length_Y(ts, A[0], A[1], A[2],
                                        begin=windows[k], end=windows[k+1])
                        for k in range(len(windows)-1)]
-
-        def f(x):
-            return float(x[0] * (1 - x[1]) * (1 - x[2]) + (1 - x[0]) * x[1] * x[2])
+        here_values_2 = [branch_length_Y(ts, A[1], A[2], A[3],
+                                         begin=windows[k], end=windows[k+1])
+                         for k in range(len(windows)-1)]
+        ts_values = ts.Y(A[0:3], windows)
+        ts_vector_values = ts.Y_vector(A, windows, [[0, 1, 2], [1, 2, 3], [0, 2, 1]])
 
         self.assertListAlmostEqual(
-                [x[0] for x in ts.Y(A, windows)],
+                [x[0] for x in ts_values],
+                here_values)
+        self.assertListAlmostEqual(
+                [x[1] for x in ts_vector_values],
+                here_values_2)
+        self.assertListAlmostEqual(
+                [x[2] for x in ts_vector_values],
                 here_values)
 
     def check_f4_stat(self, ts):
@@ -551,7 +561,6 @@ class BranchStatsTestCase(unittest.TestCase):
             nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
-        self.check_Y_stat(ts)
         self.check_vectorization(ts)
 
         # diversity between 0 and 1
@@ -593,7 +602,7 @@ class BranchStatsTestCase(unittest.TestCase):
 
         # branch lengths:
         true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
-        self.assertAlmostEqual(branch_length_Y(ts, 0, 1, 2), true_Y)
+        self.assertAlmostEqual(branch_length_Y(ts, [0], [1], [2]), true_Y)
         self.assertAlmostEqual(ts.branch_stats(A, f), true_Y)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f), true_Y)
 
@@ -682,7 +691,6 @@ class BranchStatsTestCase(unittest.TestCase):
 
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
-        self.check_Y_stat(ts)
         self.check_vectorization(ts)
 
         # divergence between 0 and 1
@@ -721,7 +729,7 @@ class BranchStatsTestCase(unittest.TestCase):
             return ((x[0] == 1) and (x[1] == 0)) or ((x[0] == 0) and (x[1] == 2))
 
         # branch lengths:
-        self.assertAlmostEqual(branch_length_Y(ts, 0, 1, 2), true_Y)
+        self.assertAlmostEqual(branch_length_Y(ts, [0], [1], [2]), true_Y)
         self.assertAlmostEqual(ts.branch_stats(A, f), true_Y)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f), true_Y)
 

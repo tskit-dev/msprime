@@ -2285,6 +2285,44 @@ class TreeSequence(object):
                     k += 1
         return A
 
+    def Y_vector(self, leaf_sets, windows, triples):
+        """
+        Finds the 'Y' statistic between three leaf_sets.  The leaf_sets should
+        be disjoint (the computation works fine, but if not the result depends
+        on the amount of overlap).  If the leaf_sets are A, B, and C, then the
+        result gives the mean total length of any edge in the tree between a
+        and the most recent common ancestor of b and c, where a, b, and c are
+        random draws from A, B, and C respectively.
+
+        The result is, for each window, a vector whose k-th entry is
+            Y(leaf_sets[triples[k][0]], leaf_sets[triples[k][1]],
+              leaf_sets[triples[k][2]]).
+
+        :param list leaf_sets: A list of *three* sets of IDs of leaves: (A,B,C).
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :param list triples: A list of triples of indices of leaf_sets.
+        :return: A list of numeric vectors of length equal to the length of
+            triples, computed separately on each window.
+        """
+        for u in triples:
+            assert(len(u) == 3)
+        n = [len(x) for x in leaf_sets]
+
+        def f(x):
+            return [float(x[i] * (n[j] - x[j]) * (n[k] - x[k])
+                          + (n[i] - x[i]) * x[j] * x[k]) for i, j, k in triples]
+
+        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        # move this division outside of f(x) so it only has to happen once
+        # corrects the diagonal for self comparisons
+        for w in range(len(windows)-1):
+            for u in range(len(triples)):
+                out[w][u] /= float(n[triples[u][0]] * n[triples[u][1]]
+                                   * n[triples[u][2]])
+
+        return out
+
     def Y(self, leaf_sets, windows):
         """
         Finds the 'Y' statistic between the three groups of leaves
@@ -2300,21 +2338,7 @@ class TreeSequence(object):
             and end, so has one more entry than number of windows).
         :return: A list of numeric values computed separately on each window.
         """
-        ns = len(leaf_sets)
-        assert(ns == 3)
-        n = [len(x) for x in leaf_sets]
-
-        def f(x):
-            return [float(x[0] * (n[1] - x[1]) * (n[2] - x[2])
-                          + (n[0] - x[0]) * x[1] * x[2])]
-
-        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
-        # move this division outside of f(x) so it only has to happen once
-        # corrects the diagonal for self comparisons
-        for w in range(len(windows)-1):
-            out[w][0] /= float(n[0] * n[1] * n[2])
-
-        return out
+        return self.Y_vector(leaf_sets, windows, triples=[[0, 1, 2]])
 
     def f4(self, leaf_sets, windows):
         """
