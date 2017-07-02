@@ -84,6 +84,7 @@ def branch_length_Y(ts, x, y, z, begin=0.0, end=None):
             continue
         if tr.interval[0] > end:
             break
+        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
         xy_mrca = tr.mrca(x, y)
         xz_mrca = tr.mrca(x, z)
         yz_mrca = tr.mrca(y, z)
@@ -91,26 +92,33 @@ def branch_length_Y(ts, x, y, z, begin=0.0, end=None):
             #   /\
             #  / /\
             # x y  z
-            S += path_length(tr, x, yz_mrca)*tr.length
+            S += path_length(tr, x, yz_mrca) * this_length
         elif xy_mrca == yz_mrca:
             #   /\
             #  / /\
             # y x  z
-            S += path_length(tr, x, xz_mrca)*tr.length
+            S += path_length(tr, x, xz_mrca) * this_length
         elif xz_mrca == yz_mrca:
             #   /\
             #  / /\
             # z x  y
-            S += path_length(tr, x, xy_mrca)*tr.length
+            S += path_length(tr, x, xy_mrca) * this_length
     return S/(end-begin)
 
 
-def branch_length_f4(ts, A, B, C, D):
+def branch_length_f4(ts, A, B, C, D, begin=0.0, end=None):
+    if end is None:
+        end = ts.sequence_length
     for U in A, B, C, D:
         if max([U.count(x) for x in set(U)]) > 1:
             raise ValueError("A,B,C, and D cannot contain repeated elements.")
     S = 0
     for tr in ts.trees():
+        if tr.interval[1] < begin:
+            continue
+        if tr.interval[0] > end:
+            break
+        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
         SS = 0
         for a in A:
             for b in B:
@@ -118,8 +126,34 @@ def branch_length_f4(ts, A, B, C, D):
                     for d in D:
                         SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
                         SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
-        S += SS*tr.length
-    return S/(ts.sequence_length*len(A)*len(B)*len(C)*len(D))
+        S += SS * this_length
+    return S / ((end - begin) * len(A) * len(B) * len(C) * len(D))
+
+
+def branch_length_f3(ts, A, B, C, begin=0.0, end=None):
+    # this is f4(A,B;A,C) but drawing distinct samples from A
+    if end is None:
+        end = ts.sequence_length
+    assert(len(A) > 1)
+    for U in A, B, C:
+        if max([U.count(x) for x in set(U)]) > 1:
+            raise ValueError("A,B,C, and D cannot contain repeated elements.")
+    S = 0
+    for tr in ts.trees():
+        if tr.interval[1] < begin:
+            continue
+        if tr.interval[0] > end:
+            break
+        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+        SS = 0
+        for a in A:
+            for b in B:
+                for c in set(A) - set([a]):
+                    for d in C:
+                        SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
+                        SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
+        S += SS * this_length
+    return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * len(C))
 
 
 def branch_stats_node_iter(ts, leaf_sets, weight_fun, method='length'):
@@ -326,8 +360,6 @@ class BranchStatsTestCase(unittest.TestCase):
                                   for i in range(len(A))]
                                  for j in range(len(A))]
                                 for k in range(len(windows)-1)])
-        print(here_values)
-        print(here_values.shape)
         for k in range(len(windows)-1):
             for i in range(len(A)):
                 for j in range(len(A)):
@@ -341,21 +373,20 @@ class BranchStatsTestCase(unittest.TestCase):
         for k in range(len(windows)-1):
             self.assertArrayAlmostEqual(here_values[k], ts_matrix_values[k])
 
-    def check_f3_matrix(self, ts):
+    def check_f3_stat(self, ts):
         A = [random.sample(ts.samples(), 3),
              random.sample(ts.samples(), 2),
              random.sample(ts.samples(), 1)]
-        windows = [0.0, ts.sequence_length/2, ts.sequence_length]
-        ts_values = ts.mean_pairwise_f3(A, windows)
-        self.assertListEqual([len(x) for x in ts_values], [6, 6])
-        assert(len(A[2]) == 1)
-        self.assertListEqual([x[5] for x in ts_values], [0.0, 0.0])
-        here_values = [[branch_length_Y(ts, A[j], A[i], A[i], begin=windows[k],
+        windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
+        ts_values = ts.f3(A, windows)
+        self.assertListEqual([len(x) for x in ts_values],
+                             [1 for _ in range(len(windows)-1)])
+        here_values = [branch_length_f3(ts, A[0], A[1], A[2], begin=windows[k],
                                         end=windows[k+1])
-                        for i in range(len(A)) for j in range(i, len(A))]
                        for k in range(len(windows)-1)]
-        for k in range(len(windows)-1):
-            self.assertListAlmostEqual(here_values[k], ts_values[k])
+        print("here:", here_values)
+        print("there:", [x[0] for x in ts_values])
+        self.assertListAlmostEqual(here_values, [x[0] for x in ts_values])
 
     def check_pairwise_diversity_mutations(self, ts):
         samples = random.sample(ts.samples(), 2)
@@ -371,17 +402,18 @@ class BranchStatsTestCase(unittest.TestCase):
 
     def check_Y_stat(self, ts):
         samples = random.sample(ts.samples(), 3)
-        A = [[samples[0]], samples[1:3]]
+        A = [[samples[0]], [samples[1]], [samples[2]]]
+        windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
+        here_values = [branch_length_Y(ts, samples[0], samples[1], samples[2],
+                                       begin=windows[k], end=windows[k+1])
+                       for k in range(len(windows)-1)]
 
         def f(x):
-            return float(((x[0] == 1) and (x[1] == 0)) or ((x[0] == 0) and (x[1] == 2)))
+            return float(x[0] * (1 - x[1]) * (1 - x[2]) + (1 - x[0]) * x[1] * x[2])
 
-        self.assertAlmostEqual(
-                ts.branch_stats(A, f),
-                branch_length_Y(ts, A[0][0], A[1][0], A[1][1]))
-        self.assertAlmostEqual(
-                branch_stats_node_iter(ts, A, f, method='length'),
-                branch_length_Y(ts, A[0][0], A[1][0], A[1][1]))
+        self.assertListAlmostEqual(
+                [x[0] for x in ts.Y(A, windows)],
+                here_values)
 
     def check_f4_stat(self, ts):
         samples = random.sample(ts.samples(), 4)
@@ -392,15 +424,20 @@ class BranchStatsTestCase(unittest.TestCase):
                   random.sample(ts.samples(), 3),
                   random.sample(ts.samples(), 3),
                   random.sample(ts.samples(), 3)]
+        windows = [0.0, ts.sequence_length/2.0, ts.sequence_length]
         for A in (A_zero, A_f1, A_one, A_many):
 
             def f(x):
                 return ((float(x[0])/len(A[0])-float(x[1])/len(A[1]))
                         * (float(x[2])/len(A[2])-float(x[3])/len(A[3])))
 
-            self.assertAlmostEqual(
-                    ts.branch_stats(A, f),
-                    branch_length_f4(ts, A[0], A[1], A[2], A[3]))
+            here_values = [branch_length_f4(ts, A[0], A[1], A[2], A[3],
+                                            begin=windows[k], end=windows[k+1])
+                           for k in range(len(windows)-1)]
+
+            self.assertListAlmostEqual(
+                    [x[0] for x in ts.f4(A, windows)],
+                    here_values)
             self.assertAlmostEqual(
                     branch_stats_node_iter(ts, A, f, method='length'),
                     branch_length_f4(ts, A[0], A[1], A[2], A[3]))
@@ -419,19 +456,17 @@ class BranchStatsTestCase(unittest.TestCase):
         self.assertRaises(ValueError,
                           ts.mean_pairwise_tmrca, [[0], [1]], [0.0, 2.0, 1.0,
                                                                ts.sequence_length])
+        self.assertRaises(AssertionError,
+                          ts.f4, [[0, 1], [2], [3]], [0, ts.sequence_length])
+        self.assertRaises(AssertionError,
+                          ts.f3, [[0, 1], [2]], [0, ts.sequence_length])
+        self.assertRaises(AssertionError,
+                          ts.f3, [[0], [1], [2]], [0, ts.sequence_length])
 
     def test_pairwise_diversity(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
-
-    def test_Y_stat(self):
-        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
-        self.check_Y_stat(ts)
-
-    def test_f4(self):
-        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
-        self.check_f4_stat(ts)
 
     def test_vectorization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
@@ -447,7 +482,9 @@ class BranchStatsTestCase(unittest.TestCase):
         '''
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_tmrca_matrix(ts)
-        self.check_f3_matrix(ts)
+        self.check_f3_stat(ts)
+        self.check_f4_stat(ts)
+        self.check_Y_stat(ts)
 
     def test_case_1(self):
         # With mutations:

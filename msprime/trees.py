@@ -2312,7 +2312,7 @@ class TreeSequence(object):
         # move this division outside of f(x) so it only has to happen once
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
-            out[w] /= float(n[0] * n[1] * n[2])
+            out[w][0] /= float(n[0] * n[1] * n[2])
 
         return out
 
@@ -2338,7 +2338,7 @@ class TreeSequence(object):
         # move this division outside of f(x) so it only has to happen once
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
-            out[w] /= float(n[0] * n[1] * n[2] * n[3])
+            out[w][0] /= float(n[0] * n[1] * n[2] * n[3])
 
         return out
 
@@ -2363,15 +2363,14 @@ class TreeSequence(object):
 
         def f(x):
             return [float(x[0] * (x[0] - 1) * (n[1] - x[1]) * (n[2] - x[2])
-                          + (n[0] - x[0]) * (n[0] - x[0] + 1) * x[1] * x[2]
+                          + (n[0] - x[0]) * (n[0] - x[0] - 1) * x[1] * x[2]
                           - x[0] * (n[0] - x[0]) * (n[1] - x[1]) * x[2]
                           - (n[0] - x[0]) * x[0] * x[1] * (n[2] - x[2]))]
 
         out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
-        # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
-            out[w] /= float(n[0] * (n[0]-1) * n[1] * n[2])
+            out[w][0] /= float(n[0] * (n[0]-1) * n[1] * n[2])
 
         return out
 
