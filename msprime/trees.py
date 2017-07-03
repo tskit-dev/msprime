@@ -271,10 +271,16 @@ class TreeDrawer(object):
     """
     A class to draw sparse trees in SVG format.
     """
-    def __init__(self, tree, width, height, show_times):
+    def __init__(
+            self, tree, width=200, height=200, show_times=False,
+            show_mutation_labels=False, show_internal_node_labels=True,
+            show_leaf_node_labels=True):
         self._width = width
         self._height = height
         self._show_times = show_times
+        self._show_mutation_labels = show_mutation_labels
+        self._show_internal_node_labels = show_internal_node_labels
+        self._show_leaf_node_labels = show_leaf_node_labels
         self._x_scale = width / (tree.get_sample_size() + 2)
         t = tree.get_time(tree.get_root())
         # Leave a margin of 20px top and bottom
@@ -296,19 +302,20 @@ class TreeDrawer(object):
         for child, mutations in node_mutations.items():
             n = len(mutations)
             parent = tree.parent(child)
-            x = self._x_coords[child], self._y_coords[parent]
-            y = self._x_coords[child], self._y_coords[child]
+            x = self._x_coords[child]
+            y1 = self._y_coords[child]
+            y2 = self._y_coords[parent]
+            chunk = (y2 - y1) / (n + 1)
             for k, mutation in enumerate(mutations):
-                z = x[0], (k + 1) * (x[1] + y[1]) / (n + 1)
-                self._mutations.append(z)
+                z = x, y1 + (k + 1) * chunk
+                self._mutations.append((z, mutation))
 
-    def write(self, path):
+    def draw(self):
         """
-        Writes the SVG description of this tree to the specified
-        path.
+        Writes the SVG description of this tree and returns the resulting XML
+        code as text.
         """
-        dwg = svgwrite.Drawing(
-            path, size=(self._width, self._height), debug=True)
+        dwg = svgwrite.Drawing(size=(self._width, self._height), debug=True)
         lines = dwg.add(dwg.g(id='lines', stroke='black'))
         labels = dwg.add(dwg.g(font_size=14, text_anchor="middle"))
         for u in self._tree.nodes():
@@ -324,22 +331,29 @@ class TreeDrawer(object):
             else:
                 dx = [-10]
                 dy = [-5]
-            labels.add(dwg.text(str(u), x, dx=dx, dy=dy))
+            condition = (
+                (self._tree.is_leaf(u) and self._show_leaf_node_labels) or
+                (self._tree.is_internal(u) and self._show_internal_node_labels))
+            if condition:
+                labels.add(dwg.text(str(u), x, dx=dx, dy=dy))
             if self._show_times and self._tree.is_internal(u):
                 dx[0] += 25
                 labels.add(dwg.text(
                     "t = {:.2f}".format(self._tree.get_time(u)), x, dx=dx,
-                    dy=dy)
-                )
+                    dy=dy))
             if v != NULL_NODE:
                 y = self._x_coords[v], self._y_coords[v]
                 lines.add(dwg.line(x, (x[0], y[1])))
                 lines.add(dwg.line((x[0], y[1]), y))
-        for x in self._mutations:
+        for x, mutation in self._mutations:
             r = 3
             dwg.add(dwg.rect(
                 insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
-        dwg.save()
+            if self._show_mutation_labels:
+                dx = [8 * r]
+                dy = [-2 * r]
+                labels.add(dwg.text("{}".format(mutation.site), x, dx=dx, dy=dy))
+        return dwg.tostring()
 
     def _assign_x_coordinates(self, node):
         """
@@ -349,11 +363,9 @@ class TreeDrawer(object):
             children = self._tree.get_children(node)
             for c in children:
                 self._assign_x_coordinates(c)
-            # We now have x coords for both children
-            c1 = self._x_coords[children[0]]
-            c2 = self._x_coords[children[1]]
-            a = min(c1, c2)
-            b = max(c1, c2)
+            coords = [self._x_coords[c] for c in children]
+            a = min(coords)
+            b = max(coords)
             self._x_coords[node] = (a + (b - a) / 2)
         else:
             self._x_coords[node] = self._leaf_x * self._x_scale
@@ -361,7 +373,6 @@ class TreeDrawer(object):
 
 
 # TODO:
-# - Pre, post, and inorder traversals of the nodes as iterators.
 # - Pickle and copy support
 class SparseTree(object):
     """
@@ -623,22 +634,38 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_sample_size()
 
-    def draw(self, path, width=200, height=200, show_times=False):
+    def draw(
+            self, path=None, width=200, height=200, show_times=False,
+            show_mutation_labels=False, show_internal_node_labels=True,
+            show_leaf_node_labels=True):
         """
-        Draws a representation of this tree to the specified path in SVG
-        format.
+        Returns a representation of this tree in SVG format.
 
-        :param str path: The path to the file to write the SVG.
+        :param str path: The path to the file to write the SVG. If None, do not
+            write to file.
         :param int width: The width of the image in pixels.
         :param int height: The height of the image in pixels.
         :param bool show_times: If True, show time labels at each internal
             node.
+        :param bool show_mutation_labels: If True, show labels for mutations.
+        :param bool show_internal_node_labels: If True, show labels for internal nodes.
+        :param bool show_leaf_node_labels: If True, show labels for leaf nodes.
+        :return: A representation of this tree in SVG format.
+        :rtype: str
         """
         if not _svgwrite_imported:
             raise ImportError(
                 "svgwrite is not installed. try `pip install svgwrite`")
-        td = TreeDrawer(self, width, height, show_times)
-        td.write(path)
+        td = TreeDrawer(
+                self, width=width, height=height, show_times=show_times,
+                show_mutation_labels=show_mutation_labels,
+                show_internal_node_labels=show_internal_node_labels,
+                show_leaf_node_labels=show_leaf_node_labels)
+        svg = td.draw()
+        if path is not None:
+            with open(path, "w") as f:
+                f.write(svg)
+        return svg
 
     @property
     def num_mutations(self):

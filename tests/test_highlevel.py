@@ -41,7 +41,6 @@ import sys
 import six
 import tempfile
 import unittest
-import xml.etree
 
 import numpy as np
 
@@ -1531,22 +1530,6 @@ class TestSparseTree(HighLevelTestCase):
                 l2 = list(test_func(t, u))
                 self.assertEqual(l1, l2)
                 self.assertEqual(t.get_num_leaves(u), len(l1))
-
-    def test_draw(self):
-        t = self.get_tree()
-        w = 123
-        h = 456
-        t.draw(self.temp_file, w, h, show_times=True)
-        self.assertGreater(os.path.getsize(self.temp_file), 0)
-        with open(self.temp_file) as f:
-            # Check some basic stuff about the SVG output.
-            f.seek(0)
-            root = xml.etree.ElementTree.fromstring(f.read())
-            self.assertEqual(root.tag, "{http://www.w3.org/2000/svg}svg")
-            width = int(root.attrib["width"])
-            self.assertEqual(w, width)
-            height = int(root.attrib["height"])
-            self.assertEqual(h, height)
 
     def test_traversals(self):
         t1 = self.get_tree()
