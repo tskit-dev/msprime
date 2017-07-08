@@ -57,9 +57,9 @@ def branch_length_diversity(ts, X, Y, begin=0.0, end=None):
         end = ts.sequence_length
     S = 0
     for tr in ts.trees():
-        if tr.interval[1] < begin:
+        if tr.interval[1] <= begin:
             continue
-        if tr.interval[0] > end:
+        if tr.interval[0] >= end:
             break
         SS = 0
         for x in X:
@@ -80,9 +80,9 @@ def branch_length_Y(ts, X, Y, Z, begin=0.0, end=None):
         end = ts.sequence_length
     S = 0
     for tr in ts.trees():
-        if tr.interval[1] < begin:
+        if tr.interval[1] <= begin:
             continue
-        if tr.interval[0] > end:
+        if tr.interval[0] >= end:
             break
         this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
         for x in X:
@@ -117,9 +117,9 @@ def branch_length_f4(ts, A, B, C, D, begin=0.0, end=None):
             raise ValueError("A,B,C, and D cannot contain repeated elements.")
     S = 0
     for tr in ts.trees():
-        if tr.interval[1] < begin:
+        if tr.interval[1] <= begin:
             continue
-        if tr.interval[0] > end:
+        if tr.interval[0] >= end:
             break
         this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
         SS = 0
@@ -143,9 +143,9 @@ def branch_length_f3(ts, A, B, C, begin=0.0, end=None):
             raise ValueError("A,B,C, and D cannot contain repeated elements.")
     S = 0
     for tr in ts.trees():
-        if tr.interval[1] < begin:
+        if tr.interval[1] <= begin:
             continue
-        if tr.interval[0] > end:
+        if tr.interval[0] >= end:
             break
         this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
         SS = 0
@@ -487,9 +487,7 @@ class BranchStatsTestCase(unittest.TestCase):
         self.check_windowization(ts)
 
     def test_derived_functions(self):
-        '''
-        Test implementation of statistics using these functions.
-        '''
+        # Test implementation of statistics using these functions.
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_tmrca_matrix(ts)
         self.check_f3_stat(ts)
