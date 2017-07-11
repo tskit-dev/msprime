@@ -274,7 +274,7 @@ class TreeDrawer(object):
     def __init__(
             self, tree, width=200, height=200, show_times=False,
             show_mutation_labels=False, show_internal_node_labels=True,
-            show_leaf_node_labels=True, node_colours=[]):
+            show_leaf_node_labels=True, branch_colours=None):
         self._width = width
         self._height = height
         self._show_times = show_times
@@ -290,16 +290,16 @@ class TreeDrawer(object):
         self._x_coords = {}
         self._y_coords = {}
         try:
-            self._colour = {node:col for node,col in node_colours.keys()}
-        except:
-            self._colour = {node:col for node,col in enumerate(node_colours)}
-            
+            self._branch_colours = {node: col for node, col in branch_colours.keys()}
+        except AttributeError:
+            self._branch_colours = {node: col for node, col in enumerate(branch_colours)}
+        
         for u in tree.nodes():
             scaled_t = tree.get_time(u) * self._y_scale
             self._y_coords[u] = height - scaled_t - y_padding
         self._leaf_x = 1
         self._assign_x_coordinates(self._tree.get_root())
-        self._assign_colours(self._tree.get_root())
+        self._assign_branch_colours(self._tree.get_root())
         self._mutations = []
         node_mutations = collections.defaultdict(list)
         for site in tree.sites():
@@ -322,7 +322,7 @@ class TreeDrawer(object):
         code as text.
         """
         dwg = svgwrite.Drawing(size=(self._width, self._height), debug=True)
-        lines = dwg.add(dwg.g(id='lines', stroke='dimgrey'))
+        lines = dwg.add(dwg.g(id='lines', stroke='dimgrey', stroke_linecap='round'))
         labels = dwg.add(dwg.g(font_size=14, text_anchor="middle"))
         for u in self._tree.nodes():
             v = self._tree.get_parent(u)
@@ -349,9 +349,9 @@ class TreeDrawer(object):
                     dy=dy))
             if v != NULL_NODE:
                 y = self._x_coords[v], self._y_coords[v]
-                if self._colour.get(v):
-                    lines.add(dwg.line(x, (x[0], y[1]), stroke=self._colour[v]))
-                    lines.add(dwg.line((x[0], y[1]), y, stroke=self._colour[v]))
+                if v in self._branch_colours and self._branch_colours[v] is not None:
+                    lines.add(dwg.line(x, (x[0], y[1]), stroke=self._branch_colours[v]))
+                    lines.add(dwg.line((x[0], y[1]), y, stroke=self._branch_colours[v]))
                 else:
                     lines.add(dwg.line(x, (x[0], y[1])))
                     lines.add(dwg.line((x[0], y[1]), y))
@@ -381,7 +381,7 @@ class TreeDrawer(object):
             self._x_coords[node] = self._leaf_x * self._x_scale
             self._leaf_x += 1
 
-    def _assign_colours(self, node):
+    def _assign_branch_colours(self, node):
         """
         Assign colours up the tree, making parents the same
         colour as their children, unless there is a disagreement
@@ -390,13 +390,13 @@ class TreeDrawer(object):
         if self._tree.is_internal(node):
             children = self._tree.get_children(node)
             for c in children:
-                self._assign_colours(c)
-            if node not in self._colour:
-                colours = set([self._colour.get(c) for c in children])
-                if len(colours)==1:
+                self._assign_branch_colours(c)
+            if node not in self._branch_colours:
+                colours = set([self._branch_colours.get(c) for c in children])
+                if len(colours) == 1:
                     single_colour = colours.pop()
                     if single_colour is not None:
-                        self._colour[node] = single_colour
+                        self._branch_colours[node] = single_colour
 
 # TODO:
 # - Pickle and copy support
@@ -663,7 +663,7 @@ class SparseTree(object):
     def draw(
             self, path=None, width=200, height=200, show_times=False,
             show_mutation_labels=False, show_internal_node_labels=True,
-            show_leaf_node_labels=True, node_colours=[]):
+            show_leaf_node_labels=True, branch_colours=[]):
         """
         Returns a representation of this tree in SVG format.
 
@@ -693,7 +693,7 @@ class SparseTree(object):
                 show_mutation_labels=show_mutation_labels,
                 show_internal_node_labels=show_internal_node_labels,
                 show_leaf_node_labels=show_leaf_node_labels,
-                node_colours=node_colours)
+                branch_colours=branch_colours)
         svg = td.draw()
         if path is not None:
             with open(path, "w") as f:
