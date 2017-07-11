@@ -658,9 +658,9 @@ class SparseTree(object):
         :param bool show_mutation_labels: If True, show labels for mutations.
         :param bool show_internal_node_labels: If True, show labels for internal nodes.
         :param bool show_leaf_node_labels: If True, show labels for leaf nodes.
-        :param list branch_colours: A dict giving colours for edges in the tree.
-            Keys correspond to node numbers in the tree. 
-        :param list node_colours: A dict giving colours for nodes in the tree.
+        :param dict branch_colours: A dict giving colours for edges in the tree.
+            Keys correspond to the node number below the edge to be coloured. 
+        :param dict node_colours: A dict giving colours for nodes in the tree.
             Keys correspond to node numbers in the tree. 
         :return: A representation of this tree in SVG format.
         :rtype: str
