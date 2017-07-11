@@ -663,9 +663,12 @@ class SparseTree(object):
         :param bool show_internal_node_labels: If True, show labels for internal nodes.
         :param bool show_leaf_node_labels: If True, show labels for leaf nodes.
         :param dict branch_colours: A dict giving colours for edges in the tree.
-            Keys correspond to the node number below the edge to be coloured. 
+            Keys correspond to the node number which terminates the edge to be coloured. 
+            Values can be any SVG-approved colour string, such as 'red', 
+            'rgba(10, 99, 50,50)', or '#6495ED'. All nodes whose keys are absent or 
+            whose value is None, are plotted in a default colour.
         :param dict node_colours: A dict giving colours for nodes in the tree.
-            Keys correspond to node numbers in the tree. 
+            Keys correspond to node numbers in the tree, values as for branch_colours
         :return: A representation of this tree in SVG format.
         :rtype: str
         """
