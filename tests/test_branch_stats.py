@@ -502,8 +502,8 @@ class BranchStatsTestCase(unittest.TestCase):
                         * (float(x[2])/len(A[2])-float(x[3])/len(A[3])))
 
             here_values = [branch_length_f4(ts, A[0], A[1], A[2], A[3],
-                                            begin=windows[k], end=windows[k+1])
-                           for k in range(len(windows)-1)]
+                                            begin=windows[i], end=windows[i+1])
+                           for i in range(len(windows)-1)]
 
             self.assertListAlmostEqual(
                     [x[0] for x in ts.f4(A, windows)],
