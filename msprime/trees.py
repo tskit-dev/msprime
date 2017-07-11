@@ -289,8 +289,12 @@ class TreeDrawer(object):
         self._tree = tree
         self._x_coords = {}
         self._y_coords = {}
-        self._branch_colours = branch_colours or {}
-        self._node_colours = node_colours or {}
+        self._branch_colours = {}
+        if branch_colours is not None:
+            self._branch_colours = branch_colours
+        self._node_colours = {}
+        if node_colours is not None:
+            self._node_colours = node_colours
         for u in tree.nodes():
             scaled_t = tree.get_time(u) * self._y_scale
             self._y_coords[u] = height - scaled_t - y_padding
