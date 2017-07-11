@@ -26,12 +26,18 @@ from __future__ import division
 import unittest
 import random
 
+import numpy as np
+import numpy.testing as nt
+
 import six
 
 import msprime
 
 ##
 # This tests implementation of the algorithm described in branch-lengths-methods.md
+#
+# The tests for many special cases - f{2,3,4}, Y - should be unified, somehow -
+# currently they are separate and haphazard but all do about the same thing.
 ##
 
 
@@ -54,9 +60,9 @@ def branch_length_diversity(ts, X, Y, begin=0.0, end=None):
         end = ts.sequence_length
     S = 0
     for tr in ts.trees():
-        if tr.interval[1] < begin:
+        if tr.interval[1] <= begin:
             continue
-        if tr.interval[0] > end:
+        if tr.interval[0] >= end:
             break
         SS = 0
         for x in X:
@@ -72,36 +78,53 @@ def branch_length_diversity_window(ts, X, Y, windows):
     return out
 
 
-def branch_length_Y(ts, x, y, z):
+def branch_length_Y(ts, X, Y, Z, begin=0.0, end=None):
+    if end is None:
+        end = ts.sequence_length
     S = 0
     for tr in ts.trees():
-        xy_mrca = tr.mrca(x, y)
-        xz_mrca = tr.mrca(x, z)
-        yz_mrca = tr.mrca(y, z)
-        if xy_mrca == xz_mrca:
-            #   /\
-            #  / /\
-            # x y  z
-            S += path_length(tr, x, yz_mrca)*tr.length
-        elif xy_mrca == yz_mrca:
-            #   /\
-            #  / /\
-            # y x  z
-            S += path_length(tr, x, xz_mrca)*tr.length
-        elif xz_mrca == yz_mrca:
-            #   /\
-            #  / /\
-            # z x  y
-            S += path_length(tr, x, xy_mrca)*tr.length
-    return S/ts.sequence_length
+        if tr.interval[1] <= begin:
+            continue
+        if tr.interval[0] >= end:
+            break
+        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+        for x in X:
+            for y in Y:
+                for z in Z:
+                    xy_mrca = tr.mrca(x, y)
+                    xz_mrca = tr.mrca(x, z)
+                    yz_mrca = tr.mrca(y, z)
+                    if xy_mrca == xz_mrca:
+                        #   /\
+                        #  / /\
+                        # x y  z
+                        S += path_length(tr, x, yz_mrca) * this_length
+                    elif xy_mrca == yz_mrca:
+                        #   /\
+                        #  / /\
+                        # y x  z
+                        S += path_length(tr, x, xz_mrca) * this_length
+                    elif xz_mrca == yz_mrca:
+                        #   /\
+                        #  / /\
+                        # z x  y
+                        S += path_length(tr, x, xy_mrca) * this_length
+    return S/((end - begin) * len(X) * len(Y) * len(Z))
 
 
-def branch_length_f4(ts, A, B, C, D):
+def branch_length_f4(ts, A, B, C, D, begin=0.0, end=None):
+    if end is None:
+        end = ts.sequence_length
     for U in A, B, C, D:
         if max([U.count(x) for x in set(U)]) > 1:
             raise ValueError("A,B,C, and D cannot contain repeated elements.")
     S = 0
     for tr in ts.trees():
+        if tr.interval[1] <= begin:
+            continue
+        if tr.interval[0] >= end:
+            break
+        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
         SS = 0
         for a in A:
             for b in B:
@@ -109,8 +132,60 @@ def branch_length_f4(ts, A, B, C, D):
                     for d in D:
                         SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
                         SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
-        S += SS*tr.length
-    return S/(ts.sequence_length*len(A)*len(B)*len(C)*len(D))
+        S += SS * this_length
+    return S / ((end - begin) * len(A) * len(B) * len(C) * len(D))
+
+
+def branch_length_f3(ts, A, B, C, begin=0.0, end=None):
+    # this is f4(A,B;A,C) but drawing distinct samples from A
+    if end is None:
+        end = ts.sequence_length
+    assert(len(A) > 1)
+    for U in A, B, C:
+        if max([U.count(x) for x in set(U)]) > 1:
+            raise ValueError("A, B and C cannot contain repeated elements.")
+    S = 0
+    for tr in ts.trees():
+        if tr.interval[1] <= begin:
+            continue
+        if tr.interval[0] >= end:
+            break
+        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+        SS = 0
+        for a in A:
+            for b in B:
+                for c in set(A) - set([a]):
+                    for d in C:
+                        SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
+                        SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
+        S += SS * this_length
+    return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * len(C))
+
+
+def branch_length_f2(ts, A, B, begin=0.0, end=None):
+    # this is f4(A,B;A,B) but drawing distinct samples from A and B
+    if end is None:
+        end = ts.sequence_length
+    assert(len(A) > 1)
+    for U in A, B:
+        if max([U.count(x) for x in set(U)]) > 1:
+            raise ValueError("A and B cannot contain repeated elements.")
+    S = 0
+    for tr in ts.trees():
+        if tr.interval[1] <= begin:
+            continue
+        if tr.interval[0] >= end:
+            break
+        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+        SS = 0
+        for a in A:
+            for b in B:
+                for c in set(A) - set([a]):
+                    for d in set(B) - set([b]):
+                        SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
+                        SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
+        S += SS * this_length
+    return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * (len(B) - 1))
 
 
 def branch_stats_node_iter(ts, leaf_sets, weight_fun, method='length'):
@@ -187,6 +262,22 @@ def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
     return S
 
 
+def upper_tri_to_matrix(x):
+    """
+    Given x, a vector of entries of the upper triangle of a matrix
+    in row-major order, including the diagonal, return the corresponding matrix.
+    """
+    # n^2 + n = 2 u => n = (-1 + sqrt(1 + 8*u))/2
+    n = int((np.sqrt(1 + 8 * len(x)) - 1)/2.0)
+    out = np.ones((n, n))
+    k = 0
+    for i in range(n):
+        for j in range(i, n):
+            out[i, j] = out[j, i] = x[k]
+            k += 1
+    return out
+
+
 class BranchStatsTestCase(unittest.TestCase):
     """
     Tests of branch statistic computation.
@@ -196,6 +287,12 @@ class BranchStatsTestCase(unittest.TestCase):
     def assertListAlmostEqual(self, x, y):
         for a, b in zip(x, y):
             self.assertAlmostEqual(a, b)
+
+    def assertArrayEqual(self, x, y):
+        nt.assert_equal(x, y)
+
+    def assertArrayAlmostEqual(self, x, y):
+        nt.assert_array_almost_equal(x, y)
 
     def check_vectorization(self, ts):
         samples = random.sample(ts.samples(), 3)
@@ -274,6 +371,82 @@ class BranchStatsTestCase(unittest.TestCase):
                     ts.branch_stats(A, f),
                     branch_length_diversity(ts, A[0], A[1]))
 
+    def check_tmrca_matrix(self, ts):
+        # nonoverlapping leaves
+        leaves = random.sample(ts.samples(), 6)
+        A = [leaves[0:3], leaves[3:5], leaves[5:6]]
+        windows = [0.0, ts.sequence_length/2, ts.sequence_length]
+        ts_values = ts.mean_pairwise_tmrca(A, windows)
+        ts_matrix_values = ts.mean_pairwise_tmrca_matrix(A, windows)
+        self.assertListEqual([len(x) for x in ts_values], [len(leaves), len(leaves)])
+        assert(len(A[2]) == 1)
+        self.assertListEqual([x[5] for x in ts_values], [np.nan, np.nan])
+        self.assertEqual(len(ts_values), len(ts_matrix_values))
+        for w in range(len(ts_values)):
+            self.assertArrayEqual(
+                    ts_matrix_values[w, :, :],
+                    upper_tri_to_matrix(ts_values[w]))
+        here_values = np.array([[[branch_length_diversity(ts, A[i], A[j],
+                                                          begin=windows[k],
+                                                          end=windows[k+1])
+                                  for i in range(len(A))]
+                                 for j in range(len(A))]
+                                for k in range(len(windows)-1)])
+        for k in range(len(windows)-1):
+            for i in range(len(A)):
+                for j in range(len(A)):
+                    if i == j:
+                        if len(A[i]) == 1:
+                            here_values[k, i, i] = np.nan
+                        else:
+                            here_values[k, i, i] /= 2.0 * (len(A[i])-1)/len(A[i])
+                    else:
+                        here_values[k, j, i] /= 2.0
+        for k in range(len(windows)-1):
+            self.assertArrayAlmostEqual(here_values[k], ts_matrix_values[k])
+
+    def check_f2_stat(self, ts):
+        A = [random.sample(ts.samples(), 3),
+             random.sample(ts.samples(), 2),
+             random.sample(ts.samples(), 2)]
+        windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
+        ts_values = ts.f2(A[0:2], windows)
+        ts_vector_values = ts.f2_vector(A, windows, [(0, 1), (1, 2)])
+        self.assertListEqual([len(x) for x in ts_values],
+                             [1 for _ in range(len(windows)-1)])
+        here_values = [[branch_length_f2(ts, A[0], A[1], begin=windows[k],
+                                         end=windows[k+1]),
+                        branch_length_f2(ts, A[1], A[2], begin=windows[k],
+                                         end=windows[k+1])]
+                       for k in range(len(windows)-1)]
+        self.assertListAlmostEqual([y[0] for y in here_values],
+                                   [x[0] for x in ts_values])
+        self.assertListAlmostEqual([y[0] for y in here_values],
+                                   [x[0] for x in ts_vector_values])
+        self.assertListAlmostEqual([y[1] for y in here_values],
+                                   [x[1] for x in ts_vector_values])
+
+    def check_f3_stat(self, ts):
+        A = [random.sample(ts.samples(), 3),
+             random.sample(ts.samples(), 2),
+             random.sample(ts.samples(), 1)]
+        windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
+        ts_values = ts.f3(A, windows)
+        ts_vector_values = ts.f3_vector(A, windows, [(0, 1, 2), (1, 0, 2)])
+        self.assertListEqual([len(x) for x in ts_values],
+                             [1 for _ in range(len(windows)-1)])
+        here_values = [[branch_length_f3(ts, A[0], A[1], A[2], begin=windows[k],
+                                         end=windows[k+1]),
+                        branch_length_f3(ts, A[1], A[0], A[2], begin=windows[k],
+                                         end=windows[k+1])]
+                       for k in range(len(windows)-1)]
+        self.assertListAlmostEqual([y[0] for y in here_values],
+                                   [x[0] for x in ts_values])
+        self.assertListAlmostEqual([y[0] for y in here_values],
+                                   [x[0] for x in ts_vector_values])
+        self.assertListAlmostEqual([y[1] for y in here_values],
+                                   [x[1] for x in ts_vector_values])
+
     def check_pairwise_diversity_mutations(self, ts):
         samples = random.sample(ts.samples(), 2)
         A = [[samples[0]], [samples[1]]]
@@ -287,53 +460,98 @@ class BranchStatsTestCase(unittest.TestCase):
                 ts.pairwise_diversity(samples=samples))
 
     def check_Y_stat(self, ts):
-        samples = random.sample(ts.samples(), 3)
-        A = [[samples[0]], samples[1:3]]
+        samples = random.sample(ts.samples(), 6)
+        A = [[samples[0]], [samples[1]], [samples[2], samples[3]],
+             [samples[4], samples[5]]]
+        windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
+        here_values = [branch_length_Y(ts, A[0], A[1], A[2],
+                                       begin=windows[k], end=windows[k+1])
+                       for k in range(len(windows)-1)]
+        here_values_2 = [branch_length_Y(ts, A[1], A[2], A[3],
+                                         begin=windows[k], end=windows[k+1])
+                         for k in range(len(windows)-1)]
+        ts_values = ts.Y(A[0:3], windows)
+        ts_vector_values = ts.Y_vector(A, windows, [[0, 1, 2], [1, 2, 3], [0, 2, 1]])
 
-        def f(x):
-            return float(((x[0] == 1) and (x[1] == 0)) or ((x[0] == 0) and (x[1] == 2)))
-
-        self.assertAlmostEqual(
-                ts.branch_stats(A, f),
-                branch_length_Y(ts, A[0][0], A[1][0], A[1][1]))
-        self.assertAlmostEqual(
-                branch_stats_node_iter(ts, A, f, method='length'),
-                branch_length_Y(ts, A[0][0], A[1][0], A[1][1]))
+        self.assertListAlmostEqual(
+                [x[0] for x in ts_values],
+                here_values)
+        self.assertListAlmostEqual(
+                [x[1] for x in ts_vector_values],
+                here_values_2)
+        self.assertListAlmostEqual(
+                [x[2] for x in ts_vector_values],
+                here_values)
 
     def check_f4_stat(self, ts):
-        samples = random.sample(ts.samples(), 4)
-        A_zero = [[samples[0]], [samples[0]], [samples[1]], [samples[1]]]
-        A_f1 = [[samples[0]], [samples[1]], [samples[0]], [samples[1]]]
-        A_one = [[samples[0]], [samples[1]], [samples[2]], [samples[3]]]
+        A_zero = [[x] for x in random.sample(ts.samples(), 4)]
         A_many = [random.sample(ts.samples(), 3),
                   random.sample(ts.samples(), 3),
                   random.sample(ts.samples(), 3),
                   random.sample(ts.samples(), 3)]
-        for A in (A_zero, A_f1, A_one, A_many):
+        A_list = A_zero + A_many
+        windows = [0.0, ts.sequence_length/2.0, ts.sequence_length]
+        indices = [(0, 1, 2, 3), (0, 1, 4, 5), (4, 5, 6, 7)]
+        ts_vector = ts.f4_vector(A_list, windows, indices)
+        for k in range(len(indices)):
+            index_list = indices[k]
+            A = [A_list[i] for i in index_list]
 
             def f(x):
                 return ((float(x[0])/len(A[0])-float(x[1])/len(A[1]))
                         * (float(x[2])/len(A[2])-float(x[3])/len(A[3])))
 
-            self.assertAlmostEqual(
-                    ts.branch_stats(A, f),
-                    branch_length_f4(ts, A[0], A[1], A[2], A[3]))
+            here_values = [branch_length_f4(ts, A[0], A[1], A[2], A[3],
+                                            begin=windows[i], end=windows[i+1])
+                           for i in range(len(windows)-1)]
+
+            self.assertListAlmostEqual(
+                    [x[0] for x in ts.f4(A, windows)],
+                    here_values)
+            self.assertListAlmostEqual(
+                    [x[k] for x in ts_vector],
+                    here_values)
             self.assertAlmostEqual(
                     branch_stats_node_iter(ts, A, f, method='length'),
                     branch_length_f4(ts, A[0], A[1], A[2], A[3]))
+
+    def test_errors(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=10)
+        self.assertRaises(ValueError,
+                          ts.mean_pairwise_tmrca, [[0], [11]], [0, ts.sequence_length])
+        self.assertRaises(ValueError,
+                          ts.mean_pairwise_tmrca, [[0], [1]], [0, ts.sequence_length/2])
+        self.assertRaises(ValueError,
+                          ts.mean_pairwise_tmrca, [[0], [1]], [ts.sequence_length/2,
+                                                               ts.sequence_length])
+        self.assertRaises(ValueError,
+                          ts.mean_pairwise_tmrca, [[0], [1]], [0.0, 2.0, 1.0,
+                                                               ts.sequence_length])
+        # errors for not enough leaf_sets
+        self.assertRaises(ValueError,
+                          ts.f4, [[0, 1], [2], [3]], [0, ts.sequence_length])
+        self.assertRaises(ValueError,
+                          ts.f3, [[0], [2]], [0, ts.sequence_length])
+        self.assertRaises(ValueError,
+                          ts.f2, [[0], [1], [2]], [0, ts.sequence_length])
+        # errors if indices aren't of the right length
+        self.assertRaises(ValueError,
+                          ts.Y_vector, [[0], [1], [2]], [0, ts.sequence_length],
+                          [[0, 1]])
+        self.assertRaises(ValueError,
+                          ts.f4_vector, [[0], [1], [2], [3]], [0, ts.sequence_length],
+                          [[0, 1]])
+        self.assertRaises(ValueError,
+                          ts.f3_vector, [[0], [1], [2], [3]], [0, ts.sequence_length],
+                          [[0, 1]])
+        self.assertRaises(ValueError,
+                          ts.f2_vector, [[0], [1], [2], [3]], [0, ts.sequence_length],
+                          [[0, 1, 2]])
 
     def test_pairwise_diversity(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
-
-    def test_Y_stat(self):
-        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
-        self.check_Y_stat(ts)
-
-    def test_f4(self):
-        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
-        self.check_f4_stat(ts)
 
     def test_vectorization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
@@ -342,6 +560,15 @@ class BranchStatsTestCase(unittest.TestCase):
     def test_windowization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         self.check_windowization(ts)
+
+    def test_derived_functions(self):
+        # Test implementation of statistics using these functions.
+        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
+        self.check_tmrca_matrix(ts)
+        self.check_f2_stat(ts)
+        self.check_f3_stat(ts)
+        self.check_f4_stat(ts)
+        self.check_Y_stat(ts)
 
     def test_case_1(self):
         # With mutations:
@@ -408,7 +635,6 @@ class BranchStatsTestCase(unittest.TestCase):
             nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
-        self.check_Y_stat(ts)
         self.check_vectorization(ts)
 
         # diversity between 0 and 1
@@ -450,7 +676,7 @@ class BranchStatsTestCase(unittest.TestCase):
 
         # branch lengths:
         true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
-        self.assertAlmostEqual(branch_length_Y(ts, 0, 1, 2), true_Y)
+        self.assertAlmostEqual(branch_length_Y(ts, [0], [1], [2]), true_Y)
         self.assertAlmostEqual(ts.branch_stats(A, f), true_Y)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f), true_Y)
 
@@ -539,7 +765,6 @@ class BranchStatsTestCase(unittest.TestCase):
 
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
-        self.check_Y_stat(ts)
         self.check_vectorization(ts)
 
         # divergence between 0 and 1
@@ -578,7 +803,7 @@ class BranchStatsTestCase(unittest.TestCase):
             return ((x[0] == 1) and (x[1] == 0)) or ((x[0] == 0) and (x[1] == 2))
 
         # branch lengths:
-        self.assertAlmostEqual(branch_length_Y(ts, 0, 1, 2), true_Y)
+        self.assertAlmostEqual(branch_length_Y(ts, [0], [1], [2]), true_Y)
         self.assertAlmostEqual(ts.branch_stats(A, f), true_Y)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f), true_Y)
 
