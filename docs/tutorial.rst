@@ -498,7 +498,7 @@ the values used.
 .. todo:: Add a diagram of the model for convenience.
 
 .. code-block:: python
-
+    import math
     def out_of_africa():
         # First we set out the maximum likelihood values of the various parameters
         # given in Table 1.
