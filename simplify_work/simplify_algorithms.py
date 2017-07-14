@@ -41,7 +41,7 @@ class Simplifier(Simulator):
         num_loci = ts.sequence_length
 
         self.ts = ts
-        self.n = sample_size
+        self.n = len(samples)
         self.m = num_loci
         self.max_segments = max_segments
         self.segment_stack = []
@@ -78,22 +78,47 @@ class Simplifier(Simulator):
         self.num_ca_events = 0
         self.num_re_events = 0
 
+    def print_state(self):
+        print(".................")
+        print("State @ time ", self.t)
+        print("Links = ", self.L.get_total())
+        for population in self.P:
+            population.print_state()
+        print("Overlap counts", len(self.S))
+        for k, x in self.S.items():
+            print("\t", k, "\t:\t", x)
+        print("Coalescence records: ")
+        for rec in self.C:
+            print("\t", rec)
+        print("Node mappings: ")
+        for a in self.A:
+            print(a, ":", self.A[a])
+
     def simplify(self):
         for parent_id, parent in enumerate(self.ts.nodes()):
+            print("---> doing parent: ", parent_id)
+            self.print_state()
             # inefficent way to pull all edges corresponding to a given parent
             edges = [x for x in self.ts.edgesets() if x.parent == parent_id]
             if len(edges) > 0:
                 self.t = parent.time
                 # pull out the ancestry segments that will be merged
                 H = self.remove_ancestry(edges)
-                print("---- H:")
-                self.P[0].print_state()
-                print(H)
+                print("---- will merge these segments (H):")
+                self.print_heaps(H)
+                print("---- State before merging:")
+                self.print_state()
                 if len(H) > 0:
                     # and merge them: just like merge_ancestors but needs to return the index
                     # of the first segment of the parent to update A with
+                    # or returns None if that parent is empty
                     parent_index = self.merge_labeled_ancestors(H, self.pop_index)
-                    self.A[parent_id] = parent_index
+                    if parent_index is not None:
+                        self.A[parent_id] = parent_index
+                    print("---- merged: ", parent_id, "->", parent_index)
+                    self.print_state()
+        print("------ done!")
+        self.print_state()
 
     def get_ancestor(self, u):
         if u in self.A:
@@ -124,7 +149,9 @@ class Simplifier(Simulator):
                     # and w will be the previous segment sent to output
                     w = None
                     while x is not None and edge.right >= x.left:
-                        if edge.left <= x.right and edge.right >= x.left:
+                        # intervals are half-open: [left, right)
+                        #  so that the left coordinate is inclusive and the right
+                        if edge.left < x.right and edge.right > x.left:
                             # we have overlap
                             seg_right = x.right
                             out_left = max(edge.left, x.left)
@@ -179,6 +206,8 @@ class Simplifier(Simulator):
                                 del self.A[child]
                             else:
                                 self.A[child] = z.index
+            print(" ... state while removing ...")
+            self.print_heaps(H)
         return H
 
     def merge_labeled_ancestors(self, H, pop_id):
@@ -195,8 +224,8 @@ class Simplifier(Simulator):
         z = None
         out = None
         while len(H) > 0:
-            # print("LOOP HEAD")
-            # self.print_heaps(H)
+            print("LOOP HEAD")
+            self.print_heaps(H)
             alpha = None
             l = H[0][0]
             X = []
@@ -205,6 +234,9 @@ class Simplifier(Simulator):
                 x = heapq.heappop(H)[1]
                 X.append(x)
                 r_max = min(r_max, x.right)
+            print(" len(X):", len(X))
+            for _x in X:
+                print(_x)
             if len(H) > 0:
                 r_max = min(r_max, H[0][0])
             if len(X) == 1:
@@ -227,6 +259,9 @@ class Simplifier(Simulator):
                 u = self.w - 1
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
+                print("  l:", l)
+                print("  r_max:", r_max)
+                print("  S:", self.S)
                 if l not in self.S:
                     j = self.S.floor_key(l)
                     self.S[l] = self.S[j]
@@ -235,6 +270,7 @@ class Simplifier(Simulator):
                     self.S[r_max] = self.S[j]
                 # Update the number of extant segments.
                 if self.S[l] == len(X):
+                    print("    yes.")
                     self.S[l] = 0
                     r = self.S.succ_key(l)
                 else:
@@ -275,7 +311,7 @@ class Simplifier(Simulator):
             self.defrag_segment_chain(z)
         if coalescence:
             self.defrag_breakpoints()
-        assert out is not None
+        print("    out:", out, z, alpha)
         return out
 
 
