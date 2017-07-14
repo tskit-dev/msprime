@@ -43,8 +43,6 @@ class Simplifier(Simulator):
         self.ts = ts
         self.n = sample_size
         self.m = num_loci
-        # self.r = recombination_rate
-        # self.migration_matrix = migration_matrix
         self.max_segments = max_segments
         self.segment_stack = []
         self.segments = [None for j in range(self.max_segments + 1)]
@@ -59,6 +57,12 @@ class Simplifier(Simulator):
         # records from `ts` refer to IDs that we must associate with ancestors
         # this mapping is recorded here:
         self.A = {}
+
+        # unused stuff included to use other Simulator methods
+        self.r = 0.0
+        self.migration_matrix = [0.0]
+        self.modifier_events = []
+
         # set this as a constant to make code clear below
         self.pop_index = 0
         for k in range(sample_size):
@@ -75,17 +79,21 @@ class Simplifier(Simulator):
         self.num_re_events = 0
 
     def simplify(self):
-        for parent_id, parent in enumerate(ts.nodes()):
+        for parent_id, parent in enumerate(self.ts.nodes()):
             # inefficent way to pull all edges corresponding to a given parent
-            edges = [x for x in ts.edgesets() if x.parent == parent]
+            edges = [x for x in self.ts.edgesets() if x.parent == parent_id]
             if len(edges) > 0:
                 self.t = parent.time
                 # pull out the ancestry segments that will be merged
                 H = self.remove_ancestry(edges)
-                # and merge them: just like merge_ancestors but needs to return the index
-                # of the first segment of the parent to update A with
-                parent_index = self.merge_labeled_ancestors(H, self.pop_index)
-                A[parent_id] = parent_index
+                print("---- H:")
+                self.P[0].print_state()
+                print(H)
+                if len(H) > 0:
+                    # and merge them: just like merge_ancestors but needs to return the index
+                    # of the first segment of the parent to update A with
+                    parent_index = self.merge_labeled_ancestors(H, self.pop_index)
+                    self.A[parent_id] = parent_index
 
     def get_ancestor(self, u):
         if u in self.A:
@@ -104,6 +112,7 @@ class Simplifier(Simulator):
         """
         H = []
         for edge in edges:
+            print("remove edge:", edge)
             for child in edge.children:
                 if child in self.A:
                     x = self.get_ancestor(child)
@@ -138,7 +147,7 @@ class Simplifier(Simulator):
                                 next_w = x
                             if w is None:
                                 # then we're at the head of an ancestor that we are outputting to H
-                                heapq.heappush(H, (w.left, w))
+                                heapq.heappush(H, (next_w.left, next_w))
                             else:
                                 w.next = next_w
                             w = next_w
@@ -284,7 +293,13 @@ def run_simplify(args):
     s.write_text(nodes_file, edgesets_file)
     nodes_file.seek(0)
     edgesets_file.seek(0)
+    print(nodes_file.getvalue())
+    print(edgesets_file.getvalue())
     new_ts = msprime.load_text(nodes_file, edgesets_file)
+    print("Input:")
+    for t in ts.trees():
+        print(t)
+    print("Output:")
     for t in new_ts.trees():
         print(t)
     # process_trees(new_ts)
