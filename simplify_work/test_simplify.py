@@ -24,6 +24,40 @@ class SimplifyTestCase(unittest.TestCase):
     random_seed = 23
 
 
+def single_childify(ts):
+    """
+    Builds a new equivalent tree sequence whose edgesets all have singleton children.
+    """
+    tables = ts.dump_tables()
+    print(tables.edgesets)
+    tables.edgesets.reset()
+    for u in range(ts.num_nodes):
+        parent_edges = [r for r in ts.edgesets() if u == r.parent]
+        print(u, "__", parent_edges)
+        children = []
+        for r in parent_edges:
+            children.extend(r.children)
+        for child in set(children):
+            edges = [r for r in parent_edges if child in r.children]
+            lefts = [r.left for r in edges]
+            rights = [r.right for r in edges]
+            do_lefts = [lefts[0]]
+            do_rights = []
+            for k in range(len(lefts)-1):
+                if lefts[k+1] != rights[k]:
+                    do_lefts.append(lefts[k+1])
+                    do_rights.append(rights[k])
+            do_rights.append(rights[-1])
+            print(child, " :: ", do_lefts, " ---- ", do_rights)
+            assert len(do_lefts) == len(do_rights)
+            for k in range(len(do_lefts)):
+                tables.edgesets.add_row(
+                    left=do_lefts[k], right=do_rights[k], children=(child,), parent=u)
+    print(tables.edgesets)
+    new_ts = msprime.load_tables(**tables._asdict())
+    return new_ts
+
+
 def do_simplify(ts, sample=None):
     if sample is None:
         sample = ts.samples()
@@ -39,12 +73,57 @@ def do_simplify(ts, sample=None):
     new_ts = msprime.load_text(nodes_file, edgesets_file)
     return new_ts
 
+
 def print_tables(ts):
     nodes = msprime.NodeTable()
     edges = msprime.EdgesetTable()
     ts.dump_tables(nodes=nodes, edgesets=edges)
     print(nodes)
     print(edges)
+
+
+def reset_population(ts):
+    """
+    Set population to zero.
+    """
+    tables = ts.dump_tables()
+    tables.nodes.reset()
+    for x in ts.nodes():
+        tables.nodes.add_row(flags=x.flags, population=0, time=x.time)
+    new_ts = msprime.load_tables(**tables._asdict())
+    return new_ts
+
+
+class TestOverlappingRecords(SimplifyTestCase):
+    """
+    Tests that simplify() can deal with overlapping records.
+    """
+
+    def test_single_tree(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed)
+        ts_single = single_childify(ts)
+        tss_nopops = do_simplify(ts_single)
+        # simplify is not currently recording population: set to 0
+        tss = reset_population(tss_nopops)
+        self.assertEqual(list(tss.records()), list(ts.records()))
+
+    def test_many_trees(self):
+        ts = msprime.simulate(
+                5, recombination_rate=5,
+                random_seed=self.random_seed)
+        self.assertGreater(ts.num_trees, 2)
+        ts_single = single_childify(ts)
+        tss_nopops = do_simplify(ts_single)
+        # simplify is not currently recording population: set to 0
+        tss = reset_population(tss_nopops)
+        print("ts:")
+        print_tables(ts)
+        print("ts_single:")
+        print_tables(ts_single)
+        print("tss:")
+        print_tables(tss)
+        self.assertEqual(list(tss.records()), list(ts.records()))
+
 
 class TestWithVisuals(SimplifyTestCase):
     """
