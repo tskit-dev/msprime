@@ -8,6 +8,7 @@ from __future__ import division
 import unittest
 import math
 import random
+import itertools
 
 import six
 
@@ -22,11 +23,26 @@ class SimplifyTestCase(unittest.TestCase):
     """
     random_seed = 23
 
-    def test_remove_ancestry(self):
-        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=1)
-        s = Simplifier(ts, [0, 3, 5])
-        s.print_state()
 
+def do_simplify(ts, sample):
+    s = Simplifier(ts, sample)
+    s.simplify()
+    nodes_file = six.StringIO()
+    edgesets_file = six.StringIO()
+    s.write_text(nodes_file, edgesets_file)
+    nodes_file.seek(0)
+    edgesets_file.seek(0)
+    print(nodes_file.getvalue())
+    print(edgesets_file.getvalue())
+    new_ts = msprime.load_text(nodes_file, edgesets_file)
+    return new_ts
+
+def print_tables(ts):
+    nodes = msprime.NodeTable()
+    edges = msprime.EdgesetTable()
+    ts.dump_tables(nodes=nodes, edgesets=edges)
+    print(nodes)
+    print(edges)
 
 class TestWithVisuals(SimplifyTestCase):
     """
@@ -34,8 +50,13 @@ class TestWithVisuals(SimplifyTestCase):
     """
 
     def verify_simplify_topology(self, ts, sample):
-        # copies from test_highlevel.py
-        new_ts = ts.simplify(sample)
+        # copies from test_topology.py
+        print(sample)
+        new_ts = do_simplify(ts, sample)
+        print("## ts:")
+        print_tables(ts)
+        print("## simplified:")
+        print_tables(new_ts)
         sample_map = {k: j for j, k in enumerate(sample)}
         old_trees = ts.trees()
         old_tree = next(old_trees)
@@ -404,9 +425,9 @@ class TestWithVisuals(SimplifyTestCase):
                     self.assertEqual(t[k], a[k])
                 else:
                     self.assertEqual(a[k], msprime.NULL_NODE)
-        self.verify_simplify_topology(ts, [0, 2])
-        self.verify_simplify_topology(ts, [0, 4])
-        self.verify_simplify_topology(ts, [2, 4])
+        for samples in [[0, 2], [0, 4], [2, 4]]:
+            print("Verifying", samples)
+            self.verify_simplify_topology(ts, samples)
 
     def test_tricky_simplify(self):
         # Continue as above but invoke simplfy:
@@ -537,7 +558,7 @@ class TestWithVisuals(SimplifyTestCase):
         0.0     0.2     7       0,5
         """)
         first_ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
-        ts = first_ts.simplify()
+        ts = do_simplify(first_ts)
         true_trees = [
             {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6: -1, 7: -1},
             {0: 4, 1: 5, 2: 4, 3: 8, 4: 5, 5: 8, 6: -1, 7: -1},
@@ -633,57 +654,4 @@ class TestWithVisuals(SimplifyTestCase):
                     self.assertEqual(a[k], msprime.NULL_NODE)
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
-
-    def test_internal_sampled_node_simple_case(self):
-        # Internal nodes cannot be samples.
-        nodes = six.StringIO("""\
-        id      is_sample   time
-        0       1           0
-        1       1           0.1
-        2       1           0.2
-        """)
-        edgesets = six.StringIO("""\
-        left    right   parent  children
-        0.0     1.0     2       0,1
-        """)
-        self.assertRaises(
-            _msprime.LibraryError, msprime.load_text, nodes=nodes, edgesets=edgesets)
-
-    def test_internal_sampled_node(self):
-        # 1.0             7
-        # 0.7            / \                      8                     6
-        #               /   \                    / \                   / \
-        # 0.5          /     5                  /   5                 /   5
-        #             /     /*\                /   /*\               /   /*\
-        # 0.4        /     /   4              /   /   4             /   /   4
-        #           /     /   / \            /   /   / \           /   /   / \
-        # 0.2      /     /   3   \          3   /   /   \         /   /   3   \
-        #         /     1    *    2         *  1   /     2       /   1    *    2
-        # 0.0    0      *         *            *  0      *      0    *         *
-        #
-        #          (0.0, 0.2),                 (0.2, 0.8),         (0.8, 1.0)
-        nodes = six.StringIO("""\
-        id      is_sample   time
-        0       0           0
-        1       1           0.1
-        2       1           0.1
-        3       1           0.2
-        4       0           0.4
-        5       1           0.5
-        6       0           0.7
-        7       0           1.0
-        8       0           0.8
-        """)
-        edgesets = six.StringIO("""\
-        left    right   parent  children
-        0.0     0.2     4       2,3
-        0.2     0.8     4       0,2
-        0.8     1.0     4       2,3
-        0.0     1.0     5       1,4
-        0.8     1.0     6       0,5
-        0.2     0.8     8       3,5
-        0.0     0.2     7       0,5
-        """)
-        self.assertRaises(
-            _msprime.LibraryError, msprime.load_text, nodes=nodes, edgesets=edgesets)
 

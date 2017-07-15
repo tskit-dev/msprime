@@ -20,20 +20,80 @@ from algorithms import *
 
 class SearchablePopulation(Population):
     '''
-    Like Population, but allows searching ancestors by index.
+    Like Population, but allows searching ancestors by ancestral segment index,
+    and removing by ancestral segment index.
     '''
-    def from_index(self, index):
+    def index_from_segment(self, ancestral_index):
         # obviously should do this differently
-        for x in self._ancestors:
-            if x.index ==index:
+        indices = [x.index for x in self._ancestors]
+        return indices.index(ancestral_index)
+        for k, x in enumerate(self._ancestors):
+            if x.index == ancestral_index:
                 return x
         return None
+
+    def from_index(self, ancestral_index):
+        return self._ancestors[index_from_segment(ancestral_index)]
+
+    def pop_from_index(self, index):
+        ind = index_from_segment(ancestral_index)
+        return self._ancestors.pop(ind)
+
+class SearchablePopulation(object):
+    """
+    Class representing a population in the simulation.
+    """
+    def __init__(self, id_):
+        self._id = id_
+        # we will use this to identify ancestors with the input node IDs:
+        #   keys are input node IDs
+        #   and values are their head ancestral segments
+        self._ancestors = {}
+
+    def __contains__(self, key):
+        return key in self._ancestors
+
+    def __getitem__(self, key):
+        return self._ancestors[key]
+
+    def __setitem__(self, key, value):
+        self._ancestors[key] = value
+
+    def print_state(self):
+        print("Population ", self._id)
+        for x in self._ancestors:
+            s = str(x) + ": "
+            u = self._ancestors[x]
+            while u is not None:
+                s += "({0}-{1}->{2}({3}))".format(
+                    u.left, u.right, u.node, u.index)
+                u = u.next
+            print("\t\t" + s)
+
+    def get_num_ancestors(self):
+        return len(self._ancestors)
+
+    def remove(self, index):
+        """
+        Removes and returns the individual at the specified index.
+        """
+        return self._ancestors.pop(index)
+
+    def add_with_id(self, ind, individual):
+        """
+        Inserts the specified individual into this population.
+        """
+        self._ancestors[ind] = individual
+
+    def __iter__(self):
+        return iter(self._ancestors)
+
 
 class Simplifier(Simulator):
     """
     Modified from Simulator().
     """
-    def __init__(self, ts, samples, max_segments=100):
+    def __init__(self, ts, sample, max_segments=100):
         # since we will have no migration events,
         # need to use one population but copy over population information
         N = 1
@@ -41,7 +101,7 @@ class Simplifier(Simulator):
         num_loci = ts.sequence_length
 
         self.ts = ts
-        self.n = len(samples)
+        self.n = len(sample)
         self.m = num_loci
         self.max_segments = max_segments
         self.segment_stack = []
@@ -50,13 +110,12 @@ class Simplifier(Simulator):
             s = Segment(j + 1)
             self.segments[j + 1] = s
             self.segment_stack.append(s)
+        # records from `ts` refer to IDs that we must associate with ancestors
+        #   this mapping is recorded here
         self.P = [SearchablePopulation(id_) for id_ in range(N)]
         self.C = []
         self.L = FenwickTree(self.max_segments)
         self.S = bintrees.AVLTree()
-        # records from `ts` refer to IDs that we must associate with ancestors
-        # this mapping is recorded here:
-        self.A = {}
 
         # unused stuff included to use other Simulator methods
         self.r = 0.0
@@ -65,12 +124,12 @@ class Simplifier(Simulator):
 
         # set this as a constant to make code clear below
         self.pop_index = 0
-        for k in range(sample_size):
-            if k in samples:
+        self.A = self.P[self.pop_index]
+        for k in ts.samples():
+            if k in sample:
                 x = self.alloc_segment(0, self.m, k, self.pop_index)
                 self.L.set_value(x.index, self.m - 1)
-                self.P[self.pop_index].add(x)
-                self.A[k] = x.index
+                self.A.add_with_id(k, x)
         self.S[0] = self.n
         self.S[self.m] = -1
         self.t = 0
@@ -82,26 +141,26 @@ class Simplifier(Simulator):
         print(".................")
         print("State @ time ", self.t)
         print("Links = ", self.L.get_total())
-        for population in self.P:
-            population.print_state()
+        print("Node mappings: ")
+        self.A.print_state()
         print("Overlap counts", len(self.S))
         for k, x in self.S.items():
             print("\t", k, "\t:\t", x)
         print("Coalescence records: ")
         for rec in self.C:
             print("\t", rec)
-        print("Node mappings: ")
-        for a in self.A:
-            print(a, ":", self.A[a])
 
     def simplify(self):
-        for parent_id, parent in enumerate(self.ts.nodes()):
-            print("---> doing parent: ", parent_id)
+        # need to deal with parents in order by birth time-ago
+        the_parents = [(parent.time, parent_id) for parent_id, parent in enumerate(self.ts.nodes())]
+        the_parents.sort()
+        for parent_time, parent_id in the_parents:
+            print("---> doing parent: ", parent_id, "at time", parent_time)
             self.print_state()
             # inefficent way to pull all edges corresponding to a given parent
             edges = [x for x in self.ts.edgesets() if x.parent == parent_id]
             if len(edges) > 0:
-                self.t = parent.time
+                self.t = parent_time
                 # pull out the ancestry segments that will be merged
                 H = self.remove_ancestry(edges)
                 print("---- will merge these segments (H):")
@@ -110,19 +169,20 @@ class Simplifier(Simulator):
                 self.print_state()
                 if len(H) > 0:
                     # and merge them: just like merge_ancestors but needs to return the index
-                    # of the first segment of the parent to update A with
+                    # of the first segment of the parent to update P with
                     # or returns None if that parent is empty
-                    parent_index = self.merge_labeled_ancestors(H, self.pop_index)
-                    if parent_index is not None:
-                        self.A[parent_id] = parent_index
-                    print("---- merged: ", parent_id, "->", parent_index)
+                    parent = self.merge_labeled_ancestors(H, self.pop_index)
+                    if parent is not None:
+                        # this replaces pop.add() in merge_ancestors
+                        self.A.add_with_id(parent_id, parent)
+                        print("---- merged: ", parent_id, "->", parent.index)
                     self.print_state()
         print("------ done!")
         self.print_state()
 
     def get_ancestor(self, u):
         if u in self.A:
-            out = self.P[self.pop_index].from_index(self.A[u])
+            out = self.A[u]
         else:
             out = None
         return out
@@ -138,6 +198,7 @@ class Simplifier(Simulator):
         H = []
         for edge in edges:
             print("remove edge:", edge)
+            self.print_state()
             for child in edge.children:
                 if child in self.A:
                     x = self.get_ancestor(child)
@@ -149,6 +210,10 @@ class Simplifier(Simulator):
                     # and w will be the previous segment sent to output
                     w = None
                     while x is not None and edge.right >= x.left:
+                        print("begin     x:" + x.__str__())
+                        print("begin     y:" + y.__str__())
+                        print("begin     z:" + z.__str__())
+                        print("begin     w:" + w.__str__())
                         # intervals are half-open: [left, right)
                         #  so that the left coordinate is inclusive and the right
                         if edge.left < x.right and edge.right > x.left:
@@ -192,6 +257,10 @@ class Simplifier(Simulator):
                             y = x
                         # move on to the next segment
                         x = x.next
+                    print("end     x:" + x.__str__())
+                    print("end     y:" + y.__str__())
+                    print("end     z:" + z.__str__())
+                    print("end     w:" + w.__str__())
                     # don't do wrap-up if we haven't actually done anything
                     if w is not None:
                         if not overhang_right:
@@ -201,11 +270,11 @@ class Simplifier(Simulator):
                         if z is not None:
                             z.prev = y
                         if y is None:
-                            # must update A[child]
+                            # must update P[child]
                             if z is None:
-                                del self.A[child]
+                                self.A.remove(child)
                             else:
-                                self.A[child] = z.index
+                                self.A[child] = z
             print(" ... state while removing ...")
             self.print_heaps(H)
         return H
@@ -296,9 +365,9 @@ class Simplifier(Simulator):
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
                 if z is None:
-                    pop.add(alpha)
                     # the only place where this differs from merge_ancestors():
-                    out = alpha.index
+                    out = alpha
+                    # pop.add(alpha)
                     self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
                 else:
                     defrag_required |= (
@@ -320,9 +389,9 @@ def run_simplify(args):
     Runs simplify on the tree sequence.
     """
     ts = msprime.load(args.tree_sequence)
-    samples = random.sample(ts.samples(), args.sample_size)
+    sample = random.sample(ts.samples(), args.sample_size)
     random.seed(args.random_seed)
-    s = Simplifier(ts, samples)
+    s = Simplifier(ts, sample)
     s.simplify()
     nodes_file = StringIO()
     edgesets_file = StringIO()
