@@ -144,18 +144,18 @@ class Simplifier(Simulator):
         the_parents = [(parent.time, input_id) for input_id, parent in enumerate(self.ts.nodes())]
         the_parents.sort()
         for parent_time, input_id in the_parents:
-            print("---> doing parent: ", input_id, "at time", parent_time)
-            self.print_state()
+            # print("---> doing parent: ", input_id, "at time", parent_time)
+            # self.print_state()
             # inefficent way to pull all edges corresponding to a given parent
             edges = [x for x in self.ts.edgesets() if x.parent == input_id]
             if len(edges) > 0:
                 self.t = parent_time
                 # pull out the ancestry segments that will be merged
                 H = self.remove_ancestry(edges)
-                print("---- will merge these segments (H):")
-                self.print_heaps(H)
-                print("---- State before merging:")
-                self.print_state()
+                # print("---- will merge these segments (H):")
+                # self.print_heaps(H)
+                # print("---- State before merging:")
+                # self.print_state()
                 if len(H) > 0:
                     # and merge them: just like merge_ancestors but needs to return the index
                     # of the first segment of the parent to update P with
@@ -164,10 +164,10 @@ class Simplifier(Simulator):
                     if parent is not None:
                         # this replaces pop.add() in merge_ancestors
                         self.A.add_with_id(input_id, parent)
-                        print("---- merged: ", input_id, "->", parent.index)
-                    self.print_state()
-        print("------ done!")
-        self.print_state()
+                        # print("---- merged: ", input_id, "->", parent.index)
+                    # self.print_state()
+        # print("------ done!")
+        # self.print_state()
 
     def get_ancestor(self, u):
         if u in self.A:
@@ -186,8 +186,8 @@ class Simplifier(Simulator):
         """
         H = []
         for edge in edges:
-            print("remove edge:", edge)
-            self.print_state()
+            # print("remove edge:", edge)
+            # self.print_state()
             for child in edge.children:
                 if child in self.A:
                     x = self.get_ancestor(child)
@@ -199,10 +199,10 @@ class Simplifier(Simulator):
                     # and w will be the previous segment sent to output
                     w = None
                     while x is not None and edge.right > x.left:
-                        print("begin     x: " + x.__str__())
-                        print("begin     y: " + y.__str__())
-                        print("begin     z: " + z.__str__())
-                        print("begin     w: " + w.__str__())
+                        # print("begin     x: " + x.__str__())
+                        # print("begin     y: " + y.__str__())
+                        # print("begin     z: " + z.__str__())
+                        # print("begin     w: " + w.__str__())
                         # intervals are half-open: [left, right)
                         #  so that the left coordinate is inclusive and the right
                         if edge.left < x.right and edge.right > x.left:
@@ -261,12 +261,12 @@ class Simplifier(Simulator):
                                 self.A.remove(child)
                             else:
                                 self.A[child] = z
-                    print("end     x:" + x.__str__())
-                    print("end     y:" + y.__str__())
-                    print("end     z:" + z.__str__())
-                    print("end     w:" + w.__str__())
-            print(" ... state of H while in removing loop ...")
-            self.print_heaps(H)
+                    # print("end     x:" + x.__str__())
+                    # print("end     y:" + y.__str__())
+                    # print("end     z:" + z.__str__())
+                    # print("end     w:" + w.__str__())
+            # print(" ... state of H while in removing loop ...")
+            # self.print_heaps(H)
         return H
 
     def merge_labeled_ancestors(self, H, pop_id):
@@ -283,8 +283,8 @@ class Simplifier(Simulator):
         z = None
         out = None
         while len(H) > 0:
-            print("LOOP HEAD")
-            self.print_heaps(H)
+            # print("LOOP HEAD")
+            # self.print_heaps(H)
             alpha = None
             l = H[0][0]
             X = []
@@ -293,9 +293,6 @@ class Simplifier(Simulator):
                 x = heapq.heappop(H)[1]
                 X.append(x)
                 r_max = min(r_max, x.right)
-            print(" len(X):", len(X))
-            for _x in X:
-                print(_x)
             if len(H) > 0:
                 r_max = min(r_max, H[0][0])
             if len(X) == 1:
@@ -317,12 +314,8 @@ class Simplifier(Simulator):
                     self.w += 1
                 # output node ID
                 u = self.w - 1
-                print(" New node: ", u)
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
-                print("  l:", l)
-                print("  r_max:", r_max)
-                print("  S:", self.S)
                 if l not in self.S:
                     j = self.S.floor_key(l)
                     self.S[l] = self.S[j]
@@ -351,8 +344,6 @@ class Simplifier(Simulator):
                     elif x.right > r:
                         x.left = r
                         heapq.heappush(H, (x.left, x))
-                # # I am unclear why this was not necessary before??
-                # children.sort()
                 self.C.append((l, r, u, children, self.t))
 
             # loop tail; update alpha and integrate it into the state.
@@ -373,7 +364,6 @@ class Simplifier(Simulator):
             self.defrag_segment_chain(z)
         if coalescence:
             self.defrag_breakpoints()
-        print("    out:", out, z, alpha)
         return out
 
     def write_text(self, nodes_file, edgesets_file):
