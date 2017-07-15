@@ -18,13 +18,22 @@ Do this translates between three things:
 
 We just keep track of the conversion from *input* to *internal*;
 the algorithm does appropriate *output*.
-This means we don't end up with the conversion from *input* to *output* node IDs,
-but we don't actually need this, except for the samples.
 Currently, we store this conversion in a dict, $A$,
 so that for an input node ID $u$, the value of $A[u]$
 gives the "internal ancestor",
 i.e., the index of the first ancestry segment corresponding to that ancestor.
 This means that we need also to be able to find ancestral segments based on index.
+
+During this procedure, the *internal* state tracks segments of *ancestry* in *ancestors*.
+Each *ancestor* is a collection of ancestry segments.
+Segments of ancestry are labeled by which *output* node label they correspond to.
+Any segments over which there was a coalescence event in a given ancestor
+will be labeled by the *output* node label of that ancestor,
+but if an ancestor does not contain any such segments,
+she will not be assigned an output label.
+Since we only process coalescences once (in `merge_ancestors`),
+we do not need to explicitly record the mapping from internal ancestor label to output node label,
+but we could easily at this point in the algorithm.
 
 **Initialization:**
 

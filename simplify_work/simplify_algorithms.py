@@ -18,26 +18,6 @@ from six.moves import StringIO
 
 from algorithms import *
 
-class SearchablePopulation(Population):
-    '''
-    Like Population, but allows searching ancestors by ancestral segment index,
-    and removing by ancestral segment index.
-    '''
-    def index_from_segment(self, ancestral_index):
-        # obviously should do this differently
-        indices = [x.index for x in self._ancestors]
-        return indices.index(ancestral_index)
-        for k, x in enumerate(self._ancestors):
-            if x.index == ancestral_index:
-                return x
-        return None
-
-    def from_index(self, ancestral_index):
-        return self._ancestors[index_from_segment(ancestral_index)]
-
-    def pop_from_index(self, index):
-        ind = index_from_segment(ancestral_index)
-        return self._ancestors.pop(ind)
 
 class SearchablePopulation(object):
     """
@@ -122,17 +102,26 @@ class Simplifier(Simulator):
         self.migration_matrix = [0.0]
         self.modifier_events = []
 
+        # need to record this to allow for samples not at time 0.0
+        self.sample_times = [ts.time(u) for u in ts.samples()]
+
         # set this as a constant to make code clear below
         self.pop_index = 0
         self.A = self.P[self.pop_index]
+        j = 0
         for k in ts.samples():
             if k in sample:
-                x = self.alloc_segment(0, self.m, k, self.pop_index)
+                # segment label (j) is the output node ID
+                x = self.alloc_segment(0, self.m, j, self.pop_index)
                 self.L.set_value(x.index, self.m - 1)
+                # and the label in A is the input node ID
                 self.A.add_with_id(k, x)
+                j += 1
         self.S[0] = self.n
         self.S[self.m] = -1
         self.t = 0
+        # this (w) gives the next output node ID to be assigned
+        #   when coalescent events occur:
         self.w = self.n
         self.num_ca_events = 0
         self.num_re_events = 0
@@ -152,13 +141,13 @@ class Simplifier(Simulator):
 
     def simplify(self):
         # need to deal with parents in order by birth time-ago
-        the_parents = [(parent.time, parent_id) for parent_id, parent in enumerate(self.ts.nodes())]
+        the_parents = [(parent.time, input_id) for input_id, parent in enumerate(self.ts.nodes())]
         the_parents.sort()
-        for parent_time, parent_id in the_parents:
-            print("---> doing parent: ", parent_id, "at time", parent_time)
+        for parent_time, input_id in the_parents:
+            print("---> doing parent: ", input_id, "at time", parent_time)
             self.print_state()
             # inefficent way to pull all edges corresponding to a given parent
-            edges = [x for x in self.ts.edgesets() if x.parent == parent_id]
+            edges = [x for x in self.ts.edgesets() if x.parent == input_id]
             if len(edges) > 0:
                 self.t = parent_time
                 # pull out the ancestry segments that will be merged
@@ -174,8 +163,8 @@ class Simplifier(Simulator):
                     parent = self.merge_labeled_ancestors(H, self.pop_index)
                     if parent is not None:
                         # this replaces pop.add() in merge_ancestors
-                        self.A.add_with_id(parent_id, parent)
-                        print("---- merged: ", parent_id, "->", parent.index)
+                        self.A.add_with_id(input_id, parent)
+                        print("---- merged: ", input_id, "->", parent.index)
                     self.print_state()
         print("------ done!")
         self.print_state()
@@ -209,11 +198,11 @@ class Simplifier(Simulator):
                     z = None
                     # and w will be the previous segment sent to output
                     w = None
-                    while x is not None and edge.right >= x.left:
-                        print("begin     x:" + x.__str__())
-                        print("begin     y:" + y.__str__())
-                        print("begin     z:" + z.__str__())
-                        print("begin     w:" + w.__str__())
+                    while x is not None and edge.right > x.left:
+                        print("begin     x: " + x.__str__())
+                        print("begin     y: " + y.__str__())
+                        print("begin     z: " + z.__str__())
+                        print("begin     w: " + w.__str__())
                         # intervals are half-open: [left, right)
                         #  so that the left coordinate is inclusive and the right
                         if edge.left < x.right and edge.right > x.left:
@@ -257,12 +246,9 @@ class Simplifier(Simulator):
                             y = x
                         # move on to the next segment
                         x = x.next
-                    print("end     x:" + x.__str__())
-                    print("end     y:" + y.__str__())
-                    print("end     z:" + z.__str__())
-                    print("end     w:" + w.__str__())
                     # don't do wrap-up if we haven't actually done anything
                     if w is not None:
+                        w.next = None
                         if not overhang_right:
                             z = x
                         if y is not None:
@@ -275,7 +261,11 @@ class Simplifier(Simulator):
                                 self.A.remove(child)
                             else:
                                 self.A[child] = z
-            print(" ... state while removing ...")
+                    print("end     x:" + x.__str__())
+                    print("end     y:" + y.__str__())
+                    print("end     z:" + z.__str__())
+                    print("end     w:" + w.__str__())
+            print(" ... state of H while in removing loop ...")
             self.print_heaps(H)
         return H
 
@@ -325,7 +315,9 @@ class Simplifier(Simulator):
                 if not coalescence:
                     coalescence = True
                     self.w += 1
+                # output node ID
                 u = self.w - 1
+                print(" New node: ", u)
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
                 print("  l:", l)
@@ -339,7 +331,6 @@ class Simplifier(Simulator):
                     self.S[r_max] = self.S[j]
                 # Update the number of extant segments.
                 if self.S[l] == len(X):
-                    print("    yes.")
                     self.S[l] = 0
                     r = self.S.succ_key(l)
                 else:
@@ -360,6 +351,8 @@ class Simplifier(Simulator):
                     elif x.right > r:
                         x.left = r
                         heapq.heappush(H, (x.left, x))
+                # # I am unclear why this was not necessary before??
+                # children.sort()
                 self.C.append((l, r, u, children, self.t))
 
             # loop tail; update alpha and integrate it into the state.
@@ -382,6 +375,24 @@ class Simplifier(Simulator):
             self.defrag_breakpoints()
         print("    out:", out, z, alpha)
         return out
+
+    def write_text(self, nodes_file, edgesets_file):
+        """
+        Writes the records out as text.  Modified to allow samples from nonzero times.
+        """
+        num_nodes = max(r[2] for r in self.C) + 1
+        time = self.sample_times + [0 for _ in range(num_nodes - self.n)]
+        print("is_sample\ttime", file=nodes_file)
+        print("left\tright\tparent\tchildren", file=edgesets_file)
+        for left, right, u, children, t in self.C:
+            time[u] = t
+            print(
+                left, right, u, ",".join(str(c) for c in sorted(children)),
+                sep="\t", file=edgesets_file)
+        for u in range(num_nodes):
+            print(
+                int(u < self.n), time[u], sep="\t", file=nodes_file)
+
 
 
 def run_simplify(args):

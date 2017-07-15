@@ -24,7 +24,9 @@ class SimplifyTestCase(unittest.TestCase):
     random_seed = 23
 
 
-def do_simplify(ts, sample):
+def do_simplify(ts, sample=None):
+    if sample is None:
+        sample = ts.samples()
     s = Simplifier(ts, sample)
     s.simplify()
     nodes_file = six.StringIO()
@@ -51,6 +53,7 @@ class TestWithVisuals(SimplifyTestCase):
 
     def verify_simplify_topology(self, ts, sample):
         # copies from test_topology.py
+        print("## sample:")
         print(sample)
         new_ts = do_simplify(ts, sample)
         print("## ts:")
