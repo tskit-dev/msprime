@@ -374,15 +374,32 @@ class Simplifier(Simulator):
         time = self.sample_times + [0 for _ in range(num_nodes - self.n)]
         print("is_sample\ttime", file=nodes_file)
         print("left\tright\tparent\tchildren", file=edgesets_file)
-        for left, right, u, children, t in self.C:
-            time[u] = t
-            print(
-                left, right, u, ",".join(str(c) for c in sorted(children)),
-                sep="\t", file=edgesets_file)
+        # collapse adjacent identical ones
+        left, right, parent, _, t = self.C[0]
+        children = sorted(self.C[0][3])
+        k = 1
+        while k < len(self.C):
+            nleft, nright, nparent, _, nt = self.C[k]
+            nchildren = sorted(self.C[k][3])
+            if (right == nleft and len(children) == len(nchildren) and parent == nparent and
+                all([a == b for a, b in zip(children, nchildren)])):
+                    # squash this record into the last
+                    right = nright
+            else:
+                time[parent] = t
+                print(
+                    left, right, parent, ",".join(str(c) for c in children),
+                    sep="\t", file=edgesets_file)
+                left, right, parent, children, t = nleft, nright, nparent, nchildren, nt
+                children = nchildren
+            k += 1
+        time[parent] = t
+        print(
+            left, right, parent, ",".join(str(c) for c in children),
+            sep="\t", file=edgesets_file)
         for u in range(num_nodes):
             print(
                 int(u < self.n), time[u], sep="\t", file=nodes_file)
-
 
 
 def run_simplify(args):
