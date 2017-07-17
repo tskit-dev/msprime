@@ -147,7 +147,24 @@ class Edgeset(SimpleContainer):
 
 
 class NodeTable(_msprime.NodeTable):
-    # TODO document
+    """
+    Class for tables describing all nodes in the tree sequence, of the form
+        id	flags	population	time
+        0	1	0		0.0
+        1	1	0		0.0
+        2	0	0		0.0
+        3	1	0		2.1
+    Node IDs are *not* recorded; rather the `id` column shows the row index, so
+    that the `k`-th row describes the node whose ID is `k`.  `flags` currently
+    records whether the node is a sample (=1) or not (=0).  `population` is an
+    integer population ID, and `time` is the time since that individual was
+    born, as a float.
+
+    Requirements: a valid `NodeTable` must satisfy:
+        1. the `time` column is nondecreasing.
+
+    It is not required that all samples must be at the top.
+    """
     def __str__(self):
         time = self.time
         flags = self.flags
@@ -159,6 +176,31 @@ class NodeTable(_msprime.NodeTable):
 
 
 class EdgesetTable(_msprime.EdgesetTable):
+    """
+    Class for tables describing all edgesets in a tree sequence, of the form
+        left	right	parent	children
+        5.0	7.0	4	0,1
+        2.0	2.5	5	1,3
+        3.2	3.5	4	0,1
+        0.0	3.2	6	0,1,3
+    These describe the half-open genomic interval affected: `[left, right)`,
+    the `parent` and the `children` on that interval.
+
+    Requirements: to describe a valid tree sequence, a `EdgesetTable` (and
+    corresponding `NodeTable`, to provide birth times) must satisfy:
+        1. any two edgesets that share a child must be nonoverlapping, and
+        2. the birth times of the `parent` in an edgeset must be strictly
+            greater than the birth times of the `children` in that edgeset.
+    Furthermore, for algorithmic requirements
+        3. the the table must be sorted by birth time of the `parent`, and
+        4. any two edgesets corresponding to the same `parent` must be nonoverlapping.
+
+    It is not required that all records corresponding to the same parent be
+    adjacent in the table.
+
+    TODO: `TreeSequence.simplify()` will accept edgesets not satisfying the
+    fourth requirement, producing a `TreeSequence` whose edgesets are of this form.
+    """
     def __str__(self):
         left = self.left
         right = self.right
