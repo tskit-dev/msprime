@@ -160,10 +160,8 @@ class NodeTable(_msprime.NodeTable):
     integer population ID, and `time` is the time since that individual was
     born, as a float.
 
-    Requirements: a valid `NodeTable` must satisfy:
-        1. the `time` column is nondecreasing.
-
-    It is not required that all samples must be at the top.
+    It is not required that the `time` column be ordered or that all samples
+    must be at the top.
     """
     def __str__(self):
         time = self.time
