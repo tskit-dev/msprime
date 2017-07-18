@@ -151,9 +151,10 @@ class NodeTable(_msprime.NodeTable):
     Class for tables describing all nodes in the tree sequence, of the form
         id	flags	population	time
         0	1	0		0.0
-        1	1	0		0.0
+        1	1	1		0.0
         2	0	0		0.0
-        3	1	0		2.1
+        3	1	0		0.5
+        4	0	2		2.1
     Node IDs are *not* recorded; rather the `id` column shows the row index, so
     that the `k`-th row describes the node whose ID is `k`.  `flags` currently
     records whether the node is a sample (=1) or not (=0).  `population` is an
@@ -180,10 +181,9 @@ class EdgesetTable(_msprime.EdgesetTable):
     """
     Class for tables describing all edgesets in a tree sequence, of the form
         left	right	parent	children
-        5.0	7.0	4	0,1
-        2.0	2.5	5	1,3
-        3.2	3.5	4	0,1
-        0.0	3.2	6	0,1,3
+        0.0     0.4     3       0,2
+        0.4     1.0     3       0,1,2
+        0.0     0.4     4       1,3
     These describe the half-open genomic interval affected: `[left, right)`,
     the `parent` and the `children` on that interval.
 
@@ -194,8 +194,9 @@ class EdgesetTable(_msprime.EdgesetTable):
         3. the birth times of the `parent` in an edgeset must be strictly
             greater than the birth times of the `children` in that edgeset.
     Furthermore, for algorithmic requirements
-        4. the the table must be sorted by birth time of the `parent`, and
-        5. any two edgesets corresponding to the same `parent` must be nonoverlapping.
+        4. the smallest `left` coordinate must be 0.0,
+        5. the the table must be sorted by birth time of the `parent`, and
+        6. any two edgesets corresponding to the same `parent` must be nonoverlapping.
     It is an additional requirement that the complete ancestry of each sample
     must be specified, but this is harder to verify.
 

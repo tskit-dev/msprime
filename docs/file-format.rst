@@ -1,8 +1,10 @@
 .. _sec-file-format:
 
-=========================
-Tree Sequence File Format
-=========================
+=====================
+Tree Sequence Formats
+=====================
+
+TODO: update this intro
 
 The correlated trees output by a coalescent simulation are stored very
 concisely in ``msprime`` as a sequence of coalescent records. To make this
@@ -14,9 +16,76 @@ API <sec-api>`. Using the specification defined here, it should be
 straightforward to access tree sequence information in any language with `HDF5
 support <https://en.wikipedia.org/wiki/Hierarchical_Data_Format#Interfaces>`_.
 
-*********
-Structure
-*********
+***********
+Definitions
+***********
+
+Here are the formal requirements for a set of tables to give a valid ARG and
+the algorithms to work properly on them.
+
+To disallow time travel and multiple inheritance:
+
+1. Offspring must be born after their parents (and hence, no loops).
+2. The set of intervals on which individual $a$ is a child must be disjoint,
+   for every $a$.
+
+and for algorithmic reasons:
+
+3. The leftmost endpoint of each chromosome is 0.0.
+4. Node times must be strictly greater than zero.
+5. The set of intervals on which individual $a$ is a parent must be disjoint,
+   for every $a$.
+6. The list of offspring in a coalescence record must be sorted.
+7. Records must be sorted in nondecreasing time order.
+
+Note that each node time is equal to the (birth) time of the corresponding parent.
+This implies that time is measured in clock time (not meioses).
+
+
+*******************
+Working with Tables
+*******************
+
+This section will have the requirements that tables (in text format)
+must satisfy to be valid, illustrated with some examples.
+
+
+**********
+Tables API
+**********
+
+This section will describe how to work with tables.
+
+Include up top something about `.add_row()` versus `.set_columns()`.
+
++++++++++
+NodeTable
++++++++++
+
+(insert documentation for NodeTable here)
+
+++++++++++++
+EdgesetTable
+++++++++++++
+
+(insert documentation for EdgesetTable here)
+
++++++++++++++
+MutationTable
++++++++++++++
+
+(insert documentation for MutationTable here)
+
++++++++++++++++++
+Import and export
++++++++++++++++++
+
+(insert documentation for TreeSequence.load_tables and so forth here)
+
+
+***********
+HDF5 Format
+***********
 
 The file format is broken into a number of groups. Each group contains
 datasets to define the data along with attributes to provide necessary
