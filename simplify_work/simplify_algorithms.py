@@ -19,70 +19,15 @@ from six.moves import StringIO
 from algorithms import *
 
 
-class SearchablePopulation(object):
-    """
-    Class representing a population in the simulation.
-    """
-    def __init__(self, id_):
-        self._id = id_
-        # we will use this to identify ancestors with the input node IDs:
-        #   keys are input node IDs
-        #   and values are their head ancestral segments
-        self._ancestors = {}
-
-    def __contains__(self, key):
-        return key in self._ancestors
-
-    def __getitem__(self, key):
-        return self._ancestors[key]
-
-    def __setitem__(self, key, value):
-        self._ancestors[key] = value
-
-    def print_state(self):
-        print("Population ", self._id)
-        for x in self._ancestors:
-            s = str(x) + ": "
-            u = self._ancestors[x]
-            while u is not None:
-                s += "({0}-{1}->{2}({3}))".format(
-                    u.left, u.right, u.node, u.index)
-                u = u.next
-            print("\t\t" + s)
-
-    def get_num_ancestors(self):
-        return len(self._ancestors)
-
-    def remove(self, index):
-        """
-        Removes and returns the individual at the specified index.
-        """
-        return self._ancestors.pop(index)
-
-    def add_with_id(self, ind, individual):
-        """
-        Inserts the specified individual into this population.
-        """
-        self._ancestors[ind] = individual
-
-    def __iter__(self):
-        return iter(self._ancestors)
-
-
-class Simplifier(Simulator):
+class Simplifier(object):
     """
     Modified from Simulator().
     """
     def __init__(self, ts, sample, max_segments=100):
-        # since we will have no migration events,
-        # need to use one population but copy over population information
-        N = 1
         sample_size = len(ts.samples())
-        num_loci = ts.sequence_length
-
         self.ts = ts
         self.n = len(sample)
-        self.m = num_loci
+        self.m = ts.sequence_length
         self.max_segments = max_segments
         self.segment_stack = []
         self.segments = [None for j in range(self.max_segments + 1)]
@@ -90,126 +35,142 @@ class Simplifier(Simulator):
             s = Segment(j + 1)
             self.segments[j + 1] = s
             self.segment_stack.append(s)
-        # records from `ts` refer to IDs that we must associate with ancestors
-        #   this mapping is recorded here
-        self.P = [SearchablePopulation(id_) for id_ in range(N)]
-        self.C = []
-        self.L = FenwickTree(self.max_segments)
+        # A maps input node IDs to the extant ancestor chain. Once the algorithm
+        # has processed the ancestors, they are are removed from the map.
+        self.A = {}
+        # M maps output node IDs to their corresponding input nodes
+        self.M = [-1 for _ in range(ts.num_nodes)]
+        # Output edgesets
+        self.E = []
         self.S = bintrees.AVLTree()
 
-        # unused stuff included to use other Simulator methods
-        self.r = 0.0
-        self.migration_matrix = [0.0]
-        self.modifier_events = []
-
-        # need to record this to allow for samples not at time 0.0
-        self.sample_times = [ts.time(u) for u in ts.samples()]
-
-        # set this as a constant to make code clear below
-        self.pop_index = 0
-        self.A = self.P[self.pop_index]
         j = 0
-        for k in ts.samples():
-            if k in sample:
-                # segment label (j) is the output node ID
-                x = self.alloc_segment(0, self.m, j, self.pop_index)
-                self.L.set_value(x.index, self.m - 1)
-                # and the label in A is the input node ID
-                self.A.add_with_id(k, x)
-                j += 1
+        for j, sample_id in enumerate(sample):
+            # segment label (j) is the output node ID
+            x = self.alloc_segment(0, self.m, j)
+            # and the label in A is the input node ID
+            self.A[sample_id] = x
+            self.M[j] = sample_id
+
         self.S[0] = self.n
         self.S[self.m] = -1
-        self.t = 0
         # this (w) gives the next output node ID to be assigned
         #   when coalescent events occur:
         self.w = self.n
-        self.num_ca_events = 0
-        self.num_re_events = 0
+
+    def alloc_segment(self, left, right, node, prev=None, next=None):
+        """
+        Pops a new segment off the stack and sets its properties.
+        """
+        s = self.segment_stack.pop()
+        s.left = left
+        s.right = right
+        s.node = node
+        s.next = next
+        s.prev = prev
+        return s
+
+    def free_segment(self, u):
+        """
+        Frees the specified segment making it ready for reuse and
+        setting its weight to zero.
+        """
+        self.segment_stack.append(u)
+
+    def print_heaps(self, L):
+        copy = list(L)
+        ordered = [heapq.heappop(copy) for _ in L]
+        print("L = ")
+        for l, x in ordered:
+            print("\t", l, ":", end="")
+            u = x
+            s = ""
+            while u is not None:
+                s += "({0}-{1}->{2}({3}))".format(
+                    u.left, u.right, u.node, u.index)
+                u = u.next
+            print(s)
 
     def print_state(self):
         print(".................")
-        print("State @ time ", self.t)
-        print("Links = ", self.L.get_total())
-        print("Node mappings: ")
-        self.A.print_state()
+        print("Ancestors: ")
+        for x in self.A.keys():
+            s = str(x) + ": "
+            u = self._ancestors[x]
+            while u is not None:
+                s += "({0}-{1}->{2}({3}))".format(
+                    u.left, u.right, u.node, u.index)
+                u = u.next
+            print("\t\t" + s)
+        print("Node mappings: (output->input)")
+        for j in range(self.w):
+            print("\t", j, self.M[j])
         print("Overlap counts", len(self.S))
         for k, x in self.S.items():
             print("\t", k, "\t:\t", x)
-        print("Coalescence records: ")
-        for rec in self.C:
-            print("\t", rec)
+        print("Output Edgesets: ")
+        for e in self.E:
+            print("\t", e)
 
     def simplify(self):
+        the_parents = [
+            (node.time, input_id) for input_id, node in enumerate(self.ts.nodes())]
         # need to deal with parents in order by birth time-ago
-        the_parents = [(parent.time, input_id) for input_id, parent in enumerate(self.ts.nodes())]
         the_parents.sort()
-        for parent_time, input_id in the_parents:
-            # print("---> doing parent: ", input_id, "at time", parent_time)
+        for time, input_id in the_parents:
+            # print("---> doing parent: ", input_id, "at time", time)
             # self.print_state()
             # inefficent way to pull all edges corresponding to a given parent
-            edges = [x for x in self.ts.edgesets() if x.parent == input_id]
-            if len(edges) > 0:
-                self.t = parent_time
+            edgesets = [x for x in self.ts.edgesets() if x.parent == input_id]
+            # print("edgesets = ", edgesets)
+            if len(edgesets) > 0:
                 # pull out the ancestry segments that will be merged
-                H = self.remove_ancestry(edges)
+                H = self.remove_ancestry(edgesets)
                 # print("---- will merge these segments (H):")
                 # self.print_heaps(H)
                 # print("---- State before merging:")
                 # self.print_state()
-                if len(H) > 0:
-                    # and merge them: just like merge_ancestors but needs to return the index
-                    # of the first segment of the parent to update P with
-                    # or returns None if that parent is empty
-                    parent = self.merge_labeled_ancestors(H, self.pop_index)
-                    if parent is not None:
-                        # this replaces pop.add() in merge_ancestors
-                        self.A.add_with_id(input_id, parent)
-                        # print("---- merged: ", input_id, "->", parent.index)
-                    # self.print_state()
+                self.merge_labeled_ancestors(H, input_id)
+                # print("---- merged: ", input_id, "->", parent.index)
+                # self.print_state()
         # print("------ done!")
+
         # self.print_state()
 
-    def get_ancestor(self, u):
-        if u in self.A:
-            out = self.A[u]
-        else:
-            out = None
-        return out
-
-    def remove_ancestry(self, edges):
+    def remove_ancestry(self, edgesets):
         """
-        Remove (modifying in place) and return the subset of the ancestors 
+        Remove (modifying in place) and return the subset of the ancestors
         lying within all intervals (left, right) for each of the children
-        for each edge in edges. Modified from paint_simplify::remove_paint().
+        for each edgeset in edgesets. Modified from paint_simplify::remove_paint().
         The output, H, is a heapq of (x.left, x) tuples, where x is the head of
         an linked list of ancestral segments.
         """
         H = []
-        for edge in edges:
+        for edgeset in edgesets:
             # print("remove edge:", edge)
             # self.print_state()
-            for child in edge.children:
+            for child in edgeset.children:
                 if child in self.A:
-                    x = self.get_ancestor(child)
-                    # y will be the last segment to the left of edge, if any,
+                    x = self.A[child]
+                    # y will be the last segment to the left of edgeset, if any,
                     #   which we may need to make sure links to the next one after
                     y = None
-                    # and z will be the first segment after edge, if any
+                    # and z will be the first segment after edgeset, if any
                     z = None
                     # and w will be the previous segment sent to output
                     w = None
-                    while x is not None and edge.right > x.left:
+                    while x is not None and edgeset.right > x.left:
                         # print("begin     x: " + x.__str__())
                         # print("begin     y: " + y.__str__())
                         # print("begin     z: " + z.__str__())
                         # print("begin     w: " + w.__str__())
                         # intervals are half-open: [left, right)
                         #  so that the left coordinate is inclusive and the right
-                        if edge.left < x.right and edge.right > x.left:
+                        if edgeset.left < x.right and edgeset.right > x.left:
                             # we have overlap
                             seg_right = x.right
-                            out_left = max(edge.left, x.left)
-                            out_right = min(edge.right, x.right)
+                            out_left = max(edgeset.left, x.left)
+                            out_right = min(edgeset.right, x.right)
                             overhang_left = (x.left < out_left)
                             overhang_right = (x.right > out_right)
                             if overhang_left:
@@ -220,7 +181,7 @@ class Simplifier(Simulator):
                                 # the remaining segment will be sent to output
                                 # with the previously output segment w as the previous one
                                 next_w = self.alloc_segment(
-                                    out_left, out_right, x.node, x.population, w, None)
+                                    out_left, out_right, x.node, w, None)
                             else:
                                 # remove x, and use it as next_w
                                 x.prev = w
@@ -236,13 +197,13 @@ class Simplifier(Simulator):
                                 # add new segment for right overhang, which will be the last one
                                 # remaining in this ancestor after the removed segment
                                 z = self.alloc_segment(
-                                    out_right, seg_right, x.node, x.population, y, x.next)
+                                    out_right, seg_right, x.node, y, x.next)
                                 # y.next is updated below
                                 if x.next is not None:
                                     x.next.prev = z
                                 break
                         else:
-                            # maybe THIS segment was the first one before edge
+                            # maybe THIS segment was the first one before edgeset
                             y = x
                         # move on to the next segment
                         x = x.next
@@ -258,7 +219,7 @@ class Simplifier(Simulator):
                         if y is None:
                             # must update P[child]
                             if z is None:
-                                self.A.remove(child)
+                                del self.A[child]
                             else:
                                 self.A[child] = z
                     # print("end     x:" + x.__str__())
@@ -269,21 +230,17 @@ class Simplifier(Simulator):
             # self.print_heaps(H)
         return H
 
-    def merge_labeled_ancestors(self, H, pop_id):
+    def merge_labeled_ancestors(self, H, input_id):
         '''
         As merge_ancestors but returning the index of the resulting head ancestry segment.
         '''
         # H is a heapq of (x.left, x) tuples,
         # with x an ancestor, i.e., a list of segments.
         # This will merge everyone in H and add them to population pop_id
-        pop = self.P[pop_id]
-        defrag_required = False
         coalescence = False
         alpha = None
         z = None
-        out = None
         while len(H) > 0:
-            # print("LOOP HEAD")
             # self.print_heaps(H)
             alpha = None
             l = H[0][0]
@@ -298,8 +255,7 @@ class Simplifier(Simulator):
             if len(X) == 1:
                 x = X[0]
                 if len(H) > 0 and H[0][0] < x.right:
-                    alpha = self.alloc_segment(
-                        x.left, H[0][0], x.node, x.population)
+                    alpha = self.alloc_segment(x.left, H[0][0], x.node)
                     x.left = H[0][0]
                     heapq.heappush(H, (x.left, x))
                 else:
@@ -311,6 +267,8 @@ class Simplifier(Simulator):
             else:
                 if not coalescence:
                     coalescence = True
+                    # Allocate a new output node ID and map it back to the input ID.
+                    self.M[self.w] = input_id
                     self.w += 1
                 # output node ID
                 u = self.w - 1
@@ -331,7 +289,7 @@ class Simplifier(Simulator):
                     while r < r_max and self.S[r] != len(X):
                         self.S[r] -= len(X) - 1
                         r = self.S.succ_key(r)
-                    alpha = self.alloc_segment(l, r, u, pop_id)
+                    alpha = self.alloc_segment(l, r, u)
                 # Update the heaps and make the record.
                 children = []
                 for x in X:
@@ -344,62 +302,51 @@ class Simplifier(Simulator):
                     elif x.right > r:
                         x.left = r
                         heapq.heappush(H, (x.left, x))
-                self.C.append((l, r, u, children, self.t))
+                self.E.append((l, r, u, children))
 
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
                 if z is None:
-                    # the only place where this differs from merge_ancestors():
-                    out = alpha
-                    # pop.add(alpha)
-                    self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
+                    # Add a new mapping for the input_id to the segment chain starting
+                    # with alpha.
+                    self.A[input_id] = alpha
                 else:
-                    defrag_required |= (
-                        z.right == alpha.left and z.node == alpha.node)
                     z.next = alpha
-                    self.L.set_value(alpha.index, alpha.right - z.right)
                 alpha.prev = z
                 z = alpha
-        if defrag_required:
-            self.defrag_segment_chain(z)
-        if coalescence:
-            self.defrag_breakpoints()
-        return out
 
     def write_text(self, nodes_file, edgesets_file):
         """
         Writes the records out as text.  Modified to allow samples from nonzero times.
         """
-        num_nodes = max(r[2] for r in self.C) + 1
-        time = self.sample_times + [0 for _ in range(num_nodes - self.n)]
-        print("is_sample\ttime", file=nodes_file)
+        num_nodes = self.w
+        input_nodes = [self.ts.node(self.M[u]) for u in range(num_nodes)]
+        print("is_sample\tpopulation\ttime", file=nodes_file)
+        for node in input_nodes:
+            print(node.flags, node.population, node.time, sep="\t", file=nodes_file)
+
         print("left\tright\tparent\tchildren", file=edgesets_file)
         # collapse adjacent identical ones
-        left, right, parent, _, t = self.C[0]
-        children = sorted(self.C[0][3])
+        left, right, parent, _, = self.E[0]
+        children = sorted(self.E[0][3])
         k = 1
-        while k < len(self.C):
-            nleft, nright, nparent, _, nt = self.C[k]
-            nchildren = sorted(self.C[k][3])
+        while k < len(self.E):
+            nleft, nright, nparent, _ = self.E[k]
+            nchildren = sorted(self.E[k][3])
             if (right == nleft and len(children) == len(nchildren) and parent == nparent and
                 all([a == b for a, b in zip(children, nchildren)])):
                     # squash this record into the last
                     right = nright
             else:
-                time[parent] = t
                 print(
                     left, right, parent, ",".join(str(c) for c in children),
                     sep="\t", file=edgesets_file)
-                left, right, parent, children, t = nleft, nright, nparent, nchildren, nt
+                left, right, parent, children = nleft, nright, nparent, nchildren
                 children = nchildren
             k += 1
-        time[parent] = t
         print(
             left, right, parent, ",".join(str(c) for c in children),
             sep="\t", file=edgesets_file)
-        for u in range(num_nodes):
-            print(
-                int(u < self.n), time[u], sep="\t", file=nodes_file)
 
 
 def run_simplify(args):
