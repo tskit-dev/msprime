@@ -93,10 +93,10 @@ class Simplifier(object):
 
     def print_state(self):
         print(".................")
-        print("Ancestors: ")
+        print("Ancestors: ", len(self.A))
         for x in self.A.keys():
             s = str(x) + ": "
-            u = self._ancestors[x]
+            u = self.A[x]
             while u is not None:
                 s += "({0}-{1}->{2}({3}))".format(
                     u.left, u.right, u.node, u.index)
@@ -120,6 +120,8 @@ class Simplifier(object):
         for time, input_id in the_parents:
             # print("---> doing parent: ", input_id, "at time", time)
             # self.print_state()
+            if len(self.A) == 0:
+                break
             # inefficent way to pull all edges corresponding to a given parent
             edgesets = [x for x in self.ts.edgesets() if x.parent == input_id]
             # print("edgesets = ", edgesets)
@@ -134,7 +136,6 @@ class Simplifier(object):
                 # print("---- merged: ", input_id, "->", parent.index)
                 # self.print_state()
         # print("------ done!")
-
         # self.print_state()
 
     def remove_ancestry(self, edgesets):
