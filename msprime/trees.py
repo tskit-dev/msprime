@@ -160,6 +160,9 @@ class NodeTable(_msprime.NodeTable):
     integer population ID, and `time` is the time since that individual was
     born, as a float.
 
+    Requirements:
+        1. All birth times must be greater than or equal to zero.
+
     It is not required that the `time` column be ordered or that all samples
     must be at the top.
     """
@@ -186,12 +189,15 @@ class EdgesetTable(_msprime.EdgesetTable):
 
     Requirements: to describe a valid tree sequence, a `EdgesetTable` (and
     corresponding `NodeTable`, to provide birth times) must satisfy:
-        1. any two edgesets that share a child must be nonoverlapping, and
-        2. the birth times of the `parent` in an edgeset must be strictly
+        1. each list of children must be in sorted order,
+        2. any two edgesets that share a child must be nonoverlapping, and
+        3. the birth times of the `parent` in an edgeset must be strictly
             greater than the birth times of the `children` in that edgeset.
     Furthermore, for algorithmic requirements
-        3. the the table must be sorted by birth time of the `parent`, and
-        4. any two edgesets corresponding to the same `parent` must be nonoverlapping.
+        4. the the table must be sorted by birth time of the `parent`, and
+        5. any two edgesets corresponding to the same `parent` must be nonoverlapping.
+    It is an additional requirement that the complete ancestry of each sample
+    must be specified, but this is harder to verify.
 
     It is not required that all records corresponding to the same parent be
     adjacent in the table.
