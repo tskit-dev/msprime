@@ -21,7 +21,8 @@ or to store genealogies from other sources efficiently using ``msprime``.
 Definitions
 ***********
 
-To begin, here are definitions of some key ideas encountered later.
+To begin, here are definitions of some key ideas encountered later.  First are
+those that describe genealogical relationships:
 
 tree
     A "gene tree", i.e., the genealogical tree describing how each of the
@@ -74,6 +75,78 @@ Note that since each node time is equal to the (birth) time of the
 corresponding parent, time is measured in clock time (not meioses).
 
 
+^^^^^^^^^
+Mutations
+^^^^^^^^^
+
+In addition to genealogical relationships, ``msprime`` generates and stores
+mutations.  Associating these with nodes means that a variant shared by many
+individuals need only be stored once, allowing retrieval and processing of
+variant information much more efficiently than if every individual's genotype
+was stored directly.
+
+mutation
+    This type records a mutation that has occurred at some point in the
+    genealogical history.  Each mutation is associated with a particular
+    ``node`` (i.e., a particular ancestor), so that any sample which inherits
+    from that node will also inherit that mutation, unless another mutation
+    intervenes.  The type records::
+        site	node	derived_state
+        0	    14	    1
+    Here ``site`` is the index of the ``site`` at which the mutation occurred,
+    ``node`` records the ID of the ancestral node associated with the mutation,
+    and ``derived_state`` is the allele that any sample inheriting from that
+    node at this site will have if another mutation does not intervene.  The
+    ``node`` is not necessarily the ancestor in whom the mutation occurred, but
+    rather the ancestor at the bottom of the branch in the tree at that site on
+    which the mutation occurred.
+
+site
+    Rather than storing a position on the genome directly, a ``mutation``
+    stores the index of a ``site``, that describes that position.  This is to
+    allow efficient processing of multiple mutations at the same genomic
+    position.  A ``site`` records a position on the genome where a mutation has
+    occurred along with the ancestral state (i.e., the state at the root of the
+    tree at that position)::
+        id	position	ancestral_state
+        0	0.1	        0
+    The ``id`` is not stored directly, but is implied by its index in the site
+    table.
+
+
+To allow for efficent algorithms, it is required that
+
+    8. Mutations occurring at the same node are sorted in reverse time order (i.e., down the tree).
+
+^^^^^^^^^^
+Migrations
+^^^^^^^^^^
+
+In simulations trees can be thought of as spread across space, and it is
+helpful for inferring demographic history to record this history.  This is
+stored using the following type.
+
+migration
+    Migrations are performed by individual ancestors, but most likely not by an
+    individual tracked as a ``node`` (as in a discrete-deme model they are
+    unlikely to be both a migrant and a most recent common ancestor).  So,
+    ``msprime`` records when a segment of ancestry has moved between
+    populations::
+        left    right   node    source  dest    time
+        0.0     0.3     3       0       1       2.1
+    This ``migration`` records that the ancestor who was alive 2.1 time units
+    in the past from which ``node`` 3 inherited the segment of genome between
+    0.0 and 0.3 migrated from population 0 to population 1.
+
+A valid ``migration``:
+
+1. Has ``time`` strictly between the time of its ``node`` and the time of any
+   ancestral node from which that node inherits on the segment ``[left,
+   right)``.
+2. Has the ``population`` of any such ancestor matching ``source``, if another
+   ``migration`` does not intervene.
+
+
 *******************
 Working with Tables
 *******************
@@ -86,12 +159,12 @@ Consider the following sequence of trees::
     ----
     1.0                6
     0.7               / \                                       5
-                     /   \                                     / \
+                     /   x                                     / \
     0.5             /     4                 4                 /   4
-                   /     / \               / \               /   / \
+                   /     / \               / x               /   / \
     0.4           /     /   \             /   3             /   /   \
                  /     /     \           /   / \           /   /     \
-                /     /       \         /   /   \         /   /       \
+                /     /       \         /   /   x         /   /       \
                /     /         \       /   /     \       /   /         \
     0.0       0     1           2     1   0       2     0   1           2
     
@@ -125,6 +198,24 @@ for each of the three genomic intervals over which node 4 is ancestor to a disti
 At this point, we know the full tree on the middle interval.
 Finally, edgesets specifying the common ancestor of 0 and 4 on the remaining intervals
 (parents 6 and 5 respectively) allow us to construct all trees across the entire interval.
+
+In the depiction above, ``x`` denotes mutations. Suppose that the first mutation occurs at position 0.1
+and the mutations in the second tree both occurred at the same position, at 0.5 (with a back mutation).
+The positions are recorded in the sites table::
+    id	position	ancestral_state
+    0	0.1     	0
+    1	0.5     	0
+and the acutal mutations::
+    site	node	derived_state
+    0	    4	    1
+    1	    3	    1
+    1	    2	    0
+This would then result in the following (two-locus) haplotypes for the three samples::
+    sample  haplotype
+    ------  ---------
+    0       01
+    1       10
+    2       11
 
 
 **********

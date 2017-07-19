@@ -238,6 +238,17 @@ class MigrationTable(_msprime.MigrationTable):
 
 
 class SiteTable(_msprime.SiteTable):
+    """
+    Class for tables describing all sites at which mutations have occurred in a
+    tree sequence, of the form
+        id	position	ancestral_state
+        0	0.1     	0
+        1	0.5     	0
+    Here ``id`` is not stored directly, but is determined by the row index in
+    the table.  ``position`` is the position along the genome, and
+    ``ancestral_state`` gives the allele at the root of the tree at that
+    position.
+    """
     def __str__(self):
         position = self.position
         ancestral_state = unpack_strings(
@@ -249,6 +260,21 @@ class SiteTable(_msprime.SiteTable):
 
 
 class MutationTable(_msprime.MutationTable):
+    """
+    Class for tables describing all mutations that have occurred in a tree
+    sequence, of the form
+        site	node	derived_state
+        0	    4	    1
+        1	    3	    1
+        1	    2	    0
+    Here ``site`` is the index in the SiteTable of the site at which the
+    mutation occurred, ``node`` is the index in the NodeTable of the node who
+    is the first node inheriting the mutation, and ``derived_state`` is the
+    allele resulting from this mutation.
+
+    It is required that mutations occurring at the same node are sorted in
+    reverse time order.
+    """
     def __str__(self):
         site = self.site
         node = self.node
