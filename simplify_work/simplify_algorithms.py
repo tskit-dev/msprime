@@ -13,10 +13,32 @@ import math
 
 import msprime
 import numpy as np
+import bintrees
 
 from six.moves import StringIO
 
-from algorithms import *
+
+class Segment(object):
+    """
+    A class representing a single segment. Each segment has a left
+    and right, denoting the loci over which it spans, a node and a
+    next, giving the next in the chain.
+    """
+    def __init__(self):
+        self.left = None
+        self.right = None
+        self.node = None
+        self.prev = None
+        self.next = None
+
+    def __str__(self):
+        s = "({0}:{1}-{2}->{3}: prev={4} next={5})".format(
+            self.index, self.left, self.right, self.node, repr(self.prev),
+            repr(self.next))
+        return s
+
+    def __lt__(self, other):
+        return (self.left, self.right, self.node) < (other.left, other.right, self.node)
 
 
 class Simplifier(object):
@@ -30,19 +52,16 @@ class Simplifier(object):
         self.m = ts.sequence_length
         self.max_segments = max_segments
         self.segment_stack = []
-        self.segments = [None for j in range(self.max_segments + 1)]
         for j in range(self.max_segments):
-            s = Segment(j + 1)
-            self.segments[j + 1] = s
-            self.segment_stack.append(s)
+            self.segment_stack.append(Segment())
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
         # has processed the ancestors, they are are removed from the map.
         self.A = {}
-        # M maps output node IDs to their corresponding input nodes
-        self.M = [-1 for _ in range(ts.num_nodes)]
-        # Output edgesets
-        self.E = []
-        self.S = bintrees.AVLTree()
+        # Output nodes and edgesets
+        self.node_table = msprime.NodeTable(ts.num_nodes)
+        self.edgeset_table = msprime.EdgesetTable(ts.num_edgesets)
+        self.last_edgeset = None
+        self.num_output_nodes = 0
 
         j = 0
         for j, sample_id in enumerate(sample):
@@ -50,13 +69,11 @@ class Simplifier(object):
             x = self.alloc_segment(0, self.m, j)
             # and the label in A is the input node ID
             self.A[sample_id] = x
-            self.M[j] = sample_id
+            self.record_node(sample_id)
 
+        self.S = bintrees.AVLTree()
         self.S[0] = self.n
         self.S[self.m] = -1
-        # this (w) gives the next output node ID to be assigned
-        #   when coalescent events occur:
-        self.w = self.n
 
     def alloc_segment(self, left, right, node, prev=None, next=None):
         """
@@ -76,6 +93,42 @@ class Simplifier(object):
         setting its weight to zero.
         """
         self.segment_stack.append(u)
+
+
+    def record_node(self, input_id):
+        """
+        Adds a new node to the output table corresponding to the specified input
+        node ID.
+        """
+        node = self.ts.node(input_id)
+        self.node_table.add_row(
+            flags=node.flags, time=node.time, population=node.population)
+        self.num_output_nodes += 1
+
+    def record_edgeset(self, left, right, parent, children):
+        """
+        Adds an edgeset to the output list. This method used the ``last_edgeset``
+        variable to check for adjacent records that may be squashed. Thus, the
+        last edgeset will not be entered in the table, which must be done manually.
+        """
+        sorted_children = tuple(sorted(children))
+        if self.last_edgeset is None:
+            self.last_edgeset = left, right, parent, sorted_children
+        else:
+            last_left, last_right, last_parent, last_children = self.last_edgeset
+            squash_condition = (
+                last_parent == parent and
+                last_children == sorted_children and
+                last_right == left)
+            if squash_condition:
+                self.last_edgeset = last_left, right, parent, sorted_children
+            else:
+                # Flush the last edgeset
+                self.edgeset_table.add_row(
+                    left=last_left, right=last_right, parent=last_parent,
+                    children=last_children)
+                self.last_edgeset = left, right, parent, sorted_children
+
 
     def print_heaps(self, L):
         copy = list(L)
@@ -98,19 +151,16 @@ class Simplifier(object):
             s = str(x) + ": "
             u = self.A[x]
             while u is not None:
-                s += "({0}-{1}->{2}({3}))".format(
-                    u.left, u.right, u.node, u.index)
+                s += "({0}-{1}->{2})".format(u.left, u.right, u.node)
                 u = u.next
             print("\t\t" + s)
-        print("Node mappings: (output->input)")
-        for j in range(self.w):
-            print("\t", j, self.M[j])
         print("Overlap counts", len(self.S))
         for k, x in self.S.items():
             print("\t", k, "\t:\t", x)
+        print("Output nodes:")
+        print(self.node_table)
         print("Output Edgesets: ")
-        for e in self.E:
-            print("\t", e)
+        print(self.edgeset_table)
 
     def simplify(self):
         the_parents = [
@@ -137,6 +187,13 @@ class Simplifier(object):
                 # self.print_state()
         # print("------ done!")
         # self.print_state()
+
+        # Flush the last edgeset to the table and create the new tree sequence.
+        left, right, parent, children = self.last_edgeset
+        self.edgeset_table.add_row(
+            left=left, right=right, parent=parent, children=children)
+        return msprime.load_tables(nodes=self.node_table, edgesets=self.edgeset_table)
+
 
     def remove_ancestry(self, edgesets):
         """
@@ -268,11 +325,9 @@ class Simplifier(object):
             else:
                 if not coalescence:
                     coalescence = True
-                    # Allocate a new output node ID and map it back to the input ID.
-                    self.M[self.w] = input_id
-                    self.w += 1
+                    self.record_node(input_id)
                 # output node ID
-                u = self.w - 1
+                u = self.num_output_nodes - 1
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
                 if l not in self.S:
@@ -303,7 +358,7 @@ class Simplifier(object):
                     elif x.right > r:
                         x.left = r
                         heapq.heappush(H, (x.left, x))
-                self.E.append((l, r, u, children))
+                self.record_edgeset(l, r, u, children)
 
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
@@ -316,39 +371,6 @@ class Simplifier(object):
                 alpha.prev = z
                 z = alpha
 
-    def write_text(self, nodes_file, edgesets_file):
-        """
-        Writes the records out as text.  Modified to allow samples from nonzero times.
-        """
-        num_nodes = self.w
-        input_nodes = [self.ts.node(self.M[u]) for u in range(num_nodes)]
-        print("is_sample\tpopulation\ttime", file=nodes_file)
-        for node in input_nodes:
-            print(node.flags, node.population, node.time, sep="\t", file=nodes_file)
-
-        print("left\tright\tparent\tchildren", file=edgesets_file)
-        # collapse adjacent identical ones
-        left, right, parent, _, = self.E[0]
-        children = sorted(self.E[0][3])
-        k = 1
-        while k < len(self.E):
-            nleft, nright, nparent, _ = self.E[k]
-            nchildren = sorted(self.E[k][3])
-            if (right == nleft and len(children) == len(nchildren) and parent == nparent and
-                all([a == b for a, b in zip(children, nchildren)])):
-                    # squash this record into the last
-                    right = nright
-            else:
-                print(
-                    left, right, parent, ",".join(str(c) for c in children),
-                    sep="\t", file=edgesets_file)
-                left, right, parent, children = nleft, nright, nparent, nchildren
-                children = nchildren
-            k += 1
-        print(
-            left, right, parent, ",".join(str(c) for c in children),
-            sep="\t", file=edgesets_file)
-
 
 def run_simplify(args):
     """
@@ -358,15 +380,7 @@ def run_simplify(args):
     sample = random.sample(ts.samples(), args.sample_size)
     random.seed(args.random_seed)
     s = Simplifier(ts, sample)
-    s.simplify()
-    nodes_file = StringIO()
-    edgesets_file = StringIO()
-    s.write_text(nodes_file, edgesets_file)
-    nodes_file.seek(0)
-    edgesets_file.seek(0)
-    print(nodes_file.getvalue())
-    print(edgesets_file.getvalue())
-    new_ts = msprime.load_text(nodes_file, edgesets_file)
+    new_ts = s.simplify()
     print("Input:")
     for t in ts.trees():
         print(t)

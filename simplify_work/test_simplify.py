@@ -62,15 +62,7 @@ def do_simplify(ts, sample=None):
     if sample is None:
         sample = ts.samples()
     s = Simplifier(ts, sample)
-    s.simplify()
-    nodes_file = six.StringIO()
-    edgesets_file = six.StringIO()
-    s.write_text(nodes_file, edgesets_file)
-    nodes_file.seek(0)
-    edgesets_file.seek(0)
-    print(nodes_file.getvalue())
-    print(edgesets_file.getvalue())
-    new_ts = msprime.load_text(nodes_file, edgesets_file)
+    new_ts = s.simplify()
     return new_ts
 
 
