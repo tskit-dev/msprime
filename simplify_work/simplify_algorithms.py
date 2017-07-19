@@ -45,15 +45,11 @@ class Simplifier(object):
     """
     Modified from Simulator().
     """
-    def __init__(self, ts, sample, max_segments=100):
+    def __init__(self, ts, sample):
         sample_size = len(ts.samples())
         self.ts = ts
         self.n = len(sample)
         self.m = ts.sequence_length
-        self.max_segments = max_segments
-        self.segment_stack = []
-        for j in range(self.max_segments):
-            self.segment_stack.append(Segment())
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
         # has processed the ancestors, they are are removed from the map.
         self.A = {}
@@ -62,6 +58,9 @@ class Simplifier(object):
         self.edgeset_table = msprime.EdgesetTable(ts.num_edgesets)
         self.last_edgeset = None
         self.num_output_nodes = 0
+        # Keep track of then number of segments we alloc and free to ensure we
+        # don't leak.
+        self.num_used_segments = 0
 
         j = 0
         for j, sample_id in enumerate(sample):
@@ -77,23 +76,25 @@ class Simplifier(object):
 
     def alloc_segment(self, left, right, node, prev=None, next=None):
         """
-        Pops a new segment off the stack and sets its properties.
+        Allocates a new segment with the specified values.
         """
-        s = self.segment_stack.pop()
+        s = Segment()
         s.left = left
         s.right = right
         s.node = node
         s.next = next
         s.prev = prev
+        self.num_used_segments += 1
         return s
 
     def free_segment(self, u):
         """
-        Frees the specified segment making it ready for reuse and
-        setting its weight to zero.
-        """
-        self.segment_stack.append(u)
+        Frees the specified segment.
 
+        Note: this method is only here to ensure that we are not leaking segments
+        in the C implementation.
+        """
+        self.num_used_segments -= 1
 
     def record_node(self, input_id):
         """
@@ -129,30 +130,26 @@ class Simplifier(object):
                     children=last_children)
                 self.last_edgeset = left, right, parent, sorted_children
 
+    def segment_chain_str(self, segment):
+        u = segment
+        s = ""
+        while u is not None:
+            s += "({0}-{1}->{2})".format(u.left, u.right, u.node)
+            u = u.next
+        return s
 
     def print_heaps(self, L):
         copy = list(L)
         ordered = [heapq.heappop(copy) for _ in L]
-        print("L = ")
+        print("H = ")
         for l, x in ordered:
-            print("\t", l, ":", end="")
-            u = x
-            s = ""
-            while u is not None:
-                s += "({0}-{1}->{2}({3}))".format(
-                    u.left, u.right, u.node, u.index)
-                u = u.next
-            print(s)
+            print("\t", l, ":", self.segment_chain_str(x))
 
     def print_state(self):
         print(".................")
         print("Ancestors: ", len(self.A))
         for x in self.A.keys():
-            s = str(x) + ": "
-            u = self.A[x]
-            while u is not None:
-                s += "({0}-{1}->{2})".format(u.left, u.right, u.node)
-                u = u.next
+            s = str(x) + ": " + self.segment_chain_str(self.A[x])
             print("\t\t" + s)
         print("Overlap counts", len(self.S))
         for k, x in self.S.items():
@@ -168,6 +165,7 @@ class Simplifier(object):
         # need to deal with parents in order by birth time-ago
         the_parents.sort()
         for time, input_id in the_parents:
+            # print()
             # print("---> doing parent: ", input_id, "at time", time)
             # self.print_state()
             if len(self.A) == 0:
@@ -177,6 +175,7 @@ class Simplifier(object):
             # print("edgesets = ", edgesets)
             if len(edgesets) > 0:
                 # pull out the ancestry segments that will be merged
+                # print("before = ")
                 H = self.remove_ancestry(edgesets)
                 # print("---- will merge these segments (H):")
                 # self.print_heaps(H)
@@ -187,6 +186,7 @@ class Simplifier(object):
                 # self.print_state()
         # print("------ done!")
         # self.print_state()
+        assert self.num_used_segments == 0
 
         # Flush the last edgeset to the table and create the new tree sequence.
         left, right, parent, children = self.last_edgeset
@@ -205,7 +205,7 @@ class Simplifier(object):
         """
         H = []
         for edgeset in edgesets:
-            # print("remove edge:", edge)
+            # print("remove edgeset:", edgeset)
             # self.print_state()
             for child in edgeset.children:
                 if child in self.A:
@@ -377,8 +377,8 @@ def run_simplify(args):
     Runs simplify on the tree sequence.
     """
     ts = msprime.load(args.tree_sequence)
-    sample = random.sample(ts.samples(), args.sample_size)
     random.seed(args.random_seed)
+    sample = random.sample(ts.samples(), args.sample_size)
     s = Simplifier(ts, sample)
     new_ts = s.simplify()
     print("Input:")
