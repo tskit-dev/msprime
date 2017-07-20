@@ -20,9 +20,11 @@ from six.moves import StringIO
 
 class Segment(object):
     """
-    A class representing a single segment. Each segment has a left
-    and right, denoting the loci over which it spans, a node and a
-    next, giving the next in the chain.
+    A class representing a single segment. Each segment has a left and right,
+    denoting the loci over which it spans, a node and a next, giving the next
+    in the chain.
+
+    The node it records is the *output* node ID.
     """
     def __init__(self):
         self.left = None
@@ -53,11 +55,16 @@ class Simplifier(object):
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
         # has processed the ancestors, they are are removed from the map.
         self.A = {}
-        # Output nodes and edgesets
+        # Output tables
         self.node_table = msprime.NodeTable(ts.num_nodes)
         self.edgeset_table = msprime.EdgesetTable(ts.num_edgesets)
+        # will keep here output sites, and associated mutations,
+        # with keys equal to position
+        self.sites = {}
         self.last_edgeset = None
         self.num_output_nodes = 0
+        self.num_output_mutations = 0
+        self.num_output_sites = 0
         # Keep track of then number of segments we alloc and free to ensure we
         # don't leak.
         self.num_used_segments = 0
@@ -69,6 +76,9 @@ class Simplifier(object):
             # and the label in A is the input node ID
             self.A[sample_id] = x
             self.record_node(sample_id)
+            self.record_mutations(input_id = sample_id,
+                                  output_id = self.num_output_nodes-1,
+                                  left = 0.0, right = self.m)
 
         self.S = bintrees.AVLTree()
         self.S[0] = self.n
@@ -101,6 +111,8 @@ class Simplifier(object):
         Adds a new node to the output table corresponding to the specified input
         node ID.
         """
+        # If we were to keep track of the full output to input mapping in M:
+        # self.M[self.num_output_nodes] = input_id
         node = self.ts.node(input_id)
         self.node_table.add_row(
             flags=node.flags, time=node.time, population=node.population)
@@ -130,6 +142,54 @@ class Simplifier(object):
                     children=last_children)
                 self.last_edgeset = left, right, parent, sorted_children
 
+    def record_mutations(self, input_id, left, right, output_id):
+        """
+        For each input mutation associated with node `input_id` between `left`
+        and `right`, add a new mutation to the output table associated with
+        node `output_id`.  Leaves `index` of sites and `site` of mutations
+        as `None` because site ordering will be determined on output.
+        """
+        # inefficiently find all matching mutations
+        for site in self.ts.sites():
+            if (site.position >= left) and (site.position < right):
+                for mutation in site.mutations:
+                    if mutation.node == input_id:
+                        # insert site in output if it doesn't exist
+                        if site.position not in self.sites:
+                            new_site = msprime.Site(
+                                        position = site.position,
+                                        ancestral_state = site.ancestral_state,
+                                        index = None,
+                                        mutations = [])
+                            self.num_output_sites += 1
+                        else:
+                            new_site = self.sites[site.position]
+                        # and insert mutation in output with output_id
+                        new_mutation = msprime.Mutation(
+                                        site=None,
+                                        node = output_id,
+                                        derived_state = mutation.derived_state)
+                        new_site.mutations.append(new_mutation)
+                        self.num_output_mutations += 1
+    
+    def update_ancestral_state(self, input_id, left, right):
+        """
+        This function is called when it is discovered that the unversal MRCA of
+        the samples is the input node `input_id` on the segment `[left,
+        right)`, which may be different than in the original tree sequence.
+        For this reason, the ancestral states of any sites in that region must
+        be updated.
+        """
+        # inefficiently...
+        for site in self.ts.sites():
+            if (site.position in self.sites) 
+                    and (site.position >= left) and (site.position < right):
+                # find the most recent mutation on the path from input_id back
+                # to the root, if any
+                #   DO THIS SOMEHOW:
+                new_ancestral_state = self.ts.allele_of_this_individual(input_id)
+                self.sites[site.position].ancestral_state = new_ancestral_state
+
     def segment_chain_str(self, segment):
         u = segment
         s = ""
@@ -158,6 +218,9 @@ class Simplifier(object):
         print(self.node_table)
         print("Output Edgesets: ")
         print(self.edgeset_table)
+        print("Output sites and mutations: ")
+        for site in self.sites:
+            print(site)
 
     def simplify(self):
         the_parents = [
@@ -192,7 +255,19 @@ class Simplifier(object):
         left, right, parent, children = self.last_edgeset
         self.edgeset_table.add_row(
             left=left, right=right, parent=parent, children=children)
-        return msprime.load_tables(nodes=self.node_table, edgesets=self.edgeset_table)
+        # construct Site and Mutation tables
+        site_table = msprime.SiteTable()
+        mutation_table = msprime.MutationTable()
+        for k, pos in enumerate(sorted(self.sites.keys())):
+            site = self.sites[pos]
+            site_table.add_row(position = site.position, 
+                               ancestral_state = self.ancestral_state)
+            for mut in site.mutations:
+                mutation_table.add_row(site=k, node=mut.node, 
+                                       derived_state=mut.derived_state)
+
+        return msprime.load_tables(nodes=self.node_table, edgesets=self.edgeset_table,
+                                   sites=site_table, mutations=mutation_table)
 
 
     def remove_ancestry(self, edgesets):
@@ -290,11 +365,13 @@ class Simplifier(object):
 
     def merge_labeled_ancestors(self, H, input_id):
         '''
-        As merge_ancestors but returning the index of the resulting head ancestry segment.
+        All ancestry segments in H come together into a new parent.  
+        The new parent must be assigned;
+        any overlapping segments coalesced;
+        and node IDs in the mutation table remapped.
         '''
         # H is a heapq of (x.left, x) tuples,
         # with x an ancestor, i.e., a list of segments.
-        # This will merge everyone in H and add them to population pop_id
         coalescence = False
         alpha = None
         z = None
@@ -340,6 +417,8 @@ class Simplifier(object):
                 if self.S[l] == len(X):
                     self.S[l] = 0
                     r = self.S.succ_key(l)
+                    # all done with this segment, so check ancestral states
+                    self.update_ancestral_state(input_id, l, r)
                 else:
                     r = l
                     while r < r_max and self.S[r] != len(X):
@@ -370,6 +449,8 @@ class Simplifier(object):
                     z.next = alpha
                 alpha.prev = z
                 z = alpha
+                # and copy over any mutations on this segment to the output
+                self.record_mutations(input_id, alpha.left, alpha.right, alpha.node)
 
 
 def run_simplify(args):

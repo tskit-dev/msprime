@@ -78,7 +78,16 @@ existing algorithm `merge_ancestors` applied to $H$;
 modified only to return the index of the first segment of $u$.
 
 
-**Notes:**
+**Updating mutations:**
 
-msprime doesn't associate unique IDs with ancestors, so we have to maintain this mapping.
-It's currently done in a dictionary, but should figure out the right way to do it.
+We can update the `node` entries in the mutation table as we go along, then go back and cull out unused `sites` afterwards.
+
+At each input edgeset, the input node ID associated with a particular line of ancestry changes,
+so we need to deal with any associated mutations.  To do this, we just need to assign any mutations associated
+with any input nodes encountered with the corresponding output node ID.  Since each ancestry
+segment carries with it the output node ID, this is easy.
+If
+- there is no coalescence, we just find corresponding mutations, assign the output node ID, and output.
+- there is coalescence and there are remaining overlapping segments, assign the (new) output node ID, and output
+- there is coalescence and no remaining overlapping segments, then find the node's state and assign this to the site's ancestral state.
+
