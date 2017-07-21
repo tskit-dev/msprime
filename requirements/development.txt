@@ -1,3 +1,4 @@
+bintrees
 codecov
 coverage
 flake8

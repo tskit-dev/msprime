@@ -36,6 +36,7 @@ import six
 
 import msprime
 import _msprime
+import tests
 
 
 def permute_nodes(ts, node_map):
@@ -87,6 +88,36 @@ def insert_redundant_breakpoints(ts):
             left=x, right=r.right, children=r.children, parent=r.parent)
     new_ts = msprime.load_tables(**tables._asdict())
     assert new_ts.num_edgesets == 2 * ts.num_edgesets
+    return new_ts
+
+
+def single_childify(ts):
+    """
+    Builds a new equivalent tree sequence whose edgesets all have singleton children.
+    """
+    tables = ts.dump_tables()
+    tables.edgesets.reset()
+    for u in range(ts.num_nodes):
+        parent_edges = [r for r in ts.edgesets() if u == r.parent]
+        children = []
+        for r in parent_edges:
+            children.extend(r.children)
+        for child in set(children):
+            edges = [r for r in parent_edges if child in r.children]
+            lefts = [r.left for r in edges]
+            rights = [r.right for r in edges]
+            do_lefts = [lefts[0]]
+            do_rights = []
+            for k in range(len(lefts)-1):
+                if lefts[k+1] != rights[k]:
+                    do_lefts.append(lefts[k+1])
+                    do_rights.append(rights[k])
+            do_rights.append(rights[-1])
+            assert len(do_lefts) == len(do_rights)
+            for k in range(len(do_lefts)):
+                tables.edgesets.add_row(
+                    left=do_lefts[k], right=do_rights[k], children=(child,), parent=u)
+    new_ts = msprime.load_tables(**tables._asdict())
     return new_ts
 
 
@@ -1503,3 +1534,40 @@ class TestWithVisuals(TopologyTestCase):
         """)
         self.assertRaises(
             _msprime.LibraryError, msprime.load_text, nodes=nodes, edgesets=edgesets)
+
+
+def do_simplify(ts, sample=None):
+    """
+    Runs the Python test implementation of simplify.
+    """
+    if sample is None:
+        sample = ts.samples()
+    s = tests.Simplifier(ts, sample)
+    new_ts = s.simplify()
+    return new_ts
+
+
+class TestPythonSimplifier(unittest.TestCase):
+    """
+    Tests that the test implementation of simplify() does what it's supposed to.
+    """
+    random_seed = 23
+
+    def test_single_tree(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed)
+        ts_single = single_childify(ts)
+        tss = do_simplify(ts_single)
+        self.assertEqual(list(tss.records()), list(ts.records()))
+
+    def test_many_trees(self):
+        ts = msprime.simulate(5, recombination_rate=5, random_seed=self.random_seed)
+        self.assertGreater(ts.num_trees, 2)
+        ts_single = single_childify(ts)
+        tss = do_simplify(ts_single)
+        self.assertEqual(list(tss.records()), list(ts.records()))
+
+    def test_small_tree_mutations(self):
+        ts = msprime.simulate(5, random_seed=self.random_seed, mutation_rate=4)
+        self.assertGreater(ts.num_mutations, 0)
+        tss = do_simplify(ts, [0, 1])
+        self.assertEqual(tss.sample_size, 2)

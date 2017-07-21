@@ -116,6 +116,24 @@ class TestOverlappingRecords(SimplifyTestCase):
         print_tables(tss)
         self.assertEqual(list(tss.records()), list(ts.records()))
 
+    def test_mutations(self):
+        ts = msprime.simulate(
+                5, recombination_rate=5, mutation_rate=5,
+                random_seed=self.random_seed)
+        self.assertGreater(ts.num_trees, 2)
+        ts_single = single_childify(ts)
+        tss_nopops = do_simplify(ts_single)
+        # simplify is not currently recording population: set to 0
+        tss = reset_population(tss_nopops)
+        print("ts:")
+        print_tables(ts)
+        print("ts_single:")
+        print_tables(ts_single)
+        print("tss:")
+        print_tables(tss)
+        self.assertEqual(list(tss.records()), list(ts.records()))
+
+
 
 class TestWithVisuals(SimplifyTestCase):
     """
@@ -149,9 +167,12 @@ class TestWithVisuals(SimplifyTestCase):
                 mapped_pair = [sample_map[u] for u in pair]
                 mrca1 = old_tree.get_mrca(*pair)
                 mrca2 = new_tree.get_mrca(*mapped_pair)
-                self.assertEqual(old_tree.get_time(mrca1), new_tree.get_time(mrca2))
-                self.assertEqual(
-                    old_tree.get_population(mrca1), new_tree.get_population(mrca2))
+                if mrca1 == -1:
+                    self.assertEqual(mrca1, mrca2)
+                else:
+                    self.assertEqual(old_tree.get_time(mrca1), new_tree.get_time(mrca2))
+                    self.assertEqual(
+                        old_tree.get_population(mrca1), new_tree.get_population(mrca2))
 
     def test_partial_non_sample_external_nodes(self):
         # A somewhat more complicated test case with a partially specified,

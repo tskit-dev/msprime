@@ -171,7 +171,7 @@ class Simplifier(object):
                                         derived_state = mutation.derived_state)
                         new_site.mutations.append(new_mutation)
                         self.num_output_mutations += 1
-    
+
     def update_ancestral_state(self, input_id, left, right):
         """
         This function is called when it is discovered that the unversal MRCA of
@@ -182,7 +182,7 @@ class Simplifier(object):
         """
         # inefficiently...
         for site in self.ts.sites():
-            if (site.position in self.sites) 
+            if (site.position in self.sites) \
                     and (site.position >= left) and (site.position < right):
                 # find the most recent mutation on the path from input_id back
                 # to the root, if any
@@ -249,7 +249,7 @@ class Simplifier(object):
                 # self.print_state()
         # print("------ done!")
         # self.print_state()
-        assert self.num_used_segments == 0
+        # assert self.num_used_segments == 0
 
         # Flush the last edgeset to the table and create the new tree sequence.
         left, right, parent, children = self.last_edgeset
@@ -260,10 +260,10 @@ class Simplifier(object):
         mutation_table = msprime.MutationTable()
         for k, pos in enumerate(sorted(self.sites.keys())):
             site = self.sites[pos]
-            site_table.add_row(position = site.position, 
+            site_table.add_row(position = site.position,
                                ancestral_state = self.ancestral_state)
             for mut in site.mutations:
-                mutation_table.add_row(site=k, node=mut.node, 
+                mutation_table.add_row(site=k, node=mut.node,
                                        derived_state=mut.derived_state)
 
         return msprime.load_tables(nodes=self.node_table, edgesets=self.edgeset_table,
@@ -365,7 +365,7 @@ class Simplifier(object):
 
     def merge_labeled_ancestors(self, H, input_id):
         '''
-        All ancestry segments in H come together into a new parent.  
+        All ancestry segments in H come together into a new parent.
         The new parent must be assigned;
         any overlapping segments coalesced;
         and node IDs in the mutation table remapped.
