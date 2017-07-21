@@ -78,19 +78,18 @@
 #define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
 #define MSP_ERR_INSUFFICIENT_SAMPLES                                -49
 #define MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO                         -50
-#define MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT                       -51
-#define MSP_ERR_COORDINATE_NOT_FOUND                                -52
-#define MSP_ERR_BAD_NODES_ARRAY                                     -53
-#define MSP_ERR_BAD_CHILDREN_ARRAY                                  -54
-#define MSP_ERR_SITE_OUT_OF_BOUNDS                                  -55
-#define MSP_ERR_NODE_OUT_OF_BOUNDS                                  -56
-#define MSP_ERR_LENGTH_MISMATCH                                     -57
-#define MSP_ERR_BAD_ALPHABET                                        -58
-#define MSP_ERR_NON_SINGLE_CHAR_MUTATION                            -59
-#define MSP_ERR_UNSORTED_SITES                                      -60
-#define MSP_ERR_BAD_SITE_POSITION                                   -61
-#define MSP_ERR_UNSORTED_MUTATIONS                                  -62
-#define MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT                -63
-#define MSP_ERR_NODE_SAMPLE_INTERNAL                                -64
+#define MSP_ERR_COORDINATE_NOT_FOUND                                -51
+#define MSP_ERR_BAD_NODES_ARRAY                                     -52
+#define MSP_ERR_BAD_CHILDREN_ARRAY                                  -53
+#define MSP_ERR_SITE_OUT_OF_BOUNDS                                  -54
+#define MSP_ERR_NODE_OUT_OF_BOUNDS                                  -55
+#define MSP_ERR_LENGTH_MISMATCH                                     -56
+#define MSP_ERR_BAD_ALPHABET                                        -57
+#define MSP_ERR_NON_SINGLE_CHAR_MUTATION                            -58
+#define MSP_ERR_UNSORTED_SITES                                      -59
+#define MSP_ERR_BAD_SITE_POSITION                                   -60
+#define MSP_ERR_UNSORTED_MUTATIONS                                  -61
+#define MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT                -62
+#define MSP_ERR_NODE_SAMPLE_INTERNAL                                -63
 
 #endif /*__ERR_H__*/

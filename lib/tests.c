@@ -4935,50 +4935,6 @@ test_tree_sequence_bad_records(void)
     edgeset_table.children[6] = 0;
     edgeset_table.children[7] = 5;
 
-    /* Make a gap between adjacent records */
-    edgeset_table.right[1] = 1.0;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT);
-    tree_sequence_free(&ts);
-    edgeset_table.right[1] = 2.0;
-
-    /* Make a gap in the middle of the sequence */
-    edgeset_table.left[0] = 7;
-    edgeset_table.left[2] = 7;
-    edgeset_table.right[3] = 2;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT);
-    tree_sequence_free(&ts);
-    edgeset_table.left[0] = 2;
-    edgeset_table.left[2] = 2;
-    edgeset_table.right[3] = 7;
-
-    /* Make a gap before the last tree */
-    edgeset_table.left[4] = 8;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT);
-    tree_sequence_free(&ts);
-    edgeset_table.left[4] = 7;
-
-    /* Add an extra record to the first tree */
-    edgeset_table.left[4] = 2;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT);
-    tree_sequence_free(&ts);
-    edgeset_table.left[4] = 7;
-
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,

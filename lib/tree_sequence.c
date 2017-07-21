@@ -575,7 +575,7 @@ tree_sequence_check(tree_sequence_t *self)
     node_id_t child, node;
     list_len_t j, k;
     size_t num_coordinates = self->edgesets.num_records + 1;
-    double left, *result;
+    double left;
     double *coordinates = malloc(num_coordinates * sizeof(double));
 
     if (coordinates == NULL) {
@@ -642,12 +642,6 @@ tree_sequence_check(tree_sequence_t *self)
         }
         if (self->edgesets.left[j] >= self->edgesets.right[j]) {
             ret = MSP_ERR_BAD_RECORD_INTERVAL;
-            goto out;
-        }
-        result = bsearch(self->edgesets.right + j, coordinates, num_coordinates,
-                sizeof(double), cmp_double);
-        if (result == NULL) {
-            ret = MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT;
             goto out;
         }
     }

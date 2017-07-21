@@ -139,9 +139,6 @@ msp_strerror(int err)
         case MSP_ERR_NODE_SAMPLE_INTERNAL:
             ret = "Cannot sample internal nodes.";
             break;
-        case MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT:
-            ret = "Bad edgeset in file: right coordinate not matching any left coordinate.";
-            break;
         case MSP_ERR_BAD_EDGESET:
             ret = "Bad edgeset in file.";
         case MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO:
