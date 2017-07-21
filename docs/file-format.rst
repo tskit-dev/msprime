@@ -1,8 +1,8 @@
 .. _sec-file-format:
 
-=====================
+#####################
 Tree Sequence Formats
-=====================
+#####################
 
 The correlated genealogical trees that describe the shared ancestry of set of
 samples are stored very concisely in ``msprime`` as a sequence of coalescent
@@ -36,7 +36,9 @@ node
     associated with branching points all trees across a region if that node is
     the most recent common ancestor to the subtending tips across that region.
     For each node, we record::
+
         (flags, population, time)
+
     where ``flags`` records information about the ancestor; ``population`` is
     the integer ID of the ancestor's (birth) population, and ``time`` is how
     long ago the ancestor was born.
@@ -50,7 +52,9 @@ edgeset
     Tree sequences are constructed by specifying over which segments of genome
     which nodes inherit from which other nodes.  This information is stored by
     recording::
+
         (left, right, parent, children)
+
     where each node in the list ``children`` inherits from the node ``parent``
     on the half-open interval of chromosome ``[left, right)``.
 
@@ -75,9 +79,9 @@ Note that since each node time is equal to the (birth) time of the
 corresponding parent, time is measured in clock time (not meioses).
 
 
-^^^^^^^^^
+
 Mutations
-^^^^^^^^^
+=========
 
 In addition to genealogical relationships, ``msprime`` generates and stores
 mutations.  Associating these with nodes means that a variant shared by many
@@ -91,8 +95,10 @@ mutation
     ``node`` (i.e., a particular ancestor), so that any sample which inherits
     from that node will also inherit that mutation, unless another mutation
     intervenes.  The type records::
+
         site	node	derived_state
         0	    14	    1
+
     Here ``site`` is the index of the ``site`` at which the mutation occurred,
     ``node`` records the ID of the ancestral node associated with the mutation,
     and ``derived_state`` is the allele that any sample inheriting from that
@@ -108,8 +114,10 @@ site
     position.  A ``site`` records a position on the genome where a mutation has
     occurred along with the ancestral state (i.e., the state at the root of the
     tree at that position)::
+
         id	position	ancestral_state
         0	0.1	        0
+
     The ``id`` is not stored directly, but is implied by its index in the site
     table.
 
@@ -118,9 +126,9 @@ To allow for efficent algorithms, it is required that
 
     8. Mutations occurring at the same node are sorted in reverse time order (i.e., down the tree).
 
-^^^^^^^^^^
+
 Migrations
-^^^^^^^^^^
+==========
 
 In simulations trees can be thought of as spread across space, and it is
 helpful for inferring demographic history to record this history.  This is
@@ -132,8 +140,10 @@ migration
     unlikely to be both a migrant and a most recent common ancestor).  So,
     ``msprime`` records when a segment of ancestry has moved between
     populations::
+
         left    right   node    source  dest    time
         0.0     0.3     3       0       1       2.1
+
     This ``migration`` records that the ancestor who was alive 2.1 time units
     in the past from which ``node`` 3 inherited the segment of genome between
     0.0 and 0.3 migrated from population 0 to population 1.
@@ -155,6 +165,7 @@ This section will have the requirements that tables (in text format)
 must satisfy to be valid, illustrated with some examples.
 
 Consider the following sequence of trees::
+
     time
     ----
     1.0                6
@@ -171,6 +182,7 @@ Consider the following sequence of trees::
     position 0.0                  0.2               0.8                1.0
 
 First, we specify the nodes in a ``NodeTable``::
+
     id      is_sample   time
     0       1           0
     1       1           0
@@ -183,6 +195,7 @@ First, we specify the nodes in a ``NodeTable``::
 Recall that the first column, ``id``, is not actually recorded, only provided for convencience.
 This has three samples: nodes 0, 1, and 2, and lists their birth times.
 Then, we specify the edgesets::
+
     left    right   parent  children
     0.2     0.8     3       0,2
     0.0     0.2     4       1,2
@@ -202,15 +215,20 @@ Finally, edgesets specifying the common ancestor of 0 and 4 on the remaining int
 In the depiction above, ``x`` denotes mutations. Suppose that the first mutation occurs at position 0.1
 and the mutations in the second tree both occurred at the same position, at 0.5 (with a back mutation).
 The positions are recorded in the sites table::
+
     id	position	ancestral_state
     0	0.1     	0
     1	0.5     	0
+
 and the acutal mutations::
+
     site	node	derived_state
     0	    4	    1
     1	    3	    1
     1	    2	    0
+
 This would then result in the following (two-locus) haplotypes for the three samples::
+
     sample  haplotype
     ------  ---------
     0       01
@@ -226,33 +244,34 @@ This section will describe how to work with tables.
 
 Include up top something about `.add_row()` versus `.set_columns()`.
 
-+++++++++
+
 NodeTable
-+++++++++
+=========
 
 .. autoclass:: msprime.NodeTable
 
-++++++++++++
+
 EdgesetTable
-++++++++++++
+============
 
 .. autoclass:: msprime.EdgesetTable
 
-+++++++++++++
+
 MutationTable
-+++++++++++++
+=============
 
 .. autoclass:: msprime.MutationTable
 
-+++++++++++++++++
+
 Import and export
-+++++++++++++++++
+=================
 
 This section describes how to extract tables from a ``TreeSequence``,
 and how to construct a ``TreeSequence`` from tables.
 Since tree sequences are immutible,
 often the best way to modify a ``TreeSequence`` 
 is (for ``ts`` a ``TreeSequence``)::
+
     nodes = msprime.NodeTable()
     edgesets = msprime.EdgesetTable()
     ts.dump_tables(nodes=nodes, edgesets=edgesets)
@@ -260,14 +279,10 @@ is (for ``ts`` a ``TreeSequence``)::
     ts.load_tables(nodes=nodes, edgesets=edgesets)
 
 
-.. autofunction:: msprime.TreeSequence.ts.load_tables
+.. automethod:: msprime.TreeSequence.load_tables
 
-.. autofunction:: msprime.TreeSequence.ts.dump_text
-
-.. autofunction:: msprime.TreeSequence.ts.dump_tables
-
-.. autofunction:: msprime.TreeSequence.ts.dump_samples_text
-
+.. automethod:: msprime.TreeSequence.dump_tables
+   :noindex:
 
 
 ***********
@@ -288,9 +303,10 @@ Path                Type                Dim         Description
 /format_version     H5T_STD_U32LE       2           The (major, minor) file format version.
 ================    ==============      ======      ===========
 
-++++++++++++++++++
+
+
 Provenance dataset
-++++++++++++++++++
+==================
 
 The provenance dataset records information relating the the provenance
 of a particular tree sequence file. When a tree sequence file is generated
@@ -309,9 +325,10 @@ Path                Type                Dim         Description
 /provenance         H5T_STRING          Scalar      Provenance information.
 ================    ==============      ======      ===========
 
-+++++++++++++++
+
+
 Mutations group
-+++++++++++++++
+===============
 
 The ``mutations`` group is optional, and describes the location of mutations
 with respect to tree nodes and their positions along the sequence. Each mutation
@@ -333,17 +350,19 @@ Path                    Type                Dim
 /mutations/position     H5T_IEEE_F64LE      M
 ===================     ==============      =====
 
-+++++++++++
+
+
 Trees group
-+++++++++++
+===========
 
 The ``trees`` group is mandatory and describes the topology of the tree
 sequence. The ``trees`` group contains a number of nested groups and datasets,
 which we will describe in turn.
 
-^^^^^^^^^^^^^^^^^^^
+
+
 Breakpoints dataset
-^^^^^^^^^^^^^^^^^^^
+-------------------
 
 The ``/trees/breakpoints`` dataset records the floating point positions of the
 breakpoints between trees in the tree sequence, and the flanking positions
@@ -357,9 +376,9 @@ Path                        Type
 /trees/breakpoints          H5T_IEEE_F64LE
 =======================     ==============
 
-^^^^^^^^^^^
+
 Nodes group
-^^^^^^^^^^^
+-----------
 
 The ``/trees/nodes`` group records information about the individual
 nodes in a tree sequence. Leaf nodes (from :math:`0` to :math:`n - 1`)
@@ -375,9 +394,9 @@ Path                        Type
 /trees/nodes/time           H5T_IEEE_F64LE
 =======================     ==============
 
-^^^^^^^^^^^^^
+
 Records group
-^^^^^^^^^^^^^
+-------------
 
 The ``/trees/records`` group stores the individual coalesence records.
 Each record consists of four pieces of information: the left and
@@ -410,9 +429,9 @@ Path                      Type                Dim
 /trees/children           H5T_STD_U32LE       :math:`\leq 2 \times` N
 ===================       ==============      ======
 
-^^^^^^^^^^^^^
+
 Indexes group
-^^^^^^^^^^^^^
+-------------
 
 The ``/trees/indexes`` group records information required to efficiently
 reconstruct the individual trees from the tree sequence. The
