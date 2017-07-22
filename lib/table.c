@@ -977,3 +977,155 @@ migration_table_print_state(migration_table_t *self, FILE *out)
                 (int) self->dest[j], self->time[j]);
     }
 }
+
+/*************************
+ * sort_tables
+ *************************/
+
+typedef struct {
+    double left;
+    double right;
+    node_id_t parent;
+    uint32_t children_length;
+    node_id_t *children;
+    double time;
+} edgeset_sort_t;
+
+typedef struct {
+    /* Input tables. */
+    node_table_t *nodes;
+    edgeset_table_t *edgesets;
+    site_table_t *sites;
+    mutation_table_t *mutations;
+    migration_table_t *migrations;
+    /* Memory used for sorting edgesets */
+    edgeset_sort_t *sorted_edgesets;
+    node_id_t *children_mem;
+} table_sorter_t;
+
+static int
+cmp_node_id_t(const void *a, const void *b) {
+    const node_id_t *ia = (const node_id_t *) a;
+    const node_id_t *ib = (const node_id_t *) b;
+    return (*ia > *ib) - (*ia < *ib);
+}
+
+static int
+cmp_edgeset(const void *a, const void *b) {
+    const edgeset_sort_t *ca = (const edgeset_sort_t *) a;
+    const edgeset_sort_t *cb = (const edgeset_sort_t *) b;
+
+    int ret = (ca->time > cb->time) - (ca->time < cb->time);
+    /* If time values are equal, sort by the parent node */
+    if (ret == 0) {
+        ret = (ca->parent > cb->parent) - (ca->parent < cb->parent);
+        /* If the nodes are equal, sort by the left coordinate. */
+        if (ret == 0) {
+            ret = (ca->left > cb->left) - (ca->left < cb->left);
+        }
+    }
+    return ret;
+}
+
+
+static int
+table_sorter_alloc(table_sorter_t *self, node_table_t *nodes, edgeset_table_t *edgesets,
+        site_table_t *sites, mutation_table_t *mutations, migration_table_t *migrations)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(table_sorter_t));
+    self->nodes = nodes;
+    self->edgesets = edgesets;
+    self->mutations = mutations;
+    self->sites = sites;
+    self->migrations = migrations;
+
+    self->children_mem = malloc(edgesets->total_children_length * sizeof(node_id_t));
+    self->sorted_edgesets = malloc(edgesets->num_rows * sizeof(edgeset_sort_t));
+    if (self->children_mem == NULL || self->sorted_edgesets == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+out:
+    return ret;
+}
+
+static int
+table_sorter_run(table_sorter_t *self)
+{
+    int ret = 0;
+    edgeset_sort_t *e;
+    size_t j, children_offset;
+
+    memcpy(self->children_mem, self->edgesets->children,
+            self->edgesets->total_children_length * sizeof(node_id_t));
+    children_offset = 0;
+    for (j = 0; j < self->edgesets->num_rows; j++) {
+        e = self->sorted_edgesets + j;
+        e->left = self->edgesets->left[j];
+        e->right = self->edgesets->right[j];
+        e->parent = self->edgesets->parent[j];
+        e->children_length = self->edgesets->children_length[j];
+        e->children = self->children_mem + children_offset;
+        if (e->parent >= (node_id_t) self->nodes->num_rows) {
+            ret = MSP_ERR_OUT_OF_BOUNDS;
+            goto out;
+        }
+        e->time = self->nodes->time[e->parent];
+        children_offset += e->children_length;
+    }
+    qsort(self->sorted_edgesets, self->edgesets->num_rows, sizeof(edgeset_sort_t),
+            cmp_edgeset);
+    /* Copy the edgesets back into the table. */
+    children_offset = 0;
+    for (j = 0; j < self->edgesets->num_rows; j++) {
+        e = self->sorted_edgesets + j;
+        self->edgesets->left[j] = e->left;
+        self->edgesets->right[j] = e->right;
+        self->edgesets->parent[j] = e->parent;
+        self->edgesets->children_length[j] = e->children_length;
+        e->children_length = self->edgesets->children_length[j];
+        /* Sort the children */
+        qsort(e->children, e->children_length, sizeof(node_id_t), cmp_node_id_t);
+        memcpy(self->edgesets->children + children_offset,
+                e->children, e->children_length * sizeof(node_id_t));
+        children_offset += e->children_length;
+    }
+
+out:
+    return ret;
+}
+
+static void
+table_sorter_free(table_sorter_t *self)
+{
+    msp_safe_free(self->children_mem);
+    msp_safe_free(self->sorted_edgesets);
+}
+
+int
+sort_tables(node_table_t *nodes, edgeset_table_t *edgesets, site_table_t *sites,
+        mutation_table_t *mutations, migration_table_t *migrations)
+{
+    int ret = 0;
+    table_sorter_t *sorter = NULL;
+
+    sorter = malloc(sizeof(table_sorter_t));
+    if (sorter == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = table_sorter_alloc(sorter, nodes, edgesets, sites, mutations, migrations);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = table_sorter_run(sorter);
+out:
+    if (sorter != NULL) {
+        table_sorter_free(sorter);
+        free(sorter);
+    }
+    return ret;
+}

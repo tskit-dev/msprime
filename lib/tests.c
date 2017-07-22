@@ -5706,6 +5706,119 @@ test_save_hdf5(void)
 }
 
 static void
+unsort_edgesets(edgeset_table_t *edgesets)
+{
+    size_t dest_children_offset, j;
+    double left, right;
+    node_id_t parent, child, *children;
+    uint32_t children_length;
+
+    /* Swap the first two records and reverse their children */
+    if (edgesets->num_rows >= 2) {
+        left = edgesets->left[0];
+        right = edgesets->right[0];
+        parent = edgesets->parent[0];
+        children_length = edgesets->children_length[0];
+        children = malloc(children_length * sizeof(node_id_t));
+        CU_ASSERT_FATAL(children != NULL);
+        memcpy(children, edgesets->children, children_length * sizeof(node_id_t));
+        dest_children_offset = children_length;
+        /* Copy children */
+        for (j = 0; j < edgesets->children_length[1]; j++) {
+            edgesets->children[j] = edgesets->children[dest_children_offset + j];
+        }
+        for (j = 0; j < children_length; j++) {
+            edgesets->children[edgesets->children_length[1] + j] = children[j];
+        }
+        free(children);
+        edgesets->left[0] = edgesets->left[1];
+        edgesets->right[0] = edgesets->right[1];
+        edgesets->parent[0] = edgesets->parent[1];
+        edgesets->children_length[0] = edgesets->children_length[1];
+        edgesets->left[1] = left;
+        edgesets->right[1] = right;
+        edgesets->parent[1] = parent;
+        edgesets->children_length[1] = children_length;
+    }
+    /* Swap the first two children for the first edgeset */
+    CU_ASSERT_FATAL(edgesets->num_rows > 0);
+    CU_ASSERT_FATAL(edgesets->children_length[0] > 1);
+    child = edgesets->children[0];
+    edgesets->children[0] = edgesets->children[1];
+    edgesets->children[1] = child;
+
+}
+
+static void
+test_sort_tables(void)
+{
+    int ret;
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    tree_sequence_t ts2;
+    tree_sequence_t *ts1;
+    size_t j, num_provenance_strings;
+    size_t alloc_size = 8192;
+    char **provenance_strings;
+    node_table_t nodes;
+    edgeset_table_t edgesets;
+    migration_table_t migrations;
+    site_table_t sites;
+    mutation_table_t mutations;
+
+    ret = node_table_alloc(&nodes, alloc_size, alloc_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&migrations, alloc_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_alloc(&sites, alloc_size, alloc_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(&mutations, alloc_size, alloc_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    CU_ASSERT_FATAL(examples != NULL);
+
+    for (j = 0; examples[j] != NULL; j++) {
+        ts1 = examples[j];
+
+        ret = tree_sequence_dump_tables_tmp(ts1, &nodes, &edgesets,
+                &migrations, &sites, &mutations, &num_provenance_strings,
+                &provenance_strings);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        unsort_edgesets(&edgesets);
+
+        ret = tree_sequence_initialise(&ts2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = tree_sequence_load_tables_tmp(&ts2, &nodes, &edgesets,
+                &migrations, &sites, &mutations, num_provenance_strings,
+                provenance_strings);
+        CU_ASSERT_NOT_EQUAL(ret, 0);
+        tree_sequence_free(&ts2);
+
+        ret = sort_tables(&nodes, &edgesets, &sites, &mutations, &migrations);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        ret = tree_sequence_initialise(&ts2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = tree_sequence_load_tables_tmp(&ts2, &nodes, &edgesets,
+                &migrations, &sites, &mutations, num_provenance_strings,
+                provenance_strings);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        verify_tree_sequences_equal(ts1, &ts2, true, true, true);
+        tree_sequence_free(&ts2);
+
+        tree_sequence_free(ts1);
+        free(ts1);
+    }
+    free(examples);
+    node_table_free(&nodes);
+    edgeset_table_free(&edgesets);
+    migration_table_free(&migrations);
+    site_table_free(&sites);
+    mutation_table_free(&mutations);
+}
+
+static void
 test_dump_tables(void)
 {
     int ret;
@@ -6509,6 +6622,7 @@ main(int argc, char **argv)
         {"test_save_empty_hdf5", test_save_empty_hdf5},
         {"test_save_hdf5", test_save_hdf5},
         {"test_dump_tables", test_dump_tables},
+        {"test_sort_tables", test_sort_tables},
         {"test_dump_tables_hdf5", test_dump_tables_hdf5},
         {"test_single_locus_two_populations", test_single_locus_two_populations},
         {"test_many_populations", test_single_locus_many_populations},
