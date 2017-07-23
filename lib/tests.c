@@ -5746,7 +5746,40 @@ unsort_edgesets(edgeset_table_t *edgesets)
     child = edgesets->children[0];
     edgesets->children[0] = edgesets->children[1];
     edgesets->children[1] = child;
+}
 
+static void
+unsort_sites(site_table_t *sites, mutation_table_t *mutations)
+{
+    double position;
+    char ancestral_state;
+    size_t j;
+
+    if (sites->num_rows > 1) {
+        /* Swap the first two sites */
+        CU_ASSERT_EQUAL_FATAL(sites->ancestral_state_length[0], 1);
+        CU_ASSERT_EQUAL_FATAL(sites->ancestral_state_length[1], 1);
+        position = sites->position[0];
+        ancestral_state = sites->ancestral_state[0];
+        sites->position[0] = sites->position[1];
+        sites->position[1] = position;
+        sites->ancestral_state[0] = sites->ancestral_state[1];
+        sites->ancestral_state[1] = ancestral_state;
+
+        /* Update the mutations for these sites */
+        j = 0;
+        while (j < mutations->num_rows && mutations->site[j] == 0) {
+            mutations->site[j] = 1;
+            j++;
+        }
+        while (j < mutations->num_rows && mutations->site[j] == 1) {
+            mutations->site[j] = 0;
+            j++;
+        }
+    }
+
+    /* site_table_print_state(sites, stdout); */
+    /* mutation_table_print_state(mutations, stdout); */
 }
 
 static void
@@ -5785,8 +5818,17 @@ test_sort_tables(void)
                 &migrations, &sites, &mutations, &num_provenance_strings,
                 &provenance_strings);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        unsort_edgesets(&edgesets);
 
+        /* Check the input validation */
+        ret = sort_tables(NULL, &edgesets, &migrations, &sites, &mutations);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+        ret = sort_tables(&nodes, NULL, &migrations, &sites, &mutations);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+        ret = sort_tables(&nodes, &edgesets, &migrations, &sites, NULL);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+        /* Check edgeset sorting */
+        unsort_edgesets(&edgesets);
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables_tmp(&ts2, &nodes, &edgesets,
@@ -5795,7 +5837,7 @@ test_sort_tables(void)
         CU_ASSERT_NOT_EQUAL(ret, 0);
         tree_sequence_free(&ts2);
 
-        ret = sort_tables(&nodes, &edgesets, &sites, &mutations, &migrations);
+        ret = sort_tables(&nodes, &edgesets, &migrations, &sites, &mutations);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
         ret = tree_sequence_initialise(&ts2);
@@ -5807,6 +5849,51 @@ test_sort_tables(void)
         verify_tree_sequences_equal(ts1, &ts2, true, true, true);
         tree_sequence_free(&ts2);
 
+        if (sites.num_rows > 1) {
+            /* Check site sorting */
+            unsort_sites(&sites, &mutations);
+            ret = tree_sequence_initialise(&ts2);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            ret = tree_sequence_load_tables_tmp(&ts2, &nodes, &edgesets,
+                    &migrations, &sites, &mutations, num_provenance_strings,
+                    provenance_strings);
+            CU_ASSERT_NOT_EQUAL(ret, 0);
+            tree_sequence_free(&ts2);
+
+            ret = sort_tables(&nodes, &edgesets, &migrations, &sites, &mutations);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+            ret = tree_sequence_initialise(&ts2);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            ret = tree_sequence_load_tables_tmp(&ts2, &nodes, &edgesets,
+                    &migrations, &sites, &mutations, num_provenance_strings,
+                    provenance_strings);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            verify_tree_sequences_equal(ts1, &ts2, true, true, true);
+            tree_sequence_free(&ts2);
+
+            /* Check for site bounds error */
+            mutations.site[0] = sites.num_rows;
+            ret = sort_tables(&nodes, &edgesets, &migrations, &sites, &mutations);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+            mutations.site[0] = 0;
+            ret = sort_tables(&nodes, &edgesets, &migrations, &sites, &mutations);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            /* Check for edgeset node bounds error */
+            edgesets.parent[0] = nodes.num_rows;
+            ret = sort_tables(&nodes, &edgesets, &migrations, &sites, &mutations);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+            edgesets.parent[0] = 0;
+            ret = sort_tables(&nodes, &edgesets, &migrations, &sites, &mutations);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            /* Check for mutation node bounds error */
+            mutations.node[0] = nodes.num_rows;
+            ret = sort_tables(&nodes, &edgesets, &migrations, &sites, &mutations);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+            mutations.node[0] = 0;
+            ret = sort_tables(&nodes, &edgesets, &migrations, &sites, &mutations);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+        }
         tree_sequence_free(ts1);
         free(ts1);
     }

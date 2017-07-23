@@ -852,8 +852,8 @@ int mutgen_populate_tables(mutgen_t *self, site_table_t *sites,
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 /* Tables API */
-int sort_tables(node_table_t *nodes, edgeset_table_t *edgesets,
-        site_table_t *sites, mutation_table_t *mutations, migration_table_t *migrations);
+int sort_tables(node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
+        site_table_t *sites, mutation_table_t *mutations);
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
         size_t max_total_name_length_increment);
