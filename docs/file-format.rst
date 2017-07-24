@@ -252,6 +252,9 @@ This section will describe how to work with tables.
 
 Include here top something about `.add_row()` and `.set_columns()`.
 
+Clarify that interfaces like `nodes.positions` creates a new array and returns
+it each time it is called.
+
 
 NodeTable
 =========
