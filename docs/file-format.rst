@@ -184,19 +184,19 @@ Consider the following sequence of trees::
                 /     /       \         /   /   x         /   /       \
                /     /         \       /   /     \       /   /         \
     0.0       0     1           2     1   0       2     0   1           2
-    
+
     position 0.0                  0.2               0.8                1.0
 
 First, we specify the nodes in a ``NodeTable``::
 
-    id      is_sample   time
-    0       1           0
-    1       1           0
-    2       1           0
-    3       0           0.4
-    4       0           0.5
-    5       0           0.7
-    6       0           1.0
+    id      is_sample    population   time
+    0       1            0            0
+    1       1            0            0
+    2       1            0            0
+    3       0            0            0.4
+    4       0            0            0.5
+    5       0            0            0.7
+    6       0            0            1.0
 
 Recall that the first column, ``id``, is not actually recorded, only provided
 for convenience.  This has three samples: nodes 0, 1, and 2, and lists their
@@ -248,12 +248,43 @@ samples::
 Tables API
 **********
 
-This section will describe how to work with tables.
+Tables provide a convenient method for viewing, importing and exporting tree
+sequences.  ``msprime`` provides direct access to the the columns of a table as
+``numpy`` arrays: for instance, if ``n`` is a ``NodeTable``, then ``n.time``
+will return an array containing the birth times of the individuals in the
+table.  *However*, it is important to note that this is *not* a shallow copy:
+modifying ``n.time`` will not change the node table ``n``.  This may change in
+the future, but currently there are two ways to modify tables: ``.add_row()``
+and ``.set_columns()`` (and also ``.reset()``, which empties the table).
 
-Include here top something about `.add_row()` and `.set_columns()`.
+The example node table above would be constructed using ``.add_row()`` as
+follows::
 
-Clarify that interfaces like `nodes.positions` creates a new array and returns
-it each time it is called.
+    n = msprime.NodeTable()
+    sv = [True, True, True, False, False, False, False]
+    tv = [0.0, 0.0, 0.0, 0.4, 0.5, 0.7, 1.0]
+    pv = [0, 0, 0, 0, 0, 0, 0]
+    for s, t, p in zip(fv, tv, pv):
+        n.add_row(is_sample=s, population=p, time=t)
+
+    print(n)
+
+The ``.add_row()`` method is natural (and should be reasonably efficient) if
+new records appear one-by-one. In the example above it would have been more
+natural to use ``.set_columns()``::
+
+    n = msprime.NodeTable()
+    n.set_columns(is_sample=sv, population=pv, time=tv)
+
+
+Finally, here is an example where we add 1.4 to every ``time`` except the first
+in the NodeTable constructed above using ``numpy`` indexing::
+
+    fn = n.flags
+    pn = n.population
+    tn = n.time
+    tn[1:] = tn[1:] + 1.4
+    n.set_columns(flags=fn, population=pn, time=tn)
 
 
 NodeTable
@@ -266,6 +297,12 @@ EdgesetTable
 ============
 
 .. autoclass:: msprime.EdgesetTable
+
+
+SiteTable
+=========
+
+.. autoclass:: msprime.SiteTable
 
 
 MutationTable
