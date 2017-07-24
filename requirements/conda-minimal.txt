@@ -4,4 +4,3 @@ hdf5
 h5py
 gsl
 six
-bintrees

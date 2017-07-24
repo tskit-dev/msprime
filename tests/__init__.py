@@ -28,8 +28,6 @@ import heapq
 import random
 import unittest
 
-import bintrees
-
 import msprime
 
 NULL_NODE = -1
@@ -495,6 +493,28 @@ class Segment(object):
         return (self.left, self.right, self.node) < (other.left, other.right, self.node)
 
 
+class SortedMap(dict):
+    """
+    Simple implementation of a sorted mapping. Based on the API for bintrees.AVLTree.
+    We don't use bintrees here because it is not available on Windows.
+    """
+    def floor_key(self, k):
+        ret = None
+        for key in sorted(self.keys()):
+            if key > k:
+                break
+            ret = key
+        return ret
+
+    def succ_key(self, k):
+        ret = None
+        for key in sorted(self.keys()):
+            ret = key
+            if key > k:
+                break
+        return ret
+
+
 class Simplifier(object):
     """
     Simplifies a tree sequence to it's minimal representation given a subset
@@ -529,7 +549,7 @@ class Simplifier(object):
             # and the label in A is the input node ID
             self.A[sample_id] = x
             self.record_node(sample_id)
-        self.S = bintrees.AVLTree()
+        self.S = SortedMap()
         self.S[0] = self.n
         self.S[self.m] = -1
 
@@ -607,7 +627,8 @@ class Simplifier(object):
             s = str(x) + ": " + self.segment_chain_str(self.A[x])
             print("\t\t" + s)
         print("Overlap counts", len(self.S))
-        for k, x in self.S.items():
+        for k in sorted(self.S.keys()):
+            x = self.S[k]
             print("\t", k, "\t:\t", x)
         print("Output nodes:")
         print(self.node_table)
