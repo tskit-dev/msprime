@@ -147,7 +147,26 @@ class Edgeset(SimpleContainer):
 
 
 class NodeTable(_msprime.NodeTable):
-    # TODO document
+    """
+    Class for tables describing all nodes in the tree sequence, of the form
+        id	flags	population	time
+        0	1	0		0.0
+        1	1	1		0.0
+        2	0	0		0.0
+        3	1	0		0.5
+        4	0	2		2.1
+    Node IDs are *not* recorded; rather the `id` column shows the row index, so
+    that the `k`-th row describes the node whose ID is `k`.  `flags` currently
+    records whether the node is a sample (=1) or not (=0).  `population` is an
+    integer population ID, and `time` is the time since that individual was
+    born, as a float.
+
+    Requirements:
+        1. All birth times must be greater than or equal to zero.
+
+    It is not required that the `time` column be ordered or that all samples
+    must be at the top.
+    """
     def __str__(self):
         time = self.time
         flags = self.flags
@@ -159,6 +178,34 @@ class NodeTable(_msprime.NodeTable):
 
 
 class EdgesetTable(_msprime.EdgesetTable):
+    """
+    Class for tables describing all edgesets in a tree sequence, of the form
+        left	right	parent	children
+        0.0     0.4     3       0,2
+        0.4     1.0     3       0,1,2
+        0.0     0.4     4       1,3
+    These describe the half-open genomic interval affected: `[left, right)`,
+    the `parent` and the `children` on that interval.
+
+    Requirements: to describe a valid tree sequence, a `EdgesetTable` (and
+    corresponding `NodeTable`, to provide birth times) must satisfy:
+        1. each list of children must be in sorted order,
+        2. any two edgesets that share a child must be nonoverlapping, and
+        3. the birth times of the `parent` in an edgeset must be strictly
+            greater than the birth times of the `children` in that edgeset.
+    Furthermore, for algorithmic requirements
+        4. the smallest `left` coordinate must be 0.0,
+        5. the the table must be sorted by birth time of the `parent`, and
+        6. any two edgesets corresponding to the same `parent` must be nonoverlapping.
+    It is an additional requirement that the complete ancestry of each sample
+    must be specified, but this is harder to verify.
+
+    It is not required that all records corresponding to the same parent be
+    adjacent in the table.
+
+    TODO: `TreeSequence.simplify()` will accept edgesets not satisfying the
+    fourth requirement, producing a `TreeSequence` whose edgesets are of this form.
+    """
     def __str__(self):
         left = self.left
         right = self.right
@@ -191,6 +238,17 @@ class MigrationTable(_msprime.MigrationTable):
 
 
 class SiteTable(_msprime.SiteTable):
+    """
+    Class for tables describing all sites at which mutations have occurred in a
+    tree sequence, of the form
+        id	position	ancestral_state
+        0	0.1     	0
+        1	0.5     	0
+    Here ``id`` is not stored directly, but is determined by the row index in
+    the table.  ``position`` is the position along the genome, and
+    ``ancestral_state`` gives the allele at the root of the tree at that
+    position.
+    """
     def __str__(self):
         position = self.position
         ancestral_state = unpack_strings(
@@ -202,6 +260,21 @@ class SiteTable(_msprime.SiteTable):
 
 
 class MutationTable(_msprime.MutationTable):
+    """
+    Class for tables describing all mutations that have occurred in a tree
+    sequence, of the form
+        site	node	derived_state
+        0	4	1
+        1	3	1
+        1	2	0
+    Here ``site`` is the index in the SiteTable of the site at which the
+    mutation occurred, ``node`` is the index in the NodeTable of the node who
+    is the first node inheriting the mutation, and ``derived_state`` is the
+    allele resulting from this mutation.
+
+    It is required that mutations occurring at the same node are sorted in
+    reverse time order.
+    """
     def __str__(self):
         site = self.site
         node = self.node
@@ -1143,7 +1216,12 @@ def load_tables(*args, **kwargs):
 
 def parse_nodes(source):
     """
-    Parse the specified file-like object and return a NodeTable instance.
+    Parse the specified file-like object and return a NodeTable instance.  The
+    object must contain text with whitespace delimited columns, which are
+    labeled with headers and contain columns ``is_sample``, ``time``, and
+    optionally, ``population``.  Further requirements are described in
+    :class:`NodeTable`.  Note that node ``id`` is not included, but implied by
+    order in the file.
     """
     # Read the header and find the indexes of the required fields.
     table = NodeTable()
@@ -1172,7 +1250,12 @@ def parse_nodes(source):
 
 def parse_edgesets(source):
     """
-    Parse the specified file-like object and return a EdgesetTableTable instance.
+    Parse the specified file-like object and return a EdgesetTable instance.
+    The object must contain text with whitespace delimited columns, which are
+    labeled with headers and contain columns ``left``, ``right``, ``parent``,
+    and ``children``.  The ``children`` field is a comma-separated list of base
+    10 integer values.  Further requirements are described in
+    :class:`EdgesetTable`.
     """
     table = EdgesetTable()
     header = source.readline().split()
@@ -1195,7 +1278,11 @@ def parse_edgesets(source):
 
 def parse_sites(source):
     """
-    Parse the specified file-like object and return a SiteTable instance.
+    Parse the specified file-like object and return a SiteTable instance.  The
+    object must contain text with whitespace delimited columns, which are
+    labeled with headers and contain columns ``position`` and
+    ``ancestral_state``.  Further requirements are described in
+    :class:`SiteTable`.
     """
     header = source.readline().split()
     position_index = header.index("position")
@@ -1213,6 +1300,10 @@ def parse_sites(source):
 def parse_mutations(source):
     """
     Parse the specified file-like object and return a MutationTable instance.
+    The object must contain text with whitespace delimited columns, which are
+    labeled with headers and contain columns ``site``, ``node``, and
+    ``derived_state``.  Further requirements are described in
+    :class:`MutationTable`.
     """
     header = source.readline().split()
     site_index = header.index("site")
@@ -1233,73 +1324,78 @@ def load_text(nodes, edgesets, sites=None, mutations=None):
     """
     Loads a tree sequence from the specified file paths. The files input here
     are in a simple whitespace delimited tabular format such as output by the
-    :meth:`.TreeSequence.write_records` and
-    :meth:`.TreeSequence.write_mutations` methods. This method is intended as a
+    :meth:`.TreeSequence.dump_text` method.  This method is intended as a
     convenient interface for importing external data into msprime; the HDF5
     based file format using by :meth:`msprime.load` will be many times more
     efficient that using the text based formats.
 
-    The ``records_file`` must be a text file with six whitespace delimited
-    columns. Each line in the file must contain at least this many columns, and
-    each line will be stored as a single coalescence record. The columns
-    correspond to the ``left``, ``right``, ``node``, ``children``, ``time`` and
-    ``population`` fields as described in the :meth:`.TreeSequence.records`
-    method. The ``left``, ``right`` and ``time`` fields are parsed as base 10
-    floating point values, and the ``node`` and ``population`` fields are
-    parsed as base 10 integers. The ``children`` field is a comma-separated
-    list of base 10 integer values, and must contain at least two elements. The
-    file may optionally begin with a header line; if the first line begins with
-    the text "left" it will be ignored.
+    ``nodes`` and ``edgesets`` must be a file-like object containing text with
+    whitespace delimited columns,  parsable by :func:`parse_nodes` and
+    :func:`parse_edgesets`, respectively.  Further requirements are described
+    in :class:`NodeTable` and :class:`EdgesetTable`.
 
-    Records must be listed in the file in non-decreasing order of the time
-    field. Within a record, children must be listed in increasing order of node
-    value. The left and right coordinates must be non-negative values.
+    ``sites`` and ``mutations`` are optional, but if included must be similar,
+    parsable by :func:`parse_sites` and :func:`parse_mutations`, respecively.
+    Further requirements are described in :class:`SiteTable` and
+    :class:`MutationTable`.
 
     An example of a simple tree sequence for four samples with
-    three distinct trees is::
+    three distinct trees is as follows.
 
-        left    right   node    children    time    population
-        2       10      4       2,3         0.071    0
-        0       2       5       1,3         0.090    0
-        2       10      5       1,4         0.090    0
-        0       7       6       0,5         0.170    0
-        7       10      7       0,5         0.202    0
-        0       2       8       2,6         0.253    0
+    nodes::
+
+        is_sample   time    population
+        1           0.0     0
+        1           0.0     0
+        1           0.0     0
+        1           0.0     0
+        0           0.071   0
+        0           0.090   0
+        0           0.170   0
+        0           0.202   0
+        0           0.253   0
+
+    edgesets::
+
+        left    right   node    children
+        2       10      4       2,3
+        0       2       5       1,3
+        2       10      5       1,4
+        0       7       6       0,5
+        7       10      7       0,5
+        0       2       8       2,6
+
 
     This example is equivalent to the tree sequence illustrated in Figure 4 of
     the `PLoS Computational Biology paper
     <http://dx.doi.org/10.1371/journal.pcbi.1004842>`_. Nodes are given here in
     time order (since this is a backwards-in-time tree sequence), but they may
     be allocated in any order. In particular, left-to-right tree sequences are
-    fully supported. However, the smallest value in the ``node`` column must be
-    equal to the sample size, and there must not be 'gaps' in the node address
-    space.
+    fully supported.
 
-    The optional ``mutations_file`` has a similiar format, but contains only
-    two columns. These correspond to the ``position`` and ``node`` fields as
-    described in the :meth:`.TreeSequence.mutations` method. The ``position``
-    field is parsed as a base 10 floating point value, and the ``node`` field
-    is parsed as a base 10 integer. The file may optionally begin with a header
-    line; if the first line begins with the text "position" it will be ignored.
+    An example of a ``sites`` and ``mutations`` file for the tree sequence
+    defined in the previous example is as follows.
 
-    Mutations must be listed in non-decreasing order of position, and the nodes
-    must refer to a node defined by the records. Mutations defined over the
-    root or a node not present in a local tree will lead to an error being
-    produced during tree traversal (e.g. in the :meth:`.TreeSequence.trees`
-    method, but also in many other methods).
+    sites::
 
-    An example of a mutations file for the tree sequence defined in the
-    previous example is::
-
-        position    node
+        position    ancestral_state
         0.1         0
-        8.5         4
+        8.5         0
 
-    :param str records_file: The path of the text file containing
-        the coalescence records for the desired tree sequence.
-    :param str mutations_file: The path of the text file containing
-        the mutation records for the desired tree sequence. This
-        argument is optional and defaults to None.
+    mutations::
+
+        site    node    derived_state
+        0       3       1
+        1       6       1
+        1       0       0
+
+
+    :param stream nodes: The file-type object containing text describing a NodeTable.
+    :param stream edgesets: The file-type object containing text
+        describing a EdgesetTable.
+    :param stream sites: The file-type object containing text describing a SiteTable.
+    :param stream mutations: The file-type object containing text
+        describing a MutationTable.
     :return: The tree sequence object containing the information
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
@@ -1756,6 +1852,19 @@ class TreeSequence(object):
     def dump_tables(
             self, nodes=None, edgesets=None, migrations=None, sites=None,
             mutations=None):
+        """
+        Copy the contents of the tables underlying the tree sequence to the
+        specified objects.
+
+        :param NodeTable nodes: The NodeTable to load the nodes into.
+        :param EdgesetTable edgesets: The EdgesetTable to load the edgesets into.
+        :param MigrationTable migrations: The MigrationTable to load the migrations into.
+        :param SiteTable sites: The SiteTable to load the sites into.
+        :param MutationTable mutations: The NodeTable to load the mutations into.
+
+        :return: A TableTuple containing all tables underlying the tree sequence.
+        :rtype: TableTuple
+        """
         # TODO document this and test the semantics to passing in new tables
         # as well as returning the updated tables.
         if nodes is None:
