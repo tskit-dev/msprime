@@ -22,8 +22,13 @@ store genealogies from other sources efficiently using ``msprime``.
 Definitions
 ***********
 
-To begin, here are definitions of some key ideas encountered later.  First are
-those that describe genealogical relationships:
+To begin, here are definitions of some key ideas encountered later.  This will
+define the terminology, as well as giving properties of the tables that these
+are stored in.  These are properties that can be assumed when writing methods
+that operate on an ``msprime`` tree sequence; the function ``sort_tables`` is
+provided to put unsorted tables in the proper order.
+
+First are those that describe genealogical relationships:
 
 tree
     A "gene tree", i.e., the genealogical tree describing how each of the
@@ -130,8 +135,10 @@ site
 
 To allow for efficent algorithms, it is required that
 
-    8. Mutations occurring at the same node are sorted in reverse time order (i.e., down the tree).
+    8. Sites are sorted by increasing position,
+    9. and mutations are sorted by site.
 
+Mutations at the same site may currently be in any order, but this may change.
 
 Migrations
 ==========
@@ -167,10 +174,7 @@ A valid ``migration``:
 Working with Tables
 *******************
 
-This section will have the requirements that tables (in text format)
-must satisfy to be valid, illustrated with some examples.
-
-Consider the following sequence of trees::
+Here is an example.  Consider the following sequence of trees::
 
     time
     ----
@@ -285,6 +289,12 @@ in the NodeTable constructed above using ``numpy`` indexing::
     tn = n.time
     tn[1:] = tn[1:] + 1.4
     n.set_columns(flags=fn, population=pn, time=tn)
+
+
+Sorting tables
+==============
+
+..autofunction:: msprime.sort_tables
 
 
 NodeTable
