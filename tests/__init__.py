@@ -484,8 +484,8 @@ class Segment(object):
         self.next = next
 
     def __str__(self):
-        s = "({0}:{1}-{2}->{3}: prev={4} next={5})".format(
-            self.index, self.left, self.right, self.node, repr(self.prev),
+        s = "({}-{}->{}:{}:: prev={} next={})".format(
+            self.left, self.right, self.node, self.mutations, repr(self.prev),
             repr(self.next))
         return s
 
@@ -527,25 +527,22 @@ class Simplifier(object):
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
         # has processed the ancestors, they are are removed from the map.
         self.A = {}
-        # M maps input node IDs to their corresponding output node IDs.
-        self.M = [-1 for _ in range(ts.num_nodes)]
         # Output tables
         self.node_table = msprime.NodeTable(ts.num_nodes)
         self.edgeset_table = msprime.EdgesetTable(ts.num_edgesets)
         self.site_table = msprime.SiteTable(max(1, ts.num_sites))
         self.mutation_table = msprime.MutationTable(max(1, ts.num_mutations))
-        # will keep here output sites, and associated mutations,
-        # with keys equal to position
-        self.sites = {}
         self.last_edgeset = None
         self.num_output_nodes = 0
-        self.num_output_sites = 0
+        self.output_sites = {}
         # Keep track of then number of segments we alloc and free to ensure we
         # don't leak.
         self.num_used_segments = 0
         for j, sample_id in enumerate(sample):
             # segment label (j) is the output node ID
             x = self.alloc_segment(0, self.m, j)
+            # x.mutations = self.get_mutations(sample_id, 0, self.m)
+            x.mutations = []
             # and the label in A is the input node ID
             self.A[sample_id] = x
             self.record_node(sample_id)
@@ -553,11 +550,26 @@ class Simplifier(object):
         self.S[0] = self.n
         self.S[self.m] = -1
 
+    def get_mutations(self, input_id, left, right):
+        """
+        Returns all mutations for the specified input ID over the specified
+        interval.
+        """
+        ret = []
+        for site in self.ts.sites():
+            if left <= site.position < right:
+                for mutation in site.mutations:
+                    if mutation.node == input_id:
+                        ret.append((site.position, mutation.derived_state))
+        # print("GET_MUTATIONS", input_id, left, right, "::", ret)
+        return ret
+
     def alloc_segment(self, left, right, node, prev=None, next=None):
         """
         Allocates a new segment with the specified values.
         """
         s = Segment(left, right, node, prev, next)
+        s.mutations = []
         self.num_used_segments += 1
         return s
 
@@ -575,7 +587,6 @@ class Simplifier(object):
         Adds a new node to the output table corresponding to the specified input
         node ID.
         """
-        self.M[input_id] = self.num_output_nodes
         node = self.ts.node(input_id)
         self.node_table.add_row(
             flags=node.flags, time=node.time, population=node.population)
@@ -609,7 +620,7 @@ class Simplifier(object):
         u = segment
         s = ""
         while u is not None:
-            s += "({0}-{1}->{2})".format(u.left, u.right, u.node)
+            s += "({0}-{1}->{2}:{3})".format(u.left, u.right, u.node, u.mutations)
             u = u.next
         return s
 
@@ -630,15 +641,16 @@ class Simplifier(object):
         for k in sorted(self.S.keys()):
             x = self.S[k]
             print("\t", k, "\t:\t", x)
-        print("Output nodes:")
-        print(self.node_table)
-        print("Output Edgesets: ")
-        print(self.edgeset_table)
-        print("Output sites and mutations: ")
-        for site in self.sites:
-            print(site)
+        # print("Output nodes:")
+        # print(self.node_table)
+        # print("Output Edgesets: ")
+        # print(self.edgeset_table)
+        # print("Output sites and mutations: ")
+        # for site in self.sites:
+        #     print(site)
 
     def simplify(self):
+        # print("START")
         the_parents = [
             (node.time, input_id) for input_id, node in enumerate(self.ts.nodes())]
         # need to deal with parents in order by birth time-ago
@@ -656,13 +668,16 @@ class Simplifier(object):
                 # pull out the ancestry segments that will be merged
                 # print("before = ")
                 H = self.remove_ancestry(edgesets)
+                self.check_state()
                 # print("---- will merge these segments (H):")
                 # self.print_heaps(H)
                 # print("---- State before merging:")
                 # self.print_state()
                 self.merge_labeled_ancestors(H, input_id)
+                # print("MERGE DONE")
                 # print("---- merged: ", input_id, "->", parent.index)
                 # self.print_state()
+                self.check_state()
         # print("------ done!")
         # self.print_state()
         extant_segments = 0
@@ -677,64 +692,36 @@ class Simplifier(object):
         self.edgeset_table.add_row(
             left=left, right=right, parent=parent, children=children)
 
-        self.translate_mutations()
+        # Add in the sites and mutations.
+        for j, position in enumerate(sorted(self.output_sites.keys())):
+            site = self.output_sites[position]
+            self.site_table.add_row(
+                position=site.position, ancestral_state=site.ancestral_state)
+            # Order the mutations within a site by node for compatability with
+            # existing implementation. Since nodes are ordered by time this is
+            # equivalent to sorting by time.
+            for mutation in site.mutations:
+                self.mutation_table.add_row(
+                    site=j, node=mutation.node, derived_state=mutation.derived_state)
 
-        # print(self.node_table)
-        # print(self.edgeset_table)
-        # print(self.site_table)
-        # print(self.mutation_table)
+#         print(self.node_table)
+#         print(self.edgeset_table)
+#         print(self.site_table)
+#         print(self.mutation_table)
         return msprime.load_tables(
             nodes=self.node_table, edgesets=self.edgeset_table,
             sites=self.site_table, mutations=self.mutation_table)
 
-    def translate_site(self, site, old_tree, new_tree):
-        """
-        Translates the specified site on old_tree to its equivalent on new_tree.
-        """
-        assert old_tree.interval[0] >= new_tree.interval[0]
-        assert old_tree.interval[1] <= new_tree.interval[1]
-        # print("TRANSLATE", site)
-        site_exists = False
-        for mutation in site.mutations:
-            new_node = msprime.NULL_NODE
-            # print("FINDING MAPPING FOR", mutation.node)
-            for u in old_tree.nodes(mutation.node):
-                # print("\t", u, "->", self.M[u])
-                new_node = self.M[u]
-                if new_node != msprime.NULL_NODE:
-                    if new_tree.parent(new_node) != msprime.NULL_NODE:
-                        break
-            if new_node != msprime.NULL_NODE:
-                is_root = new_tree.parent(new_node) == msprime.NULL_NODE
-                # print("GOT MAPPING", new_node, is_root)
-                if not is_root:
-                    self.mutation_table.add_row(
-                        site=self.num_output_sites, node=new_node,
-                        derived_state=mutation.derived_state)
-                    site_exists = True
-        if site_exists:
-            self.site_table.add_row(
-                position=site.position, ancestral_state=site.ancestral_state)
-            self.num_output_sites += 1
-
-    def translate_mutations(self):
-        """
-        Translate the mutations in the old tree sequence into their equivalents in
-        the new tree sequence.
-        """
-        # Create a new tree sequence so that we can map the mutations to the
-        # correct locations.
-        new_ts = msprime.load_tables(nodes=self.node_table, edgesets=self.edgeset_table)
-        old_trees = self.ts.trees()
-        old_tree = next(old_trees)
-        for new_tree in new_ts.trees():
-            left, right = new_tree.interval
-            # print("new_tree:", left, right, new_tree)
-            while old_tree is not None and old_tree.interval[1] <= right:
-                # print("old_tree:", old_tree.interval, old_tree)
-                for site in old_tree.sites():
-                    self.translate_site(site, old_tree, new_tree)
-                old_tree = next(old_trees, None)
+    def record_mutation(self, position, node, derived_state):
+        # print("RECORD MUTATION", position, node, derived_state)
+        if position not in self.output_sites:
+            site = msprime.Site(
+                position=position, ancestral_state="0", mutations=[], index=None)
+            self.output_sites[position] = site
+        else:
+            site = self.output_sites[position]
+        site.mutations.append(msprime.Mutation(
+            site=None, node=node, derived_state=derived_state))
 
     def remove_ancestry(self, edgesets):
         """
@@ -759,10 +746,10 @@ class Simplifier(object):
                     # and w will be the previous segment sent to output
                     w = None
                     while x is not None and edgeset.right > x.left:
-                        # print("begin     x: " + x.__str__())
-                        # print("begin     y: " + y.__str__())
-                        # print("begin     z: " + z.__str__())
-                        # print("begin     w: " + w.__str__())
+                        # print("begin     x: ", x)
+                        # print("begin     y: ", y)
+                        # print("begin     z: ", z)
+                        # print("begin     w: ", w)
                         # intervals are half-open: [left, right)
                         #  so that the left coordinate is inclusive and the right
                         if edgeset.left < x.right and edgeset.right > x.left:
@@ -772,20 +759,35 @@ class Simplifier(object):
                             out_right = min(edgeset.right, x.right)
                             overhang_left = (x.left < out_left)
                             overhang_right = (x.right > out_right)
+                            mid_mutations = [
+                                mut for mut in x.mutations
+                                if out_left <= mut[0] < out_right]
+                            left_mutations = [
+                                    mut for mut in x.mutations if mut[0] < out_left]
+                            right_mutations = [
+                                    mut for mut in x.mutations if mut[0] >= out_right]
                             if overhang_left:
                                 # this means x will be the first before removed segment
                                 y = x
                                 # revise x to be the left part
                                 x.right = out_left
+                                x.mutations = left_mutations
                                 # the remaining segment will be sent to output
                                 # with the previously output segment w as the previous
                                 next_w = self.alloc_segment(
                                     out_left, out_right, x.node, w, None)
+                                next_w.mutations = mid_mutations + self.get_mutations(
+                                        child, next_w.left, next_w.right)
+                                next_w.mutations.sort()
                             else:
                                 # remove x, and use it as next_w
                                 x.prev = w
                                 x.right = out_right
+                                x.mutations = mid_mutations
                                 next_w = x
+                                next_w.mutations.extend(self.get_mutations(
+                                        child, next_w.left, next_w.right))
+                                next_w.mutations.sort()
                             if w is None:
                                 # then we're at the head of an ancestor that we are
                                 # outputting to H
@@ -799,6 +801,7 @@ class Simplifier(object):
                                 # segment
                                 z = self.alloc_segment(
                                     out_right, seg_right, x.node, y, x.next)
+                                z.mutations = right_mutations
                                 # y.next is updated below
                                 if x.next is not None:
                                     x.next.prev = z
@@ -895,6 +898,11 @@ class Simplifier(object):
                 children = []
                 for x in X:
                     children.append(x.node)
+                    used_mutations = [mut for mut in x.mutations if mut[0] < r]
+                    unused_mutations = [mut for mut in x.mutations if mut[0] >= r]
+                    x.mutations = unused_mutations
+                    for position, derived_state in used_mutations:
+                        self.record_mutation(position, x.node, derived_state)
                     if x.right == r:
                         self.free_segment(x)
                         if x.next is not None:
@@ -915,6 +923,21 @@ class Simplifier(object):
                     z.next = alpha
                 alpha.prev = z
                 z = alpha
+
+    def check_state(self):
+        # print("CHECK_STATE")
+        # self.print_state()
+        for x in self.A.values():
+            while x is not None:
+                assert x.left < x.right
+                for mut in x.mutations:
+                    pos = mut[0]
+                    assert x.left <= pos < x.right
+                positions = [mut[0] for mut in x.mutations]
+                assert list(sorted(positions)) == positions
+                if x.next is not None:
+                    assert x.right <= x.next.left
+                x = x.next
 
 
 class MsprimeTestCase(unittest.TestCase):

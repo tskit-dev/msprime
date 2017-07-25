@@ -1567,7 +1567,40 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(list(tss.records()), list(ts.records()))
 
     def test_small_tree_mutations(self):
-        ts = msprime.simulate(5, random_seed=self.random_seed, mutation_rate=4)
-        self.assertGreater(ts.num_mutations, 0)
-        tss = do_simplify(ts, [0, 1])
+        nodes = six.StringIO("""\
+        id      is_sample   population      time
+        0       1       0               0.00000000000000
+        1       1       0               0.00000000000000
+        2       1       0               0.00000000000000
+        3       1       0               0.00000000000000
+        4       1       0               0.00000000000000
+        5       0       0               0.14567111023387
+        6       0       0               0.21385545626353
+        7       0       0               0.43508024345063
+        8       0       0               1.60156352971203
+        """)
+        edgesets = six.StringIO("""\
+        id      left            right           parent  children
+        0       0.00000000      1.00000000      5       0,1
+        1       0.00000000      1.00000000      6       2,3
+        2       0.00000000      1.00000000      7       4,5
+        3       0.00000000      1.00000000      8       6,7
+        """)
+        ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        tables = ts.dump_tables()
+        # Add some simple mutations here above the nodes we're keeping.
+        tables.sites.add_row(position=0.25, ancestral_state="0")
+        tables.sites.add_row(position=0.5, ancestral_state="0")
+        tables.sites.add_row(position=0.75, ancestral_state="0")
+        tables.mutations.add_row(site=0, node=0, derived_state="1")
+        tables.mutations.add_row(site=1, node=2, derived_state="1")
+        tables.mutations.add_row(site=2, node=7, derived_state="1")
+        ts = msprime.load_tables(
+            nodes=tables.nodes, edgesets=tables.edgesets, sites=tables.sites,
+            mutations=tables.mutations)
+        self.assertEqual(ts.num_sites, 3)
+        self.assertEqual(ts.num_mutations, 3)
+        tss = do_simplify(ts, [0, 2])
         self.assertEqual(tss.sample_size, 2)
+        self.assertEqual(tss.num_mutations, 3)
+        self.assertEqual(list(tss.haplotypes()), ["101", "010"])
