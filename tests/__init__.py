@@ -484,6 +484,9 @@ class Segment(object):
         self.next = next
 
     def __str__(self):
+        for pos in self.mutations.keys():
+            if not (self.left <= pos < self.right):
+                print("ERROR!!")
         s = "({}-{}->{}:{}:: prev={} next={})".format(
             self.left, self.right, self.node, self.mutations, repr(self.prev),
             repr(self.next))
@@ -501,6 +504,8 @@ class SortedMap(dict):
     def floor_key(self, k):
         ret = None
         for key in sorted(self.keys()):
+            if key <= k:
+                ret = key
             if key > k:
                 break
             ret = key
@@ -509,7 +514,8 @@ class SortedMap(dict):
     def succ_key(self, k):
         ret = None
         for key in sorted(self.keys()):
-            ret = key
+            if key >= k:
+                ret = key
             if key > k:
                 break
         return ret
@@ -541,27 +547,34 @@ class Simplifier(object):
         for j, sample_id in enumerate(sample):
             # segment label (j) is the output node ID
             x = self.alloc_segment(0, self.m, j)
-            # x.mutations = self.get_mutations(sample_id, 0, self.m)
-            x.mutations = []
             # and the label in A is the input node ID
             self.A[sample_id] = x
             self.record_node(sample_id)
         self.S = SortedMap()
         self.S[0] = self.n
         self.S[self.m] = -1
+        # We keep a linked list of mutations for each input node.
+        self.mutation_map = [SortedMap() for _ in range(ts.num_nodes)]
+        for site in self.ts.sites():
+            for mutation in site.mutations:
+                node = mutation.node
+                self.mutation_map[node][site.position] = mutation.derived_state
 
     def get_mutations(self, input_id, left, right):
         """
         Returns all mutations for the specified input ID over the specified
         interval.
         """
-        ret = []
-        for site in self.ts.sites():
-            if left <= site.position < right:
-                for mutation in site.mutations:
-                    if mutation.node == input_id:
-                        ret.append((site.position, mutation.derived_state))
-        # print("GET_MUTATIONS", input_id, left, right, "::", ret)
+        mutations = self.mutation_map[input_id]
+        ret = SortedMap()
+        pos = mutations.succ_key(left)
+        while pos is not None and pos < right:
+            derived_state = mutations.pop(pos)
+            ret[pos] = derived_state
+            assert left <= pos < right
+            pos = mutations.succ_key(pos)
+        # if len(ret) > 0:
+        #     print("GET_MUTATIONS", input_id, left, right, "::", ret)
         return ret
 
     def alloc_segment(self, left, right, node, prev=None, next=None):
@@ -569,7 +582,7 @@ class Simplifier(object):
         Allocates a new segment with the specified values.
         """
         s = Segment(left, right, node, prev, next)
-        s.mutations = []
+        s.mutations = SortedMap()
         self.num_used_segments += 1
         return s
 
@@ -759,13 +772,17 @@ class Simplifier(object):
                             out_right = min(edgeset.right, x.right)
                             overhang_left = (x.left < out_left)
                             overhang_right = (x.right > out_right)
-                            mid_mutations = [
-                                mut for mut in x.mutations
-                                if out_left <= mut[0] < out_right]
-                            left_mutations = [
-                                    mut for mut in x.mutations if mut[0] < out_left]
-                            right_mutations = [
-                                    mut for mut in x.mutations if mut[0] >= out_right]
+                            mid_mutations = SortedMap()
+                            left_mutations = SortedMap()
+                            right_mutations = SortedMap()
+                            for pos, derived_state in x.mutations.items():
+                                if pos < out_left:
+                                    left_mutations[pos] = derived_state
+                                elif pos < out_right:
+                                    mid_mutations[pos] = derived_state
+                                else:
+                                    right_mutations[pos] = derived_state
+                            x.mutations = None
                             if overhang_left:
                                 # this means x will be the first before removed segment
                                 y = x
@@ -776,18 +793,16 @@ class Simplifier(object):
                                 # with the previously output segment w as the previous
                                 next_w = self.alloc_segment(
                                     out_left, out_right, x.node, w, None)
-                                next_w.mutations = mid_mutations + self.get_mutations(
-                                        child, next_w.left, next_w.right)
-                                next_w.mutations.sort()
                             else:
                                 # remove x, and use it as next_w
                                 x.prev = w
                                 x.right = out_right
-                                x.mutations = mid_mutations
                                 next_w = x
-                                next_w.mutations.extend(self.get_mutations(
-                                        child, next_w.left, next_w.right))
-                                next_w.mutations.sort()
+                            next_w.mutations = self.get_mutations(
+                                    child, next_w.left, next_w.right)
+                            for pos, derived_state in mid_mutations.items():
+                                assert next_w.left <= pos < next_w.right
+                                next_w.mutations[pos] = derived_state
                             if w is None:
                                 # then we're at the head of an ancestor that we are
                                 # outputting to H
@@ -897,12 +912,13 @@ class Simplifier(object):
                 # Update the heaps and make the record.
                 children = []
                 for x in X:
+                    # Record and remove mutations for the coalescing segment
+                    pos = x.mutations.succ_key(-1)
+                    while pos is not None and pos < r:
+                        derived_state = x.mutations.pop(pos)
+                        self.record_mutation(pos, x.node, derived_state)
+                        pos = x.mutations.succ_key(pos)
                     children.append(x.node)
-                    used_mutations = [mut for mut in x.mutations if mut[0] < r]
-                    unused_mutations = [mut for mut in x.mutations if mut[0] >= r]
-                    x.mutations = unused_mutations
-                    for position, derived_state in used_mutations:
-                        self.record_mutation(position, x.node, derived_state)
                     if x.right == r:
                         self.free_segment(x)
                         if x.next is not None:
@@ -930,11 +946,9 @@ class Simplifier(object):
         for x in self.A.values():
             while x is not None:
                 assert x.left < x.right
-                for mut in x.mutations:
+                for mut in x.mutations.items():
                     pos = mut[0]
                     assert x.left <= pos < x.right
-                positions = [mut[0] for mut in x.mutations]
-                assert list(sorted(positions)) == positions
                 if x.next is not None:
                     assert x.right <= x.next.left
                 x = x.next
