@@ -279,6 +279,16 @@ def upper_tri_to_matrix(x):
     return out
 
 
+def tupleize(f):
+    """
+    Convert from a function of a list of integers x to a function of a list of
+    tuples by passing in the list of first elements.
+    """
+    def tf(x):
+        return f([u[0] for u in x])
+    return tf
+
+
 class BranchStatsTestCase(unittest.TestCase):
     """
     Tests of branch statistic computation.
@@ -316,7 +326,7 @@ class BranchStatsTestCase(unittest.TestCase):
                  branch_length_diversity(ts, A[0], A[2]),
                  branch_length_diversity(ts, A[1], A[2])])
         self.assertListAlmostEqual(
-                tsc.branch_stats_vector(A, f)[0],
+                tsc.branch_stats_vector(A, tupleize(f))[0],
                 [branch_length_diversity(ts, A[0], A[1]),
                  branch_length_diversity(ts, A[0], A[2]),
                  branch_length_diversity(ts, A[1], A[2])])
@@ -348,9 +358,12 @@ class BranchStatsTestCase(unittest.TestCase):
                 def f(x):
                     return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(n[0]*n[1])
 
-                tsdiv_v = tsc.branch_stats_vector(A, lambda x: [f(x)], windows)
+                def g(x):
+                    return [tupleize(f)(x)]
+
+                tsdiv_v = tsc.branch_stats_vector(A, g, windows)
                 tsdiv_vx = [x[0] for x in tsdiv_v]
-                tsdiv = tsc.branch_stats_windowed(A, f, windows)
+                tsdiv = tsc.branch_stats_windowed(A, tupleize(f), windows)
                 pydiv = branch_length_diversity_window(ts, A[0], A[1], windows)
                 self.assertEqual(len(tsdiv), len(windows)-1)
                 self.assertListAlmostEqual(tsdiv, pydiv)
@@ -372,7 +385,7 @@ class BranchStatsTestCase(unittest.TestCase):
                     branch_stats_node_iter(ts, A, f, method='length'),
                     branch_length_diversity(ts, A[0], A[1]))
             self.assertAlmostEqual(
-                    tsc.branch_stats(A, f),
+                    tsc.branch_stats(A, tupleize(f)),
                     branch_length_diversity(ts, A[0], A[1]))
 
     def check_tmrca_matrix(self, ts):
@@ -657,7 +670,7 @@ class BranchStatsTestCase(unittest.TestCase):
         # branch lengths:
         self.assertAlmostEqual(branch_length_diversity(ts, [0], [1]),
                                true_diversity_01)
-        self.assertAlmostEqual(tsc.branch_stats(A, f),
+        self.assertAlmostEqual(tsc.branch_stats(A, tupleize(f)),
                                true_diversity_01)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f),
                                true_diversity_01)
@@ -674,7 +687,7 @@ class BranchStatsTestCase(unittest.TestCase):
         # branch lengths:
         self.assertAlmostEqual(branch_length_diversity(ts, A[0], A[1]),
                                true_mean_diversity)
-        self.assertAlmostEqual(tsc.branch_stats(A, f),
+        self.assertAlmostEqual(tsc.branch_stats(A, tupleize(f)),
                                true_mean_diversity)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f),
                                true_mean_diversity)
@@ -688,7 +701,7 @@ class BranchStatsTestCase(unittest.TestCase):
         # branch lengths:
         true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
         self.assertAlmostEqual(branch_length_Y(ts, [0], [1], [2]), true_Y)
-        self.assertAlmostEqual(tsc.branch_stats(A, f), true_Y)
+        self.assertAlmostEqual(tsc.branch_stats(A, tupleize(f)), true_Y)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f), true_Y)
 
     def test_case_2(self):
@@ -788,7 +801,7 @@ class BranchStatsTestCase(unittest.TestCase):
         # branch lengths:
         self.assertAlmostEqual(branch_length_diversity(ts, [0], [1]),
                                true_diversity_01)
-        self.assertAlmostEqual(tsc.branch_stats(A, f),
+        self.assertAlmostEqual(tsc.branch_stats(A, tupleize(f)),
                                true_diversity_01)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f),
                                true_diversity_01)
@@ -803,7 +816,7 @@ class BranchStatsTestCase(unittest.TestCase):
         # branch lengths:
         self.assertAlmostEqual(branch_length_diversity(ts, A[0], A[1]),
                                true_mean_diversity)
-        self.assertAlmostEqual(tsc.branch_stats(A, f),
+        self.assertAlmostEqual(tsc.branch_stats(A, tupleize(f)),
                                true_mean_diversity)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f),
                                true_mean_diversity)
@@ -816,7 +829,7 @@ class BranchStatsTestCase(unittest.TestCase):
 
         # branch lengths:
         self.assertAlmostEqual(branch_length_Y(ts, [0], [1], [2]), true_Y)
-        self.assertAlmostEqual(tsc.branch_stats(A, f), true_Y)
+        self.assertAlmostEqual(tsc.branch_stats(A, tupleize(f)), true_Y)
         self.assertAlmostEqual(branch_stats_node_iter(ts, A, f), true_Y)
 
     def test_branch_stats_vector_interface(self):

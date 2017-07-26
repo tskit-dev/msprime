@@ -203,7 +203,7 @@ class TreeStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i]*(n[j]-x[j]) + (n[i]-x[i])*x[j])
+            return [float(x[i][0]*x[j][1] + x[i][1]*x[j][0])
                     for i in range(ns) for j in range(i, ns)]
 
         out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
@@ -284,8 +284,8 @@ class TreeStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i] * (n[j] - x[j]) * (n[k] - x[k])
-                          + (n[i] - x[i]) * x[j] * x[k]) for i, j, k in indices]
+            return [float(x[i][0] * x[j][1] * x[k][1]
+                          + x[i][1] * x[j][0] * x[k][0]) for i, j, k in indices]
 
         out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
@@ -333,7 +333,8 @@ class TreeStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float((x[i] * n[j] - x[j] * n[i]) * (x[k] * n[l] - x[l] * n[k]))
+            return [float((x[i][0] * x[j][1] - x[j][0] * x[i][1])
+                          * (x[k][0] * x[l][1] - x[l][0] * x[k][1]))
                     for i, j, k, l in indices]
 
         out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
@@ -384,10 +385,10 @@ class TreeStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i] * (x[i] - 1) * (n[j] - x[j]) * (n[k] - x[k])
-                          + (n[i] - x[i]) * (n[i] - x[i] - 1) * x[j] * x[k]
-                          - x[i] * (n[i] - x[i]) * (n[j] - x[j]) * x[k]
-                          - (n[i] - x[i]) * x[i] * x[j] * (n[k] - x[k]))
+            return [float(x[i][0] * (x[i][0] - 1) * x[j][1] * x[k][1]
+                          + x[i][1] * (x[i][1] - 1) * x[j][0] * x[k][0]
+                          - x[i][0] * x[i][1] * x[j][1] * x[k][0]
+                          - x[i][1] * x[i][0] * x[j][0] * x[k][1])
                     for i, j, k in indices]
 
         out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
@@ -445,10 +446,10 @@ class TreeStatCalculator(object):
                 raise ValueError("All sample_sets must have at least two samples.")
 
         def f(x):
-            return [float(x[i] * (x[i] - 1) * (n[j] - x[j]) * (n[j] - x[j] - 1)
-                          + (n[i] - x[i]) * (n[i] - x[i] - 1) * x[j] * (x[j] - 1)
-                          - x[i] * (n[i] - x[i]) * (n[j] - x[j]) * x[j]
-                          - (n[i] - x[i]) * x[i] * x[j] * (n[j] - x[j]))
+            return [float(x[i][0] * (x[i][0] - 1) * x[j][1] * (x[j][1] - 1)
+                          + x[i][1] * (x[i][1] - 1) * x[j][0] * (x[j][0] - 1)
+                          - x[i][0] * x[i][1] * x[j][1] * x[j][0]
+                          - x[i][1] * x[i][0] * x[j][0] * x[j][1])
                     for i, j in indices]
 
         out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
@@ -508,13 +509,16 @@ class TreeStatCalculator(object):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
-        that returns a boolean.  A branch in a tree is weighted by weight_fun(x),
+        that returns a number.  A branch in a tree is weighted by weight_fun(x),
         where x[i] is the number of samples in sample_sets[i] below that
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
 
         It does this separately for each window [windows[i], windows[i+1])
-        and returns the values in a list.
+        and returns the values in a list. Note that windows cannot be overlapping,
+        but overlapping windows can be achieved by (a) computing staistics on a
+        small window size and (b) averaging neighboring windows, by additivity
+        of the statistics.
         '''
         if windows is None:
             windows = (0, self.tree_sequence.sequence_length)
@@ -534,9 +538,19 @@ class TreeStatCalculator(object):
         for k in range(num_windows):
             if windows[k + 1] <= windows[k]:
                 raise ValueError("Windows must be increasing.")
-        # initialize
+        # below we actually just keep track of x, not (x,xbar), so here's the
+        #   weighting function we actually use of just x:
         num_sample_sets = len(sample_sets)
-        n_out = len(weight_fun([0 for a in range(num_sample_sets)]))
+
+        n = [len(x) for x in sample_sets]
+
+        def wfn(x):
+            y = [(x[k], n[k]-x[k]) for k in range(num_sample_sets)]
+            return weight_fun(y)
+
+        # initialize
+        n_out = len(wfn([0 for a in range(num_sample_sets)]))
+
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         L = [0.0 for j in range(n_out)]
         # print("sample_sets:", sample_sets)
@@ -563,40 +577,40 @@ class TreeStatCalculator(object):
                             pi[child] = node
                         for k in range(num_sample_sets):
                             dx[k] += sign * X[child][k]
-                        w = weight_fun(X[child])
+                        w = wfn(X[child])
                         dt = (node_time[pi[child]] - node_time[child])
                         for j in range(n_out):
                             L[j] += sign * dt * w[j]
-                        # print("\t\tchild:",child,"+=",sign,"*",weight_fun(X[child]),
+                        # print("\t\tchild:",child,"+=",sign,"*",wfn(X[child]),
                         #    "*(",node_time[pi[child]],"-",node_time[child],")","-->",L)
                         if sign == -1:
                             pi[child] = -1
-                    old_w = weight_fun(X[node])
+                    old_w = wfn(X[node])
                     for k in range(num_sample_sets):
                         X[node][k] += dx[k]
                     if pi[node] != -1:
-                        w = weight_fun(X[node])
+                        w = wfn(X[node])
                         dt = (node_time[pi[node]] - node_time[node])
                         for j in range(n_out):
                             L[j] += dt * (w[j]-old_w[j])
-                        # print("\t\tnode:",node,"+=",dt,"*(",weight_fun(X[node]),"-",
+                        # print("\t\tnode:",node,"+=",dt,"*(",wfn(X[node]),"-",
                         #   old_w,") -->",L)
                     # propagate change up the tree
                     u = pi[node]
                     if u != -1:
                         next_u = pi[u]
                         while u != -1:
-                            old_w = weight_fun(X[u])
+                            old_w = wfn(X[u])
                             for k in range(num_sample_sets):
                                 X[u][k] += dx[k]
                             # need to update X for the root,
                             # but the root does not have a branch length
                             if next_u != -1:
-                                w = weight_fun(X[u])
+                                w = wfn(X[u])
                                 dt = (node_time[pi[u]] - node_time[u])
                                 for j in range(n_out):
                                     L[j] += dt*(w[j] - old_w[j])
-                                # print("\t\tanc:",u,"+=",dt,"*(",weight_fun(X[u]),"-",
+                                # print("\t\tanc:",u,"+=",dt,"*(",wfn(X[u]),"-",
                                 #    old_w,") -->",L)
                             u = next_u
                             next_u = pi[next_u]
