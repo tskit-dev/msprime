@@ -160,7 +160,7 @@ class LdCalculator(object):
 class TreeStatCalculator(object):
     """
     Class for calculating a broad class of tree statistics.  These are all
-    calculated using :meth:``TreeStatCalculator.branch_stats_vector`` as the
+    calculated using :meth:``TreeStatCalculator.tree_stat_vector`` as the
     underlying engine.  This class requires the `numpy
     <http://www.numpy.org/>`_ library.
 
@@ -206,7 +206,7 @@ class TreeStatCalculator(object):
             return [float(x[i][0]*x[j][1] + x[i][1]*x[j][0])
                     for i in range(ns) for j in range(i, ns)]
 
-        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
+        out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         # corrects the diagonal for self comparisons
         # and note factor of two for tree length -> real time
@@ -287,7 +287,7 @@ class TreeStatCalculator(object):
             return [float(x[i][0] * x[j][1] * x[k][1]
                           + x[i][1] * x[j][0] * x[k][0]) for i, j, k in indices]
 
-        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
+        out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
@@ -337,7 +337,7 @@ class TreeStatCalculator(object):
                           * (x[k][0] * x[l][1] - x[l][0] * x[k][1]))
                     for i, j, k, l in indices]
 
-        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
+        out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
@@ -391,7 +391,7 @@ class TreeStatCalculator(object):
                           - x[i][1] * x[i][0] * x[j][0] * x[k][1])
                     for i, j, k in indices]
 
-        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
+        out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         for w in range(len(windows)-1):
             for u in range(len(indices)):
@@ -452,7 +452,7 @@ class TreeStatCalculator(object):
                           - x[i][1] * x[i][0] * x[j][0] * x[j][1])
                     for i, j in indices]
 
-        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
+        out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         for w in range(len(windows)-1):
             for u in range(len(indices)):
@@ -479,7 +479,7 @@ class TreeStatCalculator(object):
             raise ValueError("sample_sets should be of length 2.")
         return self.f2_vector(sample_sets, windows, indices=[(0, 1)])
 
-    def branch_stats(self, sample_sets, weight_fun):
+    def tree_stat(self, sample_sets, weight_fun):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
@@ -488,11 +488,11 @@ class TreeStatCalculator(object):
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
         '''
-        out = self.branch_stats_vector(sample_sets, lambda x: [weight_fun(x)])
+        out = self.tree_stat_vector(sample_sets, lambda x: [weight_fun(x)])
         assert len(out) == 1 and len(out[0]) == 1
         return out[0][0]
 
-    def branch_stats_windowed(self, sample_sets, weight_fun, windows=None):
+    def tree_stat_windowed(self, sample_sets, weight_fun, windows=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
@@ -501,21 +501,22 @@ class TreeStatCalculator(object):
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
         '''
-        out = self.branch_stats_vector(sample_sets, lambda x: [weight_fun(x)], windows)
+        out = self.tree_stat_vector(sample_sets, lambda x: [weight_fun(x)], windows)
         assert len(out[0]) == 1
         return [x[0] for x in out]
 
-    def branch_stats_vector(self, sample_sets, weight_fun, windows=None):
+    def tree_stat_vector(self, sample_sets, weight_fun, windows=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
-        whose argument is a list of integers of the same length as sample_sets
-        that returns a number.  A branch in a tree is weighted by weight_fun(x),
-        where x[i] is the number of samples in sample_sets[i] below that
-        branch.  This finds the sum of all counted branches for each tree,
-        and averages this across the tree sequence, weighted by genomic length.
+        whose argument is a list of pairs of integers of the same length as sample_sets
+        that returns a list of numbers.  A branch in a tree is weighted by
+        weight_fun(x), where x[i] is the number of samples in
+        sample_sets[i] below that branch.  This finds the sum of this weight for
+        all branches in each tree, and averages this across the tree sequence,
+        weighted by genomic length.
 
-        It does this separately for each window [windows[i], windows[i+1])
-        and returns the values in a list. Note that windows cannot be overlapping,
+        It does this separately for each window [windows[i], windows[i+1]) and
+        returns the values in a list.  Note that windows cannot be overlapping,
         but overlapping windows can be achieved by (a) computing staistics on a
         small window size and (b) averaging neighboring windows, by additivity
         of the statistics.
@@ -636,3 +637,54 @@ class TreeStatCalculator(object):
                     S[window_num][j] += L[j] * length
                 chrom_pos += length
         return S
+
+
+class SiteStatCalculator(object):
+    """
+    Class for calculating a broad class of single-site (mutation-based)
+    statistics.  These are all calculated using
+    :meth:``TreeStatCalculator.site_stat_vector`` as the underlying engine.
+    This class requires the `numpy
+    <http://www.numpy.org/>`_ library.
+
+    :param TreeSequence tree_sequence: The tree sequence mutations we are
+        interested in.
+    """
+
+    def __init__(self, tree_sequence):
+        check_numpy()
+        self.tree_sequence = tree_sequence
+
+    def site_stat_vector(self, leaf_sets, weight_fun, windows=None):
+        '''
+        Here leaf_sets is a list of lists of leaves, and weight_fun is a
+        function whose argument is a list of tuples of integers of the same
+        length as leaf_sets that returns a list of numbers.  Each mutation is
+        weighted by weight_fun(x), where x[i] is the number of leaves in
+        leaf_sets[i] below that branch.  This finds the sum of all mutations
+        across the tree sequence, and divides by total sequence length.
+
+        It does this separately for each window [windows[i], windows[i+1]) and
+        returns the values in a list.  Note that windows cannot be overlapping,
+        but overlapping windows can be achieved by (a) computing staistics on a
+        small window size and (b) averaging neighboring windows, by additivity
+        of the statistics.
+        '''
+        if windows is None:
+            windows = (0, self.tree_sequence.sequence_length)
+        for U in leaf_sets:
+            if len(U) != len(set(U)):
+                raise ValueError(
+                    "elements of leaf_sets cannot contain repeated elements.")
+            for u in U:
+                if not self.tree_sequence.node(u).is_sample():
+                    raise ValueError("Not all elements of leaf_sets are samples.")
+        num_windows = len(windows) - 1
+        if windows[0] != 0.0:
+            raise ValueError(
+                "Windows must start at the start of the sequence (at 0.0).")
+        if windows[-1] != self.tree_sequence.sequence_length:
+            raise ValueError("Windows must extend to the end of the sequence.")
+        for k in range(num_windows):
+            if windows[k + 1] <= windows[k]:
+                raise ValueError("Windows must be increasing.")
