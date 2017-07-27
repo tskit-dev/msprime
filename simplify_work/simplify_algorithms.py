@@ -285,79 +285,68 @@ class Simplifier(object):
             for child in edgeset.children:
                 if child in self.A:
                     x = self.A[child]
-                    # y will be the last segment to the left of edgeset, if any,
-                    #   which we may need to make sure links to the next one after
+                    # y will be the last segment to the left of edgeset, if
+                    # any, which we may need to make sure links to the last
+                    # segment after, if any
                     y = None
-                    # and z will be the first segment after edgeset, if any
-                    z = None
+                    while x is not None and x.left < edgeset.left:
+                        y = x
+                        if x.right > edgeset.left:
+                            # left end overlap: x will be the bit overlapping
+                            # the edgeset, leaving the nonoverlapping part
+                            # behind as y
+                            x = self.alloc_segment(edgeset.left, y.right, 
+                                                   y.node, None, y.next)
+                            y.right = edgeset.left
+                            y.next = None
+                        else:
+                            x = x.next
+                    # at the end, x will be the first segment after edgeset, if any
                     # and w will be the previous segment sent to output
                     w = None
-                    while x is not None and edgeset.right > x.left:
-                        # print("begin     x: " + x.__str__())
-                        # print("begin     y: " + y.__str__())
-                        # print("begin     z: " + z.__str__())
-                        # print("begin     w: " + w.__str__())
-                        # intervals are half-open: [left, right)
-                        #  so that the left coordinate is inclusive and the right
-                        if edgeset.left < x.right and edgeset.right > x.left:
-                            # we have overlap
-                            seg_right = x.right
-                            out_left = max(edgeset.left, x.left)
-                            out_right = min(edgeset.right, x.right)
-                            overhang_left = (x.left < out_left)
-                            overhang_right = (x.right > out_right)
-                            if overhang_left:
-                                # this means x will be the first before removed segment
-                                y = x
-                                # revise x to be the left part
-                                x.right = out_left
-                                # the remaining segment will be sent to output
-                                # with the previously output segment w as the previous one
-                                next_w = self.alloc_segment(
-                                    out_left, out_right, x.node, w, None)
-                            else:
-                                # remove x, and use it as next_w
-                                x.prev = w
-                                x.right = out_right
-                                next_w = x
-                            if w is None:
-                                # then we're at the head of an ancestor that we are outputting to H
-                                heapq.heappush(H, (next_w.left, next_w))
-                            else:
-                                w.next = next_w
-                            w = next_w
-                            if overhang_right:
-                                # add new segment for right overhang, which will be the last one
-                                # remaining in this ancestor after the removed segment
-                                z = self.alloc_segment(
-                                    out_right, seg_right, x.node, y, x.next)
-                                # y.next is updated below
-                                if x.next is not None:
-                                    x.next.prev = z
-                                break
+                    while x is not None and x.left < edgeset.right:
+                        # print("loop     x:" + x.__str__())
+                        # print("loop     y:" + y.__str__())
+                        # print("loop     w:" + w.__str__())
+                        # now we know that edgeset.left <= x.left
+                        seg_right = x.right
+                        out_left = x.left
+                        out_right = min(edgeset.right, x.right)
+                        # the next segment
+                        next_w = self.alloc_segment(out_left, out_right,
+                                                    x.node, w, None)
+                        if w is None:
+                            # then we're at the head of an ancestor that we are
+                            # outputting to H
+                            heapq.heappush(H, (next_w.left, next_w))
                         else:
-                            # maybe THIS segment was the first one before edgeset
-                            y = x
-                        # move on to the next segment
-                        x = x.next
+                            w.next = next_w
+                        w = next_w
+                        if x.right <= out_right:
+                            # move on to the next segment, deleting this one
+                            next_x = x.next
+                            self.free_segment(x)
+                            x = next_x
+                        else:
+                            # there is right overhang
+                            # modify x to be the remaining bit after the end
+                            x.left = edgeset.right
+                            # x.prev updated below
+                            break  # unecessary but more clear
                     # don't do wrap-up if we haven't actually done anything
                     if w is not None:
-                        w.next = None
-                        if not overhang_right:
-                            z = x
+                        # x is now the first segment after
                         if y is not None:
-                            y.next = z
-                        if z is not None:
-                            z.prev = y
+                            y.next = x
+                        if x is not None:
+                            x.prev = y
                         if y is None:
-                            # must update P[child]
-                            if z is None:
+                            if x is None:
                                 del self.A[child]
                             else:
-                                self.A[child] = z
+                                self.A[child] = x
                     # print("end     x:" + x.__str__())
                     # print("end     y:" + y.__str__())
-                    # print("end     z:" + z.__str__())
                     # print("end     w:" + w.__str__())
             # print(" ... state of H while in removing loop ...")
             # self.print_heaps(H)
