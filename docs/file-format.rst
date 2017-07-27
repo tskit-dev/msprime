@@ -49,7 +49,9 @@ node
 
     where ``flags`` records information about the ancestor; ``population`` is
     the integer ID of the ancestor's (birth) population, and ``time`` is how
-    long ago the ancestor was born.
+    long ago the ancestor was born.  Each node also has a unique (integer) ID,
+    but this is *not* recorded explicitly - rather, the individual's ID is
+    given by their position in the tree sequence's node table.
 
 samples
     The tips of the tree, that we have obtained data from.  These are
@@ -129,8 +131,8 @@ site
         id	position	ancestral_state
         0	0.1	        0
 
-    The ``id`` is not stored directly, but is implied by its index in the site
-    table.
+    As with nodes, the ``id`` is not stored directly, but is implied by its
+    index in the site table.
 
 
 To allow for efficent algorithms, it is required that
@@ -191,7 +193,9 @@ Here is an example.  Consider the following sequence of trees::
 
     position 0.0                  0.2               0.8                1.0
 
-First, we specify the nodes in a ``NodeTable``::
+First, we specify the nodes::
+
+    NodeTable:
 
     id      is_sample    population   time
     0       1            0            0
@@ -202,9 +206,12 @@ First, we specify the nodes in a ``NodeTable``::
     5       0            0            0.7
     6       0            0            1.0
 
-Recall that the first column, ``id``, is not actually recorded, only provided
-for convenience.  This has three samples: nodes 0, 1, and 2, and lists their
-birth times.  Then, we specify the edgesets::
+Importantly, the first column, ``id``, is **not actually recorded**, and is
+only shown when printing out node tables (as here) for convenience. This has
+three samples: nodes 0, 1, and 2, and lists their birth times.  Then, we
+specify the edgesets::
+
+    EdgesetTable:
 
     left    right   parent  children
     0.2     0.8     3       0,2
@@ -227,11 +234,16 @@ mutation occurs at position 0.1 and the mutations in the second tree both
 occurred at the same position, at 0.5 (with a back mutation).  The positions
 are recorded in the sites table::
 
+    SiteTable:
+
     id	position	ancestral_state
     0	0.1     	0
     1	0.5     	0
 
-and the acutal mutations::
+As with node tables, the ``id`` column is **not** actually recorded, but is
+implied by the position in the table.  The acutal mutations are then recorded::
+
+    MutationTable:
 
     site	node	derived_state
     0	    4	    1
