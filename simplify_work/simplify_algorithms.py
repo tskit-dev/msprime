@@ -50,6 +50,7 @@ class Simplifier(object):
     def __init__(self, ts, sample):
         sample_size = len(ts.samples())
         self.ts = ts
+        self.sample = sample
         self.n = len(sample)
         self.m = ts.sequence_length
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
@@ -75,9 +76,9 @@ class Simplifier(object):
             x = self.alloc_segment(0, self.m, j)
             # and the label in A is the input node ID
             self.A[sample_id] = x
-            self.record_node(sample_id)
+            self.record_sample_node(sample_id)
             self.record_mutations(input_id = sample_id,
-                                  output_id = self.num_output_nodes-1,
+                                  output_id = self.num_output_nodes - 1,
                                   left = 0.0, right = self.m)
 
         self.S = bintrees.AVLTree()
@@ -106,17 +107,40 @@ class Simplifier(object):
         """
         self.num_used_segments -= 1
 
-    def record_node(self, input_id):
+    def record_sample_node(self, input_id):
         """
         Adds a new node to the output table corresponding to the specified input
-        node ID.
+        node ID (which will be `self.num_output_nodes - 1`).
         """
         # If we were to keep track of the full output to input mapping in M:
         # self.M[self.num_output_nodes] = input_id
         node = self.ts.node(input_id)
+        flags = node.flags & msprime.NODE_IS_SAMPLE
         self.node_table.add_row(
-            flags=node.flags, time=node.time, population=node.population)
+            flags=flags, time=node.time, population=node.population)
         self.num_output_nodes += 1
+
+    def check_or_record_node(self, input_id):
+        """
+        Adds a new node to the output table corresponding to the specified input
+        node ID, *unless* the `input_id` corresponds to a sample, which has
+        already been added.  In either case, returns the output node ID.
+
+        Since this is not called to add sample nodes, set flags to be not samples here.
+        """
+        # If we were to keep track of the full output to input mapping in M:
+        # self.M[self.num_output_nodes] = input_id
+        if input_id not in self.sample:
+            node = self.ts.node(input_id)
+            flags = node.flags & ~msprime.NODE_IS_SAMPLE
+            self.node_table.add_row(
+                flags=node.flags, time=node.time, population=node.population)
+            self.num_output_nodes += 1
+            output_id = self.num_output_nodes - 1
+        else:
+            output_id = self.sample.index(input_id)
+        # print("id", input_id, "maps to", output_id)
+        return output_id
 
     def record_edgeset(self, left, right, parent, children):
         """
@@ -230,7 +254,7 @@ class Simplifier(object):
         for time, input_id in the_parents:
             # print()
             # print("---> doing parent: ", input_id, "at time", time)
-            # self.print_state()
+            self.print_state()
             if len(self.A) == 0:
                 break
             # inefficent way to pull all edges corresponding to a given parent
@@ -245,7 +269,7 @@ class Simplifier(object):
                 # print("---- State before merging:")
                 # self.print_state()
                 self.merge_labeled_ancestors(H, input_id)
-                # print("---- merged: ", input_id, "->", parent.index)
+                print("---- merged: ", input_id)
                 # self.print_state()
         # print("------ done!")
         # self.print_state()
@@ -364,6 +388,7 @@ class Simplifier(object):
         coalescence = False
         alpha = None
         z = None
+        u = None
         while len(H) > 0:
             # self.print_heaps(H)
             alpha = None
@@ -391,9 +416,9 @@ class Simplifier(object):
             else:
                 if not coalescence:
                     coalescence = True
-                    self.record_node(input_id)
-                # output node ID
-                u = self.num_output_nodes - 1
+                    # output node ID
+                    u = self.check_or_record_node(input_id)
+                assert u is not None
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
                 if l not in self.S:
@@ -417,7 +442,8 @@ class Simplifier(object):
                 # Update the heaps and make the record.
                 children = []
                 for x in X:
-                    children.append(x.node)
+                    if x.node is not u:
+                        children.append(x.node)
                     if x.right == r:
                         self.free_segment(x)
                         if x.next is not None:
