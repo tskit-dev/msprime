@@ -258,7 +258,7 @@ class TreeStatCalculator(object):
                     k += 1
         return A
 
-    def Y_vector(self, sample_sets, windows, indices):
+    def Y3_vector(self, sample_sets, windows, indices):
         """
         Finds the 'Y' statistic between three sample_sets.  The sample_sets should
         be disjoint (the computation works fine, but if not the result depends
@@ -271,7 +271,7 @@ class TreeStatCalculator(object):
             Y(sample_sets[indices[k][0]], sample_sets[indices[k][1]],
               sample_sets[indices[k][2]]).
 
-        :param list sample_sets: A list of *three* sets of IDs of samples: (A,B,C).
+        :param list sample_sets: A list of *three* lists of IDs of samples: (A,B,C).
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
         :param list indices: A list of triples of indices of sample_sets.
@@ -288,6 +288,7 @@ class TreeStatCalculator(object):
                           + x[i][1] * x[j][0] * x[k][0]) for i, j, k in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
+
         # move this division outside of f(x) so it only has to happen once
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
@@ -297,12 +298,87 @@ class TreeStatCalculator(object):
 
         return out
 
-    def Y(self, sample_sets, windows):
+    def Y2_vector(self, sample_sets, windows, indices):
         """
-        Finds the 'Y' statistic between the three groups of samples
-        in sample_sets. The sample_sets should be disjoint (the computation works
-        fine, but if not the result depends on the amount of overlap).
-        If the sample_sets are A, B, and C, then the result gives the mean total
+        Finds the 'Y' statistic for two groups of samples in sample_sets.
+        The sample_sets should be disjoint (the computation works fine, but if
+        not the result depends on the amount of overlap).
+        If the sample_sets are A and B then the result gives the mean total length
+        of any edge in the tree between a and the most recent common ancestor of
+        b and c, where a, b, and c are random draws from A, B, and B
+        respectively (without replacement).
+
+        The result is, for each window, a vector whose k-th entry is
+            Y2(sample_sets[indices[k][0]], sample_sets[indices[k][1]]).
+
+        :param list sample_sets: A list of lists of IDs of leaves.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :param list indices: A list of pairs of indices of sample_sets.
+        :return: A list of numeric vectors of length equal to the length of
+            indices, computed separately on each window.
+        """
+        for u in indices:
+            if not len(u) == 2:
+                raise ValueError("All indices should be of length 2.")
+        n = [len(x) for x in sample_sets]
+
+        def f(x):
+            return [float(x[i][0] * x[j][1] * (x[j][1]-1)
+                          + x[i][1] * x[j][0] * (x[j][0]-1)) for i, j in indices]
+
+        out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
+        for w in range(len(windows)-1):
+            for u in range(len(indices)):
+                out[w][u] /= float(n[indices[u][0]] * n[indices[u][1]]
+                                   * (n[indices[u][1]]-1))
+
+        return out
+
+    def Y1_vector(self, sample_sets, windows):
+        """
+        Finds the 'Y1' statistic within each set of samples in sample_sets. The
+        sample_sets should be disjoint (the computation works fine, but if not
+        the result depends on the amount of overlap).  For the sample set A, the
+        result gives the mean total length of any edge in the tree between a
+        and the most recent common ancestor of b and c, where a, b, and c are
+        random draws from A, without replacement.
+
+        The result is, for each window, a vector whose k-th entry is
+            Y1(sample_sets[k]).
+
+        :param list sample_sets: A list of sets of IDs of samples, each of length
+            at least 3.
+        :param iterable windows: The breakpoints of the windows (including
+            start and end, so has one more entry than number of windows).
+        :return: A list of numeric vectors of length equal to the length of
+            sample_sets, computed separately on each window.
+        """
+        for x in sample_sets:
+            if len(x) < 3:
+                raise ValueError("All sample_sets should be of length at least 3.")
+        n = [len(x) for x in sample_sets]
+
+        def f(x):
+            return [float(z[0] * z[1] * (z[1]-1)
+                          + z[1] * z[0] * (z[0]-1)) for z in x]
+
+        out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
+        for w in range(len(windows)-1):
+            for u in range(len(sample_sets)):
+                out[w][u] /= float(n[u] * (n[u]-1) * (n[u]-2))
+
+        return out
+
+    def Y2(self, sample_sets, windows):
+        return self.Y2_vector(sample_sets, windows, indices=[(0, 1)])
+
+    def Y3(self, sample_sets, windows):
+        """
+        Finds the 'Y' statistic between the three groups of samples in
+        sample_sets. The sample_sets should be disjoint (the computation works
+        fine, but if not the result depends on the amount of overlap).  If the
+        sample_sets are A, B, and C, then the result gives the mean total
         length of any edge in the tree between a and the most recent common
         ancestor of b and c, where a, b, and c are random draws from A, B, and
         C respectively.
@@ -312,7 +388,7 @@ class TreeStatCalculator(object):
             and end, so has one more entry than number of windows).
         :return: A list of numeric values computed separately on each window.
         """
-        return self.Y_vector(sample_sets, windows, indices=[(0, 1, 2)])
+        return self.Y3_vector(sample_sets, windows, indices=[(0, 1, 2)])
 
     def f4_vector(self, sample_sets, windows, indices):
         """

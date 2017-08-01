@@ -78,7 +78,7 @@ def branch_length_diversity_window(ts, X, Y, windows):
     return out
 
 
-def branch_length_Y(ts, X, Y, Z, begin=0.0, end=None):
+def branch_length_Y3(ts, X, Y, Z, begin=0.0, end=None):
     if end is None:
         end = ts.sequence_length
     S = 0
@@ -110,6 +110,74 @@ def branch_length_Y(ts, X, Y, Z, begin=0.0, end=None):
                         # z x  y
                         S += path_length(tr, x, xy_mrca) * this_length
     return S/((end - begin) * len(X) * len(Y) * len(Z))
+
+
+def branch_length_Y2(ts, X, Y, begin=0.0, end=None):
+    if end is None:
+        end = ts.sequence_length
+    S = 0
+    for tr in ts.trees():
+        if tr.interval[1] <= begin:
+            continue
+        if tr.interval[0] >= end:
+            break
+        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+        for x in X:
+            for y in Y:
+                for z in set(Y) - set([y]):
+                    xy_mrca = tr.mrca(x, y)
+                    xz_mrca = tr.mrca(x, z)
+                    yz_mrca = tr.mrca(y, z)
+                    if xy_mrca == xz_mrca:
+                        #   /\
+                        #  / /\
+                        # x y  z
+                        S += path_length(tr, x, yz_mrca) * this_length
+                    elif xy_mrca == yz_mrca:
+                        #   /\
+                        #  / /\
+                        # y x  z
+                        S += path_length(tr, x, xz_mrca) * this_length
+                    elif xz_mrca == yz_mrca:
+                        #   /\
+                        #  / /\
+                        # z x  y
+                        S += path_length(tr, x, xy_mrca) * this_length
+    return S/((end - begin) * len(X) * len(Y) * (len(Y)-1))
+
+
+def branch_length_Y1(ts, X, begin=0.0, end=None):
+    if end is None:
+        end = ts.sequence_length
+    S = 0
+    for tr in ts.trees():
+        if tr.interval[1] <= begin:
+            continue
+        if tr.interval[0] >= end:
+            break
+        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+        for x in X:
+            for y in set(X) - set([x]):
+                for z in set(X) - set([x, y]):
+                    xy_mrca = tr.mrca(x, y)
+                    xz_mrca = tr.mrca(x, z)
+                    yz_mrca = tr.mrca(y, z)
+                    if xy_mrca == xz_mrca:
+                        #   /\
+                        #  / /\
+                        # x y  z
+                        S += path_length(tr, x, yz_mrca) * this_length
+                    elif xy_mrca == yz_mrca:
+                        #   /\
+                        #  / /\
+                        # y x  z
+                        S += path_length(tr, x, xz_mrca) * this_length
+                    elif xz_mrca == yz_mrca:
+                        #   /\
+                        #  / /\
+                        # z x  y
+                        S += path_length(tr, x, xy_mrca) * this_length
+    return S/((end - begin) * len(X) * (len(X)-1) * (len(X)-2))
 
 
 def branch_length_f4(ts, A, B, C, D, begin=0.0, end=None):
@@ -296,6 +364,7 @@ class BranchStatsTestCase(unittest.TestCase):
     random_seed = 123456
 
     def assertListAlmostEqual(self, x, y):
+        self.assertEqual(len(x), len(y))
         for a, b in zip(x, y):
             self.assertAlmostEqual(a, b)
 
@@ -304,6 +373,52 @@ class BranchStatsTestCase(unittest.TestCase):
 
     def assertArrayAlmostEqual(self, x, y):
         nt.assert_array_almost_equal(x, y)
+
+    def compare_stats(self, ts, tree_fn, leaf_sets, index_length,
+                      tsc_fn=None, tsc_vector_fn=None):
+        """
+        Use to compare a tree sequence method tsc_vector_fn to a single-window-based
+        implementation tree_fn that takes index_length leaf sets at once.  Pass
+        index_length=0 to signal that tsc_fn does not take an 'indices' argument;
+        otherwise, gives the length of each of the tuples.
+        """
+        assert(len(leaf_sets) > index_length)
+        nl = len(leaf_sets)
+        windows = [k * ts.sequence_length / 20 for k in
+                   [0] + sorted(random.sample(range(1, 20), 4)) + [20]]
+        indices = [random.sample(range(nl), max(1, index_length)) for _ in range(5)]
+        leafset_args = [[leaf_sets[i] for i in ii] for ii in indices]
+        tree_args = [[ts] + x for x in leafset_args]
+        win_args = [{'begin': windows[i], 'end': windows[i+1]}
+                    for i in range(len(windows)-1)]
+        tree_vals = [[tree_fn(*a, **b) for a in tree_args] for b in win_args]
+
+        if tsc_vector_fn is not None:
+            if index_length > 0:
+                tsc_vector_vals = tsc_vector_fn(leaf_sets, windows, indices)
+            else:
+                tsc_vector_vals = tsc_vector_fn([leaf_sets[i[0]] for i in indices],
+                                                windows)
+            self.assertEqual(len(tsc_vector_vals), len(windows)-1)
+            print("vector:")
+            print(tsc_vector_vals)
+            print(tree_vals)
+            for x in tsc_vector_vals:
+                self.assertEqual(len(x), len(indices))
+            for i in range(len(windows)-1):
+                self.assertListAlmostEqual(tsc_vector_vals[i], tree_vals[i])
+
+        if tsc_fn is not None:
+            tsc_vals_orig = [tsc_fn(*([ls] + [windows])) for ls in leafset_args]
+            tsc_vals = [[x[k][0] for x in tsc_vals_orig] for k in range(len(windows)-1)]
+            self.assertEqual(len(tsc_vals), len(windows)-1)
+            print("not:")
+            print(tsc_vals)
+            print(tree_vals)
+            for x in tsc_vals:
+                self.assertAlmostEqual(len(x), len(indices))
+            for i in range(len(windows)-1):
+                self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
 
     def check_vectorization(self, ts):
         samples = random.sample(ts.samples(), 3)
@@ -480,29 +595,18 @@ class BranchStatsTestCase(unittest.TestCase):
                 ts.pairwise_diversity(samples=samples))
 
     def check_Y_stat(self, ts):
-        samples = random.sample(ts.samples(), 6)
-        A = [[samples[0]], [samples[1]], [samples[2], samples[3]],
-             [samples[4], samples[5]]]
+        samples = random.sample(ts.samples(), 12)
+        A = [[samples[0], samples[1], samples[6]],
+             [samples[2], samples[3], samples[7]],
+             [samples[4], samples[5], samples[8]],
+             [samples[9], samples[10], samples[11]]]
         tsc = msprime.TreeStatCalculator(ts)
-        windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
-        here_values = [branch_length_Y(ts, A[0], A[1], A[2],
-                                       begin=windows[k], end=windows[k+1])
-                       for k in range(len(windows)-1)]
-        here_values_2 = [branch_length_Y(ts, A[1], A[2], A[3],
-                                         begin=windows[k], end=windows[k+1])
-                         for k in range(len(windows)-1)]
-        ts_values = tsc.Y(A[0:3], windows)
-        ts_vector_values = tsc.Y_vector(A, windows, [[0, 1, 2], [1, 2, 3], [0, 2, 1]])
-
-        self.assertListAlmostEqual(
-                [x[0] for x in ts_values],
-                here_values)
-        self.assertListAlmostEqual(
-                [x[1] for x in ts_vector_values],
-                here_values_2)
-        self.assertListAlmostEqual(
-                [x[2] for x in ts_vector_values],
-                here_values)
+        self.compare_stats(ts, branch_length_Y3, A, 3,
+                           tsc_fn=tsc.Y3, tsc_vector_fn=tsc.Y3_vector)
+        self.compare_stats(ts, branch_length_Y2, A, 2,
+                           tsc_fn=tsc.Y2, tsc_vector_fn=tsc.Y2_vector)
+        self.compare_stats(ts, branch_length_Y1, A, 0,
+                           tsc_vector_fn=tsc.Y1_vector)
 
     def check_f4_stat(self, ts):
         A_zero = [[x] for x in random.sample(ts.samples(), 4)]
@@ -559,7 +663,7 @@ class BranchStatsTestCase(unittest.TestCase):
                           tsc.f2, [[0], [1], [2]], [0, ts.sequence_length])
         # errors if indices aren't of the right length
         self.assertRaises(ValueError,
-                          tsc.Y_vector, [[0], [1], [2]], [0, ts.sequence_length],
+                          tsc.Y3_vector, [[0], [1], [2]], [0, ts.sequence_length],
                           [[0, 1]])
         self.assertRaises(ValueError,
                           tsc.f4_vector, [[0], [1], [2], [3]], [0, ts.sequence_length],
@@ -586,7 +690,7 @@ class BranchStatsTestCase(unittest.TestCase):
 
     def test_derived_functions(self):
         # Test implementation of statistics using these functions.
-        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
+        ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
         self.check_tmrca_matrix(ts)
         self.check_f2_stat(ts)
         self.check_f3_stat(ts)
@@ -700,7 +804,7 @@ class BranchStatsTestCase(unittest.TestCase):
 
         # branch lengths:
         true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
-        self.assertAlmostEqual(branch_length_Y(ts, [0], [1], [2]), true_Y)
+        self.assertAlmostEqual(branch_length_Y3(ts, [0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, tupleize(f)), true_Y)
         self.assertAlmostEqual(tree_stat_node_iter(ts, A, f), true_Y)
 
@@ -828,7 +932,7 @@ class BranchStatsTestCase(unittest.TestCase):
             return ((x[0] == 1) and (x[1] == 0)) or ((x[0] == 0) and (x[1] == 2))
 
         # branch lengths:
-        self.assertAlmostEqual(branch_length_Y(ts, [0], [1], [2]), true_Y)
+        self.assertAlmostEqual(branch_length_Y3(ts, [0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, tupleize(f)), true_Y)
         self.assertAlmostEqual(tree_stat_node_iter(ts, A, f), true_Y)
 
