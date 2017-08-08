@@ -30,13 +30,11 @@ class Segment(object):
         self.left = None
         self.right = None
         self.node = None
-        self.prev = None
         self.next = None
 
     def __str__(self):
-        s = "({}-{}->{}: prev={} next={})".format(
-            self.left, self.right, self.node, repr(self.prev),
-            repr(self.next))
+        s = "({}-{}->{}: next={})".format(
+            self.left, self.right, self.node, repr(self.next))
         return s
 
     def __lt__(self, other):
@@ -85,7 +83,7 @@ class Simplifier(object):
         self.S[0] = self.n
         self.S[self.m] = -1
 
-    def alloc_segment(self, left, right, node, prev=None, next=None):
+    def alloc_segment(self, left, right, node, next=None):
         """
         Allocates a new segment with the specified values.
         """
@@ -95,7 +93,6 @@ class Simplifier(object):
         s.right = right
         s.node = node
         s.next = next
-        s.prev = prev
         self.num_used_segments += 1
         return s
 
@@ -312,12 +309,13 @@ class Simplifier(object):
         x = self.A[input_id]
         head = x
         last = None
+        # Skip the leading segments before left.
         while x is not None and x.right <= left:
             last = x
             x = x.next
         if x is not None and x.left < left:
             # The left edge of x overhangs. Insert a new segment for the excess.
-            y = self.alloc_segment(x.left, left, x.node, x.prev, None)
+            y = self.alloc_segment(x.left, left, x.node, None)
             x.left = left
             if last is not None:
                 last.next = y
@@ -327,7 +325,6 @@ class Simplifier(object):
         if x is not None and x.left < right:
             # x is the first segment within the target interval, so add it to the
             # output heapq.
-            x.prev = None
             heapq.heappush(H, (x.left, x))
             # Skip over segments strictly within the interval
             x_prev = x
@@ -337,7 +334,7 @@ class Simplifier(object):
             if x is not None and x.left < right:
                 # We have an overhang on the right hand side. Create a new
                 # segment for the overhang and terminate the output chain.
-                y = self.alloc_segment(right, x.right, x.node, None, x.next)
+                y = self.alloc_segment(right, x.right, x.node, x.next)
                 x.right = right
                 x.next = None
                 x = y
@@ -439,7 +436,6 @@ class Simplifier(object):
                     self.A[input_id] = alpha
                 else:
                     z.next = alpha
-                alpha.prev = z
                 z = alpha
                 # and copy over any mutations on this segment to the output
                 self.record_mutations(input_id, alpha.left, alpha.right, alpha.node)
