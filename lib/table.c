@@ -166,6 +166,22 @@ out:
     return ret;
 }
 
+static int
+node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
+        population_id_t population, size_t name_length, const char *name)
+{
+    assert(self->num_rows < self->max_rows);
+    assert(self->total_name_length + name_length < self->max_total_name_length);
+    memcpy(self->name + self->total_name_length, name, name_length);
+    self->total_name_length += name_length;
+    self->flags[self->num_rows] = flags;
+    self->time[self->num_rows] = time;
+    self->population[self->num_rows] = population;
+    self->name_length[self->num_rows] = (uint32_t) name_length;
+    self->num_rows++;
+    return 0;
+}
+
 int
 node_table_add_row(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *name)
@@ -192,13 +208,7 @@ node_table_add_row(node_table_t *self, uint32_t flags, double time,
             goto out;
         }
     }
-    memcpy(self->name + self->total_name_length, name, name_length);
-    self->total_name_length += name_length;
-    self->flags[self->num_rows] = flags;
-    self->time[self->num_rows] = time;
-    self->population[self->num_rows] = population;
-    self->name_length[self->num_rows] = (uint32_t) name_length;
-    self->num_rows++;
+    ret = node_table_add_row_internal(self, flags, time, population, name_length, name);
 out:
     return ret;
 }
@@ -1016,6 +1026,7 @@ simplifier_check_state(simplifier_t *self)
 {
     size_t j;
     size_t total_segments = 0;
+    size_t total_avl_nodes = 0;
     avl_node_t *avl_node;
     simplify_segment_t *u;
 
@@ -1024,33 +1035,25 @@ simplifier_check_state(simplifier_t *self)
             for (u = self->ancestor_map[j]; u != NULL; u = u->next) {
                 assert(u->left < u->right);
                 if (u->next != NULL) {
-                    if (u->right > u->next->left) {
-                        printf("ERROR!! %p %p\n", (void*) u, (void*) u->next);
-                    }
                     assert(u->right <= u->next->left);
                 }
                 total_segments++;
             }
         }
     }
-
     for (avl_node = self->merge_queue.head; avl_node != NULL; avl_node = avl_node->next) {
+        total_avl_nodes++;
         for (u = (simplify_segment_t *) avl_node->item; u != NULL; u = u->next) {
             assert(u->left < u->right);
             if (u->next != NULL) {
-                if (u->right > u->next->left) {
-                    printf("ERROR Q!! %p %p\n", (void*) u, (void*) u->next);
-                }
                 assert(u->right <= u->next->left);
             }
             total_segments++;
         }
     }
-    /* if (total_segments != object_heap_get_num_allocated(&self->segment_heap)) { */
-    /*     printf("MISMATCH IN SEGMENTS: present = %d, alloced = %d\n", (int) total_segments, */
-    /*             (int)object_heap_get_num_allocated(&self->segment_heap)); */
-    /* } */
-    /* assert(total_segments == object_heap_get_num_allocated(&self->segment_heap)); */
+    total_avl_nodes += avl_count(&self->overlap_counts);
+    assert(total_segments == object_heap_get_num_allocated(&self->segment_heap));
+    assert(total_avl_nodes == object_heap_get_num_allocated(&self->avl_node_heap));
 }
 
 static void
@@ -1103,7 +1106,7 @@ simplifier_print_state(simplifier_t *self)
 
 static simplify_segment_t * WARN_UNUSED
 simplifier_alloc_segment(simplifier_t *self, double left, double right, node_id_t node,
-        simplify_segment_t *prev, simplify_segment_t *next)
+        simplify_segment_t *next)
 {
     simplify_segment_t *seg = NULL;
 
@@ -1116,7 +1119,6 @@ simplifier_alloc_segment(simplifier_t *self, double left, double right, node_id_
     if (seg == NULL) {
         goto out;
     }
-    seg->prev = prev;
     seg->next = next;
     seg->left = left;
     seg->right = right;
@@ -1215,18 +1217,16 @@ simplifier_copy_overlap_count(simplifier_t *self, double x)
     return ret;
 }
 
-
-
 /* Add a new node to the output node table corresponding to the specified input id */
 static int
 simplifier_record_node(simplifier_t *self, node_id_t input_id)
 {
     int ret = 0;
+    const char *name = self->input_nodes.name + self->node_name_offset[input_id];
 
-    /* FIXME!! This does not transfer the name properly. */
-    ret = node_table_add_row(self->nodes, self->input_nodes.flags[input_id],
+    ret = node_table_add_row_internal(self->nodes, self->input_nodes.flags[input_id],
             self->input_nodes.time[input_id], self->input_nodes.population[input_id],
-            "");
+            self->input_nodes.name_length[input_id], name);
     if (ret != 0) {
         goto out;
     }
@@ -1293,7 +1293,7 @@ simplifier_alloc(simplifier_t *self,
         double sequence_length, int flags)
 {
     int ret = 0;
-    size_t j;
+    size_t j, offset;
     node_id_t input_node;
 
     memset(self, 0, sizeof(simplifier_t));
@@ -1324,6 +1324,17 @@ simplifier_alloc(simplifier_t *self,
     ret = node_table_reset(self->nodes);
     if (ret != 0) {
         goto out;
+    }
+    /* Build the offset table so we can map node names */
+    self->node_name_offset = malloc(self->input_nodes.num_rows * sizeof(size_t));
+    if (self->node_name_offset == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    offset = 0;
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        self->node_name_offset[j] = offset;
+        offset += self->input_nodes.name_length[j];
     }
     /* Allocate the heaps used for small objects. */
     /* TODO assuming that the number of edgesets is a good guess here. */
@@ -1365,7 +1376,7 @@ simplifier_alloc(simplifier_t *self,
             goto out;
         }
         self->ancestor_map[samples[j]] = simplifier_alloc_segment(self, 0,
-                self->sequence_length, (node_id_t) self->nodes->num_rows, NULL, NULL);
+                self->sequence_length, (node_id_t) self->nodes->num_rows, NULL);
         if (self->ancestor_map[samples[j]] == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -1417,6 +1428,7 @@ simplifier_free(simplifier_t *self)
     object_heap_free(&self->segment_heap);
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->overlap_count_heap);
+    msp_safe_free(self->node_name_offset);
     msp_safe_free(self->ancestor_map);
     msp_safe_free(self->children_buffer);
     msp_safe_free(self->last_edgeset.children);
@@ -1505,7 +1517,7 @@ simplifier_remove_ancestry(simplifier_t *self, double left, double right,
     }
     if (x != NULL && x->left < left) {
         /* The left edge of x overhangs. Insert a new segment for the excess. */
-        y = simplifier_alloc_segment(self, x->left, left, x->node, NULL, NULL);
+        y = simplifier_alloc_segment(self, x->left, left, x->node, NULL);
         if (y == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -1534,7 +1546,7 @@ simplifier_remove_ancestry(simplifier_t *self, double left, double right,
         if (x != NULL && x->left < right) {
             /* We have an overhang on the right hand side. Create a new
              * segment for the overhang and terminate the output chain. */
-            y = simplifier_alloc_segment(self, right, x->right, x->node, NULL, x->next);
+            y = simplifier_alloc_segment(self, right, x->right, x->node, x->next);
             if (y == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -1601,8 +1613,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         if (h == 1) {
             x = H[0];
             if (node != NULL && next_l < x->right) {
-                alpha = simplifier_alloc_segment(self, x->left, next_l, x->node,
-                        NULL, NULL);
+                alpha = simplifier_alloc_segment(self, x->left, next_l, x->node, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -1667,7 +1678,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
                     nm = (overlap_count_t *) node->item;
                     r = nm->start;
                 }
-                alpha = simplifier_alloc_segment(self, l, r, v, NULL, NULL);
+                alpha = simplifier_alloc_segment(self, l, r, v, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -1711,7 +1722,6 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
                 /* fenwick_set_value(&self->links, alpha->id, */
                 /*         alpha->right - z->right); */
             }
-            alpha->prev = z;
             z = alpha;
         }
     }

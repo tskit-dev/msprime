@@ -639,12 +639,12 @@ typedef struct {
     uint32_t count;
 } overlap_count_t;
 
+/* For the simplify algorithm, we don't need doubly linked segments */
 typedef struct _simplify_segment_t {
     double left;
     double right;
-    node_id_t node;
-    struct _simplify_segment_t *prev;
     struct _simplify_segment_t *next;
+    node_id_t node;
 } simplify_segment_t;
 
 typedef struct {
@@ -654,6 +654,7 @@ typedef struct {
     double sequence_length;
     /* Keep a copy of the input nodes to simplify mapping */
     node_table_t input_nodes;
+    size_t *node_name_offset;
     /* Input/output tables. */
     node_table_t *nodes;
     edgeset_table_t *edgesets;
