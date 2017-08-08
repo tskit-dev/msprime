@@ -476,11 +476,10 @@ class Segment(object):
 
     The node it records is the *output* node ID.
     """
-    def __init__(self, left=None, right=None, node=None, prev=None, next=None):
+    def __init__(self, left=None, right=None, node=None, next=None):
         self.left = left
         self.right = right
         self.node = node
-        self.prev = prev
         self.next = next
 
     def __str__(self):
@@ -523,7 +522,7 @@ class SortedMap(dict):
 
 class Simplifier(object):
     """
-    Simplifies a tree sequence to it's minimal representation given a subset
+    Simplifies a tree sequence to its minimal representation given a subset
     of the leaves.
     """
     def __init__(self, ts, sample):
@@ -577,11 +576,11 @@ class Simplifier(object):
         #     print("GET_MUTATIONS", input_id, left, right, "::", ret)
         return ret
 
-    def alloc_segment(self, left, right, node, prev=None, next=None):
+    def alloc_segment(self, left, right, node, next=None):
         """
         Allocates a new segment with the specified values.
         """
-        s = Segment(left, right, node, prev, next)
+        s = Segment(left, right, node, next)
         s.mutations = SortedMap()
         self.num_used_segments += 1
         return s
@@ -680,7 +679,11 @@ class Simplifier(object):
             if len(edgesets) > 0:
                 # pull out the ancestry segments that will be merged
                 # print("before = ")
-                H = self.remove_ancestry(edgesets)
+                H = []
+                for edgeset in edgesets:
+                    for child in edgeset.children:
+                        if child in self.A:
+                            self.remove_ancestry(edgeset.left, edgeset.right, child, H)
                 self.check_state()
                 # print("---- will merge these segments (H):")
                 # self.print_heaps(H)
@@ -698,7 +701,7 @@ class Simplifier(object):
             while x is not None:
                 extant_segments += 1
                 x = x.next
-        assert self.num_used_segments == extant_segments
+        # assert self.num_used_segments == extant_segments
 
         # Flush the last edgeset to the table and create the new tree sequence.
         left, right, parent, children = self.last_edgeset
@@ -736,118 +739,56 @@ class Simplifier(object):
         site.mutations.append(msprime.Mutation(
             site=None, node=node, derived_state=derived_state))
 
-    def remove_ancestry(self, edgesets):
+    def remove_ancestry(self, left, right, input_id, H):
         """
-        Remove (modifying in place) and return the subset of the ancestors
-        lying within all intervals (left, right) for each of the children
-        for each edgeset in edgesets. Modified from paint_simplify::remove_paint().
-        The output, H, is a heapq of (x.left, x) tuples, where x is the head of
-        an linked list of ancestral segments.
+        Remove the ancestry for the specified input node over the specified interval
+        by snipping out elements of the segment chain and modifying any segments
+        that overlap the edges. Update the specified heapq H of (x.left, x)
+        tuples, where x is the head of a linked list of ancestral segments that we
+        remove from the chain for input_id.
         """
-        H = []
-        for edgeset in edgesets:
-            # print("remove edgeset:", edgeset)
-            # self.print_state()
-            for child in edgeset.children:
-                if child in self.A:
-                    x = self.A[child]
-                    # y will be the last segment to the left of edgeset, if any,
-                    #   which we may need to make sure links to the next one after
-                    y = None
-                    # and z will be the first segment after edgeset, if any
-                    z = None
-                    # and w will be the previous segment sent to output
-                    w = None
-                    while x is not None and edgeset.right > x.left:
-                        # print("begin     x: ", x)
-                        # print("begin     y: ", y)
-                        # print("begin     z: ", z)
-                        # print("begin     w: ", w)
-                        # intervals are half-open: [left, right)
-                        #  so that the left coordinate is inclusive and the right
-                        if edgeset.left < x.right and edgeset.right > x.left:
-                            # we have overlap
-                            seg_right = x.right
-                            out_left = max(edgeset.left, x.left)
-                            out_right = min(edgeset.right, x.right)
-                            overhang_left = (x.left < out_left)
-                            overhang_right = (x.right > out_right)
-                            mid_mutations = SortedMap()
-                            left_mutations = SortedMap()
-                            right_mutations = SortedMap()
-                            for pos, derived_state in x.mutations.items():
-                                if pos < out_left:
-                                    left_mutations[pos] = derived_state
-                                elif pos < out_right:
-                                    mid_mutations[pos] = derived_state
-                                else:
-                                    right_mutations[pos] = derived_state
-                            x.mutations = None
-                            if overhang_left:
-                                # this means x will be the first before removed segment
-                                y = x
-                                # revise x to be the left part
-                                x.right = out_left
-                                x.mutations = left_mutations
-                                # the remaining segment will be sent to output
-                                # with the previously output segment w as the previous
-                                next_w = self.alloc_segment(
-                                    out_left, out_right, x.node, w, None)
-                            else:
-                                # remove x, and use it as next_w
-                                x.prev = w
-                                x.right = out_right
-                                next_w = x
-                            next_w.mutations = self.get_mutations(
-                                    child, next_w.left, next_w.right)
-                            for pos, derived_state in mid_mutations.items():
-                                assert next_w.left <= pos < next_w.right
-                                next_w.mutations[pos] = derived_state
-                            if w is None:
-                                # then we're at the head of an ancestor that we are
-                                # outputting to H
-                                heapq.heappush(H, (next_w.left, next_w))
-                            else:
-                                w.next = next_w
-                            w = next_w
-                            if overhang_right:
-                                # add new segment for right overhang, which will be the
-                                # last one remaining in this ancestor after the removed
-                                # segment
-                                z = self.alloc_segment(
-                                    out_right, seg_right, x.node, y, x.next)
-                                z.mutations = right_mutations
-                                # y.next is updated below
-                                if x.next is not None:
-                                    x.next.prev = z
-                                break
-                        else:
-                            # maybe THIS segment was the first one before edgeset
-                            y = x
-                        # move on to the next segment
-                        x = x.next
-                    # don't do wrap-up if we haven't actually done anything
-                    if w is not None:
-                        w.next = None
-                        if not overhang_right:
-                            z = x
-                        if y is not None:
-                            y.next = z
-                        if z is not None:
-                            z.prev = y
-                        if y is None:
-                            # must update P[child]
-                            if z is None:
-                                del self.A[child]
-                            else:
-                                self.A[child] = z
-                    # print("end     x:" + x.__str__())
-                    # print("end     y:" + y.__str__())
-                    # print("end     z:" + z.__str__())
-                    # print("end     w:" + w.__str__())
-            # print(" ... state of H while in removing loop ...")
-            # self.print_heaps(H)
-        return H
+        x = self.A[input_id]
+        head = x
+        last = None
+        # Skip the leading segments before left.
+        while x is not None and x.right <= left:
+            last = x
+            x = x.next
+        if x is not None and x.left < left:
+            # The left edge of x overhangs. Insert a new segment for the excess.
+            y = self.alloc_segment(x.left, left, x.node, None)
+            x.left = left
+            if last is not None:
+                last.next = y
+            last = y
+            if x == head:
+                head = last
+        if x is not None and x.left < right:
+            # x is the first segment within the target interval, so add it to the
+            # output heapq.
+            heapq.heappush(H, (x.left, x))
+            # Skip over segments strictly within the interval
+            while x is not None and x.right <= right:
+                x_prev = x
+                x = x.next
+            if x is not None and x.left < right:
+                # We have an overhang on the right hand side. Create a new
+                # segment for the overhang and terminate the output chain.
+                y = self.alloc_segment(right, x.right, x.node, x.next)
+                x.right = right
+                x.next = None
+                x = y
+            elif x_prev is not None:
+                x_prev.next = None
+        # x is the first segment in the new chain starting after right.
+        if last is None:
+            head = x
+        else:
+            last.next = x
+        if head is None:
+            del self.A[input_id]
+        else:
+            self.A[input_id] = head
 
     def merge_labeled_ancestors(self, H, input_id):
         '''

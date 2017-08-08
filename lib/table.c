@@ -1492,87 +1492,67 @@ simplifier_remove_ancestry(simplifier_t *self, double left, double right,
         node_id_t input_id)
 {
     int ret = 0;
-    simplify_segment_t *x, *y, *z, *w, *next_w;
-    double seg_right, out_left, out_right;
-    bool overhang_left, overhang_right;
+    simplify_segment_t *x, *y, *head, *last, *x_prev;
 
     x = self->ancestor_map[input_id];
-    y = NULL;
-    z = NULL;
-    w = NULL;
-    /* TODO this can be clarified a bit I think
-     * 1) Put the y-loop explicitly at the start, so that we just pop off the segments
-     *    that are before left.
-     * 2) Don't try to reuse x as an output segment. Just free the segment, and
-     *    deal with w in a separate block. Performance penalty is negligible and
-     *    might make the flow clearer.
-     * 3) We're definitely leaking segments somewhere. Put back in the assertion check
-     *    for this.
-     * 4) Also check for AVL node leakage. We should be using and freeing a lot of these.
-     */
-    while (x != NULL && right > x->left) {
-        if (left < x->right && right > x->left) {
-            seg_right = x->right;
-            out_left = GSL_MAX(left, x->left);
-            out_right = GSL_MIN(right, x->right);
-            overhang_left = x->left < out_left;
-            overhang_right = x->right > out_right;
-
-            if (overhang_left) {
-                y = x;
-                x->right = out_left;
-                next_w = simplifier_alloc_segment(self, out_left, out_right, x->node, w, NULL);
-                if (next_w == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
-            } else {
-                x->prev = w;
-                x->right = out_right;
-                next_w = x;
-            }
-            if (w == NULL) {
-                ret = simplifier_priority_queue_insert(self, &self->merge_queue, next_w);
-                if (ret != 0) {
-                    goto out;
-                }
-            } else {
-                w->next = next_w;
-            }
-            w = next_w;
-            if (overhang_right) {
-                z = simplifier_alloc_segment(self, out_right, seg_right, x->node, y, x->next);
-                if (z == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
-                if (x->next != NULL) {
-                    x->next->prev = z;
-                }
-                break;
-            }
-        } else {
-            y = x;
-        }
+    head = x;
+    last = NULL;
+    x_prev = NULL;  /* Keep the compiler happy */
+    /* Skip the leading segments before left */
+    while (x != NULL && x->right <= left) {
+        last = x;
         x = x->next;
     }
-    if (w != NULL) {
-        w->next = NULL;
-
-        if (!overhang_right) {
-            z = x;
-        }
-        if (y != NULL) {
-            y->next = z;
-        }
-        if (z != NULL) {
-            z->prev = y;
-        }
+    if (x != NULL && x->left < left) {
+        /* The left edge of x overhangs. Insert a new segment for the excess. */
+        y = simplifier_alloc_segment(self, x->left, left, x->node, NULL, NULL);
         if (y == NULL) {
-            /* TODO I think we might be leaking a segment here when we overwrite this */
-            self->ancestor_map[input_id] = z;
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        x->left = left;
+        if (last != NULL) {
+            last->next = y;
+        }
+        last = y;
+        if (x == head) {
+            head = last;
         }
     }
+    if (x != NULL && x->left < right) {
+        /* x is the first segment within the target interval, so add it to the
+         * output queue */
+        ret = simplifier_priority_queue_insert(self, &self->merge_queue, x);
+        if (ret != 0) {
+            goto out;
+        }
+        /* Skip over segments strictly within the target interval */
+        while (x != NULL && x->right <= right) {
+            x_prev = x;
+            x = x->next;
+        }
+        if (x != NULL && x->left < right) {
+            /* We have an overhang on the right hand side. Create a new
+             * segment for the overhang and terminate the output chain. */
+            y = simplifier_alloc_segment(self, right, x->right, x->node, NULL, x->next);
+            if (y == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            x->right = right;
+            x->next = NULL;
+            x = y;
+        } else if (x_prev != NULL) {
+            x_prev->next = NULL;
+        }
+    }
+    /* x is the first segment in the new chain starting after right. */
+    if (last == NULL) {
+        head = x;
+    } else {
+        last->next = x;
+    }
+    self->ancestor_map[input_id] = head;
 out:
     return ret;
 }

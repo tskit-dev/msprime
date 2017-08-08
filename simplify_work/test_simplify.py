@@ -843,3 +843,16 @@ class TestWithVisuals(SimplifyTestCase):
         self.verify_simplify_topology(ts, [0, 1])
         self.verify_simplify_topology(ts, [1, 2])
         self.verify_simplify_topology(ts, [2, 0])
+
+    def test_single_tree(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed)
+        ts_single = single_childify(ts)
+        tss = do_simplify(ts_single)
+        self.assertEqual(list(tss.records()), list(ts.records()))
+
+    def test_many_trees(self):
+        ts = msprime.simulate(15, recombination_rate=5.75, random_seed=self.random_seed)
+        self.assertGreater(ts.num_trees, 2)
+        ts_single = single_childify(ts)
+        tss = do_simplify(ts_single)
+        self.assertEqual(list(tss.records()), list(ts.records()))

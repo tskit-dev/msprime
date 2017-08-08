@@ -1560,7 +1560,7 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(list(tss.records()), list(ts.records()))
 
     def test_many_trees(self):
-        ts = msprime.simulate(5, recombination_rate=5, random_seed=self.random_seed)
+        ts = msprime.simulate(5, recombination_rate=4, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_single = single_childify(ts)
         tss = do_simplify(ts_single)

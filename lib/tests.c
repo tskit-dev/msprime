@@ -688,6 +688,7 @@ verify_simplify(tree_sequence_t *ts)
     for (j = 0; j < sizeof(sample_sizes) / sizeof(uint32_t); j++) {
         if (sample_sizes[j] > 1 && sample_sizes[j] <= n) {
             ret = tree_sequence_simplify(ts, sample, sample_sizes[j], flags, &subset);
+            /* printf("ret = %s\n", msp_strerror(ret)); */
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             verify_simplify_properties(ts, &subset, sample, sample_sizes[j]);
         }

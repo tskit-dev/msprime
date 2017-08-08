@@ -327,7 +327,6 @@ class Simplifier(object):
             # output heapq.
             heapq.heappush(H, (x.left, x))
             # Skip over segments strictly within the interval
-            x_prev = x
             while x is not None and x.right <= right:
                 x_prev = x
                 x = x.next
