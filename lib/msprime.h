@@ -631,6 +631,48 @@ typedef struct {
     object_heap_t avl_node_heap;
 } mutgen_t;
 
+
+/* Represents the number of segments overlapping a given interval from the
+ * given start location. */
+typedef struct {
+    double start;
+    uint32_t count;
+} overlap_count_t;
+
+typedef struct _simplify_segment_t {
+    double left;
+    double right;
+    node_id_t node;
+    struct _simplify_segment_t *prev;
+    struct _simplify_segment_t *next;
+} simplify_segment_t;
+
+typedef struct {
+    node_id_t *samples;
+    size_t num_samples;
+    int flags;
+    double sequence_length;
+    /* Keep a copy of the input nodes to simplify mapping */
+    node_table_t input_nodes;
+    /* Input/output tables. */
+    node_table_t *nodes;
+    edgeset_table_t *edgesets;
+    site_table_t *sites;
+    mutation_table_t *mutations;
+    /* Internal state */
+    simplify_segment_t **ancestor_map;
+    avl_tree_t overlap_counts;
+    avl_tree_t merge_queue;
+    object_heap_t segment_heap;
+    object_heap_t avl_node_heap;
+    object_heap_t overlap_count_heap;
+    size_t children_buffer_size;
+    node_id_t *children_buffer;
+    size_t segment_buffer_size;
+    simplify_segment_t **segment_buffer;
+    edgeset_t last_edgeset;
+} simplifier_t;
+
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
 int msp_set_simulation_model_non_parametric(msp_t *self, int model);
 int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
@@ -905,6 +947,14 @@ int migration_table_set_columns(migration_table_t *self, size_t num_rows,
 int migration_table_reset(migration_table_t *self);
 int migration_table_free(migration_table_t *self);
 void migration_table_print_state(migration_table_t *self, FILE *out);
+
+int simplifier_alloc(simplifier_t *self,
+        node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
+        site_table_t *sites, mutation_table_t *mutations,
+        node_id_t *samples, size_t num_samples, double sequence_length, int flags);
+int simplifier_free(simplifier_t *self);
+int simplifier_run(simplifier_t *self);
+void simplifier_print_state(simplifier_t *self);
 
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);

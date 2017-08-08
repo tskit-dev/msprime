@@ -25,6 +25,7 @@
 #include <gsl/gsl_math.h>
 
 #include "err.h"
+#include "object_heap.h"
 #include "msprime.h"
 
 #define DEFAULT_MAX_ROWS_INCREMENT 1024
@@ -976,4 +977,878 @@ migration_table_print_state(migration_table_t *self, FILE *out)
                 self->right[j], (int) self->node[j], (int) self->source[j],
                 (int) self->dest[j], self->time[j]);
     }
+}
+
+/*************************
+ * simplifier
+ *************************/
+
+static int
+cmp_node_id(const void *a, const void *b) {
+    const node_id_t *ia = (const node_id_t *) a;
+    const node_id_t *ib = (const node_id_t *) b;
+    return (*ia > *ib) - (*ia < *ib);
+}
+
+static int
+cmp_overlap_count(const void *a, const void *b) {
+    const overlap_count_t *ia = (const overlap_count_t *) a;
+    const overlap_count_t *ib = (const overlap_count_t *) b;
+    int ret = (ia->start > ib->start) - (ia->start < ib->start);
+    return ret;
+}
+
+/* For the segment priority queue we want to sort on the left
+ * coordinate and to break ties we use the node */
+static int
+cmp_segment_queue(const void *a, const void *b) {
+    const simplify_segment_t *ia = (const simplify_segment_t *) a;
+    const simplify_segment_t *ib = (const simplify_segment_t *) b;
+    int ret = (ia->left > ib->left) - (ia->left < ib->left);
+    if (ret == 0)  {
+        ret = (ia->node > ib->node) - (ia->node < ib->node);
+    }
+    return ret;
+}
+
+static void
+simplifier_check_state(simplifier_t *self)
+{
+    size_t j;
+    size_t total_segments = 0;
+    avl_node_t *avl_node;
+    simplify_segment_t *u;
+
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        if (self->ancestor_map[j] != NULL) {
+            for (u = self->ancestor_map[j]; u != NULL; u = u->next) {
+                assert(u->left < u->right);
+                if (u->next != NULL) {
+                    if (u->right > u->next->left) {
+                        printf("ERROR!! %p %p\n", (void*) u, (void*) u->next);
+                    }
+                    assert(u->right <= u->next->left);
+                }
+                total_segments++;
+            }
+        }
+    }
+
+    for (avl_node = self->merge_queue.head; avl_node != NULL; avl_node = avl_node->next) {
+        for (u = (simplify_segment_t *) avl_node->item; u != NULL; u = u->next) {
+            assert(u->left < u->right);
+            if (u->next != NULL) {
+                if (u->right > u->next->left) {
+                    printf("ERROR Q!! %p %p\n", (void*) u, (void*) u->next);
+                }
+                assert(u->right <= u->next->left);
+            }
+            total_segments++;
+        }
+    }
+    /* if (total_segments != object_heap_get_num_allocated(&self->segment_heap)) { */
+    /*     printf("MISMATCH IN SEGMENTS: present = %d, alloced = %d\n", (int) total_segments, */
+    /*             (int)object_heap_get_num_allocated(&self->segment_heap)); */
+    /* } */
+    /* assert(total_segments == object_heap_get_num_allocated(&self->segment_heap)); */
+}
+
+static void
+print_segment_chain(simplify_segment_t *head)
+{
+    simplify_segment_t *u;
+
+    for (u = head; u != NULL; u = u->next) {
+        printf("(%f,%f->%d)", u->left, u->right, u->node);
+    }
+}
+
+void
+simplifier_print_state(simplifier_t *self)
+{
+    size_t j;
+    avl_node_t *avl_node;
+    simplify_segment_t *u;
+
+    printf("--simplifier state--\n");
+    printf("===\nInput nodes\n==\n");
+    node_table_print_state(&self->input_nodes, stdout);
+    printf("===\nOutput tables\n==\n");
+    node_table_print_state(self->nodes, stdout);
+    edgeset_table_print_state(self->edgesets, stdout);
+    site_table_print_state(self->sites, stdout);
+    mutation_table_print_state(self->mutations, stdout);
+    printf("===\nmemory heaps\n==\n");
+    printf("segment_heap:\n");
+    object_heap_print_state(&self->segment_heap, stdout);
+    printf("avl_node_heap:\n");
+    object_heap_print_state(&self->avl_node_heap, stdout);
+    printf("overlap_count_heap:\n");
+    object_heap_print_state(&self->overlap_count_heap, stdout);
+    printf("===\nancestors\n==\n");
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        if (self->ancestor_map[j] != NULL) {
+            printf("%d:\t", (int) j);
+            print_segment_chain(self->ancestor_map[j]);
+            printf("\n");
+        }
+    }
+    printf("===\nmerge queue\n==\n");
+    for (avl_node = self->merge_queue.head; avl_node != NULL; avl_node = avl_node->next) {
+        u = (simplify_segment_t *) avl_node->item;
+        print_segment_chain(u);
+        printf("\n");
+    }
+}
+
+static simplify_segment_t * WARN_UNUSED
+simplifier_alloc_segment(simplifier_t *self, double left, double right, node_id_t node,
+        simplify_segment_t *prev, simplify_segment_t *next)
+{
+    simplify_segment_t *seg = NULL;
+
+    if (object_heap_empty(&self->segment_heap)) {
+        if (object_heap_expand(&self->segment_heap) != 0) {
+            goto out;
+        }
+    }
+    seg = (simplify_segment_t *) object_heap_alloc_object(&self->segment_heap);
+    if (seg == NULL) {
+        goto out;
+    }
+    seg->prev = prev;
+    seg->next = next;
+    seg->left = left;
+    seg->right = right;
+    seg->node = node;
+out:
+    return seg;
+}
+
+static inline void
+simplifier_free_segment(simplifier_t *self, simplify_segment_t *seg)
+{
+    object_heap_free_object(&self->segment_heap, seg);
+}
+
+static inline avl_node_t * WARN_UNUSED
+simplifier_alloc_avl_node(simplifier_t *self)
+{
+    avl_node_t *ret = NULL;
+
+    if (object_heap_empty(&self->avl_node_heap)) {
+        if (object_heap_expand(&self->avl_node_heap) != 0) {
+            goto out;
+        }
+    }
+    ret = (avl_node_t *) object_heap_alloc_object(&self->avl_node_heap);
+out:
+    return ret;
+}
+
+static inline void
+simplifier_free_avl_node(simplifier_t *self, avl_node_t *node)
+{
+    object_heap_free_object(&self->avl_node_heap, node);
+}
+
+static inline overlap_count_t *
+simplifier_alloc_overlap_count(simplifier_t *self)
+{
+    overlap_count_t *ret = NULL;
+
+    if (object_heap_empty(&self->overlap_count_heap)) {
+        if (object_heap_expand(&self->overlap_count_heap) != 0) {
+            goto out;
+        }
+    }
+    ret = (overlap_count_t *) object_heap_alloc_object(&self->overlap_count_heap);
+out:
+    return ret;
+}
+
+/*
+ * Inserts a new overlap_count at the specified position, mapping to the
+ * specified number of overlapping segments v.
+ */
+static int WARN_UNUSED
+simplifier_insert_overlap_count(simplifier_t *self, double x, uint32_t v)
+{
+    int ret = 0;
+    avl_node_t *node = simplifier_alloc_avl_node(self);
+    overlap_count_t *m = simplifier_alloc_overlap_count(self);
+
+    if (node == NULL || m == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    m->start = x;
+    m->count = v;
+    avl_init_node(node, m);
+    node = avl_insert_node(&self->overlap_counts, node);
+    assert(node != NULL);
+out:
+    return ret;
+}
+
+/*
+ * Inserts a new overlap_count at the specified position, and copies its
+ * count from the containing overlap count.
+ */
+static int WARN_UNUSED
+simplifier_copy_overlap_count(simplifier_t *self, double x)
+{
+    int ret;
+    overlap_count_t search, *nm;
+    avl_node_t *node;
+
+    search.start = x;
+    avl_search_closest(&self->overlap_counts, &search, &node);
+    assert(node != NULL);
+    nm = (overlap_count_t *) node->item;
+    if (nm->start > x) {
+        node = node->prev;
+        assert(node != NULL);
+        nm = (overlap_count_t *) node->item;
+    }
+    ret = simplifier_insert_overlap_count(self, x, nm->count);
+    return ret;
+}
+
+
+
+/* Add a new node to the output node table corresponding to the specified input id */
+static int
+simplifier_record_node(simplifier_t *self, node_id_t input_id)
+{
+    int ret = 0;
+
+    /* FIXME!! This does not transfer the name properly. */
+    ret = node_table_add_row(self->nodes, self->input_nodes.flags[input_id],
+            self->input_nodes.time[input_id], self->input_nodes.population[input_id],
+            "");
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
+/* Records the specified edgeset in the output table */
+static int
+simplifier_record_edgeset(simplifier_t *self, double left, double right,
+        node_id_t parent, node_id_t *children, list_len_t children_length)
+{
+    int ret = 0;
+    bool squash;
+
+    qsort(children, children_length, sizeof(node_id_t), cmp_node_id);
+    if (self->last_edgeset.children_length == 0) {
+        /* First edgeset */
+        self->last_edgeset.left = left;
+        self->last_edgeset.right = right;
+        self->last_edgeset.parent = parent;
+        self->last_edgeset.children_length = children_length;
+        memcpy(self->last_edgeset.children, children,
+                children_length * sizeof(node_id_t));
+    } else {
+        squash = false;
+        if (self->last_edgeset.children_length == children_length) {
+            squash =
+                left == self->last_edgeset.right &&
+                parent == self->last_edgeset.parent &&
+                memcmp(children, self->last_edgeset.children,
+                        children_length * sizeof(node_id_t)) == 0;
+        }
+        if (squash) {
+            self->last_edgeset.right = right;
+        } else {
+            /* Flush the last edgeset */
+            ret = edgeset_table_add_row(self->edgesets,
+                    self->last_edgeset.left,
+                    self->last_edgeset.right,
+                    self->last_edgeset.parent,
+                    self->last_edgeset.children,
+                    self->last_edgeset.children_length);
+            if (ret != 0) {
+                goto out;
+            }
+            self->last_edgeset.left = left;
+            self->last_edgeset.right = right;
+            self->last_edgeset.parent = parent;
+            self->last_edgeset.children_length = children_length;
+            memcpy(self->last_edgeset.children, children,
+                    children_length * sizeof(node_id_t));
+        }
+    }
+out:
+    return ret;
+}
+
+int
+simplifier_alloc(simplifier_t *self,
+        node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
+        site_table_t *sites, mutation_table_t *mutations,
+        node_id_t *samples, size_t num_samples,
+        double sequence_length, int flags)
+{
+    int ret = 0;
+    size_t j;
+    node_id_t input_node;
+
+    memset(self, 0, sizeof(simplifier_t));
+    self->samples = samples;
+    self->num_samples = num_samples;
+    self->flags = flags;
+    self->sequence_length = sequence_length;
+    self->nodes = nodes;
+    self->edgesets = edgesets;
+    self->sites = sites;
+    self->mutations = mutations;
+
+    if (num_samples < 2 || nodes->num_rows == 0 || edgesets->num_rows == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    /* Make a copy of the input nodes and clear the table ready for output */
+    ret = node_table_alloc(&self->input_nodes, nodes->num_rows,
+            nodes->total_name_length + 1);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = node_table_set_columns(&self->input_nodes, nodes->num_rows,
+            nodes->flags, nodes->time, nodes->population, nodes->name, nodes->name_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = node_table_reset(self->nodes);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Allocate the heaps used for small objects. */
+    /* TODO assuming that the number of edgesets is a good guess here. */
+    ret = object_heap_init(&self->segment_heap, sizeof(simplify_segment_t),
+            edgesets->num_rows, NULL);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t),
+            edgesets->num_rows, NULL);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = object_heap_init(&self->overlap_count_heap, sizeof(overlap_count_t),
+            edgesets->num_rows, NULL);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Make the maps and set the intial state */
+    self->ancestor_map = calloc(self->input_nodes.num_rows,
+            sizeof(simplify_segment_t *));
+    if (self->ancestor_map == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    self->nodes->num_rows = 0;
+    for (j = 0; j < self->num_samples; j++) {
+        input_node = samples[j];
+        if (input_node < 0 || input_node >= (node_id_t) self->input_nodes.num_rows) {
+            ret = MSP_ERR_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (!(self->input_nodes.flags[input_node] & MSP_NODE_IS_SAMPLE)) {
+            ret = MSP_ERR_BAD_SAMPLES;
+            goto out;
+        }
+        if (self->ancestor_map[samples[j]] != NULL) {
+            ret = MSP_ERR_DUPLICATE_SAMPLE;
+            goto out;
+        }
+        self->ancestor_map[samples[j]] = simplifier_alloc_segment(self, 0,
+                self->sequence_length, (node_id_t) self->nodes->num_rows, NULL, NULL);
+        if (self->ancestor_map[samples[j]] == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        simplifier_record_node(self, input_node);
+    }
+    avl_init_tree(&self->overlap_counts, cmp_overlap_count, NULL);
+    avl_init_tree(&self->merge_queue, cmp_segment_queue, NULL);
+
+    /* Allocate the children and segment buffers */
+    self->children_buffer_size = 2;
+    self->children_buffer = malloc(self->children_buffer_size * sizeof(node_id_t));
+    self->last_edgeset.children = malloc(self->children_buffer_size * sizeof(node_id_t));
+    self->segment_buffer_size = 64;
+    self->segment_buffer = malloc(self->segment_buffer_size * sizeof(simplify_segment_t *));
+    if (self->children_buffer == NULL || self->last_edgeset.children == NULL
+            || self->segment_buffer == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* Set the initial overlap counts */
+    ret = simplifier_insert_overlap_count(self, 0, (uint32_t) num_samples);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = simplifier_insert_overlap_count(self, self->sequence_length,
+            (uint32_t) num_samples + 1);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Set up the sites */
+
+    ret = site_table_reset(self->sites);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_reset(self->mutations);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
+int
+simplifier_free(simplifier_t *self)
+{
+    node_table_free(&self->input_nodes);
+    object_heap_free(&self->segment_heap);
+    object_heap_free(&self->avl_node_heap);
+    object_heap_free(&self->overlap_count_heap);
+    msp_safe_free(self->ancestor_map);
+    msp_safe_free(self->children_buffer);
+    msp_safe_free(self->last_edgeset.children);
+    msp_safe_free(self->segment_buffer);
+    return 0;
+}
+
+static node_id_t *
+simplifier_get_children_buffer(simplifier_t *self, size_t num_children)
+{
+    node_id_t *ret = NULL;
+    node_id_t *tmp;
+
+    if (self->children_buffer_size < num_children) {
+        self->children_buffer_size = num_children;
+        msp_safe_free(self->children_buffer);
+        self->children_buffer = malloc(self->children_buffer_size * sizeof(node_id_t));
+        if (self->children_buffer == NULL) {
+            goto out;
+        }
+        /* Also realloc the buffer for last children */
+        tmp = realloc(self->last_edgeset.children, num_children * sizeof(node_id_t));
+        if (tmp == NULL) {
+            goto out;
+        }
+        self->last_edgeset.children = tmp;
+    }
+    ret = self->children_buffer;
+out:
+    return ret;
+}
+
+static simplify_segment_t **
+simplifier_get_segment_buffer(simplifier_t *self, size_t size)
+{
+    simplify_segment_t **ret = NULL;
+
+    if (self->segment_buffer_size < size) {
+        self->segment_buffer_size = size;
+        msp_safe_free(self->segment_buffer);
+        self->segment_buffer = malloc(self->segment_buffer_size
+                * sizeof(simplify_segment_t *));
+        if (self->segment_buffer == NULL) {
+            goto out;
+        }
+    }
+    ret = self->segment_buffer;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+simplifier_priority_queue_insert(simplifier_t *self, avl_tree_t *Q, simplify_segment_t *u)
+{
+    int ret = 0;
+    avl_node_t *node;
+
+    assert(u != NULL);
+    node = simplifier_alloc_avl_node(self);
+    if (node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    avl_init_node(node, u);
+    node = avl_insert_node(Q, node);
+    assert(node != NULL);
+out:
+    return ret;
+}
+
+static int
+simplifier_remove_ancestry(simplifier_t *self, double left, double right,
+        node_id_t input_id)
+{
+    int ret = 0;
+    simplify_segment_t *x, *y, *z, *w, *next_w;
+    double seg_right, out_left, out_right;
+    bool overhang_left, overhang_right;
+
+    x = self->ancestor_map[input_id];
+    y = NULL;
+    z = NULL;
+    w = NULL;
+    /* TODO this can be clarified a bit I think
+     * 1) Put the y-loop explicitly at the start, so that we just pop off the segments
+     *    that are before left.
+     * 2) Don't try to reuse x as an output segment. Just free the segment, and
+     *    deal with w in a separate block. Performance penalty is negligible and
+     *    might make the flow clearer.
+     * 3) We're definitely leaking segments somewhere. Put back in the assertion check
+     *    for this.
+     * 4) Also check for AVL node leakage. We should be using and freeing a lot of these.
+     */
+    while (x != NULL && right > x->left) {
+        if (left < x->right && right > x->left) {
+            seg_right = x->right;
+            out_left = GSL_MAX(left, x->left);
+            out_right = GSL_MIN(right, x->right);
+            overhang_left = x->left < out_left;
+            overhang_right = x->right > out_right;
+
+            if (overhang_left) {
+                y = x;
+                x->right = out_left;
+                next_w = simplifier_alloc_segment(self, out_left, out_right, x->node, w, NULL);
+                if (next_w == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+            } else {
+                x->prev = w;
+                x->right = out_right;
+                next_w = x;
+            }
+            if (w == NULL) {
+                ret = simplifier_priority_queue_insert(self, &self->merge_queue, next_w);
+                if (ret != 0) {
+                    goto out;
+                }
+            } else {
+                w->next = next_w;
+            }
+            w = next_w;
+            if (overhang_right) {
+                z = simplifier_alloc_segment(self, out_right, seg_right, x->node, y, x->next);
+                if (z == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                if (x->next != NULL) {
+                    x->next->prev = z;
+                }
+                break;
+            }
+        } else {
+            y = x;
+        }
+        x = x->next;
+    }
+    if (w != NULL) {
+        w->next = NULL;
+
+        if (!overhang_right) {
+            z = x;
+        }
+        if (y != NULL) {
+            y->next = z;
+        }
+        if (z != NULL) {
+            z->prev = y;
+        }
+        if (y == NULL) {
+            /* TODO I think we might be leaking a segment here when we overwrite this */
+            self->ancestor_map[input_id] = z;
+        }
+    }
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
+{
+    int ret = MSP_ERR_GENERIC;
+    bool coalescence = 0;
+    /* bool defrag_required = 0; */
+    node_id_t v, *children;
+    double l, r, r_max, next_l;
+    uint32_t j, h;
+    avl_node_t *node;
+    overlap_count_t *nm, search;
+    simplify_segment_t *x, *z, *alpha;
+    simplify_segment_t **H = NULL;
+    avl_tree_t *Q = &self->merge_queue;
+
+    H = simplifier_get_segment_buffer(self, avl_count(Q));
+    if (H == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* l_min = 0; */
+    z = NULL;
+    while (avl_count(Q) > 0) {
+        h = 0;
+        node = Q->head;
+        l = ((simplify_segment_t *) node->item)->left;
+        r_max = self->sequence_length;
+        while (node != NULL && ((simplify_segment_t *) node->item)->left == l) {
+            H[h] = (simplify_segment_t *) node->item;
+            r_max = GSL_MIN(r_max, H[h]->right);
+            h++;
+            simplifier_free_avl_node(self, node);
+            avl_unlink_node(Q, node);
+            node = node->next;
+        }
+        next_l = 0;
+        if (node != NULL) {
+            next_l = ((simplify_segment_t *) node->item)->left;
+            r_max = GSL_MIN(r_max, next_l);
+        }
+        alpha = NULL;
+        if (h == 1) {
+            x = H[0];
+            if (node != NULL && next_l < x->right) {
+                alpha = simplifier_alloc_segment(self, x->left, next_l, x->node,
+                        NULL, NULL);
+                if (alpha == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                x->left = next_l;
+            } else {
+                alpha = x;
+                x = x->next;
+                alpha->next = NULL;
+            }
+            if (x != NULL) {
+                ret = simplifier_priority_queue_insert(self, Q, x);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        } else {
+            if (!coalescence) {
+                coalescence = 1;
+                /* l_min = l; */
+                ret = simplifier_record_node(self, input_id);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+            v = (node_id_t) self->nodes->num_rows - 1;
+            /* Insert overlap counts for bounds, if necessary */
+            search.start = l;
+            node = avl_search(&self->overlap_counts, &search);
+            if (node == NULL) {
+                ret = simplifier_copy_overlap_count(self, l);
+                if (ret < 0) {
+                    goto out;
+                }
+            }
+            search.start = r_max;
+            node = avl_search(&self->overlap_counts, &search);
+            if (node == NULL) {
+                ret = simplifier_copy_overlap_count(self, r_max);
+                if (ret < 0) {
+                    goto out;
+                }
+            }
+            /* Update the extant segments and allocate alpha if the interval
+             * has not coalesced. */
+            search.start = l;
+            node = avl_search(&self->overlap_counts, &search);
+            assert(node != NULL);
+            nm = (overlap_count_t *) node->item;
+            if (nm->count == h) {
+                nm->count = 0;
+                node = node->next;
+                assert(node != NULL);
+                nm = (overlap_count_t *) node->item;
+                r = nm->start;
+            } else {
+                r = l;
+                while (nm->count != h && r < r_max) {
+                    nm->count -= h - 1;
+                    node = node->next;
+                    assert(node != NULL);
+                    nm = (overlap_count_t *) node->item;
+                    r = nm->start;
+                }
+                alpha = simplifier_alloc_segment(self, l, r, v, NULL, NULL);
+                if (alpha == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+            }
+            /* Create the record and update the priority queue */
+            children = simplifier_get_children_buffer(self, h);
+            if (children == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            for (j = 0; j < h; j++) {
+                x = H[j];
+                children[j] = x->node;
+                if (x->right == r) {
+                    simplifier_free_segment(self, x);
+                    x = x->next;
+                } else if (x->right > r) {
+                    x->left = r;
+                }
+                if (x != NULL) {
+                    ret = simplifier_priority_queue_insert(self, Q, x);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                }
+            }
+            ret = simplifier_record_edgeset(self, l, r, v, children, h);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        /* Loop tail; integrate alpha into the global state */
+        if (alpha != NULL) {
+            if (z == NULL) {
+                self->ancestor_map[input_id] = alpha;
+            } else {
+                /* defrag_required |= */
+                /*     z->right == alpha->left && z->value == alpha->value; */
+                z->next = alpha;
+                /* fenwick_set_value(&self->links, alpha->id, */
+                /*         alpha->right - z->right); */
+            }
+            alpha->prev = z;
+            z = alpha;
+        }
+    }
+    /*
+    if (defrag_required) {
+        ret = simplifier_defrag_simplify_segment_chain(self, z);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (coalescence) {
+        ret = simplifier_conditional_compress_overlap_counts(self, l_min, r_max);
+        if (ret != 0) {
+            goto out;
+        }
+
+    }
+    */
+    ret = 0;
+out:
+    return ret;
+}
+
+
+int WARN_UNUSED
+simplifier_run(simplifier_t *self)
+{
+    int ret = 0;
+    size_t j;
+    node_id_t parent, current_parent, *children;
+    list_len_t k, children_length;
+    double left, right;
+    size_t num_input_edgesets = self->edgesets->num_rows;
+    size_t children_offset = 0;
+
+    /* We modify the edgeset table in place, adding records to the
+     * start of the table after we have read in and queued the edgesets
+     * for each parent. */
+    ret = edgeset_table_reset(self->edgesets);
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* printf("START\n"); */
+    /* simplifier_print_state(self); */
+
+    if (num_input_edgesets > 0) {
+        current_parent = self->edgesets->parent[0];
+
+        for (j = 0; j < num_input_edgesets; j++) {
+            assert(j >= self->edgesets->num_rows);
+            parent = self->edgesets->parent[j];
+            left = self->edgesets->left[j];
+            right = self->edgesets->right[j];
+            children_length = self->edgesets->children_length[j];
+            children = self->edgesets->children + children_offset;
+            children_offset += children_length;
+
+            if (parent != current_parent) {
+                /* printf("FLUSH: %d: %d segments\n", current_parent, */
+                /*         avl_count(&self->merge_queue)); */
+                simplifier_check_state(self);
+                /* simplifier_print_state(self); */
+                ret = simplifier_merge_ancestors(self, current_parent);
+                if (ret != 0) {
+                    goto out;
+                }
+                assert(avl_count(&self->merge_queue) == 0);
+                /* printf("Done merge\n"); */
+                /* simplifier_check_state(self); */
+                if (self->input_nodes.time[current_parent]
+                        > self->input_nodes.time[parent]) {
+                    ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
+                    goto out;
+                }
+                current_parent = parent;
+            }
+            /* printf("EDGESET: %d %d: %f-%f %d: %p\n", (int) j, */
+            /*         parent, left, right, children_length, (void *) children); */
+            for (k = 0; k < children_length; k++) {
+                if (self->ancestor_map[children[k]] != NULL) {
+                    /* printf("BEFORE REMOVE: %d: Q size = %d\n", children[k], avl_count(&self->merge_queue)); */
+                    /* simplifier_print_state(self); */
+                    simplifier_check_state(self);
+                    ret = simplifier_remove_ancestry(self, left, right, children[k]);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                    /* printf("AFTER REMOVE: %d: Q size = %d\n", children[k], avl_count(&self->merge_queue)); */
+                    simplifier_check_state(self);
+                    /* printf("DONE AFTER REMOVE CHECK\n"); */
+                }
+
+            }
+
+        }
+        /* printf("FLUSH: %d\n", current_parent); */
+        ret = simplifier_merge_ancestors(self, current_parent);
+        if (ret != 0) {
+            goto out;
+        }
+        assert(avl_count(&self->merge_queue) == 0);
+        simplifier_check_state(self);
+    }
+    /* Flush the last edgeset */
+    ret = edgeset_table_add_row(self->edgesets,
+            self->last_edgeset.left,
+            self->last_edgeset.right,
+            self->last_edgeset.parent,
+            self->last_edgeset.children,
+            self->last_edgeset.children_length);
+    if (ret != 0) {
+        goto out;
+    }
+    /* printf("DONE\n"); */
+    /* simplifier_print_state(self); */
+out:
+
+    return ret;
 }
