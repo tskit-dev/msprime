@@ -457,7 +457,7 @@ model, and compare this with the analytical expectation.
             [m, m, 0]]
         # We pass these values to the simulate function, and ask it
         # to run the required number of replicates.
-        num_replicates = 1e6
+        num_replicates = int(1e6)
         replicates = msprime.simulate(
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
@@ -499,6 +499,7 @@ the values used.
 
 .. code-block:: python
 
+    import math
     def out_of_africa():
         # First we set out the maximum likelihood values of the various parameters
         # given in Table 1.

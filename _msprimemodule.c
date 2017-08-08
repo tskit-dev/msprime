@@ -3246,7 +3246,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         }
     }
     if ((mutations == NULL) != (sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both mutations and mutation types");
+        PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
         goto out;
     }
     err = tree_sequence_load_tables_tmp(self->tree_sequence,
@@ -7334,6 +7334,73 @@ static PyTypeObject SimulatorType = {
  */
 
 static PyObject *
+msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    NodeTable *py_nodes = NULL;
+    EdgesetTable *py_edgesets = NULL;
+    MigrationTable *py_migrations = NULL;
+    SiteTable *py_sites = NULL;
+    MutationTable *py_mutations = NULL;
+    node_table_t *nodes = NULL;
+    edgeset_table_t *edgesets = NULL;
+    migration_table_t *migrations = NULL;
+    site_table_t *sites = NULL;
+    mutation_table_t *mutations = NULL;
+
+    static char *kwlist[] = {"nodes", "edgesets", "migrations", "sites", "mutations", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!", kwlist,
+            &NodeTableType, &py_nodes,
+            &EdgesetTableType, &py_edgesets,
+            &MigrationTableType, &py_migrations,
+            &SiteTableType, &py_sites,
+            &MutationTableType, &py_mutations)) {
+        goto out;
+    }
+    if (NodeTable_check_state(py_nodes) != 0) {
+        goto out;
+    }
+    nodes = py_nodes->node_table;
+    if (EdgesetTable_check_state(py_edgesets) != 0) {
+        goto out;
+    }
+    edgesets = py_edgesets->edgeset_table;
+    if (py_migrations != NULL) {
+        if (MigrationTable_check_state(py_migrations) != 0) {
+            goto out;
+        }
+        migrations = py_migrations->migration_table;
+    }
+    if (py_sites != NULL) {
+        if (SiteTable_check_state(py_sites) != 0) {
+            goto out;
+        }
+        sites = py_sites->site_table;
+    }
+    if (py_mutations != NULL) {
+        if (MutationTable_check_state(py_mutations) != 0) {
+            goto out;
+        }
+        mutations = py_mutations->mutation_table;
+    }
+    if ((mutations == NULL) != (sites == NULL)) {
+        PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
+        goto out;
+    }
+    err = sort_tables(nodes, edgesets, migrations, sites, mutations);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+
+static PyObject *
 msprime_get_gsl_version(PyObject *self)
 {
     return Py_BuildValue("ii", GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
@@ -7381,6 +7448,8 @@ msprime_get_library_version_str(PyObject *self)
 
 
 static PyMethodDef msprime_methods[] = {
+    {"sort_tables", (PyCFunction) msprime_sort_tables, METH_VARARGS|METH_KEYWORDS,
+            "Sorts tables into canonical ordering for tree sequence intput." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
     {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,
