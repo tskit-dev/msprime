@@ -645,22 +645,36 @@ typedef struct _simplify_segment_t {
     double right;
     struct _simplify_segment_t *next;
     node_id_t node;
+    avl_tree_t mutations;
 } simplify_segment_t;
+
+typedef struct _site_mutation_t {
+    double position;
+    char *ancestral_state;
+    char *derived_state;
+    list_len_t ancestral_state_length;
+    list_len_t derived_state_length;
+    node_id_t node;
+    /* This is used when we have multiple mutations at a site */
+    struct _site_mutation_t *next;
+} site_mutation_t;
 
 typedef struct {
     node_id_t *samples;
     size_t num_samples;
     int flags;
     double sequence_length;
-    /* Keep a copy of the input nodes to simplify mapping */
+    /* Keep a copy of the input nodes, sites and mutations to simplify mapping */
     node_table_t input_nodes;
     size_t *node_name_offset;
+    site_table_t input_sites;
+    mutation_table_t input_mutations;
     /* Input/output tables. */
     node_table_t *nodes;
     edgeset_table_t *edgesets;
     site_table_t *sites;
     mutation_table_t *mutations;
-    /* Internal state */
+    /* State for topology */
     simplify_segment_t **ancestor_map;
     avl_tree_t overlap_counts;
     avl_tree_t merge_queue;
@@ -672,6 +686,10 @@ typedef struct {
     size_t segment_buffer_size;
     simplify_segment_t **segment_buffer;
     edgeset_t last_edgeset;
+    /* State for sites/mutations */
+    avl_tree_t *mutation_map;
+    site_mutation_t *site_mutation_mem;
+    avl_tree_t output_sites;
 } simplifier_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
