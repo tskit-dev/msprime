@@ -26,6 +26,7 @@ from __future__ import division
 import collections
 import heapq
 import random
+import sys
 import unittest
 
 import msprime
@@ -38,7 +39,14 @@ def setUp():
     random.seed(210)
 
 
+class MsprimeTestCase(unittest.TestCase):
+    """
+    Superclass of all tests msprime simulator test cases.
+    """
+
+
 class PythonSparseTree(object):
+
     """
     Presents the same interface as the SparseTree object for testing. This
     is tightly coupled with the PythonTreeSequence object below which updates
@@ -483,12 +491,8 @@ class Segment(object):
         self.next = next
 
     def __str__(self):
-        for pos in self.mutations.keys():
-            if not (self.left <= pos < self.right):
-                print("ERROR!!")
-        s = "({}-{}->{}:{}:: prev={} next={})".format(
-            self.left, self.right, self.node, self.mutations, repr(self.prev),
-            repr(self.next))
+        s = "({}-{}->{}:{}:: next={})".format(
+            self.left, self.right, self.node, self.mutations, repr(self.next))
         return s
 
     def __lt__(self, other):
@@ -529,6 +533,7 @@ class Simplifier(object):
         self.ts = ts
         self.n = len(sample)
         self.m = ts.sequence_length
+        self.input_sites = list(ts.sites())
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
         # has processed the ancestors, they are are removed from the map.
         self.A = {}
@@ -552,28 +557,19 @@ class Simplifier(object):
         self.S = SortedMap()
         self.S[0] = self.n
         self.S[self.m] = -1
-        # We keep a linked list of mutations for each input node.
-        self.mutation_map = [SortedMap() for _ in range(ts.num_nodes)]
-        for site in self.ts.sites():
-            for mutation in site.mutations:
-                node = mutation.node
-                self.mutation_map[node][site.position] = mutation.derived_state
 
     def get_mutations(self, input_id, left, right):
         """
         Returns all mutations for the specified input ID over the specified
         interval.
         """
-        mutations = self.mutation_map[input_id]
-        ret = SortedMap()
-        pos = mutations.succ_key(left)
-        while pos is not None and pos < right:
-            derived_state = mutations.pop(pos)
-            ret[pos] = derived_state
-            assert left <= pos < right
-            pos = mutations.succ_key(pos)
-        # if len(ret) > 0:
-        #     print("GET_MUTATIONS", input_id, left, right, "::", ret)
+        ret = []
+        for site in self.ts.sites():
+            if left <= site.position < right:
+                for mutation in site.mutations:
+                    if mutation.node == input_id:
+                        ret.append(mutation)
+        # print("GET_MUTATIONS", input_id, left, right, "::", ret)
         return ret
 
     def alloc_segment(self, left, right, node, next=None):
@@ -581,7 +577,7 @@ class Simplifier(object):
         Allocates a new segment with the specified values.
         """
         s = Segment(left, right, node, next)
-        s.mutations = SortedMap()
+        s.mutations = []
         self.num_used_segments += 1
         return s
 
@@ -632,7 +628,8 @@ class Simplifier(object):
         u = segment
         s = ""
         while u is not None:
-            s += "({0}-{1}->{2}:{3})".format(u.left, u.right, u.node, u.mutations)
+            s += "({0}-{1}->{2}:{3})".format(
+                    u.left, u.right, u.node, u.mutations)
             u = u.next
         return s
 
@@ -653,6 +650,11 @@ class Simplifier(object):
         for k in sorted(self.S.keys()):
             x = self.S[k]
             print("\t", k, "\t:\t", x)
+        # print("Mutation map:")
+        # for u in range(len(self.mutation_map)):
+        #     mut_node = self.mutation_map[u]
+        #     if mut_node is not None:
+        #         print("\t", u, "->", self.mutation_chain_str(mut_node))
         # print("Output nodes:")
         # print(self.node_table)
         # print("Output Edgesets: ")
@@ -663,6 +665,7 @@ class Simplifier(object):
 
     def simplify(self):
         # print("START")
+        # self.print_state()
         the_parents = [
             (node.time, input_id) for input_id, node in enumerate(self.ts.nodes())]
         # need to deal with parents in order by birth time-ago
@@ -728,16 +731,16 @@ class Simplifier(object):
             nodes=self.node_table, edgesets=self.edgeset_table,
             sites=self.site_table, mutations=self.mutation_table)
 
-    def record_mutation(self, position, node, derived_state):
-        # print("RECORD MUTATION", position, node, derived_state)
+    def record_mutation(self, node, mutation):
+        position = self.input_sites[mutation.site].position
         if position not in self.output_sites:
             site = msprime.Site(
                 position=position, ancestral_state="0", mutations=[], index=None)
             self.output_sites[position] = site
         else:
             site = self.output_sites[position]
-        site.mutations.append(msprime.Mutation(
-            site=None, node=node, derived_state=derived_state))
+        site.mutations.append(
+            msprime.Mutation(site=None, node=node, derived_state=mutation.derived_state))
 
     def remove_ancestry(self, left, right, input_id, H):
         """
@@ -748,6 +751,7 @@ class Simplifier(object):
         remove from the chain for input_id.
         """
         x = self.A[input_id]
+        # print("REMOVE ANCESTRY:", input_id, left, right)
         head = x
         last = None
         # Skip the leading segments before left.
@@ -763,10 +767,20 @@ class Simplifier(object):
             last = y
             if x == head:
                 head = last
+            mutations = x.mutations
+            # assert len(mutations) == 0
+            y.mutations = [
+                mut for mut in mutations
+                if self.input_sites[mut.site].position < left]
+            x.mutations = [
+                mut for mut in mutations
+                if self.input_sites[mut.site].position >= left]
+
         if x is not None and x.left < right:
             # x is the first segment within the target interval, so add it to the
             # output heapq.
             heapq.heappush(H, (x.left, x))
+            tmp = x
             # Skip over segments strictly within the interval
             while x is not None and x.right <= right:
                 x_prev = x
@@ -777,6 +791,13 @@ class Simplifier(object):
                 y = self.alloc_segment(right, x.right, x.node, x.next)
                 x.right = right
                 x.next = None
+                mutations = x.mutations
+                y.mutations = [
+                    mut for mut in mutations
+                    if self.input_sites[mut.site].position >= right]
+                x.mutations = [
+                    mut for mut in mutations
+                    if self.input_sites[mut.site].position < left]
                 x = y
             elif x_prev is not None:
                 x_prev.next = None
@@ -789,6 +810,21 @@ class Simplifier(object):
             del self.A[input_id]
         else:
             self.A[input_id] = head
+
+        # Add mutations to the segments
+        mutations = self.get_mutations(input_id, left, right)
+        x = head
+        while x is not None:
+            x.mutations.extend([
+                mut for mut in mutations
+                if x.left <= self.input_sites[mut.site].position < x.right])
+            x = x.next
+        x = tmp
+        while x is not None:
+            x.mutations.extend([
+                mut for mut in mutations
+                if x.left <= self.input_sites[mut.site].position < x.right])
+            x = x.next
 
     def merge_labeled_ancestors(self, H, input_id):
         '''
@@ -854,11 +890,12 @@ class Simplifier(object):
                 children = []
                 for x in X:
                     # Record and remove mutations for the coalescing segment
-                    pos = x.mutations.succ_key(-1)
-                    while pos is not None and pos < r:
-                        derived_state = x.mutations.pop(pos)
-                        self.record_mutation(pos, x.node, derived_state)
-                        pos = x.mutations.succ_key(pos)
+                    for mut in x.mutations:
+                        if self.input_sites[mut.site].position < r:
+                            self.record_mutation(x.node, mut)
+                    x.mutations = [
+                        mut for mut in x.mutations
+                        if self.input_sites[mut.site].position >= r]
                     children.append(x.node)
                     if x.right == r:
                         self.free_segment(x)
@@ -878,24 +915,31 @@ class Simplifier(object):
                     self.A[input_id] = alpha
                 else:
                     z.next = alpha
-                alpha.prev = z
                 z = alpha
 
     def check_state(self):
         # print("CHECK_STATE")
         # self.print_state()
-        for x in self.A.values():
+        for input_id, x in self.A.items():
             while x is not None:
                 assert x.left < x.right
-                for mut in x.mutations.items():
-                    pos = mut[0]
+                for mut in x.mutations:
+                    pos = self.input_sites[mut.site].position
                     assert x.left <= pos < x.right
                 if x.next is not None:
                     assert x.right <= x.next.left
                 x = x.next
 
 
-class MsprimeTestCase(unittest.TestCase):
-    """
-    Superclass of all tests msprime simulator test cases.
-    """
+if __name__ == "__main__":
+    # Simple CLI for running simplifier above.
+    ts = msprime.load(sys.argv[1])
+    samples = list(map(int, sys.argv[2:]))
+    s = Simplifier(ts, samples)
+    tss = s.simplify()
+    tables = tss.dump_tables()
+    print("Output:")
+    print(tables.nodes)
+    print(tables.edgesets)
+    print(tables.sites)
+    print(tables.mutations)
