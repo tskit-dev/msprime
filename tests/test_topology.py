@@ -1451,21 +1451,6 @@ class TestWithVisuals(TopologyTestCase):
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
 
-    def test_internal_sampled_node_simple_case(self):
-        # Internal nodes cannot be samples.
-        nodes = six.StringIO("""\
-        id      is_sample   time
-        0       1           0
-        1       1           0.1
-        2       1           0.2
-        """)
-        edgesets = six.StringIO("""\
-        left    right   parent  children
-        0.0     1.0     2       0,1
-        """)
-        self.assertRaises(
-            _msprime.LibraryError, msprime.load_text, nodes=nodes, edgesets=edgesets)
-
     def test_internal_sampled_node(self):
         # 1.0             7
         # 0.7            / \                      8                     6
@@ -1501,5 +1486,25 @@ class TestWithVisuals(TopologyTestCase):
         0.2     0.8     8       3,5
         0.0     0.2     7       0,5
         """)
-        self.assertRaises(
-            _msprime.LibraryError, msprime.load_text, nodes=nodes, edgesets=edgesets)
+        ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        true_trees = [
+            {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6: -1, 7: -1},
+            {0: 4, 1: 5, 2: 4, 3: 8, 4: 5, 5: 8, 6: -1, 7: -1},
+            {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: -1, 7: -1}]
+        self.assertEqual(ts.sample_size, 4)
+        self.assertEqual(ts.num_trees, 3)
+        self.assertEqual(ts.num_nodes, 9)
+        self.assertEqual(ts.time(0), 0.0)
+        self.assertEqual(ts.time(1), 0.1)
+        self.assertEqual(ts.time(2), 0.1)
+        self.assertEqual(ts.time(3), 0.2)
+        # check topologies agree:
+        tree_dicts = [t.parent_dict for t in ts.trees()]
+        for a, t in zip(true_trees, tree_dicts):
+            for k in a.keys():
+                if k in t.keys():
+                    self.assertEqual(t[k], a[k])
+                else:
+                    self.assertEqual(a[k], msprime.NULL_NODE)
+        # check .simplify() works here
+        self.verify_simplify_topology(ts, [1, 2, 3])

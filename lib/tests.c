@@ -173,6 +173,37 @@ const char *unary_ex_mutations =
     "1    6   1\n"
     "2    5   1\n";
 
+/* An example of a tree sequence with internally sampled nodes. */
+
+const char *internal_sample_ex_nodes =
+    "1  0.0   0\n"
+    "1  0.1   0\n"
+    "1  0.1   0\n"
+    "1  0.2   0\n"
+    "0  0.4   0\n"
+    "1  0.5   0\n"
+    "0  0.7   0\n"
+    "0  1.0   0\n"
+    "0  1.2   0\n";
+const char *internal_sample_ex_edgesets =
+    "0 2  4 2,3\n"
+    "2 8  4 0,2\n"
+    "8 10 4 2,3\n"
+    "0 10 5 1,4\n"
+    "8 10 6 0,5\n"
+    "0 2  7 0,5\n"
+    "2 8  8 3,5\n";
+/* We make one mutation for each tree, some above the internal node */
+const char *internal_sample_ex_sites =
+    "1.0    0\n"
+    "4.5    0\n"
+    "8.5    0\n";
+const char *internal_sample_ex_mutations =
+    "0    2   1\n"
+    "1    5   1\n"
+    "2    5   1\n";
+
+
 /* Simple utilities to parse text so we can write declaritive
  * tests. This is not intended as a robust general input mechanism.
  */
@@ -3081,16 +3112,6 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     node_table.flags[0] = 1;
 
-    /* internal node sampled */
-    node_table.flags[2] = 1;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
-       NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_SAMPLE_INTERNAL);
-    tree_sequence_free(&ts);
-    node_table.flags[2] = 0;
-
     /* Make sure we've preserved a good tree sequence */
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4359,6 +4380,24 @@ test_unary_tree_sequence_iter(void)
     tree_sequence_free(&ts);
 }
 
+
+static void
+test_internal_sample_tree_sequence_iter(void)
+{
+    node_id_t parents[] = {
+        7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+        4, 5, 4, 8, 5, 8, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+        6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+    };
+    tree_sequence_t ts;
+    uint32_t num_trees = 3;
+
+    tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edgesets, NULL,
+            internal_sample_ex_sites, internal_sample_ex_mutations, NULL);
+    verify_trees(&ts, num_trees, parents);
+    tree_sequence_free(&ts);
+}
+
 static void
 test_nonbinary_tree_sequence_iter(void)
 {
@@ -5056,9 +5095,7 @@ verify_tree_diffs(tree_sequence_t *ts)
             num_in += record->num_children - 1;
             record = record->next;
         }
-        if (first_tree) {
-            CU_ASSERT_EQUAL(num_in, tree_sequence_get_sample_size(ts) - 1);
-        } else {
+        if (!first_tree) {
             CU_ASSERT_EQUAL(num_in, num_out);
         }
         /* Now check against the sparse tree iterator. */
@@ -5131,6 +5168,20 @@ test_unary_tree_sequence_diff_iter(void)
     tree_sequence_t ts;
 
     tree_sequence_from_text(&ts, unary_ex_nodes, unary_ex_edgesets, NULL,
+            NULL, NULL, NULL);
+    verify_tree_diffs(&ts);
+
+    ret = tree_sequence_free(&ts);
+    CU_ASSERT_EQUAL(ret, 0);
+}
+
+static void
+test_internal_sample_tree_sequence_diff_iter(void)
+{
+    int ret;
+    tree_sequence_t ts;
+
+    tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edgesets, NULL,
             NULL, NULL, NULL);
     verify_tree_diffs(&ts);
 
@@ -6688,6 +6739,7 @@ main(int argc, char **argv)
         {"test_nonbinary_leaf_sets", test_nonbinary_leaf_sets},
         {"test_nonbinary_tree_sequence_iter", test_nonbinary_tree_sequence_iter},
         {"test_unary_tree_sequence_iter", test_unary_tree_sequence_iter},
+        {"test_internal_sample_tree_sequence_iter", test_internal_sample_tree_sequence_iter},
         {"test_left_to_right_tree_sequence_iter", test_left_to_right_tree_sequence_iter},
         {"test_tree_sequence_bad_records", test_tree_sequence_bad_records},
         {"test_tree_sequence_diff_iter", test_tree_sequence_diff_iter},
@@ -6695,6 +6747,8 @@ main(int argc, char **argv)
             test_nonbinary_tree_sequence_diff_iter},
         {"test_unary_tree_sequence_diff_iter",
             test_unary_tree_sequence_diff_iter},
+        {"test_internal_sample_tree_sequence_diff_iter",
+            test_internal_sample_tree_sequence_diff_iter},
         {"test_diff_iter_from_examples", test_diff_iter_from_examples},
         {"test_tree_iter_from_examples", test_tree_iter_from_examples},
         {"test_tree_equals_from_examples", test_tree_equals_from_examples},

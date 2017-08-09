@@ -768,7 +768,6 @@ static int
 tree_sequence_init_edgesets(tree_sequence_t *self)
 {
     int ret = 0;
-    node_id_t u;
     size_t j, offset;
 
     offset = 0;
@@ -781,12 +780,6 @@ tree_sequence_init_edgesets(tree_sequence_t *self)
         }
         self->edgesets.children[j] = self->edgesets.children_mem + offset;
         offset += (size_t) self->edgesets.children_length[j];
-        /* Check that no sampled nodes are internal. */
-        u = self->edgesets.parent[j];
-        if (u >= 0 && self->nodes.flags[u] & MSP_NODE_IS_SAMPLE) {
-            ret = MSP_ERR_NODE_SAMPLE_INTERNAL;
-            goto out;
-        }
     }
 out:
     return ret;
@@ -3641,7 +3634,6 @@ sparse_tree_check_state(sparse_tree_t *self)
     for (j = 0; j < self->sample_size; j++) {
         u = self->samples[j];
         assert(self->time[u] >= 0.0);
-        assert(self->num_children[u] == 0);
         while (self->parent[u] != MSP_NULL_NODE) {
             v = self->parent[u];
             found = 0;
