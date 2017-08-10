@@ -2703,6 +2703,7 @@ test_simplest_multiple_root_records(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&simplified), 1);
+    tree_sequence_free(&simplified);
     tree_sequence_free(&ts);
 }
 

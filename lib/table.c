@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2016 University of Oxford
+** Copyright (C) 2015-2017 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -1439,6 +1439,7 @@ simplifier_print_state(simplifier_t *self)
         }
         printf("\n");
     }
+    simplifier_check_state(self);
 }
 
 static simplify_segment_t * WARN_UNUSED
@@ -1504,6 +1505,12 @@ simplifier_alloc_overlap_count(simplifier_t *self)
     ret = (overlap_count_t *) object_heap_alloc_object(&self->overlap_count_heap);
 out:
     return ret;
+}
+
+static inline void
+simplifier_free_overlap_count(simplifier_t *self, overlap_count_t *node)
+{
+    object_heap_free_object(&self->overlap_count_heap, node);
 }
 
 /*
@@ -1893,6 +1900,81 @@ out:
     return ret;
 }
 
+static int
+simplifier_compress_overlap_counts(simplifier_t *self, double l, double r)
+{
+    int ret = 0;
+    avl_node_t *node1, *node2;
+    overlap_count_t search, *nm1, *nm2;
+    int freed = 0;
+
+    search.start = l;
+    node1 = avl_search(&self->overlap_counts, &search);
+    assert(node1 != NULL);
+    if (node1->prev != NULL) {
+        node1 = node1->prev;
+    }
+    node2 = node1->next;
+    do {
+        nm1 = (overlap_count_t *) node1->item;
+        nm2 = (overlap_count_t *) node2->item;
+        if (nm1->count == nm2->count) {
+            avl_unlink_node(&self->overlap_counts, node2);
+            simplifier_free_avl_node(self, node2);
+            simplifier_free_overlap_count(self, nm2);
+            node2 = node1->next;
+            freed++;
+        } else {
+            node1 = node2;
+            node2 = node2->next;
+        }
+    } while (node2 != NULL && nm2->start <= r);
+    return ret;
+}
+
+static int WARN_UNUSED
+simplifier_conditional_compress_overlap_counts(simplifier_t *self, double l, double r)
+{
+    int ret = 0;
+    double covered_fraction = (r - l) / self->sequence_length;
+
+    /* This is a heuristic to prevent us spending a lot of time pointlessly
+     * trying to defragment during the early stages of the simulation.
+     * 5% of the overall length seems like a good value and leads to
+     * a ~15% time reduction when doing large simulations.
+     */
+    if (covered_fraction < 0.05) {
+        ret = simplifier_compress_overlap_counts(self, l, r);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+simplifier_defrag_segment_chain(simplifier_t *self, node_id_t input_id)
+{
+    simplify_segment_t *x_prev, *x;
+
+    x_prev = self->ancestor_map[input_id];
+    assert(x_prev != NULL);
+    x = x_prev->next;
+    while (x != NULL) {
+        if (x_prev->right == x->left && x_prev->node == x->node) {
+            x_prev->right = x->right;
+            x_prev->next = x->next;
+            simplifier_free_segment(self, x);
+            x = x_prev->next;
+        } else {
+            x_prev = x;
+            x = x->next;
+        }
+    }
+    return 0;
+}
+
 static int WARN_UNUSED
 simplifier_priority_queue_insert(simplifier_t *self, avl_tree_t *Q, simplify_segment_t *u)
 {
@@ -2022,9 +2104,9 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
 {
     int ret = MSP_ERR_GENERIC;
     bool coalescence = 0;
-    /* bool defrag_required = 0; */
+    bool defrag_required = 0;
     node_id_t v, *children;
-    double l, r, r_max, next_l;
+    double l, r, r_max, next_l, l_min;
     uint32_t j, h;
     avl_node_t *node;
     overlap_count_t *nm, search;
@@ -2037,7 +2119,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    /* l_min = 0; */
+    l_min = 0;
     z = NULL;
     while (avl_count(Q) > 0) {
         h = 0;
@@ -2081,7 +2163,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         } else {
             if (!coalescence) {
                 coalescence = 1;
-                /* l_min = l; */
+                l_min = l;
                 ret = simplifier_record_node(self, input_id);
                 if (ret != 0) {
                     goto out;
@@ -2164,18 +2246,15 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             if (z == NULL) {
                 self->ancestor_map[input_id] = alpha;
             } else {
-                /* defrag_required |= */
-                /*     z->right == alpha->left && z->value == alpha->value; */
+                defrag_required |=
+                    z->right == alpha->left && z->node == alpha->node;
                 z->next = alpha;
-                /* fenwick_set_value(&self->links, alpha->id, */
-                /*         alpha->right - z->right); */
             }
             z = alpha;
         }
     }
-    /*
     if (defrag_required) {
-        ret = simplifier_defrag_simplify_segment_chain(self, z);
+        ret = simplifier_defrag_segment_chain(self, input_id);
         if (ret != 0) {
             goto out;
         }
@@ -2185,9 +2264,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         if (ret != 0) {
             goto out;
         }
-
     }
-    */
     ret = 0;
 out:
     return ret;
@@ -2278,17 +2355,11 @@ simplifier_run(simplifier_t *self)
             children_offset += children_length;
 
             if (parent != current_parent) {
-                /* printf("FLUSH: %d: %d segments\n", current_parent, */
-                /*         avl_count(&self->merge_queue)); */
-                /* simplifier_print_state(self); */
-                simplifier_check_state(self);
                 ret = simplifier_merge_ancestors(self, current_parent);
                 if (ret != 0) {
                     goto out;
                 }
                 assert(avl_count(&self->merge_queue) == 0);
-                /* printf("Done merge\n"); */
-                /* simplifier_check_state(self); */
                 if (self->input_nodes.time[current_parent]
                         > self->input_nodes.time[parent]) {
                     ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
@@ -2296,32 +2367,25 @@ simplifier_run(simplifier_t *self)
                 }
                 current_parent = parent;
             }
-            /* printf("EDGESET: %d %d: %f-%f %d: %p\n", (int) j, */
-            /*         parent, left, right, children_length, (void *) children); */
             for (k = 0; k < children_length; k++) {
                 if (self->ancestor_map[children[k]] != NULL) {
-                    /* simplifier_print_state(self); */
                     ret = simplifier_record_mutations(self, children[k]);
                     if (ret != 0) {
                         goto out;
                     }
-                    simplifier_check_state(self);
                     ret = simplifier_remove_ancestry(self, left, right, children[k]);
                     if (ret != 0) {
                         goto out;
                     }
-                    simplifier_check_state(self);
-                    /* printf("DONE AFTER REMOVE CHECK\n"); */
                 }
             }
         }
-        /* printf("FLUSH: %d\n", current_parent); */
         ret = simplifier_merge_ancestors(self, current_parent);
         if (ret != 0) {
             goto out;
         }
         assert(avl_count(&self->merge_queue) == 0);
-        simplifier_check_state(self);
+        /* simplifier_check_state(self); */
     }
     /* Flush the last edgeset, if any */
     if (self->last_edgeset.children_length > 0) {
