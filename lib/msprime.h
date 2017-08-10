@@ -645,7 +645,6 @@ typedef struct _simplify_segment_t {
     double right;
     struct _simplify_segment_t *next;
     node_id_t node;
-    avl_tree_t mutations;
 } simplify_segment_t;
 
 typedef struct _site_mutation_t {

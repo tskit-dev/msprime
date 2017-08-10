@@ -1339,9 +1339,8 @@ simplifier_check_state(simplifier_t *self)
     size_t j;
     size_t total_segments = 0;
     size_t total_avl_nodes = 0;
-    avl_node_t *a1, *a2;
+    avl_node_t *a;
     simplify_segment_t *u;
-    site_mutation_t *sm;
 
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         if (self->ancestor_map[j] != NULL) {
@@ -1351,25 +1350,18 @@ simplifier_check_state(simplifier_t *self)
                     assert(u->right <= u->next->left);
                 }
                 total_segments++;
-                total_avl_nodes += avl_count(&u->mutations);
             }
         }
         total_avl_nodes += avl_count(&self->mutation_map[j]);
     }
-    for (a1 = self->merge_queue.head; a1 != NULL; a1 = a1->next) {
+    for (a = self->merge_queue.head; a != NULL; a = a->next) {
         total_avl_nodes++;
-        for (u = (simplify_segment_t *) a1->item; u != NULL; u = u->next) {
+        for (u = (simplify_segment_t *) a->item; u != NULL; u = u->next) {
             assert(u->left < u->right);
             if (u->next != NULL) {
                 assert(u->right <= u->next->left);
             }
             total_segments++;
-            total_avl_nodes += avl_count(&u->mutations);
-            for (a2 = u->mutations.head; a2 != NULL; a2 = a2->next) {
-                sm = (site_mutation_t *) a2->item;
-                assert(sm->position >= u->left);
-                assert(sm->position < u->right);
-            }
         }
     }
     total_avl_nodes += avl_count(&self->overlap_counts);
@@ -1383,16 +1375,9 @@ static void
 print_segment_chain(simplify_segment_t *head)
 {
     simplify_segment_t *u;
-    avl_node_t *avl_node;
-    site_mutation_t *sm;
 
     for (u = head; u != NULL; u = u->next) {
-        printf("(%f,%f->%d[", u->left, u->right, u->node);
-        for (avl_node = u->mutations.head; avl_node != NULL; avl_node = avl_node->next) {
-            sm = (site_mutation_t *) avl_node->item;
-            printf("%f,", sm->position);
-        }
-        printf("])");
+        printf("(%f,%f->%d)", u->left, u->right, u->node);
     }
 }
 
@@ -1479,7 +1464,6 @@ simplifier_alloc_segment(simplifier_t *self, double left, double right, node_id_
     seg->left = left;
     seg->right = right;
     seg->node = node;
-    avl_init_tree(&seg->mutations, cmp_site_mutation, NULL);
 out:
     return seg;
 }
@@ -1487,7 +1471,6 @@ out:
 static inline void
 simplifier_free_segment(simplifier_t *self, simplify_segment_t *seg)
 {
-    assert(avl_count(&seg->mutations) == 0);
     object_heap_free_object(&self->segment_heap, seg);
 }
 
@@ -1932,77 +1915,50 @@ out:
     return ret;
 }
 
-static void
-simplifier_insert_mutations(simplifier_t *self, node_id_t input_id, simplify_segment_t *seg)
+static int
+simplifier_record_mutations(simplifier_t *self, node_id_t input_id)
 {
-    avl_node_t *a1, *a2, *a3;
-    site_mutation_t search, *sm;
+    int ret = 0;
+    simplify_segment_t *seg = self->ancestor_map[input_id];
+    avl_node_t *a, *b, *tmp;
+    site_mutation_t *sm, search;
 
-    /* printf("Inserting mutations for %d into ", input_id); */
-    /* print_segment_chain(seg); */
-    /* printf("\n"); */
-
-    search.position = seg->left;
-    avl_search_closest(&self->mutation_map[input_id], &search, &a1);
-    if (a1 != NULL) {
-        sm = (site_mutation_t *) a1->item;
-        if (sm->position < seg->left) {
-            a1 = a1->next;
+    while (seg != NULL) {
+        search.position = seg->left;
+        avl_search_closest(&self->mutation_map[input_id], &search, &a);
+        if (a == NULL) {
+            /* There are no mutations for this node, so no point in continuing */
+            break;
         }
-        while (a1 != NULL && ((site_mutation_t *) a1->item)->position < seg->right) {
-            sm = (site_mutation_t *) a1->item;
+        sm = (site_mutation_t *) a->item;
+        if (sm->position < seg->left) {
+            a = a->next;
+        }
+        while (a != NULL && ((site_mutation_t *) a->item)->position < seg->right) {
+            sm = (site_mutation_t *) a->item;
+            sm->node = seg->node;
             /* Grab a reference to the next element in this tree so that we can
              * delete this node and add it into the destination tree. */
-            a2 = a1->next;
-            avl_unlink_node(&self->mutation_map[input_id], a1);
-            a3 = avl_search(&seg->mutations, sm);
-            if (a3 == NULL) {
-                a1 = avl_insert_node(&seg->mutations, a1);
-                assert(a1 != NULL);
+            tmp = a->next;
+            avl_unlink_node(&self->mutation_map[input_id], a);
+            search.position = sm->position;
+            b = avl_search(&self->output_sites, &search);
+            if (b == NULL) {
+                /* This site doesn't exist yet, so just insert directly */
+                a = avl_insert_node(&self->output_sites, a);
+                assert(a != NULL);
             } else {
-                /* We have other mutations at this position already. Place the
-                 * current mutation at the head of the chain.*/
-                simplifier_free_avl_node(self, a1);
-                sm->next = (site_mutation_t *) a3->item;
-                a3->item = sm;
+                /* There are already mutations at this site, so append this
+                 * mutation to the head of the list */
+                sm->next = (site_mutation_t *) b->item;
+                b->item = sm;
+                simplifier_free_avl_node(self, a);
             }
-            a1 = a2;
+            a = tmp;
         }
+        seg = seg->next;
     }
-}
-
-static void
-simplifier_move_left_mutations(simplifier_t *self, double x, avl_tree_t *source,
-        avl_tree_t *dest)
-{
-    avl_node_t *a1, *a2;
-
-    /* printf("Moving left_mutations at %f\n", x); */
-    a1 = source->head;
-    while (a1 != NULL && ((site_mutation_t *) a1->item)->position < x) {
-        a2 = a1->next;
-        avl_unlink_node(source, a1);
-        a1 = avl_insert_node(dest, a1);
-        assert(a1 != NULL);
-        a1 = a2;
-    }
-}
-
-static void
-simplifier_move_right_mutations(simplifier_t *self, double x, avl_tree_t *source,
-        avl_tree_t *dest)
-{
-    avl_node_t *a1, *a2;
-
-    /* printf("Moving right_mutations at %f\n", x); */
-    a1 = source->tail;
-    while (a1 != NULL && ((site_mutation_t *) a1->item)->position >= x) {
-        a2 = a1->prev;
-        avl_unlink_node(source, a1);
-        a1 = avl_insert_node(dest, a1);
-        assert(a1 != NULL);
-        a1 = a2;
-    }
+    return ret;
 }
 
 static int
@@ -2013,12 +1969,6 @@ simplifier_remove_ancestry(simplifier_t *self, double left, double right,
     simplify_segment_t *x, *y, *head, *last, *x_prev;
 
     head = self->ancestor_map[input_id];
-    x = head;
-    /* Add mutations for input ID to the segments */
-    while (x != NULL) {
-        simplifier_insert_mutations(self, input_id, x);
-        x = x->next;
-    }
     x = head;
     last = NULL;
     x_prev = NULL;  /* Keep the compiler happy */
@@ -2042,7 +1992,6 @@ simplifier_remove_ancestry(simplifier_t *self, double left, double right,
         if (x == head) {
             head = last;
         }
-        simplifier_move_left_mutations(self, left, &x->mutations, &y->mutations);
     }
     if (x != NULL && x->left < right) {
         /* x is the first segment within the target interval, so add it to the
@@ -2066,7 +2015,6 @@ simplifier_remove_ancestry(simplifier_t *self, double left, double right,
             }
             x->right = right;
             x->next = NULL;
-            simplifier_move_right_mutations(self, right, &x->mutations, &y->mutations);
             x = y;
         } else if (x_prev != NULL) {
             x_prev->next = NULL;
@@ -2079,56 +2027,6 @@ simplifier_remove_ancestry(simplifier_t *self, double left, double right,
         last->next = x;
     }
     self->ancestor_map[input_id] = head;
-out:
-    return ret;
-}
-
-static int WARN_UNUSED
-simplifier_record_mutation(simplifier_t *self, site_mutation_t *sm)
-{
-    int ret = 0;
-    avl_node_t *a;
-    site_mutation_t search;
-
-    search.position = sm->position;
-    a = avl_search(&self->output_sites, &search);
-    if (a == NULL) {
-        a = simplifier_alloc_avl_node(self);
-        if (a == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        avl_init_node(a, sm);
-        a = avl_insert_node(&self->output_sites, a);
-        assert(a != NULL);
-    } else {
-        sm->next = (site_mutation_t *) a->item;
-        a->item = sm;
-    }
-out:
-    return ret;
-}
-
-static int WARN_UNUSED
-simplifier_record_mutations(simplifier_t *self, simplify_segment_t *seg, double right)
-{
-    int ret = 0;
-    avl_node_t *a1, *a2;
-    site_mutation_t *sm;
-
-    a1 = seg->mutations.head;
-    while (a1 != NULL && ((site_mutation_t *) a1->item)->position < right) {
-        sm = (site_mutation_t *) a1->item;
-        sm->node = seg->node;
-        ret = simplifier_record_mutation(self, sm);
-        if (ret != 0) {
-            goto out;
-        }
-        a2 = a1->next;
-        avl_unlink_node(&seg->mutations, a1);
-        simplifier_free_avl_node(self, a1);
-        a1 = a2;
-    }
 out:
     return ret;
 }
@@ -2256,10 +2154,6 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             }
             for (j = 0; j < h; j++) {
                 x = H[j];
-                ret = simplifier_record_mutations(self, x, r);
-                if (ret != 0) {
-                    goto out;
-                }
                 children[j] = x->node;
                 if (x->right == r) {
                     simplifier_free_segment(self, x);
@@ -2380,8 +2274,8 @@ simplifier_run(simplifier_t *self)
             if (parent != current_parent) {
                 /* printf("FLUSH: %d: %d segments\n", current_parent, */
                 /*         avl_count(&self->merge_queue)); */
-                simplifier_check_state(self);
                 /* simplifier_print_state(self); */
+                simplifier_check_state(self);
                 ret = simplifier_merge_ancestors(self, current_parent);
                 if (ret != 0) {
                     goto out;
@@ -2401,6 +2295,10 @@ simplifier_run(simplifier_t *self)
             for (k = 0; k < children_length; k++) {
                 if (self->ancestor_map[children[k]] != NULL) {
                     /* simplifier_print_state(self); */
+                    ret = simplifier_record_mutations(self, children[k]);
+                    if (ret != 0) {
+                        goto out;
+                    }
                     simplifier_check_state(self);
                     ret = simplifier_remove_ancestry(self, left, right, children[k]);
                     if (ret != 0) {
@@ -2409,9 +2307,7 @@ simplifier_run(simplifier_t *self)
                     simplifier_check_state(self);
                     /* printf("DONE AFTER REMOVE CHECK\n"); */
                 }
-
             }
-
         }
         /* printf("FLUSH: %d\n", current_parent); */
         ret = simplifier_merge_ancestors(self, current_parent);

@@ -491,8 +491,8 @@ class Segment(object):
         self.next = next
 
     def __str__(self):
-        s = "({}-{}->{}:{}:: next={})".format(
-            self.left, self.right, self.node, self.mutations, repr(self.next))
+        s = "({}-{}->{}:next={})".format(
+            self.left, self.right, self.node, repr(self.next))
         return s
 
     def __lt__(self, other):
@@ -584,7 +584,6 @@ class Simplifier(object):
         Allocates a new segment with the specified values.
         """
         s = Segment(left, right, node, next)
-        s.mutations = SortedMap()
         self.num_used_segments += 1
         return s
 
@@ -635,8 +634,7 @@ class Simplifier(object):
         u = segment
         s = ""
         while u is not None:
-            s += "({0}-{1}->{2}:{3})".format(
-                    u.left, u.right, u.node, u.mutations)
+            s += "({0}-{1}->{2})".format(u.left, u.right, u.node)
             u = u.next
         return s
 
@@ -759,14 +757,14 @@ class Simplifier(object):
         remove from the chain for input_id.
         """
         head = self.A[input_id]
-        # Add mutations to the segments
+        # Record any mutations we encounter.
         x = head
         while x is not None:
             mutations = self.get_mutations(input_id, x.left, x.right)
             for pos, mut in mutations.items():
-                x.mutations[self.input_sites[mut.site].position] = mut
+                self.record_mutation(x.node, mut)
             x = x.next
-        # print("REMOVE ANCESTRY:", input_id, left, right)
+
         x = head
         last = None
         # Skip the leading segments before left.
@@ -782,12 +780,6 @@ class Simplifier(object):
             last = y
             if x == head:
                 head = last
-            # Remove the mutations in x with pos < left and add to y.
-            pos = x.mutations.succ_key(-1)
-            while pos is not None and pos < left:
-                mut = x.mutations.pop(pos)
-                y.mutations[pos] = mut
-                pos = x.mutations.succ_key(pos)
 
         if x is not None and x.left < right:
             # x is the first segment within the target interval, so add it to the
@@ -803,15 +795,10 @@ class Simplifier(object):
                 y = self.alloc_segment(right, x.right, x.node, x.next)
                 x.right = right
                 x.next = None
-                # Remove the mutations in x with pos >= right and add to y.
-                pos = x.mutations.succ_key(right)
-                while pos is not None:
-                    mut = x.mutations.pop(pos)
-                    y.mutations[pos] = mut
-                    pos = x.mutations.succ_key(pos)
                 x = y
             elif x_prev is not None:
                 x_prev.next = None
+
         # x is the first segment in the new chain starting after right.
         if last is None:
             head = x
@@ -885,12 +872,6 @@ class Simplifier(object):
                 # Update the heaps and make the record.
                 children = []
                 for x in X:
-                    # Record and remove mutations for the coalescing segment
-                    pos = x.mutations.succ_key(-1)
-                    while pos is not None and pos < r:
-                        mut = x.mutations.pop(pos)
-                        self.record_mutation(x.node, mut)
-                        pos = x.mutations.succ_key(pos)
                     children.append(x.node)
                     if x.right == r:
                         self.free_segment(x)
@@ -918,9 +899,6 @@ class Simplifier(object):
         for input_id, x in self.A.items():
             while x is not None:
                 assert x.left < x.right
-                for pos, mut in x.mutations.items():
-                    assert pos == self.input_sites[mut.site].position
-                    assert x.left <= pos < x.right
                 if x.next is not None:
                     assert x.right <= x.next.left
                 x = x.next
@@ -931,6 +909,7 @@ if __name__ == "__main__":
     ts = msprime.load(sys.argv[1])
     samples = list(map(int, sys.argv[2:]))
     s = Simplifier(ts, samples)
+    s.print_state()
     tss = s.simplify()
     tables = tss.dump_tables()
     print("Output:")
