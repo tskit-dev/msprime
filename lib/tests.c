@@ -4537,7 +4537,6 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests, leaf_count_test_t *tes
         /* all operations depending on tracked leaves should fail. */
         ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves);
         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-        /* Getting leaf lists should still fail, as it's not enabled. */
         ret = sparse_tree_get_leaf_list(&tree, tests[j].node, &head, &tail);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         u = head;
@@ -4910,6 +4909,25 @@ test_nonbinary_leaf_sets(void)
 
     tree_sequence_free(&ts);
 }
+
+static void
+test_internal_sample_leaf_sets(void)
+{
+    leaf_count_test_t tests[] = {
+        {0, 0, 1}, {0, 5, 4}, {0, 4, 2}, {0, 7, 5},
+        {1, 4, 2}, {1, 5, 4}, {1, 8, 5}, 
+        {2, 5, 4}, {2, 6, 5}};
+    uint32_t num_tests = 9;
+    tree_sequence_t ts;
+
+    tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edgesets, 
+            NULL, NULL, NULL, NULL);
+    verify_leaf_counts(&ts, num_tests, tests);
+    verify_leaf_sets(&ts);
+
+    tree_sequence_free(&ts);
+}
+
 
 static void
 test_tree_sequence_bad_records(void)
@@ -6737,6 +6755,7 @@ main(int argc, char **argv)
         {"test_tree_sequence_iter", test_tree_sequence_iter},
         {"test_leaf_sets", test_leaf_sets},
         {"test_nonbinary_leaf_sets", test_nonbinary_leaf_sets},
+        {"test_internal_sample_leaf_sets", test_internal_sample_leaf_sets},
         {"test_nonbinary_tree_sequence_iter", test_nonbinary_tree_sequence_iter},
         {"test_unary_tree_sequence_iter", test_unary_tree_sequence_iter},
         {"test_internal_sample_tree_sequence_iter", test_internal_sample_tree_sequence_iter},

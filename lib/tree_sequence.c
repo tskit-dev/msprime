@@ -3786,8 +3786,12 @@ sparse_tree_update_leaf_lists(sparse_tree_t *self, node_id_t node)
 
     u = node;
     while (u != MSP_NULL_NODE) {
-        head[u] = NULL;
-        tail[u] = NULL;
+        if (self->tree_sequence->nodes.flags[u] & MSP_NODE_IS_SAMPLE) {
+            tail[u] = head[u];
+        } else {
+            head[u] = NULL;
+            tail[u] = NULL;
+        }
         for (c = 0; c < self->num_children[u]; c++) {
             v = self->children[u][c];
             if (head[v] != NULL) {
