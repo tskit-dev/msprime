@@ -136,9 +136,6 @@ msp_strerror(int err)
         case MSP_ERR_INSUFFICIENT_SAMPLES:
             ret = "At least two samples needed.";
             break;
-        case MSP_ERR_NODE_SAMPLE_INTERNAL:
-            ret = "Cannot sample internal nodes.";
-            break;
         case MSP_ERR_BAD_EDGESET:
             ret = "Bad edgeset in file.";
         case MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO:

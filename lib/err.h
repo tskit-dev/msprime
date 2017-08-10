@@ -90,6 +90,5 @@
 #define MSP_ERR_BAD_SITE_POSITION                                   -60
 #define MSP_ERR_UNSORTED_MUTATIONS                                  -61
 #define MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT                -62
-#define MSP_ERR_NODE_SAMPLE_INTERNAL                                -63
 
 #endif /*__ERR_H__*/
