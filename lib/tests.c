@@ -4915,12 +4915,12 @@ test_internal_sample_leaf_sets(void)
 {
     leaf_count_test_t tests[] = {
         {0, 0, 1}, {0, 5, 4}, {0, 4, 2}, {0, 7, 5},
-        {1, 4, 2}, {1, 5, 4}, {1, 8, 5}, 
+        {1, 4, 2}, {1, 5, 4}, {1, 8, 5},
         {2, 5, 4}, {2, 6, 5}};
     uint32_t num_tests = 9;
     tree_sequence_t ts;
 
-    tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edgesets, 
+    tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edgesets,
             NULL, NULL, NULL, NULL);
     verify_leaf_counts(&ts, num_tests, tests);
     verify_leaf_sets(&ts);

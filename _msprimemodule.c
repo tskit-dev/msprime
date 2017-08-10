@@ -3964,7 +3964,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     TreeSequence *tree_sequence = NULL;
     node_id_t *tracked_leaves = NULL;
     int flags = 0;
-    uint32_t j, n, num_tracked_leaves;
+    uint32_t j, num_tracked_leaves, num_nodes;
     PyObject *item;
 
     self->sparse_tree = NULL;
@@ -3978,7 +3978,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
         goto out;
     }
-    n = tree_sequence_get_sample_size(tree_sequence->tree_sequence);
+	num_nodes = tree_sequence_get_num_nodes(tree_sequence->tree_sequence);
     num_tracked_leaves = 0;
     if (py_tracked_leaves != NULL) {
         if (!flags & MSP_LEAF_COUNTS) {
@@ -4000,8 +4000,8 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         tracked_leaves[j] = (node_id_t) PyLong_AsLong(item);
-        if (tracked_leaves[j] >= n) {
-            PyErr_SetString(PyExc_ValueError, "leaves must be < sample_size");
+        if (tracked_leaves[j] >= num_nodes) {
+            PyErr_SetString(PyExc_ValueError, "leaves must be valid nodes");
             goto out;
         }
     }

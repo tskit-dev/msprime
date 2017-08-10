@@ -2653,7 +2653,7 @@ class TestSparseTree(LowLevelTestCase):
             self.assertRaises(
                 TypeError, _msprime.SparseTree, ts, flags=flags,
                 tracked_leaves=[1, bad_type])
-        for bad_leaf in [ts.get_sample_size(), 10**6, -1e6]:
+        for bad_leaf in [10**6, -1e6]:
             self.assertRaises(
                 ValueError, _msprime.SparseTree, ts, flags=flags,
                 tracked_leaves=[bad_leaf])
