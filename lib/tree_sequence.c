@@ -2422,7 +2422,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
      * sequence.
      */
     ret = simplifier_alloc(simplifier, nodes, edgesets, NULL, sites, mutations,
-            samples, num_samples, self->sequence_length, flags);
+            samples, num_samples, flags);
     if (ret != 0) {
         goto out;
     }

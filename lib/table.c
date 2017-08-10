@@ -1678,10 +1678,6 @@ simplifier_init_sites(simplifier_t *self)
         sm->derived_state_length = self->mutations->derived_state_length[j];
         offset += sm->derived_state_length;
         site = self->mutations->site[j];
-        if (site < 0 || site > (site_id_t) self->num_input_sites) {
-            ret = MSP_ERR_OUT_OF_BOUNDS;
-            goto out;
-        }
         sm->site_id = site;
         sm->position = self->sites->position[site];
         avl_node = simplifier_alloc_avl_node(self);
@@ -1693,7 +1689,6 @@ simplifier_init_sites(simplifier_t *self)
         avl_node = avl_insert_node(self->mutation_map + self->mutations->node[j], avl_node);
         assert(avl_node != NULL);
     }
-
     /* Reset the input tables ready for output */
     ret = site_table_reset(self->sites);
     if (ret != 0) {
@@ -1707,12 +1702,85 @@ out:
     return ret;
 }
 
+static int
+simplifier_check_input(simplifier_t *self)
+{
+    int ret = MSP_ERR_GENERIC;
+    node_id_t num_nodes = (node_id_t) self->nodes->num_rows;
+    site_id_t num_sites = (site_id_t) self->sites->num_rows;
+    double *time = self->nodes->time;
+    char *node_seen = NULL;
+    node_id_t last_parent, parent;
+    size_t j;
+
+    node_seen = calloc((size_t) num_nodes, sizeof(char));
+    /* Check the edgesets */
+    last_parent = self->edgesets->parent[0];
+    for (j = 0; j < self->edgesets->num_rows; j++) {
+        if (self->edgesets->left[j] >= self->edgesets->right[j]) {
+            ret = MSP_ERR_BAD_RECORD_INTERVAL;
+            goto out;
+        }
+        parent = self->edgesets->parent[j];
+        if (parent < 0 || parent >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (parent != last_parent) {
+            node_seen[last_parent] = 1;
+            if (node_seen[parent] != 0) {
+                /* TODO should be more specific; this is the case where nodes with
+                 * equal time are sorted, but the nodes are not contiguous */
+                ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
+                goto out;
+            }
+            if (time[last_parent] > time[parent]) {
+                ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
+                goto out;
+            }
+            last_parent = parent;
+        }
+    }
+    for (j = 0; j < self->edgesets->total_children_length; j++) {
+        if (self->edgesets->children[j] < 0 || self->edgesets->children[j] >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+    }
+    /* Check the samples */
+    for (j = 0; j < self->num_samples; j++) {
+        if (self->samples[j] < 0 || self->samples[j] >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (!(self->nodes->flags[self->samples[j]] & MSP_NODE_IS_SAMPLE)) {
+            ret = MSP_ERR_BAD_SAMPLES;
+            goto out;
+        }
+
+    }
+    /* Check the mutations */
+    for (j = 0; j < self->mutations->num_rows; j++) {
+        if (self->mutations->site[j] < 0 || self->mutations->site[j] >= num_sites) {
+            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (self->mutations->node[j] < 0 || self->mutations->node[j] >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    msp_safe_free(node_seen);
+    return ret;
+}
+
 int
 simplifier_alloc(simplifier_t *self,
         node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations,
-        node_id_t *samples, size_t num_samples,
-        double sequence_length, int flags)
+        node_id_t *samples, size_t num_samples, int flags)
 {
     int ret = 0;
     size_t j, offset;
@@ -1722,15 +1790,25 @@ simplifier_alloc(simplifier_t *self,
     self->samples = samples;
     self->num_samples = num_samples;
     self->flags = flags;
-    self->sequence_length = sequence_length;
     self->nodes = nodes;
     self->edgesets = edgesets;
     self->sites = sites;
     self->mutations = mutations;
+    self->sequence_length = 0;
 
     if (num_samples < 2 || nodes->num_rows == 0 || edgesets->num_rows == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
+    }
+    /* TODO we can add a flag to skip these checks for when we know they are
+     * unnecessary */
+    ret = simplifier_check_input(self);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Compute the sequence length */
+    for (j = 0; j < edgesets->num_rows; j++) {
+        self->sequence_length = GSL_MAX(edgesets->right[j], self->sequence_length);
     }
     /* Make a copy of the input nodes and clear the table ready for output */
     ret = node_table_alloc(&self->input_nodes, nodes->num_rows,
@@ -1785,14 +1863,6 @@ simplifier_alloc(simplifier_t *self,
     self->nodes->num_rows = 0;
     for (j = 0; j < self->num_samples; j++) {
         input_node = samples[j];
-        if (input_node < 0 || input_node >= (node_id_t) self->input_nodes.num_rows) {
-            ret = MSP_ERR_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (!(self->input_nodes.flags[input_node] & MSP_NODE_IS_SAMPLE)) {
-            ret = MSP_ERR_BAD_SAMPLES;
-            goto out;
-        }
         if (self->ancestor_map[samples[j]] != NULL) {
             ret = MSP_ERR_DUPLICATE_SAMPLE;
             goto out;
@@ -2361,11 +2431,6 @@ simplifier_run(simplifier_t *self)
                     goto out;
                 }
                 assert(avl_count(&self->merge_queue) == 0);
-                if (self->input_nodes.time[current_parent]
-                        > self->input_nodes.time[parent]) {
-                    ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
-                    goto out;
-                }
                 current_parent = parent;
             }
             for (k = 0; k < children_length; k++) {
