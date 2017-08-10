@@ -3978,7 +3978,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(tree_sequence) != 0) {
         goto out;
     }
-	num_nodes = tree_sequence_get_num_nodes(tree_sequence->tree_sequence);
+    num_nodes = tree_sequence_get_num_nodes(tree_sequence->tree_sequence);
     num_tracked_leaves = 0;
     if (py_tracked_leaves != NULL) {
         if (!flags & MSP_LEAF_COUNTS) {

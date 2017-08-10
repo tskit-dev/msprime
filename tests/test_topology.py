@@ -109,7 +109,7 @@ class TopologyTestCase(unittest.TestCase):
     def check_num_leaves(self, ts, x):
         """
         Compare against x, a list of tuples of the form
-            (tree number, parent, number of leaves)
+        `(tree number, parent, number of leaves)`.
         """
         k = 0
         tss = ts.trees(leaf_counts=True)
@@ -124,18 +124,16 @@ class TopologyTestCase(unittest.TestCase):
         k = 0
         tss = ts.trees(leaf_counts=True, tracked_leaves=tracked_leaves)
         t = next(tss)
-        print(tracked_leaves)
         for j, node, nl in x:
             while k < j:
                 t = next(tss)
                 k += 1
-            print(j, node, nl, t.num_tracked_leaves(node))
             self.assertEqual(nl, t.num_tracked_leaves(node))
 
     def check_leaf_iterator(self, ts, x):
         """
         Compare against x, a list of tuples of the form
-            (tree number, node, leaf ID list)
+        `(tree number, node, leaf ID list)`.
         """
         k = 0
         tss = ts.trees(leaf_lists=True)
@@ -145,7 +143,6 @@ class TopologyTestCase(unittest.TestCase):
                 t = next(tss)
                 k += 1
             for u, v in zip(leaves, t.leaves(node)):
-                print(u, v)
                 self.assertEqual(u, v)
 
 
@@ -1570,7 +1567,6 @@ class TestWithVisuals(TopologyTestCase):
         self.assertEqual(t.is_leaf(0), True)
         self.assertEqual(t.is_internal(1), False)
         self.assertEqual(t.is_leaf(1), True)
-        # this may NOT be what we want?
         self.assertEqual(t.is_internal(5), True)
         self.assertEqual(t.is_leaf(5), False)
         self.assertEqual(t.is_internal(4), True)
