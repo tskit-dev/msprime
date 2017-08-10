@@ -1371,73 +1371,73 @@ simplifier_check_state(simplifier_t *self)
 }
 
 static void
-print_segment_chain(simplify_segment_t *head)
+print_segment_chain(simplify_segment_t *head, FILE *out)
 {
     simplify_segment_t *u;
 
     for (u = head; u != NULL; u = u->next) {
-        printf("(%f,%f->%d)", u->left, u->right, u->node);
+        fprintf(out, "(%f,%f->%d)", u->left, u->right, u->node);
     }
 }
 
 void
-simplifier_print_state(simplifier_t *self)
+simplifier_print_state(simplifier_t *self, FILE *out)
 {
     size_t j;
     avl_node_t *avl_node;
     simplify_segment_t *u;
     simplify_mutation_t *sm;
 
-    printf("--simplifier state--\n");
-    printf("===\nInput nodes\n==\n");
-    node_table_print_state(&self->input_nodes, stdout);
-    printf("===\nOutput tables\n==\n");
-    node_table_print_state(self->nodes, stdout);
-    edgeset_table_print_state(self->edgesets, stdout);
-    site_table_print_state(self->sites, stdout);
-    mutation_table_print_state(self->mutations, stdout);
-    printf("===\nmemory heaps\n==\n");
-    printf("segment_heap:\n");
-    object_heap_print_state(&self->segment_heap, stdout);
-    printf("avl_node_heap:\n");
-    object_heap_print_state(&self->avl_node_heap, stdout);
-    printf("overlap_count_heap:\n");
-    object_heap_print_state(&self->overlap_count_heap, stdout);
-    printf("===\nancestors\n==\n");
+    fprintf(out, "--simplifier state--\n");
+    fprintf(out, "===\nInput nodes\n==\n");
+    node_table_print_state(&self->input_nodes, out);
+    fprintf(out, "===\nOutput tables\n==\n");
+    node_table_print_state(self->nodes, out);
+    edgeset_table_print_state(self->edgesets, out);
+    site_table_print_state(self->sites, out);
+    mutation_table_print_state(self->mutations, out);
+    fprintf(out, "===\nmemory heaps\n==\n");
+    fprintf(out, "segment_heap:\n");
+    object_heap_print_state(&self->segment_heap, out);
+    fprintf(out, "avl_node_heap:\n");
+    object_heap_print_state(&self->avl_node_heap, out);
+    fprintf(out, "overlap_count_heap:\n");
+    object_heap_print_state(&self->overlap_count_heap, out);
+    fprintf(out, "===\nancestors\n==\n");
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         if (self->ancestor_map[j] != NULL) {
-            printf("%d:\t", (int) j);
-            print_segment_chain(self->ancestor_map[j]);
-            printf("\n");
+            fprintf(out, "%d:\t", (int) j);
+            print_segment_chain(self->ancestor_map[j], out);
+            fprintf(out, "\n");
         }
     }
-    printf("===\nmerge queue\n==\n");
+    fprintf(out, "===\nmerge queue\n==\n");
     for (avl_node = self->merge_queue.head; avl_node != NULL; avl_node = avl_node->next) {
         u = (simplify_segment_t *) avl_node->item;
-        print_segment_chain(u);
-        printf("\n");
+        print_segment_chain(u, out);
+        fprintf(out, "\n");
     }
-    printf("===\nmutation map\n==\n");
+    fprintf(out, "===\nmutation map\n==\n");
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         if (avl_count(&self->mutation_map[j]) > 0) {
-            printf("%d:\t", (int) j);
+            fprintf(out, "%d:\t", (int) j);
             for (avl_node = self->mutation_map[j].head;
                     avl_node != NULL; avl_node = avl_node->next) {
                 sm = (simplify_mutation_t *) avl_node->item;
-                printf("%f,", sm->position);
+                fprintf(out, "%f,", sm->position);
             }
-            printf("\n");
+            fprintf(out, "\n");
         }
     }
-    printf("===\nOutput sites\n==\n");
+    fprintf(out, "===\nOutput sites\n==\n");
     for (j = 0; j < self->num_input_sites; j++) {
-        printf("%d: %f:\t", (int) j, self->output_sites[j].position);
+        fprintf(out, "%d: %f:\t", (int) j, self->output_sites[j].position);
         sm = self->output_sites[j].mutations;
         while (sm != NULL) {
-            printf("(%f, %d)", sm->position, sm->node);
+            fprintf(out, "(%f, %d)", sm->position, sm->node);
             sm = sm->next;
         }
-        printf("\n");
+        fprintf(out, "\n");
     }
     simplifier_check_state(self);
 }
@@ -1686,6 +1686,7 @@ simplifier_init_sites(simplifier_t *self)
         sm->position = self->sites->position[site];
         avl_node = simplifier_alloc_avl_node(self);
         if (avl_node == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
         avl_init_node(avl_node, sm);

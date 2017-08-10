@@ -983,7 +983,7 @@ int simplifier_alloc(simplifier_t *self,
         node_id_t *samples, size_t num_samples, double sequence_length, int flags);
 int simplifier_free(simplifier_t *self);
 int simplifier_run(simplifier_t *self);
-void simplifier_print_state(simplifier_t *self);
+void simplifier_print_state(simplifier_t *self, FILE *out);
 
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
