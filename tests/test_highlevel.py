@@ -1076,7 +1076,6 @@ class TestTreeSequence(HighLevelTestCase):
                     self.verify_simplify_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
-    @unittest.skip("Recurrent/back mutations simplify")
     def test_simplify_bugs(self):
         prefix = "tests/data/simplify-bugs/"
         j = 1

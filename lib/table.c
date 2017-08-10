@@ -1326,9 +1326,9 @@ cmp_segment_queue(const void *a, const void *b) {
 }
 
 static int
-cmp_site_mutation(const void *a, const void *b) {
-    const site_mutation_t *ia = (const site_mutation_t *) a;
-    const site_mutation_t *ib = (const site_mutation_t *) b;
+cmp_simplify_mutation(const void *a, const void *b) {
+    const simplify_mutation_t *ia = (const simplify_mutation_t *) a;
+    const simplify_mutation_t *ib = (const simplify_mutation_t *) b;
     int ret = (ia->position > ib->position) - (ia->position < ib->position);
     return ret;
 }
@@ -1365,7 +1365,6 @@ simplifier_check_state(simplifier_t *self)
         }
     }
     total_avl_nodes += avl_count(&self->overlap_counts);
-    total_avl_nodes += avl_count(&self->output_sites);
 
     assert(total_segments == object_heap_get_num_allocated(&self->segment_heap));
     assert(total_avl_nodes == object_heap_get_num_allocated(&self->avl_node_heap));
@@ -1387,15 +1386,11 @@ simplifier_print_state(simplifier_t *self)
     size_t j;
     avl_node_t *avl_node;
     simplify_segment_t *u;
-    site_mutation_t *sm;
+    simplify_mutation_t *sm;
 
     printf("--simplifier state--\n");
     printf("===\nInput nodes\n==\n");
     node_table_print_state(&self->input_nodes, stdout);
-    printf("===\nInput sites\n==\n");
-    site_table_print_state(&self->input_sites, stdout);
-    printf("===\nInput mutations\n==\n");
-    mutation_table_print_state(&self->input_mutations, stdout);
     printf("===\nOutput tables\n==\n");
     node_table_print_state(self->nodes, stdout);
     edgeset_table_print_state(self->edgesets, stdout);
@@ -1428,15 +1423,16 @@ simplifier_print_state(simplifier_t *self)
             printf("%d:\t", (int) j);
             for (avl_node = self->mutation_map[j].head;
                     avl_node != NULL; avl_node = avl_node->next) {
-                sm = (site_mutation_t *) avl_node->item;
+                sm = (simplify_mutation_t *) avl_node->item;
                 printf("%f,", sm->position);
             }
             printf("\n");
         }
     }
     printf("===\nOutput sites\n==\n");
-    for (avl_node = self->output_sites.head; avl_node != NULL; avl_node = avl_node->next) {
-        sm = (site_mutation_t *) avl_node->item;
+    for (j = 0; j < self->num_input_sites; j++) {
+        printf("%d: %f:\t", (int) j, self->output_sites[j].position);
+        sm = self->output_sites[j].mutations;
         while (sm != NULL) {
             printf("(%f, %d)", sm->position, sm->node);
             sm = sm->next;
@@ -1559,7 +1555,7 @@ simplifier_copy_overlap_count(simplifier_t *self, double x)
 }
 
 /* Add a new node to the output node table corresponding to the specified input id */
-static int
+static int WARN_UNUSED
 simplifier_record_node(simplifier_t *self, node_id_t input_id)
 {
     int ret = 0;
@@ -1626,6 +1622,83 @@ out:
     return ret;
 }
 
+static int
+simplifier_init_sites(simplifier_t *self)
+{
+    int ret = 0;
+    size_t j, offset;
+    site_id_t site;
+    simplify_mutation_t *sm;
+    avl_node_t *avl_node;
+
+    /* Set up the mutation mappings */
+    self->num_input_sites = self->sites->num_rows;
+    self->mutation_map = malloc(self->input_nodes.num_rows * sizeof(avl_tree_t));
+    self->mutation_mem = calloc(self->mutations->num_rows, sizeof(simplify_mutation_t));
+    self->output_sites = calloc(self->sites->num_rows, sizeof(simplify_site_t));
+    self->ancestral_state_mem = malloc(self->sites->total_ancestral_state_length
+            * sizeof(char));
+    self->derived_state_mem = malloc(self->mutations->total_derived_state_length
+            * sizeof(char));
+
+    if (self->mutation_map == NULL || self->mutation_mem == NULL
+            || self->output_sites == NULL || self->ancestral_state_mem == NULL
+            || self->derived_state_mem == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memcpy(self->ancestral_state_mem, self->sites->ancestral_state,
+            self->sites->total_ancestral_state_length * sizeof(char));
+    memcpy(self->derived_state_mem, self->mutations->derived_state,
+            self->mutations->total_derived_state_length * sizeof(char));
+
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        avl_init_tree(self->mutation_map + j, cmp_simplify_mutation, NULL);
+    }
+    offset = 0;
+    for (j = 0; j < self->num_input_sites; j++) {
+        self->output_sites[j].position = self->sites->position[j];
+        self->output_sites[j].ancestral_state_length =
+            self->sites->ancestral_state_length[j];
+        self->output_sites[j].ancestral_state = self->ancestral_state_mem + offset;
+        offset += self->output_sites[j].ancestral_state_length;
+        self->output_sites[j].mutations = NULL;
+    }
+    offset = 0;
+    for (j = 0; j < self->mutations->num_rows; j++) {
+        sm = self->mutation_mem + j;
+        sm->derived_state = self->derived_state_mem + offset;
+        sm->derived_state_length = self->mutations->derived_state_length[j];
+        offset += sm->derived_state_length;
+        site = self->mutations->site[j];
+        if (site < 0 || site > (site_id_t) self->num_input_sites) {
+            ret = MSP_ERR_OUT_OF_BOUNDS;
+            goto out;
+        }
+        sm->site_id = site;
+        sm->position = self->sites->position[site];
+        avl_node = simplifier_alloc_avl_node(self);
+        if (avl_node == NULL) {
+            goto out;
+        }
+        avl_init_node(avl_node, sm);
+        avl_node = avl_insert_node(self->mutation_map + self->mutations->node[j], avl_node);
+        assert(avl_node != NULL);
+    }
+
+    /* Reset the input tables ready for output */
+    ret = site_table_reset(self->sites);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_reset(self->mutations);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
 int
 simplifier_alloc(simplifier_t *self,
         node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
@@ -1634,13 +1707,8 @@ simplifier_alloc(simplifier_t *self,
         double sequence_length, int flags)
 {
     int ret = 0;
-    size_t j, offset, derived_state_offset;
-    size_t *ancestral_state_offset = NULL;
+    size_t j, offset;
     node_id_t input_node;
-    site_mutation_t *sm;
-    site_id_t site;
-    avl_node_t *avl_node;
-
 
     memset(self, 0, sizeof(simplifier_t));
     self->samples = samples;
@@ -1727,7 +1795,10 @@ simplifier_alloc(simplifier_t *self,
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        simplifier_record_node(self, input_node);
+        ret = simplifier_record_node(self, input_node);
+        if (ret != 0) {
+            goto out;
+        }
     }
     avl_init_tree(&self->overlap_counts, cmp_overlap_count, NULL);
     avl_init_tree(&self->merge_queue, cmp_segment_queue, NULL);
@@ -1753,83 +1824,8 @@ simplifier_alloc(simplifier_t *self,
     if (ret != 0) {
         goto out;
     }
-
-    /* Make a copy of the sites and mutaiton tables and clear. */
-    ret = site_table_alloc(&self->input_sites, sites->num_rows + 1,
-            sites->total_ancestral_state_length + 1);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = site_table_set_columns(&self->input_sites, sites->num_rows,
-            sites->position, sites->ancestral_state, sites->ancestral_state_length);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = site_table_reset(self->sites);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutation_table_alloc(&self->input_mutations, mutations->num_rows + 1,
-            mutations->total_derived_state_length + 1);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutation_table_set_columns(&self->input_mutations, mutations->num_rows,
-            mutations->site, mutations->node, mutations->derived_state,
-            mutations->derived_state_length);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutation_table_reset(self->mutations);
-    if (ret != 0) {
-        goto out;
-    }
-
-    /* Set up the mutation mappings */
-    self->mutation_map = malloc(self->input_nodes.num_rows * sizeof(avl_tree_t));
-    self->site_mutation_mem = calloc(self->input_mutations.num_rows,
-            sizeof(site_mutation_t));
-    ancestral_state_offset = malloc(self->input_sites.num_rows * sizeof(size_t));
-    if (self->mutation_map == NULL || self->site_mutation_mem == NULL
-            || ancestral_state_offset == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
-        avl_init_tree(self->mutation_map + j, cmp_site_mutation, NULL);
-    }
-    offset = 0;
-    for (j = 0; j < self->input_sites.num_rows; j++) {
-        ancestral_state_offset[j] = offset;
-        offset += self->sites->ancestral_state_length[j];
-    }
-    derived_state_offset = 0;
-    for (j = 0; j < self->input_mutations.num_rows; j++) {
-        sm = self->site_mutation_mem + j;
-        sm->derived_state = self->input_mutations.derived_state + derived_state_offset;
-        sm->derived_state_length = self->input_mutations.derived_state_length[j];
-        derived_state_offset += sm->derived_state_length;
-        site = self->input_mutations.site[j];
-        if (site < 0 || site > (site_id_t) self->input_sites.num_rows) {
-            ret = MSP_ERR_OUT_OF_BOUNDS;
-            goto out;
-        }
-        sm->position = self->input_sites.position[site];
-        sm->ancestral_state = self->input_sites.ancestral_state
-            + ancestral_state_offset[site];
-        sm->ancestral_state_length = self->input_sites.ancestral_state_length[site];
-        avl_node = simplifier_alloc_avl_node(self);
-        if (avl_node == NULL) {
-            goto out;
-        }
-        avl_init_node(avl_node, sm);
-        avl_node = avl_insert_node(self->mutation_map + self->mutations->node[j], avl_node);
-        assert(avl_node != NULL);
-    }
-    avl_init_tree(&self->output_sites, cmp_site_mutation, NULL);
-
+    ret = simplifier_init_sites(self);
 out:
-    msp_safe_free(ancestral_state_offset);
     return ret;
 }
 
@@ -1837,8 +1833,6 @@ int
 simplifier_free(simplifier_t *self)
 {
     node_table_free(&self->input_nodes);
-    site_table_free(&self->input_sites);
-    mutation_table_free(&self->input_mutations);
     object_heap_free(&self->segment_heap);
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->overlap_count_heap);
@@ -1848,7 +1842,10 @@ simplifier_free(simplifier_t *self)
     msp_safe_free(self->last_edgeset.children);
     msp_safe_free(self->segment_buffer);
     msp_safe_free(self->mutation_map);
-    msp_safe_free(self->site_mutation_mem);
+    msp_safe_free(self->mutation_mem);
+    msp_safe_free(self->output_sites);
+    msp_safe_free(self->ancestral_state_mem);
+    msp_safe_free(self->derived_state_mem);
     return 0;
 }
 
@@ -1920,8 +1917,8 @@ simplifier_record_mutations(simplifier_t *self, node_id_t input_id)
 {
     int ret = 0;
     simplify_segment_t *seg = self->ancestor_map[input_id];
-    avl_node_t *a, *b, *tmp;
-    site_mutation_t *sm, search;
+    avl_node_t *a, *tmp;
+    simplify_mutation_t *sm, search;
 
     while (seg != NULL) {
         search.position = seg->left;
@@ -1930,30 +1927,19 @@ simplifier_record_mutations(simplifier_t *self, node_id_t input_id)
             /* There are no mutations for this node, so no point in continuing */
             break;
         }
-        sm = (site_mutation_t *) a->item;
+        sm = (simplify_mutation_t *) a->item;
         if (sm->position < seg->left) {
             a = a->next;
         }
-        while (a != NULL && ((site_mutation_t *) a->item)->position < seg->right) {
-            sm = (site_mutation_t *) a->item;
+        while (a != NULL && ((simplify_mutation_t *) a->item)->position < seg->right) {
+            sm = (simplify_mutation_t *) a->item;
             sm->node = seg->node;
-            /* Grab a reference to the next element in this tree so that we can
-             * delete this node and add it into the destination tree. */
+            sm->next = self->output_sites[sm->site_id].mutations;
+            self->output_sites[sm->site_id].mutations = sm;
+            /* Remove this node from the AVL tree and move on to the next */
             tmp = a->next;
             avl_unlink_node(&self->mutation_map[input_id], a);
-            search.position = sm->position;
-            b = avl_search(&self->output_sites, &search);
-            if (b == NULL) {
-                /* This site doesn't exist yet, so just insert directly */
-                a = avl_insert_node(&self->output_sites, a);
-                assert(a != NULL);
-            } else {
-                /* There are already mutations at this site, so append this
-                 * mutation to the head of the list */
-                sm->next = (site_mutation_t *) b->item;
-                b->item = sm;
-                simplifier_free_avl_node(self, a);
-            }
+            simplifier_free_avl_node(self, a);
             a = tmp;
         }
         seg = seg->next;
@@ -2212,26 +2198,46 @@ static int WARN_UNUSED
 simplifier_output_sites(simplifier_t *self)
 {
     int ret = 0;
-    avl_node_t *a;
-    site_mutation_t *sm;
-    site_id_t site = 0;
+    simplify_mutation_t *mut;
+    site_id_t output_site_id = 0;
+    simplify_site_t *site;
+    char *ancestral_state;
+    list_len_t ancestral_state_length;
+    bool write_site;
+    size_t j;
 
-    for (a = self->output_sites.head; a != NULL; a = a->next) {
-        sm = (site_mutation_t *) a->item;
-        ret = site_table_add_row(self->sites, sm->position, sm->ancestral_state,
-                sm->ancestral_state_length);
-        if (ret != 0) {
-            goto out;
+    for (j = 0; j < self->num_input_sites; j++) {
+        site = &self->output_sites[j];
+        mut = site->mutations;
+        ancestral_state = site->ancestral_state;
+        ancestral_state_length = site->ancestral_state_length;
+        write_site = true;
+        if (mut != NULL) {
+            if (mut->derived_state[0] == '0') {
+                /* FIXME!! This is a hack that will only work for binary mutations */
+                ancestral_state[0] = '1';
+                assert(ancestral_state_length == 1);
+            }
+            while (mut != NULL) {
+                ret = mutation_table_add_row(self->mutations, output_site_id, mut->node,
+                        mut->derived_state, mut->derived_state_length);
+                if (ret != 0) {
+                    goto out;
+                }
+                mut = mut->next;
+            }
+        } else {
+            write_site = !(self->flags & MSP_FILTER_INVARIANT_SITES);
         }
-        while (sm != NULL) {
-            ret = mutation_table_add_row(self->mutations, site, sm->node,
-                    sm->derived_state, sm->derived_state_length);
+        if (write_site) {
+            ret = site_table_add_row(self->sites, site->position, ancestral_state,
+                    ancestral_state_length);
             if (ret != 0) {
                 goto out;
             }
-            sm = sm->next;
+            output_site_id++;
+            assert(output_site_id == (site_id_t) self->sites->num_rows);
         }
-        site++;
     }
 out:
     return ret;
@@ -2317,20 +2323,21 @@ simplifier_run(simplifier_t *self)
         assert(avl_count(&self->merge_queue) == 0);
         simplifier_check_state(self);
     }
-    /* Flush the last edgeset */
-    ret = edgeset_table_add_row(self->edgesets,
-            self->last_edgeset.left,
-            self->last_edgeset.right,
-            self->last_edgeset.parent,
-            self->last_edgeset.children,
-            self->last_edgeset.children_length);
+    /* Flush the last edgeset, if any */
+    if (self->last_edgeset.children_length > 0) {
+        ret = edgeset_table_add_row(self->edgesets,
+                self->last_edgeset.left,
+                self->last_edgeset.right,
+                self->last_edgeset.parent,
+                self->last_edgeset.children,
+                self->last_edgeset.children_length);
+    }
     if (ret != 0) {
         goto out;
     }
-    ret = simplifier_output_sites(self);
     /* printf("DONE\n"); */
     /* simplifier_print_state(self); */
+    ret = simplifier_output_sites(self);
 out:
-
     return ret;
 }

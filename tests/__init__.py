@@ -670,47 +670,24 @@ class Simplifier(object):
         #     print(site)
 
     def simplify(self):
-        # print("START")
-        # self.print_state()
         the_parents = [
             (node.time, input_id) for input_id, node in enumerate(self.ts.nodes())]
         # need to deal with parents in order by birth time-ago
         the_parents.sort()
         for time, input_id in the_parents:
-            # print()
-            # print("---> doing parent: ", input_id, "at time", time)
-            # self.print_state()
             if len(self.A) == 0:
                 break
             # inefficent way to pull all edges corresponding to a given parent
             edgesets = [x for x in self.ts.edgesets() if x.parent == input_id]
-            # print("edgesets = ", edgesets)
-            if len(edgesets) > 0:
-                # pull out the ancestry segments that will be merged
-                # print("before = ")
+            for edgeset in edgesets:
                 H = []
                 for edgeset in edgesets:
                     for child in edgeset.children:
                         if child in self.A:
                             self.remove_ancestry(edgeset.left, edgeset.right, child, H)
-                self.check_state()
-                # print("---- will merge these segments (H):")
-                # self.print_heaps(H)
-                # print("---- State before merging:")
-                # self.print_state()
+                            self.check_state()
                 self.merge_labeled_ancestors(H, input_id)
-                # print("MERGE DONE")
-                # print("---- merged: ", input_id, "->", parent.index)
-                # self.print_state()
                 self.check_state()
-        # print("------ done!")
-        # self.print_state()
-        extant_segments = 0
-        for x in self.A.values():
-            while x is not None:
-                extant_segments += 1
-                x = x.next
-        # assert self.num_used_segments == extant_segments
 
         # Flush the last edgeset to the table and create the new tree sequence.
         left, right, parent, children = self.last_edgeset
@@ -720,19 +697,18 @@ class Simplifier(object):
         # Add in the sites and mutations.
         for j, position in enumerate(sorted(self.output_sites.keys())):
             site = self.output_sites[position]
+            ancestral_state = site.ancestral_state
+            # Reverse the mutations to get the correct order.
+            site.mutations.reverse()
+            # Hack to get correct ancestral state for binary mutations. In general
+            # we'll need something better.
+            if site.mutations[0].derived_state == '0':
+                ancestral_state = '1'
             self.site_table.add_row(
-                position=site.position, ancestral_state=site.ancestral_state)
-            # Order the mutations within a site by node for compatability with
-            # existing implementation. Since nodes are ordered by time this is
-            # equivalent to sorting by time.
+                position=site.position, ancestral_state=ancestral_state)
             for mutation in site.mutations:
                 self.mutation_table.add_row(
                     site=j, node=mutation.node, derived_state=mutation.derived_state)
-
-#         print(self.node_table)
-#         print(self.edgeset_table)
-#         print(self.site_table)
-#         print(self.mutation_table)
         return msprime.load_tables(
             nodes=self.node_table, edgesets=self.edgeset_table,
             sites=self.site_table, mutations=self.mutation_table)

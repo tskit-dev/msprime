@@ -834,12 +834,17 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts.num_sites, 6)
         self.assertEqual(ts.num_mutations, 6)
         t = next(ts.trees())
-        self.assertEqual(t.num_sites, 6)
+        self.assertEqual(len(list(t.sites())), 6)
         haplotypes = ["101100", "011100", "000011"]
         variants = [b"100", b"010", b"110", b"110", b"001", b"001"]
         self.assertEqual(list(ts.haplotypes()), haplotypes)
         self.assertEqual([v.genotypes for v in ts.variants(as_bytes=True)], variants)
         ts_simplified = ts.simplify(filter_root_mutations=False)
+
+        tables = ts_simplified.dump_tables()
+        print()
+        print(tables.sites)
+        print(tables.mutations)
         self.assertEqual(list(ts_simplified.haplotypes()), haplotypes)
         self.assertEqual(
             [v.genotypes for v in ts_simplified.variants(as_bytes=True)], variants)
@@ -1553,6 +1558,26 @@ class TestPythonSimplifier(unittest.TestCase):
     """
     random_seed = 23
 
+    small_tree_ex_nodes = """\
+    id      is_sample   population      time
+    0       1       0               0.00000000000000
+    1       1       0               0.00000000000000
+    2       1       0               0.00000000000000
+    3       1       0               0.00000000000000
+    4       1       0               0.00000000000000
+    5       0       0               0.14567111023387
+    6       0       0               0.21385545626353
+    7       0       0               0.43508024345063
+    8       0       0               1.60156352971203
+    """
+    small_tree_ex_edgesets = """\
+    id      left            right           parent  children
+    0       0.00000000      1.00000000      5       0,1
+    1       0.00000000      1.00000000      6       2,3
+    2       0.00000000      1.00000000      7       4,5
+    3       0.00000000      1.00000000      8       6,7
+    """
+
     def test_single_tree(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
         ts_single = single_childify(ts)
@@ -1585,26 +1610,9 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(list(tss.records()), list(ts.records()))
 
     def test_small_tree_mutations(self):
-        nodes = six.StringIO("""\
-        id      is_sample   population      time
-        0       1       0               0.00000000000000
-        1       1       0               0.00000000000000
-        2       1       0               0.00000000000000
-        3       1       0               0.00000000000000
-        4       1       0               0.00000000000000
-        5       0       0               0.14567111023387
-        6       0       0               0.21385545626353
-        7       0       0               0.43508024345063
-        8       0       0               1.60156352971203
-        """)
-        edgesets = six.StringIO("""\
-        id      left            right           parent  children
-        0       0.00000000      1.00000000      5       0,1
-        1       0.00000000      1.00000000      6       2,3
-        2       0.00000000      1.00000000      7       4,5
-        3       0.00000000      1.00000000      8       6,7
-        """)
-        ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        ts = msprime.load_text(
+            nodes=six.StringIO(self.small_tree_ex_nodes),
+            edgesets=six.StringIO(self.small_tree_ex_edgesets))
         tables = ts.dump_tables()
         # Add some simple mutations here above the nodes we're keeping.
         tables.sites.add_row(position=0.25, ancestral_state="0")
@@ -1624,3 +1632,60 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(tss.sample_size, 2)
         self.assertEqual(tss.num_mutations, 4)
         self.assertEqual(list(tss.haplotypes()), ["1011", "0100"])
+
+    def test_small_tree_recurrent_mutations(self):
+        ts = msprime.load_text(
+            nodes=six.StringIO(self.small_tree_ex_nodes),
+            edgesets=six.StringIO(self.small_tree_ex_edgesets))
+        tables = ts.dump_tables()
+        # Add recurrent mutation on the root branches
+        tables.sites.add_row(position=0.25, ancestral_state="0")
+        tables.mutations.add_row(site=0, node=6, derived_state="1")
+        tables.mutations.add_row(site=0, node=7, derived_state="1")
+        ts = msprime.load_tables(
+            nodes=tables.nodes, edgesets=tables.edgesets, sites=tables.sites,
+            mutations=tables.mutations)
+        self.assertEqual(ts.num_sites, 1)
+        self.assertEqual(ts.num_mutations, 2)
+        tss = do_simplify(ts, [4, 3])
+        self.assertEqual(tss.sample_size, 2)
+        self.assertEqual(tss.num_sites, 1)
+        self.assertEqual(tss.num_mutations, 2)
+        self.assertEqual(list(tss.haplotypes()), ["1", "1"])
+
+    def best_small_tree_back_mutations(self):
+        ts = msprime.load_text(
+            nodes=six.StringIO(self.small_tree_ex_nodes),
+            edgesets=six.StringIO(self.small_tree_ex_edgesets))
+        tables = ts.dump_tables()
+        # Add a chain of mutations
+        tables.sites.add_row(position=0.25, ancestral_state="0")
+        tables.mutations.add_row(site=0, node=7, derived_state="1")
+        tables.mutations.add_row(site=0, node=5, derived_state="0")
+        tables.mutations.add_row(site=0, node=1, derived_state="1")
+        ts = msprime.load_tables(
+            nodes=tables.nodes, edgesets=tables.edgesets, sites=tables.sites,
+            mutations=tables.mutations)
+        self.assertEqual(ts.num_sites, 1)
+        self.assertEqual(ts.num_mutations, 3)
+        self.assertEqual(list(ts.haplotypes()), ["0", "1", "0", "0", "1"])
+        # First check if we simplify for all leaves and keep original state.
+        tss = do_simplify(ts, [0, 1, 2, 3, 4])
+        self.assertEqual(tss.sample_size, 5)
+        self.assertEqual(tss.num_sites, 1)
+        self.assertEqual(tss.num_mutations, 3)
+        self.assertEqual(list(tss.haplotypes()), ["0", "1", "0", "0", "1"])
+
+        # The ancestral state above 5 should be 0.
+        tss = do_simplify(ts, [0, 1])
+        self.assertEqual(tss.sample_size, 2)
+        self.assertEqual(tss.num_sites, 1)
+        self.assertEqual(tss.num_mutations, 1)
+        self.assertEqual(list(tss.haplotypes()), ["0", "1"])
+
+        # The ancestral state above 7 should be 1.
+        tss = do_simplify(ts, [4, 0, 1])
+        self.assertEqual(tss.sample_size, 3)
+        self.assertEqual(tss.num_sites, 1)
+        self.assertEqual(tss.num_mutations, 2)
+        self.assertEqual(list(tss.haplotypes()), ["1", "0", "1"])

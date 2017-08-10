@@ -2648,7 +2648,13 @@ test_simplest_degenerate_multiple_root_records(void)
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_CANNOT_SIMPLIFY);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
+    /* Because there are zero edgesets, the sequence length is now 0 */
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 0.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 2);
+
+    tree_sequence_free(&simplified);
     tree_sequence_free(&ts);
 }
 
@@ -2680,14 +2686,24 @@ test_simplest_multiple_root_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 4, 0, &simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
-    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 6);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
-
-    tree_sequence_free(&ts);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 6);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&simplified), 1);
     tree_sequence_free(&simplified);
+
+    /* Make one tree degenerate */
+    ret = tree_sequence_initialise(&simplified);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_simplify(&ts, sample_ids, 3, 0, &simplified);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&simplified), 1);
+    tree_sequence_free(&ts);
 }
 
 static void

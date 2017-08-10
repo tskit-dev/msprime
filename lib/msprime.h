@@ -639,7 +639,8 @@ typedef struct {
     uint32_t count;
 } overlap_count_t;
 
-/* For the simplify algorithm, we don't need doubly linked segments */
+/* For the simplify algorithm, we need specialised forms of ancestral
+ * segments, sites and mutations */
 typedef struct _simplify_segment_t {
     double left;
     double right;
@@ -647,27 +648,31 @@ typedef struct _simplify_segment_t {
     node_id_t node;
 } simplify_segment_t;
 
-typedef struct _site_mutation_t {
+typedef struct _simplify_mutation_t {
+    double position;
+    site_id_t site_id;
+    node_id_t node;
+    char *derived_state;
+    list_len_t derived_state_length;
+    struct _simplify_mutation_t *next;
+} simplify_mutation_t;
+
+typedef struct {
     double position;
     char *ancestral_state;
-    char *derived_state;
     list_len_t ancestral_state_length;
-    list_len_t derived_state_length;
-    node_id_t node;
-    /* This is used when we have multiple mutations at a site */
-    struct _site_mutation_t *next;
-} site_mutation_t;
+    simplify_mutation_t *mutations;
+} simplify_site_t;
 
 typedef struct {
     node_id_t *samples;
     size_t num_samples;
     int flags;
     double sequence_length;
-    /* Keep a copy of the input nodes, sites and mutations to simplify mapping */
+    /* Keep a copy of the input nodes simplify mapping */
     node_table_t input_nodes;
     size_t *node_name_offset;
-    site_table_t input_sites;
-    mutation_table_t input_mutations;
+    size_t num_input_sites;
     /* Input/output tables. */
     node_table_t *nodes;
     edgeset_table_t *edgesets;
@@ -687,8 +692,10 @@ typedef struct {
     edgeset_t last_edgeset;
     /* State for sites/mutations */
     avl_tree_t *mutation_map;
-    site_mutation_t *site_mutation_mem;
-    avl_tree_t output_sites;
+    simplify_mutation_t *mutation_mem;
+    simplify_site_t *output_sites;
+    char *ancestral_state_mem;
+    char *derived_state_mem;
 } simplifier_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
