@@ -59,14 +59,14 @@ cmp_node_id_t(const void *a, const void *b) {
 
 
 /* Simple single tree example. */
-const char *single_tree_ex_nodes =
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "0  1   0\n"
-    "0  2   0\n"
-    "0  3   0\n";
+const char *single_tree_ex_nodes =/*          6          */
+    "1  0   0\n"                  /*         / \         */
+    "1  0   0\n"                  /*        /   \        */
+    "1  0   0\n"                  /*       /     \       */
+    "1  0   0\n"                  /*      /       5      */
+    "0  1   0\n"                  /*     4       / \     */
+    "0  2   0\n"                  /*    / \     /   \    */
+    "0  3   0\n";                 /*   0   1   2     3   */
 const char *single_tree_ex_edgesets =
     "0  1   4   0,1\n"
     "0  1   5   2,3\n"

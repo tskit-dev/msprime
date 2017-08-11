@@ -1304,14 +1304,6 @@ out:
  * simplifier
  *************************/
 
-static int
-cmp_overlap_count(const void *a, const void *b) {
-    const overlap_count_t *ia = (const overlap_count_t *) a;
-    const overlap_count_t *ib = (const overlap_count_t *) b;
-    int ret = (ia->start > ib->start) - (ia->start < ib->start);
-    return ret;
-}
-
 /* For the segment priority queue we want to sort on the left
  * coordinate and to break ties we use the node */
 static int
@@ -1343,14 +1335,20 @@ simplifier_check_state(simplifier_t *self)
     simplify_segment_t *u;
 
     for (j = 0; j < self->input_nodes.num_rows; j++) {
-        if (self->ancestor_map[j] != NULL) {
-            for (u = self->ancestor_map[j]; u != NULL; u = u->next) {
-                assert(u->left < u->right);
-                if (u->next != NULL) {
-                    assert(u->right <= u->next->left);
-                }
-                total_segments++;
+        for (u = self->ancestor_map[j]; u != NULL; u = u->next) {
+            assert(u->left < u->right);
+            if (u->next != NULL) {
+                assert(u->right <= u->next->left);
             }
+            total_segments++;
+        }
+        for (u = self->root_map[j]; u != NULL; u = u->next) {
+            assert(u->left < u->right);
+            if (u->next != NULL) {
+                assert(u->right <= u->next->left);
+                assert(u->node == (node_id_t) j);
+            }
+            total_segments++;
         }
         total_avl_nodes += avl_count(&self->mutation_map[j]);
     }
@@ -1364,8 +1362,6 @@ simplifier_check_state(simplifier_t *self)
             total_segments++;
         }
     }
-    total_avl_nodes += avl_count(&self->overlap_counts);
-
     assert(total_segments == object_heap_get_num_allocated(&self->segment_heap));
     assert(total_avl_nodes == object_heap_get_num_allocated(&self->avl_node_heap));
 }
@@ -1401,13 +1397,19 @@ simplifier_print_state(simplifier_t *self, FILE *out)
     object_heap_print_state(&self->segment_heap, out);
     fprintf(out, "avl_node_heap:\n");
     object_heap_print_state(&self->avl_node_heap, out);
-    fprintf(out, "overlap_count_heap:\n");
-    object_heap_print_state(&self->overlap_count_heap, out);
     fprintf(out, "===\nancestors\n==\n");
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         if (self->ancestor_map[j] != NULL) {
             fprintf(out, "%d:\t", (int) j);
             print_segment_chain(self->ancestor_map[j], out);
+            fprintf(out, "\n");
+        }
+    }
+    fprintf(out, "===\nroots\n==\n");
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        if (self->root_map[j] != NULL) {
+            fprintf(out, "%d:\t", (int) j);
+            print_segment_chain(self->root_map[j], out);
             fprintf(out, "\n");
         }
     }
@@ -1490,75 +1492,6 @@ static inline void
 simplifier_free_avl_node(simplifier_t *self, avl_node_t *node)
 {
     object_heap_free_object(&self->avl_node_heap, node);
-}
-
-static inline overlap_count_t *
-simplifier_alloc_overlap_count(simplifier_t *self)
-{
-    overlap_count_t *ret = NULL;
-
-    if (object_heap_empty(&self->overlap_count_heap)) {
-        if (object_heap_expand(&self->overlap_count_heap) != 0) {
-            goto out;
-        }
-    }
-    ret = (overlap_count_t *) object_heap_alloc_object(&self->overlap_count_heap);
-out:
-    return ret;
-}
-
-static inline void
-simplifier_free_overlap_count(simplifier_t *self, overlap_count_t *node)
-{
-    object_heap_free_object(&self->overlap_count_heap, node);
-}
-
-/*
- * Inserts a new overlap_count at the specified position, mapping to the
- * specified number of overlapping segments v.
- */
-static int WARN_UNUSED
-simplifier_insert_overlap_count(simplifier_t *self, double x, uint32_t v)
-{
-    int ret = 0;
-    avl_node_t *node = simplifier_alloc_avl_node(self);
-    overlap_count_t *m = simplifier_alloc_overlap_count(self);
-
-    if (node == NULL || m == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    m->start = x;
-    m->count = v;
-    avl_init_node(node, m);
-    node = avl_insert_node(&self->overlap_counts, node);
-    assert(node != NULL);
-out:
-    return ret;
-}
-
-/*
- * Inserts a new overlap_count at the specified position, and copies its
- * count from the containing overlap count.
- */
-static int WARN_UNUSED
-simplifier_copy_overlap_count(simplifier_t *self, double x)
-{
-    int ret;
-    overlap_count_t search, *nm;
-    avl_node_t *node;
-
-    search.start = x;
-    avl_search_closest(&self->overlap_counts, &search, &node);
-    assert(node != NULL);
-    nm = (overlap_count_t *) node->item;
-    if (nm->start > x) {
-        node = node->prev;
-        assert(node != NULL);
-        nm = (overlap_count_t *) node->item;
-    }
-    ret = simplifier_insert_overlap_count(self, x, nm->count);
-    return ret;
 }
 
 /* Add a new node to the output node table corresponding to the specified input id */
@@ -1848,15 +1781,10 @@ simplifier_alloc(simplifier_t *self,
     if (ret != 0) {
         goto out;
     }
-    ret = object_heap_init(&self->overlap_count_heap, sizeof(overlap_count_t),
-            edgesets->num_rows, NULL);
-    if (ret != 0) {
-        goto out;
-    }
     /* Make the maps and set the intial state */
-    self->ancestor_map = calloc(self->input_nodes.num_rows,
-            sizeof(simplify_segment_t *));
-    if (self->ancestor_map == NULL) {
+    self->ancestor_map = calloc(self->input_nodes.num_rows, sizeof(simplify_segment_t *));
+    self->root_map = calloc(self->input_nodes.num_rows, sizeof(simplify_segment_t *));
+    if (self->ancestor_map == NULL || self->root_map == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -1878,7 +1806,6 @@ simplifier_alloc(simplifier_t *self,
             goto out;
         }
     }
-    avl_init_tree(&self->overlap_counts, cmp_overlap_count, NULL);
     avl_init_tree(&self->merge_queue, cmp_segment_queue, NULL);
 
     /* Allocate the children and segment buffers */
@@ -1892,16 +1819,6 @@ simplifier_alloc(simplifier_t *self,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    /* Set the initial overlap counts */
-    ret = simplifier_insert_overlap_count(self, 0, (uint32_t) num_samples);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = simplifier_insert_overlap_count(self, self->sequence_length,
-            (uint32_t) num_samples + 1);
-    if (ret != 0) {
-        goto out;
-    }
     ret = simplifier_init_sites(self);
 out:
     return ret;
@@ -1913,9 +1830,9 @@ simplifier_free(simplifier_t *self)
     node_table_free(&self->input_nodes);
     object_heap_free(&self->segment_heap);
     object_heap_free(&self->avl_node_heap);
-    object_heap_free(&self->overlap_count_heap);
     msp_safe_free(self->node_name_offset);
     msp_safe_free(self->ancestor_map);
+    msp_safe_free(self->root_map);
     msp_safe_free(self->children_buffer);
     msp_safe_free(self->last_edgeset.children);
     msp_safe_free(self->segment_buffer);
@@ -1967,59 +1884,6 @@ simplifier_get_segment_buffer(simplifier_t *self, size_t size)
         }
     }
     ret = self->segment_buffer;
-out:
-    return ret;
-}
-
-static int
-simplifier_compress_overlap_counts(simplifier_t *self, double l, double r)
-{
-    int ret = 0;
-    avl_node_t *node1, *node2;
-    overlap_count_t search, *nm1, *nm2;
-    int freed = 0;
-
-    search.start = l;
-    node1 = avl_search(&self->overlap_counts, &search);
-    assert(node1 != NULL);
-    if (node1->prev != NULL) {
-        node1 = node1->prev;
-    }
-    node2 = node1->next;
-    do {
-        nm1 = (overlap_count_t *) node1->item;
-        nm2 = (overlap_count_t *) node2->item;
-        if (nm1->count == nm2->count) {
-            avl_unlink_node(&self->overlap_counts, node2);
-            simplifier_free_avl_node(self, node2);
-            simplifier_free_overlap_count(self, nm2);
-            node2 = node1->next;
-            freed++;
-        } else {
-            node1 = node2;
-            node2 = node2->next;
-        }
-    } while (node2 != NULL && nm2->start <= r);
-    return ret;
-}
-
-static int WARN_UNUSED
-simplifier_conditional_compress_overlap_counts(simplifier_t *self, double l, double r)
-{
-    int ret = 0;
-    double covered_fraction = (r - l) / self->sequence_length;
-
-    /* This is a heuristic to prevent us spending a lot of time pointlessly
-     * trying to defragment during the early stages of the simulation.
-     * 5% of the overall length seems like a good value and leads to
-     * a ~15% time reduction when doing large simulations.
-     */
-    if (covered_fraction < 0.05) {
-        ret = simplifier_compress_overlap_counts(self, l, r);
-        if (ret != 0) {
-            goto out;
-        }
-    }
 out:
     return ret;
 }
@@ -2174,13 +2038,12 @@ static int WARN_UNUSED
 simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
 {
     int ret = MSP_ERR_GENERIC;
-    bool coalescence = 0;
+    bool coalescence = false;
     bool defrag_required = 0;
     node_id_t v, *children;
-    double l, r, r_max, next_l, l_min;
+    double l, r, next_l;
     uint32_t j, h;
     avl_node_t *node;
-    overlap_count_t *nm, search;
     simplify_segment_t *x, *z, *alpha;
     simplify_segment_t **H = NULL;
     avl_tree_t *Q = &self->merge_queue;
@@ -2190,16 +2053,15 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    l_min = 0;
     z = NULL;
     while (avl_count(Q) > 0) {
         h = 0;
         node = Q->head;
         l = ((simplify_segment_t *) node->item)->left;
-        r_max = self->sequence_length;
+        r = self->sequence_length;
         while (node != NULL && ((simplify_segment_t *) node->item)->left == l) {
             H[h] = (simplify_segment_t *) node->item;
-            r_max = GSL_MIN(r_max, H[h]->right);
+            r = GSL_MIN(r, H[h]->right);
             h++;
             simplifier_free_avl_node(self, node);
             avl_unlink_node(Q, node);
@@ -2208,9 +2070,8 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         next_l = 0;
         if (node != NULL) {
             next_l = ((simplify_segment_t *) node->item)->left;
-            r_max = GSL_MIN(r_max, next_l);
+            r = GSL_MIN(r, next_l);
         }
-        alpha = NULL;
         if (h == 1) {
             x = H[0];
             if (node != NULL && next_l < x->right) {
@@ -2233,57 +2094,17 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             }
         } else {
             if (!coalescence) {
-                coalescence = 1;
-                l_min = l;
+                coalescence = true;
                 ret = simplifier_record_node(self, input_id);
                 if (ret != 0) {
                     goto out;
                 }
             }
             v = (node_id_t) self->nodes->num_rows - 1;
-            /* Insert overlap counts for bounds, if necessary */
-            search.start = l;
-            node = avl_search(&self->overlap_counts, &search);
-            if (node == NULL) {
-                ret = simplifier_copy_overlap_count(self, l);
-                if (ret < 0) {
-                    goto out;
-                }
-            }
-            search.start = r_max;
-            node = avl_search(&self->overlap_counts, &search);
-            if (node == NULL) {
-                ret = simplifier_copy_overlap_count(self, r_max);
-                if (ret < 0) {
-                    goto out;
-                }
-            }
-            /* Update the extant segments and allocate alpha if the interval
-             * has not coalesced. */
-            search.start = l;
-            node = avl_search(&self->overlap_counts, &search);
-            assert(node != NULL);
-            nm = (overlap_count_t *) node->item;
-            if (nm->count == h) {
-                nm->count = 0;
-                node = node->next;
-                assert(node != NULL);
-                nm = (overlap_count_t *) node->item;
-                r = nm->start;
-            } else {
-                r = l;
-                while (nm->count != h && r < r_max) {
-                    nm->count -= h - 1;
-                    node = node->next;
-                    assert(node != NULL);
-                    nm = (overlap_count_t *) node->item;
-                    r = nm->start;
-                }
-                alpha = simplifier_alloc_segment(self, l, r, v, NULL);
-                if (alpha == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
+            alpha = simplifier_alloc_segment(self, l, r, v, NULL);
+            if (alpha == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
             }
             /* Create the record and update the priority queue */
             children = simplifier_get_children_buffer(self, h);
@@ -2313,25 +2134,17 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             }
         }
         /* Loop tail; integrate alpha into the global state */
-        if (alpha != NULL) {
-            if (z == NULL) {
-                self->ancestor_map[input_id] = alpha;
-            } else {
-                defrag_required |=
-                    z->right == alpha->left && z->node == alpha->node;
-                z->next = alpha;
-            }
-            z = alpha;
+        assert(alpha != NULL);
+        if (z == NULL) {
+            self->ancestor_map[input_id] = alpha;
+        } else {
+            defrag_required |= z->right == alpha->left && z->node == alpha->node;
+            z->next = alpha;
         }
+        z = alpha;
     }
     if (defrag_required) {
         ret = simplifier_defrag_segment_chain(self, input_id);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    if (coalescence) {
-        ret = simplifier_conditional_compress_overlap_counts(self, l_min, r_max);
         if (ret != 0) {
             goto out;
         }
@@ -2341,6 +2154,78 @@ out:
     return ret;
 }
 
+/* After we have completed processing all the edgesets, the remaining segments
+ * in the ancestor map will point to roots in the trees of the intervals in
+ * question. Go through the ancestor map, and build a map of the these nodes to
+ * the intervals that they cover. Since we are now finished with the ancestor
+ * map, we reuse the memory to build this new map.
+ *
+ * TODO if we keep this data structure and approach, then we should do segment
+ * squashing in the algorithm below. There will be adjacent segments that
+ * can be merged, and removing these will be significant later when we
+ * are searching through the root mutations.
+ *
+ * However, it seems likely that a more sophisticated approach might be needed
+ * here.
+ */
+static int WARN_UNUSED
+simplifier_build_root_map(simplifier_t *self)
+{
+    node_id_t root;
+    simplify_segment_t *x, *y, *y_prev, *x_next;
+    size_t j;
+
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        x = self->ancestor_map[j];
+        self->ancestor_map[j] = NULL;
+        while (x != NULL) {
+            x_next = x->next;
+            root = x->node;
+            /* Insert x into the chain for root */
+            x->next = NULL;
+            y = self->root_map[root];
+            if (y == NULL) {
+                self->root_map[root] = x;
+            } else {
+                y_prev = NULL;
+                while (y != NULL && y->right <= x->left) {
+                    assert(y->node == root);
+                    y_prev = y;
+                    y = y->next;
+                }
+                if (y_prev == NULL) {
+                    /* We are splicing into the first element of the chain */
+                    self->root_map[root] = x;
+                } else {
+                    /* Insert x into the middle of the chain */
+                    assert(y_prev->right <= x->left);
+                    y_prev->next = x;
+                }
+                x->next = y;
+            }
+            x = x_next;
+        }
+    }
+    return 0;
+}
+
+/* Returns true if the specified node is a root at the specified position.
+ * Note: simplifier_build_root_map must be called before this function will
+ * work.
+ */
+static bool
+simplifier_node_is_root(simplifier_t *self, node_id_t node, double position)
+{
+    bool ret = false;
+    simplify_segment_t *x;
+
+    x = self->root_map[node];
+    while (x != NULL && !ret) {
+        ret = x->left <= position && position < x->right;
+        x = x->next;
+    }
+    return ret;
+}
 
 static int WARN_UNUSED
 simplifier_output_sites(simplifier_t *self)
@@ -2351,33 +2236,41 @@ simplifier_output_sites(simplifier_t *self)
     simplify_site_t *site;
     char *ancestral_state;
     list_len_t ancestral_state_length;
-    bool write_site;
+    size_t written_mutations;
     size_t j;
+    bool write_invariant_sites = !(self->flags & MSP_FILTER_INVARIANT_SITES);
 
+    ret = simplifier_build_root_map(self);
+    if (ret != 0) {
+        goto out;
+    }
     for (j = 0; j < self->num_input_sites; j++) {
         site = &self->output_sites[j];
         mut = site->mutations;
         ancestral_state = site->ancestral_state;
         ancestral_state_length = site->ancestral_state_length;
-        write_site = true;
+        written_mutations = 0;
         if (mut != NULL) {
-            if (mut->derived_state[0] == '0') {
-                /* FIXME!! This is a hack that will only work for binary mutations */
-                ancestral_state[0] = '1';
-                assert(ancestral_state_length == 1);
-            }
             while (mut != NULL) {
-                ret = mutation_table_add_row(self->mutations, output_site_id, mut->node,
-                        mut->derived_state, mut->derived_state_length);
-                if (ret != 0) {
-                    goto out;
+                if (!simplifier_node_is_root(self, mut->node, site->position)) {
+                    ret = mutation_table_add_row(self->mutations, output_site_id, mut->node,
+                            mut->derived_state, mut->derived_state_length);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                    written_mutations++;
+                }
+                if (mut->derived_state[0] == '0') {
+                    /* FIXME!! This is a hack that will only work for binary mutations */
+                    /* Probably this won't work for alternating mutations down the tree
+                     * either */
+                    ancestral_state[0] = '1';
+                    assert(ancestral_state_length == 1);
                 }
                 mut = mut->next;
             }
-        } else {
-            write_site = !(self->flags & MSP_FILTER_INVARIANT_SITES);
         }
-        if (write_site) {
+        if (written_mutations > 0 || write_invariant_sites) {
             ret = site_table_add_row(self->sites, site->position, ancestral_state,
                     ancestral_state_length);
             if (ret != 0) {
@@ -2466,7 +2359,7 @@ simplifier_run(simplifier_t *self)
         goto out;
     }
     /* printf("DONE\n"); */
-    /* simplifier_print_state(self); */
+    /* simplifier_print_state(self, stdout); */
     ret = simplifier_output_sites(self);
 out:
     return ret;

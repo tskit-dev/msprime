@@ -1063,6 +1063,7 @@ class TestTreeSequence(HighLevelTestCase):
 
     def test_simplify(self):
         num_mutations = 0
+        # TODO When back-mutations are implemented correctly, enable this test fully
         for ts in get_example_tree_sequences(back_mutations=False):
             n = ts.get_sample_size()
             num_mutations += ts.get_num_mutations()

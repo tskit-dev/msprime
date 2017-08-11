@@ -554,9 +554,6 @@ class Simplifier(object):
             # and the label in A is the input node ID
             self.A[sample_id] = x
             self.record_node(sample_id)
-        self.S = SortedMap()
-        self.S[0] = self.n
-        self.S[self.m] = -1
         # We keep a sorted map of mutations for each input node.
         self.mutation_map = [SortedMap() for _ in range(ts.num_nodes)]
         for site in self.ts.sites():
@@ -651,15 +648,14 @@ class Simplifier(object):
         for x in self.A.keys():
             s = str(x) + ": " + self.segment_chain_str(self.A[x])
             print("\t\t" + s)
-        print("Overlap counts", len(self.S))
-        for k in sorted(self.S.keys()):
-            x = self.S[k]
-            print("\t", k, "\t:\t", x)
         print("Mutation map:")
         for u in range(len(self.mutation_map)):
             v = self.mutation_map[u]
             if len(v) > 0:
                 print("\t", u, "->", v)
+        print("Output sites:")
+        for site in self.output_sites.values():
+            print("\t", site)
 
         # print("Output nodes:")
         # print(self.node_table)
@@ -675,8 +671,6 @@ class Simplifier(object):
         # need to deal with parents in order by birth time-ago
         the_parents.sort()
         for time, input_id in the_parents:
-            if len(self.A) == 0:
-                break
             # inefficent way to pull all edges corresponding to a given parent
             edgesets = [x for x in self.ts.edgesets() if x.parent == input_id]
             for edgeset in edgesets:
@@ -688,27 +682,48 @@ class Simplifier(object):
                             self.check_state()
                 self.merge_labeled_ancestors(H, input_id)
                 self.check_state()
-
         # Flush the last edgeset to the table and create the new tree sequence.
         left, right, parent, children = self.last_edgeset
         self.edgeset_table.add_row(
             left=left, right=right, parent=parent, children=children)
 
+        # print("DONE")
+        # self.print_state()
+        # The extant segments are the roots for each interval. For every root
+        # node, store the intervals over which it applies.
+        roots = collections.defaultdict(list)
+        for seg in self.A.values():
+            while seg is not None:
+                roots[seg.node].append(seg)
+                seg = seg.next
+
         # Add in the sites and mutations.
-        for j, position in enumerate(sorted(self.output_sites.keys())):
+        output_site_id = 0
+        for position in sorted(self.output_sites.keys()):
             site = self.output_sites[position]
             ancestral_state = site.ancestral_state
             # Reverse the mutations to get the correct order.
             site.mutations.reverse()
-            # Hack to get correct ancestral state for binary mutations. In general
-            # we'll need something better.
-            if site.mutations[0].derived_state == '0':
-                ancestral_state = '1'
-            self.site_table.add_row(
-                position=site.position, ancestral_state=ancestral_state)
-            for mutation in site.mutations:
-                self.mutation_table.add_row(
-                    site=j, node=mutation.node, derived_state=mutation.derived_state)
+            # This is an ugly hack to see if the mutation is over a root. We will
+            # need a better algorithm in general, and this will certainly fail for
+            # more complex mutations.
+            root = False
+            if site.mutations[0].node in roots:
+                for seg in roots[site.mutations[0].node]:
+                    if seg.left <= site.position < seg.right:
+                        root = True
+            if not root:
+                # Hack to get correct ancestral state for binary mutations. In general
+                # we'll need something better.
+                if site.mutations[0].derived_state == '0':
+                    ancestral_state = '1'
+                self.site_table.add_row(
+                    position=site.position, ancestral_state=ancestral_state)
+                for mutation in site.mutations:
+                    self.mutation_table.add_row(
+                        site=output_site_id, node=mutation.node,
+                        derived_state=mutation.derived_state)
+                output_site_id += 1
         return msprime.load_tables(
             nodes=self.node_table, edgesets=self.edgeset_table,
             sites=self.site_table, mutations=self.mutation_table)
@@ -786,12 +801,10 @@ class Simplifier(object):
             self.A[input_id] = head
 
     def merge_labeled_ancestors(self, H, input_id):
-        '''
+        """
         All ancestry segments in H come together into a new parent.
-        The new parent must be assigned;
-        any overlapping segments coalesced;
-        and node IDs in the mutation table remapped.
-        '''
+        The new parent must be assigned and any overlapping segments coalesced.
+        """
         # H is a heapq of (x.left, x) tuples,
         # with x an ancestor, i.e., a list of segments.
         coalescence = False
@@ -802,13 +815,13 @@ class Simplifier(object):
             alpha = None
             l = H[0][0]
             X = []
-            r_max = self.m + 1
+            r = self.m + 1
             while len(H) > 0 and H[0][0] == l:
                 x = heapq.heappop(H)[1]
                 X.append(x)
-                r_max = min(r_max, x.right)
+                r = min(r, x.right)
             if len(H) > 0:
-                r_max = min(r_max, H[0][0])
+                r = min(r, H[0][0])
             if len(X) == 1:
                 x = X[0]
                 if len(H) > 0 and H[0][0] < x.right:
@@ -827,24 +840,7 @@ class Simplifier(object):
                     self.record_node(input_id)
                 # output node ID
                 u = self.num_output_nodes - 1
-                # We must also break if the next left value is less than
-                # any of the right values in the current overlap set.
-                if l not in self.S:
-                    j = self.S.floor_key(l)
-                    self.S[l] = self.S[j]
-                if r_max not in self.S:
-                    j = self.S.floor_key(r_max)
-                    self.S[r_max] = self.S[j]
-                # Update the number of extant segments.
-                if self.S[l] == len(X):
-                    self.S[l] = 0
-                    r = self.S.succ_key(l)
-                else:
-                    r = l
-                    while r < r_max and self.S[r] != len(X):
-                        self.S[r] -= len(X) - 1
-                        r = self.S.succ_key(r)
-                    alpha = self.alloc_segment(l, r, u)
+                alpha = self.alloc_segment(l, r, u)
                 # Update the heaps and make the record.
                 children = []
                 for x in X:
@@ -860,14 +856,13 @@ class Simplifier(object):
                 self.record_edgeset(l, r, u, children)
 
             # loop tail; update alpha and integrate it into the state.
-            if alpha is not None:
-                if z is None:
-                    # Add a new mapping for the input_id to the segment chain starting
-                    # with alpha.
-                    self.A[input_id] = alpha
-                else:
-                    z.next = alpha
-                z = alpha
+            if z is None:
+                # Add a new mapping for the input_id to the segment chain starting
+                # with alpha.
+                self.A[input_id] = alpha
+            else:
+                z.next = alpha
+            z = alpha
 
     def check_state(self):
         # print("CHECK_STATE")

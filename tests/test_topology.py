@@ -618,9 +618,9 @@ class TestMultipleRoots(TopologyTestCase):
     """
     Tests for situations where we have multiple roots for the samples.
     """
+    @unittest.skip("Multiple root simplify")
     def test_simplest_degenerate_case(self):
         # Simplest case where we have n = 2 and two unary records.
-        # This cannot be simplified, since there are no trees to recover.
         nodes = six.StringIO("""\
         id      is_sample   time
         0       1           0
@@ -1628,7 +1628,16 @@ class TestPythonSimplifier(unittest.TestCase):
     Tests that the test implementation of simplify() does what it's supposed to.
     """
     random_seed = 23
-
+    #
+    #          8
+    #         / \
+    #        /   \
+    #       /     \
+    #      7       \
+    #     / \       6
+    #    /   5     / \
+    #   /   / \   /   \
+    #  4   0   1 2     3
     small_tree_ex_nodes = """\
     id      is_sample   population      time
     0       1       0               0.00000000000000
@@ -1703,6 +1712,30 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(tss.sample_size, 2)
         self.assertEqual(tss.num_mutations, 4)
         self.assertEqual(list(tss.haplotypes()), ["1011", "0100"])
+
+    def test_small_tree_fixed_sites(self):
+        ts = msprime.load_text(
+            nodes=six.StringIO(self.small_tree_ex_nodes),
+            edgesets=six.StringIO(self.small_tree_ex_edgesets))
+        tables = ts.dump_tables()
+        # Add some simple mutations that will be fixed after simplify
+        tables.sites.add_row(position=0.25, ancestral_state="0")
+        tables.sites.add_row(position=0.5, ancestral_state="0")
+        tables.sites.add_row(position=0.75, ancestral_state="0")
+        tables.sites.add_row(position=0.8, ancestral_state="0")
+        tables.mutations.add_row(site=0, node=7, derived_state="1")
+        tables.mutations.add_row(site=1, node=2, derived_state="1")
+        tables.mutations.add_row(site=2, node=3, derived_state="1")
+        tables.mutations.add_row(site=3, node=6, derived_state="1")
+        ts = msprime.load_tables(
+            nodes=tables.nodes, edgesets=tables.edgesets, sites=tables.sites,
+            mutations=tables.mutations)
+        self.assertEqual(ts.num_sites, 4)
+        self.assertEqual(ts.num_mutations, 4)
+        tss = do_simplify(ts, [4, 1])
+        self.assertEqual(tss.sample_size, 2)
+        self.assertEqual(tss.num_mutations, 0)
+        self.assertEqual(list(tss.haplotypes()), ["", ""])
 
     def test_small_tree_recurrent_mutations(self):
         ts = msprime.load_text(

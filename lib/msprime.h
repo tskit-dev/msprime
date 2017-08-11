@@ -632,13 +632,6 @@ typedef struct {
 } mutgen_t;
 
 
-/* Represents the number of segments overlapping a given interval from the
- * given start location. */
-typedef struct {
-    double start;
-    uint32_t count;
-} overlap_count_t;
-
 /* For the simplify algorithm, we need specialised forms of ancestral
  * segments, sites and mutations */
 typedef struct _simplify_segment_t {
@@ -680,11 +673,10 @@ typedef struct {
     mutation_table_t *mutations;
     /* State for topology */
     simplify_segment_t **ancestor_map;
-    avl_tree_t overlap_counts;
+    simplify_segment_t **root_map;
     avl_tree_t merge_queue;
     object_heap_t segment_heap;
     object_heap_t avl_node_heap;
-    object_heap_t overlap_count_heap;
     size_t children_buffer_size;
     node_id_t *children_buffer;
     size_t segment_buffer_size;
