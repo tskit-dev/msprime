@@ -1124,6 +1124,7 @@ class TestWithVisuals(TopologyTestCase):
                     self.assertEqual(a[k], msprime.NULL_NODE)
         self.verify_simplify_topology(ts, [0, 1, 2])
 
+    @unittest.skip("Complex mutations for simplify")
     def test_many_single_offspring(self):
         # a more complex test with single offspring
         # With `(i,j,x)->k` denoting that individual `k` inherits from `i` on `[0,x)`
