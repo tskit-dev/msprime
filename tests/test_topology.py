@@ -925,7 +925,7 @@ class TestWithVisuals(TopologyTestCase):
     Some pedantic tests with ascii depictions of what's supposed to happen.
     """
 
-    def verify_simplify_topology(self, ts, sample):
+    def verify_simplify_topology(self, ts, sample, haplotypes=False):
         # copies from test_highlevel.py
         new_ts = ts.simplify(sample)
         sample_map = {k: j for j, k in enumerate(sample)}
@@ -949,6 +949,11 @@ class TestWithVisuals(TopologyTestCase):
                 self.assertEqual(old_tree.get_time(mrca1), new_tree.get_time(mrca2))
                 self.assertEqual(
                     old_tree.get_population(mrca1), new_tree.get_population(mrca2))
+        if haplotypes:
+            orig_haps = list(ts.haplotypes())
+            simp_haps = list(new_ts.haplotypes())
+            for i, j in enumerate(sample):
+                self.assertEqual(orig_haps[j], simp_haps[i])
 
     def test_partial_non_sample_external_nodes(self):
         # A somewhat more complicated test case with a partially specified,
@@ -1135,14 +1140,14 @@ class TestWithVisuals(TopologyTestCase):
         #
         # 0       --3--      |     --3--    |     --3--    |    --3--    |    --3--
         #        /  |  \     |    /  |  \   |    /     \   |   /     \   |   /     \
-        # 1     4   |   5    |   4   |   5  |   4       5  |  4       5  |  4       5
+        # 1     4   |   5    |   4   *   5  |   4       5  |  4       5  |  4       5
         #       |\ / \ /|    |   |\   \     |   |\     /   |  |\     /   |  |\     /|
         # 2     | 6   7 |    |   | 6   7    |   | 6   7    |  | 6   7    |  | 6   7 |
-        #       | |\ /| |    |   |  \  |    |   |  \  |    |  |  \       |  |  \    | ...
-        # 3     | | 8 | |    |   |   8 |    |   |   8 |    |  |   8      |  |   8   |
-        #       | |/ \| |    |   |  /  |    |   |  /  |    |  |  / \     |  |  / \  |
+        #       | |\ /| |    |   |  \  *    |   |  \  |    |  |  *       |  |  *    | ...
+        # 3     | | 8 | |    |   |   8 |    |   *   8 *    |  |   8      |  |   8   |
+        #       | |/ \| |    |   |  /  |    |   |  /  |    |  |  * *     |  |  / \  |
         # 4     | 9  10 |    |   | 9  10    |   | 9  10    |  | 9  10    |  | 9  10 |
-        #       |/ \ / \|    |   |  \   \   |   |  \   \   |  |  \   \   |  |  \    |
+        #       |/ \ / \|    |   |  \   *   |   |  \   \   |  |  \   *   |  |  \    |
         # 5     0   1   2    |   0   1   2  |   0   1   2  |  0   1   2  |  0   1   2
         #
         #                    |   0.0 - 0.1  |   0.1 - 0.2  |  0.2 - 0.4  |  0.4 - 0.5
@@ -1174,6 +1179,7 @@ class TestWithVisuals(TopologyTestCase):
             {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 7, 9: 6, 10: 8},
             {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 3, 7: 5, 8: 7, 9: 6, 10: 8}
         ]
+        true_haplotypes = ['0000', '0101', '1010']
         nodes = six.StringIO("""\
         id      is_sample   time
         0       1           0
@@ -1209,8 +1215,27 @@ class TestWithVisuals(TopologyTestCase):
         0.1     0.9     3       4,5
         0.0     0.1     3       4,5,7
         """)
-
-        ts = msprime.load_text(nodes, edgesets)
+        sites = six.StringIO("""\
+        position    ancestral_state
+        0.05        0
+        0.15        1
+        0.25        0
+        0.4         0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state
+        0       7       1
+        0      10       0
+        0       2       1
+        1       0       0
+        1      10       0
+        2       8       1
+        2       9       0
+        2      10       0
+        2       2       1
+        3       8       1
+        """)
+        ts = msprime.load_text(nodes, edgesets, sites, mutations)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, len(true_trees))
@@ -1223,9 +1248,13 @@ class TestWithVisuals(TopologyTestCase):
                     self.assertEqual(t[k], a[k])
                 else:
                     self.assertEqual(a[k], msprime.NULL_NODE)
-        self.verify_simplify_topology(ts, [0, 1])
-        self.verify_simplify_topology(ts, [1, 2])
-        self.verify_simplify_topology(ts, [2, 0])
+        for j, x in enumerate(ts.haplotypes()):
+            self.assertEqual(x, true_haplotypes[j])
+        self.verify_simplify_topology(ts, [0, 1, 2], haplotypes=True)
+        self.verify_simplify_topology(ts, [1, 0, 2], haplotypes=True)
+        self.verify_simplify_topology(ts, [0, 1], haplotypes=False)
+        self.verify_simplify_topology(ts, [1, 2], haplotypes=False)
+        self.verify_simplify_topology(ts, [2, 0], haplotypes=False)
 
     def test_tricky_switches(self):
         # suppose the topology has:
