@@ -4607,29 +4607,21 @@ test_internal_sample_simplified_tree_sequence_iter(void)
     int ret;
     tree_sequence_t ts, simplified;
     node_id_t samples[] = {2, 3, 5};
-    /* node_id_t parents[] = { */
-    /*     3, 3, MSP_NULL_NODE, 2, MSP_NULL_NODE, */
-    /*     2, 4, 4, MSP_NULL_NODE, MSP_NULL_NODE, */
-    /*     3, 3, MSP_NULL_NODE, 2, MSP_NULL_NODE, */
-    /* }; */
-    /* uint32_t num_trees = 3; */
+    node_id_t parents[] = {
+        3, 3, MSP_NULL_NODE, 2, MSP_NULL_NODE,
+        2, 4, 4, MSP_NULL_NODE, MSP_NULL_NODE,
+        3, 3, MSP_NULL_NODE, 2, MSP_NULL_NODE,
+    };
+    uint32_t num_trees = 3;
 
-    printf("\nFIXME internal sample simplify\n");
 
-    /* TODO finish this test case. It doesn't do very much at the moment,
-     * as it seems that the trees here are triggering an assertion in the
-     * sparse tree code. This test doesn't do a lot now.
-     */
     tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edgesets, NULL,
             internal_sample_ex_sites, internal_sample_ex_mutations, NULL);
-
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, samples, 3, 0, &simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    /* tree_sequence_print_state(&simplified, stdout); */
-    /* verify_trees(&simplified, num_trees, parents); */
-
+    verify_trees(&simplified, num_trees, parents);
     tree_sequence_free(&simplified);
     tree_sequence_free(&ts);
 }

@@ -2106,6 +2106,9 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
                 if (ret != 0) {
                     goto out;
                 }
+                /* The node on this segment must be remapped to the parent so that we
+                 * have the correct nodes further up in the tree. */
+                x->node = v;
             }
             if (node != NULL && next_l < x->right) {
                 alpha = simplifier_alloc_segment(self, x->left, next_l, x->node, NULL);

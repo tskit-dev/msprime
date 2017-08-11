@@ -835,6 +835,7 @@ class Simplifier(object):
                     u = self.node_id_map[input_id]
                     if self.is_sample(u):
                         self.record_edgeset(x.left, x.right, u, [x.node])
+                        x.node = u
                 if len(H) > 0 and H[0][0] < x.right:
                     alpha = self.alloc_segment(x.left, H[0][0], x.node)
                     x.left = H[0][0]
