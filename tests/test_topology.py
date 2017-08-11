@@ -1179,7 +1179,7 @@ class TestWithVisuals(TopologyTestCase):
             {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 4, 7: 5, 8: 7, 9: 6, 10: 8},
             {0: 9, 1: 10, 2: 5, 3: -1, 4: 3, 5: 3, 6: 3, 7: 5, 8: 7, 9: 6, 10: 8}
         ]
-        true_haplotypes = ['0000', '0101', '1010']
+        true_haplotypes = ['0100', '0001', '1110']
         nodes = six.StringIO("""\
         id      is_sample   time
         0       1           0
@@ -1218,7 +1218,7 @@ class TestWithVisuals(TopologyTestCase):
         sites = six.StringIO("""\
         position    ancestral_state
         0.05        0
-        0.15        1
+        0.15        0
         0.25        0
         0.4         0
         """)
@@ -1227,8 +1227,8 @@ class TestWithVisuals(TopologyTestCase):
         0       7       1
         0      10       0
         0       2       1
-        1       0       0
-        1      10       0
+        1       0       1
+        1      10       1
         2       8       1
         2       9       0
         2      10       0
