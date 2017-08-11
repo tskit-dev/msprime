@@ -1413,6 +1413,12 @@ simplifier_print_state(simplifier_t *self, FILE *out)
             fprintf(out, "\n");
         }
     }
+    fprintf(out, "===\nnode_id map (input->output)\n==\n");
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        if (self->node_id_map[j] != MSP_NULL_NODE) {
+            fprintf(out, "%d->%d\n", (int) j, self->node_id_map[j]);
+        }
+    }
     fprintf(out, "===\nmerge queue\n==\n");
     for (avl_node = self->merge_queue.head; avl_node != NULL; avl_node = avl_node->next) {
         u = (simplify_segment_t *) avl_node->item;
@@ -1501,6 +1507,7 @@ simplifier_record_node(simplifier_t *self, node_id_t input_id)
     int ret = 0;
     const char *name = self->input_nodes.name + self->node_name_offset[input_id];
 
+    self->node_id_map[input_id] = (node_id_t) self->nodes->num_rows;
     ret = node_table_add_row_internal(self->nodes, self->input_nodes.flags[input_id],
             self->input_nodes.time[input_id], self->input_nodes.population[input_id],
             self->input_nodes.name_length[input_id], name);
@@ -1784,10 +1791,13 @@ simplifier_alloc(simplifier_t *self,
     /* Make the maps and set the intial state */
     self->ancestor_map = calloc(self->input_nodes.num_rows, sizeof(simplify_segment_t *));
     self->root_map = calloc(self->input_nodes.num_rows, sizeof(simplify_segment_t *));
-    if (self->ancestor_map == NULL || self->root_map == NULL) {
+    self->node_id_map = malloc(self->input_nodes.num_rows * sizeof(node_id_t));
+    if (self->ancestor_map == NULL || self->root_map == NULL
+            || self->node_id_map == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    memset(self->node_id_map, 0xff, self->input_nodes.num_rows * sizeof(node_id_t));
     self->nodes->num_rows = 0;
     for (j = 0; j < self->num_samples; j++) {
         input_node = samples[j];
@@ -1832,6 +1842,7 @@ simplifier_free(simplifier_t *self)
     object_heap_free(&self->avl_node_heap);
     msp_safe_free(self->node_name_offset);
     msp_safe_free(self->ancestor_map);
+    msp_safe_free(self->node_id_map);
     msp_safe_free(self->root_map);
     msp_safe_free(self->children_buffer);
     msp_safe_free(self->last_edgeset.children);
@@ -1971,6 +1982,13 @@ simplifier_remove_ancestry(simplifier_t *self, double left, double right,
     int ret = 0;
     simplify_segment_t *x, *y, *head, *last, *x_prev;
 
+    /* There is a problem here when we have internal samples. We seem
+     * to be leaking segments within remove_ancestry, possibly because
+     * we are overwriting the ancestry segment that was already inserted.
+     * This may be harmless, or it may signify a deeper problem. We
+     * should resolve this problem one way or another though.
+     */
+
     head = self->ancestor_map[input_id];
     x = head;
     last = NULL;
@@ -2074,6 +2092,21 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         }
         if (h == 1) {
             x = H[0];
+            v = self->node_id_map[input_id];
+            if (0 <= v && v < (node_id_t) self->num_samples) {
+                /* If we have a mapped node over an interval with no other segments,
+                 * then we must record this edgeset as it joins internal samples */
+                children = simplifier_get_children_buffer(self, 1);
+                if (children == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                children[0] = x->node;
+                ret = simplifier_record_edgeset(self, x->left, x->right, v, children, 1);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
             if (node != NULL && next_l < x->right) {
                 alpha = simplifier_alloc_segment(self, x->left, next_l, x->node, NULL);
                 if (alpha == NULL) {
@@ -2095,12 +2128,14 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         } else {
             if (!coalescence) {
                 coalescence = true;
-                ret = simplifier_record_node(self, input_id);
-                if (ret != 0) {
-                    goto out;
+                if (self->node_id_map[input_id] == MSP_NULL_NODE) {
+                    ret = simplifier_record_node(self, input_id);
+                    if (ret != 0) {
+                        goto out;
+                    }
                 }
             }
-            v = (node_id_t) self->nodes->num_rows - 1;
+            v = self->node_id_map[input_id];
             alpha = simplifier_alloc_segment(self, l, r, v, NULL);
             if (alpha == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
@@ -2304,7 +2339,7 @@ simplifier_run(simplifier_t *self)
     }
 
     /* printf("START\n"); */
-    /* simplifier_print_state(self); */
+    /* simplifier_print_state(self, stdout); */
 
     if (num_input_edgesets > 0) {
         current_parent = self->edgesets->parent[0];
@@ -2344,7 +2379,6 @@ simplifier_run(simplifier_t *self)
             goto out;
         }
         assert(avl_count(&self->merge_queue) == 0);
-        /* simplifier_check_state(self); */
     }
     /* Flush the last edgeset, if any */
     if (self->last_edgeset.children_length > 0) {

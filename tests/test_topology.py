@@ -1689,6 +1689,66 @@ class TestPythonSimplifier(unittest.TestCase):
         tss = do_simplify(ts_single)
         self.assertEqual(list(tss.records()), list(ts.records()))
 
+    def test_small_tree_internal_samples(self):
+        ts = msprime.load_text(
+            nodes=six.StringIO(self.small_tree_ex_nodes),
+            edgesets=six.StringIO(self.small_tree_ex_edgesets))
+        tables = ts.dump_tables()
+        nodes = tables.nodes
+        flags = nodes.flags
+        # The parent of samples 0 and 1 is 5. Change this to an internal sample
+        # and set 0 and 1 to be unsampled.
+        flags[0] = 0
+        flags[1] = 0
+        flags[5] = msprime.NODE_IS_SAMPLE
+        nodes.set_columns(flags=flags, time=nodes.time)
+        ts = msprime.load_tables(nodes=nodes, edgesets=tables.edgesets)
+        self.assertEqual(ts.sample_size, 4)
+        tss = do_simplify(ts, [3, 5])
+        self.assertEqual(tss.num_nodes, 3)
+        self.assertEqual(tss.num_edgesets, 1)
+
+    def test_small_tree_linear_samples(self):
+        ts = msprime.load_text(
+            nodes=six.StringIO(self.small_tree_ex_nodes),
+            edgesets=six.StringIO(self.small_tree_ex_edgesets))
+        tables = ts.dump_tables()
+        nodes = tables.nodes
+        flags = nodes.flags
+        # 7 is above 0. These are the only two samples
+        flags[:] = 0
+        flags[0] = msprime.NODE_IS_SAMPLE
+        flags[7] = msprime.NODE_IS_SAMPLE
+        nodes.set_columns(flags=flags, time=nodes.time)
+        ts = msprime.load_tables(nodes=nodes, edgesets=tables.edgesets)
+        self.assertEqual(ts.sample_size, 2)
+        tss = do_simplify(ts, [0, 7])
+        self.assertEqual(tss.num_nodes, 2)
+        self.assertEqual(tss.num_edgesets, 1)
+        t = next(tss.trees())
+        self.assertEqual(t.parent_dict, {0: 1})
+
+    def test_small_tree_internal_and_external_samples(self):
+        ts = msprime.load_text(
+            nodes=six.StringIO(self.small_tree_ex_nodes),
+            edgesets=six.StringIO(self.small_tree_ex_edgesets))
+        tables = ts.dump_tables()
+        nodes = tables.nodes
+        flags = nodes.flags
+        # 7 is above 0 and 1.
+        flags[:] = 0
+        flags[0] = msprime.NODE_IS_SAMPLE
+        flags[1] = msprime.NODE_IS_SAMPLE
+        flags[7] = msprime.NODE_IS_SAMPLE
+        nodes.set_columns(flags=flags, time=nodes.time)
+        ts = msprime.load_tables(nodes=nodes, edgesets=tables.edgesets)
+        self.assertEqual(ts.sample_size, 3)
+        tss = do_simplify(ts, [0, 1, 7])
+        self.assertEqual(tss.num_nodes, 4)
+        self.assertEqual(tss.num_edgesets, 2)
+        t = next(tss.trees())
+        self.assertEqual(t.parent_dict, {0: 3, 1: 3, 3: 2})
+
     def test_small_tree_mutations(self):
         ts = msprime.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),

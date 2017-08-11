@@ -548,6 +548,7 @@ class Simplifier(object):
         # Keep track of then number of segments we alloc and free to ensure we
         # don't leak.
         self.num_used_segments = 0
+        self.node_id_map = {}
         for j, sample_id in enumerate(sample):
             # segment label (j) is the output node ID
             x = self.alloc_segment(0, self.m, j)
@@ -559,6 +560,9 @@ class Simplifier(object):
         for site in self.ts.sites():
             for mut in site.mutations:
                 self.mutation_map[mut.node][site.position] = mut
+
+    def is_sample(self, output_id):
+        return output_id < self.n
 
     def get_mutations(self, input_id, left, right):
         """
@@ -573,7 +577,6 @@ class Simplifier(object):
             ret[pos] = mut
             assert left <= pos < right
             pos = mutations.succ_key(pos)
-        # print("GET_MUTATIONS", input_id, left, right, "::", ret)
         return ret
 
     def alloc_segment(self, left, right, node, next=None):
@@ -601,6 +604,7 @@ class Simplifier(object):
         node = self.ts.node(input_id)
         self.node_table.add_row(
             flags=node.flags, time=node.time, population=node.population)
+        self.node_id_map[input_id] = self.num_output_nodes
         self.num_output_nodes += 1
 
     def record_edgeset(self, left, right, parent, children):
@@ -656,6 +660,9 @@ class Simplifier(object):
         print("Output sites:")
         for site in self.output_sites.values():
             print("\t", site)
+        print("Node ID map: (input->output)")
+        for input_id in sorted(self.node_id_map.keys()):
+            print("\t", input_id, "->", self.node_id_map[input_id])
 
         # print("Output nodes:")
         # print(self.node_table)
@@ -683,10 +690,10 @@ class Simplifier(object):
                 self.merge_labeled_ancestors(H, input_id)
                 self.check_state()
         # Flush the last edgeset to the table and create the new tree sequence.
-        left, right, parent, children = self.last_edgeset
-        self.edgeset_table.add_row(
-            left=left, right=right, parent=parent, children=children)
-
+        if self.last_edgeset is not None:
+            left, right, parent, children = self.last_edgeset
+            self.edgeset_table.add_row(
+                left=left, right=right, parent=parent, children=children)
         # print("DONE")
         # self.print_state()
         # The extant segments are the roots for each interval. For every root
@@ -824,6 +831,10 @@ class Simplifier(object):
                 r = min(r, H[0][0])
             if len(X) == 1:
                 x = X[0]
+                if input_id in self.node_id_map:
+                    u = self.node_id_map[input_id]
+                    if self.is_sample(u):
+                        self.record_edgeset(x.left, x.right, u, [x.node])
                 if len(H) > 0 and H[0][0] < x.right:
                     alpha = self.alloc_segment(x.left, H[0][0], x.node)
                     x.left = H[0][0]
@@ -837,9 +848,10 @@ class Simplifier(object):
             else:
                 if not coalescence:
                     coalescence = True
-                    self.record_node(input_id)
+                    if input_id not in self.node_id_map:
+                        self.record_node(input_id)
                 # output node ID
-                u = self.num_output_nodes - 1
+                u = self.node_id_map[input_id]
                 alpha = self.alloc_segment(l, r, u)
                 # Update the heaps and make the record.
                 children = []

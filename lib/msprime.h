@@ -674,6 +674,7 @@ typedef struct {
     /* State for topology */
     simplify_segment_t **ancestor_map;
     simplify_segment_t **root_map;
+    node_id_t *node_id_map;
     avl_tree_t merge_queue;
     object_heap_t segment_heap;
     object_heap_t avl_node_heap;
