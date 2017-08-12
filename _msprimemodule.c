@@ -7333,11 +7333,11 @@ static PyTypeObject SimulatorType = {
  *===================================================================
  */
 
-#ifdef HAVE_NUMPY
 
 static PyObject *
 msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
 {
+#ifdef HAVE_NUMPY
     int err;
     PyObject *ret = NULL;
     NodeTable *py_nodes = NULL;
@@ -7399,11 +7399,16 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     ret = Py_BuildValue("");
 out:
     return ret;
+#else
+    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
+    return NULL;
+#endif
 }
 
 static PyObject *
 msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
 {
+#ifdef HAVE_NUMPY
     int err;
     PyObject *ret = NULL;
     PyObject *samples = NULL;
@@ -7568,8 +7573,11 @@ out:
         PyMem_Free(mutations);
     }
     return ret;
-}
+#else
+    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
+    return NULL;
 #endif
+}
 
 static PyObject *
 msprime_get_gsl_version(PyObject *self)
@@ -7618,12 +7626,10 @@ msprime_get_library_version_str(PyObject *self)
 
 
 static PyMethodDef msprime_methods[] = {
-#ifdef HAVE_NUMPY
     {"sort_tables", (PyCFunction) msprime_sort_tables, METH_VARARGS|METH_KEYWORDS,
             "Sorts tables into canonical ordering for tree sequence input." },
     {"simplify_tables", (PyCFunction) msprime_simplify_tables, METH_VARARGS|METH_KEYWORDS,
             "Simplifies the specified set of tables for a given sample subset." },
-#endif
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
     {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,

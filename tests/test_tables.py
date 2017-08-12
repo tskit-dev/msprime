@@ -830,6 +830,9 @@ class TestSimplifyTables(unittest.TestCase):
             self.assertRaises(
                 TypeError, msprime.simplify_tables,
                 np.array([0, 1], dtype=bad_dtype), nodes, edgesets)
+        bad_samples = np.array([[0, 1], [2, 3]], dtype=np.int32)
+        self.assertRaises(
+            ValueError, msprime.simplify_tables, bad_samples, nodes, edgesets)
 
     def test_tables_interface(self):
         self.assertRaises(TypeError, msprime.simplify_tables)

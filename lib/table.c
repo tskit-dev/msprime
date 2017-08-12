@@ -2206,8 +2206,7 @@ out:
 /* After we have completed processing all the edgesets, the remaining segments
  * in the ancestor map will point to roots in the trees of the intervals in
  * question. Go through the ancestor map, and build a map of the these nodes to
- * the intervals that they cover. Since we are now finished with the ancestor
- * map, we reuse the memory to build this new map.
+ * the intervals that they cover.
  *
  * TODO if we keep this data structure and approach, then we should do segment
  * squashing in the algorithm below. There will be adjacent segments that
@@ -2351,13 +2350,8 @@ simplifier_run(simplifier_t *self)
     if (ret != 0) {
         goto out;
     }
-
-    /* printf("START\n"); */
-    /* simplifier_print_state(self, stdout); */
-
     if (num_input_edgesets > 0) {
         current_parent = self->edgesets->parent[0];
-
         for (j = 0; j < num_input_edgesets; j++) {
             assert(j >= self->edgesets->num_rows);
             parent = self->edgesets->parent[j];
@@ -2366,7 +2360,6 @@ simplifier_run(simplifier_t *self)
             children_length = self->edgesets->children_length[j];
             children = self->edgesets->children + children_offset;
             children_offset += children_length;
-
             if (parent != current_parent) {
                 ret = simplifier_merge_ancestors(self, current_parent);
                 if (ret != 0) {
@@ -2394,6 +2387,7 @@ simplifier_run(simplifier_t *self)
         }
         assert(avl_count(&self->merge_queue) == 0);
     }
+
     /* Flush the last edgeset, if any */
     if (self->last_edgeset.children_length > 0) {
         ret = edgeset_table_add_row(self->edgesets,
@@ -2406,8 +2400,6 @@ simplifier_run(simplifier_t *self)
     if (ret != 0) {
         goto out;
     }
-    /* printf("DONE\n"); */
-    /* simplifier_print_state(self, stdout); */
     ret = simplifier_output_sites(self);
 out:
     return ret;
