@@ -247,6 +247,9 @@ msp_strerror(int err)
         case MSP_ERR_UNSORTED_MUTATIONS:
             ret = "Mutations must be provided in non-decreasing site order";
             break;
+        case MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT:
+            ret = "All edgesets for a given parent must be adjacent.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

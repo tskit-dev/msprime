@@ -1669,9 +1669,7 @@ simplifier_check_input(simplifier_t *self)
         if (parent != last_parent) {
             node_seen[last_parent] = 1;
             if (node_seen[parent] != 0) {
-                /* TODO should be more specific; this is the case where nodes with
-                 * equal time are sorted, but the nodes are not contiguous */
-                ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
+                ret = MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT;
                 goto out;
             }
             if (time[last_parent] > time[parent]) {
@@ -1699,18 +1697,24 @@ simplifier_check_input(simplifier_t *self)
         }
 
     }
-    if (self->sites != NULL) {
-        num_sites = (site_id_t) self->sites->num_rows;
-        /* Check the mutations */
-        for (j = 0; j < self->mutations->num_rows; j++) {
-            if (self->mutations->site[j] < 0 || self->mutations->site[j] >= num_sites) {
-                ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
-                goto out;
-            }
-            if (self->mutations->node[j] < 0 || self->mutations->node[j] >= num_nodes) {
-                ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-                goto out;
-            }
+    /* Check the sites */
+    for (j = 0; j < self->sites->num_rows; j++) {
+        if (self->sites->position[j] < 0
+                || self->sites->position[j] >= self->sequence_length) {
+            ret = MSP_ERR_BAD_SITE_POSITION;
+            goto out;
+        }
+    }
+    /* Check the mutations */
+    num_sites = (site_id_t) self->sites->num_rows;
+    for (j = 0; j < self->mutations->num_rows; j++) {
+        if (self->mutations->site[j] < 0 || self->mutations->site[j] >= num_sites) {
+            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (self->mutations->node[j] < 0 || self->mutations->node[j] >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
         }
     }
     ret = 0;
@@ -1747,15 +1751,15 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    /* Compute the sequence length */
+    for (j = 0; j < edgesets->num_rows; j++) {
+        self->sequence_length = GSL_MAX(edgesets->right[j], self->sequence_length);
+    }
     /* TODO we can add a flag to skip these checks for when we know they are
      * unnecessary */
     ret = simplifier_check_input(self);
     if (ret != 0) {
         goto out;
-    }
-    /* Compute the sequence length */
-    for (j = 0; j < edgesets->num_rows; j++) {
-        self->sequence_length = GSL_MAX(edgesets->right[j], self->sequence_length);
     }
     /* Make a copy of the input nodes and clear the table ready for output */
     ret = node_table_alloc(&self->input_nodes, nodes->num_rows,

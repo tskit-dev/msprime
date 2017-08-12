@@ -692,6 +692,124 @@ class TestSimplifyTables(unittest.TestCase):
             self.assertEqual(sites_before, tables.sites)
             self.assertEqual(mutations_before, tables.mutations)
 
+    def test_bad_samples(self):
+        n = 10
+        ts = msprime.simulate(n, random_seed=self.random_seed)
+        tables = ts.dump_tables()
+        for bad_node in [-1, n, n + 1, ts.num_nodes - 1, ts.num_nodes, 2**31 - 1]:
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simplify_tables,
+                samples=[0, bad_node], nodes=tables.nodes, edgesets=tables.edgesets)
+
+    def test_bad_edgeset_ordering(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed)
+        tables = ts.dump_tables()
+        edgesets = tables.edgesets
+        # Reversing the edgesets violates the ordering constraints.
+        edgesets.set_columns(
+            left=edgesets.left[::-1], right=edgesets.right[::-1],
+            parent=edgesets.parent[::-1], children=edgesets.children[::-1],
+            children_length=edgesets.children_length[::-1])
+        self.assertRaises(
+            _msprime.LibraryError, msprime.simplify_tables,
+            samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+
+    def test_bad_edgesets(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed)
+        for bad_node in [-1, ts.num_nodes, ts.num_nodes + 1, 2**31 - 1]:
+            # Bad parent node
+            tables = ts.dump_tables()
+            edgesets = tables.edgesets
+            parent = edgesets.parent
+            parent[0] = bad_node
+            edgesets.set_columns(
+                left=edgesets.left, right=edgesets.right, parent=parent,
+                children=edgesets.children, children_length=edgesets.children_length)
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simplify_tables,
+                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+            # Bad child node
+            tables = ts.dump_tables()
+            edgesets = tables.edgesets
+            children = edgesets.children
+            children[0] = bad_node
+            edgesets.set_columns(
+                left=edgesets.left, right=edgesets.right, parent=edgesets.parent,
+                children=children, children_length=edgesets.children_length)
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simplify_tables,
+                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+            # left == right
+            tables = ts.dump_tables()
+            edgesets = tables.edgesets
+            left = edgesets.left
+            left[0] = edgesets.right[0]
+            edgesets.set_columns(
+                left=left, right=edgesets.right, parent=edgesets.parent,
+                children=edgesets.children, children_length=edgesets.children_length)
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simplify_tables,
+                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+            # left > right
+            tables = ts.dump_tables()
+            edgesets = tables.edgesets
+            left = edgesets.left
+            left[0] = edgesets.right[0] + 1
+            edgesets.set_columns(
+                left=left, right=edgesets.right, parent=edgesets.parent,
+                children=edgesets.children, children_length=edgesets.children_length)
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simplify_tables,
+                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+
+    def test_bad_mutation_nodes(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed, mutation_rate=1)
+        self.assertGreater(ts.num_mutations, 0)
+        for bad_node in [-1, ts.num_nodes, 2**31 - 1]:
+            tables = ts.dump_tables()
+            mutations = tables.mutations
+            node = mutations.node
+            node[0] = bad_node
+            mutations.set_columns(
+                site=mutations.site, node=node, derived_state=mutations.derived_state,
+                derived_state_length=mutations.derived_state_length)
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simplify_tables,
+                samples=[0, 1], nodes=tables.nodes, edgesets=tables.edgesets,
+                sites=tables.sites, mutations=mutations)
+
+    def test_bad_mutation_sites(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed, mutation_rate=1)
+        self.assertGreater(ts.num_mutations, 0)
+        for bad_site in [-1, ts.num_sites, 2**31 - 1]:
+            tables = ts.dump_tables()
+            mutations = tables.mutations
+            site = mutations.site
+            site[0] = bad_site
+            mutations.set_columns(
+                site=site, node=mutations.node, derived_state=mutations.derived_state,
+                derived_state_length=mutations.derived_state_length)
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simplify_tables,
+                samples=[0, 1], nodes=tables.nodes, edgesets=tables.edgesets,
+                sites=tables.sites, mutations=mutations)
+
+    def test_bad_site_positions(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed, mutation_rate=1)
+        self.assertGreater(ts.num_mutations, 0)
+        for bad_position in [-1, ts.sequence_length, ts.sequence_length + 0.01]:
+            tables = ts.dump_tables()
+            sites = tables.sites
+            position = sites.position
+            position[0] = bad_position
+            sites.set_columns(
+                position=position, ancestral_state=sites.ancestral_state,
+                ancestral_state_length=sites.ancestral_state_length)
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simplify_tables,
+                samples=[0, 1], nodes=tables.nodes, edgesets=tables.edgesets,
+                sites=sites, mutations=tables.mutations)
+
     def test_samples_interface(self):
         tables = msprime.simulate(50, random_seed=1).dump_tables()
         nodes = tables.nodes

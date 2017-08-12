@@ -532,6 +532,165 @@ class TestGeneralSamples(TopologyTestCase):
         self.verify_permuted_nodes(ts)
 
 
+class TestSimplifyExamples(TopologyTestCase):
+    """
+    Tests for simplify where we write out the input and expected output
+    or we detect expected errors.
+    """
+    def verify_simplify(
+            self, samples, nodes_before=None, edgesets_before=None,
+            nodes_after=None, edgesets_after=None):
+        """
+        Verifies that if we run simplify on the specified input we get the
+        required output.
+        """
+        b_nodes = msprime.parse_nodes(six.StringIO(nodes_before))
+        b_edgesets = msprime.parse_edgesets(six.StringIO(edgesets_before))
+        msprime.simplify_tables(
+            samples=samples, nodes=b_nodes, edgesets=b_edgesets)
+        a_nodes = msprime.parse_nodes(six.StringIO(nodes_after))
+        a_edgesets = msprime.parse_edgesets(six.StringIO(edgesets_after))
+        self.assertEqual(b_nodes, a_nodes)
+        self.assertEqual(b_edgesets, a_edgesets)
+
+    def test_unsorted_edgesets(self):
+        # We have two nodes at the same time and interleave edgesets for
+        # these nodes together. This is an error because all edgesets for
+        # a given parent must be contigous.
+        nodes_before = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           1
+        3       0           1
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       1       2       0,1
+        0       1       3       0,1
+        1       2       2       0,1
+        1       2       3       0,1
+        """
+        nodes = msprime.parse_nodes(six.StringIO(nodes_before))
+        edgesets = msprime.parse_edgesets(six.StringIO(edgesets_before))
+        self.assertRaises(
+            _msprime.LibraryError, msprime.simplify_tables,
+            samples=[0, 1], nodes=nodes, edgesets=edgesets)
+
+    def test_single_binary_tree(self):
+        #
+        # 2        4
+        #         / \
+        # 1      3   \
+        #       / \   \
+        # 0   (0)(1)  (2)
+        nodes_before = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           0
+        3       0           1
+        4       0           2
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       1       3       0,1
+        0       1       4       2,3
+        """
+        # We sample 0 and 2, so we get
+        nodes_after = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           2
+        """
+        edgesets_after = """\
+        left    right   parent  children
+        0       1       2       0,1
+        """
+        self.verify_simplify(
+            samples=[0, 2],
+            nodes_before=nodes_before, edgesets_before=edgesets_before,
+            nodes_after=nodes_after, edgesets_after=edgesets_after)
+
+    def test_single_binary_tree_internal_sample(self):
+        #
+        # 2        4
+        #         / \
+        # 1     (3)  \
+        #       / \   \
+        # 0   (0)  1  (2)
+        nodes_before = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           0
+        3       1           1
+        4       0           2
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       1       3       0,1
+        0       1       4       2,3
+        """
+        # We sample 0 and 3, so we get
+        nodes_after = """\
+        id      is_sample   time
+        0       1           0
+        1       1           1
+        """
+        edgesets_after = """\
+        left    right   parent  children
+        0       1       1       0
+        """
+        self.verify_simplify(
+            samples=[0, 3],
+            nodes_before=nodes_before, edgesets_before=edgesets_before,
+            nodes_after=nodes_after, edgesets_after=edgesets_after)
+
+    def test_single_binary_tree_internal_sample_meet_at_root(self):
+        # 3          5
+        #           / \
+        # 2        4  (6)
+        #         / \
+        # 1     (3)  \
+        #       / \   \
+        # 0   (0)  1   2
+        nodes_before = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           0
+        3       1           1
+        4       0           2
+        5       0           3
+        6       1           2
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       1       3       0,1
+        0       1       4       2,3
+        0       1       5       4,6
+        """
+        # We sample 0 and 3 and 6, so we get
+        nodes_after = """\
+        id      is_sample   time
+        0       1           0
+        1       1           1
+        2       1           2
+        3       0           3
+        """
+        edgesets_after = """\
+        left    right   parent  children
+        0       1       1       0
+        0       1       3       1,2
+        """
+        self.verify_simplify(
+            samples=[0, 3, 6],
+            nodes_before=nodes_before, edgesets_before=edgesets_before,
+            nodes_after=nodes_after, edgesets_after=edgesets_after)
+
+
 class TestNonSampleExternalNodes(TopologyTestCase):
     """
     Tests for situations in which we have tips that are not samples.
