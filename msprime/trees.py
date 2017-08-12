@@ -50,6 +50,7 @@ from _msprime import RandomGenerator
 from _msprime import MutationGenerator
 from _msprime import NODE_IS_SAMPLE
 from _msprime import sort_tables  # NOQA
+from _msprime import simplify_tables  # NOQA
 
 NULL_NODE = -1
 
@@ -177,6 +178,27 @@ class NodeTable(_msprime.NodeTable):
             ret += "{}\t{}\t{}\t\t{:.14f}\n".format(j, flags[j], population[j], time[j])
         return ret[:-1]
 
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = (
+                np.array_equal(self.flags, other.flags) and
+                np.array_equal(self.population, other.population) and
+                np.array_equal(self.time, other.time) and
+                np.array_equal(self.name, other.name) and
+                np.array_equal(self.name_length, other.name_length))
+        return ret
+
+    def copy(self):
+        """
+        Returns a deep copy of this table.
+        """
+        copy = NodeTable()
+        copy.set_columns(
+            flags=self.flags, time=self.time, population=self.population,
+            name=self.name, name_length=self.name_length)
+        return copy
+
 
 class EdgesetTable(_msprime.EdgesetTable):
     """
@@ -222,6 +244,27 @@ class EdgesetTable(_msprime.EdgesetTable):
                 j, left[j], right[j], parent[j], ",".join(map(str, row_children)))
         return ret[:-1]
 
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = (
+                np.array_equal(self.left, other.left) and
+                np.array_equal(self.right, other.right) and
+                np.array_equal(self.parent, other.parent) and
+                np.array_equal(self.children, other.children) and
+                np.array_equal(self.children_length, other.children_length))
+        return ret
+
+    def copy(self):
+        """
+        Returns a deep copy of this table.
+        """
+        copy = EdgesetTable()
+        copy.set_columns(
+            left=self.left, right=self.right, parent=self.parent,
+            children=self.children, children_length=self.children_length)
+        return copy
+
 
 class MigrationTable(_msprime.MigrationTable):
     def __str__(self):
@@ -236,6 +279,28 @@ class MigrationTable(_msprime.MigrationTable):
             ret += "{}\t{:.8f}\t{:.8f}\t{}\t{}\t{}\t{:.8f}\n".format(
                 j, left[j], right[j], node[j], source[j], dest[j], time[j])
         return ret[:-1]
+
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = (
+                np.array_equal(self.left, other.left) and
+                np.array_equal(self.right, other.right) and
+                np.array_equal(self.node, other.node) and
+                np.array_equal(self.source, other.source) and
+                np.array_equal(self.dest, other.dest) and
+                np.array_equal(self.time, other.time))
+        return ret
+
+    def copy(self):
+        """
+        Returns a deep copy of this table.
+        """
+        copy = MigrationTable()
+        copy.set_columns(
+            left=self.left, right=self.right, node=self.node, source=self.source,
+            dest=self.dest, time=self.time)
+        return copy
 
 
 class SiteTable(_msprime.SiteTable):
@@ -258,6 +323,26 @@ class SiteTable(_msprime.SiteTable):
         for j in range(self.num_rows):
             ret += "{}\t{:.8f}\t{}\n".format(j, position[j], ancestral_state[j])
         return ret[:-1]
+
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = (
+                np.array_equal(self.position, other.position) and
+                np.array_equal(self.ancestral_state, other.ancestral_state) and
+                np.array_equal(
+                    self.ancestral_state_length, other.ancestral_state_length))
+        return ret
+
+    def copy(self):
+        """
+        Returns a deep copy of this table.
+        """
+        copy = SiteTable()
+        copy.set_columns(
+            position=self.position, ancestral_state=self.ancestral_state,
+            ancestral_state_length=self.ancestral_state_length)
+        return copy
 
 
 class MutationTable(_msprime.MutationTable):
@@ -285,6 +370,27 @@ class MutationTable(_msprime.MutationTable):
         for j in range(self.num_rows):
             ret += "{}\t{}\t{}\t{}\n".format(j, site[j], node[j], derived_state[j])
         return ret[:-1]
+
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = (
+                np.array_equal(self.site, other.site) and
+                np.array_equal(self.node, other.node) and
+                np.array_equal(self.derived_state, other.derived_state) and
+                np.array_equal(
+                    self.derived_state_length, other.derived_state_length))
+        return ret
+
+    def copy(self):
+        """
+        Returns a deep copy of this table.
+        """
+        copy = MutationTable()
+        copy.set_columns(
+            site=self.site, node=self.node, derived_state=self.derived_state,
+            derived_state_length=self.derived_state_length)
+        return copy
 
 
 def pack_strings(strings):

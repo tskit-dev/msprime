@@ -2353,6 +2353,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     simplifier_t *simplifier = NULL;
     node_table_t *nodes = NULL;
     edgeset_table_t *edgesets = NULL;
+    migration_table_t *migrations = NULL;
     site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
     size_t num_provenance_strings;
@@ -2378,8 +2379,17 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     if (ret != 0) {
         goto out;
     }
-    /* If we have 0 sites and mutations just alloc space for one row. It's not
-     * worth making a special case and checking to see if these are NULL */
+    /* If we have 0 migrations, sites or mutations just alloc space for one row.
+     * It's not worth making a special case and checking to see if these are NULL */
+    migrations = malloc(sizeof(node_table_t));
+    if (migrations == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = migration_table_alloc(migrations, self->migrations.num_records + 1);
+    if (ret != 0) {
+        goto out;
+    }
     sites = malloc(sizeof(node_table_t));
     if (sites == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -2400,7 +2410,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_dump_tables_tmp(self, nodes, edgesets, NULL,
+    ret = tree_sequence_dump_tables_tmp(self, nodes, edgesets, migrations,
             sites, mutations, &num_provenance_strings, &provenance_strings);
     if (ret != 0) {
         goto out;
@@ -2410,12 +2420,8 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    /* TODO we don't support migrations here yet, so we just pass in NULL
-     * as the argument. Migrations will be dropped in the simplified tree
-     * sequence.
-     */
-    ret = simplifier_alloc(simplifier, nodes, edgesets, NULL, sites, mutations,
-            samples, num_samples, flags);
+    ret = simplifier_alloc(simplifier, samples, num_samples,
+            nodes, edgesets, migrations, sites, mutations, flags);
     if (ret != 0) {
         goto out;
     }
@@ -2423,8 +2429,13 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     if (ret != 0) {
         goto out;
     }
+    /* We are done with the simplifier object, so free it to save some memory */
+    simplifier_free(simplifier);
+    free(simplifier);
+    simplifier = NULL;
+
     /* TODO fix provenance strings here...*/
-    ret = tree_sequence_load_tables_tmp(output, nodes, edgesets, NULL,
+    ret = tree_sequence_load_tables_tmp(output, nodes, edgesets, migrations,
             sites, mutations, 0, NULL);
 out:
     if (nodes != NULL) {
@@ -2434,6 +2445,10 @@ out:
     if (edgesets != NULL) {
         edgeset_table_free(edgesets);
         free(edgesets);
+    }
+    if (migrations != NULL) {
+        migration_table_free(migrations);
+        free(migrations);
     }
     if (sites != NULL) {
         site_table_free(sites);

@@ -4087,8 +4087,8 @@ test_single_tree_simplify(void)
             &provenance_strings);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = simplifier_alloc(&simplifier, &nodes, &edgesets, &migrations,
-        &sites, &mutations, samples, 2, 0);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, &sites, &mutations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     simplifier_print_state(&simplifier, _devnull);
     ret = simplifier_run(&simplifier);
@@ -4105,8 +4105,8 @@ test_single_tree_simplify(void)
             &provenance_strings);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     unsort_edgesets(&edgesets);
-    ret = simplifier_alloc(&simplifier, &nodes, &edgesets, &migrations,
-            &sites, &mutations, samples, 2, 0);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, &sites, &mutations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_RECORDS_NOT_TIME_SORTED);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4117,8 +4117,8 @@ test_single_tree_simplify(void)
             &provenance_strings);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edgesets.parent[0] = -1;
-    ret = simplifier_alloc(&simplifier, &nodes, &edgesets, &migrations,
-            &sites, &mutations, samples, 2, 0);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, &sites, &mutations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4129,8 +4129,8 @@ test_single_tree_simplify(void)
             &provenance_strings);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edgesets.children[0] = -1;
-    ret = simplifier_alloc(&simplifier, &nodes, &edgesets, &migrations,
-            &sites, &mutations, samples, 2, 0);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, &sites, &mutations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4142,8 +4142,8 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(mutations.num_rows > 0 && sites.num_rows > 0);
     mutations.site[0] = -1;
-    ret = simplifier_alloc(&simplifier, &nodes, &edgesets, &migrations,
-            &sites, &mutations, samples, 2, 0);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, &sites, &mutations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4155,9 +4155,35 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(mutations.num_rows > 0 && sites.num_rows > 0);
     mutations.node[0] = -1;
-    ret = simplifier_alloc(&simplifier, &nodes, &edgesets, &migrations,
-            &sites, &mutations, samples, 2, 0);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, &sites, &mutations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    ret = simplifier_free(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Test the interface for NULL inputs */
+    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edgesets,
+            &migrations, &sites, &mutations, &num_provenance_strings,
+            &provenance_strings);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = simplifier_alloc(&simplifier, NULL, 2,
+            &nodes, &edgesets, &migrations, &sites, &mutations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            NULL, &edgesets, &migrations, &sites, &mutations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, NULL, &migrations, &sites, &mutations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, NULL, &mutations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, &sites, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, NULL, &sites, &mutations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 

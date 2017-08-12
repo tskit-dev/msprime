@@ -399,7 +399,7 @@ edgeset_table_set_columns(edgeset_table_t *self,
     memcpy(self->children, children, total_children_length * sizeof(node_id_t));
     memcpy(self->children_length, children_length, num_rows * sizeof(list_len_t));
     self->num_rows = num_rows;
-    self->total_children_length += total_children_length;
+    self->total_children_length = total_children_length;
 out:
     return ret;
 }
@@ -1647,7 +1647,7 @@ simplifier_check_input(simplifier_t *self)
 {
     int ret = MSP_ERR_GENERIC;
     node_id_t num_nodes = (node_id_t) self->nodes->num_rows;
-    site_id_t num_sites = (site_id_t) self->sites->num_rows;
+    site_id_t num_sites;
     double *time = self->nodes->time;
     char *node_seen = NULL;
     node_id_t last_parent, parent;
@@ -1699,15 +1699,18 @@ simplifier_check_input(simplifier_t *self)
         }
 
     }
-    /* Check the mutations */
-    for (j = 0; j < self->mutations->num_rows; j++) {
-        if (self->mutations->site[j] < 0 || self->mutations->site[j] >= num_sites) {
-            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (self->mutations->node[j] < 0 || self->mutations->node[j] >= num_nodes) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
+    if (self->sites != NULL) {
+        num_sites = (site_id_t) self->sites->num_rows;
+        /* Check the mutations */
+        for (j = 0; j < self->mutations->num_rows; j++) {
+            if (self->mutations->site[j] < 0 || self->mutations->site[j] >= num_sites) {
+                ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
+                goto out;
+            }
+            if (self->mutations->node[j] < 0 || self->mutations->node[j] >= num_nodes) {
+                ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+                goto out;
+            }
         }
     }
     ret = 0;
@@ -1717,10 +1720,9 @@ out:
 }
 
 int
-simplifier_alloc(simplifier_t *self,
+simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
-        site_table_t *sites, mutation_table_t *mutations,
-        node_id_t *samples, size_t num_samples, int flags)
+        site_table_t *sites, mutation_table_t *mutations, int flags)
 {
     int ret = 0;
     size_t j, offset;
@@ -1736,6 +1738,11 @@ simplifier_alloc(simplifier_t *self,
     self->mutations = mutations;
     self->sequence_length = 0;
 
+    if (nodes == NULL || edgesets == NULL || samples == NULL
+            || sites == NULL || mutations == NULL || migrations == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     if (num_samples < 2 || nodes->num_rows == 0 || edgesets->num_rows == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
