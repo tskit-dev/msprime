@@ -136,9 +136,6 @@ msp_strerror(int err)
         case MSP_ERR_INSUFFICIENT_SAMPLES:
             ret = "At least two samples needed.";
             break;
-        case MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT:
-            ret = "Bad edgeset in file: right coordinate not matching any left coordinate.";
-            break;
         case MSP_ERR_BAD_EDGESET:
             ret = "Bad edgeset in file.";
         case MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO:
@@ -249,6 +246,9 @@ msp_strerror(int err)
             break;
         case MSP_ERR_UNSORTED_MUTATIONS:
             ret = "Mutations must be provided in non-decreasing site order";
+            break;
+        case MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT:
+            ret = "All edgesets for a given parent must be adjacent.";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {

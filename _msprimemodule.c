@@ -7333,9 +7333,11 @@ static PyTypeObject SimulatorType = {
  *===================================================================
  */
 
+
 static PyObject *
 msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
 {
+#ifdef HAVE_NUMPY
     int err;
     PyObject *ret = NULL;
     NodeTable *py_nodes = NULL;
@@ -7397,8 +7399,185 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     ret = Py_BuildValue("");
 out:
     return ret;
+#else
+    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
+    return NULL;
+#endif
 }
 
+static PyObject *
+msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
+{
+#ifdef HAVE_NUMPY
+    int err;
+    PyObject *ret = NULL;
+    PyObject *samples = NULL;
+    PyArrayObject *samples_array = NULL;
+    NodeTable *py_nodes = NULL;
+    EdgesetTable *py_edgesets = NULL;
+    MigrationTable *py_migrations = NULL;
+    SiteTable *py_sites = NULL;
+    MutationTable *py_mutations = NULL;
+    node_table_t *nodes = NULL;
+    edgeset_table_t *edgesets = NULL;
+    migration_table_t *migrations = NULL;
+    site_table_t *sites = NULL;
+    mutation_table_t *mutations = NULL;
+    npy_intp *shape;
+    size_t num_samples;
+    simplifier_t *simplifier = NULL;
+    int flags = 0;
+    int filter_invariant_sites = true;
+    bool migrations_allocated = false;
+    bool sites_allocated = false;
+    bool mutations_allocated = false;
+
+    static char *kwlist[] = {
+        "samples", "nodes", "edgesets", "migrations", "sites", "mutations",
+        "filter_invariant_sites", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO!O!|O!O!O!i", kwlist,
+            &samples,
+            &NodeTableType, &py_nodes,
+            &EdgesetTableType, &py_edgesets,
+            &MigrationTableType, &py_migrations,
+            &SiteTableType, &py_sites,
+            &MutationTableType, &py_mutations,
+            &filter_invariant_sites)) {
+        goto out;
+    }
+    samples_array = (PyArrayObject *) PyArray_FROM_OTF(samples, NPY_INT32,
+            NPY_ARRAY_IN_ARRAY);
+    if (samples_array == NULL) {
+        goto out;
+    }
+    if (PyArray_NDIM(samples_array) != 1) {
+        PyErr_SetString(PyExc_ValueError, "samples must 1D array");
+        goto out;
+    }
+    shape = PyArray_DIMS(samples_array);
+    num_samples = shape[0];
+    if (num_samples < 2) {
+        PyErr_SetString(PyExc_ValueError, "num_samples must >= 2");
+        goto out;
+    }
+    if (NodeTable_check_state(py_nodes) != 0) {
+        goto out;
+    }
+    nodes = py_nodes->node_table;
+    if (EdgesetTable_check_state(py_edgesets) != 0) {
+        goto out;
+    }
+    edgesets = py_edgesets->edgeset_table;
+    if (py_migrations != NULL) {
+        PyErr_SetString(PyExc_ValueError,
+                "Migrations not yet supported in simplify. Please file a bug report.");
+        goto out;
+    }
+    if (py_sites != NULL) {
+        if (SiteTable_check_state(py_sites) != 0) {
+            goto out;
+        }
+        sites = py_sites->site_table;
+    }
+    if (py_mutations != NULL) {
+        if (MutationTable_check_state(py_mutations) != 0) {
+            goto out;
+        }
+        mutations = py_mutations->mutation_table;
+    }
+    if ((mutations == NULL) != (sites == NULL)) {
+        PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
+        goto out;
+    }
+    if (filter_invariant_sites) {
+        flags |= MSP_FILTER_INVARIANT_SITES;
+    }
+
+    /* If migrations, sites or mutations is NULL on the input, allocate an empty
+     * table for convenience. */
+    if (migrations == NULL) {
+        migrations = PyMem_Malloc(sizeof(migration_table_t));
+        if (migrations == NULL) {
+            ret = PyErr_NoMemory();
+            goto out;
+        }
+        migrations_allocated = true;
+        err = migration_table_alloc(migrations, 1);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    if (sites == NULL) {
+        sites = PyMem_Malloc(sizeof(site_table_t));
+        if (sites == NULL) {
+            ret = PyErr_NoMemory();
+            goto out;
+        }
+        sites_allocated = true;
+        err = site_table_alloc(sites, 1, 1);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    if (mutations == NULL) {
+        mutations = PyMem_Malloc(sizeof(mutation_table_t));
+        if (mutations == NULL) {
+            ret = PyErr_NoMemory();
+            goto out;
+        }
+        mutations_allocated = true;
+        err = mutation_table_alloc(mutations, 1, 1);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    /* Allocate the simplifier and run */
+    simplifier = PyMem_Malloc(sizeof(simplifier_t));
+    if (simplifier == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = simplifier_alloc(simplifier,
+            (node_id_t *) PyArray_DATA(samples_array), num_samples,
+            nodes, edgesets, migrations, sites, mutations, flags);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    err = simplifier_run(simplifier);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    if (simplifier != NULL) {
+        simplifier_free(simplifier);
+        PyMem_Free(simplifier);
+    }
+    Py_XDECREF(samples_array);
+    if (migrations_allocated) {
+        migration_table_free(migrations);
+        PyMem_Free(migrations);
+    }
+    if (sites_allocated) {
+        site_table_free(sites);
+        PyMem_Free(sites);
+    }
+    if (mutations_allocated) {
+        mutation_table_free(mutations);
+        PyMem_Free(mutations);
+    }
+    return ret;
+#else
+    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
+    return NULL;
+#endif
+}
 
 static PyObject *
 msprime_get_gsl_version(PyObject *self)
@@ -7422,7 +7601,6 @@ msprime_get_hdf5_version(PyObject *self)
 out:
     return ret;
 }
-
 
 static PyObject *
 msprime_h5close(PyObject *self)
@@ -7449,7 +7627,9 @@ msprime_get_library_version_str(PyObject *self)
 
 static PyMethodDef msprime_methods[] = {
     {"sort_tables", (PyCFunction) msprime_sort_tables, METH_VARARGS|METH_KEYWORDS,
-            "Sorts tables into canonical ordering for tree sequence intput." },
+            "Sorts tables into canonical ordering for tree sequence input." },
+    {"simplify_tables", (PyCFunction) msprime_simplify_tables, METH_VARARGS|METH_KEYWORDS,
+            "Simplifies the specified set of tables for a given sample subset." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
     {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,

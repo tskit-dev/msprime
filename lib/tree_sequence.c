@@ -26,7 +26,9 @@
 #include <gsl/gsl_math.h>
 
 #include "err.h"
+#include "object_heap.h"
 #include "msprime.h"
+
 
 #define MSP_DIR_FORWARD 1
 #define MSP_DIR_REVERSE -1
@@ -36,13 +38,6 @@ typedef struct {
     node_id_t index;
     int64_t time;
 } index_sort_t;
-
-static int
-cmp_node_id_t(const void *a, const void *b) {
-    const node_id_t *ia = (const node_id_t *) a;
-    const node_id_t *ib = (const node_id_t *) b;
-    return (*ia > *ib) - (*ia < *ib);
-}
 
 static int
 cmp_double(const void *a, const void *b) {
@@ -58,22 +53,6 @@ cmp_index_sort(const void *a, const void *b) {
     int ret = (ca->value > cb->value) - (ca->value < cb->value);
     if (ret == 0) {
         ret = (ca->time > cb->time) - (ca->time < cb->time);
-    }
-    return ret;
-}
-
-static int
-cmp_record_time_left(const void *a, const void *b) {
-    const coalescence_record_t *ca = (const coalescence_record_t *) a;
-    const coalescence_record_t *cb = (const coalescence_record_t *) b;
-    int ret = (ca->time > cb->time) - (ca->time < cb->time);
-    /* If time values are equal, sort by the node */
-    if (ret == 0) {
-        ret = (ca->node > cb->node) - (ca->node < cb->node);
-        /* If the nodes are equal, sort by the left coordinate. */
-        if (ret == 0) {
-            ret = (ca->left > cb->left) - (ca->left < cb->left);
-        }
     }
     return ret;
 }
@@ -136,6 +115,10 @@ validate_length(size_t num_rows, uint32_t *length, size_t total_length)
     return ret;
 
 }
+
+/* ======================================================== *
+ * tree sequence
+ * ======================================================== */
 
 static void
 tree_sequence_check_state(tree_sequence_t *self)
@@ -575,7 +558,7 @@ tree_sequence_check(tree_sequence_t *self)
     node_id_t child, node;
     list_len_t j, k;
     size_t num_coordinates = self->edgesets.num_records + 1;
-    double left, *result;
+    double left;
     double *coordinates = malloc(num_coordinates * sizeof(double));
 
     if (coordinates == NULL) {
@@ -642,12 +625,6 @@ tree_sequence_check(tree_sequence_t *self)
         }
         if (self->edgesets.left[j] >= self->edgesets.right[j]) {
             ret = MSP_ERR_BAD_RECORD_INTERVAL;
-            goto out;
-        }
-        result = bsearch(self->edgesets.right + j, coordinates, num_coordinates,
-                sizeof(double), cmp_double);
-        if (result == NULL) {
-            ret = MSP_ERR_BAD_EDGESET_NONMATCHING_RIGHT;
             goto out;
         }
     }
@@ -946,131 +923,6 @@ tree_sequence_store_provenance_strings(tree_sequence_t *self,
     }
     ret = 0;
 out:
-    return ret;
-}
-
-/* Temporary interface used to translate into load_tables for the simplify
- * function. Remove once simplify has been updated.
- */
-static int WARN_UNUSED
-tree_sequence_load_records(tree_sequence_t *self,
-        size_t num_samples, sample_t *samples,
-        size_t num_coalescence_records, coalescence_record_t *records,
-        size_t num_sites, site_t *sites,
-        size_t num_mutations, mutation_t *mutations)
-{
-    int ret = MSP_ERR_GENERIC;
-    node_table_t *node_table = NULL;
-    edgeset_table_t *edgeset_table = NULL;
-    site_table_t *site_table = NULL;
-    mutation_table_t *mutation_table = NULL;
-    size_t j;
-    node_id_t last_node;
-    coalescence_record_t *cr;
-
-    node_table = malloc(sizeof(node_table_t));
-    if (node_table == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = node_table_alloc(node_table, num_samples + num_coalescence_records, 1);
-    if (ret != 0) {
-        goto out;
-    }
-    edgeset_table = malloc(sizeof(edgeset_table_t));
-    if (edgeset_table == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = edgeset_table_alloc(edgeset_table, num_coalescence_records,
-            2 * num_coalescence_records);
-    if (ret != 0) {
-        goto out;
-    }
-    site_table = malloc(sizeof(site_table_t));
-    if (site_table == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    /* Add 1 to avoid init errors. */
-    ret = site_table_alloc(site_table, num_sites + 1, num_sites + 1);
-    if (ret != 0) {
-        goto out;
-    }
-    for (j = 0; j < num_sites; j++) {
-        ret = site_table_add_row(site_table, sites[j].position,
-                sites[j].ancestral_state, sites[j].ancestral_state_length);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    mutation_table = malloc(sizeof(mutation_table_t));
-    if (mutation_table == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = mutation_table_alloc(mutation_table, num_mutations + 1, num_mutations + 1);
-    if (ret != 0) {
-        goto out;
-    }
-    for (j = 0; j < num_mutations; j++) {
-        ret = mutation_table_add_row(mutation_table, mutations[j].site,
-                mutations[j].node, mutations[j].derived_state,
-                mutations[j].derived_state_length);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    for (j = 0; j < num_samples; j++) {
-        ret = node_table_add_row(node_table, MSP_NODE_IS_SAMPLE,
-                samples[j].time, samples[j].population_id, "");
-        if (ret != 0) {
-            goto out;
-        }
-    }
-
-    last_node = 0;
-    for (j = 0; j < num_coalescence_records; j++) {
-        cr = &records[j];
-        if (cr->node != last_node) {
-            assert(cr->node > last_node);
-            last_node = cr->node;
-            ret = node_table_add_row(node_table, 0, cr->time, cr->population_id, "");
-            if (ret != 0) {
-                goto out;
-            }
-        }
-        ret = edgeset_table_add_row(edgeset_table, cr->left, cr->right,
-                cr->node, cr->children, cr->num_children);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    /* node_table_print_state(node_table, stdout); */
-    /* edgeset_table_print_state(edgeset_table, stdout); */
-    /* site_table_print_state(site_table, stdout); */
-    /* mutation_table_print_state(mutation_table, stdout); */
-
-    ret = tree_sequence_load_tables_tmp(self, node_table, edgeset_table,
-            NULL, site_table, mutation_table, 0, NULL);
-
-out:
-    if (node_table != NULL) {
-        node_table_free(node_table);
-        free(node_table);
-    }
-    if (edgeset_table != NULL) {
-        edgeset_table_free(edgeset_table);
-        free(edgeset_table);
-    }
-    if (site_table != NULL) {
-        site_table_free(site_table);
-        free(site_table);
-    }
-    if (mutation_table != NULL) {
-        mutation_table_free(mutation_table);
-        free(mutation_table);
-    }
     return ret;
 }
 
@@ -2493,466 +2345,122 @@ tree_sequence_get_sample_index_map(tree_sequence_t *self, node_id_t **sample_ind
     return 0;
 }
 
-/* Compress the node space in the specified set of records and mutations.
- */
-static int WARN_UNUSED
-tree_sequence_compress_nodes(tree_sequence_t *self, node_id_t *samples, size_t num_samples,
-        coalescence_record_t *records, size_t num_records, mutation_t *mutations,
-        size_t num_mutations)
-{
-    int ret = MSP_ERR_GENERIC;
-    node_id_t *node_map = NULL;
-    node_id_t next_node;
-    size_t c, j;
-    coalescence_record_t *cr;
-
-    node_map = malloc(self->nodes.num_records * sizeof(node_id_t));
-    if (node_map == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    for (j = 0; j < self->nodes.num_records; j++) {
-        node_map[j] = MSP_NULL_NODE;
-    }
-    for (j = 0; j < num_samples; j++) {
-        node_map[samples[j]] = (node_id_t) j;
-    }
-    next_node = (node_id_t) num_samples;
-    for (j = 0; j < num_records; j++) {
-        cr = &records[j];
-        if (node_map[cr->node] == MSP_NULL_NODE) {
-            node_map[cr->node] = next_node;
-            next_node++;
-        }
-        cr->node = node_map[cr->node];
-        for (c = 0; c < cr->num_children; c++) {
-            cr->children[c] = node_map[cr->children[c]];
-        }
-        qsort(cr->children, cr->num_children, sizeof(node_id_t), cmp_node_id_t);
-    }
-    for (j = 0; j < num_mutations; j++) {
-        mutations[j].node = node_map[mutations[j].node];
-        assert(mutations[j].node != MSP_NULL_NODE);
-    }
-    ret = 0;
-out:
-    if (node_map != NULL) {
-        free(node_map);
-    }
-    return ret;
-}
-
-static int
-tree_sequence_compress_sites(tree_sequence_t *self,
-        mutation_t *mutations, size_t num_mutations,
-        site_t *sites, size_t *ret_num_sites)
-{
-    int ret = 0;
-    size_t output_num_sites = 0;
-    size_t j, k;
-    bool invariant_site;
-
-    /* TODO we should also compress the mutations, but there are situations
-     * where we cannot remove mutations without knowing what the state of a
-     * given node is. It seems hard to do this without having a full tree
-     * traversal (which is too expensive). For now, we accept that there
-     * may be multiple mutations at a given node.
-     */
-
-    /* Go through the sites and remove any that don't have any mutations. */
-    k = 0;
-    for (j = 0; j < self->sites.num_records; j++) {
-        invariant_site = true;
-        while (k < num_mutations && mutations[k].site == (site_id_t) j) {
-            mutations[k].site = (site_id_t) output_num_sites;
-            invariant_site = false;
-            k++;
-        }
-        if (! invariant_site) {
-            sites[output_num_sites] = sites[j];
-            output_num_sites++;
-        }
-    }
-    *ret_num_sites = output_num_sites;
-    return ret;
-}
-
-/* TODO this needs to be updated to use the new tables/edgesets API. We currently
- * use coalescence_records because it makes it simpler for sorting records by time.
- * This should really be spun into its own class, as this function is far too long.
- */
 int WARN_UNUSED
 tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
         size_t num_samples, int flags, tree_sequence_t *output)
 {
-    typedef struct {
-        bool active;
-        double left;
-        node_id_t *mapped_children;
-        uint32_t num_mapped_children;
-    } active_record_t;
+    int ret = 0;
+    simplifier_t *simplifier = NULL;
+    node_table_t *nodes = NULL;
+    edgeset_table_t *edgesets = NULL;
+    migration_table_t *migrations = NULL;
+    site_table_t *sites = NULL;
+    mutation_table_t *mutations = NULL;
+    size_t num_provenance_strings;
+    char **provenance_strings;
 
-    int ret = MSP_ERR_GENERIC;
-    node_id_t *parent = NULL;
-    list_len_t *children_length = NULL;
-    node_id_t **children = NULL;
-    node_id_t *mapping = NULL;
-    node_id_t *mapped_children = NULL;
-    node_id_t *mapped_children_mem = NULL;
-    sample_t *sample_objects = NULL;
-    active_record_t *active_records = NULL;
-    coalescence_record_t *output_records = NULL;
-    mutation_t *output_mutations = NULL;
-    site_t *output_sites = NULL;
-    node_id_t *I = self->edgesets.indexes.insertion_order;
-    node_id_t *O = self->edgesets.indexes.removal_order;
-    size_t M = self->edgesets.num_records;
-    size_t j, k, next_avl_node, mapped_children_mem_offset, num_output_records,
-           num_output_mutations, max_num_child_nodes, max_num_records,
-           num_output_sites;
-    node_id_t u, v, w, h;
-    list_len_t c;
-    size_t num_mapped_children, l;
-    avl_tree_t visited_nodes;
-    avl_node_t *avl_node_mem = NULL;
-    node_id_t *avl_node_value_mem = NULL;
-    avl_node_t *avl_node;
-    active_record_t *ar;
-    coalescence_record_t *cr;
-    bool equal, activate_record;
-    double right, x;
-    bool filter_invariant_sites = flags & MSP_FILTER_INVARIANT_SITES;
-
-    if (num_samples < 2) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    parent = malloc(self->nodes.num_records * sizeof(node_id_t));
-    children = malloc(self->nodes.num_records * sizeof(node_id_t *));
-    children_length = malloc(self->nodes.num_records * sizeof(node_id_t));
-    mapping = malloc(self->nodes.num_records * sizeof(node_id_t));
-    sample_objects = malloc(num_samples * sizeof(sample_t));
-    avl_node_mem = malloc(self->nodes.num_records * sizeof(avl_node_t));
-    avl_node_value_mem = malloc(self->nodes.num_records * sizeof(node_id_t));
-    active_records = malloc(self->nodes.num_records * sizeof(active_record_t));
-    mapped_children = malloc(self->nodes.num_records * sizeof(node_id_t));
-    /* TODO these bounds aren't safe, as we can always construct pathological
-     * examples that will exceed them. When we're refactoring this into an
-     * class, we should replace this with a stack that can grow.
-     */
-    max_num_child_nodes = 4 * self->edgesets.total_children_length;
-    max_num_records = 2 * self->edgesets.num_records;
-    mapped_children_mem = malloc(max_num_child_nodes * sizeof(node_id_t));
-    output_records = malloc(max_num_records * sizeof(coalescence_record_t));
-    output_sites = malloc(self->sites.num_records * sizeof(site_t));
-    output_mutations = malloc(self->mutations.num_records * sizeof(mutation_t));
-    if (parent == NULL || children == NULL || children_length == NULL
-            || mapping == NULL || sample_objects == NULL
-            || avl_node_mem == NULL || avl_node_value_mem == NULL
-            || mapped_children == NULL || active_records == NULL
-            || mapped_children_mem == NULL || output_records == NULL
-            || output_mutations == NULL || output_sites == NULL) {
+    /* Allocate the tables. */
+    nodes = malloc(sizeof(node_table_t));
+    if (nodes == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-
-    /* Initialise the mapping and tree structures */
-    for (u = 0; u < (node_id_t) self->nodes.num_records; u++) {
-        parent[u] = MSP_NULL_NODE;
-        children[u] = NULL;
-        children_length[u] = 0;
-        mapping[u] = MSP_NULL_NODE;
-        avl_node_mem[u].item = avl_node_value_mem + u;
-        active_records[u].active = false;
-    }
-    for (j = 0; j < num_samples; j++) {
-        u = samples[j];
-        if (u < 0 || u >= (node_id_t) self->nodes.num_records) {
-            ret = MSP_ERR_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (!(self->nodes.flags[u] & MSP_NODE_IS_SAMPLE)) {
-            ret = MSP_ERR_BAD_SAMPLES;
-            goto out;
-        }
-        if (mapping[u] != MSP_NULL_NODE) {
-            ret = MSP_ERR_DUPLICATE_SAMPLE;
-            goto out;
-        }
-        mapping[u] = u;
-        sample_objects[j].population_id = self->nodes.population[u];
-        sample_objects[j].time = self->nodes.time[u];
-    }
-    avl_init_tree(&visited_nodes, cmp_node_id_t, NULL);
-    mapped_children_mem_offset = 0;
-    num_output_records = 0;
-    num_output_mutations = 0;
-
-    j = 0;
-    k = 0;
-    l = 0;
-    while (j < M) {
-        x = self->edgesets.left[I[j]];
-        next_avl_node = 0;
-        avl_clear_tree(&visited_nodes);
-
-        /* Records out */
-        while (self->edgesets.right[O[k]] == x) {
-            h = O[k];
-            k++;
-            u = self->edgesets.parent[h];
-            for (c = 0; c < children_length[u]; c++) {
-                parent[children[u][c]] = MSP_NULL_NODE;
-            }
-            children_length[u] = 0;
-            children[u] = NULL;
-            /* Propagate up to the root and save visited nodes */
-            while (u != MSP_NULL_NODE) {
-                if (avl_search(&visited_nodes, &u) == NULL) {
-                    assert(next_avl_node < self->nodes.num_records);
-                    avl_node = &avl_node_mem[next_avl_node];
-                    next_avl_node++;
-                    *((node_id_t *) avl_node->item) = u;
-                    avl_node = avl_insert_node(&visited_nodes, avl_node);
-                    assert(avl_node != NULL);
-                }
-
-                w = MSP_NULL_NODE;
-                for (c = 0; c < children_length[u]; c++) {
-                    v = children[u][c];
-                    if (mapping[v] != MSP_NULL_NODE) {
-                        w = w == MSP_NULL_NODE ? mapping[v]: u;
-                    }
-                }
-                mapping[u] = w;
-                u = parent[u];
-            }
-        }
-
-        /* Records in */
-        while (j < M && self->edgesets.left[I[j]] == x) {
-            h = I[j];
-            j++;
-            u = self->edgesets.parent[h];
-            children_length[u] = self->edgesets.children_length[h];
-            children[u] = self->edgesets.children[h];
-            for (c = 0; c < children_length[u]; c++) {
-                v = children[u][c];
-                parent[v] = u;
-            }
-            /* Propagate up to the root and save visited nodes */
-            while (u != MSP_NULL_NODE) {
-                if (avl_search(&visited_nodes, &u) == NULL) {
-                    assert(next_avl_node < self->nodes.num_records);
-                    avl_node = &avl_node_mem[next_avl_node];
-                    next_avl_node++;
-                    *((node_id_t *) avl_node->item) = u;
-                    avl_node = avl_insert_node(&visited_nodes, avl_node);
-                    assert(avl_node != NULL);
-                }
-
-                w = MSP_NULL_NODE;
-                for (c = 0; c < children_length[u]; c++) {
-                    v = children[u][c];
-                    if (mapping[v] != MSP_NULL_NODE) {
-                        w = w == MSP_NULL_NODE ? mapping[v]: u;
-                    }
-                }
-                mapping[u] = w;
-                u = parent[u];
-            }
-        }
-
-        /* Examine the visited nodes and update the active records */
-        for (avl_node = visited_nodes.head; avl_node != NULL;
-                avl_node = avl_node->next) {
-            u = *((node_id_t *) avl_node->item);
-            ar = &active_records[u];
-            activate_record = false;
-            if (ar->active) {
-                /* Compare the mapped children at this node to the record. */
-                num_mapped_children = 0;
-                for (c = 0; c < children_length[u]; c++) {
-                    v = children[u][c];
-                    if (mapping[v] != MSP_NULL_NODE) {
-                        assert(num_mapped_children < self->nodes.num_records);
-                        mapped_children[num_mapped_children] = mapping[v];
-                        num_mapped_children++;
-                    }
-                }
-                equal = false;
-                if (num_mapped_children == ar->num_mapped_children) {
-                    qsort(mapped_children, num_mapped_children, sizeof(node_id_t),
-                            cmp_node_id_t);
-                    equal = memcmp(ar->mapped_children, mapped_children,
-                            num_mapped_children * sizeof(node_id_t)) == 0;
-                }
-                if (!equal) {
-                    ar->active = false;
-                    assert(num_output_records < max_num_records);
-                    cr = &output_records[num_output_records];
-                    num_output_records++;
-                    cr->left = ar->left;
-                    cr->right = x;
-                    cr->node = u;
-                    cr->num_children = ar->num_mapped_children;
-                    cr->children = ar->mapped_children;
-                    cr->time = self->nodes.time[u];
-                    cr->population_id = self->nodes.population[u];
-                    if (u == mapping[u]) {
-                        activate_record = true;
-                    }
-                }
-            } else {
-                if (u == mapping[u]) {
-                    activate_record = true;
-                }
-            }
-            if (activate_record) {
-                ar->active = true;
-                ar->left = x;
-                ar->num_mapped_children = 0;
-                ar->mapped_children = mapped_children_mem + mapped_children_mem_offset;
-                for (c = 0; c < children_length[u]; c++) {
-                    v = children[u][c];
-                    if (mapping[v] != MSP_NULL_NODE) {
-                        assert(mapped_children_mem_offset < max_num_child_nodes);
-                        mapped_children_mem_offset++;
-                        ar->mapped_children[ar->num_mapped_children] = mapping[v];
-                        ar->num_mapped_children++;
-                    }
-                }
-                qsort(ar->mapped_children, ar->num_mapped_children, sizeof(node_id_t),
-                        cmp_node_id_t);
-            }
-        }
-
-        /* Update the mutations for this tree */
-        right = self->edgesets.right[O[k]];
-        while (l < self->sites.num_records && self->sites.position[l] < right) {
-            output_sites[l].position = self->sites.position[l];
-            output_sites[l].ancestral_state = self->sites.ancestral_state[l];
-            output_sites[l].ancestral_state_length = self->sites.ancestral_state_length[l];
-            for (c = 0; c < self->sites.site_mutations_length[l]; c++) {
-                u = self->sites.site_mutations[l][c].node;
-                if (mapping[u] != MSP_NULL_NODE) {
-                    /* Traverse up the tree until we find either another node in
-                     * the subset tree or the root */
-                    v = parent[u];
-                    while (v != MSP_NULL_NODE && mapping[v] != v) {
-                        v = parent[v];
-                    }
-                    if (v == MSP_NULL_NODE) {
-                        /* This mutation was above the root, and so we must change the
-                         * ancestral state of the site accordingly. */
-                        output_sites[l].ancestral_state =
-                            self->sites.site_mutations[l][c].derived_state;
-                        output_sites[l].ancestral_state_length =
-                            self->sites.site_mutations[l][c].derived_state_length;
-                    } else {
-                        output_mutations[num_output_mutations].site = (site_id_t) l;
-                        output_mutations[num_output_mutations].node = mapping[u];
-                        output_mutations[num_output_mutations].derived_state =
-                            self->sites.site_mutations[l][c].derived_state;
-                        output_mutations[num_output_mutations].derived_state_length =
-                            self->sites.site_mutations[l][c].derived_state_length;
-                        num_output_mutations++;
-                    }
-                }
-            }
-            l++;
-        }
-    }
-
-    /* After the main loop has completed, find all the records that have not
-     * been finished and terminate them.
-     */
-    x = self->sequence_length;
-    for (u = 0; u < (node_id_t) self->nodes.num_records; u++) {
-        ar = &active_records[u];
-        if (ar->active) {
-            assert(num_output_records < max_num_records);
-            cr = &output_records[num_output_records];
-            num_output_records++;
-            cr->left = ar->left;
-            cr->right = x;
-            cr->node = u;
-            cr->time = self->nodes.time[u];
-            cr->population_id = self->nodes.population[u];
-            cr->num_children = (uint32_t) ar->num_mapped_children;
-            cr->children = ar->mapped_children;
-        }
-    }
-
-    if (num_output_records == 0) {
-        ret = MSP_ERR_CANNOT_SIMPLIFY;
-        goto out;
-    }
-    /* Sort the records by time and left coordinate */
-    qsort(output_records, num_output_records, sizeof(coalescence_record_t),
-            cmp_record_time_left);
-    ret = tree_sequence_compress_nodes(self, samples, num_samples,
-            output_records, num_output_records, output_mutations,
-            num_output_mutations);
+    ret = node_table_alloc(nodes, self->nodes.num_records, self->nodes.total_name_length);
     if (ret != 0) {
         goto out;
     }
-    num_output_sites = self->sites.num_records;
-    if (filter_invariant_sites) {
-        ret = tree_sequence_compress_sites(self, output_mutations, num_output_mutations,
-                output_sites, &num_output_sites);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    /* Alloc a new tree sequence for these records. */
-    ret = tree_sequence_load_records(output, num_samples, sample_objects,
-            num_output_records, output_records,
-            num_output_sites, output_sites,
-            num_output_mutations, output_mutations);
-    if (ret != 0) {
-        tree_sequence_free(output);
+    edgesets = malloc(sizeof(node_table_t));
+    if (edgesets == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    ret = edgeset_table_alloc(edgesets, self->edgesets.num_records,
+            self->edgesets.total_children_length);
+    if (ret != 0) {
+        goto out;
+    }
+    /* If we have 0 migrations, sites or mutations just alloc space for one row.
+     * It's not worth making a special case and checking to see if these are NULL */
+    migrations = malloc(sizeof(node_table_t));
+    if (migrations == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = migration_table_alloc(migrations, self->migrations.num_records + 1);
+    if (ret != 0) {
+        goto out;
+    }
+    sites = malloc(sizeof(node_table_t));
+    if (sites == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = site_table_alloc(sites, self->sites.num_records + 1,
+            self->sites.total_ancestral_state_length + 1);
+    if (ret != 0) {
+        goto out;
+    }
+    mutations = malloc(sizeof(node_table_t));
+    if (mutations == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = mutation_table_alloc(mutations, self->mutations.num_records + 1,
+            self->mutations.total_derived_state_length + 1);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_dump_tables_tmp(self, nodes, edgesets, migrations,
+            sites, mutations, &num_provenance_strings, &provenance_strings);
+    if (ret != 0) {
+        goto out;
+    }
+    simplifier = malloc(sizeof(simplifier_t));
+    if (simplifier == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = simplifier_alloc(simplifier, samples, num_samples,
+            nodes, edgesets, migrations, sites, mutations, flags);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = simplifier_run(simplifier);
+    if (ret != 0) {
+        goto out;
+    }
+    /* We are done with the simplifier object, so free it to save some memory */
+    simplifier_free(simplifier);
+    free(simplifier);
+    simplifier = NULL;
+
+    /* TODO fix provenance strings here...*/
+    ret = tree_sequence_load_tables_tmp(output, nodes, edgesets, migrations,
+            sites, mutations, 0, NULL);
 out:
-    if (parent != NULL) {
-        free(parent);
+    if (nodes != NULL) {
+        node_table_free(nodes);
+        free(nodes);
     }
-    if (children != NULL) {
-        free(children);
+    if (edgesets != NULL) {
+        edgeset_table_free(edgesets);
+        free(edgesets);
     }
-    if (children_length != NULL) {
-        free(children_length);
+    if (migrations != NULL) {
+        migration_table_free(migrations);
+        free(migrations);
     }
-    if (mapping != NULL) {
-        free(mapping);
+    if (sites != NULL) {
+        site_table_free(sites);
+        free(sites);
     }
-    if (sample_objects != NULL) {
-        free(sample_objects);
+    if (mutations != NULL) {
+        mutation_table_free(mutations);
+        free(mutations);
     }
-    if (avl_node_value_mem != NULL) {
-        free(avl_node_value_mem);
-    }
-    if (avl_node_mem != NULL) {
-        free(avl_node_mem);
-    }
-    if (active_records != NULL) {
-        free(active_records);
-    }
-    if (mapped_children != NULL) {
-        free(mapped_children);
-    }
-    if (mapped_children_mem != NULL) {
-        free(mapped_children_mem);
-    }
-    if (output_records != NULL) {
-        free(output_records);
-    }
-    if (output_mutations != NULL) {
-        free(output_mutations);
-    }
-    if (output_sites != NULL) {
-        free(output_sites);
+    if (simplifier != NULL) {
+        simplifier_free(simplifier);
+        free(simplifier);
     }
     return ret;
 }

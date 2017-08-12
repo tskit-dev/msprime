@@ -142,6 +142,10 @@ class Segment(object):
             repr(self.next))
         return s
 
+    def __lt__(self, other):
+        return ((self.left, self.right, self.population, self.node) 
+                < (other.left, other.right, other.population, self.node))
+
 
 class Population(object):
     """

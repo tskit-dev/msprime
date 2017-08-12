@@ -631,6 +631,66 @@ typedef struct {
     object_heap_t avl_node_heap;
 } mutgen_t;
 
+
+/* For the simplify algorithm, we need specialised forms of ancestral
+ * segments, sites and mutations */
+typedef struct _simplify_segment_t {
+    double left;
+    double right;
+    struct _simplify_segment_t *next;
+    node_id_t node;
+} simplify_segment_t;
+
+typedef struct _simplify_mutation_t {
+    double position;
+    site_id_t site_id;
+    node_id_t node;
+    char *derived_state;
+    list_len_t derived_state_length;
+    struct _simplify_mutation_t *next;
+} simplify_mutation_t;
+
+typedef struct {
+    double position;
+    char *ancestral_state;
+    list_len_t ancestral_state_length;
+    simplify_mutation_t *mutations;
+} simplify_site_t;
+
+typedef struct {
+    node_id_t *samples;
+    size_t num_samples;
+    int flags;
+    double sequence_length;
+    /* Keep a copy of the input nodes simplify mapping */
+    node_table_t input_nodes;
+    size_t *node_name_offset;
+    size_t num_input_sites;
+    /* Input/output tables. */
+    node_table_t *nodes;
+    edgeset_table_t *edgesets;
+    site_table_t *sites;
+    mutation_table_t *mutations;
+    /* State for topology */
+    simplify_segment_t **ancestor_map;
+    simplify_segment_t **root_map;
+    node_id_t *node_id_map;
+    avl_tree_t merge_queue;
+    object_heap_t segment_heap;
+    object_heap_t avl_node_heap;
+    size_t children_buffer_size;
+    node_id_t *children_buffer;
+    size_t segment_buffer_size;
+    simplify_segment_t **segment_buffer;
+    edgeset_t last_edgeset;
+    /* State for sites/mutations */
+    avl_tree_t *mutation_map;
+    simplify_mutation_t *mutation_mem;
+    simplify_site_t *output_sites;
+    char *ancestral_state_mem;
+    char *derived_state_mem;
+} simplifier_t;
+
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
 int msp_set_simulation_model_non_parametric(msp_t *self, int model);
 int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
@@ -909,6 +969,14 @@ int migration_table_set_columns(migration_table_t *self, size_t num_rows,
 int migration_table_reset(migration_table_t *self);
 int migration_table_free(migration_table_t *self);
 void migration_table_print_state(migration_table_t *self, FILE *out);
+
+int simplifier_alloc(simplifier_t *self,
+        node_id_t *samples, size_t num_samples,
+        node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
+        site_table_t *sites, mutation_table_t *mutations, int flags);
+int simplifier_free(simplifier_t *self);
+int simplifier_run(simplifier_t *self);
+void simplifier_print_state(simplifier_t *self, FILE *out);
 
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 University of Oxford
+# Copyright (C) 2015-2017 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -24,8 +24,12 @@ from __future__ import unicode_literals
 from __future__ import division
 
 import collections
+import heapq
 import random
+import sys
 import unittest
+
+import msprime
 
 NULL_NODE = -1
 
@@ -35,7 +39,14 @@ def setUp():
     random.seed(210)
 
 
+class MsprimeTestCase(unittest.TestCase):
+    """
+    Superclass of all tests msprime simulator test cases.
+    """
+
+
 class PythonSparseTree(object):
+
     """
     Presents the same interface as the SparseTree object for testing. This
     is tightly coupled with the PythonTreeSequence object below which updates
@@ -465,7 +476,428 @@ class MRCACalculator(object):
         return z
 
 
-class MsprimeTestCase(unittest.TestCase):
+class Segment(object):
     """
-    Superclass of all tests msprime simulator test cases.
+    A class representing a single segment. Each segment has a left and right,
+    denoting the loci over which it spans, a node and a next, giving the next
+    in the chain.
+
+    The node it records is the *output* node ID.
     """
+    def __init__(self, left=None, right=None, node=None, next=None):
+        self.left = left
+        self.right = right
+        self.node = node
+        self.next = next
+
+    def __str__(self):
+        s = "({}-{}->{}:next={})".format(
+            self.left, self.right, self.node, repr(self.next))
+        return s
+
+    def __lt__(self, other):
+        return (self.left, self.right, self.node) < (other.left, other.right, self.node)
+
+
+class SortedMap(dict):
+    """
+    Simple implementation of a sorted mapping. Based on the API for bintrees.AVLTree.
+    We don't use bintrees here because it is not available on Windows.
+    """
+    def floor_key(self, k):
+        ret = None
+        for key in sorted(self.keys()):
+            if key <= k:
+                ret = key
+            if key > k:
+                break
+            ret = key
+        return ret
+
+    def succ_key(self, k):
+        ret = None
+        for key in sorted(self.keys()):
+            if key >= k:
+                ret = key
+            if key > k:
+                break
+        return ret
+
+
+class Simplifier(object):
+    """
+    Simplifies a tree sequence to its minimal representation given a subset
+    of the leaves.
+    """
+    def __init__(self, ts, sample):
+        self.ts = ts
+        self.n = len(sample)
+        self.m = ts.sequence_length
+        self.input_sites = list(ts.sites())
+        # A maps input node IDs to the extant ancestor chain. Once the algorithm
+        # has processed the ancestors, they are are removed from the map.
+        self.A = {}
+        # Output tables
+        self.node_table = msprime.NodeTable(ts.num_nodes)
+        self.edgeset_table = msprime.EdgesetTable(ts.num_edgesets)
+        self.site_table = msprime.SiteTable(max(1, ts.num_sites))
+        self.mutation_table = msprime.MutationTable(max(1, ts.num_mutations))
+        self.last_edgeset = None
+        self.num_output_nodes = 0
+        self.output_sites = {}
+        # Keep track of then number of segments we alloc and free to ensure we
+        # don't leak.
+        self.num_used_segments = 0
+        self.node_id_map = {}
+        for j, sample_id in enumerate(sample):
+            # segment label (j) is the output node ID
+            x = self.alloc_segment(0, self.m, j)
+            # and the label in A is the input node ID
+            self.A[sample_id] = x
+            self.record_node(sample_id)
+        # We keep a sorted map of mutations for each input node.
+        self.mutation_map = [SortedMap() for _ in range(ts.num_nodes)]
+        for site in self.ts.sites():
+            for mut in site.mutations:
+                self.mutation_map[mut.node][site.position] = mut
+
+    def is_sample(self, output_id):
+        return output_id < self.n
+
+    def get_mutations(self, input_id, left, right):
+        """
+        Returns all mutations for the specified input ID over the specified
+        interval.
+        """
+        mutations = self.mutation_map[input_id]
+        ret = SortedMap()
+        pos = mutations.succ_key(left)
+        while pos is not None and pos < right:
+            mut = mutations.pop(pos)
+            ret[pos] = mut
+            assert left <= pos < right
+            pos = mutations.succ_key(pos)
+        return ret
+
+    def alloc_segment(self, left, right, node, next=None):
+        """
+        Allocates a new segment with the specified values.
+        """
+        s = Segment(left, right, node, next)
+        self.num_used_segments += 1
+        return s
+
+    def free_segment(self, u):
+        """
+        Frees the specified segment.
+
+        Note: this method is only here to ensure that we are not leaking segments
+        in the C implementation.
+        """
+        self.num_used_segments -= 1
+
+    def record_node(self, input_id):
+        """
+        Adds a new node to the output table corresponding to the specified input
+        node ID.
+        """
+        node = self.ts.node(input_id)
+        self.node_table.add_row(
+            flags=node.flags, time=node.time, population=node.population)
+        self.node_id_map[input_id] = self.num_output_nodes
+        self.num_output_nodes += 1
+
+    def record_edgeset(self, left, right, parent, children):
+        """
+        Adds an edgeset to the output list. This method used the ``last_edgeset``
+        variable to check for adjacent records that may be squashed. Thus, the
+        last edgeset will not be entered in the table, which must be done manually.
+        """
+        sorted_children = tuple(sorted(children))
+        if self.last_edgeset is None:
+            self.last_edgeset = left, right, parent, sorted_children
+        else:
+            last_left, last_right, last_parent, last_children = self.last_edgeset
+            squash_condition = (
+                last_parent == parent and
+                last_children == sorted_children and
+                last_right == left)
+            if squash_condition:
+                self.last_edgeset = last_left, right, parent, sorted_children
+            else:
+                # Flush the last edgeset
+                self.edgeset_table.add_row(
+                    left=last_left, right=last_right, parent=last_parent,
+                    children=last_children)
+                self.last_edgeset = left, right, parent, sorted_children
+
+    def segment_chain_str(self, segment):
+        u = segment
+        s = ""
+        while u is not None:
+            s += "({0}-{1}->{2})".format(u.left, u.right, u.node)
+            u = u.next
+        return s
+
+    def print_heaps(self, L):
+        copy = list(L)
+        ordered = [heapq.heappop(copy) for _ in L]
+        print("H = ")
+        for l, x in ordered:
+            print("\t", l, ":", self.segment_chain_str(x))
+
+    def print_state(self):
+        print(".................")
+        print("Ancestors: ", len(self.A))
+        for x in self.A.keys():
+            s = str(x) + ": " + self.segment_chain_str(self.A[x])
+            print("\t\t" + s)
+        print("Mutation map:")
+        for u in range(len(self.mutation_map)):
+            v = self.mutation_map[u]
+            if len(v) > 0:
+                print("\t", u, "->", v)
+        print("Output sites:")
+        for site in self.output_sites.values():
+            print("\t", site)
+        print("Node ID map: (input->output)")
+        for input_id in sorted(self.node_id_map.keys()):
+            print("\t", input_id, "->", self.node_id_map[input_id])
+
+        # print("Output nodes:")
+        # print(self.node_table)
+        # print("Output Edgesets: ")
+        # print(self.edgeset_table)
+        # print("Output sites and mutations: ")
+        # for site in self.sites:
+        #     print(site)
+
+    def simplify(self):
+        the_parents = [
+            (node.time, input_id) for input_id, node in enumerate(self.ts.nodes())]
+        # need to deal with parents in order by birth time-ago
+        the_parents.sort()
+        for time, input_id in the_parents:
+            # inefficent way to pull all edges corresponding to a given parent
+            edgesets = [x for x in self.ts.edgesets() if x.parent == input_id]
+            for edgeset in edgesets:
+                H = []
+                for edgeset in edgesets:
+                    for child in edgeset.children:
+                        if child in self.A:
+                            self.remove_ancestry(edgeset.left, edgeset.right, child, H)
+                            self.check_state()
+                self.merge_labeled_ancestors(H, input_id)
+                self.check_state()
+        # Flush the last edgeset to the table and create the new tree sequence.
+        if self.last_edgeset is not None:
+            left, right, parent, children = self.last_edgeset
+            self.edgeset_table.add_row(
+                left=left, right=right, parent=parent, children=children)
+        # print("DONE")
+        # self.print_state()
+        # The extant segments are the roots for each interval. For every root
+        # node, store the intervals over which it applies.
+        roots = collections.defaultdict(list)
+        for seg in self.A.values():
+            while seg is not None:
+                roots[seg.node].append(seg)
+                seg = seg.next
+
+        # Add in the sites and mutations.
+        output_site_id = 0
+        for position in sorted(self.output_sites.keys()):
+            site = self.output_sites[position]
+            ancestral_state = site.ancestral_state
+            # Reverse the mutations to get the correct order.
+            site.mutations.reverse()
+            # This is an ugly hack to see if the mutation is over a root. We will
+            # need a better algorithm in general, and this will certainly fail for
+            # more complex mutations.
+            root = False
+            if site.mutations[0].node in roots:
+                for seg in roots[site.mutations[0].node]:
+                    if seg.left <= site.position < seg.right:
+                        root = True
+            if not root:
+                # Hack to get correct ancestral state for binary mutations. In general
+                # we'll need something better.
+                if site.mutations[0].derived_state == '0':
+                    ancestral_state = '1'
+                self.site_table.add_row(
+                    position=site.position, ancestral_state=ancestral_state)
+                for mutation in site.mutations:
+                    self.mutation_table.add_row(
+                        site=output_site_id, node=mutation.node,
+                        derived_state=mutation.derived_state)
+                output_site_id += 1
+        return msprime.load_tables(
+            nodes=self.node_table, edgesets=self.edgeset_table,
+            sites=self.site_table, mutations=self.mutation_table)
+
+    def record_mutation(self, node, mutation):
+        position = self.input_sites[mutation.site].position
+        if position not in self.output_sites:
+            site = msprime.Site(
+                position=position, ancestral_state="0", mutations=[], index=None)
+            self.output_sites[position] = site
+        else:
+            site = self.output_sites[position]
+        site.mutations.append(
+            msprime.Mutation(site=None, node=node, derived_state=mutation.derived_state))
+
+    def remove_ancestry(self, left, right, input_id, H):
+        """
+        Remove the ancestry for the specified input node over the specified interval
+        by snipping out elements of the segment chain and modifying any segments
+        that overlap the edges. Update the specified heapq H of (x.left, x)
+        tuples, where x is the head of a linked list of ancestral segments that we
+        remove from the chain for input_id.
+        """
+        head = self.A[input_id]
+        # Record any mutations we encounter.
+        x = head
+        while x is not None:
+            mutations = self.get_mutations(input_id, x.left, x.right)
+            for pos, mut in mutations.items():
+                self.record_mutation(x.node, mut)
+            x = x.next
+
+        x = head
+        last = None
+        # Skip the leading segments before left.
+        while x is not None and x.right <= left:
+            last = x
+            x = x.next
+        if x is not None and x.left < left:
+            # The left edge of x overhangs. Insert a new segment for the excess.
+            y = self.alloc_segment(x.left, left, x.node, None)
+            x.left = left
+            if last is not None:
+                last.next = y
+            last = y
+            if x == head:
+                head = last
+
+        if x is not None and x.left < right:
+            # x is the first segment within the target interval, so add it to the
+            # output heapq.
+            heapq.heappush(H, (x.left, x))
+            # Skip over segments strictly within the interval
+            while x is not None and x.right <= right:
+                x_prev = x
+                x = x.next
+            if x is not None and x.left < right:
+                # We have an overhang on the right hand side. Create a new
+                # segment for the overhang and terminate the output chain.
+                y = self.alloc_segment(right, x.right, x.node, x.next)
+                x.right = right
+                x.next = None
+                x = y
+            elif x_prev is not None:
+                x_prev.next = None
+
+        # x is the first segment in the new chain starting after right.
+        if last is None:
+            head = x
+        else:
+            last.next = x
+        if head is None:
+            del self.A[input_id]
+        else:
+            self.A[input_id] = head
+
+    def merge_labeled_ancestors(self, H, input_id):
+        """
+        All ancestry segments in H come together into a new parent.
+        The new parent must be assigned and any overlapping segments coalesced.
+        """
+        # H is a heapq of (x.left, x) tuples,
+        # with x an ancestor, i.e., a list of segments.
+        coalescence = False
+        alpha = None
+        z = None
+        while len(H) > 0:
+            # self.print_heaps(H)
+            alpha = None
+            l = H[0][0]
+            X = []
+            r = self.m + 1
+            while len(H) > 0 and H[0][0] == l:
+                x = heapq.heappop(H)[1]
+                X.append(x)
+                r = min(r, x.right)
+            if len(H) > 0:
+                r = min(r, H[0][0])
+            if len(X) == 1:
+                x = X[0]
+                if input_id in self.node_id_map:
+                    u = self.node_id_map[input_id]
+                    if self.is_sample(u):
+                        self.record_edgeset(x.left, x.right, u, [x.node])
+                        x.node = u
+                if len(H) > 0 and H[0][0] < x.right:
+                    alpha = self.alloc_segment(x.left, H[0][0], x.node)
+                    x.left = H[0][0]
+                    heapq.heappush(H, (x.left, x))
+                else:
+                    if x.next is not None:
+                        y = x.next
+                        heapq.heappush(H, (y.left, y))
+                    alpha = x
+                    alpha.next = None
+            else:
+                if not coalescence:
+                    coalescence = True
+                    if input_id not in self.node_id_map:
+                        self.record_node(input_id)
+                # output node ID
+                u = self.node_id_map[input_id]
+                alpha = self.alloc_segment(l, r, u)
+                # Update the heaps and make the record.
+                children = []
+                for x in X:
+                    children.append(x.node)
+                    if x.right == r:
+                        self.free_segment(x)
+                        if x.next is not None:
+                            y = x.next
+                            heapq.heappush(H, (y.left, y))
+                    elif x.right > r:
+                        x.left = r
+                        heapq.heappush(H, (x.left, x))
+                self.record_edgeset(l, r, u, children)
+
+            # loop tail; update alpha and integrate it into the state.
+            if z is None:
+                # Add a new mapping for the input_id to the segment chain starting
+                # with alpha.
+                self.A[input_id] = alpha
+            else:
+                z.next = alpha
+            z = alpha
+
+    def check_state(self):
+        # print("CHECK_STATE")
+        # self.print_state()
+        for input_id, x in self.A.items():
+            while x is not None:
+                assert x.left < x.right
+                if x.next is not None:
+                    assert x.right <= x.next.left
+                x = x.next
+
+
+if __name__ == "__main__":
+    # Simple CLI for running simplifier above.
+    ts = msprime.load(sys.argv[1])
+    samples = list(map(int, sys.argv[2:]))
+    s = Simplifier(ts, samples)
+    s.print_state()
+    tss = s.simplify()
+    tables = tss.dump_tables()
+    print("Output:")
+    print(tables.nodes)
+    print(tables.edgesets)
+    print(tables.sites)
+    print(tables.mutations)

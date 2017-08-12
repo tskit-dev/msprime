@@ -29,7 +29,6 @@ except ImportError:
     # This fails for Python 3.x, but that's fine.
     pass
 
-import collections
 import gzip
 import itertools
 import json
@@ -166,114 +165,8 @@ def simplify_tree_sequence(ts, samples):
     """
     Simple tree-by-tree algorithm to get a simplify of a tree sequence.
     """
-    if len(samples) < 2:
-        raise ValueError("Must have at least two samples")
-    # TODO this algorithm is partially refactored to use the tables API.
-    # It should be updated to properly support non binary mutations and
-    # to also remove references to the CoalescenceRecord object. The algorithm
-    # can also be clarified, as it's quite muddled at the moment what a 'record'
-    # is.
-
-    # TODO remove
-    for site in ts.sites():
-        assert site.ancestral_state == "0"
-        for mutation in site.mutations:
-            assert mutation.derived_state == "1"
-
-    num_nodes = ts.get_num_nodes()
-    active_records = {}
-    new_records = []
-    site_records = collections.defaultdict(list)
-    for tree in ts.trees(tracked_leaves=samples):
-        parent = [msprime.NULL_NODE for j in range(num_nodes)]
-        children = collections.defaultdict(list)
-        for leaf in samples:
-            u = leaf
-            v = tree.get_parent(u)
-            while v != msprime.NULL_NODE:
-                is_parent = (
-                    tree.get_num_tracked_leaves(v) > tree.get_num_tracked_leaves(u))
-                if parent[u] == msprime.NULL_NODE and is_parent:
-                    parent[u] = v
-                    children[v].append(u)
-                    children[v].sort()
-                    u = v
-                v = tree.get_parent(v)
-        removed = []
-        for u, record in active_records.items():
-            if u not in children:
-                active_records[u][1] = tree.get_interval()[0]
-                new_records.append(msprime.CoalescenceRecord(*record))
-                removed.append(u)
-        for u in removed:
-            del active_records[u]
-        for u, c in children.items():
-            if u not in active_records:
-                active_records[u] = list(tree.get_interval()) + [
-                    u, tuple(c), tree.get_time(u), tree.get_population(u)]
-            elif active_records[u][3] != tuple(c):
-                active_records[u][1] = tree.get_interval()[0]
-                new_records.append(msprime.CoalescenceRecord(*active_records[u]))
-                active_records[u][0] = tree.get_interval()[0]
-                active_records[u][3] = tuple(c)
-        subset_root = samples[0]
-        while parent[subset_root] != msprime.NULL_NODE:
-            subset_root = parent[subset_root]
-        # Now find the new nodes for all mutations that can be mapped back in
-        for site in tree.sites():
-            new_nodes = []
-            for mut in site.mutations:
-                stack = [mut.node]
-                while not len(stack) == 0:
-                    u = stack.pop()
-                    if parent[u] != msprime.NULL_NODE or u in children:
-                        if u != subset_root:
-                            new_nodes.append(u)
-                        break
-                    stack.extend(tree.get_children(u))
-            if len(new_nodes) > 0:
-                site_records[site.position].extend(new_nodes)
-    for record in active_records.values():
-        record[1] = ts.get_sequence_length()
-        new_records.append(msprime.CoalescenceRecord(*record))
-    new_records.sort(key=lambda r: (r.time, r.node, r.left))
-
-    # Now compress the nodes.
-    node_map = [msprime.NULL_NODE for _ in range(num_nodes)]
-    new_nodes = msprime.NodeTable(num_nodes)
-    new_edgesets = msprime.EdgesetTable(ts.num_edgesets, 2 * ts.num_edgesets)
-    for j, u in enumerate(samples):
-        node_map[u] = j
-        node = ts.node(u)
-        new_nodes.add_row(flags=node.flags, time=node.time, population=node.population)
-    next_node = len(samples)
-    for record in new_records:
-        for u in list(record.children) + [record.node]:
-            if node_map[u] == msprime.NULL_NODE:
-                node = ts.node(u)
-                new_nodes.add_row(
-                    flags=node.flags, time=node.time, population=node.population)
-                node_map[u] = next_node
-                next_node += 1
-        children = tuple(sorted(node_map[c] for c in record.children))
-        new_edgesets.add_row(
-            left=record.left, right=record.right, parent=node_map[record.node],
-            children=children)
-    new_sites = msprime.SiteTable()
-    new_mutations = msprime.MutationTable()
-    for j, position in enumerate(sorted(site_records.keys())):
-        # We must sort the mapped nodes by nonincreasing time.
-        nodes = sorted(
-            [node_map[u] for u in site_records[position]],
-            key=lambda v: -ts.node(v).time)
-        # TODO get the ancestral_state and derived_state properly.
-        new_sites.add_row(position=position, ancestral_state="0")
-        for node in nodes:
-            new_mutations.add_row(site=j, node=node, derived_state="1")
-
-    return msprime.load_tables(
-        nodes=new_nodes, edgesets=new_edgesets, sites=new_sites,
-        mutations=new_mutations)
+    s = tests.Simplifier(ts, samples)
+    return s.simplify()
 
 
 def make_alternating_back_mutations(ts):
@@ -1168,10 +1061,10 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertIn(unique[0], [0, 1])
             j += 1
 
-    @unittest.skip("simplify with lots of back mutations")
     def test_simplify(self):
         num_mutations = 0
-        for ts in get_example_tree_sequences():
+        # TODO When back-mutations are implemented correctly, enable this test fully
+        for ts in get_example_tree_sequences(back_mutations=False):
             n = ts.get_sample_size()
             num_mutations += ts.get_num_mutations()
             if n > 2:
@@ -1200,6 +1093,7 @@ class TestTreeSequence(HighLevelTestCase):
                     open(mutations_file) as mutations:
                 ts = msprime.load_text(
                     nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
+            # print("nodes_file = ", nodes_file)
             samples = list(range(ts.sample_size))
             self.verify_simplify_equality(ts, samples)
             self.verify_simplify_topology(ts, samples)

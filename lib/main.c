@@ -1033,16 +1033,29 @@ run_stats(const char *filename, int verbose)
 }
 
 static void
-run_simplify(const char *input_filename, const char *output_filename, int verbose)
+run_simplify(const char *input_filename, const char *output_filename, size_t num_samples,
+        bool filter_invariant_sites, int verbose)
 {
     tree_sequence_t ts, subset;
-    size_t j, num_samples;
+    size_t j;
     node_id_t *samples;
     int flags = 0;
     int ret;
 
+    if (filter_invariant_sites) {
+        flags |= MSP_FILTER_INVARIANT_SITES;
+    }
+
     load_tree_sequence(&ts, input_filename);
-    num_samples = tree_sequence_get_sample_size(&ts);
+    if (verbose > 0) {
+        printf(">>>>>>>>\nINPUT:\n>>>>>>>>\n");
+        tree_sequence_print_state(&ts, stdout);
+    }
+    if (num_samples == 0) {
+        num_samples = tree_sequence_get_sample_size(&ts);
+    } else {
+        num_samples = GSL_MIN(num_samples, tree_sequence_get_sample_size(&ts));
+    }
     samples = malloc(num_samples * sizeof(node_id_t));
     if (samples == NULL) {
         fatal_error("out of memory");
@@ -1062,7 +1075,10 @@ run_simplify(const char *input_filename, const char *output_filename, int verbos
     if (ret != 0) {
         fatal_library_error(ret, "Write error");
     }
-    /* tree_sequence_print_state(&subset, stdout); */
+    if (verbose > 0) {
+        printf(">>>>>>>>\nOUTPUT:\n>>>>>>>>\n");
+        tree_sequence_print_state(&subset, stdout);
+    }
     tree_sequence_free(&ts);
     tree_sequence_free(&subset);
     free(samples);
@@ -1143,13 +1159,18 @@ main(int argc, char** argv)
     void* argtable8[] = {cmd8, verbose8, infiles8, end8};
     int nerrors8;
 
-    /* SYNTAX 9: simplify [-v] <input-file> */
+    /* SYNTAX 9: simplify [-vi] [-s] <input-file> <output-file> */
     struct arg_rex *cmd9 = arg_rex1(NULL, NULL, "simplify", NULL, REG_ICASE, NULL);
     struct arg_lit *verbose9 = arg_lit0("v", "verbose", NULL);
+    struct arg_int *sample_size9 = arg_int0("s", "sample-size", "<sample-size>",
+            "Number of samples to keep in the simplified tree sequence.");
+    struct arg_lit *filter_invariant_sites9 = arg_lit0("i",
+            "filter-invariant-sites", "<filter-invariant-sites>");
     struct arg_file *infiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_file *outfiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_end *end9 = arg_end(20);
-    void* argtable9[] = {cmd9, verbose9, infiles9, outfiles9, end9};
+    void* argtable9[] = {cmd9, verbose9, filter_invariant_sites9, sample_size9,
+        infiles9, outfiles9, end9};
     int nerrors9;
 
     int exitcode = EXIT_SUCCESS;
@@ -1160,6 +1181,7 @@ main(int argc, char** argv)
     output1->filename[0] = NULL;
     ploidy5->ival[0] = 1;
     chrom5->sval[0] = "1";
+    sample_size9->ival[0] = 0;
 
     nerrors1 = arg_parse(argc, argv, argtable1);
     nerrors2 = arg_parse(argc, argv, argtable2);
@@ -1189,7 +1211,9 @@ main(int argc, char** argv)
     } else if (nerrors8 == 0) {
         run_stats(infiles8->filename[0], verbose8->count);
     } else if (nerrors9 == 0) {
-        run_simplify(infiles9->filename[0], outfiles9->filename[0], verbose9->count);
+        run_simplify(infiles9->filename[0], outfiles9->filename[0],
+                (size_t) sample_size9->ival[0], (bool) filter_invariant_sites9->count,
+                verbose9->count);
     } else {
         /* We get here if the command line matched none of the possible syntaxes */
         if (cmd1->count > 0) {
