@@ -538,20 +538,41 @@ class TestSimplifyExamples(TopologyTestCase):
     or we detect expected errors.
     """
     def verify_simplify(
-            self, samples, nodes_before=None, edgesets_before=None,
-            nodes_after=None, edgesets_after=None):
+            self, samples, filter_invariant_sites=True,
+            nodes_before=None, edgesets_before=None, sites_before=None,
+            mutations_before=None, nodes_after=None, edgesets_after=None,
+            sites_after=None, mutations_after=None):
         """
         Verifies that if we run simplify on the specified input we get the
         required output.
         """
         b_nodes = msprime.parse_nodes(six.StringIO(nodes_before))
         b_edgesets = msprime.parse_edgesets(six.StringIO(edgesets_before))
+        if sites_before is not None:
+            b_sites = msprime.parse_sites(six.StringIO(sites_before))
+        else:
+            b_sites = msprime.SiteTable()
+        if mutations_before is not None:
+            b_mutations = msprime.parse_mutations(six.StringIO(mutations_before))
+        else:
+            b_mutations = msprime.MutationTable()
         msprime.simplify_tables(
-            samples=samples, nodes=b_nodes, edgesets=b_edgesets)
+            samples=samples, nodes=b_nodes, edgesets=b_edgesets, sites=b_sites,
+            mutations=b_mutations, filter_invariant_sites=filter_invariant_sites)
         a_nodes = msprime.parse_nodes(six.StringIO(nodes_after))
         a_edgesets = msprime.parse_edgesets(six.StringIO(edgesets_after))
+        if sites_after is not None:
+            a_sites = msprime.parse_sites(six.StringIO(sites_after))
+        else:
+            a_sites = msprime.SiteTable()
+        if mutations_after is not None:
+            a_mutations = msprime.parse_mutations(six.StringIO(mutations_after))
+        else:
+            a_mutations = msprime.MutationTable()
         self.assertEqual(b_nodes, a_nodes)
         self.assertEqual(b_edgesets, a_edgesets)
+        self.assertEqual(b_sites, a_sites)
+        self.assertEqual(b_mutations, a_mutations)
 
     def test_unsorted_edgesets(self):
         # We have two nodes at the same time and interleave edgesets for
@@ -689,6 +710,78 @@ class TestSimplifyExamples(TopologyTestCase):
             samples=[0, 3, 6],
             nodes_before=nodes_before, edgesets_before=edgesets_before,
             nodes_after=nodes_after, edgesets_after=edgesets_after)
+
+    def test_single_binary_tree_simple_mutations(self):
+        # 3          5
+        #           / \
+        # 2        4   \
+        #         / \   s0
+        # 1      3   s1  \
+        #       / \   \   \
+        # 0   (0) (1)  2  (6)
+        nodes_before = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           0
+        3       0           1
+        4       0           2
+        5       0           3
+        6       1           0
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       1       3       0,1
+        0       1       4       2,3
+        0       1       5       4,6
+        """
+        sites_before = """\
+        id  position    ancestral_state
+        0   0.1         0
+        1   0.2         0
+        """
+        mutations_before = """\
+        site    node    derived_state
+        0       6       1
+        1       2       1
+        """
+
+        # We sample 0 and 2 and 6, so we get
+        nodes_after = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           0
+        3       0           1
+        3       0           3
+        """
+        edgesets_after = """\
+        left    right   parent  children
+        0       1       3       0,1
+        0       1       4       2,3
+        """
+        sites_after = """\
+        id  position    ancestral_state
+        0   0.1         0
+        """
+        mutations_after = """\
+        site    node    derived_state
+        0       2       1
+        """
+        self.verify_simplify(
+            samples=[0, 1, 6],
+            nodes_before=nodes_before, edgesets_before=edgesets_before,
+            sites_before=sites_before, mutations_before=mutations_before,
+            nodes_after=nodes_after, edgesets_after=edgesets_after,
+            sites_after=sites_after, mutations_after=mutations_after)
+        # If we don't filter the fixed sites, we should get the same
+        # mutations and the original sites table back.
+        self.verify_simplify(
+            samples=[0, 1, 6], filter_invariant_sites=False,
+            nodes_before=nodes_before, edgesets_before=edgesets_before,
+            sites_before=sites_before, mutations_before=mutations_before,
+            nodes_after=nodes_after, edgesets_after=edgesets_after,
+            sites_after=sites_before, mutations_after=mutations_after)
 
 
 class TestNonSampleExternalNodes(TopologyTestCase):
