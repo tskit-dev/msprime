@@ -7832,7 +7832,7 @@ msprime_get_library_version_str(PyObject *self)
 
 static PyMethodDef msprime_methods[] = {
     {"sort_tables", (PyCFunction) msprime_sort_tables, METH_VARARGS|METH_KEYWORDS,
-            "Sorts tables into canonical ordering for tree sequence input." },
+            "Sorts tables, in place, into canonical ordering for tree sequence input." },
     {"simplify_tables", (PyCFunction) msprime_simplify_tables, METH_VARARGS|METH_KEYWORDS,
             "Simplifies the specified set of tables for a given sample subset." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
