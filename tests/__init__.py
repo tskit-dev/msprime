@@ -31,6 +31,8 @@ import unittest
 
 import msprime
 
+from .wf import wf_sim
+
 NULL_NODE = -1
 
 

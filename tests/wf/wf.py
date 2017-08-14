@@ -34,6 +34,7 @@ def wf_sim(N, ngens, survival=0.0, mutation_rate=0.0, debug=False, seed=None):
     edgesets = msprime.EdgesetTable()
     sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
+    migrations = msprime.MigrationTable()
     init_ts.dump_tables(nodes=nodes, edgesets=edgesets,
                         sites=sites, mutations=mutations)
     nodes.set_columns(time=nodes.time + ngens + 1,
@@ -43,8 +44,7 @@ def wf_sim(N, ngens, survival=0.0, mutation_rate=0.0, debug=False, seed=None):
     mut_positions = {}
 
     # get ready to record things
-    labels = count(1 + max(init_ts.samples()), 1)
-    pop = [next(labels) for k in range(N)]
+    pop = init_ts.samples()
 
     for t in range(ngens, -1, -1):
         if debug:
@@ -52,38 +52,40 @@ def wf_sim(N, ngens, survival=0.0, mutation_rate=0.0, debug=False, seed=None):
             print("pop:", pop)
 
         dead = [(random.random() > survival) for k in pop]
-        j = 0
+        # sample these first so that all parents are from the previous gen
+        new_parents = [(random.choice(pop), random.choice(pop)) 
+                       for k in range(sum(dead))]
+        k = 0
         if debug:
             print("Replacing", sum(dead), "individuals.")
-        while j < N:
-            while not dead[j]:
-                j += 1
-            # this is: offspring ID, lparent, rparent, breakpoint
-            offspring = next(labels)
-            lparent = random.choice(pop)
-            rparent = random.choice(pop)
-            bp = random_breakpoint()
-            muts = random_mutations(mutation_rate)
-            if debug:
-                print("--->", offspring, lparent, rparent, bp)
-            pop[j] = offspring
-            j += 1
-            nodes.add_row(time=t)
-            if bp > 0.0:
-                edgesets.add_row(left=0.0, right=bp,
-                                 parent=lparent, children=(offspring,))
-            if bp < 1.0:
-                edgesets.add_row(left=bp, right=1.0,
-                                 parent=rparent, children=(offspring,))
-            for mut in muts:
-                if mut not in mut_positions:
-                    mut_positions[mut] = sites.num_rows
-                    sites.add_row(site=mut, ancestral_state=random_allele())
-                mutations.add_row(site=mut_positions[mut],
-                                  node=offspring, derived_state=random_allele())
+        for j in range(N):
+            if dead[j]:
+                # this is: offspring ID, lparent, rparent, breakpoint
+                offspring = nodes.num_rows
+                nodes.add_row(time=t, population=0)
+                lparent, rparent = new_parents[k]
+                k += 1
+                bp = random_breakpoint()
+                muts = random_mutations(mutation_rate)
+                if debug:
+                    print("--->", offspring, lparent, rparent, bp)
+                pop[j] = offspring
+                if bp > 0.0:
+                    edgesets.add_row(left=0.0, right=bp,
+                                     parent=lparent, children=(offspring,))
+                if bp < 1.0:
+                    edgesets.add_row(left=bp, right=1.0,
+                                     parent=rparent, children=(offspring,))
+                for mut in muts:
+                    if mut not in mut_positions:
+                        mut_positions[mut] = sites.num_rows
+                        sites.add_row(site=mut, ancestral_state=random_allele())
+                    mutations.add_row(site=mut_positions[mut],
+                                      node=offspring, derived_state=random_allele())
 
     if debug:
-        print("Done, now sorting.")
+        print("Done! Final pop:")
+        print(pop)
 
     nodes.set_columns(time=nodes.time,
                       flags=[(msprime.NODE_IS_SAMPLE if u in pop else 0)
@@ -97,6 +99,16 @@ def wf_sim(N, ngens, survival=0.0, mutation_rate=0.0, debug=False, seed=None):
 
     if debug:
         print("Done.")
+        print("Nodes:")
+        print(nodes)
+        print("Edgesets:")
+        print(edgesets)
+        print("Sites:")
+        print(sites)
+        print("Mutations:")
+        print(mutations)
+        print("Migrations:")
+        print(migrations)
 
     return msprime.TableTuple(nodes=nodes, edgesets=edgesets, sites=sites,
-                              mutations=mutations)
+                              mutations=mutations, migrations=migrations)
