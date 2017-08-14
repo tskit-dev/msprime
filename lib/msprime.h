@@ -666,6 +666,10 @@ typedef struct {
     node_table_t input_nodes;
     size_t *node_name_offset;
     size_t num_input_sites;
+    /* Keep a copy of the input edgesets for simplicity. We cannot modify the
+     * edgeset table in place because we may have more output edgesets than input.
+     */
+    edgeset_table_t input_edgesets;
     /* Input/output tables. */
     node_table_t *nodes;
     edgeset_table_t *edgesets;

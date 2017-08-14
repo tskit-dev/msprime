@@ -1787,15 +1787,31 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         self->node_name_offset[j] = offset;
         offset += self->input_nodes.name_length[j];
     }
+    /* Make a copy of the input edgesets and clear the input table, ready for output. */
+    ret = edgeset_table_alloc(&self->input_edgesets, edgesets->num_rows,
+            edgesets->total_children_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_set_columns(&self->input_edgesets, edgesets->num_rows,
+            edgesets->left, edgesets->right, edgesets->parent,
+            edgesets->children, edgesets->children_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_reset(self->edgesets);
+    if (ret != 0) {
+        goto out;
+    }
     /* Allocate the heaps used for small objects. */
     /* TODO assuming that the number of edgesets is a good guess here. */
     ret = object_heap_init(&self->segment_heap, sizeof(simplify_segment_t),
-            edgesets->num_rows, NULL);
+            self->input_edgesets.num_rows, NULL);
     if (ret != 0) {
         goto out;
     }
     ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t),
-            edgesets->num_rows, NULL);
+            self->input_edgesets.num_rows, NULL);
     if (ret != 0) {
         goto out;
     }
@@ -1849,6 +1865,7 @@ int
 simplifier_free(simplifier_t *self)
 {
     node_table_free(&self->input_nodes);
+    edgeset_table_free(&self->input_edgesets);
     object_heap_free(&self->segment_heap);
     object_heap_free(&self->avl_node_heap);
     msp_safe_free(self->node_name_offset);
@@ -2340,53 +2357,42 @@ simplifier_run(simplifier_t *self)
     node_id_t parent, current_parent, *children;
     list_len_t k, children_length;
     double left, right;
-    size_t num_input_edgesets = self->edgesets->num_rows;
     size_t children_offset = 0;
 
-    /* We modify the edgeset table in place, adding records to the
-     * start of the table after we have read in and queued the edgesets
-     * for each parent. */
-    ret = edgeset_table_reset(self->edgesets);
-    if (ret != 0) {
-        goto out;
-    }
-    if (num_input_edgesets > 0) {
-        current_parent = self->edgesets->parent[0];
-        for (j = 0; j < num_input_edgesets; j++) {
-            assert(j >= self->edgesets->num_rows);
-            parent = self->edgesets->parent[j];
-            left = self->edgesets->left[j];
-            right = self->edgesets->right[j];
-            children_length = self->edgesets->children_length[j];
-            children = self->edgesets->children + children_offset;
-            children_offset += children_length;
-            if (parent != current_parent) {
-                ret = simplifier_merge_ancestors(self, current_parent);
+    current_parent = self->input_edgesets.parent[0];
+    for (j = 0; j < self->input_edgesets.num_rows; j++) {
+        parent = self->input_edgesets.parent[j];
+        left = self->input_edgesets.left[j];
+        right = self->input_edgesets.right[j];
+        children_length = self->input_edgesets.children_length[j];
+        children = self->input_edgesets.children + children_offset;
+        children_offset += children_length;
+        if (parent != current_parent) {
+            ret = simplifier_merge_ancestors(self, current_parent);
+            if (ret != 0) {
+                goto out;
+            }
+            assert(avl_count(&self->merge_queue) == 0);
+            current_parent = parent;
+        }
+        for (k = 0; k < children_length; k++) {
+            if (self->ancestor_map[children[k]] != NULL) {
+                ret = simplifier_record_mutations(self, children[k]);
                 if (ret != 0) {
                     goto out;
                 }
-                assert(avl_count(&self->merge_queue) == 0);
-                current_parent = parent;
-            }
-            for (k = 0; k < children_length; k++) {
-                if (self->ancestor_map[children[k]] != NULL) {
-                    ret = simplifier_record_mutations(self, children[k]);
-                    if (ret != 0) {
-                        goto out;
-                    }
-                    ret = simplifier_remove_ancestry(self, left, right, children[k]);
-                    if (ret != 0) {
-                        goto out;
-                    }
+                ret = simplifier_remove_ancestry(self, left, right, children[k]);
+                if (ret != 0) {
+                    goto out;
                 }
             }
         }
-        ret = simplifier_merge_ancestors(self, current_parent);
-        if (ret != 0) {
-            goto out;
-        }
-        assert(avl_count(&self->merge_queue) == 0);
     }
+    ret = simplifier_merge_ancestors(self, current_parent);
+    if (ret != 0) {
+        goto out;
+    }
+    assert(avl_count(&self->merge_queue) == 0);
 
     /* Flush the last edgeset, if any */
     if (self->last_edgeset.children_length > 0) {

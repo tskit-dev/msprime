@@ -783,6 +783,56 @@ class TestSimplifyExamples(TopologyTestCase):
             nodes_after=nodes_after, edgesets_after=edgesets_after,
             sites_after=sites_before, mutations_after=mutations_after)
 
+    def test_overlapping_edgesets(self):
+        nodes = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           0
+        3       0           1
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       2       3       0,2
+        1       3       3       1,2
+        """
+        # We should resolve the overlapping edgesets here.
+        edgesets_after = """\
+        left    right   parent  children
+        0       1       3       0,2
+        1       2       3       0,1,2
+        2       3       3       1,2
+        """
+        self.verify_simplify(
+            samples=[0, 1, 2],
+            nodes_before=nodes, edgesets_before=edgesets_before,
+            nodes_after=nodes, edgesets_after=edgesets_after)
+
+    @unittest.skip("Unary edgesets in simplify")
+    def test_overlapping_unary_edgesets(self):
+        nodes = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           1
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       2       2       0
+        1       3       2       1
+        """
+        # We should resolve the overlapping edgesets here.
+        edgesets_after = """\
+        left    right   parent  children
+        0       1       3       0
+        1       2       3       0,1
+        2       3       3       1
+        """
+        self.verify_simplify(
+            samples=[0, 1],
+            nodes_before=nodes, edgesets_before=edgesets_before,
+            nodes_after=nodes, edgesets_after=edgesets_after)
+
 
 class TestNonSampleExternalNodes(TopologyTestCase):
     """
@@ -2206,3 +2256,24 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(tss.num_sites, 1)
         self.assertEqual(tss.num_mutations, 2)
         self.assertEqual(list(tss.haplotypes()), ["1", "0", "1"])
+
+    @unittest.skip("Unary edgesets in simplify")
+    def test_overlapping_unary_edgesets(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           1
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0       2       2       0
+        1       3       2       1
+        """)
+        ts = msprime.load_text(nodes, edgesets)
+        for x in ts.dump_tables():
+            print(x)
+        tss = do_simplify(ts)
+        print()
+        for x in tss.dump_tables():
+            print(x)
