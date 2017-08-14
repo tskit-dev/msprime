@@ -3076,6 +3076,16 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     tree_sequence_free(&ts);
 
+    /* < 2 samples is an error */
+    node_table.flags[0] = 0;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
+            NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_INSUFFICIENT_SAMPLES);
+    tree_sequence_free(&ts);
+    node_table.flags[0] = 1;
+
     /* Bad interval */
     edgeset_table.right[0] = 0.0;
     ret = tree_sequence_initialise(&ts);
@@ -3087,7 +3097,7 @@ test_simplest_bad_records(void)
     edgeset_table.right[0]= 1.0;
 
     /* Bad left endpoint*/
-    edgeset_table.left[0] = 1.0;
+    edgeset_table.left[0] = 0.1;
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
@@ -3219,6 +3229,94 @@ test_simplest_bad_records(void)
     node_table_free(&node_table);
     edgeset_table_free(&edgeset_table);
 }
+
+static void
+test_simplest_overlapping_parents(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n";
+    const char *edgesets =
+        "0  1   2   0\n"
+        "0  1   2   1\n";
+    tree_sequence_t ts;
+    node_table_t node_table;
+    edgeset_table_t edgeset_table;
+    sparse_tree_t tree;
+    int ret;
+
+    ret = node_table_alloc(&node_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_nodes(nodes, &node_table);
+    CU_ASSERT_EQUAL_FATAL(node_table.num_rows, 3);
+    parse_edgesets(edgesets, &edgeset_table);
+    CU_ASSERT_EQUAL_FATAL(edgeset_table.num_rows, 2);
+
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    edgeset_table.left[0] = 0;
+    edgeset_table.parent[0] = 2;
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table,
+            NULL, NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_alloc(&tree, &ts, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&tree);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT);
+
+    sparse_tree_free(&tree);
+    tree_sequence_free(&ts);
+    node_table_free(&node_table);
+    edgeset_table_free(&edgeset_table);
+}
+
+static void
+test_simplest_contradictory_children(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n"
+        "0  1   0\n";
+    const char *edgesets =
+        "0  1   2   0,1\n"
+        "0  1   3   0,1\n";
+    tree_sequence_t ts;
+    node_table_t node_table;
+    edgeset_table_t edgeset_table;
+    sparse_tree_t tree;
+    int ret;
+
+    ret = node_table_alloc(&node_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_nodes(nodes, &node_table);
+    CU_ASSERT_EQUAL_FATAL(node_table.num_rows, 4);
+    parse_edgesets(edgesets, &edgeset_table);
+    CU_ASSERT_EQUAL_FATAL(edgeset_table.num_rows, 2);
+
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table,
+            NULL, NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_alloc(&tree, &ts, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&tree);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN);
+
+    sparse_tree_free(&tree);
+    tree_sequence_free(&ts);
+    node_table_free(&node_table);
+    edgeset_table_free(&edgeset_table);
+}
+
 
 static void
 test_alphabet_detection(void)
@@ -6864,6 +6962,8 @@ main(int argc, char **argv)
         {"test_simplest_back_mutations", test_simplest_back_mutations},
         {"test_simplest_general_samples", test_simplest_general_samples},
         {"test_simplest_bad_records", test_simplest_bad_records},
+        {"test_simplest_overlapping_parents", test_simplest_overlapping_parents},
+        {"test_simplest_contradictory_children", test_simplest_contradictory_children},
         {"test_alphabet_detection", test_alphabet_detection},
         {"test_single_tree_good_records", test_single_tree_good_records},
         {"test_single_nonbinary_tree_good_records",

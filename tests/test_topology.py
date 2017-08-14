@@ -1894,6 +1894,77 @@ class TestWithVisuals(TopologyTestCase):
         self.assertEqual(t.sample_size, 4)
 
 
+class TestBadTrees(unittest.TestCase):
+    """
+    Tests for bad tree sequence topologies that can only be detected when we
+    try to create trees.
+    """
+
+    def test_simplest_fully_overlapping_parent(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           1
+        3       0           2
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0.0     1.0     2       0
+        0.0     1.0     2       1
+        """)
+        ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        self.assertRaises(_msprime.LibraryError, list, ts.trees())
+
+    def test_simplest_paritially_overlapping_parent(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           1
+        3       0           2
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0.0     1.0     2       0
+        0.5     1.0     2       1
+        """)
+        ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        self.assertRaises(_msprime.LibraryError, list, ts.trees())
+
+    def test_simplest_contradictory_children(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           1
+        3       0           2
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0.0     1.0     2       0
+        0.0     1.0     3       0
+        """)
+        ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        self.assertRaises(_msprime.LibraryError, list, ts.trees())
+
+    def test_partial_overlap_contradictory_children(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           1
+        3       0           2
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0.0     1.0     2       0,1
+        0.5     1.0     3       0
+        """)
+        ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        self.assertRaises(_msprime.LibraryError, list, ts.trees())
+
+
 def do_simplify(ts, sample=None):
     """
     Runs the Python test implementation of simplify.

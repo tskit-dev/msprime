@@ -1094,7 +1094,7 @@ class TestTreeSequence(HighLevelTestCase):
                 ts = msprime.load_text(
                     nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
             # print("nodes_file = ", nodes_file)
-            samples = list(range(ts.sample_size))
+            samples = list(ts.samples())
             self.verify_simplify_equality(ts, samples)
             self.verify_simplify_topology(ts, samples)
             self.verify_simplify_mutations(ts, samples)
@@ -1376,13 +1376,10 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         edgesets_file = six.StringIO("left\tright\tparent\tchildren\n")
         sites_file = six.StringIO("position\tancestral_state\n")
         mutations_file = six.StringIO("site\tnode\tderived_state\n")
-        ts = msprime.load_text(
+        self.assertRaises(
+            _msprime.LibraryError, msprime.load_text,
             nodes=nodes_file, edgesets=edgesets_file, sites=sites_file,
             mutations=mutations_file)
-        self.assertEqual(ts.num_nodes, 0)
-        self.assertEqual(ts.num_edgesets, 0)
-        self.assertEqual(ts.num_sites, 0)
-        self.assertEqual(ts.num_mutations, 0)
 
 
 class TestSparseTree(HighLevelTestCase):
