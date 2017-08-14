@@ -3443,39 +3443,21 @@ test_simplest_overlapping_unary_edgesets_simplify(void)
     simplifier_print_state(&simplifier, _devnull);
     ret = simplifier_free(&simplifier);
 
-    /* edgeset_table_print_state(&edgeset_table, stdout); */
 
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    printf("\nFIXME UNARY edgesets in simplify\n");
-#if 0
-    /* This test fails because we're not handling single unary edgesets
-     * overlapping an interval properly in simplify.
-     */
-    CU_ASSERT_EQUAL(node_table.num_rows, 4);
-    CU_ASSERT_EQUAL(edgeset_table.num_rows, 3);
 
-    /*
-     0       1       2       0
+    CU_ASSERT_EQUAL(node_table.num_rows, 3);
+    CU_ASSERT_EQUAL(edgeset_table.num_rows, 1);
+
+    /* Because we only sample 0 and 1, the flanking unary edgesets are removed
      1       2       2       0,1
-     2       3       2       1
      */
-    CU_ASSERT_EQUAL(edgeset_table.left[0], 0);
-    CU_ASSERT_EQUAL(edgeset_table.left[1], 1);
-    CU_ASSERT_EQUAL(edgeset_table.left[2], 2);
-    CU_ASSERT_EQUAL(edgeset_table.right[0], 1);
-    CU_ASSERT_EQUAL(edgeset_table.right[1], 2);
-    CU_ASSERT_EQUAL(edgeset_table.right[2], 3);
+    CU_ASSERT_EQUAL(edgeset_table.left[0], 1);
+    CU_ASSERT_EQUAL(edgeset_table.right[0], 2);
     CU_ASSERT_EQUAL(edgeset_table.parent[0], 2);
-    CU_ASSERT_EQUAL(edgeset_table.parent[1], 2);
-    CU_ASSERT_EQUAL(edgeset_table.parent[2], 2);
-    CU_ASSERT_EQUAL(edgeset_table.children_length[0], 1);
-    CU_ASSERT_EQUAL(edgeset_table.children_length[1], 2);
-    CU_ASSERT_EQUAL(edgeset_table.children_length[2], 1);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[0], 2);
     CU_ASSERT_EQUAL(edgeset_table.children[0], 0);
-    CU_ASSERT_EQUAL(edgeset_table.children[1], 0);
-    CU_ASSERT_EQUAL(edgeset_table.children[2], 1);
-    CU_ASSERT_EQUAL(edgeset_table.children[3], 1);
-#endif
+    CU_ASSERT_EQUAL(edgeset_table.children[1], 1);
 
     node_table_free(&node_table);
     edgeset_table_free(&edgeset_table);
