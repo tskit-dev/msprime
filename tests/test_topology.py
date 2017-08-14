@@ -541,7 +541,7 @@ class TestSimplifyExamples(TopologyTestCase):
             self, samples, filter_invariant_sites=True,
             nodes_before=None, edgesets_before=None, sites_before=None,
             mutations_before=None, nodes_after=None, edgesets_after=None,
-            sites_after=None, mutations_after=None):
+            sites_after=None, mutations_after=None, debug=False):
         """
         Verifies that if we run simplify on the specified input we get the
         required output.
@@ -569,6 +569,15 @@ class TestSimplifyExamples(TopologyTestCase):
             a_mutations = msprime.parse_mutations(six.StringIO(mutations_after))
         else:
             a_mutations = msprime.MutationTable()
+        if debug:
+            print("nodes required:")
+            print(a_nodes)
+            print("nodes computed:")
+            print(b_nodes)
+            print("edgesets required:")
+            print(a_edgesets)
+            print("edgesets computed:")
+            print(b_edgesets)
         self.assertEqual(b_nodes, a_nodes)
         self.assertEqual(b_edgesets, a_edgesets)
         self.assertEqual(b_sites, a_sites)
@@ -808,7 +817,6 @@ class TestSimplifyExamples(TopologyTestCase):
             nodes_before=nodes, edgesets_before=edgesets_before,
             nodes_after=nodes, edgesets_after=edgesets_after)
 
-    @unittest.skip("Unary edgesets in simplify")
     def test_overlapping_unary_edgesets(self):
         nodes = """\
         id      is_sample   time
@@ -821,17 +829,86 @@ class TestSimplifyExamples(TopologyTestCase):
         0       2       2       0
         1       3       2       1
         """
-        # We should resolve the overlapping edgesets here.
+        # We resolve the overlapping edgesets here. Since the flanking regions
+        # have no interesting edges, these are left out of the output.
         edgesets_after = """\
         left    right   parent  children
-        0       1       3       0
-        1       2       3       0,1
-        2       3       3       1
+        1       2       2       0,1
         """
         self.verify_simplify(
             samples=[0, 1],
             nodes_before=nodes, edgesets_before=edgesets_before,
             nodes_after=nodes, edgesets_after=edgesets_after)
+
+    @unittest.skip("Overlapping unary edgesets, internal sample")
+    def test_overlapping_unary_edgesets_internal_samples(self):
+        nodes = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           1
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       2       2       0
+        1       3       2       1
+        """
+        # We resolve the overlapping edgesets here. Because node 2 is a sample,
+        # we should still have the unary edgesets in the output.
+        edgesets_after = """\
+        left    right   parent  children
+        0       1       2       0
+        1       2       2       0,1
+        2       3       2       1
+        """
+        self.verify_simplify(
+            samples=[0, 1, 2], debug=True,
+            nodes_before=nodes, edgesets_before=edgesets_before,
+            nodes_after=nodes, edgesets_after=edgesets_after)
+
+    def test_unary_edgesets_no_overlap(self):
+        nodes_before = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           1
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       2       2       0
+        2       3       2       1
+        """
+        # Because there is no overlap between the samples, we just get an
+        # empty set of output edgesets.
+        nodes_after = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        """
+        edgesets_after = """\
+        left    right   parent  children
+        """
+        self.verify_simplify(
+            samples=[0, 1],
+            nodes_before=nodes_before, edgesets_before=edgesets_before,
+            nodes_after=nodes_after, edgesets_after=edgesets_after)
+
+    def test_unary_edgesets_no_overlap_internal_sample(self):
+        nodes_before = """\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           1
+        """
+        edgesets_before = """\
+        left    right   parent  children
+        0       1       2       0
+        1       2       2       1
+        """
+        self.verify_simplify(
+            samples=[0, 1, 2],
+            nodes_before=nodes_before, edgesets_before=edgesets_before,
+            nodes_after=nodes_before, edgesets_after=edgesets_before)
 
 
 class TestNonSampleExternalNodes(TopologyTestCase):
@@ -2015,17 +2092,6 @@ class TestBadTrees(unittest.TestCase):
         self.assertRaises(_msprime.LibraryError, list, ts.trees())
 
 
-def do_simplify(ts, sample=None):
-    """
-    Runs the Python test implementation of simplify.
-    """
-    if sample is None:
-        sample = ts.samples()
-    s = tests.Simplifier(ts, sample)
-    new_ts = s.simplify()
-    return new_ts
-
-
 class TestPythonSimplifier(unittest.TestCase):
     """
     Tests that the test implementation of simplify() does what it's supposed to.
@@ -2061,17 +2127,38 @@ class TestPythonSimplifier(unittest.TestCase):
     3       0.00000000      1.00000000      8       6,7
     """
 
+    def do_simplify(self, ts, sample=None, compare_lib=True):
+        """
+        Runs the Python test implementation of simplify.
+        """
+        if sample is None:
+            sample = ts.samples()
+        s = tests.Simplifier(ts, sample)
+        new_ts = s.simplify()
+        if compare_lib:
+            lib_tables = ts.dump_tables()
+            msprime.simplify_tables(
+                samples=sample, nodes=lib_tables.nodes, edgesets=lib_tables.edgesets,
+                sites=lib_tables.sites, mutations=lib_tables.mutations)
+            py_tables = new_ts.dump_tables()
+            self.assertEqual(lib_tables.nodes, py_tables.nodes)
+            self.assertEqual(lib_tables.edgesets, py_tables.edgesets)
+            self.assertEqual(lib_tables.migrations, py_tables.migrations)
+            self.assertEqual(lib_tables.sites, py_tables.sites)
+            self.assertEqual(lib_tables.mutations, py_tables.mutations)
+        return new_ts
+
     def test_single_tree(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
         ts_single = single_childify(ts)
-        tss = do_simplify(ts_single)
+        tss = self.do_simplify(ts_single)
         self.assertEqual(list(tss.records()), list(ts.records()))
 
     def test_single_tree_mutations(self):
         ts = msprime.simulate(10, mutation_rate=1, random_seed=self.random_seed)
         self.assertGreater(ts.num_sites, 1)
         ts_single = single_childify(ts)
-        tss = do_simplify(ts_single)
+        tss = self.do_simplify(ts_single)
         self.assertEqual(list(tss.records()), list(ts.records()))
         self.assertEqual(list(tss.haplotypes()), list(ts.haplotypes()))
 
@@ -2081,7 +2168,7 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertGreater(ts.num_trees, 2)
         self.assertGreater(ts.num_sites, 2)
         ts_single = single_childify(ts)
-        tss = do_simplify(ts_single)
+        tss = self.do_simplify(ts_single)
         self.assertEqual(list(tss.records()), list(ts.records()))
         self.assertEqual(list(tss.haplotypes()), list(ts.haplotypes()))
 
@@ -2089,7 +2176,7 @@ class TestPythonSimplifier(unittest.TestCase):
         ts = msprime.simulate(5, recombination_rate=4, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_single = single_childify(ts)
-        tss = do_simplify(ts_single)
+        tss = self.do_simplify(ts_single)
         self.assertEqual(list(tss.records()), list(ts.records()))
 
     def test_small_tree_internal_samples(self):
@@ -2107,7 +2194,7 @@ class TestPythonSimplifier(unittest.TestCase):
         nodes.set_columns(flags=flags, time=nodes.time)
         ts = msprime.load_tables(nodes=nodes, edgesets=tables.edgesets)
         self.assertEqual(ts.sample_size, 4)
-        tss = do_simplify(ts, [3, 5])
+        tss = self.do_simplify(ts, [3, 5])
         self.assertEqual(tss.num_nodes, 3)
         self.assertEqual(tss.num_edgesets, 1)
 
@@ -2125,7 +2212,7 @@ class TestPythonSimplifier(unittest.TestCase):
         nodes.set_columns(flags=flags, time=nodes.time)
         ts = msprime.load_tables(nodes=nodes, edgesets=tables.edgesets)
         self.assertEqual(ts.sample_size, 2)
-        tss = do_simplify(ts, [0, 7])
+        tss = self.do_simplify(ts, [0, 7])
         self.assertEqual(tss.num_nodes, 2)
         self.assertEqual(tss.num_edgesets, 1)
         t = next(tss.trees())
@@ -2146,7 +2233,7 @@ class TestPythonSimplifier(unittest.TestCase):
         nodes.set_columns(flags=flags, time=nodes.time)
         ts = msprime.load_tables(nodes=nodes, edgesets=tables.edgesets)
         self.assertEqual(ts.sample_size, 3)
-        tss = do_simplify(ts, [0, 1, 7])
+        tss = self.do_simplify(ts, [0, 1, 7])
         self.assertEqual(tss.num_nodes, 4)
         self.assertEqual(tss.num_edgesets, 2)
         t = next(tss.trees())
@@ -2171,7 +2258,7 @@ class TestPythonSimplifier(unittest.TestCase):
             mutations=tables.mutations)
         self.assertEqual(ts.num_sites, 4)
         self.assertEqual(ts.num_mutations, 4)
-        tss = do_simplify(ts, [0, 2])
+        tss = self.do_simplify(ts, [0, 2])
         self.assertEqual(tss.sample_size, 2)
         self.assertEqual(tss.num_mutations, 4)
         self.assertEqual(list(tss.haplotypes()), ["1011", "0100"])
@@ -2195,7 +2282,7 @@ class TestPythonSimplifier(unittest.TestCase):
             mutations=tables.mutations)
         self.assertEqual(ts.num_sites, 4)
         self.assertEqual(ts.num_mutations, 4)
-        tss = do_simplify(ts, [4, 1])
+        tss = self.do_simplify(ts, [4, 1])
         self.assertEqual(tss.sample_size, 2)
         self.assertEqual(tss.num_mutations, 0)
         self.assertEqual(list(tss.haplotypes()), ["", ""])
@@ -2214,7 +2301,7 @@ class TestPythonSimplifier(unittest.TestCase):
             mutations=tables.mutations)
         self.assertEqual(ts.num_sites, 1)
         self.assertEqual(ts.num_mutations, 2)
-        tss = do_simplify(ts, [4, 3])
+        tss = self.do_simplify(ts, [4, 3])
         self.assertEqual(tss.sample_size, 2)
         self.assertEqual(tss.num_sites, 1)
         self.assertEqual(tss.num_mutations, 2)
@@ -2237,33 +2324,33 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(ts.num_mutations, 3)
         self.assertEqual(list(ts.haplotypes()), ["0", "1", "0", "0", "1"])
         # First check if we simplify for all leaves and keep original state.
-        tss = do_simplify(ts, [0, 1, 2, 3, 4])
+        tss = self.do_simplify(ts, [0, 1, 2, 3, 4])
         self.assertEqual(tss.sample_size, 5)
         self.assertEqual(tss.num_sites, 1)
         self.assertEqual(tss.num_mutations, 3)
         self.assertEqual(list(tss.haplotypes()), ["0", "1", "0", "0", "1"])
 
         # The ancestral state above 5 should be 0.
-        tss = do_simplify(ts, [0, 1])
+        tss = self.do_simplify(ts, [0, 1])
         self.assertEqual(tss.sample_size, 2)
         self.assertEqual(tss.num_sites, 1)
         self.assertEqual(tss.num_mutations, 1)
         self.assertEqual(list(tss.haplotypes()), ["0", "1"])
 
         # The ancestral state above 7 should be 1.
-        tss = do_simplify(ts, [4, 0, 1])
+        tss = self.do_simplify(ts, [4, 0, 1])
         self.assertEqual(tss.sample_size, 3)
         self.assertEqual(tss.num_sites, 1)
         self.assertEqual(tss.num_mutations, 2)
         self.assertEqual(list(tss.haplotypes()), ["1", "0", "1"])
 
-    @unittest.skip("Unary edgesets in simplify")
-    def test_overlapping_unary_edgesets(self):
+    @unittest.skip("Overlapping unary edgesets, internal sample")
+    def test_overlapping_unary_edgesets_internal_samples(self):
         nodes = six.StringIO("""\
         id      is_sample   time
         0       1           0
         1       1           0
-        2       0           1
+        2       1           1
         """)
         edgesets = six.StringIO("""\
         left    right   parent  children
@@ -2273,7 +2360,8 @@ class TestPythonSimplifier(unittest.TestCase):
         ts = msprime.load_text(nodes, edgesets)
         for x in ts.dump_tables():
             print(x)
-        tss = do_simplify(ts)
+        tss = self.do_simplify(ts)
+        print("AFTER")
         print()
         for x in tss.dump_tables():
             print(x)

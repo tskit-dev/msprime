@@ -727,8 +727,8 @@ class Simplifier(object):
                         site=output_site_id, node=mutation.node,
                         derived_state=mutation.derived_state)
                 output_site_id += 1
-        # print("DONE")
-        # self.print_state()
+        print("DONE")
+        self.print_state()
         return msprime.load_tables(
             nodes=self.node_table, edgesets=self.edgeset_table,
             sites=self.site_table, mutations=self.mutation_table)
