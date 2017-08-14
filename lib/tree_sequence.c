@@ -40,13 +40,6 @@ typedef struct {
 } index_sort_t;
 
 static int
-cmp_double(const void *a, const void *b) {
-    const double *ia = (const double *) a;
-    const double *ib = (const double *) b;
-    return (*ia > *ib) - (*ia < *ib);
-}
-
-static int
 cmp_index_sort(const void *a, const void *b) {
     const index_sort_t *ca = (const index_sort_t *) a;
     const index_sort_t *cb = (const index_sort_t *) b;
@@ -557,25 +550,15 @@ tree_sequence_check(tree_sequence_t *self)
     int ret = MSP_ERR_BAD_EDGESET;
     node_id_t child, node;
     list_len_t j, k;
-    size_t num_coordinates = self->edgesets.num_records + 1;
     double left;
-    double *coordinates = malloc(num_coordinates * sizeof(double));
 
-    if (coordinates == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
+    /* TODO there is no deep reason why we have to have at least two samples,
+     * but parts of the code do assume this at the moment. If we relax this
+     * assumption we must be careful to test thoroughly. */
+    if (self->sample_size < 2) {
+        ret = MSP_ERR_INSUFFICIENT_SAMPLES;
         goto out;
     }
-    for (j = 0; j < self->edgesets.num_records; j++) {
-        coordinates[j] = self->edgesets.left[j];
-    }
-    coordinates[self->edgesets.num_records] = self->sequence_length;
-    qsort(coordinates, num_coordinates, sizeof(double), cmp_double);
-
-    if (coordinates[0] != 0.0) {
-        ret = MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO;
-        goto out;
-    }
-
     left = DBL_MAX;
     for (j = 0; j < self->edgesets.num_records; j++) {
         node = self->edgesets.parent[j];
@@ -691,9 +674,6 @@ tree_sequence_check(tree_sequence_t *self)
     }
     ret = 0;
 out:
-    if (coordinates != NULL) {
-        free(coordinates);
-    }
     return ret;
 }
 
@@ -3328,7 +3308,7 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     node_id_t in = *in_index + direction_change;
     node_id_t out = *out_index + direction_change;
     list_len_t j;
-    node_id_t k, u, oldest_child;
+    node_id_t k, u, v, oldest_child;
     double x = in_breakpoints[in_order[in]];
     double oldest_child_time;
     tree_sequence_t *s = self->tree_sequence;
@@ -3366,9 +3346,18 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         k = in_order[in];
         u = s->edgesets.parent[k];
         for (j = 0; j < s->edgesets.children_length[k]; j++) {
-            self->parent[s->edgesets.children[k][j]] = u;
+            v = s->edgesets.children[k][j];
+            if (self->parent[v] != MSP_NULL_NODE) {
+                ret = MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN;
+                goto out;
+            }
+            self->parent[v] = u;
         }
         self->num_children[u] = s->edgesets.children_length[k];
+        if (self->children[u] != NULL) {
+            ret = MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT;
+            goto out;
+        }
         self->children[u] = s->edgesets.children[k];
         self->time[u] = s->nodes.time[u];
         self->population[u] = s->nodes.population[u];
@@ -3406,6 +3395,7 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         self->sites_length = s->sites.tree_sites_length[self->index];
     }
     ret = 1;
+out:
     return ret;
 }
 

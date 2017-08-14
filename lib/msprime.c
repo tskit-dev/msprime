@@ -250,6 +250,13 @@ msp_strerror(int err)
         case MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT:
             ret = "All edgesets for a given parent must be adjacent.";
             break;
+        case MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN:
+            ret = "Bad edgesets: contradictory children for a given parent over "
+                "an interval.";
+            break;
+        case MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT:
+            ret = "Bad edgesets: multiple definitions of a given parent over an interval";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
