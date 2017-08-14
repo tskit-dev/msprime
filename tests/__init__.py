@@ -663,14 +663,10 @@ class Simplifier(object):
         print("Node ID map: (input->output)")
         for input_id in sorted(self.node_id_map.keys()):
             print("\t", input_id, "->", self.node_id_map[input_id])
-
-        # print("Output nodes:")
-        # print(self.node_table)
-        # print("Output Edgesets: ")
-        # print(self.edgeset_table)
-        # print("Output sites and mutations: ")
-        # for site in self.sites:
-        #     print(site)
+        print("Output nodes:")
+        print(self.node_table)
+        print("Output Edgesets: ")
+        print(self.edgeset_table)
 
     def simplify(self):
         the_parents = [
@@ -731,6 +727,8 @@ class Simplifier(object):
                         site=output_site_id, node=mutation.node,
                         derived_state=mutation.derived_state)
                 output_site_id += 1
+        # print("DONE")
+        # self.print_state()
         return msprime.load_tables(
             nodes=self.node_table, edgesets=self.edgeset_table,
             sites=self.site_table, mutations=self.mutation_table)

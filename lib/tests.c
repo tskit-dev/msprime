@@ -3317,6 +3317,172 @@ test_simplest_contradictory_children(void)
     edgeset_table_free(&edgeset_table);
 }
 
+static void
+test_simplest_overlapping_edgesets_simplify(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edgesets =
+        "0  2   3   0,2\n"
+        "1  3   3   1,2\n";
+    node_id_t samples[] = {0, 1, 2};
+    node_table_t node_table;
+    edgeset_table_t edgeset_table;
+    migration_table_t migration_table;
+    site_table_t site_table;
+    mutation_table_t mutation_table;
+    simplifier_t simplifier;
+    int ret;
+
+    ret = node_table_alloc(&node_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&migration_table, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_alloc(&site_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(&mutation_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_nodes(nodes, &node_table);
+    CU_ASSERT_EQUAL_FATAL(node_table.num_rows, 4);
+    parse_edgesets(edgesets, &edgeset_table);
+    CU_ASSERT_EQUAL_FATAL(edgeset_table.num_rows, 2);
+
+    ret = simplifier_alloc(&simplifier, samples, 3,
+            &node_table, &edgeset_table, &migration_table,
+            &site_table, &mutation_table, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_run(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_free(&simplifier);
+
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(node_table.num_rows, 4);
+    CU_ASSERT_EQUAL(edgeset_table.num_rows, 3);
+    /*
+     0       1       3       0,2
+     1       2       3       0,1,2
+     2       3       3       1,2
+     */
+    CU_ASSERT_EQUAL(edgeset_table.left[0], 0);
+    CU_ASSERT_EQUAL(edgeset_table.left[1], 1);
+    CU_ASSERT_EQUAL(edgeset_table.left[2], 2);
+    CU_ASSERT_EQUAL(edgeset_table.right[0], 1);
+    CU_ASSERT_EQUAL(edgeset_table.right[1], 2);
+    CU_ASSERT_EQUAL(edgeset_table.right[2], 3);
+    CU_ASSERT_EQUAL(edgeset_table.parent[0], 3);
+    CU_ASSERT_EQUAL(edgeset_table.parent[1], 3);
+    CU_ASSERT_EQUAL(edgeset_table.parent[2], 3);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[0], 2);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[1], 3);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[2], 2);
+    CU_ASSERT_EQUAL(edgeset_table.children[0], 0);
+    CU_ASSERT_EQUAL(edgeset_table.children[1], 2);
+    CU_ASSERT_EQUAL(edgeset_table.children[2], 0);
+    CU_ASSERT_EQUAL(edgeset_table.children[3], 1);
+    CU_ASSERT_EQUAL(edgeset_table.children[4], 2);
+    CU_ASSERT_EQUAL(edgeset_table.children[5], 1);
+    CU_ASSERT_EQUAL(edgeset_table.children[6], 2);
+
+    node_table_free(&node_table);
+    edgeset_table_free(&edgeset_table);
+    migration_table_free(&migration_table);
+    site_table_free(&site_table);
+    mutation_table_free(&mutation_table);
+}
+
+static void
+test_simplest_overlapping_unary_edgesets_simplify(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edgesets =
+        "0  2   2   0\n"
+        "1  3   2   1\n";
+    node_id_t samples[] = {0, 1};
+    node_table_t node_table;
+    edgeset_table_t edgeset_table;
+    migration_table_t migration_table;
+    site_table_t site_table;
+    mutation_table_t mutation_table;
+    simplifier_t simplifier;
+    int ret;
+
+    ret = node_table_alloc(&node_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&migration_table, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_alloc(&site_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(&mutation_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_nodes(nodes, &node_table);
+    CU_ASSERT_EQUAL_FATAL(node_table.num_rows, 3);
+    parse_edgesets(edgesets, &edgeset_table);
+    CU_ASSERT_EQUAL_FATAL(edgeset_table.num_rows, 2);
+
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &node_table, &edgeset_table, &migration_table,
+            &site_table, &mutation_table, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_run(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_free(&simplifier);
+
+    /* edgeset_table_print_state(&edgeset_table, stdout); */
+
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    printf("\nFIXME UNARY edgesets in simplify\n");
+#if 0
+    /* This test fails because we're not handling single unary edgesets
+     * overlapping an interval properly in simplify.
+     */
+    CU_ASSERT_EQUAL(node_table.num_rows, 4);
+    CU_ASSERT_EQUAL(edgeset_table.num_rows, 3);
+
+    /*
+     0       1       2       0
+     1       2       2       0,1
+     2       3       2       1
+     */
+    CU_ASSERT_EQUAL(edgeset_table.left[0], 0);
+    CU_ASSERT_EQUAL(edgeset_table.left[1], 1);
+    CU_ASSERT_EQUAL(edgeset_table.left[2], 2);
+    CU_ASSERT_EQUAL(edgeset_table.right[0], 1);
+    CU_ASSERT_EQUAL(edgeset_table.right[1], 2);
+    CU_ASSERT_EQUAL(edgeset_table.right[2], 3);
+    CU_ASSERT_EQUAL(edgeset_table.parent[0], 2);
+    CU_ASSERT_EQUAL(edgeset_table.parent[1], 2);
+    CU_ASSERT_EQUAL(edgeset_table.parent[2], 2);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[0], 1);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[1], 2);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[2], 1);
+    CU_ASSERT_EQUAL(edgeset_table.children[0], 0);
+    CU_ASSERT_EQUAL(edgeset_table.children[1], 0);
+    CU_ASSERT_EQUAL(edgeset_table.children[2], 1);
+    CU_ASSERT_EQUAL(edgeset_table.children[3], 1);
+#endif
+
+    node_table_free(&node_table);
+    edgeset_table_free(&edgeset_table);
+    migration_table_free(&migration_table);
+    site_table_free(&site_table);
+    mutation_table_free(&mutation_table);
+}
 
 static void
 test_alphabet_detection(void)
@@ -6964,6 +7130,10 @@ main(int argc, char **argv)
         {"test_simplest_bad_records", test_simplest_bad_records},
         {"test_simplest_overlapping_parents", test_simplest_overlapping_parents},
         {"test_simplest_contradictory_children", test_simplest_contradictory_children},
+        {"test_simplest_overlapping_edgesets_simplify",
+            test_simplest_overlapping_edgesets_simplify},
+        {"test_simplest_overlapping_unary_edgesets_simplify",
+            test_simplest_overlapping_unary_edgesets_simplify},
         {"test_alphabet_detection", test_alphabet_detection},
         {"test_single_tree_good_records", test_single_tree_good_records},
         {"test_single_nonbinary_tree_good_records",

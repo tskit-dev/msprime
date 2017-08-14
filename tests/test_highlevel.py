@@ -1024,13 +1024,14 @@ class TestTreeSequence(HighLevelTestCase):
 
     def verify_simplify_equality(self, ts, sample):
         s1 = ts.simplify(sample)
+        t1 = s1.dump_tables()
         s2 = simplify_tree_sequence(ts, sample)
-        self.assertEqual(list(s1.edgesets()), list(s2.edgesets()))
-        self.assertEqual(list(s1.nodes()), list(s2.nodes()))
-        self.assertEqual(list(s1.sites()), list(s2.sites()))
-        self.assertEqual(list(s1.haplotypes()), list(s2.haplotypes()))
-        self.assertEqual(
-            list(s1.variants(as_bytes=True)), list(s2.variants(as_bytes=True)))
+        t2 = s2.dump_tables()
+        self.assertEqual(t1.nodes, t2.nodes)
+        self.assertEqual(t1.edgesets, t2.edgesets)
+        self.assertEqual(t1.migrations, t2.migrations)
+        self.assertEqual(t1.sites, t2.sites)
+        self.assertEqual(t1.mutations, t2.mutations)
 
     def verify_simplify_variants(self, ts, sample):
         subset = ts.simplify(sample)
@@ -1096,9 +1097,6 @@ class TestTreeSequence(HighLevelTestCase):
             # print("nodes_file = ", nodes_file)
             samples = list(ts.samples())
             self.verify_simplify_equality(ts, samples)
-            self.verify_simplify_topology(ts, samples)
-            self.verify_simplify_mutations(ts, samples)
-            self.verify_simplify_variants(ts, samples)
             j += 1
         self.assertGreater(j, 1)
 
