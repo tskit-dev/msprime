@@ -28,7 +28,6 @@ import unittest
 import numpy as np
 
 import msprime
-import tests
 
 
 def random_breakpoint():
@@ -146,12 +145,13 @@ def get_wf_sims(seed):
     Returns an iterator of example tree sequences produced by
     the WF simulator.
     """
-    for N in [5, 10]:
-        for surv in [0.0, 0.5]:
+    for N in [5, 10, 100]:
+        for surv in [0.0, 0.5, 0.9]:
             tables = wf_sim(N=N, ngens=N, survival=surv, seed=seed)
             msprime.sort_tables(nodes=tables.nodes, edgesets=tables.edgesets,
                                 sites=tables.sites, mutations=tables.mutations)
             verify_simulation(tables, ngens=N)
+            print("Sim:", N, surv)
             yield tables
 
 
@@ -245,8 +245,8 @@ class TestWFsim(unittest.TestCase):
                 small_ts = ts.simplify(samples=[ts.samples()[k] for k in sub_samples])
                 self.verify_simplify(big_ts, small_ts, samples=sub_samples)
 
-    @unittest.skip("error at second MSP_BAD_PARAM_VALUE of MSP_ERR_BAD_PARAM_VALUE")
-    def dont_test_simplify_tables(self):
+    @unittest.skip("error at second MSP_BAD_PARAM_VALUE of node_table_set_columns")
+    def test_simplify_tables(self):
         seed = 23
         for tables in get_wf_sims(seed=seed):
             ts = msprime.load_tables(nodes=tables.nodes, edgesets=tables.edgesets,
