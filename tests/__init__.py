@@ -683,6 +683,9 @@ class Simplifier(object):
                         if child in self.A:
                             self.remove_ancestry(edgeset.left, edgeset.right, child, H)
                             self.check_state()
+                # print("merging for ", input_id)
+                # self.print_heaps(H)
+                # self.print_state()
                 self.merge_labeled_ancestors(H, input_id)
                 self.check_state()
         # Flush the last edgeset to the table and create the new tree sequence.
@@ -868,9 +871,17 @@ class Simplifier(object):
 
             # loop tail; update alpha and integrate it into the state.
             if z is None:
-                # Add a new mapping for the input_id to the segment chain starting
-                # with alpha.
-                self.A[input_id] = alpha
+                if input_id in self.A:
+                    # If ancestry already exists for this input_id, we must replace
+                    # the corresponding chunk and update
+                    # print("mapping for input_id", input_id)
+                    # print(self.A[input_id])
+                    # print(alpha)
+                    assert alpha.node == self.A[input_id].node
+                    # self.insert_into_chain(input_id, alpha)
+                else:
+                    # Otherwise, alpha is the head of the chain.
+                    self.A[input_id] = alpha
             else:
                 z.next = alpha
             z = alpha

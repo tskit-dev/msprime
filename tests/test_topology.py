@@ -840,7 +840,6 @@ class TestSimplifyExamples(TopologyTestCase):
             nodes_before=nodes, edgesets_before=edgesets_before,
             nodes_after=nodes, edgesets_after=edgesets_after)
 
-    @unittest.skip("Overlapping unary edgesets, internal sample")
     def test_overlapping_unary_edgesets_internal_samples(self):
         nodes = """\
         id      is_sample   time
@@ -862,7 +861,7 @@ class TestSimplifyExamples(TopologyTestCase):
         2       3       2       1
         """
         self.verify_simplify(
-            samples=[0, 1, 2], debug=True,
+            samples=[0, 1, 2],
             nodes_before=nodes, edgesets_before=edgesets_before,
             nodes_after=nodes, edgesets_after=edgesets_after)
 
@@ -2361,5 +2360,32 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(tss.sample_size, 3)
         self.assertEqual(tss.num_trees, 3)
         trees = [{0: 2}, {0: 2, 1: 2}, {1: 2}]
+        for t in tss.trees():
+            self.assertEqual(t.parent_dict, trees[t.index])
+
+    def test_internal_samples(self):
+        nodes = six.StringIO("""\
+        id      is_sample   population      time
+        0       1       -1              1.00000000000000
+        1       0       -1              1.00000000000000
+        2       1       -1              1.00000000000000
+        3       0       -1              1.31203521181726
+        4       0       -1              2.26776380586006
+        5       1       -1              0.00000000000000
+
+        """)
+        edgesets = six.StringIO("""\
+        id      left            right           parent  children
+        0       0.62185118      1.00000000      1       5
+        1       0.00000000      0.62185118      2       5
+        2       0.00000000      1.00000000      3       0,2
+        3       0.00000000      1.00000000      4       1,3
+        """)
+
+        ts = msprime.load_text(nodes, edgesets)
+        tss = self.do_simplify(ts, compare_lib=True)
+        self.assertEqual(tss.sample_size, 3)
+        self.assertEqual(tss.num_trees, 2)
+        trees = [{0: 3, 1: 3, 2: 1}, {0: 3, 1: 3, 2: 4, 3: 4}]
         for t in tss.trees():
             self.assertEqual(t.parent_dict, trees[t.index])
