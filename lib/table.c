@@ -1771,11 +1771,14 @@ simplifier_check_input(simplifier_t *self)
     double *time = self->nodes->time;
     char *node_seen = NULL;
     node_id_t last_parent, parent;
-    size_t j;
+    size_t j, offset;
+    list_len_t k;
+    node_id_t *children;
 
     node_seen = calloc((size_t) num_nodes, sizeof(char));
     /* Check the edgesets */
     last_parent = self->edgesets->parent[0];
+    offset = 0;
     for (j = 0; j < self->edgesets->num_rows; j++) {
         if (self->edgesets->left[j] >= self->edgesets->right[j]) {
             ret = MSP_ERR_BAD_RECORD_INTERVAL;
@@ -1798,12 +1801,20 @@ simplifier_check_input(simplifier_t *self)
             }
             last_parent = parent;
         }
-    }
-    for (j = 0; j < self->edgesets->total_children_length; j++) {
-        if (self->edgesets->children[j] < 0 || self->edgesets->children[j] >= num_nodes) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
+        /* Check the children */
+        children = self->edgesets->children + offset;
+        for (k = 0; k < self->edgesets->children_length[j]; k++) {
+            if (children[k] < 0 || children[k] >= num_nodes) {
+                ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+                goto out;
+            }
+            /* time[child] must be < time[parent] */
+            if (time[children[k]] >= time[parent]) {
+                ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
+                goto out;
+            }
         }
+        offset += self->edgesets->children_length[j];
     }
     /* Check the samples */
     for (j = 0; j < self->num_samples; j++) {

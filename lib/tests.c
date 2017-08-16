@@ -4374,6 +4374,18 @@ test_single_tree_simplify(void)
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    /* detect loops */
+    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edgesets,
+            &migrations, &sites, &mutations, &num_provenance_strings,
+            &provenance_strings);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    edgesets.children[0] = edgesets.parent[0];
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, &sites, &mutations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING);
+    ret = simplifier_free(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
     /* detect bad sites */
     ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edgesets,
             &migrations, &sites, &mutations, &num_provenance_strings,
