@@ -727,8 +727,8 @@ class Simplifier(object):
                         site=output_site_id, node=mutation.node,
                         derived_state=mutation.derived_state)
                 output_site_id += 1
-        print("DONE")
-        self.print_state()
+        # print("DONE")
+        # self.print_state()
         return msprime.load_tables(
             nodes=self.node_table, edgesets=self.edgeset_table,
             sites=self.site_table, mutations=self.mutation_table)
@@ -829,11 +829,6 @@ class Simplifier(object):
                 r = min(r, H[0][0])
             if len(X) == 1:
                 x = X[0]
-                if input_id in self.node_id_map:
-                    u = self.node_id_map[input_id]
-                    if self.is_sample(u):
-                        self.record_edgeset(x.left, x.right, u, [x.node])
-                        x.node = u
                 if len(H) > 0 and H[0][0] < x.right:
                     alpha = self.alloc_segment(x.left, H[0][0], x.node)
                     x.left = H[0][0]
@@ -844,6 +839,11 @@ class Simplifier(object):
                         heapq.heappush(H, (y.left, y))
                     alpha = x
                     alpha.next = None
+                if input_id in self.node_id_map:
+                    u = self.node_id_map[input_id]
+                    if self.is_sample(u):
+                        self.record_edgeset(alpha.left, alpha.right, u, [alpha.node])
+                        alpha.node = u
             else:
                 if not coalescence:
                     coalescence = True

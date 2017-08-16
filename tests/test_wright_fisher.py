@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2017 University of Oxford
+# Copyright (C) 2017 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -25,13 +25,14 @@ from __future__ import division
 import itertools
 import random
 import unittest
+
 import numpy as np
 
 import msprime
 
 
 def random_breakpoint():
-    return min(1.0, max(0.0, 2*random.random()-0.5))
+    return min(1.0, max(0.0, 2 * random.random() - 0.5))
 
 
 def random_mutations(rate):
@@ -56,18 +57,13 @@ def wf_sim(N, ngens, survival=0.0, mutation_rate=0.0, debug=False, seed=None):
     # initial population
     init_ts = msprime.simulate(N, recombination_rate=1.0)
 
-    nodes = msprime.NodeTable()
-    edgesets = msprime.EdgesetTable()
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
-    migrations = msprime.MigrationTable()
-    init_ts.dump_tables(nodes=nodes, edgesets=edgesets,
-                        sites=sites, mutations=mutations)
-    nodes.set_columns(time=nodes.time + ngens + 1,
-                      flags=nodes.flags,
-                      population=nodes.population)
+    tables = init_ts.dump_tables()
+    nodes = tables.nodes
+    nodes.set_columns(
+        time=nodes.time + ngens + 1, flags=nodes.flags, population=nodes.population)
+    edgesets = tables.edgesets
     # searchable
-    mut_positions = {}
+    # mut_positions = {}
 
     # get ready to record things
     pop = init_ts.samples()
@@ -77,10 +73,10 @@ def wf_sim(N, ngens, survival=0.0, mutation_rate=0.0, debug=False, seed=None):
             print("t:", t)
             print("pop:", pop)
 
-        dead = [(random.random() > survival) for k in pop]
+        dead = [random.random() > survival for k in pop]
         # sample these first so that all parents are from the previous gen
-        new_parents = [(random.choice(pop), random.choice(pop))
-                       for k in range(sum(dead))]
+        new_parents = [
+            (random.choice(pop), random.choice(pop)) for k in range(sum(dead))]
         k = 0
         if debug:
             print("Replacing", sum(dead), "individuals.")
@@ -92,52 +88,45 @@ def wf_sim(N, ngens, survival=0.0, mutation_rate=0.0, debug=False, seed=None):
                 lparent, rparent = new_parents[k]
                 k += 1
                 bp = random_breakpoint()
-                muts = random_mutations(mutation_rate)
+                # muts = random_mutations(mutation_rate)
                 if debug:
                     print("--->", offspring, lparent, rparent, bp)
                 pop[j] = offspring
                 if bp > 0.0:
-                    edgesets.add_row(left=0.0, right=bp,
-                                     parent=lparent, children=(offspring,))
+                    edgesets.add_row(
+                        left=0.0, right=bp, parent=lparent, children=(offspring,))
                 if bp < 1.0:
-                    edgesets.add_row(left=bp, right=1.0,
-                                     parent=rparent, children=(offspring,))
-                for mut in muts:
-                    if mut not in mut_positions:
-                        mut_positions[mut] = sites.num_rows
-                        sites.add_row(site=mut, ancestral_state=random_allele())
-                    mutations.add_row(site=mut_positions[mut],
-                                      node=offspring, derived_state=random_allele())
+                    edgesets.add_row(
+                        left=bp, right=1.0, parent=rparent, children=(offspring,))
+                # for mut in muts:
+                #     # Pretty sure this won't work.
+                #     if mut not in mut_positions:
+                #         mut_positions[mut] = sites.num_rows
+                #         sites.add_row(site=mut, ancestral_state=random_allele())
+                #     mutations.add_row(
+                #         site=mut_positions[mut], node=offspring,
+                # derived_state=random_allele())
 
     if debug:
         print("Done! Final pop:")
         print(pop)
-
-    nodes.set_columns(time=nodes.time,
-                      flags=[(msprime.NODE_IS_SAMPLE if u in pop else 0)
-                             for u in range(nodes.num_rows)],
-                      population=nodes.population)
-    # msprime.sort_tables(nodes=nodes, edgesets=edgesets, sites=sites,
-    #                     mutations=mutations)
-
-    # ts = msprime.load_tables(nodes=nodes, edgesets=edgesets, sites=sites,
-    #                          mutations=mutations)
-
+    flags = [
+        (msprime.NODE_IS_SAMPLE if u in pop else 0) for u in range(nodes.num_rows)]
+    nodes.set_columns(time=nodes.time, flags=flags, population=nodes.population)
     if debug:
         print("Done.")
         print("Nodes:")
-        print(nodes)
+        print(tables.nodes)
         print("Edgesets:")
-        print(edgesets)
+        print(tables.edgesets)
         print("Sites:")
-        print(sites)
+        print(tables.sites)
         print("Mutations:")
-        print(mutations)
+        print(tables.mutations)
         print("Migrations:")
-        print(migrations)
+        print(tables.migrations)
 
-    return msprime.TableTuple(nodes=nodes, edgesets=edgesets, sites=sites,
-                              mutations=mutations, migrations=migrations)
+    return tables
 
 
 def get_wf_sims(seed):
@@ -180,14 +169,59 @@ def verify_simulation(tables, ngens):
                 assert lefts[k+1] == rights[k]
 
 
-class TestWFsim(unittest.TestCase):
+class TestSimulation(unittest.TestCase):
     """
-    Tests that tables produced by the WF sim are properly dealt with.
+    Tests that the simulations produce the output we expect.
     """
+    random_seed = 5678
+
+    def test_non_overlapping_generations(self):
+        tables = wf_sim(N=10, ngens=10, survival=0.0, seed=self.random_seed)
+        self.assertGreater(tables.nodes.num_rows, 0)
+        self.assertGreater(tables.edgesets.num_rows, 0)
+        self.assertEqual(tables.sites.num_rows, 0)
+        self.assertEqual(tables.mutations.num_rows, 0)
+        self.assertEqual(tables.migrations.num_rows, 0)
+        nodes = tables.nodes
+        edgesets = tables.edgesets
+        msprime.sort_tables(nodes=nodes, edgesets=edgesets)
+        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
+        msprime.simplify_tables(samples=samples, nodes=nodes, edgesets=edgesets)
+        # We should have a complete tree sequence with no unary nodes.
+        ts = msprime.load_tables(nodes=nodes, edgesets=edgesets)
+        for e in ts.edgesets():
+            self.assertGreater(len(e.children), 1)
+        # All trees should have exactly one root and the leaves should be the samples.
+        for tree in ts.trees():
+            leaves = set(tree.leaves(tree.root))
+            self.assertEqual(leaves, set(ts.samples()))
+
+    def test_overlapping_generations(self):
+
+        tables = wf_sim(N=20, ngens=20, survival=0.98, seed=self.random_seed)
+        self.assertGreater(tables.nodes.num_rows, 0)
+        self.assertGreater(tables.edgesets.num_rows, 0)
+        self.assertEqual(tables.sites.num_rows, 0)
+        self.assertEqual(tables.mutations.num_rows, 0)
+        self.assertEqual(tables.migrations.num_rows, 0)
+        nodes = tables.nodes
+        edgesets = tables.edgesets
+        msprime.sort_tables(nodes=nodes, edgesets=edgesets)
+        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
+        msprime.simplify_tables(samples=samples, nodes=nodes, edgesets=edgesets)
+        ts = msprime.load_tables(nodes=nodes, edgesets=edgesets)
+        for tree in ts.trees():
+            # TODO assert something useful about the trees. We should be able to
+            # say something about the tree topologies based on the properties of
+            # the WF simulation.
+            self.assertTrue(tree is not None)
+
+
+class TestSimplify(unittest.TestCase):
 
     def verify_simplify(self, ts, new_ts, samples=None):
         '''
-        Check that trees in `ts` match `new_ts` after mapping `samples` in `ts
+        Check that trees in `ts` match `new_ts` after mapping `samples` in `ts`
         to `range(len(samples))` in `new_ts`.  Modified from
         `verify_simplify_topology`.
         '''
@@ -196,8 +230,7 @@ class TestWFsim(unittest.TestCase):
         sample_map = {k: j for j, k in enumerate(samples)}
         # check trees agree at these points
         locs = [random.random() for _ in range(20)]
-        locs += random.sample(list(ts.breakpoints())[:-1],
-                              min(20, ts.num_trees))
+        locs += random.sample(list(ts.breakpoints())[:-1], min(20, ts.num_trees))
         locs.sort()
         old_trees = ts.trees()
         new_trees = new_ts.trees()
@@ -207,9 +240,11 @@ class TestWFsim(unittest.TestCase):
             while old_right <= loc:
                 old_tree = next(old_trees)
                 old_left, old_right = old_tree.get_interval()
+            assert old_left <= loc < old_right
             while new_right <= loc:
                 new_tree = next(new_trees)
                 new_left, new_right = new_tree.get_interval()
+            assert new_left <= loc < new_right
             pairs = itertools.islice(itertools.combinations(samples, 2), 500)
             print("Loc:", loc)
             print(old_tree.parent_dict)
@@ -254,7 +289,9 @@ class TestWFsim(unittest.TestCase):
                                      sites=tables.sites, mutations=tables.mutations)
             for nsamples in [2, 5, 10]:
                 nodes = tables.nodes.copy()
+                print(nodes)
                 edgesets = tables.edgesets.copy()
+                print(edgesets)
                 sites = tables.sites.copy()
                 mutations = tables.mutations.copy()
                 msprime.simplify_tables(samples=ts.samples(),

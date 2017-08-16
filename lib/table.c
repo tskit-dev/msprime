@@ -2250,24 +2250,6 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         }
         if (h == 1) {
             x = H[0];
-            v = self->node_id_map[input_id];
-            if (0 <= v && v < (node_id_t) self->num_samples) {
-                /* If we have a mapped node over an interval with no other segments,
-                 * then we must record this edgeset as it joins internal samples */
-                children = simplifier_get_children_buffer(self, 1);
-                if (children == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
-                children[0] = x->node;
-                ret = simplifier_record_edgeset(self, x->left, x->right, v, children, 1);
-                if (ret != 0) {
-                    goto out;
-                }
-                /* The node on this segment must be remapped to the parent so that we
-                 * have the correct nodes further up in the tree. */
-                x->node = v;
-            }
             if (node != NULL && next_l < x->right) {
                 alpha = simplifier_alloc_segment(self, x->left, next_l, x->node, NULL);
                 if (alpha == NULL) {
@@ -2285,6 +2267,25 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
                 if (ret != 0) {
                     goto out;
                 }
+            }
+            v = self->node_id_map[input_id];
+            if (v >= 0 && v < (node_id_t) self->num_samples) {
+                /* If we have a mapped node over an interval with no other segments,
+                 * then we must record this edgeset as it joins internal samples */
+                children = simplifier_get_children_buffer(self, 1);
+                if (children == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                children[0] = alpha->node;
+                ret = simplifier_record_edgeset(self, alpha->left, alpha->right,
+                        v, children, 1);
+                if (ret != 0) {
+                    goto out;
+                }
+                /* The node on this segment must be remapped to the parent so that we
+                 * have the correct nodes further up in the tree. */
+                alpha->node = v;
             }
         } else {
             if (!coalescence) {
@@ -2332,6 +2333,11 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         /* Loop tail; integrate alpha into the global state */
         assert(alpha != NULL);
         if (z == NULL) {
+            x = self->ancestor_map[input_id];
+            if (x != NULL) {
+                assert(x->next == NULL);
+                simplifier_free_segment(self, x);
+            }
             self->ancestor_map[input_id] = alpha;
         } else {
             defrag_required |= z->right == alpha->left && z->node == alpha->node;

@@ -2344,7 +2344,6 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(tss.num_mutations, 2)
         self.assertEqual(list(tss.haplotypes()), ["1", "0", "1"])
 
-    @unittest.skip("Overlapping unary edgesets, internal sample")
     def test_overlapping_unary_edgesets_internal_samples(self):
         nodes = six.StringIO("""\
         id      is_sample   time
@@ -2358,10 +2357,9 @@ class TestPythonSimplifier(unittest.TestCase):
         1       3       2       1
         """)
         ts = msprime.load_text(nodes, edgesets)
-        for x in ts.dump_tables():
-            print(x)
         tss = self.do_simplify(ts)
-        print("AFTER")
-        print()
-        for x in tss.dump_tables():
-            print(x)
+        self.assertEqual(tss.sample_size, 3)
+        self.assertEqual(tss.num_trees, 3)
+        trees = [{0: 2}, {0: 2, 1: 2}, {1: 2}]
+        for t in tss.trees():
+            self.assertEqual(t.parent_dict, trees[t.index])
