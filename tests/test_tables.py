@@ -218,10 +218,12 @@ class CommonTestsMixin(object):
                 input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
             table = self.table_class()
             table.set_columns(**input_data)
-            copy = table.copy()
-            self.assertNotEqual(id(copy), id(table))
-            self.assertIsInstance(copy, self.table_class)
-            self.assertEqual(copy, table)
+            for _ in range(10):
+                copy = table.copy()
+                self.assertNotEqual(id(copy), id(table))
+                self.assertIsInstance(copy, self.table_class)
+                self.assertEqual(copy, table)
+                table = copy
 
     def test_equality(self):
         for num_rows in [1, 10, 100]:
@@ -888,3 +890,14 @@ class TestSimplifyTables(unittest.TestCase):
             ValueError, msprime.simplify_tables, samples=samples,
             nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations,
             migrations=msprime.MigrationTable())
+
+    def test_node_table_empty_name_bug(self):
+        # Issue #236. Calling simplify on copied tables unexpectedly fails.
+        ts = msprime.simulate(20, random_seed=1)
+        tables = ts.dump_tables()
+        nodes = tables.nodes.copy()
+        edgesets = tables.edgesets.copy()
+        msprime.simplify_tables(
+                samples=ts.samples(), nodes=nodes, edgesets=edgesets)
+        self.assertEqual(nodes, tables.nodes)
+        self.assertEqual(edgesets, tables.edgesets)

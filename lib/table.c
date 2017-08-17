@@ -53,27 +53,6 @@ out:
  * node table
  *************************/
 
-int
-node_table_alloc(node_table_t *self, size_t max_rows_increment,
-        size_t max_total_name_length_increment)
-{
-    int ret = 0;
-
-    memset(self, 0, sizeof(node_table_t));
-    if (max_rows_increment == 0 || max_total_name_length_increment == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->max_rows_increment = max_rows_increment;
-    self->max_total_name_length_increment = max_total_name_length_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_total_name_length = 0;
-    self->total_name_length = 0;
-out:
-    return ret;
-}
-
 static int
 node_table_expand_fixed_columns(node_table_t *self, size_t new_size)
 {
@@ -114,6 +93,37 @@ node_table_expand_name(node_table_t *self, size_t new_size)
             goto out;
         }
         self->max_total_name_length = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+node_table_alloc(node_table_t *self, size_t max_rows_increment,
+        size_t max_total_name_length_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(node_table_t));
+    if (max_rows_increment == 0) {
+       max_rows_increment = DEFAULT_MAX_ROWS_INCREMENT;
+    }
+    if (max_total_name_length_increment == 0) {
+        max_total_name_length_increment = DEFAULT_MAX_ROWS_INCREMENT;
+    }
+    self->max_rows_increment = max_rows_increment;
+    self->max_total_name_length_increment = max_total_name_length_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    self->max_total_name_length = 0;
+    self->total_name_length = 0;
+    ret = node_table_expand_fixed_columns(self, self->max_rows_increment);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = node_table_expand_name(self, self->max_total_name_length_increment);
+    if (ret != 0) {
+        goto out;
     }
 out:
     return ret;

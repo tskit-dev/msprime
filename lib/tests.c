@@ -417,8 +417,7 @@ tree_sequence_from_text(tree_sequence_t *ts, const char *nodes, const char *edge
     CU_ASSERT_FATAL(nodes != NULL);
     CU_ASSERT_FATAL(edgesets != NULL);
 
-    ret = node_table_alloc(&node_table, default_size_increment,
-            default_size_increment);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, default_size_increment,
             default_size_increment);
@@ -1064,7 +1063,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     int stack_top = 0;
 
     CU_ASSERT_FATAL(new_ts != NULL);
-    ret = node_table_alloc(&nodes, alloc_size, alloc_size);
+    ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1154,7 +1153,7 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     size_t num_provenance_strings;
 
     CU_ASSERT_FATAL(new_ts != NULL);
-    ret = node_table_alloc(&nodes, alloc_size, alloc_size);
+    ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3036,7 +3035,7 @@ test_simplest_bad_records(void)
     edgeset_table_t edgeset_table;
     int ret;
 
-    ret = node_table_alloc(&node_table, 1, 1);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3246,7 +3245,7 @@ test_simplest_overlapping_parents(void)
     sparse_tree_t tree;
     int ret;
 
-    ret = node_table_alloc(&node_table, 1, 1);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3291,7 +3290,7 @@ test_simplest_contradictory_children(void)
     sparse_tree_t tree;
     int ret;
 
-    ret = node_table_alloc(&node_table, 1, 1);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3337,7 +3336,7 @@ test_simplest_overlapping_edgesets_simplify(void)
     simplifier_t simplifier;
     int ret;
 
-    ret = node_table_alloc(&node_table, 1, 1);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3417,7 +3416,7 @@ test_simplest_overlapping_unary_edgesets_simplify(void)
     simplifier_t simplifier;
     int ret;
 
-    ret = node_table_alloc(&node_table, 1, 1);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3571,7 +3570,7 @@ test_single_tree_bad_records(void)
     node_table_t node_table;
     edgeset_table_t edgeset_table;
 
-    ret = node_table_alloc(&node_table, 1, 1);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3692,7 +3691,7 @@ test_single_tree_bad_mutations(void)
     site_table_t site_table;
     mutation_table_t mutation_table;
 
-    ret = node_table_alloc(&node_table, 1, 1);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4317,7 +4316,7 @@ test_single_tree_simplify(void)
     verify_simplify(&ts);
 
     /* Check the simplifier interface directly */
-    ret = node_table_alloc(&nodes, alloc_size, alloc_size);
+    ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4572,7 +4571,7 @@ test_single_tree_mutgen(void)
     mutation_table_t mutations, mutations_after;
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = node_table_alloc(&node_table, 1, 1);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5442,7 +5441,7 @@ test_tree_sequence_bad_records(void)
         7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
     };
 
-    ret = node_table_alloc(&node_table, 1, 1);
+    ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgeset_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6245,7 +6244,7 @@ test_sort_tables(void)
     site_table_t sites;
     mutation_table_t mutations;
 
-    ret = node_table_alloc(&nodes, alloc_size, alloc_size);
+    ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6368,7 +6367,7 @@ test_dump_tables(void)
     site_table_t sites;
     mutation_table_t mutations;
 
-    ret = node_table_alloc(&nodes, alloc_size, alloc_size);
+    ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6465,7 +6464,7 @@ test_dump_tables_hdf5(void)
     site_table_t sites;
     mutation_table_t mutations;
 
-    ret = node_table_alloc(&nodes, alloc_size, alloc_size);
+    ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
@@ -6566,11 +6565,6 @@ test_node_table(void)
     char name_copy[test_name_length + 1];
 
     name_copy[test_name_length] = '\0';
-    ret = node_table_alloc(&table, 0, 1);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = node_table_alloc(&table, 1, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-
     ret = node_table_alloc(&table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     node_table_print_state(&table, _devnull);
