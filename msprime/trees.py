@@ -453,11 +453,12 @@ class TreeDrawer(object):
     """
     def __init__(
             self, tree, width=200, height=200, show_times=False,
-            show_mutation_labels=False, show_internal_node_labels=True,
-            show_leaf_node_labels=True):
+            show_mutation_locations=True, show_mutation_labels=False,
+            show_internal_node_labels=True, show_leaf_node_labels=True):
         self._width = width
         self._height = height
         self._show_times = show_times
+        self._show_mutation_locations = show_mutation_locations
         self._show_mutation_labels = show_mutation_labels
         self._show_internal_node_labels = show_internal_node_labels
         self._show_leaf_node_labels = show_leaf_node_labels
@@ -527,8 +528,9 @@ class TreeDrawer(object):
                 lines.add(dwg.line((x[0], y[1]), y))
         for x, mutation in self._mutations:
             r = 3
-            dwg.add(dwg.rect(
-                insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
+            if self._show_mutation_locations:
+                dwg.add(dwg.rect(
+                    insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
             if self._show_mutation_labels:
                 dx = [8 * r]
                 dy = [-2 * r]
@@ -815,9 +817,9 @@ class SparseTree(object):
         return self._ll_sparse_tree.get_sample_size()
 
     def draw(
-            self, path=None, width=200, height=200, show_times=False,
-            show_mutation_labels=False, show_internal_node_labels=True,
-            show_leaf_node_labels=True):
+            self, path=None, width=200, height=200, times=False,
+            mutation_locations=True, mutation_labels=False,
+            internal_node_labels=True, leaf_node_labels=True, show_times=None):
         """
         Returns a representation of this tree in SVG format.
 
@@ -825,22 +827,27 @@ class SparseTree(object):
             write to file.
         :param int width: The width of the image in pixels.
         :param int height: The height of the image in pixels.
-        :param bool show_times: If True, show time labels at each internal
-            node.
-        :param bool show_mutation_labels: If True, show labels for mutations.
-        :param bool show_internal_node_labels: If True, show labels for internal nodes.
-        :param bool show_leaf_node_labels: If True, show labels for leaf nodes.
+        :param bool times: If True, show time labels at each internal node.
+        :param bool mutation_locations: If True, show mutations as points over nodes.
+        :param bool mutation_labels: If True, show labels for mutations.
+        :param bool internal_node_labels: If True, show labels for internal nodes.
+        :param bool leaf_node_labels: If True, show labels for leaf nodes.
+        :param bool show_times: Deprecated alias for ``times``.
         :return: A representation of this tree in SVG format.
         :rtype: str
         """
+        # show_times is a deprecated alias for times.
+        if show_times is not None:
+            times = show_times
         if not _svgwrite_imported:
             raise ImportError(
                 "svgwrite is not installed. try `pip install svgwrite`")
         td = TreeDrawer(
-                self, width=width, height=height, show_times=show_times,
-                show_mutation_labels=show_mutation_labels,
-                show_internal_node_labels=show_internal_node_labels,
-                show_leaf_node_labels=show_leaf_node_labels)
+                self, width=width, height=height, show_times=times,
+                show_mutation_locations=mutation_locations,
+                show_mutation_labels=mutation_labels,
+                show_internal_node_labels=internal_node_labels,
+                show_leaf_node_labels=leaf_node_labels)
         svg = td.draw()
         if path is not None:
             with open(path, "w") as f:
