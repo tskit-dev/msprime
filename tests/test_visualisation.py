@@ -88,8 +88,8 @@ class TestTreeDraw(unittest.TestCase):
 
     def test_boolean_flags(self):
         flags = [
-            "show_times", "show_mutation_labels", "show_internal_node_labels",
-            "show_leaf_node_labels"]
+            "times", "mutation_locations", "mutation_labels", "internal_node_labels",
+            "leaf_node_labels", "show_times"]
         t = self.get_binary_tree()
         for flag in flags:
             for boolean in [True, False]:
