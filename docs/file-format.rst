@@ -268,8 +268,8 @@ follows::
     sv = [True, True, True, False, False, False, False]
     tv = [0.0, 0.0, 0.0, 0.4, 0.5, 0.7, 1.0]
     pv = [0, 0, 0, 0, 0, 0, 0]
-    for s, t, p in zip(fv, tv, pv):
-        n.add_row(is_sample=s, population=p, time=t)
+    for s, t, p in zip(sv, tv, pv):
+        n.add_row(flags=s, population=p, time=t)
 
     print(n)
 
@@ -278,7 +278,7 @@ new records appear one-by-one. In the example above it would have been more
 natural to use ``.set_columns()``::
 
     n = msprime.NodeTable()
-    n.set_columns(is_sample=sv, population=pv, time=tv)
+    n.set_columns(flags=sv, population=pv, time=tv)
 
 
 Finally, here is an example where we add 1.4 to every ``time`` except the first
