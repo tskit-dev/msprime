@@ -329,7 +329,6 @@ class TestSimplify(unittest.TestCase):
                 small_ts = ts.simplify(samples=[ts.samples()[k] for k in sub_samples])
                 self.verify_simplify(big_ts, small_ts, samples=sub_samples)
 
-    @unittest.skip("Skip simpify tables BAD_PARAM_VALUE")
     def test_simplify_tables(self):
         seed = 23
         for tables in self.get_wf_sims(seed=seed):
@@ -338,9 +337,7 @@ class TestSimplify(unittest.TestCase):
                 sites=tables.sites, mutations=tables.mutations)
             for nsamples in [2, 5, 10]:
                 nodes = tables.nodes.copy()
-                print(nodes)
                 edgesets = tables.edgesets.copy()
-                print(edgesets)
                 sites = tables.sites.copy()
                 mutations = tables.mutations.copy()
                 msprime.simplify_tables(
