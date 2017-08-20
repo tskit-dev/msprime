@@ -262,7 +262,14 @@ the future, but currently there are two ways to modify tables: ``.add_row()``
 and ``.set_columns()`` (and also ``.reset()``, which empties the table).
 
 The example node table above would be constructed using ``.add_row()`` as
-follows::
+follows:
+
+.. ipython:: python
+    :suppress:
+
+    import msprime
+
+.. ipython:: python
 
     n = msprime.NodeTable()
     sv = [True, True, True, False, False, False, False]
