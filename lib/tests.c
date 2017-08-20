@@ -411,7 +411,6 @@ tree_sequence_from_text(tree_sequence_t *ts, const char *nodes, const char *edge
     mutation_table_t mutation_table;
     site_table_t site_table;
     migration_table_t migration_table;
-    size_t default_size_increment = 1024;
 
     CU_ASSERT_FATAL(ts != NULL);
     CU_ASSERT_FATAL(nodes != NULL);
@@ -419,15 +418,13 @@ tree_sequence_from_text(tree_sequence_t *ts, const char *nodes, const char *edge
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, default_size_increment,
-            default_size_increment);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, default_size_increment, default_size_increment);
+    ret = site_table_alloc(&site_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutation_table, default_size_increment,
-            default_size_increment);
+    ret = mutation_table_alloc(&mutation_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migration_table, default_size_increment);
+    ret = migration_table_alloc(&migration_table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(nodes, &node_table);
@@ -1047,7 +1044,6 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
 {
     int ret;
     size_t num_provenance_strings;
-    size_t alloc_size = 8192;
     char **provenance_strings;
     tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
     sparse_tree_t tree;
@@ -1065,13 +1061,13 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
+    ret = edgeset_table_alloc(&edgesets, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migrations, alloc_size);
+    ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, alloc_size, alloc_size);
+    ret = site_table_alloc(&sites, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, alloc_size, alloc_size);
+    ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = sparse_tree_alloc(&tree, ts, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1135,7 +1131,6 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
 {
     int ret;
     size_t j, k;
-    size_t alloc_size = 8192;
     size_t MAX_CHILDREN = 1024;
     tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
     node_table_t nodes;
@@ -1155,13 +1150,13 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
+    ret = edgeset_table_alloc(&edgesets, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migrations, alloc_size);
+    ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, alloc_size, alloc_size);
+    ret = site_table_alloc(&sites, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, alloc_size, alloc_size);
+    ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     node_map = malloc(num_nodes * sizeof(node_id_t));
     CU_ASSERT_FATAL(node_map != NULL);
@@ -3037,7 +3032,7 @@ test_simplest_bad_records(void)
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(nodes, &node_table);
@@ -3247,7 +3242,7 @@ test_simplest_overlapping_parents(void)
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(nodes, &node_table);
@@ -3292,7 +3287,7 @@ test_simplest_contradictory_children(void)
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(nodes, &node_table);
@@ -3338,13 +3333,13 @@ test_simplest_overlapping_edgesets_simplify(void)
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migration_table, 1);
+    ret = migration_table_alloc(&migration_table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, 1, 1);
+    ret = site_table_alloc(&site_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutation_table, 1, 1);
+    ret = mutation_table_alloc(&mutation_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(nodes, &node_table);
@@ -3418,13 +3413,13 @@ test_simplest_overlapping_unary_edgesets_simplify(void)
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migration_table, 1);
+    ret = migration_table_alloc(&migration_table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, 1, 1);
+    ret = site_table_alloc(&site_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutation_table, 1, 1);
+    ret = mutation_table_alloc(&mutation_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(nodes, &node_table);
@@ -3572,7 +3567,7 @@ test_single_tree_bad_records(void)
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(single_tree_ex_nodes, &node_table);
@@ -3693,11 +3688,11 @@ test_single_tree_bad_mutations(void)
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, 1, 1);
+    ret = site_table_alloc(&site_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutation_table, 1, 1);
+    ret = mutation_table_alloc(&mutation_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(single_tree_ex_nodes, &node_table);
@@ -4307,7 +4302,6 @@ test_single_tree_simplify(void)
     size_t num_provenance_strings;
     char **provenance_strings;
     int ret;
-    size_t alloc_size = 1;
     simplifier_t simplifier;
     node_id_t samples[] = {0, 1};
 
@@ -4318,13 +4312,13 @@ test_single_tree_simplify(void)
     /* Check the simplifier interface directly */
     ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
+    ret = edgeset_table_alloc(&edgesets, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migrations, alloc_size);
+    ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, alloc_size, alloc_size);
+    ret = site_table_alloc(&sites, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, alloc_size, alloc_size);
+    ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edgesets,
@@ -4573,17 +4567,17 @@ test_single_tree_mutgen(void)
     CU_ASSERT_FATAL(rng != NULL);
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     parse_nodes(nodes, &node_table);
     parse_edgesets(edgesets, &edgeset_table);
-    ret = site_table_alloc(&sites, 1, 1);
+    ret = site_table_alloc(&sites, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, 1, 1);
+    ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites_after, 100, 100);
+    ret = site_table_alloc(&sites_after, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations_after, 100, 100);
+    ret = mutation_table_alloc(&mutations_after, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = mutgen_alloc(&mutgen, 0.0, rng, MSP_ALPHABET_BINARY, 100);
@@ -5443,7 +5437,7 @@ test_tree_sequence_bad_records(void)
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    ret = edgeset_table_alloc(&edgeset_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(paper_ex_nodes, &node_table);
@@ -6236,7 +6230,6 @@ test_sort_tables(void)
     tree_sequence_t ts2;
     tree_sequence_t *ts1;
     size_t j, num_provenance_strings;
-    size_t alloc_size = 8192;
     char **provenance_strings;
     node_table_t nodes;
     edgeset_table_t edgesets;
@@ -6246,13 +6239,13 @@ test_sort_tables(void)
 
     ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
+    ret = edgeset_table_alloc(&edgesets, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migrations, alloc_size);
+    ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, alloc_size, alloc_size);
+    ret = site_table_alloc(&sites, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, alloc_size, alloc_size);
+    ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_FATAL(examples != NULL);
@@ -6359,7 +6352,6 @@ test_dump_tables(void)
     tree_sequence_t ts2;
     tree_sequence_t *ts1;
     size_t j, num_provenance_strings;
-    size_t alloc_size = 8192;
     char **provenance_strings;
     node_table_t nodes;
     edgeset_table_t edgesets;
@@ -6369,13 +6361,13 @@ test_dump_tables(void)
 
     ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
+    ret = edgeset_table_alloc(&edgesets, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migrations, alloc_size);
+    ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, alloc_size, alloc_size);
+    ret = site_table_alloc(&sites, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, alloc_size, alloc_size);
+    ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_FATAL(examples != NULL);
@@ -6456,7 +6448,6 @@ test_dump_tables_hdf5(void)
     int ret;
     size_t k, num_provenance_strings;
     tree_sequence_t *ts1, ts2, ts3, **examples;
-    size_t alloc_size = 8192;
     char **provenance_strings;
     node_table_t nodes;
     edgeset_table_t edgesets;
@@ -6467,13 +6458,13 @@ test_dump_tables_hdf5(void)
     ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = edgeset_table_alloc(&edgesets, alloc_size, alloc_size);
+    ret = edgeset_table_alloc(&edgesets, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migrations, alloc_size);
+    ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, alloc_size, alloc_size);
+    ret = site_table_alloc(&sites, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, alloc_size, alloc_size);
+    ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     examples = get_example_tree_sequences(1);
@@ -6673,11 +6664,6 @@ test_edgeset_table(void)
     double *left, *right;
     node_id_t c[max_children];
 
-    ret = edgeset_table_alloc(&table, 0, 1);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = edgeset_table_alloc(&table, 1, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-
     ret = edgeset_table_alloc(&table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edgeset_table_print_state(&table, _devnull);
@@ -6771,11 +6757,6 @@ test_site_table(void)
     double *position;
     uint32_t *ancestral_state_length;
 
-    ret = site_table_alloc(&table, 0, 1);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = site_table_alloc(&table, 1, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-
     ret = site_table_alloc(&table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     site_table_print_state(&table, _devnull);
@@ -6859,10 +6840,6 @@ test_mutation_table(void)
     for (j = 0; j < max_len; j++) {
         c[j] = j + 1;
     }
-    ret = mutation_table_alloc(&table, 0, 1);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = mutation_table_alloc(&table, 1, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     ret = mutation_table_alloc(&table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6944,9 +6921,6 @@ test_migration_table(void)
     node_id_t *node;
     population_id_t *source, *dest;
     double *left, *right, *time;
-
-    ret = migration_table_alloc(&table, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     ret = migration_table_alloc(&table, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);

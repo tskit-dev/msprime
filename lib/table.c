@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2017 University of Oxford
+** Copyright (C) 2017 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -28,7 +28,7 @@
 #include "msprime.h"
 #include "object_heap.h"
 
-#define DEFAULT_MAX_ROWS_INCREMENT 1024
+#define DEFAULT_SIZE_INCREMENT 1024
 
 #define TABLE_SEP "-----------------------------------------\n"
 
@@ -106,10 +106,10 @@ node_table_alloc(node_table_t *self, size_t max_rows_increment,
 
     memset(self, 0, sizeof(node_table_t));
     if (max_rows_increment == 0) {
-       max_rows_increment = DEFAULT_MAX_ROWS_INCREMENT;
+       max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
     if (max_total_name_length_increment == 0) {
-        max_total_name_length_increment = DEFAULT_MAX_ROWS_INCREMENT;
+        max_total_name_length_increment = DEFAULT_SIZE_INCREMENT;
     }
     self->max_rows_increment = max_rows_increment;
     self->max_total_name_length_increment = max_total_name_length_increment;
@@ -274,27 +274,6 @@ node_table_print_state(node_table_t *self, FILE *out)
  * edgeset table
  *************************/
 
-int
-edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
-        size_t max_total_children_length_increment)
-{
-    int ret = 0;
-
-    memset(self, 0, sizeof(edgeset_table_t));
-    if (max_rows_increment == 0 || max_total_children_length_increment == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->max_rows_increment = max_rows_increment;
-    self->max_total_children_length_increment = max_total_children_length_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_total_children_length = 0;
-    self->total_children_length = 0;
-out:
-    return ret;
-}
-
 static int
 edgeset_table_expand_main_columns(edgeset_table_t *self, size_t new_size)
 {
@@ -335,6 +314,37 @@ edgeset_table_expand_children(edgeset_table_t *self, size_t new_size)
             goto out;
         }
         self->max_total_children_length = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
+        size_t max_total_children_length_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(edgeset_table_t));
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    if (max_total_children_length_increment == 0) {
+        max_total_children_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = max_rows_increment;
+    self->max_total_children_length_increment = max_total_children_length_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    self->max_total_children_length = 0;
+    self->total_children_length = 0;
+    ret = edgeset_table_expand_main_columns(self, self->max_rows_increment);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_expand_children(self, self->max_total_children_length_increment);
+    if (ret != 0) {
+        goto out;
     }
 out:
     return ret;
@@ -470,28 +480,6 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
  * site table
  *************************/
 
-int
-site_table_alloc(site_table_t *self, size_t max_rows_increment,
-        size_t max_total_ancestral_state_length_increment)
-{
-    int ret = 0;
-
-    memset(self, 0, sizeof(site_table_t));
-    if (max_rows_increment == 0 || max_total_ancestral_state_length_increment == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->max_rows_increment = max_rows_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_total_ancestral_state_length_increment =
-        max_total_ancestral_state_length_increment;
-    self->max_total_ancestral_state_length = 0;
-    self->total_ancestral_state_length = 0;
-out:
-    return ret;
-}
-
 static int
 site_table_expand_main_columns(site_table_t *self, size_t new_size)
 {
@@ -524,6 +512,39 @@ site_table_expand_ancestral_state(site_table_t *self, size_t new_size)
             goto out;
         }
         self->max_total_ancestral_state_length = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+site_table_alloc(site_table_t *self, size_t max_rows_increment,
+        size_t max_total_ancestral_state_length_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(site_table_t));
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    if (max_total_ancestral_state_length_increment == 0) {
+        max_total_ancestral_state_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = max_rows_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    self->max_total_ancestral_state_length_increment =
+        max_total_ancestral_state_length_increment;
+    self->max_total_ancestral_state_length = 0;
+    self->total_ancestral_state_length = 0;
+    ret = site_table_expand_main_columns(self, self->max_rows_increment);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = site_table_expand_ancestral_state(self,
+            self->max_total_ancestral_state_length_increment);
+    if (ret != 0) {
+        goto out;
     }
 out:
     return ret;
@@ -663,28 +684,6 @@ site_table_print_state(site_table_t *self, FILE *out)
  * mutation table
  *************************/
 
-int
-mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        size_t max_total_derived_state_length_increment)
-{
-    int ret = 0;
-
-    memset(self, 0, sizeof(mutation_table_t));
-    if (max_rows_increment == 0 || max_total_derived_state_length_increment == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->max_rows_increment = max_rows_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_total_derived_state_length_increment =
-        max_total_derived_state_length_increment;
-    self->max_total_derived_state_length = 0;
-    self->total_derived_state_length = 0;
-out:
-    return ret;
-}
-
 static int
 mutation_table_expand_main_columns(mutation_table_t *self, size_t new_size)
 {
@@ -721,6 +720,39 @@ mutation_table_expand_derived_state(mutation_table_t *self, size_t new_size)
             goto out;
         }
         self->max_total_derived_state_length = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
+        size_t max_total_derived_state_length_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(mutation_table_t));
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    if (max_total_derived_state_length_increment == 0) {
+        max_total_derived_state_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = max_rows_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    self->max_total_derived_state_length_increment =
+        max_total_derived_state_length_increment;
+    self->max_total_derived_state_length = 0;
+    self->total_derived_state_length = 0;
+    ret = mutation_table_expand_main_columns(self, self->max_rows_increment);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_expand_derived_state(self,
+            self->max_total_derived_state_length_increment);
+    if (ret != 0) {
+        goto out;
     }
 out:
     return ret;
@@ -861,23 +893,6 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
  * migration table
  *************************/
 
-int
-migration_table_alloc(migration_table_t *self, size_t max_rows_increment)
-{
-    int ret = 0;
-
-    memset(self, 0, sizeof(migration_table_t));
-    if (max_rows_increment == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->max_rows_increment = max_rows_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-out:
-    return ret;
-}
-
 static int
 migration_table_expand(migration_table_t *self, size_t new_size)
 {
@@ -909,6 +924,26 @@ migration_table_expand(migration_table_t *self, size_t new_size)
             goto out;
         }
         self->max_rows = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+migration_table_alloc(migration_table_t *self, size_t max_rows_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(migration_table_t));
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = max_rows_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    ret = migration_table_expand(self, self->max_rows_increment);
+    if (ret != 0) {
+        goto out;
     }
 out:
     return ret;
@@ -1164,7 +1199,6 @@ table_sorter_sort_edgesets(table_sorter_t *self)
                 e->children, e->children_length * sizeof(node_id_t));
         children_offset += e->children_length;
     }
-
 out:
     return ret;
 }
@@ -1772,8 +1806,7 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         goto out;
     }
     /* Make a copy of the input nodes and clear the table ready for output */
-    ret = node_table_alloc(&self->input_nodes, nodes->num_rows,
-            nodes->total_name_length + 1);
+    ret = node_table_alloc(&self->input_nodes, nodes->num_rows, nodes->total_name_length);
     if (ret != 0) {
         goto out;
     }

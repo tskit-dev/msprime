@@ -2359,14 +2359,12 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     if (ret != 0) {
         goto out;
     }
-    /* If we have 0 migrations, sites or mutations just alloc space for one row.
-     * It's not worth making a special case and checking to see if these are NULL */
     migrations = malloc(sizeof(node_table_t));
     if (migrations == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = migration_table_alloc(migrations, self->migrations.num_records + 1);
+    ret = migration_table_alloc(migrations, self->migrations.num_records);
     if (ret != 0) {
         goto out;
     }
@@ -2375,8 +2373,8 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = site_table_alloc(sites, self->sites.num_records + 1,
-            self->sites.total_ancestral_state_length + 1);
+    ret = site_table_alloc(sites, self->sites.num_records,
+            self->sites.total_ancestral_state_length);
     if (ret != 0) {
         goto out;
     }
@@ -2385,8 +2383,8 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = mutation_table_alloc(mutations, self->mutations.num_records + 1,
-            self->mutations.total_derived_state_length + 1);
+    ret = mutation_table_alloc(mutations, self->mutations.num_records,
+            self->mutations.total_derived_state_length);
     if (ret != 0) {
         goto out;
     }

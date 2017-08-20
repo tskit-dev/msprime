@@ -77,16 +77,21 @@ class CommonTestsMixin(object):
     we have to make this a mixin.
     """
     def test_max_rows_increment(self):
-        for bad_value in [-1, 0, -2**10]:
+        for bad_value in [-1, -2**10]:
             self.assertRaises(ValueError, self.table_class, max_rows_increment=bad_value)
         for v in [1, 100, 256]:
             table = self.table_class(max_rows_increment=v)
             self.assertEqual(table.max_rows_increment, v)
+        # Setting zero or not argument both denote the default.
+        table = self.table_class()
+        self.assertEqual(table.max_rows_increment, 1024)
+        table = self.table_class(max_rows_increment=0)
+        self.assertEqual(table.max_rows_increment, 1024)
 
     def test_input_parameters_errors(self):
         self.assertGreater(len(self.input_parameters), 0)
         for param, _ in self.input_parameters:
-            for bad_value in [-1, 0, -2**10]:
+            for bad_value in [-1, -2**10]:
                 self.assertRaises(ValueError, self.table_class, **{param: bad_value})
             for bad_type in [None, ValueError, "ser"]:
                 self.assertRaises(TypeError, self.table_class, **{param: bad_type})
