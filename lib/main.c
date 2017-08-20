@@ -812,23 +812,23 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_alloc(edgesets, 10, 10);
+    ret = edgeset_table_alloc(edgesets, 0, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_alloc(nodes, 10, 10);
+    ret = node_table_alloc(nodes, 0, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_alloc(sites, 1, 1);
+    ret = site_table_alloc(sites, 0, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_alloc(mutations, 10, 10);
+    ret = mutation_table_alloc(mutations, 0, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = migration_table_alloc(migrations, 10);
+    ret = migration_table_alloc(migrations, 0);
     if (ret != 0) {
         goto out;
     }

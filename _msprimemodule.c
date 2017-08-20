@@ -872,15 +872,15 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
-    Py_ssize_t max_rows_increment = 1024;
-    Py_ssize_t max_name_length_increment = 1;
+    Py_ssize_t max_rows_increment = 0;
+    Py_ssize_t max_name_length_increment = 0;
 
     self->node_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
         goto out;
     }
-    if (max_rows_increment <= 0) {
+    if (max_rows_increment < 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
@@ -1232,20 +1232,21 @@ EdgesetTable_init(EdgesetTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {
         "max_rows_increment", "max_children_length_increment", NULL};
-    Py_ssize_t max_rows_increment = 1024;
-    Py_ssize_t max_children_length_increment = 1024;
+    Py_ssize_t max_rows_increment = 0;
+    Py_ssize_t max_children_length_increment = 0;
 
     self->edgeset_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
                 &max_rows_increment, &max_children_length_increment)) {
         goto out;
     }
-    if (max_rows_increment <= 0) {
+    if (max_rows_increment < 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    if (max_children_length_increment <= 0) {
-        PyErr_SetString(PyExc_ValueError, "max_children_length_increment must be positive");
+    if (max_children_length_increment < 0) {
+        PyErr_SetString(PyExc_ValueError,
+                "max_children_length_increment must be positive");
         goto out;
     }
     self->edgeset_table = PyMem_Malloc(sizeof(edgeset_table_t));
@@ -1253,8 +1254,8 @@ EdgesetTable_init(EdgesetTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = edgeset_table_alloc(self->edgeset_table, max_rows_increment,
-            max_children_length_increment);
+    err = edgeset_table_alloc(self->edgeset_table, (size_t) max_rows_increment,
+            (size_t) max_children_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1610,14 +1611,14 @@ MigrationTable_init(MigrationTable *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
-    Py_ssize_t max_rows_increment = 1024;
+    Py_ssize_t max_rows_increment = 0;
 
     self->migration_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
         goto out;
     }
-    if (max_rows_increment <= 0) {
+    if (max_rows_increment < 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
@@ -1937,19 +1938,19 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {"max_rows_increment",
         "max_total_ancestral_state_length_increment", NULL};
-    Py_ssize_t max_rows_increment = 1024;
-    Py_ssize_t max_length_increment = 1024;
+    Py_ssize_t max_rows_increment = 0;
+    Py_ssize_t max_length_increment = 0;
 
     self->site_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
                 &max_rows_increment, &max_length_increment)) {
         goto out;
     }
-    if (max_rows_increment <= 0) {
+    if (max_rows_increment < 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    if (max_length_increment <= 0) {
+    if (max_length_increment < 0) {
         PyErr_SetString(PyExc_ValueError, "max_length_increment must be positive");
         goto out;
     }
@@ -1958,7 +1959,8 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = site_table_alloc(self->site_table, max_rows_increment, max_length_increment);
+    err = site_table_alloc(self->site_table, (size_t) max_rows_increment,
+            (size_t) max_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2267,20 +2269,21 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {
         "max_rows_increment", "max_total_derived_state_length_increment", NULL};
-    Py_ssize_t max_rows_increment = 1024;
-    Py_ssize_t max_total_derived_state_length_increment = 1024;
+    Py_ssize_t max_rows_increment = 0;
+    Py_ssize_t max_total_derived_state_length_increment = 0;
 
     self->mutation_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
                 &max_rows_increment, &max_total_derived_state_length_increment)) {
         goto out;
     }
-    if (max_rows_increment <= 0) {
+    if (max_rows_increment < 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    if (max_total_derived_state_length_increment <= 0) {
-        PyErr_SetString(PyExc_ValueError, "max_total_derived_state_length_increment must be positive");
+    if (max_total_derived_state_length_increment < 0) {
+        PyErr_SetString(PyExc_ValueError,
+                "max_total_derived_state_length_increment must be positive");
         goto out;
     }
     self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
@@ -2288,8 +2291,8 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = mutation_table_alloc(self->mutation_table, max_rows_increment,
-            max_total_derived_state_length_increment);
+    err = mutation_table_alloc(self->mutation_table, (size_t) max_rows_increment,
+            (size_t) max_total_derived_state_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -7503,7 +7506,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         migrations_allocated = true;
-        err = migration_table_alloc(migrations, 1);
+        err = migration_table_alloc(migrations, 0);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -7516,7 +7519,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         sites_allocated = true;
-        err = site_table_alloc(sites, 1, 1);
+        err = site_table_alloc(sites, 0, 0);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -7529,7 +7532,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         mutations_allocated = true;
-        err = mutation_table_alloc(mutations, 1, 1);
+        err = mutation_table_alloc(mutations, 0, 0);
         if (err != 0) {
             handle_library_error(err);
             goto out;
