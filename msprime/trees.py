@@ -157,6 +157,7 @@ class NodeTable(_msprime.NodeTable):
         2	0	0		0.0
         3	1	0		0.5
         4	0	2		2.1
+
     Node IDs are *not* recorded; rather the `id` column shows the row index, so
     that the `k`-th row describes the node whose ID is `k`.  `flags` currently
     records whether the node is a sample (=1) or not (=0).  `population` is an
@@ -207,19 +208,24 @@ class EdgesetTable(_msprime.EdgesetTable):
         0.0     0.4     3       0,2
         0.4     1.0     3       0,1,2
         0.0     0.4     4       1,3
+
     These describe the half-open genomic interval affected: `[left, right)`,
     the `parent` and the `children` on that interval.
 
     Requirements: to describe a valid tree sequence, a `EdgesetTable` (and
     corresponding `NodeTable`, to provide birth times) must satisfy:
+
         1. each list of children must be in sorted order,
         2. any two edgesets that share a child must be nonoverlapping, and
         3. the birth times of the `parent` in an edgeset must be strictly
             greater than the birth times of the `children` in that edgeset.
+
     Furthermore, for algorithmic requirements
+
         4. the smallest `left` coordinate must be 0.0,
         5. the the table must be sorted by birth time of the `parent`, and
         6. any two edgesets corresponding to the same `parent` must be nonoverlapping.
+
     It is an additional requirement that the complete ancestry of each sample
     must be specified, but this is harder to verify.
 
@@ -307,9 +313,11 @@ class SiteTable(_msprime.SiteTable):
     """
     Class for tables describing all sites at which mutations have occurred in a
     tree sequence, of the form
+
         id	position	ancestral_state
         0	0.1     	0
         1	0.5     	0
+
     Here ``id`` is not stored directly, but is determined by the row index in
     the table.  ``position`` is the position along the genome, and
     ``ancestral_state`` gives the allele at the root of the tree at that
@@ -349,10 +357,12 @@ class MutationTable(_msprime.MutationTable):
     """
     Class for tables describing all mutations that have occurred in a tree
     sequence, of the form
+    
         site	node	derived_state
         0	4	1
         1	3	1
         1	2	0
+
     Here ``site`` is the index in the SiteTable of the site at which the
     mutation occurred, ``node`` is the index in the NodeTable of the node who
     is the first node inheriting the mutation, and ``derived_state`` is the
