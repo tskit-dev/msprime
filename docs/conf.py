@@ -20,23 +20,24 @@ import shlex
 # documentation build on readthedocs, so we mock the module. Follows
 # the recommended pattern at
 # http://docs.readthedocs.org/en/latest/faq.html
-try:
-    from unittest.mock import MagicMock
-except ImportError:
-    from mock import Mock as MagicMock
-
-class Mock(MagicMock):
-    @classmethod
-    def __getattr__(cls, name):
-        return MagicMock()
-
-MOCK_MODULES = ["_msprime"]
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+# try:
+#     from unittest.mock import MagicMock
+# except ImportError:
+#     from mock import Mock as MagicMock
+# 
+# class Mock(MagicMock):
+#     @classmethod
+#     def __getattr__(cls, name):
+#         return MagicMock()
+# 
+# MOCK_MODULES = ["_msprime"]
+# sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('..'))
+if (os.environ.get('READTHEDOCS') == "True") is False:
+    sys.path.insert(0, os.path.abspath('..'))
 
 import setuptools_scm
 setuptools_scm_version = setuptools_scm.get_version(root="../")
@@ -56,6 +57,9 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
     'sphinxarg.ext',
+    'sphinx.ext.doctest',
+    'IPython.sphinxext.ipython_console_highlighting',
+    'IPython.sphinxext.ipython_directive',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
