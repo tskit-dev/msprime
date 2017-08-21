@@ -931,8 +931,12 @@ out:
 }
 
 #ifdef HAVE_NUMPY
+#define SET_COLS 0
+#define APPEND_COLS 1
+
 static PyObject *
-NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
+NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -996,9 +1000,17 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = node_table_set_columns(self->node_table, num_rows,
-            PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
-            name_data, name_length_data);
+    if (method == SET_COLS) {
+        err = node_table_set_columns(self->node_table, num_rows,
+                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
+                name_data, name_length_data);
+    } else if (method == APPEND_COLS) {
+        err = node_table_append_columns(self->node_table, num_rows,
+                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
+                name_data, name_length_data);
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1012,6 +1024,19 @@ out:
     Py_XDECREF(name_length_array);
     return ret;
 }
+
+static PyObject *
+NodeTable_append_columns(NodeTable *self, PyObject *args, PyObject *kwds)
+{
+    return NodeTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
+static PyObject *
+NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
+{
+    return NodeTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
 #endif
 
 static PyObject *
@@ -1053,6 +1078,18 @@ NodeTable_get_num_rows(NodeTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_get_max_rows(NodeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->max_rows);
 out:
     return ret;
 }
@@ -1134,6 +1171,8 @@ static PyGetSetDef NodeTable_getsetters[] = {
         (getter) NodeTable_get_max_rows_increment, NULL, "The size increment"},
     {"num_rows", (getter) NodeTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows", (getter) NodeTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"time", (getter) NodeTable_get_time, NULL, "The time array"},
     {"flags", (getter) NodeTable_get_flags, NULL, "The flags array"},
@@ -1148,8 +1187,11 @@ static PyMethodDef NodeTable_methods[] = {
     {"add_row", (PyCFunction) NodeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
 #ifdef HAVE_NUMPY
+    {"append_columns", (PyCFunction) NodeTable_append_columns,
+        METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
     {"set_columns", (PyCFunction) NodeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
 #endif
     {"reset", (PyCFunction) NodeTable_reset, METH_NOARGS,
         "Clears this table."},

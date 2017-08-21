@@ -925,6 +925,8 @@ int node_table_add_row(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *name);
 int node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
         population_id_t *population, char *name, list_len_t *name_length);
+int node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
+        population_id_t *population, char *name, list_len_t *name_length);
 int node_table_reset(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);

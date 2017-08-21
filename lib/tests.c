@@ -6608,6 +6608,25 @@ test_node_table(void)
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.total_name_length, num_rows);
 
+    /* Append another num_rows onto the end */
+    ret = node_table_append_columns(&table, num_rows, flags, time, population,
+            name, name_length);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags + num_rows, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.population + num_rows, population,
+                num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time + num_rows, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name, name, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name + num_rows, name, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name_length, name_length, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name_length + num_rows, name_length,
+                num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.total_name_length, 2 * num_rows);
+
     /* If population is NULL it should be set the -1. If name is NULL all names
      * should be set to the empty string. */
     num_rows = 10;
@@ -6641,6 +6660,17 @@ test_node_table(void)
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.name_length, name_length, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.total_name_length, 0);
+    ret = node_table_append_columns(&table, num_rows, flags, time, NULL, NULL, NULL);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags + num_rows, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time + num_rows, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name_length, name_length, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.name_length + num_rows, name_length,
+                num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
     CU_ASSERT_EQUAL(table.total_name_length, 0);
 
     node_table_free(&table);

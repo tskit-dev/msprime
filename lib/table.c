@@ -28,6 +28,7 @@
 #include "msprime.h"
 #include "object_heap.h"
 
+
 #define DEFAULT_SIZE_INCREMENT 1024
 
 #define TABLE_SEP "-----------------------------------------\n"
@@ -54,11 +55,13 @@ out:
  *************************/
 
 static int
-node_table_expand_fixed_columns(node_table_t *self, size_t new_size)
+node_table_expand_fixed_columns(node_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->flags, new_size, sizeof(uint32_t));
         if (ret != 0) {
             goto out;
@@ -83,11 +86,14 @@ out:
 }
 
 static int
-node_table_expand_name(node_table_t *self, size_t new_size)
+node_table_expand_name(node_table_t *self, size_t additional_length)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_length,
+            self->max_total_name_length_increment);
+    size_t new_size = self->max_total_name_length + increment;
 
-    if (new_size > self->max_total_name_length) {
+    if ((self->total_name_length + additional_length) > self->max_total_name_length) {
         ret = expand_column((void **) &self->name, new_size, sizeof(char *));
         if (ret != 0) {
             goto out;
@@ -117,11 +123,11 @@ node_table_alloc(node_table_t *self, size_t max_rows_increment,
     self->num_rows = 0;
     self->max_total_name_length = 0;
     self->total_name_length = 0;
-    ret = node_table_expand_fixed_columns(self, self->max_rows_increment);
+    ret = node_table_expand_fixed_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_expand_name(self, self->max_total_name_length_increment);
+    ret = node_table_expand_name(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -131,6 +137,22 @@ out:
 
 int
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
+        population_id_t *population, char *name, uint32_t *name_length)
+{
+    int ret;
+
+    ret = node_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = node_table_append_columns(self, num_rows, flags, time, population, name,
+            name_length);
+out:
+    return ret;
+}
+
+int
+node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
         population_id_t *population, char *name, uint32_t *name_length)
 {
     int ret;
@@ -148,13 +170,14 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
     if (ret != 0) {
         goto out;
     }
-    memcpy(self->flags, flags, num_rows * sizeof(uint32_t));
-    memcpy(self->time, time, num_rows * sizeof(double));
+    memcpy(self->flags + self->num_rows, flags, num_rows * sizeof(uint32_t));
+    memcpy(self->time + self->num_rows, time, num_rows * sizeof(double));
     if (name == NULL) {
         self->total_name_length = 0;
-        memset(self->name_length, 0, num_rows * sizeof(uint32_t));
+        memset(self->name_length + self->num_rows, 0, num_rows * sizeof(uint32_t));
     } else {
-        memcpy(self->name_length, name_length, num_rows * sizeof(uint32_t));
+        memcpy(self->name_length + self->num_rows, name_length,
+                num_rows * sizeof(uint32_t));
         total_name_length = 0;
         for (j = 0; j < num_rows; j++) {
             total_name_length += name_length[j];
@@ -163,15 +186,19 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
         if (ret != 0) {
             goto out;
         }
-        memcpy(self->name, name, total_name_length * sizeof(char));
-        self->total_name_length = total_name_length;
+        memcpy(self->name + self->total_name_length, name,
+                total_name_length * sizeof(char));
+        self->total_name_length += total_name_length;
     }
     if (population == NULL) {
-        memset(self->population, 0xff, num_rows * sizeof(population_id_t));
+        /* Set population to NULL_POPULATION (-1) if not specified */
+        memset(self->population + self->num_rows, 0xff,
+                num_rows * sizeof(population_id_t));
     } else {
-        memcpy(self->population, population, num_rows * sizeof(population_id_t));
+        memcpy(self->population + self->num_rows, population,
+                num_rows * sizeof(population_id_t));
     }
-    self->num_rows = num_rows;
+    self->num_rows += num_rows;
 out:
     return ret;
 }
@@ -192,31 +219,26 @@ node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
     return 0;
 }
 
+/* TODO this is a bad API: we should include size_t name_length here. */
 int
 node_table_add_row(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *name)
 {
     int ret = 0;
-    size_t new_size, name_length;
+    size_t name_length;
 
     if (name == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = node_table_expand_fixed_columns(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = node_table_expand_fixed_columns(self, 1);
+    if (ret != 0) {
+        goto out;
     }
     name_length = strlen(name);
-    while (self->total_name_length + name_length >= self->max_total_name_length) {
-        new_size = self->max_total_name_length + self->max_total_name_length_increment;
-        ret = node_table_expand_name(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = node_table_expand_name(self, name_length);
+    if (ret != 0) {
+        goto out;
     }
     ret = node_table_add_row_internal(self, flags, time, population, name_length, name);
 out:
