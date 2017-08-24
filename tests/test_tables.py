@@ -129,16 +129,19 @@ class CommonTestsMixin(object):
         # Make sure this works.
         table = self.table_class()
         table.set_columns(**kwargs)
+        table.append_columns(**kwargs)
         for focal_col in self.columns:
             table = self.table_class()
             for bad_type in [Exception, msprime]:
                 error_kwargs = dict(kwargs)
                 error_kwargs[focal_col.name] = bad_type
                 self.assertRaises(TypeError, table.set_columns, **error_kwargs)
+                self.assertRaises(TypeError, table.append_columns, **error_kwargs)
             for bad_value in ["qwer", [0, "sd"]]:
                 error_kwargs = dict(kwargs)
                 error_kwargs[focal_col.name] = bad_value
                 self.assertRaises(ValueError, table.set_columns, **error_kwargs)
+                self.assertRaises(ValueError, table.append_columns, **error_kwargs)
 
     def test_set_columns_input_sizes(self):
         num_rows = 100
@@ -152,17 +155,21 @@ class CommonTestsMixin(object):
             col_map[length_col.name] = length_col
         table = self.table_class()
         table.set_columns(**input_data)
+        table.append_columns(**input_data)
         for equal_len_col_set in self.equal_len_columns:
             if len(equal_len_col_set) > 1:
                 for col in equal_len_col_set:
                     kwargs = dict(input_data)
                     kwargs[col] = col_map[col].get_input(1)
                     self.assertRaises(ValueError, table.set_columns, **kwargs)
+                    self.assertRaises(ValueError, table.append_columns, **kwargs)
 
     def test_set_read_only_attributes(self):
         table = self.table_class()
         with self.assertRaises(AttributeError):
             table.num_rows = 10
+        with self.assertRaises(AttributeError):
+            table.max_rows = 10
         for param, default in self.input_parameters:
             with self.assertRaises(AttributeError):
                 setattr(table, param, 2)
@@ -199,6 +206,41 @@ class CommonTestsMixin(object):
                 self.assertEqual(table.num_rows, 0)
                 for colname in input_data.keys():
                     self.assertEqual(list(getattr(table, colname)), [])
+
+    def test_append_columns_data(self):
+        for num_rows in [0, 10, 100, 1000]:
+            input_data = {
+                col.name: col.get_input(num_rows) for col in self.columns}
+            for list_col, length_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
+                input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
+            table = self.table_class()
+            for j in range(1, 10):
+                table.append_columns(**input_data)
+                for colname, values in input_data.items():
+                    output_array = getattr(table, colname)
+                    input_array = np.hstack([values for _ in range(j)])
+                    self.assertEqual(input_array.shape, output_array.shape)
+                    self.assertTrue(np.array_equal(input_array, output_array))
+                self.assertEqual(table.num_rows, j * num_rows)
+
+    def test_append_columns_max_rows(self):
+        for num_rows in [0, 10, 100, 1000]:
+            input_data = {
+                col.name: col.get_input(num_rows) for col in self.columns}
+            for list_col, length_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
+                input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
+            for max_rows in [0, 1, 8192]:
+                table = self.table_class(max_rows_increment=max_rows)
+                for j in range(1, 10):
+                    table.append_columns(**input_data)
+                    self.assertEqual(table.num_rows, j * num_rows)
+                    self.assertGreater(table.max_rows, table.num_rows)
+                    if table.num_rows < max_rows:
+                        self.assertEqual(table.max_rows, max_rows)
 
     def test_str(self):
         for num_rows in [0, 10]:

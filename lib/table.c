@@ -28,6 +28,7 @@
 #include "msprime.h"
 #include "object_heap.h"
 
+
 #define DEFAULT_SIZE_INCREMENT 1024
 
 #define TABLE_SEP "-----------------------------------------\n"
@@ -54,11 +55,13 @@ out:
  *************************/
 
 static int
-node_table_expand_fixed_columns(node_table_t *self, size_t new_size)
+node_table_expand_main_columns(node_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->flags, new_size, sizeof(uint32_t));
         if (ret != 0) {
             goto out;
@@ -83,11 +86,14 @@ out:
 }
 
 static int
-node_table_expand_name(node_table_t *self, size_t new_size)
+node_table_expand_name(node_table_t *self, size_t additional_length)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_length,
+            self->max_total_name_length_increment);
+    size_t new_size = self->max_total_name_length + increment;
 
-    if (new_size > self->max_total_name_length) {
+    if ((self->total_name_length + additional_length) > self->max_total_name_length) {
         ret = expand_column((void **) &self->name, new_size, sizeof(char *));
         if (ret != 0) {
             goto out;
@@ -117,11 +123,11 @@ node_table_alloc(node_table_t *self, size_t max_rows_increment,
     self->num_rows = 0;
     self->max_total_name_length = 0;
     self->total_name_length = 0;
-    ret = node_table_expand_fixed_columns(self, self->max_rows_increment);
+    ret = node_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_expand_name(self, self->max_total_name_length_increment);
+    ret = node_table_expand_name(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -131,6 +137,22 @@ out:
 
 int
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
+        population_id_t *population, char *name, uint32_t *name_length)
+{
+    int ret;
+
+    ret = node_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = node_table_append_columns(self, num_rows, flags, time, population, name,
+            name_length);
+out:
+    return ret;
+}
+
+int
+node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
         population_id_t *population, char *name, uint32_t *name_length)
 {
     int ret;
@@ -144,17 +166,18 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    ret = node_table_expand_fixed_columns(self, num_rows);
+    ret = node_table_expand_main_columns(self, num_rows);
     if (ret != 0) {
         goto out;
     }
-    memcpy(self->flags, flags, num_rows * sizeof(uint32_t));
-    memcpy(self->time, time, num_rows * sizeof(double));
+    memcpy(self->flags + self->num_rows, flags, num_rows * sizeof(uint32_t));
+    memcpy(self->time + self->num_rows, time, num_rows * sizeof(double));
     if (name == NULL) {
         self->total_name_length = 0;
-        memset(self->name_length, 0, num_rows * sizeof(uint32_t));
+        memset(self->name_length + self->num_rows, 0, num_rows * sizeof(uint32_t));
     } else {
-        memcpy(self->name_length, name_length, num_rows * sizeof(uint32_t));
+        memcpy(self->name_length + self->num_rows, name_length,
+                num_rows * sizeof(uint32_t));
         total_name_length = 0;
         for (j = 0; j < num_rows; j++) {
             total_name_length += name_length[j];
@@ -163,15 +186,19 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
         if (ret != 0) {
             goto out;
         }
-        memcpy(self->name, name, total_name_length * sizeof(char));
-        self->total_name_length = total_name_length;
+        memcpy(self->name + self->total_name_length, name,
+                total_name_length * sizeof(char));
+        self->total_name_length += total_name_length;
     }
     if (population == NULL) {
-        memset(self->population, 0xff, num_rows * sizeof(population_id_t));
+        /* Set population to NULL_POPULATION (-1) if not specified */
+        memset(self->population + self->num_rows, 0xff,
+                num_rows * sizeof(population_id_t));
     } else {
-        memcpy(self->population, population, num_rows * sizeof(population_id_t));
+        memcpy(self->population + self->num_rows, population,
+                num_rows * sizeof(population_id_t));
     }
-    self->num_rows = num_rows;
+    self->num_rows += num_rows;
 out:
     return ret;
 }
@@ -192,31 +219,26 @@ node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
     return 0;
 }
 
+/* TODO this is a bad API: we should include size_t name_length here. */
 int
 node_table_add_row(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *name)
 {
     int ret = 0;
-    size_t new_size, name_length;
+    size_t name_length;
 
     if (name == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = node_table_expand_fixed_columns(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = node_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
     }
     name_length = strlen(name);
-    while (self->total_name_length + name_length >= self->max_total_name_length) {
-        new_size = self->max_total_name_length + self->max_total_name_length_increment;
-        ret = node_table_expand_name(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = node_table_expand_name(self, name_length);
+    if (ret != 0) {
+        goto out;
     }
     ret = node_table_add_row_internal(self, flags, time, population, name_length, name);
 out:
@@ -275,11 +297,13 @@ node_table_print_state(node_table_t *self, FILE *out)
  *************************/
 
 static int
-edgeset_table_expand_main_columns(edgeset_table_t *self, size_t new_size)
+edgeset_table_expand_main_columns(edgeset_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->left, new_size, sizeof(double));
         if (ret != 0) {
             goto out;
@@ -304,11 +328,15 @@ out:
 }
 
 static int
-edgeset_table_expand_children(edgeset_table_t *self, size_t new_size)
+edgeset_table_expand_children(edgeset_table_t *self, size_t additional_length)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_length,
+            self->max_total_children_length_increment);
+    size_t new_size = self->max_total_children_length + increment;
 
-    if (new_size > self->max_total_children_length) {
+    if ((self->total_children_length + additional_length)
+            > self->max_total_children_length) {
         ret = expand_column((void **) &self->children, new_size, sizeof(node_id_t));
         if (ret != 0) {
             goto out;
@@ -338,11 +366,11 @@ edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
     self->num_rows = 0;
     self->max_total_children_length = 0;
     self->total_children_length = 0;
-    ret = edgeset_table_expand_main_columns(self, self->max_rows_increment);
+    ret = edgeset_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_expand_children(self, self->max_total_children_length_increment);
+    ret = edgeset_table_expand_children(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -360,21 +388,13 @@ edgeset_table_add_row(edgeset_table_t *self, double left, double right,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (self->num_rows == self->max_rows) {
-        ret = edgeset_table_expand_main_columns(self,
-                self->max_rows + self->max_rows_increment);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = edgeset_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
     }
-    /* Need the loop here in case we have a very large number of children */
-    while (self->total_children_length + children_length
-            >= self->max_total_children_length) {
-        ret = edgeset_table_expand_children(self,
-            self->max_total_children_length + self->max_total_children_length_increment);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = edgeset_table_expand_children(self, children_length);
+    if (ret != 0) {
+        goto out;
     }
     self->left[self->num_rows] = left;
     self->right[self->num_rows] = right;
@@ -390,6 +410,23 @@ out:
 
 int
 edgeset_table_set_columns(edgeset_table_t *self,
+        size_t num_rows, double *left, double *right, node_id_t *parent,
+        node_id_t *children, list_len_t *children_length)
+{
+    int ret = 0;
+
+    ret = edgeset_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_append_columns(self, num_rows, left, right, parent,
+            children, children_length);
+out:
+    return ret;
+}
+
+int
+edgeset_table_append_columns(edgeset_table_t *self,
         size_t num_rows, double *left, double *right, node_id_t *parent,
         node_id_t *children, list_len_t *children_length)
 {
@@ -413,13 +450,15 @@ edgeset_table_set_columns(edgeset_table_t *self,
     if (ret != 0) {
         goto out;
     }
-    memcpy(self->left, left, num_rows * sizeof(double));
-    memcpy(self->right, right, num_rows * sizeof(double));
-    memcpy(self->parent, parent, num_rows * sizeof(node_id_t));
-    memcpy(self->children, children, total_children_length * sizeof(node_id_t));
-    memcpy(self->children_length, children_length, num_rows * sizeof(list_len_t));
-    self->num_rows = num_rows;
-    self->total_children_length = total_children_length;
+    memcpy(self->left + self->num_rows, left, num_rows * sizeof(double));
+    memcpy(self->right + self->num_rows, right, num_rows * sizeof(double));
+    memcpy(self->parent + self->num_rows, parent, num_rows * sizeof(node_id_t));
+    memcpy(self->children + self->total_children_length, children,
+            total_children_length * sizeof(node_id_t));
+    memcpy(self->children_length + self->num_rows, children_length,
+            num_rows * sizeof(list_len_t));
+    self->num_rows += num_rows;
+    self->total_children_length += total_children_length;
 out:
     return ret;
 }
@@ -481,11 +520,13 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
  *************************/
 
 static int
-site_table_expand_main_columns(site_table_t *self, size_t new_size)
+site_table_expand_main_columns(site_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->position, new_size, sizeof(double));
         if (ret != 0) {
             goto out;
@@ -502,11 +543,15 @@ out:
 }
 
 static int
-site_table_expand_ancestral_state(site_table_t *self, size_t new_size)
+site_table_expand_ancestral_state(site_table_t *self, size_t additional_length)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_length,
+            self->max_total_ancestral_state_length_increment);
+    size_t new_size = self->max_total_ancestral_state_length + increment;
 
-    if (new_size > self->max_total_ancestral_state_length) {
+    if ((self->total_ancestral_state_length + additional_length)
+            > self->max_total_ancestral_state_length) {
         ret = expand_column((void **) &self->ancestral_state, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
@@ -537,12 +582,11 @@ site_table_alloc(site_table_t *self, size_t max_rows_increment,
         max_total_ancestral_state_length_increment;
     self->max_total_ancestral_state_length = 0;
     self->total_ancestral_state_length = 0;
-    ret = site_table_expand_main_columns(self, self->max_rows_increment);
+    ret = site_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_expand_ancestral_state(self,
-            self->max_total_ancestral_state_length_increment);
+    ret = site_table_expand_ancestral_state(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -555,23 +599,14 @@ site_table_add_row(site_table_t *self, double position, const char *ancestral_st
         list_len_t ancestral_state_length)
 {
     int ret = 0;
-    size_t new_size;
 
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = site_table_expand_main_columns(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = site_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
     }
-    while (self->total_ancestral_state_length + ancestral_state_length >=
-            self->max_total_ancestral_state_length) {
-        ret = site_table_expand_ancestral_state(self,
-                self->max_total_ancestral_state_length +
-                self->max_total_ancestral_state_length_increment);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = site_table_expand_ancestral_state(self, ancestral_state_length);
+    if (ret != 0) {
+        goto out;
     }
     self->position[self->num_rows] = position;
     self->ancestral_state_length[self->num_rows] = (uint32_t) ancestral_state_length;
@@ -584,38 +619,52 @@ out:
 }
 
 int
-site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
+site_table_append_columns(site_table_t *self, size_t num_rows, double *position,
         const char *ancestral_state, list_len_t *ancestral_state_length)
 {
     int ret = 0;
     size_t total_ancestral_state_length = 0;
     size_t j;
 
-    if (num_rows > 0) {
-        if (position == NULL || ancestral_state == NULL || ancestral_state_length == NULL) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-
-        for (j = 0; j < num_rows; j++) {
-            total_ancestral_state_length += ancestral_state_length[j];
-        }
-        ret = site_table_expand_main_columns(self, num_rows);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = site_table_expand_ancestral_state(self, total_ancestral_state_length);
-        if (ret != 0) {
-            goto out;
-        }
-        memcpy(self->position, position, num_rows * sizeof(double));
-        memcpy(self->ancestral_state, ancestral_state,
-                total_ancestral_state_length * sizeof(char));
-        memcpy(self->ancestral_state_length, ancestral_state_length,
-                num_rows * sizeof(uint32_t));
-        self->num_rows = num_rows;
-        self->total_ancestral_state_length = total_ancestral_state_length;
+    if (position == NULL || ancestral_state == NULL || ancestral_state_length == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
     }
+
+    for (j = 0; j < num_rows; j++) {
+        total_ancestral_state_length += ancestral_state_length[j];
+    }
+    ret = site_table_expand_main_columns(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = site_table_expand_ancestral_state(self, total_ancestral_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->position + self->num_rows, position, num_rows * sizeof(double));
+    memcpy(self->ancestral_state + self->total_ancestral_state_length, ancestral_state,
+            total_ancestral_state_length * sizeof(char));
+    memcpy(self->ancestral_state_length + self->num_rows, ancestral_state_length,
+            num_rows * sizeof(uint32_t));
+    self->num_rows += num_rows;
+    self->total_ancestral_state_length += total_ancestral_state_length;
+out:
+    return ret;
+}
+
+int
+site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
+        const char *ancestral_state, list_len_t *ancestral_state_length)
+{
+    int ret = 0;
+
+    ret = site_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = site_table_append_columns(self, num_rows, position, ancestral_state,
+            ancestral_state_length);
 out:
     return ret;
 }
@@ -685,11 +734,13 @@ site_table_print_state(site_table_t *self, FILE *out)
  *************************/
 
 static int
-mutation_table_expand_main_columns(mutation_table_t *self, size_t new_size)
+mutation_table_expand_main_columns(mutation_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->site, new_size, sizeof(site_id_t));
         if (ret != 0) {
             goto out;
@@ -710,11 +761,15 @@ out:
 }
 
 static int
-mutation_table_expand_derived_state(mutation_table_t *self, size_t new_size)
+mutation_table_expand_derived_state(mutation_table_t *self, size_t additional_length)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_length,
+            self->max_total_derived_state_length_increment);
+    size_t new_size = self->max_total_derived_state_length + increment;
 
-    if (new_size > self->max_total_derived_state_length) {
+    if ((self->total_derived_state_length + additional_length)
+            > self->max_total_derived_state_length) {
         ret = expand_column((void **) &self->derived_state, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
@@ -745,12 +800,11 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
         max_total_derived_state_length_increment;
     self->max_total_derived_state_length = 0;
     self->total_derived_state_length = 0;
-    ret = mutation_table_expand_main_columns(self, self->max_rows_increment);
+    ret = mutation_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_expand_derived_state(self,
-            self->max_total_derived_state_length_increment);
+    ret = mutation_table_expand_derived_state(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -763,23 +817,14 @@ mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
         const char *derived_state, list_len_t derived_state_length)
 {
     int ret = 0;
-    size_t new_size;
 
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = mutation_table_expand_main_columns(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = mutation_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
     }
-    while (self->total_derived_state_length + derived_state_length >=
-            self->max_total_derived_state_length) {
-        ret = mutation_table_expand_derived_state(self,
-                self->max_total_derived_state_length +
-                self->max_total_derived_state_length_increment);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = mutation_table_expand_derived_state(self, derived_state_length);
+    if (ret != 0) {
+        goto out;
     }
     self->site[self->num_rows] = site;
     self->node[self->num_rows] = node;
@@ -793,37 +838,53 @@ out:
 }
 
 int
-mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
+mutation_table_append_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
         node_id_t *node, const char *derived_state, uint32_t *derived_state_length)
 {
     int ret = 0;
     size_t total_derived_state_length = 0;
     size_t j;
 
-    if (num_rows > 0) {
-        if (site == NULL || node == NULL || derived_state == NULL
-                || derived_state_length == NULL) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        ret = mutation_table_expand_main_columns(self, num_rows);
-        if (ret != 0) {
-            goto out;
-        }
-        for (j = 0; j < num_rows; j++) {
-            total_derived_state_length += (size_t) derived_state_length[j];
-        }
-        ret = mutation_table_expand_derived_state(self, total_derived_state_length);
-        if (ret != 0) {
-            goto out;
-        }
-        memcpy(self->site, site, num_rows * sizeof(site_id_t));
-        memcpy(self->node, node, num_rows * sizeof(node_id_t));
-        memcpy(self->derived_state_length, derived_state_length, num_rows * sizeof(node_id_t));
-        memcpy(self->derived_state, derived_state, total_derived_state_length * sizeof(char));
-        self->num_rows = num_rows;
-        self->total_derived_state_length = total_derived_state_length;
+    if (site == NULL || node == NULL || derived_state == NULL
+            || derived_state_length == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
     }
+    ret = mutation_table_expand_main_columns(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_rows; j++) {
+        total_derived_state_length += (size_t) derived_state_length[j];
+    }
+    ret = mutation_table_expand_derived_state(self, total_derived_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->site + self->num_rows, site, num_rows * sizeof(site_id_t));
+    memcpy(self->node + self->num_rows, node, num_rows * sizeof(node_id_t));
+    memcpy(self->derived_state_length + self->num_rows, derived_state_length,
+            num_rows * sizeof(node_id_t));
+    memcpy(self->derived_state + self->total_derived_state_length, derived_state,
+            total_derived_state_length * sizeof(char));
+    self->num_rows += num_rows;
+    self->total_derived_state_length += total_derived_state_length;
+out:
+    return ret;
+}
+
+int
+mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
+        node_id_t *node, const char *derived_state, uint32_t *derived_state_length)
+{
+    int ret = 0;
+
+    ret = mutation_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_append_columns(self, num_rows ,site, node, derived_state,
+            derived_state_length);
 out:
     return ret;
 }
@@ -894,11 +955,13 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
  *************************/
 
 static int
-migration_table_expand(migration_table_t *self, size_t new_size)
+migration_table_expand(migration_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->left, new_size, sizeof(double));
         if (ret != 0) {
             goto out;
@@ -941,7 +1004,7 @@ migration_table_alloc(migration_table_t *self, size_t max_rows_increment)
     self->max_rows_increment = max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    ret = migration_table_expand(self, self->max_rows_increment);
+    ret = migration_table_expand(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -950,7 +1013,7 @@ out:
 }
 
 int
-migration_table_set_columns(migration_table_t *self, size_t num_rows, double *left,
+migration_table_append_columns(migration_table_t *self, size_t num_rows, double *left,
         double *right, node_id_t *node, population_id_t *source, population_id_t *dest,
         double *time)
 {
@@ -965,13 +1028,30 @@ migration_table_set_columns(migration_table_t *self, size_t num_rows, double *le
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    memcpy(self->left, left, num_rows * sizeof(double));
-    memcpy(self->right, right, num_rows * sizeof(double));
-    memcpy(self->node, node, num_rows * sizeof(node_id_t));
-    memcpy(self->source, source, num_rows * sizeof(population_id_t));
-    memcpy(self->dest, dest, num_rows * sizeof(population_id_t));
-    memcpy(self->time, time, num_rows * sizeof(double));
-    self->num_rows = num_rows;
+    memcpy(self->left + self->num_rows, left, num_rows * sizeof(double));
+    memcpy(self->right + self->num_rows, right, num_rows * sizeof(double));
+    memcpy(self->node + self->num_rows, node, num_rows * sizeof(node_id_t));
+    memcpy(self->source + self->num_rows, source, num_rows * sizeof(population_id_t));
+    memcpy(self->dest + self->num_rows, dest, num_rows * sizeof(population_id_t));
+    memcpy(self->time + self->num_rows, time, num_rows * sizeof(double));
+    self->num_rows += num_rows;
+out:
+    return ret;
+}
+
+int
+migration_table_set_columns(migration_table_t *self, size_t num_rows, double *left,
+        double *right, node_id_t *node, population_id_t *source, population_id_t *dest,
+        double *time)
+{
+    int ret;
+
+    ret = migration_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = migration_table_append_columns(self, num_rows, left, right, node, source,
+            dest, time);
 out:
     return ret;
 }
@@ -981,14 +1061,10 @@ migration_table_add_row(migration_table_t *self, double left, double right,
         node_id_t node, population_id_t source, population_id_t dest, double time)
 {
     int ret = 0;
-    size_t new_size;
 
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = migration_table_expand(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = migration_table_expand(self, 1);
+    if (ret != 0) {
+        goto out;
     }
     self->left[self->num_rows] = left;
     self->right[self->num_rows] = right;

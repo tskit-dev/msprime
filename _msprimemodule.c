@@ -42,6 +42,9 @@
 #define MODULE_DOC \
 "Low level interface for msprime"
 
+#define SET_COLS 0
+#define APPEND_COLS 1
+
 static PyObject *MsprimeInputError;
 static PyObject *MsprimeLibraryError;
 
@@ -931,8 +934,10 @@ out:
 }
 
 #ifdef HAVE_NUMPY
+
 static PyObject *
-NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
+NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -996,9 +1001,17 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = node_table_set_columns(self->node_table, num_rows,
-            PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
-            name_data, name_length_data);
+    if (method == SET_COLS) {
+        err = node_table_set_columns(self->node_table, num_rows,
+                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
+                name_data, name_length_data);
+    } else if (method == APPEND_COLS) {
+        err = node_table_append_columns(self->node_table, num_rows,
+                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
+                name_data, name_length_data);
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1012,6 +1025,19 @@ out:
     Py_XDECREF(name_length_array);
     return ret;
 }
+
+static PyObject *
+NodeTable_append_columns(NodeTable *self, PyObject *args, PyObject *kwds)
+{
+    return NodeTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
+static PyObject *
+NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
+{
+    return NodeTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
 #endif
 
 static PyObject *
@@ -1053,6 +1079,18 @@ NodeTable_get_num_rows(NodeTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_get_max_rows(NodeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->max_rows);
 out:
     return ret;
 }
@@ -1134,6 +1172,8 @@ static PyGetSetDef NodeTable_getsetters[] = {
         (getter) NodeTable_get_max_rows_increment, NULL, "The size increment"},
     {"num_rows", (getter) NodeTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows", (getter) NodeTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"time", (getter) NodeTable_get_time, NULL, "The time array"},
     {"flags", (getter) NodeTable_get_flags, NULL, "The flags array"},
@@ -1148,8 +1188,11 @@ static PyMethodDef NodeTable_methods[] = {
     {"add_row", (PyCFunction) NodeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
 #ifdef HAVE_NUMPY
+    {"append_columns", (PyCFunction) NodeTable_append_columns,
+        METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
     {"set_columns", (PyCFunction) NodeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
 #endif
     {"reset", (PyCFunction) NodeTable_reset, METH_NOARGS,
         "Clears this table."},
@@ -1305,7 +1348,8 @@ out:
 
 #ifdef HAVE_NUMPY
 static PyObject *
-EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
+EdgesetTable_set_or_append_columns(EdgesetTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -1352,10 +1396,19 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     if (children_length_array == NULL) {
         goto out;
     }
-    err = edgeset_table_set_columns(self->edgeset_table, num_rows,
-            PyArray_DATA(left_array), PyArray_DATA(right_array),
-            PyArray_DATA(parent_array), PyArray_DATA(children_array),
-            PyArray_DATA(children_length_array));
+    if (method == SET_COLS) {
+        err = edgeset_table_set_columns(self->edgeset_table, num_rows,
+                PyArray_DATA(left_array), PyArray_DATA(right_array),
+                PyArray_DATA(parent_array), PyArray_DATA(children_array),
+                PyArray_DATA(children_length_array));
+    } else if (method == APPEND_COLS) {
+        err = edgeset_table_append_columns(self->edgeset_table, num_rows,
+                PyArray_DATA(left_array), PyArray_DATA(right_array),
+                PyArray_DATA(parent_array), PyArray_DATA(children_array),
+                PyArray_DATA(children_length_array));
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1369,6 +1422,19 @@ out:
     Py_XDECREF(children_length_array);
     return ret;
 }
+
+static PyObject *
+EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
+{
+    return EdgesetTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+EdgesetTable_append_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
+{
+    return EdgesetTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
 #endif
 
 static PyObject *
@@ -1423,6 +1489,18 @@ EdgesetTable_get_num_rows(EdgesetTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->edgeset_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+EdgesetTable_get_max_rows(EdgesetTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (EdgesetTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->edgeset_table->max_rows);
 out:
     return ret;
 }
@@ -1513,6 +1591,8 @@ static PyGetSetDef EdgesetTable_getsetters[] = {
         "The total children increment"},
     {"num_rows", (getter) EdgesetTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows", (getter) EdgesetTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"left", (getter) EdgesetTable_get_left, NULL, "The left array"},
     {"right", (getter) EdgesetTable_get_right, NULL, "The right array"},
@@ -1529,7 +1609,9 @@ static PyMethodDef EdgesetTable_methods[] = {
         "Adds a new row to this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) EdgesetTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
+    {"append_columns", (PyCFunction) EdgesetTable_append_columns, METH_VARARGS|METH_KEYWORDS,
+        "Copies the data in the specified arrays into the columns."},
 #endif
     {"reset", (PyCFunction) EdgesetTable_reset, METH_NOARGS,
         "Clears this table."},
@@ -1638,8 +1720,10 @@ out:
 }
 
 #ifdef HAVE_NUMPY
+
 static PyObject *
-MigrationTable_set_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
+MigrationTable_set_or_append_columns(MigrationTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -1687,9 +1771,17 @@ MigrationTable_set_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
     if (time_array == NULL) {
         goto out;
     }
-    err = migration_table_set_columns(self->migration_table, num_rows,
+    if (method == SET_COLS) {
+        err = migration_table_set_columns(self->migration_table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
             PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
+    } else if (method == APPEND_COLS) {
+        err = migration_table_append_columns(self->migration_table, num_rows,
+            PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
+            PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1704,6 +1796,19 @@ out:
     Py_XDECREF(time_array);
     return ret;
 }
+
+static PyObject *
+MigrationTable_set_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
+{
+    return MigrationTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+MigrationTable_append_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
+{
+    return MigrationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
 #endif
 
 static PyObject *
@@ -1745,6 +1850,18 @@ MigrationTable_get_num_rows(MigrationTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+MigrationTable_get_max_rows(MigrationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->max_rows);
 out:
     return ret;
 }
@@ -1840,6 +1957,8 @@ static PyGetSetDef MigrationTable_getsetters[] = {
         (getter) MigrationTable_get_max_rows_increment, NULL, "The size increment"},
     {"num_rows", (getter) MigrationTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows", (getter) MigrationTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"left", (getter) MigrationTable_get_left, NULL, "The left array"},
     {"right", (getter) MigrationTable_get_right, NULL, "The right array"},
@@ -1854,7 +1973,9 @@ static PyGetSetDef MigrationTable_getsetters[] = {
 static PyMethodDef MigrationTable_methods[] = {
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MigrationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
+    {"append_columns", (PyCFunction) MigrationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
 #endif
     {"reset", (PyCFunction) MigrationTable_reset, METH_NOARGS,
         "Clears this table."},
@@ -1999,8 +2120,10 @@ out:
 }
 
 #ifdef HAVE_NUMPY
+
 static PyObject *
-SiteTable_set_columns(SiteTable *self, PyObject *args, PyObject *kwds)
+SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -2039,9 +2162,17 @@ SiteTable_set_columns(SiteTable *self, PyObject *args, PyObject *kwds)
                 total_ancestral_state_length) != 0) {
         goto out;
     }
-    err = site_table_set_columns(self->site_table, num_rows,
+    if (method == SET_COLS) {
+        err = site_table_set_columns(self->site_table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
             ancestral_state_length);
+    } else if (method == APPEND_COLS) {
+        err = site_table_append_columns(self->site_table, num_rows,
+            PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
+            ancestral_state_length);
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2053,6 +2184,19 @@ out:
     Py_XDECREF(ancestral_state_length_array);
     return ret;
 }
+
+static PyObject *
+SiteTable_set_columns(SiteTable *self, PyObject *args, PyObject *kwds)
+{
+    return SiteTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+SiteTable_append_columns(SiteTable *self, PyObject *args, PyObject *kwds)
+{
+    return SiteTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
 #endif
 
 static PyObject *
@@ -2108,6 +2252,18 @@ SiteTable_get_num_rows(SiteTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+SiteTable_get_max_rows(SiteTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (SiteTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->max_rows);
 out:
     return ret;
 }
@@ -2169,6 +2325,9 @@ static PyGetSetDef SiteTable_getsetters[] = {
     {"num_rows",
         (getter) SiteTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows",
+        (getter) SiteTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"position", (getter) SiteTable_get_position, NULL,
         "The position array."},
@@ -2185,7 +2344,9 @@ static PyMethodDef SiteTable_methods[] = {
         "Adds a new row to this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) SiteTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
+    {"append_columns", (PyCFunction) SiteTable_append_columns, METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
 #endif
     {"reset", (PyCFunction) SiteTable_reset, METH_NOARGS,
         "Clears this table."},
@@ -2333,8 +2494,10 @@ out:
 
 
 #ifdef HAVE_NUMPY
+
 static PyObject *
-MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
+MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -2373,9 +2536,17 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     if (node_array == NULL) {
         goto out;
     }
-    err = mutation_table_set_columns(self->mutation_table, num_rows,
-            PyArray_DATA(site_array), PyArray_DATA(node_array),
-            PyArray_DATA(derived_state_array), PyArray_DATA(derived_state_length_array));
+    if (method == SET_COLS) {
+        err = mutation_table_set_columns(self->mutation_table, num_rows,
+                PyArray_DATA(site_array), PyArray_DATA(node_array),
+                PyArray_DATA(derived_state_array), PyArray_DATA(derived_state_length_array));
+    } else if (method == APPEND_COLS) {
+        err = mutation_table_append_columns(self->mutation_table, num_rows,
+                PyArray_DATA(site_array), PyArray_DATA(node_array),
+                PyArray_DATA(derived_state_array), PyArray_DATA(derived_state_length_array));
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2388,6 +2559,20 @@ out:
     Py_XDECREF(node_array);
     return ret;
 }
+
+static PyObject *
+MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
+{
+    return MutationTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+MutationTable_append_columns(MutationTable *self, PyObject *args, PyObject *kwds)
+{
+    return MutationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
+
 #endif
 
 static PyObject *
@@ -2442,6 +2627,18 @@ MutationTable_get_num_rows(MutationTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTable_get_max_rows(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_rows);
 out:
     return ret;
 }
@@ -2518,6 +2715,9 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"num_rows",
         (getter) MutationTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows",
+        (getter) MutationTable_get_max_rows, NULL,
+        "The curret maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"site", (getter) MutationTable_get_site, NULL, "The site array"},
     {"node", (getter) MutationTable_get_node, NULL, "The node array"},
@@ -2534,7 +2734,9 @@ static PyMethodDef MutationTable_methods[] = {
         "Adds a new row to this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MutationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
+    {"append_columns", (PyCFunction) MutationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified  arrays into the columns."},
 #endif
     {"reset", (PyCFunction) MutationTable_reset, METH_NOARGS,
         "Clears this table."},

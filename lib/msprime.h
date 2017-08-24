@@ -925,6 +925,8 @@ int node_table_add_row(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *name);
 int node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
         population_id_t *population, char *name, list_len_t *name_length);
+int node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
+        population_id_t *population, char *name, list_len_t *name_length);
 int node_table_reset(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
@@ -936,6 +938,9 @@ int edgeset_table_add_row(edgeset_table_t *self, double left, double right,
 int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, double *left,
         double *right, node_id_t *parent, node_id_t *children,
         list_len_t *children_length);
+int edgeset_table_append_columns(edgeset_table_t *self, size_t num_rows, double *left,
+        double *right, node_id_t *parent, node_id_t *children,
+        list_len_t *children_length);
 int edgeset_table_reset(edgeset_table_t *self);
 int edgeset_table_free(edgeset_table_t *self);
 void edgeset_table_print_state(edgeset_table_t *self, FILE *out);
@@ -945,6 +950,8 @@ int site_table_alloc(site_table_t *self, size_t max_rows_increment,
 int site_table_add_row(site_table_t *self, double position, const char *ancestral_state,
         list_len_t ancestral_state_length);
 int site_table_set_columns(site_table_t *self, size_t num_rows,
+        double *position, const char *ancestral_state, list_len_t *ancestral_state_length);
+int site_table_append_columns(site_table_t *self, size_t num_rows,
         double *position, const char *ancestral_state, list_len_t *ancestral_state_length);
 bool site_table_equal(site_table_t *self, site_table_t *other);
 int site_table_reset(site_table_t *self);
@@ -959,6 +966,9 @@ int mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t nod
 int mutation_table_set_columns(mutation_table_t *self, size_t num_rows,
         site_id_t *site, node_id_t *node, const char *derived_state,
         list_len_t *derived_state_length);
+int mutation_table_append_columns(mutation_table_t *self, size_t num_rows,
+        site_id_t *site, node_id_t *node, const char *derived_state,
+        list_len_t *derived_state_length);
 bool mutation_table_equal(mutation_table_t *self, mutation_table_t *other);
 int mutation_table_reset(mutation_table_t *self);
 int mutation_table_free(mutation_table_t *self);
@@ -968,6 +978,9 @@ int migration_table_alloc(migration_table_t *self, size_t max_rows_increment);
 int migration_table_add_row(migration_table_t *self, double left, double right,
         node_id_t node, population_id_t source, population_id_t dest, double time);
 int migration_table_set_columns(migration_table_t *self, size_t num_rows,
+        double *left, double *right, node_id_t *node, population_id_t *source,
+        population_id_t *dest, double *time);
+int migration_table_append_columns(migration_table_t *self, size_t num_rows,
         double *left, double *right, node_id_t *node, population_id_t *source,
         population_id_t *dest, double *time);
 int migration_table_reset(migration_table_t *self);
