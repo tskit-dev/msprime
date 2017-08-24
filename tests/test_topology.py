@@ -2126,18 +2126,18 @@ class TestPythonSimplifier(unittest.TestCase):
     3       0.00000000      1.00000000      8       6,7
     """
 
-    def do_simplify(self, ts, sample=None, compare_lib=True):
+    def do_simplify(self, ts, samples=None, compare_lib=True):
         """
         Runs the Python test implementation of simplify.
         """
-        if sample is None:
-            sample = ts.samples()
-        s = tests.Simplifier(ts, sample)
+        if samples is None:
+            samples = ts.samples()
+        s = tests.Simplifier(ts, samples)
         new_ts = s.simplify()
         if compare_lib:
             lib_tables = ts.dump_tables()
             msprime.simplify_tables(
-                samples=sample, nodes=lib_tables.nodes, edgesets=lib_tables.edgesets,
+                samples=samples, nodes=lib_tables.nodes, edgesets=lib_tables.edgesets,
                 sites=lib_tables.sites, mutations=lib_tables.mutations)
             py_tables = new_ts.dump_tables()
             self.assertEqual(lib_tables.nodes, py_tables.nodes)

@@ -190,9 +190,6 @@ class TestSimulation(unittest.TestCase):
         samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
         msprime.simplify_tables(samples=samples, nodes=nodes, edgesets=edgesets)
         ts = msprime.load_tables(nodes=nodes, edgesets=edgesets)
-        # print("AFTER")
-        # print(nodes)
-        # print(edgesets)
         for tree in ts.trees():
             roots = get_tree_roots(ts, tree)
             self.assertEqual(roots, {tree.root})
