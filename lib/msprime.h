@@ -951,6 +951,8 @@ int site_table_add_row(site_table_t *self, double position, const char *ancestra
         list_len_t ancestral_state_length);
 int site_table_set_columns(site_table_t *self, size_t num_rows,
         double *position, const char *ancestral_state, list_len_t *ancestral_state_length);
+int site_table_append_columns(site_table_t *self, size_t num_rows,
+        double *position, const char *ancestral_state, list_len_t *ancestral_state_length);
 bool site_table_equal(site_table_t *self, site_table_t *other);
 int site_table_reset(site_table_t *self);
 int site_table_free(site_table_t *self);

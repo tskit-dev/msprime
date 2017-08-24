@@ -390,7 +390,6 @@ class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
     table_class = msprime.EdgesetTable
 
 
-@unittest.skip("append_cols")
 class TestSiteTable(unittest.TestCase, CommonTestsMixin):
     columns = [DoubleColumn("position")]
     ragged_list_columns = [

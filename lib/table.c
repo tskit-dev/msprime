@@ -520,11 +520,13 @@ edgeset_table_print_state(edgeset_table_t *self, FILE *out)
  *************************/
 
 static int
-site_table_expand_main_columns(site_table_t *self, size_t new_size)
+site_table_expand_main_columns(site_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->position, new_size, sizeof(double));
         if (ret != 0) {
             goto out;
@@ -541,11 +543,15 @@ out:
 }
 
 static int
-site_table_expand_ancestral_state(site_table_t *self, size_t new_size)
+site_table_expand_ancestral_state(site_table_t *self, size_t additional_length)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_length,
+            self->max_total_ancestral_state_length_increment);
+    size_t new_size = self->max_total_ancestral_state_length + increment;
 
-    if (new_size > self->max_total_ancestral_state_length) {
+    if ((self->total_ancestral_state_length + additional_length)
+            > self->max_total_ancestral_state_length) {
         ret = expand_column((void **) &self->ancestral_state, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
@@ -576,12 +582,11 @@ site_table_alloc(site_table_t *self, size_t max_rows_increment,
         max_total_ancestral_state_length_increment;
     self->max_total_ancestral_state_length = 0;
     self->total_ancestral_state_length = 0;
-    ret = site_table_expand_main_columns(self, self->max_rows_increment);
+    ret = site_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_expand_ancestral_state(self,
-            self->max_total_ancestral_state_length_increment);
+    ret = site_table_expand_ancestral_state(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -594,23 +599,14 @@ site_table_add_row(site_table_t *self, double position, const char *ancestral_st
         list_len_t ancestral_state_length)
 {
     int ret = 0;
-    size_t new_size;
 
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = site_table_expand_main_columns(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = site_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
     }
-    while (self->total_ancestral_state_length + ancestral_state_length >=
-            self->max_total_ancestral_state_length) {
-        ret = site_table_expand_ancestral_state(self,
-                self->max_total_ancestral_state_length +
-                self->max_total_ancestral_state_length_increment);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = site_table_expand_ancestral_state(self, ancestral_state_length);
+    if (ret != 0) {
+        goto out;
     }
     self->position[self->num_rows] = position;
     self->ancestral_state_length[self->num_rows] = (uint32_t) ancestral_state_length;
@@ -623,38 +619,52 @@ out:
 }
 
 int
-site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
+site_table_append_columns(site_table_t *self, size_t num_rows, double *position,
         const char *ancestral_state, list_len_t *ancestral_state_length)
 {
     int ret = 0;
     size_t total_ancestral_state_length = 0;
     size_t j;
 
-    if (num_rows > 0) {
-        if (position == NULL || ancestral_state == NULL || ancestral_state_length == NULL) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-
-        for (j = 0; j < num_rows; j++) {
-            total_ancestral_state_length += ancestral_state_length[j];
-        }
-        ret = site_table_expand_main_columns(self, num_rows);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = site_table_expand_ancestral_state(self, total_ancestral_state_length);
-        if (ret != 0) {
-            goto out;
-        }
-        memcpy(self->position, position, num_rows * sizeof(double));
-        memcpy(self->ancestral_state, ancestral_state,
-                total_ancestral_state_length * sizeof(char));
-        memcpy(self->ancestral_state_length, ancestral_state_length,
-                num_rows * sizeof(uint32_t));
-        self->num_rows = num_rows;
-        self->total_ancestral_state_length = total_ancestral_state_length;
+    if (position == NULL || ancestral_state == NULL || ancestral_state_length == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
     }
+
+    for (j = 0; j < num_rows; j++) {
+        total_ancestral_state_length += ancestral_state_length[j];
+    }
+    ret = site_table_expand_main_columns(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = site_table_expand_ancestral_state(self, total_ancestral_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->position + self->num_rows, position, num_rows * sizeof(double));
+    memcpy(self->ancestral_state + self->total_ancestral_state_length, ancestral_state,
+            total_ancestral_state_length * sizeof(char));
+    memcpy(self->ancestral_state_length + self->num_rows, ancestral_state_length,
+            num_rows * sizeof(uint32_t));
+    self->num_rows += num_rows;
+    self->total_ancestral_state_length += total_ancestral_state_length;
+out:
+    return ret;
+}
+
+int
+site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
+        const char *ancestral_state, list_len_t *ancestral_state_length)
+{
+    int ret = 0;
+
+    ret = site_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = site_table_append_columns(self, num_rows, position, ancestral_state,
+            ancestral_state_length);
 out:
     return ret;
 }

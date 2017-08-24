@@ -2081,8 +2081,10 @@ out:
 }
 
 #ifdef HAVE_NUMPY
+
 static PyObject *
-SiteTable_set_columns(SiteTable *self, PyObject *args, PyObject *kwds)
+SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -2121,9 +2123,17 @@ SiteTable_set_columns(SiteTable *self, PyObject *args, PyObject *kwds)
                 total_ancestral_state_length) != 0) {
         goto out;
     }
-    err = site_table_set_columns(self->site_table, num_rows,
+    if (method == SET_COLS) {
+        err = site_table_set_columns(self->site_table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
             ancestral_state_length);
+    } else if (method == APPEND_COLS) {
+        err = site_table_append_columns(self->site_table, num_rows,
+            PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
+            ancestral_state_length);
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2135,6 +2145,19 @@ out:
     Py_XDECREF(ancestral_state_length_array);
     return ret;
 }
+
+static PyObject *
+SiteTable_set_columns(SiteTable *self, PyObject *args, PyObject *kwds)
+{
+    return SiteTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+SiteTable_append_columns(SiteTable *self, PyObject *args, PyObject *kwds)
+{
+    return SiteTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
 #endif
 
 static PyObject *
@@ -2190,6 +2213,18 @@ SiteTable_get_num_rows(SiteTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+SiteTable_get_max_rows(SiteTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (SiteTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->max_rows);
 out:
     return ret;
 }
@@ -2251,6 +2286,9 @@ static PyGetSetDef SiteTable_getsetters[] = {
     {"num_rows",
         (getter) SiteTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows",
+        (getter) SiteTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"position", (getter) SiteTable_get_position, NULL,
         "The position array."},
@@ -2267,7 +2305,9 @@ static PyMethodDef SiteTable_methods[] = {
         "Adds a new row to this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) SiteTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
+    {"append_columns", (PyCFunction) SiteTable_append_columns, METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
 #endif
     {"reset", (PyCFunction) SiteTable_reset, METH_NOARGS,
         "Clears this table."},
