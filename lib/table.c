@@ -55,7 +55,7 @@ out:
  *************************/
 
 static int
-node_table_expand_fixed_columns(node_table_t *self, size_t additional_rows)
+node_table_expand_main_columns(node_table_t *self, size_t additional_rows)
 {
     int ret = 0;
     size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
@@ -123,7 +123,7 @@ node_table_alloc(node_table_t *self, size_t max_rows_increment,
     self->num_rows = 0;
     self->max_total_name_length = 0;
     self->total_name_length = 0;
-    ret = node_table_expand_fixed_columns(self, 1);
+    ret = node_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -166,7 +166,7 @@ node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, 
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    ret = node_table_expand_fixed_columns(self, num_rows);
+    ret = node_table_expand_main_columns(self, num_rows);
     if (ret != 0) {
         goto out;
     }
@@ -231,7 +231,7 @@ node_table_add_row(node_table_t *self, uint32_t flags, double time,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    ret = node_table_expand_fixed_columns(self, 1);
+    ret = node_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -955,11 +955,13 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
  *************************/
 
 static int
-migration_table_expand(migration_table_t *self, size_t new_size)
+migration_table_expand(migration_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->left, new_size, sizeof(double));
         if (ret != 0) {
             goto out;
@@ -1002,7 +1004,7 @@ migration_table_alloc(migration_table_t *self, size_t max_rows_increment)
     self->max_rows_increment = max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    ret = migration_table_expand(self, self->max_rows_increment);
+    ret = migration_table_expand(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -1011,7 +1013,7 @@ out:
 }
 
 int
-migration_table_set_columns(migration_table_t *self, size_t num_rows, double *left,
+migration_table_append_columns(migration_table_t *self, size_t num_rows, double *left,
         double *right, node_id_t *node, population_id_t *source, population_id_t *dest,
         double *time)
 {
@@ -1026,13 +1028,30 @@ migration_table_set_columns(migration_table_t *self, size_t num_rows, double *le
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    memcpy(self->left, left, num_rows * sizeof(double));
-    memcpy(self->right, right, num_rows * sizeof(double));
-    memcpy(self->node, node, num_rows * sizeof(node_id_t));
-    memcpy(self->source, source, num_rows * sizeof(population_id_t));
-    memcpy(self->dest, dest, num_rows * sizeof(population_id_t));
-    memcpy(self->time, time, num_rows * sizeof(double));
-    self->num_rows = num_rows;
+    memcpy(self->left + self->num_rows, left, num_rows * sizeof(double));
+    memcpy(self->right + self->num_rows, right, num_rows * sizeof(double));
+    memcpy(self->node + self->num_rows, node, num_rows * sizeof(node_id_t));
+    memcpy(self->source + self->num_rows, source, num_rows * sizeof(population_id_t));
+    memcpy(self->dest + self->num_rows, dest, num_rows * sizeof(population_id_t));
+    memcpy(self->time + self->num_rows, time, num_rows * sizeof(double));
+    self->num_rows += num_rows;
+out:
+    return ret;
+}
+
+int
+migration_table_set_columns(migration_table_t *self, size_t num_rows, double *left,
+        double *right, node_id_t *node, population_id_t *source, population_id_t *dest,
+        double *time)
+{
+    int ret;
+
+    ret = migration_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = migration_table_append_columns(self, num_rows, left, right, node, source,
+            dest, time);
 out:
     return ret;
 }
@@ -1042,14 +1061,10 @@ migration_table_add_row(migration_table_t *self, double left, double right,
         node_id_t node, population_id_t source, population_id_t dest, double time)
 {
     int ret = 0;
-    size_t new_size;
 
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = migration_table_expand(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = migration_table_expand(self, 1);
+    if (ret != 0) {
+        goto out;
     }
     self->left[self->num_rows] = left;
     self->right[self->num_rows] = right;

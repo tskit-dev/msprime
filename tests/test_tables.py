@@ -414,7 +414,6 @@ class TestMutationTable(unittest.TestCase, CommonTestsMixin):
     table_class = msprime.MutationTable
 
 
-@unittest.skip("append_cols")
 class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("left"),

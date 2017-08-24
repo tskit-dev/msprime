@@ -1720,8 +1720,10 @@ out:
 }
 
 #ifdef HAVE_NUMPY
+
 static PyObject *
-MigrationTable_set_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
+MigrationTable_set_or_append_columns(MigrationTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -1769,9 +1771,17 @@ MigrationTable_set_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
     if (time_array == NULL) {
         goto out;
     }
-    err = migration_table_set_columns(self->migration_table, num_rows,
+    if (method == SET_COLS) {
+        err = migration_table_set_columns(self->migration_table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
             PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
+    } else if (method == APPEND_COLS) {
+        err = migration_table_append_columns(self->migration_table, num_rows,
+            PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
+            PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1786,6 +1796,19 @@ out:
     Py_XDECREF(time_array);
     return ret;
 }
+
+static PyObject *
+MigrationTable_set_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
+{
+    return MigrationTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+MigrationTable_append_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
+{
+    return MigrationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
 #endif
 
 static PyObject *
@@ -1827,6 +1850,18 @@ MigrationTable_get_num_rows(MigrationTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+MigrationTable_get_max_rows(MigrationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->max_rows);
 out:
     return ret;
 }
@@ -1922,6 +1957,8 @@ static PyGetSetDef MigrationTable_getsetters[] = {
         (getter) MigrationTable_get_max_rows_increment, NULL, "The size increment"},
     {"num_rows", (getter) MigrationTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows", (getter) MigrationTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"left", (getter) MigrationTable_get_left, NULL, "The left array"},
     {"right", (getter) MigrationTable_get_right, NULL, "The right array"},
@@ -1936,7 +1973,9 @@ static PyGetSetDef MigrationTable_getsetters[] = {
 static PyMethodDef MigrationTable_methods[] = {
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MigrationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
+    {"append_columns", (PyCFunction) MigrationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
 #endif
     {"reset", (PyCFunction) MigrationTable_reset, METH_NOARGS,
         "Clears this table."},

@@ -980,6 +980,9 @@ int migration_table_add_row(migration_table_t *self, double left, double right,
 int migration_table_set_columns(migration_table_t *self, size_t num_rows,
         double *left, double *right, node_id_t *node, population_id_t *source,
         population_id_t *dest, double *time);
+int migration_table_append_columns(migration_table_t *self, size_t num_rows,
+        double *left, double *right, node_id_t *node, population_id_t *source,
+        population_id_t *dest, double *time);
 int migration_table_reset(migration_table_t *self);
 int migration_table_free(migration_table_t *self);
 void migration_table_print_state(migration_table_t *self, FILE *out);

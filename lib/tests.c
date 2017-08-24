@@ -7025,8 +7025,6 @@ test_migration_table(void)
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
     }
     migration_table_print_state(&table, _devnull);
-    migration_table_reset(&table);
-    CU_ASSERT_EQUAL(table.num_rows, 0);
 
     num_rows *= 2;
     left = malloc(num_rows * sizeof(double));
@@ -7058,6 +7056,25 @@ test_migration_table(void)
     CU_ASSERT_EQUAL(memcmp(table.source, source, num_rows * sizeof(population_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.dest, dest, num_rows * sizeof(population_id_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    /* Append another num_rows */
+    ret = migration_table_append_columns(&table, num_rows, left, right, node, source,
+            dest, time);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.left + num_rows, left, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.right + num_rows, right, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time + num_rows, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node + num_rows, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.source, source, num_rows * sizeof(population_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.source + num_rows, source,
+                num_rows * sizeof(population_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.dest, dest, num_rows * sizeof(population_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.dest + num_rows, dest,
+                num_rows * sizeof(population_id_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
 
     /* inputs cannot be NULL */
     ret = migration_table_set_columns(&table, num_rows, NULL, right, node, source,
@@ -7078,6 +7095,9 @@ test_migration_table(void)
     ret = migration_table_set_columns(&table, num_rows, left, right, node, source,
             dest, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    migration_table_reset(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
 
     migration_table_free(&table);
     free(left);
