@@ -376,7 +376,6 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
             self.assertEqual(list(table.name_length), [0 for _ in range(num_rows)])
 
 
-@unittest.skip("append_cols")
 class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
 
     columns = [

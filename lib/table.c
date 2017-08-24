@@ -297,11 +297,13 @@ node_table_print_state(node_table_t *self, FILE *out)
  *************************/
 
 static int
-edgeset_table_expand_main_columns(edgeset_table_t *self, size_t new_size)
+edgeset_table_expand_main_columns(edgeset_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->left, new_size, sizeof(double));
         if (ret != 0) {
             goto out;
@@ -326,11 +328,15 @@ out:
 }
 
 static int
-edgeset_table_expand_children(edgeset_table_t *self, size_t new_size)
+edgeset_table_expand_children(edgeset_table_t *self, size_t additional_length)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_length,
+            self->max_total_children_length_increment);
+    size_t new_size = self->max_total_children_length + increment;
 
-    if (new_size > self->max_total_children_length) {
+    if ((self->total_children_length + additional_length)
+            > self->max_total_children_length) {
         ret = expand_column((void **) &self->children, new_size, sizeof(node_id_t));
         if (ret != 0) {
             goto out;
@@ -360,11 +366,11 @@ edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
     self->num_rows = 0;
     self->max_total_children_length = 0;
     self->total_children_length = 0;
-    ret = edgeset_table_expand_main_columns(self, self->max_rows_increment);
+    ret = edgeset_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_expand_children(self, self->max_total_children_length_increment);
+    ret = edgeset_table_expand_children(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -382,21 +388,13 @@ edgeset_table_add_row(edgeset_table_t *self, double left, double right,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (self->num_rows == self->max_rows) {
-        ret = edgeset_table_expand_main_columns(self,
-                self->max_rows + self->max_rows_increment);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = edgeset_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
     }
-    /* Need the loop here in case we have a very large number of children */
-    while (self->total_children_length + children_length
-            >= self->max_total_children_length) {
-        ret = edgeset_table_expand_children(self,
-            self->max_total_children_length + self->max_total_children_length_increment);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = edgeset_table_expand_children(self, children_length);
+    if (ret != 0) {
+        goto out;
     }
     self->left[self->num_rows] = left;
     self->right[self->num_rows] = right;
@@ -412,6 +410,23 @@ out:
 
 int
 edgeset_table_set_columns(edgeset_table_t *self,
+        size_t num_rows, double *left, double *right, node_id_t *parent,
+        node_id_t *children, list_len_t *children_length)
+{
+    int ret = 0;
+
+    ret = edgeset_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edgeset_table_append_columns(self, num_rows, left, right, parent,
+            children, children_length);
+out:
+    return ret;
+}
+
+int
+edgeset_table_append_columns(edgeset_table_t *self,
         size_t num_rows, double *left, double *right, node_id_t *parent,
         node_id_t *children, list_len_t *children_length)
 {
@@ -435,13 +450,15 @@ edgeset_table_set_columns(edgeset_table_t *self,
     if (ret != 0) {
         goto out;
     }
-    memcpy(self->left, left, num_rows * sizeof(double));
-    memcpy(self->right, right, num_rows * sizeof(double));
-    memcpy(self->parent, parent, num_rows * sizeof(node_id_t));
-    memcpy(self->children, children, total_children_length * sizeof(node_id_t));
-    memcpy(self->children_length, children_length, num_rows * sizeof(list_len_t));
-    self->num_rows = num_rows;
-    self->total_children_length = total_children_length;
+    memcpy(self->left + self->num_rows, left, num_rows * sizeof(double));
+    memcpy(self->right + self->num_rows, right, num_rows * sizeof(double));
+    memcpy(self->parent + self->num_rows, parent, num_rows * sizeof(node_id_t));
+    memcpy(self->children + self->total_children_length, children,
+            total_children_length * sizeof(node_id_t));
+    memcpy(self->children_length + self->num_rows, children_length,
+            num_rows * sizeof(list_len_t));
+    self->num_rows += num_rows;
+    self->total_children_length += total_children_length;
 out:
     return ret;
 }

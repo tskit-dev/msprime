@@ -42,6 +42,9 @@
 #define MODULE_DOC \
 "Low level interface for msprime"
 
+#define SET_COLS 0
+#define APPEND_COLS 1
+
 static PyObject *MsprimeInputError;
 static PyObject *MsprimeLibraryError;
 
@@ -931,8 +934,6 @@ out:
 }
 
 #ifdef HAVE_NUMPY
-#define SET_COLS 0
-#define APPEND_COLS 1
 
 static PyObject *
 NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
@@ -1347,7 +1348,8 @@ out:
 
 #ifdef HAVE_NUMPY
 static PyObject *
-EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
+EdgesetTable_set_or_append_columns(EdgesetTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -1394,10 +1396,19 @@ EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
     if (children_length_array == NULL) {
         goto out;
     }
-    err = edgeset_table_set_columns(self->edgeset_table, num_rows,
-            PyArray_DATA(left_array), PyArray_DATA(right_array),
-            PyArray_DATA(parent_array), PyArray_DATA(children_array),
-            PyArray_DATA(children_length_array));
+    if (method == SET_COLS) {
+        err = edgeset_table_set_columns(self->edgeset_table, num_rows,
+                PyArray_DATA(left_array), PyArray_DATA(right_array),
+                PyArray_DATA(parent_array), PyArray_DATA(children_array),
+                PyArray_DATA(children_length_array));
+    } else if (method == APPEND_COLS) {
+        err = edgeset_table_append_columns(self->edgeset_table, num_rows,
+                PyArray_DATA(left_array), PyArray_DATA(right_array),
+                PyArray_DATA(parent_array), PyArray_DATA(children_array),
+                PyArray_DATA(children_length_array));
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1411,6 +1422,19 @@ out:
     Py_XDECREF(children_length_array);
     return ret;
 }
+
+static PyObject *
+EdgesetTable_set_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
+{
+    return EdgesetTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+EdgesetTable_append_columns(EdgesetTable *self, PyObject *args, PyObject *kwds)
+{
+    return EdgesetTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
 #endif
 
 static PyObject *
@@ -1465,6 +1489,18 @@ EdgesetTable_get_num_rows(EdgesetTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->edgeset_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+EdgesetTable_get_max_rows(EdgesetTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (EdgesetTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->edgeset_table->max_rows);
 out:
     return ret;
 }
@@ -1555,6 +1591,8 @@ static PyGetSetDef EdgesetTable_getsetters[] = {
         "The total children increment"},
     {"num_rows", (getter) EdgesetTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows", (getter) EdgesetTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"left", (getter) EdgesetTable_get_left, NULL, "The left array"},
     {"right", (getter) EdgesetTable_get_right, NULL, "The right array"},
@@ -1571,7 +1609,9 @@ static PyMethodDef EdgesetTable_methods[] = {
         "Adds a new row to this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) EdgesetTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
+    {"append_columns", (PyCFunction) EdgesetTable_append_columns, METH_VARARGS|METH_KEYWORDS,
+        "Copies the data in the specified arrays into the columns."},
 #endif
     {"reset", (PyCFunction) EdgesetTable_reset, METH_NOARGS,
         "Clears this table."},

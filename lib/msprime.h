@@ -938,6 +938,9 @@ int edgeset_table_add_row(edgeset_table_t *self, double left, double right,
 int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, double *left,
         double *right, node_id_t *parent, node_id_t *children,
         list_len_t *children_length);
+int edgeset_table_append_columns(edgeset_table_t *self, size_t num_rows, double *left,
+        double *right, node_id_t *parent, node_id_t *children,
+        list_len_t *children_length);
 int edgeset_table_reset(edgeset_table_t *self);
 int edgeset_table_free(edgeset_table_t *self);
 void edgeset_table_print_state(edgeset_table_t *self, FILE *out);

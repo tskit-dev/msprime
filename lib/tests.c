@@ -6717,9 +6717,6 @@ test_edgeset_table(void)
         CU_ASSERT_EQUAL(table.total_children_length, total_children_length);
     }
     edgeset_table_print_state(&table, _devnull);
-    edgeset_table_reset(&table);
-    CU_ASSERT_EQUAL(table.num_rows, 0);
-    CU_ASSERT_EQUAL(table.total_children_length, 0);
 
     num_rows *= 2;
     left = malloc(num_rows * sizeof(double));
@@ -6751,6 +6748,25 @@ test_edgeset_table(void)
                 num_rows * sizeof(list_len_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.total_children_length, 2 * num_rows);
+    /* Append another num_rows to the end. */
+    ret = edgeset_table_append_columns(&table, num_rows, left, right, parent,
+            children, children_length);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.left + num_rows, left, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.right + num_rows, right, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent + num_rows, parent, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.children, children, 2 * num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.children + 2 * num_rows, children,
+                2 * num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.children_length, children_length,
+                num_rows * sizeof(list_len_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.children_length + num_rows, children_length,
+                num_rows * sizeof(list_len_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.total_children_length, 4 * num_rows);
 
     /* Inputs cannot be NULL */
     ret = edgeset_table_set_columns(&table, num_rows, NULL, right, parent,
@@ -6768,6 +6784,10 @@ test_edgeset_table(void)
     ret = edgeset_table_set_columns(&table, num_rows, left, right, parent,
             children, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    edgeset_table_reset(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
+    CU_ASSERT_EQUAL(table.total_children_length, 0);
 
     edgeset_table_free(&table);
     free(left);
