@@ -6927,9 +6927,6 @@ test_mutation_table(void)
         CU_ASSERT_EQUAL(table.total_derived_state_length, len);
     }
     mutation_table_print_state(&table, _devnull);
-    mutation_table_reset(&table);
-    CU_ASSERT_EQUAL(table.num_rows, 0);
-    CU_ASSERT_EQUAL(table.total_derived_state_length, 0);
 
     num_rows *= 2;
     site = malloc(num_rows * sizeof(site_id_t));
@@ -6959,6 +6956,23 @@ test_mutation_table(void)
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.total_derived_state_length, num_rows);
 
+    /* Append another num_rows */
+    ret = mutation_table_append_columns(&table, num_rows, site, node, derived_state,
+            derived_state_length);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.site, site, num_rows * sizeof(site_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.site + num_rows, site, num_rows * sizeof(site_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node + num_rows, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.derived_state_length + num_rows, derived_state_length,
+                num_rows * sizeof(list_len_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.total_derived_state_length, 2 * num_rows);
+
     /* Inputs cannot be NULL */
     ret = mutation_table_set_columns(&table, num_rows, NULL, node, derived_state,
             derived_state_length);
@@ -6972,6 +6986,10 @@ test_mutation_table(void)
     ret = mutation_table_set_columns(&table, num_rows, site, node, derived_state,
             NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    mutation_table_reset(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
+    CU_ASSERT_EQUAL(table.total_derived_state_length, 0);
 
     mutation_table_free(&table);
     free(site);

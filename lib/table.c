@@ -734,11 +734,13 @@ site_table_print_state(site_table_t *self, FILE *out)
  *************************/
 
 static int
-mutation_table_expand_main_columns(mutation_table_t *self, size_t new_size)
+mutation_table_expand_main_columns(mutation_table_t *self, size_t additional_rows)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    size_t new_size = self->max_rows + increment;
 
-    if (new_size > self->max_rows) {
+    if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->site, new_size, sizeof(site_id_t));
         if (ret != 0) {
             goto out;
@@ -759,11 +761,15 @@ out:
 }
 
 static int
-mutation_table_expand_derived_state(mutation_table_t *self, size_t new_size)
+mutation_table_expand_derived_state(mutation_table_t *self, size_t additional_length)
 {
     int ret = 0;
+    size_t increment = GSL_MAX(additional_length,
+            self->max_total_derived_state_length_increment);
+    size_t new_size = self->max_total_derived_state_length + increment;
 
-    if (new_size > self->max_total_derived_state_length) {
+    if ((self->total_derived_state_length + additional_length)
+            > self->max_total_derived_state_length) {
         ret = expand_column((void **) &self->derived_state, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
@@ -794,12 +800,11 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
         max_total_derived_state_length_increment;
     self->max_total_derived_state_length = 0;
     self->total_derived_state_length = 0;
-    ret = mutation_table_expand_main_columns(self, self->max_rows_increment);
+    ret = mutation_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_expand_derived_state(self,
-            self->max_total_derived_state_length_increment);
+    ret = mutation_table_expand_derived_state(self, 1);
     if (ret != 0) {
         goto out;
     }
@@ -812,23 +817,14 @@ mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
         const char *derived_state, list_len_t derived_state_length)
 {
     int ret = 0;
-    size_t new_size;
 
-    if (self->num_rows == self->max_rows) {
-        new_size = self->max_rows + self->max_rows_increment;
-        ret = mutation_table_expand_main_columns(self, new_size);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = mutation_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
     }
-    while (self->total_derived_state_length + derived_state_length >=
-            self->max_total_derived_state_length) {
-        ret = mutation_table_expand_derived_state(self,
-                self->max_total_derived_state_length +
-                self->max_total_derived_state_length_increment);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = mutation_table_expand_derived_state(self, derived_state_length);
+    if (ret != 0) {
+        goto out;
     }
     self->site[self->num_rows] = site;
     self->node[self->num_rows] = node;
@@ -842,37 +838,53 @@ out:
 }
 
 int
-mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
+mutation_table_append_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
         node_id_t *node, const char *derived_state, uint32_t *derived_state_length)
 {
     int ret = 0;
     size_t total_derived_state_length = 0;
     size_t j;
 
-    if (num_rows > 0) {
-        if (site == NULL || node == NULL || derived_state == NULL
-                || derived_state_length == NULL) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        ret = mutation_table_expand_main_columns(self, num_rows);
-        if (ret != 0) {
-            goto out;
-        }
-        for (j = 0; j < num_rows; j++) {
-            total_derived_state_length += (size_t) derived_state_length[j];
-        }
-        ret = mutation_table_expand_derived_state(self, total_derived_state_length);
-        if (ret != 0) {
-            goto out;
-        }
-        memcpy(self->site, site, num_rows * sizeof(site_id_t));
-        memcpy(self->node, node, num_rows * sizeof(node_id_t));
-        memcpy(self->derived_state_length, derived_state_length, num_rows * sizeof(node_id_t));
-        memcpy(self->derived_state, derived_state, total_derived_state_length * sizeof(char));
-        self->num_rows = num_rows;
-        self->total_derived_state_length = total_derived_state_length;
+    if (site == NULL || node == NULL || derived_state == NULL
+            || derived_state_length == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
     }
+    ret = mutation_table_expand_main_columns(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_rows; j++) {
+        total_derived_state_length += (size_t) derived_state_length[j];
+    }
+    ret = mutation_table_expand_derived_state(self, total_derived_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->site + self->num_rows, site, num_rows * sizeof(site_id_t));
+    memcpy(self->node + self->num_rows, node, num_rows * sizeof(node_id_t));
+    memcpy(self->derived_state_length + self->num_rows, derived_state_length,
+            num_rows * sizeof(node_id_t));
+    memcpy(self->derived_state + self->total_derived_state_length, derived_state,
+            total_derived_state_length * sizeof(char));
+    self->num_rows += num_rows;
+    self->total_derived_state_length += total_derived_state_length;
+out:
+    return ret;
+}
+
+int
+mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
+        node_id_t *node, const char *derived_state, uint32_t *derived_state_length)
+{
+    int ret = 0;
+
+    ret = mutation_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_append_columns(self, num_rows ,site, node, derived_state,
+            derived_state_length);
 out:
     return ret;
 }

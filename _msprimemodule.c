@@ -2455,8 +2455,10 @@ out:
 
 
 #ifdef HAVE_NUMPY
+
 static PyObject *
-MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
+MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObject *kwds,
+        int method)
 {
     PyObject *ret = NULL;
     int err;
@@ -2495,9 +2497,17 @@ MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
     if (node_array == NULL) {
         goto out;
     }
-    err = mutation_table_set_columns(self->mutation_table, num_rows,
-            PyArray_DATA(site_array), PyArray_DATA(node_array),
-            PyArray_DATA(derived_state_array), PyArray_DATA(derived_state_length_array));
+    if (method == SET_COLS) {
+        err = mutation_table_set_columns(self->mutation_table, num_rows,
+                PyArray_DATA(site_array), PyArray_DATA(node_array),
+                PyArray_DATA(derived_state_array), PyArray_DATA(derived_state_length_array));
+    } else if (method == APPEND_COLS) {
+        err = mutation_table_append_columns(self->mutation_table, num_rows,
+                PyArray_DATA(site_array), PyArray_DATA(node_array),
+                PyArray_DATA(derived_state_array), PyArray_DATA(derived_state_length_array));
+    } else {
+        assert(0);
+    }
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2510,6 +2520,20 @@ out:
     Py_XDECREF(node_array);
     return ret;
 }
+
+static PyObject *
+MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
+{
+    return MutationTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+MutationTable_append_columns(MutationTable *self, PyObject *args, PyObject *kwds)
+{
+    return MutationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
+
 #endif
 
 static PyObject *
@@ -2564,6 +2588,18 @@ MutationTable_get_num_rows(MutationTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTable_get_max_rows(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_rows);
 out:
     return ret;
 }
@@ -2640,6 +2676,9 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"num_rows",
         (getter) MutationTable_get_num_rows, NULL,
         "The number of rows in the table."},
+    {"max_rows",
+        (getter) MutationTable_get_max_rows, NULL,
+        "The curret maximum number of rows in the table."},
 #ifdef HAVE_NUMPY
     {"site", (getter) MutationTable_get_site, NULL, "The site array"},
     {"node", (getter) MutationTable_get_node, NULL, "The node array"},
@@ -2656,7 +2695,9 @@ static PyMethodDef MutationTable_methods[] = {
         "Adds a new row to this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MutationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
-        "Copies the data in the speficied arrays into the columns."},
+        "Copies the data in the specified arrays into the columns."},
+    {"append_columns", (PyCFunction) MutationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified  arrays into the columns."},
 #endif
     {"reset", (PyCFunction) MutationTable_reset, METH_NOARGS,
         "Clears this table."},

@@ -401,7 +401,6 @@ class TestSiteTable(unittest.TestCase, CommonTestsMixin):
     table_class = msprime.SiteTable
 
 
-@unittest.skip("append_cols")
 class TestMutationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         Int32Column("site"),
