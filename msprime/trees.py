@@ -741,7 +741,7 @@ class SparseTree(object):
         :return: True if u is a sample.
         :rtype: bool
         """
-        return self._ll_sparse_tree.is_sample(u)
+        return bool(self._ll_sparse_tree.is_sample(u))
 
     @property
     def num_nodes(self):
@@ -913,15 +913,18 @@ class SparseTree(object):
                 yield DeprecatedMutation(
                     position=site.position, node=mutation.node, index=site.index)
 
-    def leaves(self, u):
+    def leaves(self, u=None):
         """
         Returns an iterator over all the leaves in this tree that are
-        underneath the specified node.
+        underneath the specified node. If u is not specified, return all leaves
+        in the tree.
 
         :param int u: The node of interest.
         :return: An iterator over all leaves in the subtree rooted at u.
         :rtype: iterator
         """
+        if u is None:
+            u = self.root
         for v in self.nodes(u):
             if self.is_leaf(v):
                 yield v
@@ -931,11 +934,11 @@ class SparseTree(object):
             if self.is_sample(v):
                 yield v
 
-    def samples(self, u):
+    def samples(self, u=None):
         """
         Returns an iterator over all the samples in this tree that are
         underneath the specified node. If u is a sample, it is included in the
-        returned iterator.
+        returned iterator. If u is not specified, return all samples in the tree.
 
         If the :meth:`.TreeSequence.trees` method is called with
         ``sample_lists=True``, this method uses an efficient algorithm to find
@@ -945,18 +948,21 @@ class SparseTree(object):
         :return: An iterator over all samples in the subtree rooted at u.
         :rtype: iterator
         """
+        if u is None:
+            u = self.root
         if self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_LISTS:
             return _msprime.LeafListIterator(self._ll_sparse_tree, u)
         else:
             return self._sample_generator(u)
 
-    def num_samples(self, u):
+    def num_samples(self, u=None):
         return self.get_num_samples(u)
 
-    def get_num_samples(self, u):
+    def get_num_samples(self, u=None):
         """
         Returns the number of samples in this tree underneath the specified
-        node (including the node itself).
+        node (including the node itself). If u is not specified return
+        the total number of samples in the tree.
 
         If the :meth:`.TreeSequence.trees` method is called with
         ``sample_counts=True`` this method is a constant time operation. If not,
@@ -966,16 +972,21 @@ class SparseTree(object):
         :return: The number of samples in the subtree rooted at u.
         :rtype: int
         """
+        if u is None:
+            u = self.root
         return self._ll_sparse_tree.get_num_samples(u)
 
-    def num_tracked_samples(self, u):
+    def num_tracked_samples(self, u=None):
         return self.get_num_tracked_samples(u)
 
-    def get_num_tracked_samples(self, u):
+    def get_num_tracked_samples(self, u=None):
         """
         Returns the number of samples in the set specified in the
         ``tracked_samples`` parameter of the :meth:`.TreeSequence.trees` method
-        underneath the specified node. This is a constant time operation.
+        underneath the specified node. If the input node is not specified,
+        return the total number of tracked samples in the tree.
+
+        This is a constant time operation.
 
         :param int u: The node of interest.
         :return: The number of samples within the set of tracked samples in
@@ -984,6 +995,8 @@ class SparseTree(object):
         :raises RuntimeError: if the :meth:`.TreeSequence.trees`
             method is not called with ``sample_counts=True``.
         """
+        if u is None:
+            u = self.root
         if not (self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_COUNTS):
             raise RuntimeError(
                 "The get_num_tracked_samples method is only supported "

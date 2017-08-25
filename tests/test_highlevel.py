@@ -48,7 +48,41 @@ import _msprime
 import tests
 
 
+def get_internal_samples_examples():
+    n = 5
+    ts = msprime.simulate(n, random_seed=10, mutation_rate=5)
+    assert ts.num_mutations > 0
+    tables = ts.dump_tables()
+    nodes = tables.nodes
+    flags = nodes.flags
+    # Set all nodes to be samples.
+    flags[:] = msprime.NODE_IS_SAMPLE
+    nodes.set_columns(flags=flags, time=nodes.time, population=nodes.population)
+    ts = msprime.load_tables(
+        nodes=nodes, edgesets=tables.edgesets,
+        sites=tables.sites, mutations=tables.mutations)
+    yield ts
+    # Set just internal nodes to be samples.
+    flags[:] = 0
+    flags[n:] = msprime.NODE_IS_SAMPLE
+    nodes.set_columns(flags=flags, time=nodes.time, population=nodes.population)
+    ts = msprime.load_tables(
+        nodes=nodes, edgesets=tables.edgesets,
+        sites=tables.sites, mutations=tables.mutations)
+    yield ts
+    # Set a mixture of internal and leaf samples.
+    flags[:] = 0
+    flags[n // 2: n + n // 2] = msprime.NODE_IS_SAMPLE
+    nodes.set_columns(flags=flags, time=nodes.time, population=nodes.population)
+    ts = msprime.load_tables(
+        nodes=nodes, edgesets=tables.edgesets,
+        sites=tables.sites, mutations=tables.mutations)
+    yield ts
+
+
 def get_example_tree_sequences(back_mutations=True):
+    for ts in get_internal_samples_examples():
+        yield ts
     for n in [2, 3, 10, 100]:
         for m in [1, 2, 32]:
             for rho in [0, 0.1, 0.5]:
@@ -276,10 +310,9 @@ class HighLevelTestCase(tests.MsprimeTestCase):
 
     def verify_sparse_tree_structure(self, st):
         used_nodes = set()
-        for j in range(st.get_sample_size()):
-            self.assertEqual(st.get_time(j), 0)
+        for u in st.leaves():
             # verify the path to root
-            u = j
+            self.assertTrue(st.is_leaf(u))
             times = []
             while st.get_parent(u) != msprime.NULL_NODE:
                 used_nodes.add(u)
@@ -291,7 +324,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertEqual(u, st.get_root())
             self.assertEqual(times, sorted(times))
         used_nodes.add(st.get_root())
-        self.assertLessEqual(len(used_nodes), 2 * st.get_sample_size() - 1)
         # for every entry other than used_nodes we should have an empty row
         for j in range(st.get_root()):
             if j not in used_nodes:
@@ -307,6 +339,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             self.assertNotEqual(u, msprime.NULL_NODE)
             if st.is_sample(u):
                 samples.append(u)
+            if st.is_leaf(u):
                 self.assertEqual(len(st.get_children(u)), 0)
             else:
                 for c in reversed(st.get_children(u)):
@@ -315,13 +348,14 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             # node.
             self.assertEqual(st.get_num_samples(u), len(list(st.samples(u))))
             self.assertEqual(st.get_num_tracked_samples(u), 0)
-        self.assertEqual(sorted(samples), list(range(st.get_sample_size())))
         # Check the parent dict
         pi = st.get_parent_dict()
-        self.assertLessEqual(len(pi), 2 * st.get_sample_size() - 1)
+        self.assertEqual(len(pi), len(list(st.nodes())) - 1)
         self.assertNotIn(st.get_root(), pi)
         for k, v in pi.items():
             self.assertEqual(st.get_parent(k), v)
+        self.assertEqual(st.num_samples(), len(samples))
+        self.assertEqual(sorted(st.samples()), sorted(samples))
 
     def verify_sparse_tree(self, st):
         self.verify_sparse_tree_mrcas(st)
@@ -372,9 +406,10 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertGreaterEqual(pi1, 0.0)
         self.assertFalse(math.isnan(pi1))
         # Check for a subsample.
-        samples = range(ts.get_sample_size() // 2 + 1)
+        num_samples = ts.get_sample_size() // 2 + 1
+        samples = list(ts.samples())[:num_samples]
         pi1 = ts.get_pairwise_diversity(samples)
-        pi2 = simple_get_pairwise_diversity([haplotypes[j] for j in samples])
+        pi2 = simple_get_pairwise_diversity([haplotypes[j] for j in range(num_samples)])
         pi3 = get_pairwise_diversity(ts, samples)
         self.assertAlmostEqual(pi1, pi2)
         self.assertAlmostEqual(pi1, pi3)
@@ -853,11 +888,14 @@ class TestTreeSequence(HighLevelTestCase):
     def verify_tracked_samples(self, ts):
         # Should be empty list by default.
         for tree in ts.trees():
+            self.assertEqual(tree.get_num_tracked_samples(), 0)
             for u in tree.nodes():
                 self.assertEqual(tree.get_num_tracked_samples(u), 0)
-        tracked_samples = [0, 1]
+        samples = list(ts.samples())
+        tracked_samples = samples[:2]
         for tree in ts.trees(tracked_samples):
             nu = [0 for j in range(ts.get_num_nodes())]
+            self.assertEqual(tree.get_num_tracked_samples(), len(tracked_samples))
             for j in tracked_samples:
                 u = j
                 while u != msprime.NULL_NODE:
@@ -940,32 +978,34 @@ class TestTreeSequence(HighLevelTestCase):
 
     def test_get_population(self):
         for ts in get_example_tree_sequences():
-            n = ts.get_sample_size()
             N = ts.get_num_nodes()
             self.assertRaises(ValueError, ts.get_population, -1)
             self.assertRaises(ValueError, ts.get_population, N)
             self.assertRaises(ValueError, ts.get_population, N + 1)
             self.assertEqual(ts.get_population(0), 0)
-            self.assertEqual(ts.get_population(n - 1), 0)
+            self.assertEqual(ts.get_population(N - 1), 0)
 
     def test_get_time(self):
         for ts in get_example_tree_sequences():
-            n = ts.get_sample_size()
             N = ts.get_num_nodes()
             self.assertRaises(ValueError, ts.get_time, -1)
             self.assertRaises(ValueError, ts.get_time, N)
             self.assertRaises(ValueError, ts.get_time, N + 1)
-            self.assertEqual(ts.get_time(0), 0)
-            self.assertEqual(ts.get_time(n - 1), 0)
+            for u in range(N):
+                self.assertEqual(ts.get_time(u), ts.node(u).time)
 
     def test_get_samples(self):
         for ts in get_example_tree_sequences():
-            n = ts.get_sample_size()
-            samples = list(range(n))
+            samples = []
+            for u in range(ts.num_nodes):
+                if ts.node(u).is_sample():
+                    samples.append(u)
             self.assertEqual(ts.get_samples(), samples)
             self.assertEqual(ts.get_samples(0), samples)
             self.assertEqual(ts.get_samples(msprime.NULL_POPULATION), [])
             self.assertEqual(ts.get_samples(1), [])
+            for t in ts.trees():
+                self.assertEqual(sorted(list(t.samples(t.root))), samples)
 
     def test_write_vcf_interface(self):
         for ts in get_example_tree_sequences():
@@ -1063,6 +1103,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertIn(unique[0], [0, 1])
             j += 1
 
+    @unittest.skip("Skip simplify with internal sample examples")
     def test_simplify(self):
         num_mutations = 0
         # TODO When back-mutations are implemented correctly, enable this test fully
@@ -1072,7 +1113,7 @@ class TestTreeSequence(HighLevelTestCase):
             if n > 2:
                 sample_sizes = set([2, max(2, n // 2), n - 1])
                 for k in sample_sizes:
-                    subset = random.sample(range(ts.get_sample_size()), k)
+                    subset = random.sample(list(ts.samples()), k)
                     self.verify_simplify_topology(ts, subset)
                     self.verify_simplify_mutations(ts, subset)
                     self.verify_simplify_equality(ts, subset)
