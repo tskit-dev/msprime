@@ -766,7 +766,7 @@ print_tree_sequence(tree_sequence_t *ts, int verbose)
         printf("========================\n");
         printf("trees\n");
         printf("========================\n");
-        ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS);
+        ret = sparse_tree_alloc(&tree, ts, MSP_SAMPLE_COUNTS);
         if (ret != 0) {
             fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
         }

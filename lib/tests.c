@@ -79,7 +79,7 @@ const char *single_tree_ex_mutations =
     "0    2     1\n"
     "1    4     1\n"
     "1    0     0\n"  /* Back mutation over 0 */
-    "2    0     1\n"  /* recurrent mutations over leaves */
+    "2    0     1\n"  /* recurrent mutations over samples */
     "2    1     1\n"
     "2    2     1\n"
     "2    3     1\n";
@@ -1093,7 +1093,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
                 CU_ASSERT_EQUAL_FATAL(ret, 0);
             }
             /* To ensure that the mutations are sorted in time order, we only
-             * traverse down the left-most path to the leaf. This means we
+             * traverse down the left-most path to the sample. This means we
              * don't really need a stack at all, but we may extend this to a full
              * traversal in the future. */
             if (tree.num_children[u] > 0) {
@@ -2646,7 +2646,7 @@ test_simplest_unary_records(void)
 }
 
 static void
-test_simplest_non_sample_leaf_records(void)
+test_simplest_non_sample_sample_records(void)
 {
     int ret;
     const char *nodes =
@@ -3922,7 +3922,7 @@ test_single_tree_iter(void)
     tree_sequence_t ts;
     sparse_tree_t tree;
     node_id_t u, v, w;
-    size_t num_leaves;
+    size_t num_samples;
     uint32_t num_nodes = 7;
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL, NULL);
@@ -3940,15 +3940,15 @@ test_single_tree_iter(void)
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(v, parents[u]);
     }
-    ret = sparse_tree_get_num_leaves(&tree, 0, &num_leaves);
+    ret = sparse_tree_get_num_samples(&tree, 0, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_leaves, 1);
-    ret = sparse_tree_get_num_leaves(&tree, 4, &num_leaves);
+    CU_ASSERT_EQUAL(num_samples, 1);
+    ret = sparse_tree_get_num_samples(&tree, 4, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_leaves, 2);
-    ret = sparse_tree_get_num_leaves(&tree, 6, &num_leaves);
+    CU_ASSERT_EQUAL(num_samples, 2);
+    ret = sparse_tree_get_num_samples(&tree, 6, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_leaves, 4);
+    CU_ASSERT_EQUAL(num_samples, 4);
     ret = sparse_tree_get_mrca(&tree, 0, 1, &w);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(w, 4);
@@ -3986,9 +3986,9 @@ test_single_nonbinary_tree_iter(void)
     tree_sequence_t ts;
     sparse_tree_t tree;
     node_id_t u, v, w, *children;
-    size_t num_leaves, num_children;
+    size_t num_samples, num_children;
     size_t num_nodes = 10;
-    size_t num_samples = 7;
+    size_t total_samples = 7;
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL, NULL);
     ret = sparse_tree_alloc(&tree, &ts, 0);
@@ -4005,10 +4005,10 @@ test_single_nonbinary_tree_iter(void)
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(v, parents[u]);
     }
-    for (u = 0; u < num_samples; u++) {
-        ret = sparse_tree_get_num_leaves(&tree, u, &num_leaves);
+    for (u = 0; u < total_samples; u++) {
+        ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
         CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(num_leaves, 1);
+        CU_ASSERT_EQUAL(num_samples, 1);
         ret = sparse_tree_get_children(&tree, u, &num_children, &children);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(children, NULL);
@@ -4016,9 +4016,9 @@ test_single_nonbinary_tree_iter(void)
     }
 
     u = 7;
-    ret = sparse_tree_get_num_leaves(&tree, u, &num_leaves);
+    ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_leaves, 4);
+    CU_ASSERT_EQUAL(num_samples, 4);
     ret = sparse_tree_get_children(&tree, u, &num_children, &children);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(num_children, 4);
@@ -4028,9 +4028,9 @@ test_single_nonbinary_tree_iter(void)
     CU_ASSERT_EQUAL(children[3], 3);
 
     u = 8;
-    ret = sparse_tree_get_num_leaves(&tree, u, &num_leaves);
+    ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_leaves, 2);
+    CU_ASSERT_EQUAL(num_samples, 2);
     ret = sparse_tree_get_children(&tree, u, &num_children, &children);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(num_children, 2);
@@ -4038,9 +4038,9 @@ test_single_nonbinary_tree_iter(void)
     CU_ASSERT_EQUAL(children[1], 5);
 
     u = 9;
-    ret = sparse_tree_get_num_leaves(&tree, u, &num_leaves);
+    ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_leaves, 7);
+    CU_ASSERT_EQUAL(num_samples, 7);
     ret = sparse_tree_get_children(&tree, u, &num_children, &children);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(num_children, 3);
@@ -4087,7 +4087,7 @@ test_single_tree_general_samples_iter(void)
     tree_sequence_t ts;
     sparse_tree_t tree;
     node_id_t u, v, w;
-    size_t num_leaves;
+    size_t num_samples;
     uint32_t num_nodes = 7;
 
     tree_sequence_from_text(&ts, nodes, edgesets, NULL, NULL, NULL, NULL);
@@ -4111,15 +4111,15 @@ test_single_tree_general_samples_iter(void)
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(v, parents[u]);
     }
-    ret = sparse_tree_get_num_leaves(&tree, 3, &num_leaves);
+    ret = sparse_tree_get_num_samples(&tree, 3, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_leaves, 1);
-    ret = sparse_tree_get_num_leaves(&tree, 2, &num_leaves);
+    CU_ASSERT_EQUAL(num_samples, 1);
+    ret = sparse_tree_get_num_samples(&tree, 2, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_leaves, 2);
-    ret = sparse_tree_get_num_leaves(&tree, 0, &num_leaves);
+    CU_ASSERT_EQUAL(num_samples, 2);
+    ret = sparse_tree_get_num_samples(&tree, 0, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_leaves, 4);
+    CU_ASSERT_EQUAL(num_samples, 4);
     ret = sparse_tree_get_mrca(&tree, 3, 4, &w);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(w, 2);
@@ -4196,7 +4196,7 @@ test_single_tree_hapgen_char_alphabet(void)
         "1    1     T\n"
         "2    0     G\n"
         "2    1     A\n"
-        "2    2     T\n"  // A bunch of different leaf mutations
+        "2    2     T\n"  // A bunch of different sample mutations
         "3    4     T\n"
         "3    0     A\n"; // A back mutation from T -> A
     uint32_t num_samples = 4;
@@ -4258,7 +4258,7 @@ test_single_tree_vargen_char_alphabet(void)
         "1    1     T\n"
         "2    0     G\n"
         "2    1     A\n"
-        "2    2     T\n"  // A bunch of different leaf mutations
+        "2    2     T\n"  // A bunch of different sample mutations
         "3    4     T\n"
         "3    0     A\n"; // A back mutation from T -> A
     tree_sequence_t ts;
@@ -4838,13 +4838,13 @@ test_sparse_tree_errors(void)
     tree_sequence_t ts, other_ts;
     sparse_tree_t t, other_t;
     node_id_t bad_nodes[] = {num_nodes, num_nodes + 1, -1};
-    node_id_t tracked_leaves[] = {0, 0, 0};
+    node_id_t tracked_samples[] = {0, 0, 0};
 
     tree_sequence_from_text(&ts, paper_ex_nodes, paper_ex_edgesets, NULL, NULL, NULL, NULL);
 
     ret = sparse_tree_alloc(&t, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = sparse_tree_alloc(&t, &ts, MSP_LEAF_COUNTS);
+    ret = sparse_tree_alloc(&t, &ts, MSP_SAMPLE_COUNTS);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = sparse_tree_first(&t);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
@@ -4862,11 +4862,11 @@ test_sparse_tree_errors(void)
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
         ret = sparse_tree_get_mrca(&t, 0, u, NULL);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-        ret = sparse_tree_get_num_leaves(&t, u, NULL);
+        ret = sparse_tree_get_num_samples(&t, u, NULL);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-        ret = sparse_tree_get_num_tracked_leaves(&t, u, NULL);
+        ret = sparse_tree_get_num_tracked_samples(&t, u, NULL);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-        ret = sparse_tree_get_leaf_list(&t, u, NULL, NULL);
+        ret = sparse_tree_get_sample_list(&t, u, NULL, NULL);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
         /* Also check tree sequence methods */
         ret = tree_sequence_get_node(&ts, u, &node);
@@ -4874,17 +4874,17 @@ test_sparse_tree_errors(void)
         CU_ASSERT(!tree_sequence_is_sample(&ts, u));
     }
 
-    tracked_leaves[0] = 0;
-    tracked_leaves[1] = tree_sequence_get_sample_size(&ts);
-    ret = sparse_tree_set_tracked_leaves(&t, 2, tracked_leaves);
+    tracked_samples[0] = 0;
+    tracked_samples[1] = tree_sequence_get_sample_size(&ts);
+    ret = sparse_tree_set_tracked_samples(&t, 2, tracked_samples);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SAMPLES);
-    tracked_leaves[1] = tree_sequence_get_num_nodes(&ts);
-    ret = sparse_tree_set_tracked_leaves(&t, 2, tracked_leaves);
+    tracked_samples[1] = tree_sequence_get_num_nodes(&ts);
+    ret = sparse_tree_set_tracked_samples(&t, 2, tracked_samples);
     CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-    tracked_leaves[1] = 0;
-    ret = sparse_tree_set_tracked_leaves(&t, 2, tracked_leaves);
+    tracked_samples[1] = 0;
+    ret = sparse_tree_set_tracked_samples(&t, 2, tracked_samples);
     CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_SAMPLE);
-    ret = sparse_tree_set_tracked_leaves_from_leaf_list(&t, NULL, NULL);
+    ret = sparse_tree_set_tracked_samples_from_sample_list(&t, NULL, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     tree_sequence_from_text(&other_ts, paper_ex_nodes, paper_ex_edgesets, NULL, NULL, NULL, NULL);
@@ -5043,22 +5043,22 @@ typedef struct {
     uint32_t tree_index;
     uint32_t node;
     uint32_t count;
-} leaf_count_test_t;
+} sample_count_test_t;
 
 static void
-verify_leaf_counts(tree_sequence_t *ts, size_t num_tests, leaf_count_test_t *tests)
+verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t *tests)
 {
     int ret;
-    size_t j, num_leaves, n, k;
+    size_t j, num_samples, n, k;
     sparse_tree_t tree;
-    leaf_list_node_t *u, *head, *tail;
+    node_list_t *u, *head, *tail;
     node_id_t *samples;
 
     n = tree_sequence_get_sample_size(ts);
     ret = tree_sequence_get_samples(ts, &samples);
     CU_ASSERT_EQUAL(ret, 0);
 
-    /* First run without the MSP_LEAF_COUNTS feature */
+    /* First run without the MSP_SAMPLE_COUNTS feature */
     ret = sparse_tree_alloc(&tree, ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_first(&tree);
@@ -5068,19 +5068,19 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests, leaf_count_test_t *tes
             ret = sparse_tree_next(&tree);
             CU_ASSERT_EQUAL_FATAL(ret, 1);
         }
-        ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves);
+        ret = sparse_tree_get_num_samples(&tree, tests[j].node, &num_samples);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
-        /* all operations depending on tracked leaves should fail. */
-        ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves);
+        CU_ASSERT_EQUAL(tests[j].count, num_samples);
+        /* all operations depending on tracked samples should fail. */
+        ret = sparse_tree_get_num_tracked_samples(&tree, 0, &num_samples);
         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-        ret = sparse_tree_get_leaf_list(&tree, 0, NULL, NULL);
+        ret = sparse_tree_get_sample_list(&tree, 0, NULL, NULL);
         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
     }
     sparse_tree_free(&tree);
 
-    /* Now run with MSP_LEAF_COUNTS but with no leaves tracked. */
-    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS);
+    /* Now run with MSP_SAMPLE_COUNTS but with no samples tracked. */
+    ret = sparse_tree_alloc(&tree, ts, MSP_SAMPLE_COUNTS);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_first(&tree);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
@@ -5089,21 +5089,21 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests, leaf_count_test_t *tes
             ret = sparse_tree_next(&tree);
             CU_ASSERT_EQUAL_FATAL(ret, 1);
         }
-        ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves);
+        ret = sparse_tree_get_num_samples(&tree, tests[j].node, &num_samples);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
-        /* all operations depending on tracked leaves should fail. */
-        ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves);
+        CU_ASSERT_EQUAL(tests[j].count, num_samples);
+        /* all operations depending on tracked samples should fail. */
+        ret = sparse_tree_get_num_tracked_samples(&tree, 0, &num_samples);
         CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(num_leaves, 0);
-        /* Getting leaf lists should still fail, as it's not enabled. */
-        ret = sparse_tree_get_leaf_list(&tree, 0, NULL, NULL);
+        CU_ASSERT_EQUAL(num_samples, 0);
+        /* Getting sample lists should still fail, as it's not enabled. */
+        ret = sparse_tree_get_sample_list(&tree, 0, NULL, NULL);
         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
     }
     sparse_tree_free(&tree);
 
-    /* Run with MSP_LEAF_LISTS, but without MSP_LEAF_COUNTS */
-    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_LISTS);
+    /* Run with MSP_SAMPLE_LISTS, but without MSP_SAMPLE_COUNTS */
+    ret = sparse_tree_alloc(&tree, ts, MSP_SAMPLE_LISTS);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_first(&tree);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
@@ -5112,13 +5112,13 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests, leaf_count_test_t *tes
             ret = sparse_tree_next(&tree);
             CU_ASSERT_EQUAL_FATAL(ret, 1);
         }
-        ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves);
+        ret = sparse_tree_get_num_samples(&tree, tests[j].node, &num_samples);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
-        /* all operations depending on tracked leaves should fail. */
-        ret = sparse_tree_get_num_tracked_leaves(&tree, 0, &num_leaves);
+        CU_ASSERT_EQUAL(tests[j].count, num_samples);
+        /* all operations depending on tracked samples should fail. */
+        ret = sparse_tree_get_num_tracked_samples(&tree, 0, &num_samples);
         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-        ret = sparse_tree_get_leaf_list(&tree, tests[j].node, &head, &tail);
+        ret = sparse_tree_get_sample_list(&tree, tests[j].node, &head, &tail);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         u = head;
         k = 0;
@@ -5133,10 +5133,10 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests, leaf_count_test_t *tes
     }
     sparse_tree_free(&tree);
 
-    /* Now use MSP_LEAF_COUNTS|MSP_LEAF_LISTS */
-    ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS|MSP_LEAF_LISTS);
+    /* Now use MSP_SAMPLE_COUNTS|MSP_SAMPLE_LISTS */
+    ret = sparse_tree_alloc(&tree, ts, MSP_SAMPLE_COUNTS|MSP_SAMPLE_LISTS);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = sparse_tree_set_tracked_leaves(&tree, n, samples);
+    ret = sparse_tree_set_tracked_samples(&tree, n, samples);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_first(&tree);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
@@ -5145,15 +5145,15 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests, leaf_count_test_t *tes
             ret = sparse_tree_next(&tree);
             CU_ASSERT_EQUAL_FATAL(ret, 1);
         }
-        ret = sparse_tree_get_num_leaves(&tree, tests[j].node, &num_leaves);
+        ret = sparse_tree_get_num_samples(&tree, tests[j].node, &num_samples);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
+        CU_ASSERT_EQUAL(tests[j].count, num_samples);
 
-        /* We're tracking all leaves, so the count should be the same */
-        ret = sparse_tree_get_num_tracked_leaves(&tree, tests[j].node, &num_leaves);
+        /* We're tracking all samples, so the count should be the same */
+        ret = sparse_tree_get_num_tracked_samples(&tree, tests[j].node, &num_samples);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL(tests[j].count, num_leaves);
-        ret = sparse_tree_get_leaf_list(&tree, tests[j].node, &head, &tail);
+        CU_ASSERT_EQUAL(tests[j].count, num_samples);
+        ret = sparse_tree_get_sample_list(&tree, tests[j].node, &head, &tail);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         u = head;
         k = 0;
@@ -5171,81 +5171,81 @@ verify_leaf_counts(tree_sequence_t *ts, size_t num_tests, leaf_count_test_t *tes
 
 
 static void
-verify_leaf_sets_for_tree(sparse_tree_t *tree)
+verify_sample_sets_for_tree(sparse_tree_t *tree)
 {
     int ret, stack_top, j;
-    node_id_t u, v, n, num_nodes, num_leaves;
+    node_id_t u, v, n, num_nodes, num_samples;
     size_t tmp;
-    node_id_t *stack, *leaves;
-    leaf_list_node_t *z, *head, *tail;
+    node_id_t *stack, *samples;
+    node_list_t *z, *head, *tail;
     tree_sequence_t *ts = tree->tree_sequence;
 
     n = tree_sequence_get_sample_size(ts);
     num_nodes = tree_sequence_get_num_nodes(ts);
     stack = malloc(n * sizeof(node_id_t));
-    leaves = malloc(n * sizeof(node_id_t));
+    samples = malloc(n * sizeof(node_id_t));
     CU_ASSERT_FATAL(stack != NULL);
-    CU_ASSERT_FATAL(leaves != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
     for (u = 0; u < num_nodes; u++) {
         if (tree->num_children[u] == 0 && !tree_sequence_is_sample(ts, u)) {
-            ret = sparse_tree_get_leaf_list(tree, u, &head, &tail);
+            ret = sparse_tree_get_sample_list(tree, u, &head, &tail);
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT_EQUAL(head, NULL);
             CU_ASSERT_EQUAL(tail, NULL);
         } else {
             stack_top = 0;
-            num_leaves = 0;
+            num_samples = 0;
             stack[stack_top] = u;
             while (stack_top >= 0) {
                 v = stack[stack_top];
                 stack_top--;
                 if (tree_sequence_is_sample(ts, v)) {
-                    leaves[num_leaves] = v;
-                    num_leaves++;
+                    samples[num_samples] = v;
+                    num_samples++;
                 }
                 for (j = tree->num_children[v] - 1; j >= 0; j--) {
                     stack_top++;
                     stack[stack_top] = tree->children[v][j];
                 }
             }
-            ret = sparse_tree_get_num_leaves(tree, u, &tmp);
+            ret = sparse_tree_get_num_samples(tree, u, &tmp);
             CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_EQUAL(num_leaves, tmp);
-            ret = sparse_tree_get_leaf_list(tree, u, &head, &tail);
+            CU_ASSERT_EQUAL(num_samples, tmp);
+            ret = sparse_tree_get_sample_list(tree, u, &head, &tail);
             CU_ASSERT_EQUAL(ret, 0);
             z = head;
             j = 0;
             while (1) {
-                CU_ASSERT_TRUE_FATAL(j < num_leaves);
-                CU_ASSERT_EQUAL(z->node, leaves[j]);
+                CU_ASSERT_TRUE_FATAL(j < num_samples);
+                CU_ASSERT_EQUAL(z->node, samples[j]);
                 j++;
                 if (z == tail) {
                     break;
                 }
                 z = z->next;
             }
-            CU_ASSERT_EQUAL(j, num_leaves);
+            CU_ASSERT_EQUAL(j, num_samples);
         }
     }
     free(stack);
-    free(leaves);
+    free(samples);
 }
 
 static void
-verify_leaf_sets(tree_sequence_t *ts)
+verify_sample_sets(tree_sequence_t *ts)
 {
     int ret;
     sparse_tree_t t;
 
-    ret = sparse_tree_alloc(&t, ts, MSP_LEAF_COUNTS|MSP_LEAF_LISTS);
+    ret = sparse_tree_alloc(&t, ts, MSP_SAMPLE_COUNTS|MSP_SAMPLE_LISTS);
     CU_ASSERT_EQUAL(ret, 0);
 
     for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
-        verify_leaf_sets_for_tree(&t);
+        verify_sample_sets_for_tree(&t);
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     for (ret = sparse_tree_last(&t); ret == 1; ret = sparse_tree_prev(&t)) {
-        verify_leaf_sets_for_tree(&t);
+        verify_sample_sets_for_tree(&t);
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -5290,8 +5290,8 @@ verify_tree_equals(tree_sequence_t *ts)
     size_t j, k;
     tree_sequence_t *other_ts = get_example_tree_sequence(
             10, 0, 100, 100.0, 1.0, 1.0, 0, NULL, MSP_ALPHABET_BINARY);
-    int flags[] = {0, MSP_LEAF_LISTS, MSP_LEAF_COUNTS,
-        MSP_LEAF_LISTS | MSP_LEAF_COUNTS};
+    int flags[] = {0, MSP_SAMPLE_LISTS, MSP_SAMPLE_COUNTS,
+        MSP_SAMPLE_LISTS | MSP_SAMPLE_COUNTS};
 
     trees = get_tree_list(ts);
     ret = sparse_tree_alloc(&t, other_ts, 0);
@@ -5459,25 +5459,25 @@ verify_tree_next_prev(tree_sequence_t *ts)
 }
 
 static void
-test_leaf_sets(void)
+test_sample_sets(void)
 {
-    leaf_count_test_t tests[] = {
+    sample_count_test_t tests[] = {
         {0, 0, 1}, {0, 5, 2}, {0, 6, 3},
         {1, 4, 2}, {1, 5, 3}, {1, 6, 4}};
     uint32_t num_tests = 6;
     tree_sequence_t ts;
 
     tree_sequence_from_text(&ts, paper_ex_nodes, paper_ex_edgesets, NULL, NULL, NULL, NULL);
-    verify_leaf_counts(&ts, num_tests, tests);
-    verify_leaf_sets(&ts);
+    verify_sample_counts(&ts, num_tests, tests);
+    verify_sample_sets(&ts);
 
     tree_sequence_free(&ts);
 }
 
 static void
-test_nonbinary_leaf_sets(void)
+test_nonbinary_sample_sets(void)
 {
-    leaf_count_test_t tests[] = {
+    sample_count_test_t tests[] = {
         {0, 0, 1}, {0, 8, 4}, {0, 9, 5}, {0, 10, 3}, {0, 12, 8},
         {1, 5, 1}, {1, 8, 4}, {1, 9, 5}, {0, 10, 2}, {0, 11, 1}};
     uint32_t num_tests = 8;
@@ -5485,16 +5485,16 @@ test_nonbinary_leaf_sets(void)
 
     tree_sequence_from_text(&ts, nonbinary_ex_nodes, nonbinary_ex_edgesets, NULL,
             NULL, NULL, NULL);
-    verify_leaf_counts(&ts, num_tests, tests);
-    verify_leaf_sets(&ts);
+    verify_sample_counts(&ts, num_tests, tests);
+    verify_sample_sets(&ts);
 
     tree_sequence_free(&ts);
 }
 
 static void
-test_internal_sample_leaf_sets(void)
+test_internal_sample_sample_sets(void)
 {
-    leaf_count_test_t tests[] = {
+    sample_count_test_t tests[] = {
         {0, 0, 1}, {0, 5, 4}, {0, 4, 2}, {0, 7, 5},
         {1, 4, 2}, {1, 5, 4}, {1, 8, 5},
         {2, 5, 4}, {2, 6, 5}};
@@ -5503,8 +5503,8 @@ test_internal_sample_leaf_sets(void)
 
     tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edgesets,
             NULL, NULL, NULL, NULL);
-    verify_leaf_counts(&ts, num_tests, tests);
-    verify_leaf_sets(&ts);
+    verify_sample_counts(&ts, num_tests, tests);
+    verify_sample_sets(&ts);
 
     tree_sequence_free(&ts);
 }
@@ -5775,14 +5775,14 @@ test_tree_iter_from_examples(void)
 }
 
 static void
-test_leaf_sets_from_examples(void)
+test_sample_sets_from_examples(void)
 {
     tree_sequence_t **examples = get_example_tree_sequences(1);
     uint32_t j;
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        verify_leaf_sets(examples[j]);
+        verify_sample_sets(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -7265,7 +7265,7 @@ main(int argc, char **argv)
         {"test_simplest_records", test_simplest_records},
         {"test_simplest_nonbinary_records", test_simplest_nonbinary_records},
         {"test_simplest_unary_records", test_simplest_unary_records},
-        {"test_simplest_non_sample_leaf_records", test_simplest_non_sample_leaf_records},
+        {"test_simplest_non_sample_sample_records", test_simplest_non_sample_sample_records},
         {"test_simplest_degenerate_multiple_root_records",
             test_simplest_degenerate_multiple_root_records},
         {"test_simplest_multiple_root_records", test_simplest_multiple_root_records},
@@ -7302,9 +7302,9 @@ main(int argc, char **argv)
         {"test_single_tree_mutgen", test_single_tree_mutgen},
         {"test_sparse_tree_errors", test_sparse_tree_errors},
         {"test_tree_sequence_iter", test_tree_sequence_iter},
-        {"test_leaf_sets", test_leaf_sets},
-        {"test_nonbinary_leaf_sets", test_nonbinary_leaf_sets},
-        {"test_internal_sample_leaf_sets", test_internal_sample_leaf_sets},
+        {"test_sample_sets", test_sample_sets},
+        {"test_nonbinary_sample_sets", test_nonbinary_sample_sets},
+        {"test_internal_sample_sample_sets", test_internal_sample_sample_sets},
         {"test_nonbinary_tree_sequence_iter", test_nonbinary_tree_sequence_iter},
         {"test_unary_tree_sequence_iter", test_unary_tree_sequence_iter},
         {"test_internal_sample_tree_sequence_iter", test_internal_sample_tree_sequence_iter},
@@ -7323,7 +7323,7 @@ main(int argc, char **argv)
         {"test_tree_iter_from_examples", test_tree_iter_from_examples},
         {"test_tree_equals_from_examples", test_tree_equals_from_examples},
         {"test_tree_next_and_prev_from_examples", test_next_prev_from_examples},
-        {"test_leaf_sets_from_examples", test_leaf_sets_from_examples},
+        {"test_sample_sets_from_examples", test_sample_sets_from_examples},
         {"test_hapgen_from_examples", test_hapgen_from_examples},
         {"test_vargen_from_examples", test_vargen_from_examples},
         {"test_newick_from_examples", test_newick_from_examples},

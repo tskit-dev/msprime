@@ -94,7 +94,7 @@ hapgen_set_state(hapgen_t *self, size_t row, size_t column, const char *state)
 }
 
 static inline int
-hapgen_update_leaf(hapgen_t * self, node_id_t sample_id, site_id_t site,
+hapgen_update_sample(hapgen_t * self, node_id_t sample_id, site_id_t site,
         const char *derived_state)
 {
     int ret = 0;
@@ -113,13 +113,13 @@ static int
 hapgen_apply_tree_site(hapgen_t *self, site_t *site)
 {
     int ret = 0;
-    leaf_list_node_t *w, *tail;
+    node_list_t *w, *tail;
     bool not_done;
     list_len_t j;
     const char *derived_state;
 
     for (j = 0; j < site->mutations_length; j++) {
-        ret = sparse_tree_get_leaf_list(&self->tree, site->mutations[j].node, &w, &tail);
+        ret = sparse_tree_get_sample_list(&self->tree, site->mutations[j].node, &w, &tail);
         if (ret != 0) {
             goto out;
         }
@@ -132,7 +132,7 @@ hapgen_apply_tree_site(hapgen_t *self, site_t *site)
             not_done = true;
             while (not_done) {
                 assert(w != NULL);
-                ret = hapgen_update_leaf(self, w->node, site->id, derived_state);
+                ret = hapgen_update_sample(self, w->node, site->id, derived_state);
                 if (ret != 0) {
                     goto out;
                 }
@@ -189,7 +189,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
         goto out;
     }
     self->binary = tree_sequence_get_alphabet(tree_sequence) == MSP_ALPHABET_BINARY;
-    ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
+    ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_SAMPLE_LISTS);
     if (ret != 0) {
         goto out;
     }
