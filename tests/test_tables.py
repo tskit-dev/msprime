@@ -788,6 +788,17 @@ class TestSimplifyTables(unittest.TestCase):
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
                 samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+            # child == parent
+            tables = ts.dump_tables()
+            edgesets = tables.edgesets
+            children = edgesets.children
+            children[0] = edgesets.parent[0]
+            edgesets.set_columns(
+                left=edgesets.left, right=edgesets.right, parent=edgesets.parent,
+                children=children, children_length=edgesets.children_length)
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simplify_tables,
+                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
             # left == right
             tables = ts.dump_tables()
             edgesets = tables.edgesets

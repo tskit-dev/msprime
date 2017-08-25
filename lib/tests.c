@@ -3436,8 +3436,6 @@ test_simplest_overlapping_unary_edgesets_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     simplifier_print_state(&simplifier, _devnull);
     ret = simplifier_free(&simplifier);
-
-
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_EQUAL(node_table.num_rows, 3);
@@ -3452,6 +3450,84 @@ test_simplest_overlapping_unary_edgesets_simplify(void)
     CU_ASSERT_EQUAL(edgeset_table.children_length[0], 2);
     CU_ASSERT_EQUAL(edgeset_table.children[0], 0);
     CU_ASSERT_EQUAL(edgeset_table.children[1], 1);
+
+    node_table_free(&node_table);
+    edgeset_table_free(&edgeset_table);
+    migration_table_free(&migration_table);
+    site_table_free(&site_table);
+    mutation_table_free(&mutation_table);
+}
+
+
+static void
+test_simplest_overlapping_unary_edgesets_internal_samples_simplify(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  1   0";
+    const char *edgesets =
+        "0  2   2   0\n"
+        "1  3   2   1\n";
+    node_id_t samples[] = {0, 1, 2};
+    node_table_t node_table;
+    edgeset_table_t edgeset_table;
+    migration_table_t migration_table;
+    site_table_t site_table;
+    mutation_table_t mutation_table;
+    simplifier_t simplifier;
+    int ret;
+
+    ret = node_table_alloc(&node_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edgeset_table_alloc(&edgeset_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&migration_table, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_alloc(&site_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(&mutation_table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_nodes(nodes, &node_table);
+    CU_ASSERT_EQUAL_FATAL(node_table.num_rows, 3);
+    parse_edgesets(edgesets, &edgeset_table);
+    CU_ASSERT_EQUAL_FATAL(edgeset_table.num_rows, 2);
+
+    ret = simplifier_alloc(&simplifier, samples, 3,
+            &node_table, &edgeset_table, &migration_table,
+            &site_table, &mutation_table, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_run(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_free(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    CU_ASSERT_EQUAL(node_table.num_rows, 3);
+    CU_ASSERT_EQUAL(edgeset_table.num_rows, 3);
+    /*
+     0       1       2       0
+     1       2       2       0,1
+     2       3       2       1
+     */
+    CU_ASSERT_EQUAL(edgeset_table.left[0], 0);
+    CU_ASSERT_EQUAL(edgeset_table.left[1], 1);
+    CU_ASSERT_EQUAL(edgeset_table.left[2], 2);
+    CU_ASSERT_EQUAL(edgeset_table.right[0], 1);
+    CU_ASSERT_EQUAL(edgeset_table.right[1], 2);
+    CU_ASSERT_EQUAL(edgeset_table.right[2], 3);
+    CU_ASSERT_EQUAL(edgeset_table.parent[0], 2);
+    CU_ASSERT_EQUAL(edgeset_table.parent[1], 2);
+    CU_ASSERT_EQUAL(edgeset_table.parent[2], 2);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[0], 1);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[1], 2);
+    CU_ASSERT_EQUAL(edgeset_table.children_length[2], 1);
+    CU_ASSERT_EQUAL(edgeset_table.children[0], 0);
+    CU_ASSERT_EQUAL(edgeset_table.children[1], 0);
+    CU_ASSERT_EQUAL(edgeset_table.children[2], 1);
+    CU_ASSERT_EQUAL(edgeset_table.children[3], 1);
 
     node_table_free(&node_table);
     edgeset_table_free(&edgeset_table);
@@ -4371,6 +4447,18 @@ test_single_tree_simplify(void)
     ret = simplifier_alloc(&simplifier, samples, 2,
             &nodes, &edgesets, &migrations, &sites, &mutations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    ret = simplifier_free(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* detect loops */
+    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edgesets,
+            &migrations, &sites, &mutations, &num_provenance_strings,
+            &provenance_strings);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    edgesets.children[0] = edgesets.parent[0];
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edgesets, &migrations, &sites, &mutations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -7191,6 +7279,8 @@ main(int argc, char **argv)
             test_simplest_overlapping_edgesets_simplify},
         {"test_simplest_overlapping_unary_edgesets_simplify",
             test_simplest_overlapping_unary_edgesets_simplify},
+        {"test_simplest_overlapping_unary_edgesets_internal_samples_simplify",
+            test_simplest_overlapping_unary_edgesets_internal_samples_simplify},
         {"test_alphabet_detection", test_alphabet_detection},
         {"test_single_tree_good_records", test_single_tree_good_records},
         {"test_single_nonbinary_tree_good_records",
