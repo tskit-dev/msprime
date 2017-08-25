@@ -913,6 +913,13 @@ class SparseTree(object):
                 yield DeprecatedMutation(
                     position=site.position, node=mutation.node, index=site.index)
 
+    def get_leaves(self, u):
+        # Deprecated alias for samples. See the discussion in the get_num_leaves
+        # method for why this method is here and why it is semantically incorrect.
+        # The 'leaves' iterator below correctly returns the leaves below a given
+        # node.
+        return self.samples(u)
+
     def leaves(self, u=None):
         """
         Returns an iterator over all the leaves in this tree that are
@@ -955,6 +962,19 @@ class SparseTree(object):
         else:
             return self._sample_generator(u)
 
+    def get_num_leaves(self, u):
+        # Deprecated alias for num_samples. The method name is inaccurate
+        # as this will count the number of tracked _samples_. This is only provided to
+        # avoid breaking existing code and should not be used in new code. We could
+        # change this method to be semantically correct and just count the
+        # number of leaves we hit in the leaves() iterator. However, this would
+        # have the undesirable effect of making code that depends on the constant
+        # time performance of get_num_leaves many times slower. So, the best option
+        # is to leave this method as is, and to slowly deprecate it out. Once this
+        # has been removed, we might add in a ``num_leaves`` method that returns the
+        # length of the leaves() iterator as one would expect.
+        return self.num_samples(u)
+
     def num_samples(self, u=None):
         return self.get_num_samples(u)
 
@@ -975,6 +995,12 @@ class SparseTree(object):
         if u is None:
             u = self.root
         return self._ll_sparse_tree.get_num_samples(u)
+
+    def get_num_tracked_leaves(self, u):
+        # Deprecated alias for num_tracked_samples. The method name is inaccurate
+        # as this will count the number of tracked _samples_. This is only provided to
+        # avoid breaking existing code and should not be used in new code.
+        return self.num_tracked_samples(u)
 
     def num_tracked_samples(self, u=None):
         return self.get_num_tracked_samples(u)
@@ -2344,7 +2370,9 @@ class TreeSequence(object):
         for t in self.trees():
             yield t.get_interval()[1]
 
-    def trees(self, tracked_samples=None, sample_counts=True, sample_lists=False):
+    def trees(
+            self, tracked_samples=None, sample_counts=True, sample_lists=False,
+            tracked_leaves=None, leaf_counts=None, leaf_lists=None):
         """
         Returns an iterator over the trees in this tree sequence. Each value
         returned in this iterator is an instance of
@@ -2380,6 +2408,16 @@ class TreeSequence(object):
         :return: An iterator over the sparse trees in this tree sequence.
         :rtype: iter
         """
+        # tracked_leaves, leaf_counts and leaf_lists are deprecated aliases
+        # for tracked_samples, sample_counts and sample_lists respectively.
+        # These are left over from an older version of the API when leaves
+        # and samples were synonymous.
+        if tracked_leaves is not None:
+            tracked_samples = tracked_leaves
+        if leaf_counts is not None:
+            sample_counts = leaf_counts
+        if leaf_lists is not None:
+            sample_lists = leaf_lists
         flags = 0
         if sample_counts:
             flags |= _msprime.SAMPLE_COUNTS

@@ -908,6 +908,35 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             self.verify_tracked_samples(ts)
 
+    def test_deprecated_sample_aliases(self):
+        for ts in get_example_tree_sequences():
+            # Ensure that we get the same results from the various combinations
+            # of leaf_lists, sample_lists etc.
+            samples = list(ts.samples())[:2]
+            # tracked leaves/samples
+            trees_new = ts.trees(tracked_samples=samples)
+            trees_old = ts.trees(tracked_leaves=samples)
+            for t_new, t_old in zip(trees_new, trees_old):
+                for u in t_new.nodes():
+                    self.assertEqual(
+                        t_new.num_tracked_samples(u), t_old.get_num_tracked_leaves(u))
+            for on in [True, False]:
+                # sample/leaf counts
+                trees_new = ts.trees(sample_counts=on)
+                trees_old = ts.trees(leaf_counts=on)
+                for t_new, t_old in zip(trees_new, trees_old):
+                    for u in t_new.nodes():
+                        self.assertEqual(t_new.num_samples(u), t_old.get_num_leaves(u))
+                        self.assertEqual(
+                            list(t_new.samples(u)), list(t_old.get_leaves(u)))
+                trees_new = ts.trees(sample_lists=on)
+                trees_old = ts.trees(leaf_lists=on)
+                for t_new, t_old in zip(trees_new, trees_old):
+                    for u in t_new.nodes():
+                        self.assertEqual(t_new.num_samples(u), t_old.get_num_leaves(u))
+                        self.assertEqual(
+                            list(t_new.samples(u)), list(t_old.get_leaves(u)))
+
     def verify_samples(self, ts):
         # We should get the same list of samples if we use the low-level
         # sample lists or a simple traversal.
