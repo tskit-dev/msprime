@@ -4872,6 +4872,7 @@ test_sparse_tree_errors(void)
         ret = tree_sequence_get_node(&ts, u, &node);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
         CU_ASSERT(!tree_sequence_is_sample(&ts, u));
+        CU_ASSERT(!sparse_tree_is_sample(&t, u));
     }
 
     tracked_samples[0] = 0;
@@ -5127,6 +5128,7 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
             if (u == tail) {
                 break;
             }
+            CU_ASSERT_TRUE(sparse_tree_is_sample(&tree, u->node));
             u = u->next;
         }
         CU_ASSERT_EQUAL(tests[j].count, k);
@@ -5162,6 +5164,7 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
             if (u == tail) {
                 break;
             }
+            CU_ASSERT_TRUE(sparse_tree_is_sample(&tree, u->node));
             u = u->next;
         }
         CU_ASSERT_EQUAL(tests[j].count, k);

@@ -146,7 +146,7 @@ def sparse_tree_to_newick(st, precision, Ne):
 
 
 def _build_newick(node, root, tree, branch_lengths):
-    if tree.is_sample(node):
+    if tree.is_leaf(node):
         s = "{0}:{1}".format(node + 1, branch_lengths[node])
     else:
         c1, c2 = tree.get_children(node)
@@ -1410,11 +1410,11 @@ class TestSparseTree(HighLevelTestCase):
                 stack = [u]
                 while len(stack) > 0:
                     v = stack.pop()
+                    if t.is_sample(v):
+                        yield v
                     if t.is_internal(v):
                         for c in reversed(t.get_children(v)):
                             stack.append(c)
-                    else:
-                        yield v
             for u in t.nodes():
                 l1 = list(t.samples(u))
                 l2 = list(test_func(t, u))

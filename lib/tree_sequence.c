@@ -3056,6 +3056,11 @@ sparse_tree_get_root(sparse_tree_t *self, node_id_t *root)
     return 0;
 }
 
+bool
+sparse_tree_is_sample(sparse_tree_t *self, node_id_t u)
+{
+    return tree_sequence_is_sample(self->tree_sequence, u);
+}
 
 int WARN_UNUSED
 sparse_tree_get_parent(sparse_tree_t *self, node_id_t u, node_id_t *parent)

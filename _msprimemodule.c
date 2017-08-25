@@ -4366,6 +4366,20 @@ out:
 }
 
 static PyObject *
+SparseTree_is_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", sparse_tree_is_sample(self->sparse_tree, (node_id_t) node));
+out:
+    return ret;
+}
+
+static PyObject *
 SparseTree_get_parent(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
@@ -4560,6 +4574,8 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the value of the flags variable." },
     {"get_num_sites", (PyCFunction) SparseTree_get_num_sites, METH_NOARGS,
             "Returns the number of sites on this tree." },
+    {"is_sample", (PyCFunction) SparseTree_is_sample, METH_VARARGS,
+            "Returns True if the specified node is a sample." },
     {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
             "Returns the parent of node u" },
     {"get_time", (PyCFunction) SparseTree_get_time, METH_VARARGS,

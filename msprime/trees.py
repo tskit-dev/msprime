@@ -712,24 +712,36 @@ class SparseTree(object):
 
     def is_internal(self, u):
         """
-        Returns True if the specified node is not a sample.
+        Returns True if the specified node is not a leaf. A node is internal
+        if it has one or more children in the current tree.
 
         :param int u: The node of interest.
-        :return: True if u is not a sample node.
+        :return: True if u is not a leaf node.
         :rtype: bool
         """
-        return not self.is_sample(u)
+        return not self.is_leaf(u)
+
+    def is_leaf(self, u):
+        """
+        Returns True if the specified node is a leaf. A node :math:`u` is a
+        leaf if it has zero children.
+
+        :param int u: The node of interest.
+        :return: True if u is a leaf node.
+        :rtype: bool
+        """
+        return len(self.children(u)) == 0
 
     def is_sample(self, u):
         """
         Returns True if the specified node is a sample. A node :math:`u` is a
-        sample if it has zero children.
+        sample if it has been marked as a sample in the parent tree sequence.
 
         :param int u: The node of interest.
-        :return: True if u is a sample node.
+        :return: True if u is a sample.
         :rtype: bool
         """
-        return len(self.children(u)) == 0
+        return self._ll_sparse_tree.is_sample(u)
 
     @property
     def num_nodes(self):
@@ -901,6 +913,19 @@ class SparseTree(object):
                 yield DeprecatedMutation(
                     position=site.position, node=mutation.node, index=site.index)
 
+    def leaves(self, u):
+        """
+        Returns an iterator over all the leaves in this tree that are
+        underneath the specified node.
+
+        :param int u: The node of interest.
+        :return: An iterator over all leaves in the subtree rooted at u.
+        :rtype: iterator
+        """
+        for v in self.nodes(u):
+            if self.is_leaf(v):
+                yield v
+
     def _sample_generator(self, u):
         for v in self.nodes(u):
             if self.is_sample(v):
@@ -908,8 +933,9 @@ class SparseTree(object):
 
     def samples(self, u):
         """
-        Returns an iterator over all the samples in this tree underneath
-        the specified node.
+        Returns an iterator over all the samples in this tree that are
+        underneath the specified node. If u is a sample, it is included in the
+        returned iterator.
 
         If the :meth:`.TreeSequence.trees` method is called with
         ``sample_lists=True``, this method uses an efficient algorithm to find
@@ -930,7 +956,7 @@ class SparseTree(object):
     def get_num_samples(self, u):
         """
         Returns the number of samples in this tree underneath the specified
-        node.
+        node (including the node itself).
 
         If the :meth:`.TreeSequence.trees` method is called with
         ``sample_counts=True`` this method is a constant time operation. If not,

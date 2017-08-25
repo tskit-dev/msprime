@@ -835,6 +835,7 @@ int sparse_tree_set_tracked_samples(sparse_tree_t *self,
 int sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
         node_list_t *head, node_list_t *tail);
 int sparse_tree_get_root(sparse_tree_t *self, node_id_t *root);
+bool sparse_tree_is_sample(sparse_tree_t *self, node_id_t u);
 int sparse_tree_get_parent(sparse_tree_t *self, node_id_t u, node_id_t *parent);
 int sparse_tree_get_children(sparse_tree_t *self, node_id_t u,
         size_t *num_children, node_id_t **children);
