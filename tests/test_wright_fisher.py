@@ -154,6 +154,7 @@ class TestSimulation(unittest.TestCase):
     """
     random_seed = 5678
 
+    @unittest.skip("Need leaves iterator")
     def test_non_overlapping_generations(self):
         tables = wf_sim(N=10, ngens=10, survival=0.0, seed=self.random_seed)
         self.assertGreater(tables.nodes.num_rows, 0)

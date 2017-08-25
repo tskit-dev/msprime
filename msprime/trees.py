@@ -473,7 +473,7 @@ class TreeDrawer(object):
         for u in tree.nodes():
             scaled_t = tree.get_time(u) * self._y_scale
             self._y_coords[u] = height - scaled_t - y_padding
-        self._leaf_x = 1
+        self._sample_x = 1
         self._assign_x_coordinates(self._tree.get_root())
         self._mutations = []
         node_mutations = collections.defaultdict(list)
@@ -505,7 +505,7 @@ class TreeDrawer(object):
             dwg.add(dwg.circle(center=x, r=3))
             dx = [0]
             dy = None
-            if self._tree.is_leaf(u):
+            if self._tree.is_sample(u):
                 dy = [20]
             elif v == msprime.NULL_NODE:
                 dy = [-5]
@@ -513,7 +513,7 @@ class TreeDrawer(object):
                 dx = [-10]
                 dy = [-5]
             condition = (
-                (self._tree.is_leaf(u) and self._show_leaf_node_labels) or
+                (self._tree.is_sample(u) and self._show_leaf_node_labels) or
                 (self._tree.is_internal(u) and self._show_internal_node_labels))
             if condition:
                 labels.add(dwg.text(str(u), x, dx=dx, dy=dy))
@@ -550,8 +550,8 @@ class TreeDrawer(object):
             b = max(coords)
             self._x_coords[node] = (a + (b - a) / 2)
         else:
-            self._x_coords[node] = self._leaf_x * self._x_scale
-            self._leaf_x += 1
+            self._x_coords[node] = self._sample_x * self._x_scale
+            self._sample_x += 1
 
 
 # TODO:
@@ -559,11 +559,11 @@ class TreeDrawer(object):
 class SparseTree(object):
     """
     A SparseTree is a single tree in a :class:`.TreeSequence`. In a sparse tree
-    for a sample of size :math:`n`, the leaves are nodes :math:`0` to :math:`n
+    for a sample of size :math:`n`, the samples are nodes :math:`0` to :math:`n
     - 1` inclusive and internal nodes are integers :math:`\geq n`. The value of
     these nodes is strictly increasing as we ascend the tree and the root of
     the tree is the node with the largest value that is reachable from  the
-    leaves. Each node in the tree has a parent which is obtained using the
+    samples. Each node in the tree has a parent which is obtained using the
     :meth:`.get_parent` method. The parent of the root node is the
     :const:`.NULL_NODE`, :math:`-1`. Similarly, each internal node has a
     pair of children, which are obtained using the :meth:`.get_children`
@@ -669,7 +669,7 @@ class SparseTree(object):
         """
         Returns the children of the specified node as a tuple :math:`(v, w)`.
         For internal nodes, this tuple is always in sorted order such that
-        :math:`v < w`. If u is a leaf or is not a node in the current tree,
+        :math:`v < w`. If u is a sample or is not a node in the current tree,
         return the tuple (:const:`.NULL_NODE`, :const:`.NULL_NODE`).
 
         :param int u: The node of interest.
@@ -684,7 +684,7 @@ class SparseTree(object):
     def get_time(self, u):
         """
         Returns the time of the specified node in generations. Returns 0 if u
-        is a leaf or is not a node in the current tree.
+        is a sample or is not a node in the current tree.
 
         :param int u: The node of interest.
         :return: The time of u.
@@ -697,7 +697,7 @@ class SparseTree(object):
 
     def get_population(self, u):
         """
-        Returns the population associated with the specified node. For leaf
+        Returns the population associated with the specified node. For sample
         nodes this is the population of the sample, and for internal nodes this
         is the population where the corresponding coalescence occured. If the
         specified node is not a member of this tree or population level
@@ -712,21 +712,21 @@ class SparseTree(object):
 
     def is_internal(self, u):
         """
-        Returns True if the specified node is not a leaf.
+        Returns True if the specified node is not a sample.
 
         :param int u: The node of interest.
-        :return: True if u is not a leaf node.
+        :return: True if u is not a sample node.
         :rtype: bool
         """
-        return not self.is_leaf(u)
+        return not self.is_sample(u)
 
-    def is_leaf(self, u):
+    def is_sample(self, u):
         """
-        Returns True if the specified node is a leaf. A node :math:`u` is a
-        leaf if it has zero children.
+        Returns True if the specified node is a sample. A node :math:`u` is a
+        sample if it has zero children.
 
         :param int u: The node of interest.
-        :return: True if u is a leaf node.
+        :return: True if u is a sample node.
         :rtype: bool
         """
         return len(self.children(u)) == 0
@@ -808,10 +808,10 @@ class SparseTree(object):
 
     def get_sample_size(self):
         """
-        Returns the sample size for this tree. This is the number of leaf
+        Returns the sample size for this tree. This is the number of sample
         nodes in the tree.
 
-        :return: The number of leaf nodes in the tree.
+        :return: The number of sample nodes in the tree.
         :rtype: int
         """
         return self._ll_sparse_tree.get_sample_size()
@@ -901,68 +901,68 @@ class SparseTree(object):
                 yield DeprecatedMutation(
                     position=site.position, node=mutation.node, index=site.index)
 
-    def _leaf_generator(self, u):
+    def _sample_generator(self, u):
         for v in self.nodes(u):
-            if self.is_leaf(v):
+            if self.is_sample(v):
                 yield v
 
-    def leaves(self, u):
+    def samples(self, u):
         """
-        Returns an iterator over all the leaves in this tree underneath
+        Returns an iterator over all the samples in this tree underneath
         the specified node.
 
         If the :meth:`.TreeSequence.trees` method is called with
-        ``leaf_lists=True``, this method uses an efficient algorithm to find
-        the leaves. If not, a simple traversal based method is used.
+        ``sample_lists=True``, this method uses an efficient algorithm to find
+        the samples. If not, a simple traversal based method is used.
 
         :param int u: The node of interest.
-        :return: An iterator over all leaves in the subtree rooted at u.
+        :return: An iterator over all samples in the subtree rooted at u.
         :rtype: iterator
         """
-        if self._ll_sparse_tree.get_flags() & _msprime.LEAF_LISTS:
+        if self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_LISTS:
             return _msprime.LeafListIterator(self._ll_sparse_tree, u)
         else:
-            return self._leaf_generator(u)
+            return self._sample_generator(u)
 
-    def num_leaves(self, u):
-        return self.get_num_leaves(u)
+    def num_samples(self, u):
+        return self.get_num_samples(u)
 
-    def get_num_leaves(self, u):
+    def get_num_samples(self, u):
         """
-        Returns the number of leaves in this tree underneath the specified
+        Returns the number of samples in this tree underneath the specified
         node.
 
         If the :meth:`.TreeSequence.trees` method is called with
-        ``leaf_counts=True`` this method is a constant time operation. If not,
-        a slower traversal based algorithm is used to count the leaves.
+        ``sample_counts=True`` this method is a constant time operation. If not,
+        a slower traversal based algorithm is used to count the samples.
 
         :param int u: The node of interest.
-        :return: The number of leaves in the subtree rooted at u.
+        :return: The number of samples in the subtree rooted at u.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_num_leaves(u)
+        return self._ll_sparse_tree.get_num_samples(u)
 
-    def num_tracked_leaves(self, u):
-        return self.get_num_tracked_leaves(u)
+    def num_tracked_samples(self, u):
+        return self.get_num_tracked_samples(u)
 
-    def get_num_tracked_leaves(self, u):
+    def get_num_tracked_samples(self, u):
         """
-        Returns the number of leaves in the set specified in the
-        ``tracked_leaves`` parameter of the :meth:`.TreeSequence.trees` method
+        Returns the number of samples in the set specified in the
+        ``tracked_samples`` parameter of the :meth:`.TreeSequence.trees` method
         underneath the specified node. This is a constant time operation.
 
         :param int u: The node of interest.
-        :return: The number of leaves within the set of tracked leaves in
+        :return: The number of samples within the set of tracked samples in
             the subtree rooted at u.
         :rtype: int
         :raises RuntimeError: if the :meth:`.TreeSequence.trees`
-            method is not called with ``leaf_counts=True``.
+            method is not called with ``sample_counts=True``.
         """
-        if not (self._ll_sparse_tree.get_flags() & _msprime.LEAF_COUNTS):
+        if not (self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_COUNTS):
             raise RuntimeError(
-                "The get_num_tracked_leaves method is only supported "
-                "when leaf_counts=True.")
-        return self._ll_sparse_tree.get_num_tracked_leaves(u)
+                "The get_num_tracked_samples method is only supported "
+                "when sample_counts=True.")
+        return self._ll_sparse_tree.get_num_tracked_samples(u)
 
     def _preorder_traversal(self, u):
         stack = [u]
@@ -2087,9 +2087,9 @@ class TreeSequence(object):
     def get_sample_size(self):
         """
         Returns the sample size for this tree sequence. This is the number
-        of leaf nodes in each tree.
+        of sample nodes in each tree.
 
-        :return: The number of leaf nodes in the tree sequence.
+        :return: The number of sample nodes in the tree sequence.
         :rtype: int
         """
         return self._ll_tree_sequence.get_sample_size()
@@ -2246,7 +2246,7 @@ class TreeSequence(object):
         tuples, and these describe the records that must be applied to create
         the tree covering the current interval. These records are returned in
         time-increasing order, such that the records affecting the lowest parts
-        of the tree (i.e., closest to the leaves) are returned first.
+        of the tree (i.e., closest to the samples) are returned first.
 
         :return: An iterator over the diffs between adjacent trees in this
             tree sequence.
@@ -2305,23 +2305,23 @@ class TreeSequence(object):
         for t in self.trees():
             yield t.get_interval()[1]
 
-    def trees(self, tracked_leaves=None, leaf_counts=True, leaf_lists=False):
+    def trees(self, tracked_samples=None, sample_counts=True, sample_lists=False):
         """
         Returns an iterator over the trees in this tree sequence. Each value
         returned in this iterator is an instance of
         :class:`.SparseTree`.
 
-        The ``leaf_counts`` and ``leaf_lists`` parameters control the
-        features that are enabled for the resulting trees. If ``leaf_counts``
-        is True, then it is possible to count the number of leaves underneath
-        a particular node in constant time using the :meth:`.get_num_leaves`
-        method. If ``leaf_lists`` is True a more efficient algorithm is
-        used in the :meth:`.SparseTree.leaves` method.
+        The ``sample_counts`` and ``sample_lists`` parameters control the
+        features that are enabled for the resulting trees. If ``sample_counts``
+        is True, then it is possible to count the number of samples underneath
+        a particular node in constant time using the :meth:`.get_num_samples`
+        method. If ``sample_lists`` is True a more efficient algorithm is
+        used in the :meth:`.SparseTree.samples` method.
 
-        The ``tracked_leaves`` parameter can be used to efficiently count the
-        number of leaves in a given set that exist in a particular subtree
-        using the :meth:`.SparseTree.get_num_tracked_leaves` method. It is an
-        error to use the ``tracked_leaves`` parameter when the ``leaf_counts``
+        The ``tracked_samples`` parameter can be used to efficiently count the
+        number of samples in a given set that exist in a particular subtree
+        using the :meth:`.SparseTree.get_num_tracked_samples` method. It is an
+        error to use the ``tracked_samples`` parameter when the ``sample_counts``
         flag is False.
 
         :warning: Do not store the results of this iterator in a list!
@@ -2329,28 +2329,28 @@ class TreeSequence(object):
            for every tree returned which will most likely lead to unexpected
            behaviour.
 
-        :param list tracked_leaves: The list of leaves to be tracked and
-            counted using the :meth:`.SparseTree.get_num_tracked_leaves`
+        :param list tracked_samples: The list of samples to be tracked and
+            counted using the :meth:`.SparseTree.get_num_tracked_samples`
             method.
-        :param bool leaf_counts: If True, support constant time leaf counts
-            via the :meth:`.SparseTree.get_num_leaves` and
-            :meth:`.SparseTree.get_num_tracked_leaves` methods.
-        :param bool leaf_lists: If True, provide more efficient access
-            to the leaves beneath a give node using the
-            :meth:`.SparseTree.leaves` method.
+        :param bool sample_counts: If True, support constant time sample counts
+            via the :meth:`.SparseTree.get_num_samples` and
+            :meth:`.SparseTree.get_num_tracked_samples` methods.
+        :param bool sample_lists: If True, provide more efficient access
+            to the samples beneath a give node using the
+            :meth:`.SparseTree.samples` method.
         :return: An iterator over the sparse trees in this tree sequence.
         :rtype: iter
         """
         flags = 0
-        if leaf_counts:
-            flags |= _msprime.LEAF_COUNTS
-        elif tracked_leaves is not None:
-            raise ValueError("Cannot set tracked_leaves without leaf_counts")
-        if leaf_lists:
-            flags |= _msprime.LEAF_LISTS
+        if sample_counts:
+            flags |= _msprime.SAMPLE_COUNTS
+        elif tracked_samples is not None:
+            raise ValueError("Cannot set tracked_samples without sample_counts")
+        if sample_lists:
+            flags |= _msprime.SAMPLE_LISTS
         kwargs = {"flags": flags}
-        if tracked_leaves is not None:
-            kwargs["tracked_leaves"] = tracked_leaves
+        if tracked_samples is not None:
+            kwargs["tracked_samples"] = tracked_samples
         ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence, **kwargs)
         iterator = _msprime.SparseTreeIterator(ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree)
@@ -2451,12 +2451,12 @@ class TreeSequence(object):
         :rtype: float
         """
         if samples is None:
-            leaves = self.samples()
+            samples = self.samples()
         else:
-            leaves = list(samples)
-        return self._ll_tree_sequence.get_pairwise_diversity(leaves)
+            samples = list(samples)
+        return self._ll_tree_sequence.get_pairwise_diversity(samples)
 
-    def mean_pairwise_tmrca(self, leaf_sets, windows):
+    def mean_pairwise_tmrca(self, sample_sets, windows):
         """
         Finds the mean time to most recent common ancestor between pairs of samples
         as described in mean_pairwise_tmrca_matrix (which uses this function).
@@ -2465,32 +2465,32 @@ class TreeSequence(object):
 
         >>> k=0
         >>> for w in range(len(windows)-1):
-        >>>     for i in range(len(leaf_sets)):
-        >>>         for j in range(i,len(leaf_sets)):
+        >>>     for i in range(len(sample_sets)):
+        >>>         for j in range(i,len(sample_sets)):
         >>>             trmca[i,j] = tmrca[j,i] = x[w][k]
         >>>             k += 1
 
         will fill out the matrix of mean TMRCAs in the `i`th window between (and
-        within) each group of leaves in `leaf_sets` in the matrix `tmrca`.
-        Alternatively, if `names` labels the leaf_sets, the output labels are:
+        within) each group of samples in `sample_sets` in the matrix `tmrca`.
+        Alternatively, if `names` labels the sample_sets, the output labels are:
 
         >>> [".".join(names[i],names[j]) for i in range(len(names))
         >>>         for j in range(i,len(names))]
 
-        :param list leaf_sets: A list of sets of IDs of leaves.
+        :param list sample_sets: A list of sets of IDs of samples.
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
         :return: A list of the upper triangle of mean TMRCA values in row-major
             order, including the diagonal.
         """
-        ns = len(leaf_sets)
-        n = [len(x) for x in leaf_sets]
+        ns = len(sample_sets)
+        n = [len(x) for x in sample_sets]
 
         def f(x):
             return [float(x[i]*(n[j]-x[j]) + (n[i]-x[i])*x[j])
                     for i in range(ns) for j in range(i, ns)]
 
-        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         # corrects the diagonal for self comparisons
         # and note factor of two for tree length -> real time
@@ -2509,29 +2509,29 @@ class TreeSequence(object):
 
         return out
 
-    def mean_pairwise_tmrca_matrix(self, leaf_sets, windows):
+    def mean_pairwise_tmrca_matrix(self, sample_sets, windows):
         """
         Finds the mean time to most recent common ancestor between pairs of
-        samples from each set of leaves and in each window. Returns a numpy
-        array indexed by (window, leaf_set, leaf_set).  Diagonal entries are
+        samples from each set of samples and in each window. Returns a numpy
+        array indexed by (window, sample_set, sample_set).  Diagonal entries are
         corrected so that the value gives the mean pairwise TMRCA for *distinct*
-        samples, but it is not checked whether the leaf_sets are disjoint
+        samples, but it is not checked whether the sample_sets are disjoint
         (so offdiagonals are not corrected).  For this reason, if an element of
-        `leaf_sets` has only one element, the corresponding diagonal will be
+        `sample_sets` has only one element, the corresponding diagonal will be
         NaN.
 
         The mean TMRCA between two samples is defined to be one-half the length
         of all edges separating them in the tree at a uniformly chosen position
         on the genome.
 
-        :param list leaf_sets: A list of sets of IDs of leaves.
+        :param list sample_sets: A list of sets of IDs of samples.
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
         :return: A list of the upper triangle of mean TMRCA values in row-major
             order, including the diagonal.
         """
-        x = self.mean_pairwise_tmrca(leaf_sets, windows)
-        ns = len(leaf_sets)
+        x = self.mean_pairwise_tmrca(sample_sets, windows)
+        ns = len(sample_sets)
         nw = len(windows) - 1
         A = np.ones((nw, ns, ns), dtype=float)
         for w in range(nw):
@@ -2542,36 +2542,36 @@ class TreeSequence(object):
                     k += 1
         return A
 
-    def Y_vector(self, leaf_sets, windows, indices):
+    def Y_vector(self, sample_sets, windows, indices):
         """
-        Finds the 'Y' statistic between three leaf_sets.  The leaf_sets should
+        Finds the 'Y' statistic between three sample_sets.  The sample_sets should
         be disjoint (the computation works fine, but if not the result depends
-        on the amount of overlap).  If the leaf_sets are A, B, and C, then the
+        on the amount of overlap).  If the sample_sets are A, B, and C, then the
         result gives the mean total length of any edge in the tree between a
         and the most recent common ancestor of b and c, where a, b, and c are
         random draws from A, B, and C respectively.
 
         The result is, for each window, a vector whose k-th entry is
-            Y(leaf_sets[indices[k][0]], leaf_sets[indices[k][1]],
-              leaf_sets[indices[k][2]]).
+            Y(sample_sets[indices[k][0]], sample_sets[indices[k][1]],
+              sample_sets[indices[k][2]]).
 
-        :param list leaf_sets: A list of *three* sets of IDs of leaves: (A,B,C).
+        :param list sample_sets: A list of *three* sets of IDs of samples: (A,B,C).
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
-        :param list indices: A list of triples of indices of leaf_sets.
+        :param list indices: A list of triples of indices of sample_sets.
         :return: A list of numeric vectors of length equal to the length of
             indices, computed separately on each window.
         """
         for u in indices:
             if not len(u) == 3:
                 raise ValueError("All indices should be of length 3.")
-        n = [len(x) for x in leaf_sets]
+        n = [len(x) for x in sample_sets]
 
         def f(x):
             return [float(x[i] * (n[j] - x[j]) * (n[k] - x[k])
                           + (n[i] - x[i]) * x[j] * x[k]) for i, j, k in indices]
 
-        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
@@ -2581,46 +2581,46 @@ class TreeSequence(object):
 
         return out
 
-    def Y(self, leaf_sets, windows):
+    def Y(self, sample_sets, windows):
         """
-        Finds the 'Y' statistic between the three groups of leaves
-        in leaf_sets. The leaf_sets should be disjoint (the computation works
+        Finds the 'Y' statistic between the three groups of samples
+        in sample_sets. The sample_sets should be disjoint (the computation works
         fine, but if not the result depends on the amount of overlap).
-        If the leaf_sets are A, B, and C, then the result gives the mean total
+        If the sample_sets are A, B, and C, then the result gives the mean total
         length of any edge in the tree between a and the most recent common
         ancestor of b and c, where a, b, and c are random draws from A, B, and
         C respectively.
 
-        :param list leaf_sets: A list of *three* sets of IDs of leaves: (A,B,C).
+        :param list sample_sets: A list of *three* sets of IDs of samples: (A,B,C).
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
         :return: A list of numeric values computed separately on each window.
         """
-        return self.Y_vector(leaf_sets, windows, indices=[(0, 1, 2)])
+        return self.Y_vector(sample_sets, windows, indices=[(0, 1, 2)])
 
-    def f4_vector(self, leaf_sets, windows, indices):
+    def f4_vector(self, sample_sets, windows, indices):
         """
         Finds the Patterson's f4 statistics between multiple subsets of four
-        groups of leaf_sets. The leaf_sets should be disjoint (the computation
+        groups of sample_sets. The sample_sets should be disjoint (the computation
         works fine, but if not the result depends on the amount of overlap).
 
-        :param list leaf_sets: A list of four sets of IDs of leaves: (A,B,C,D)
+        :param list sample_sets: A list of four sets of IDs of samples: (A,B,C,D)
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
-        :param list indices: A list of 4-tuples of indices of leaf_sets.
+        :param list indices: A list of 4-tuples of indices of sample_sets.
         :return: A list of values of f4(A,B;C,D) of length equal to the length of
             indices, computed separately on each window.
         """
         for u in indices:
             if not len(u) == 4:
                 raise ValueError("All tuples in indices should be of length 4.")
-        n = [len(x) for x in leaf_sets]
+        n = [len(x) for x in sample_sets]
 
         def f(x):
             return [float((x[i] * n[j] - x[j] * n[i]) * (x[k] * n[l] - x[l] * n[k]))
                     for i, j, k, l in indices]
 
-        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
@@ -2630,25 +2630,25 @@ class TreeSequence(object):
 
         return out
 
-    def f4(self, leaf_sets, windows):
+    def f4(self, sample_sets, windows):
         """
-        Finds the Patterson's f4 statistics between the four groups of leaves
-        in leaf_sets. The leaf_sets should be disjoint (the computation works
+        Finds the Patterson's f4 statistics between the four groups of samples
+        in sample_sets. The sample_sets should be disjoint (the computation works
         fine, but if not the result depends on the amount of overlap).
 
-        :param list leaf_sets: A list of four sets of IDs of leaves: (A,B,C,D)
+        :param list sample_sets: A list of four sets of IDs of samples: (A,B,C,D)
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
         :return: A list of values of f4(A,B;C,D) computed separately on each window.
         """
-        if not len(leaf_sets) == 4:
-            raise ValueError("leaf_sets should be of length 4.")
-        return self.f4_vector(leaf_sets, windows, indices=[(0, 1, 2, 3)])
+        if not len(sample_sets) == 4:
+            raise ValueError("sample_sets should be of length 4.")
+        return self.f4_vector(sample_sets, windows, indices=[(0, 1, 2, 3)])
 
-    def f3_vector(self, leaf_sets, windows, indices):
+    def f3_vector(self, sample_sets, windows, indices):
         """
         Finds the Patterson's f3 statistics between multiple subsets of three
-        groups of leaves in leaf_sets. The leaf_sets should be disjoint (the
+        groups of samples in sample_sets. The sample_sets should be disjoint (the
         computation works fine, but if not the result depends on the amount of
         overlap).
 
@@ -2656,16 +2656,16 @@ class TreeSequence(object):
 
         If A does not contain at least three samples, the result is NaN.
 
-        :param list leaf_sets: A list of sets of IDs of leaves.
+        :param list sample_sets: A list of sets of IDs of samples.
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
-        :param list indices: A list of triples of indices of leaf_sets.
+        :param list indices: A list of triples of indices of sample_sets.
         :return: A list of values of f3(A,B,C) computed separately on each window.
         """
         for u in indices:
             if not len(u) == 3:
                 raise ValueError("All tuples in indices should be of length 3.")
-        n = [len(x) for x in leaf_sets]
+        n = [len(x) for x in sample_sets]
 
         def f(x):
             return [float(x[i] * (x[i] - 1) * (n[j] - x[j]) * (n[k] - x[k])
@@ -2674,7 +2674,7 @@ class TreeSequence(object):
                           - (n[i] - x[i]) * x[i] * x[j] * (n[k] - x[k]))
                     for i, j, k in indices]
 
-        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         for w in range(len(windows)-1):
             for u in range(len(indices)):
@@ -2686,47 +2686,47 @@ class TreeSequence(object):
 
         return out
 
-    def f3(self, leaf_sets, windows):
+    def f3(self, sample_sets, windows):
         """
-        Finds the Patterson's f3 statistics between the three groups of leaves
-        in leaf_sets. The leaf_sets should be disjoint (the computation works
+        Finds the Patterson's f3 statistics between the three groups of samples
+        in sample_sets. The sample_sets should be disjoint (the computation works
         fine, but if not the result depends on the amount of overlap).
 
         f3(A;B,C) is f4(A,B;A,C) corrected to not include self comparisons.
 
-        :param list leaf_sets: A list of *three* sets of IDs of leaves: (A,B,C),
+        :param list sample_sets: A list of *three* sets of IDs of samples: (A,B,C),
             with the first set having at least two samples.
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
         :return: A list of values of f3(A,B,C) computed separately on each window.
         """
-        if not len(leaf_sets) == 3:
-            raise ValueError("leaf_sets should be of length 3.")
-        return self.f3_vector(leaf_sets, windows, indices=[(0, 1, 2)])
+        if not len(sample_sets) == 3:
+            raise ValueError("sample_sets should be of length 3.")
+        return self.f3_vector(sample_sets, windows, indices=[(0, 1, 2)])
 
-    def f2_vector(self, leaf_sets, windows, indices):
+    def f2_vector(self, sample_sets, windows, indices):
         """
         Finds the Patterson's f2 statistics between multiple subsets of pairs
-        of leaves in leaf_sets. The leaf_sets should be disjoint (the
+        of samples in sample_sets. The sample_sets should be disjoint (the
         computation works fine, but if not the result depends on the amount of
         overlap).
 
         f2(A;B) is f4(A,B;A,B) corrected to not include self comparisons.
 
-        :param list leaf_sets: A list of sets of IDs of leaves, each having at
+        :param list sample_sets: A list of sets of IDs of samples, each having at
             least two samples.
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
-        :param list indices: A list of pairs of indices of leaf_sets.
+        :param list indices: A list of pairs of indices of sample_sets.
         :return: A list of values of f2(A,C) computed separately on each window.
         """
         for u in indices:
             if not len(u) == 2:
                 raise ValueError("All tuples in indices should be of length 2.")
-        n = [len(x) for x in leaf_sets]
+        n = [len(x) for x in sample_sets]
         for xlen in n:
             if not xlen > 1:
-                raise ValueError("All leaf_sets must have at least two samples.")
+                raise ValueError("All sample_sets must have at least two samples.")
 
         def f(x):
             return [float(x[i] * (x[i] - 1) * (n[j] - x[j]) * (n[j] - x[j] - 1)
@@ -2735,7 +2735,7 @@ class TreeSequence(object):
                           - (n[i] - x[i]) * x[i] * x[j] * (n[j] - x[j]))
                     for i, j in indices]
 
-        out = self.branch_stats_vector(leaf_sets, weight_fun=f, windows=windows)
+        out = self.branch_stats_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         for w in range(len(windows)-1):
             for u in range(len(indices)):
@@ -2744,56 +2744,56 @@ class TreeSequence(object):
 
         return out
 
-    def f2(self, leaf_sets, windows):
+    def f2(self, sample_sets, windows):
         """
-        Finds the Patterson's f2 statistics between the three groups of leaves
-        in leaf_sets. The leaf_sets should be disjoint (the computation works
+        Finds the Patterson's f2 statistics between the three groups of samples
+        in sample_sets. The sample_sets should be disjoint (the computation works
         fine, but if not the result depends on the amount of overlap).
 
         f2(A;B) is f4(A,B;A,B) corrected to not include self comparisons.
 
-        :param list leaf_sets: A list of *two* sets of IDs of leaves: (A,B),
+        :param list sample_sets: A list of *two* sets of IDs of samples: (A,B),
             each having at least two samples.
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
         :return: A list of values of f2(A,B) computed separately on each window.
         """
-        if not len(leaf_sets) == 2:
-            raise ValueError("leaf_sets should be of length 2.")
-        return self.f2_vector(leaf_sets, windows, indices=[(0, 1)])
+        if not len(sample_sets) == 2:
+            raise ValueError("sample_sets should be of length 2.")
+        return self.f2_vector(sample_sets, windows, indices=[(0, 1)])
 
-    def branch_stats(self, leaf_sets, weight_fun):
+    def branch_stats(self, sample_sets, weight_fun):
         '''
-        Here leaf_sets is a list of lists of leaves, and weight_fun is a function
-        whose argument is a list of integers of the same length as leaf_sets
+        Here sample_sets is a list of lists of samples, and weight_fun is a function
+        whose argument is a list of integers of the same length as sample_sets
         that returns a boolean.  A branch in a tree is weighted by weight_fun(x),
-        where x[i] is the number of leaves in leaf_sets[i] below that
+        where x[i] is the number of samples in sample_sets[i] below that
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
         '''
-        out = self.branch_stats_vector(leaf_sets, lambda x: [weight_fun(x)])
+        out = self.branch_stats_vector(sample_sets, lambda x: [weight_fun(x)])
         assert len(out) == 1 and len(out[0]) == 1
         return out[0][0]
 
-    def branch_stats_windowed(self, leaf_sets, weight_fun, windows=None):
+    def branch_stats_windowed(self, sample_sets, weight_fun, windows=None):
         '''
-        Here leaf_sets is a list of lists of leaves, and weight_fun is a function
-        whose argument is a list of integers of the same length as leaf_sets
+        Here sample_sets is a list of lists of samples, and weight_fun is a function
+        whose argument is a list of integers of the same length as sample_sets
         that returns a boolean.  A branch in a tree is weighted by weight_fun(x),
-        where x[i] is the number of leaves in leaf_sets[i] below that
+        where x[i] is the number of samples in sample_sets[i] below that
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
         '''
-        out = self.branch_stats_vector(leaf_sets, lambda x: [weight_fun(x)], windows)
+        out = self.branch_stats_vector(sample_sets, lambda x: [weight_fun(x)], windows)
         assert len(out[0]) == 1
         return [x[0] for x in out]
 
-    def branch_stats_vector(self, leaf_sets, weight_fun, windows=None):
+    def branch_stats_vector(self, sample_sets, weight_fun, windows=None):
         '''
-        Here leaf_sets is a list of lists of leaves, and weight_fun is a function
-        whose argument is a list of integers of the same length as leaf_sets
+        Here sample_sets is a list of lists of samples, and weight_fun is a function
+        whose argument is a list of integers of the same length as sample_sets
         that returns a boolean.  A branch in a tree is weighted by weight_fun(x),
-        where x[i] is the number of leaves in leaf_sets[i] below that
+        where x[i] is the number of samples in sample_sets[i] below that
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
 
@@ -2802,13 +2802,13 @@ class TreeSequence(object):
         '''
         if windows is None:
             windows = (0, self.sequence_length)
-        for U in leaf_sets:
+        for U in sample_sets:
             if len(U) != len(set(U)):
                 raise ValueError(
-                    "elements of leaf_sets cannot contain repeated elements.")
+                    "elements of sample_sets cannot contain repeated elements.")
             for u in U:
                 if not self.node(u).is_sample():
-                    raise ValueError("Not all elements of leaf_sets are samples.")
+                    raise ValueError("Not all elements of sample_sets are samples.")
         num_windows = len(windows) - 1
         if windows[0] != 0.0:
             raise ValueError(
@@ -2819,14 +2819,14 @@ class TreeSequence(object):
             if windows[k + 1] <= windows[k]:
                 raise ValueError("Windows must be increasing.")
         # initialize
-        num_leaf_sets = len(leaf_sets)
-        n_out = len(weight_fun([0 for a in range(num_leaf_sets)]))
+        num_sample_sets = len(sample_sets)
+        n_out = len(weight_fun([0 for a in range(num_sample_sets)]))
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         L = [0.0 for j in range(n_out)]
-        # print("leaf_sets:", leaf_sets)
+        # print("sample_sets:", sample_sets)
         # print("n_out:",n_out)
         N = self.num_nodes
-        X = [[int(u in a) for a in leaf_sets] for u in range(N)]
+        X = [[int(u in a) for a in sample_sets] for u in range(N)]
         # we will essentially construct the tree
         pi = [-1 for j in range(N)]
         node_time = [0.0 for u in range(N)]
@@ -2841,11 +2841,11 @@ class TreeSequence(object):
                     # print("\t",X, "-->", L)
                     if sign == +1:
                         node_time[node] = time
-                    dx = [0 for k in range(num_leaf_sets)]
+                    dx = [0 for k in range(num_sample_sets)]
                     for child in children:
                         if sign == +1:
                             pi[child] = node
-                        for k in range(num_leaf_sets):
+                        for k in range(num_sample_sets):
                             dx[k] += sign * X[child][k]
                         w = weight_fun(X[child])
                         dt = (node_time[pi[child]] - node_time[child])
@@ -2856,7 +2856,7 @@ class TreeSequence(object):
                         if sign == -1:
                             pi[child] = -1
                     old_w = weight_fun(X[node])
-                    for k in range(num_leaf_sets):
+                    for k in range(num_sample_sets):
                         X[node][k] += dx[k]
                     if pi[node] != -1:
                         w = weight_fun(X[node])
@@ -2871,7 +2871,7 @@ class TreeSequence(object):
                         next_u = pi[u]
                         while u != -1:
                             old_w = weight_fun(X[u])
-                            for k in range(num_leaf_sets):
+                            for k in range(num_sample_sets):
                                 X[u][k] += dx[k]
                             # need to update X for the root,
                             # but the root does not have a branch length

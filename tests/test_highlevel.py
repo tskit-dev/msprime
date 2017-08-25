@@ -112,17 +112,17 @@ def get_pairwise_diversity(tree_sequence, samples=None):
     and should return identical results.
     """
     if samples is None:
-        tracked_leaves = tree_sequence.get_samples()
+        tracked_samples = tree_sequence.get_samples()
     else:
-        tracked_leaves = list(samples)
-    if len(tracked_leaves) < 2:
+        tracked_samples = list(samples)
+    if len(tracked_samples) < 2:
         raise ValueError("len(samples) must be >= 2")
     pi = 0
-    k = len(tracked_leaves)
+    k = len(tracked_samples)
     denom = k * (k - 1) / 2
-    for t in tree_sequence.trees(tracked_leaves=tracked_leaves):
+    for t in tree_sequence.trees(tracked_samples=tracked_samples):
         for mutation in t.mutations():
-            j = t.get_num_tracked_leaves(mutation.node)
+            j = t.get_num_tracked_samples(mutation.node)
             pi += j * (k - j) / denom
     return pi
 
@@ -146,7 +146,7 @@ def sparse_tree_to_newick(st, precision, Ne):
 
 
 def _build_newick(node, root, tree, branch_lengths):
-    if tree.is_leaf(node):
+    if tree.is_sample(node):
         s = "{0}:{1}".format(node + 1, branch_lengths[node])
     else:
         c1, c2 = tree.get_children(node)
@@ -190,9 +190,9 @@ def make_alternating_back_mutations(ts):
                 state[v] = state[u]
         del state[tree.root]
         # Ensure we have some variation in our samples.
-        s = sum(state[u] for u in tree.leaves(tree.root))
+        s = sum(state[u] for u in tree.samples(tree.root))
         if s == 0 or s == tree.sample_size:
-            del state[next(tree.leaves(tree.root))]
+            del state[next(tree.samples(tree.root))]
         site_mutations = sorted([(-tree.time(u), u) for u in state.keys()])
         for _, u in sorted(site_mutations):
             mutations.add_row(site, u, str(state[u]))
@@ -299,23 +299,23 @@ class HighLevelTestCase(tests.MsprimeTestCase):
                 self.assertEqual(st.get_time(j), 0)
                 for c in st.get_children(j):
                     self.assertEqual(c, msprime.NULL_NODE)
-        # To a top-down traversal, and make sure we meet all the leaves.
+        # To a top-down traversal, and make sure we meet all the samples.
         stack = [st.get_root()]
-        leaves = []
+        samples = []
         while len(stack) > 0:
             u = stack.pop()
             self.assertNotEqual(u, msprime.NULL_NODE)
-            if st.is_leaf(u):
-                leaves.append(u)
+            if st.is_sample(u):
+                samples.append(u)
                 self.assertEqual(len(st.get_children(u)), 0)
             else:
                 for c in reversed(st.get_children(u)):
                     stack.append(c)
-            # Check that we get the correct number of leaves at each
+            # Check that we get the correct number of samples at each
             # node.
-            self.assertEqual(st.get_num_leaves(u), len(list(st.leaves(u))))
-            self.assertEqual(st.get_num_tracked_leaves(u), 0)
-        self.assertEqual(sorted(leaves), list(range(st.get_sample_size())))
+            self.assertEqual(st.get_num_samples(u), len(list(st.samples(u))))
+            self.assertEqual(st.get_num_tracked_samples(u), 0)
+        self.assertEqual(sorted(samples), list(range(st.get_sample_size())))
         # Check the parent dict
         pi = st.get_parent_dict()
         self.assertLessEqual(len(pi), 2 * st.get_sample_size() - 1)
@@ -593,7 +593,7 @@ class TestVariantGenerator(HighLevelTestCase):
         variants = list(ts.variants())
         self.assertEqual(len(variants), 0)
 
-    def test_recurrent_mutations_over_leaves(self):
+    def test_recurrent_mutations_over_samples(self):
         ts = self.get_tree_sequence()
         num_sites = 5
         sites = [
@@ -621,12 +621,12 @@ class TestVariantGenerator(HighLevelTestCase):
         ts = self.get_tree_sequence()
         tree = next(ts.trees())
         for u in tree.nodes():
-            for leaf in tree.leaves(u):
-                if leaf != u:
+            for sample in tree.samples(u):
+                if sample != u:
                     site = msprime.Site(
                         index=0, ancestral_state="0", position=0, mutations=[
                             msprime.Mutation(site=0, derived_state="1", node=u),
-                            msprime.Mutation(site=0, derived_state="1", node=leaf)])
+                            msprime.Mutation(site=0, derived_state="1", node=sample)])
             ts_new = ts.copy(sites=[site])
             self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
 
@@ -694,7 +694,7 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         for ts in get_bottleneck_examples():
             self.verify_tree_sequence(ts)
 
-    def test_recurrent_mutations_over_leaves(self):
+    def test_recurrent_mutations_over_samples(self):
         for ts in get_bottleneck_examples():
             num_sites = 5
             sites = [
@@ -850,79 +850,79 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             self.verify_tree_diffs(ts)
 
-    def verify_tracked_leaves(self, ts):
+    def verify_tracked_samples(self, ts):
         # Should be empty list by default.
         for tree in ts.trees():
             for u in tree.nodes():
-                self.assertEqual(tree.get_num_tracked_leaves(u), 0)
-        tracked_leaves = [0, 1]
-        for tree in ts.trees(tracked_leaves):
+                self.assertEqual(tree.get_num_tracked_samples(u), 0)
+        tracked_samples = [0, 1]
+        for tree in ts.trees(tracked_samples):
             nu = [0 for j in range(ts.get_num_nodes())]
-            for j in tracked_leaves:
+            for j in tracked_samples:
                 u = j
                 while u != msprime.NULL_NODE:
                     nu[u] += 1
                     u = tree.get_parent(u)
             for u, count in enumerate(nu):
-                self.assertEqual(tree.get_num_tracked_leaves(u), count)
+                self.assertEqual(tree.get_num_tracked_samples(u), count)
 
-    def test_tracked_leaves(self):
+    def test_tracked_samples(self):
         for ts in get_example_tree_sequences():
-            self.verify_tracked_leaves(ts)
+            self.verify_tracked_samples(ts)
 
-    def verify_leaves(self, ts):
-        # We should get the same list of leaves if we use the low-level
-        # leaf lists or a simple traversal.
-        leaves1 = []
-        for t in ts.trees(leaf_lists=False):
-            leaves1.append(list(t.leaves(t.root)))
-        leaves2 = []
-        for t in ts.trees(leaf_lists=True):
-            leaves2.append(list(t.leaves(t.root)))
-        self.assertEqual(leaves1, leaves2)
+    def verify_samples(self, ts):
+        # We should get the same list of samples if we use the low-level
+        # sample lists or a simple traversal.
+        samples1 = []
+        for t in ts.trees(sample_lists=False):
+            samples1.append(list(t.samples(t.root)))
+        samples2 = []
+        for t in ts.trees(sample_lists=True):
+            samples2.append(list(t.samples(t.root)))
+        self.assertEqual(samples1, samples2)
 
-    def test_leaves(self):
+    def test_samples(self):
         for ts in get_example_tree_sequences():
-            self.verify_leaves(ts)
+            self.verify_samples(ts)
 
     def test_trees_interface(self):
         ts = list(get_example_tree_sequences())[0]
-        # The defaults should make sense and count leaves.
-        # get_num_tracked_leaves
+        # The defaults should make sense and count samples.
+        # get_num_tracked_samples
         for t in ts.trees():
-            self.assertEqual(t.get_num_leaves(0), 1)
-            self.assertEqual(t.get_num_tracked_leaves(0), 0)
-            self.assertEqual(list(t.leaves(0)), [0])
+            self.assertEqual(t.get_num_samples(0), 1)
+            self.assertEqual(t.get_num_tracked_samples(0), 0)
+            self.assertEqual(list(t.samples(0)), [0])
 
-        for t in ts.trees(leaf_counts=False):
-            self.assertEqual(t.get_num_leaves(0), 1)
-            self.assertRaises(RuntimeError, t.get_num_tracked_leaves, 0)
-            self.assertEqual(list(t.leaves(0)), [0])
+        for t in ts.trees(sample_counts=False):
+            self.assertEqual(t.get_num_samples(0), 1)
+            self.assertRaises(RuntimeError, t.get_num_tracked_samples, 0)
+            self.assertEqual(list(t.samples(0)), [0])
 
-        for t in ts.trees(leaf_counts=True):
-            self.assertEqual(t.get_num_leaves(0), 1)
-            self.assertEqual(t.get_num_tracked_leaves(0), 0)
-            self.assertEqual(list(t.leaves(0)), [0])
+        for t in ts.trees(sample_counts=True):
+            self.assertEqual(t.get_num_samples(0), 1)
+            self.assertEqual(t.get_num_tracked_samples(0), 0)
+            self.assertEqual(list(t.samples(0)), [0])
 
-        for t in ts.trees(leaf_counts=True, tracked_leaves=[0]):
-            self.assertEqual(t.get_num_leaves(0), 1)
-            self.assertEqual(t.get_num_tracked_leaves(0), 1)
-            self.assertEqual(list(t.leaves(0)), [0])
+        for t in ts.trees(sample_counts=True, tracked_samples=[0]):
+            self.assertEqual(t.get_num_samples(0), 1)
+            self.assertEqual(t.get_num_tracked_samples(0), 1)
+            self.assertEqual(list(t.samples(0)), [0])
 
-        for t in ts.trees(leaf_lists=True, leaf_counts=True):
-            self.assertEqual(t.get_num_leaves(0), 1)
-            self.assertEqual(t.get_num_tracked_leaves(0), 0)
-            self.assertEqual(list(t.leaves(0)), [0])
+        for t in ts.trees(sample_lists=True, sample_counts=True):
+            self.assertEqual(t.get_num_samples(0), 1)
+            self.assertEqual(t.get_num_tracked_samples(0), 0)
+            self.assertEqual(list(t.samples(0)), [0])
 
-        for t in ts.trees(leaf_lists=True, leaf_counts=False):
-            self.assertEqual(t.get_num_leaves(0), 1)
-            self.assertRaises(RuntimeError, t.get_num_tracked_leaves, 0)
-            self.assertEqual(list(t.leaves(0)), [0])
+        for t in ts.trees(sample_lists=True, sample_counts=False):
+            self.assertEqual(t.get_num_samples(0), 1)
+            self.assertRaises(RuntimeError, t.get_num_tracked_samples, 0)
+            self.assertEqual(list(t.samples(0)), [0])
 
         # This is a bit weird as we don't seem to actually execute the
         # method until it is iterated.
         self.assertRaises(
-            ValueError, list, ts.trees(leaf_counts=False, tracked_leaves=[0]))
+            ValueError, list, ts.trees(sample_counts=False, tracked_samples=[0]))
 
     @unittest.skip("pi on recurrent mutations")
     def test_get_pairwise_diversity(self):
@@ -1001,26 +1001,27 @@ class TestTreeSequence(HighLevelTestCase):
         # Get the allele counts within the subset.
         allele_counts = {mut.position: 0 for mut in ts.mutations()}
         sample_map = {k: j for j, k in enumerate(sample)}
-        leaves = {mut.position: [] for mut in ts.mutations()}
-        for tree in ts.trees(tracked_leaves=sample):
+        samples = {mut.position: [] for mut in ts.mutations()}
+        for tree in ts.trees(tracked_samples=sample):
             for site in tree.sites():
                 for mut in site.mutations:
-                    allele_counts[site.position] += tree.get_num_tracked_leaves(mut.node)
-                    for u in tree.leaves(mut.node):
+                    allele_counts[site.position] += tree.get_num_tracked_samples(
+                        mut.node)
+                    for u in tree.samples(mut.node):
                         if u in sample_map:
-                            leaves[site.position].append(sample_map[u])
+                            samples[site.position].append(sample_map[u])
         new_ts = ts.simplify(sample)
         self.assertLessEqual(new_ts.get_num_sites(), ts.get_num_sites())
         self.assertLessEqual(new_ts.get_num_mutations(), ts.get_num_mutations())
         for tree in new_ts.trees():
             for site in tree.sites():
-                leaf_count = 0
-                new_leaves = []
+                sample_count = 0
+                new_samples = []
                 for mut in site.mutations:
-                    leaf_count += tree.get_num_leaves(mut.node)
-                    new_leaves.extend(tree.leaves(mut.node))
-                self.assertEqual(sorted(leaves[site.position]), sorted(new_leaves))
-                self.assertEqual(leaf_count, allele_counts[site.position])
+                    sample_count += tree.get_num_samples(mut.node)
+                    new_samples.extend(tree.samples(mut.node))
+                self.assertEqual(sorted(samples[site.position]), sorted(new_samples))
+                self.assertEqual(sample_count, allele_counts[site.position])
 
     def verify_simplify_equality(self, ts, sample):
         s1 = ts.simplify(sample)
@@ -1384,23 +1385,23 @@ class TestSparseTree(HighLevelTestCase):
     """
     Some simple tests on the API for the sparse tree.
     """
-    def get_tree(self, leaf_lists=False):
+    def get_tree(self, sample_lists=False):
         ts = msprime.simulate(10, random_seed=1, mutation_rate=1)
-        return next(ts.trees(leaf_lists=leaf_lists))
+        return next(ts.trees(sample_lists=sample_lists))
 
     def test_str(self):
         t = self.get_tree()
         self.assertIsInstance(str(t), str)
         self.assertEqual(str(t), str(t.get_parent_dict()))
 
-    def test_leaves(self):
-        for leaf_lists in [True, False]:
-            t = self.get_tree(leaf_lists)
+    def test_samples(self):
+        for sample_lists in [True, False]:
+            t = self.get_tree(sample_lists)
             n = t.get_sample_size()
-            all_leaves = list(t.leaves(t.get_root()))
-            self.assertEqual(sorted(all_leaves), list(range(n)))
+            all_samples = list(t.samples(t.get_root()))
+            self.assertEqual(sorted(all_samples), list(range(n)))
             for j in range(n):
-                self.assertEqual(list(t.leaves(j)), [j])
+                self.assertEqual(list(t.samples(j)), [j])
 
             def test_func(t, u):
                 """
@@ -1415,10 +1416,10 @@ class TestSparseTree(HighLevelTestCase):
                     else:
                         yield v
             for u in t.nodes():
-                l1 = list(t.leaves(u))
+                l1 = list(t.samples(u))
                 l2 = list(test_func(t, u))
                 self.assertEqual(l1, l2)
-                self.assertEqual(t.get_num_leaves(u), len(l1))
+                self.assertEqual(t.get_num_samples(u), len(l1))
 
     def test_traversals(self):
         t1 = self.get_tree()
@@ -1477,11 +1478,11 @@ class TestSparseTree(HighLevelTestCase):
                 self.assertEqual(t1.get_parent(node), t1.parent(node))
                 self.assertEqual(t1.get_children(node), t1.children(node))
                 self.assertEqual(t1.get_population(node), t1.population(node))
-                self.assertEqual(t1.get_num_leaves(node), t1.num_leaves(node))
+                self.assertEqual(t1.get_num_samples(node), t1.num_samples(node))
                 self.assertEqual(t1.get_branch_length(node),
                                  t1.branch_length(node))
-                self.assertEqual(t1.get_num_tracked_leaves(node),
-                                 t1.num_tracked_leaves(node))
+                self.assertEqual(t1.get_num_tracked_samples(node),
+                                 t1.num_tracked_samples(node))
 
         pairs = itertools.islice(itertools.combinations(t1.nodes(), 2), 50)
         for pair in pairs:
@@ -2016,7 +2017,7 @@ class TestNodeOrdering(HighLevelTestCase):
         j = 0
         for t1, t2 in zip(ts.trees(), other_ts.trees()):
             # Verify the topologies are identical. We do this by traversing
-            # upwards to the root for every leaf and checking if we map to
+            # upwards to the root for every sample and checking if we map to
             # the correct node and time.
             for u in range(n):
                 v_orig = u
