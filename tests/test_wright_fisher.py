@@ -27,6 +27,7 @@ import random
 import unittest
 
 import numpy as np
+import math
 
 import msprime
 import tests
@@ -36,9 +37,13 @@ def random_breakpoint():
     return min(1.0, max(0.0, 2 * random.random() - 0.5))
 
 
-def random_mutations(rate):
+def random_mutations(rate, infinite_sites=True):
     nmuts = np.random.poisson(lam=rate)
-    return [random.random() for _ in range(nmuts)]
+    if not infinite_sites:
+        muts = [math.floor(100*random.random())/100 for _ in range(nmuts)]
+    else:
+        muts = [random.random() for _ in range(nmuts)]
+    return muts
 
 
 def random_allele():
@@ -61,6 +66,7 @@ def wf_sim(
     migrations = msprime.MigrationTable()
     sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
+    mut_positions = {}
     if deep_history:
         # initial population
         init_ts = msprime.simulate(N, recombination_rate=1.0)
@@ -91,7 +97,7 @@ def wf_sim(
                 lparent, rparent = new_parents[k]
                 k += 1
                 bp = random_breakpoint()
-                # muts = random_mutations(mutation_rate)
+                muts = random_mutations(mutation_rate)
                 if debug:
                     print("--->", offspring, lparent, rparent, bp)
                 pop[j] = offspring
@@ -99,14 +105,13 @@ def wf_sim(
                     edges.add_row(left=0.0, right=bp, parent=lparent, child=offspring)
                 if bp < 1.0:
                     edges.add_row(left=bp, right=1.0, parent=rparent, child=offspring)
-                # for mut in muts:
-                #     # Pretty sure this won't work.
-                #     if mut not in mut_positions:
-                #         mut_positions[mut] = sites.num_rows
-                #         sites.add_row(site=mut, ancestral_state=random_allele())
-                #     mutations.add_row(
-                #         site=mut_positions[mut], node=offspring,
-                # derived_state=random_allele())
+                for mut in muts:
+                    if mut not in mut_positions:
+                        mut_positions[mut] = sites.num_rows
+                        sites.add_row(position=mut, ancestral_state=random_allele())
+                    mutations.add_row(
+                            site=mut_positions[mut], node=offspring,
+                            derived_state=random_allele())
 
     if debug:
         print("Done! Final pop:")
@@ -120,13 +125,12 @@ def wf_sim(
         print(nodes)
         print("Edges:")
         print(edges)
-        # print("Sites:")
-        # print(tables.sites)
-        # print("Mutations:")
-        # print(tables.mutations)
-        # print("Migrations:")
-        # print(tables.migrations)
-
+        print("Sites:")
+        print(sites)
+        print("Mutations:")
+        print(mutations)
+        print("Migrations:")
+        print(migrations)
     return msprime.TableCollection(nodes, edges, migrations, sites, mutations)
 
 
@@ -220,6 +224,29 @@ class TestSimulation(unittest.TestCase):
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
+    def test_with_mutations(self):
+        N = 10
+        ngens = 100
+        tables = wf_sim(
+            N=N, ngens=ngens, mutation_rate=1.0, deep_history=False,
+            seed=self.random_seed)
+        self.assertGreater(tables.sites.num_rows, 0)
+        self.assertGreater(tables.mutations.num_rows, 0)
+        nodes = tables.nodes
+        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
+        msprime.sort_tables(**tables.asdict())
+        msprime.simplify_tables(
+            samples=samples, nodes=tables.nodes, edges=tables.edges,
+            sites=tables.sites, mutations=tables.mutations)
+        self.assertGreater(tables.nodes.num_rows, 0)
+        self.assertGreater(tables.edges.num_rows, 0)
+        self.assertGreater(tables.sites.num_rows, 0)
+        self.assertGreater(tables.mutations.num_rows, 0)
+        ts = msprime.load_tables(**tables.asdict())
+        self.assertEqual(ts.sample_size, N)
+        for hap in ts.haplotypes():
+            self.assertEqual(len(hap), ts.num_sites)
+
 
 class TestSimplify(unittest.TestCase):
     """
@@ -244,15 +271,17 @@ class TestSimplify(unittest.TestCase):
         """
         for N in [5, 10, 20]:
             for surv in [0.0, 0.5, 0.9]:
-                tables = wf_sim(N=N, ngens=N, survival=surv, seed=seed)
-                msprime.sort_tables(
-                    nodes=tables.nodes, edges=tables.edges,
-                    sites=tables.sites, mutations=tables.mutations)
-                ts = msprime.load_tables(
-                    nodes=tables.nodes, edges=tables.edges,
-                    sites=tables.sites, mutations=tables.mutations)
-                self.verify_simulation(ts, ngens=N)
-                yield ts
+                for mut in [0.0, 0.5]:
+                    tables = wf_sim(
+                        N=N, ngens=N, survival=surv, seed=seed, mutation_rate=mut)
+                    msprime.sort_tables(
+                        nodes=tables.nodes, edges=tables.edges,
+                        sites=tables.sites, mutations=tables.mutations)
+                    ts = msprime.load_tables(
+                        nodes=tables.nodes, edges=tables.edges,
+                        sites=tables.sites, mutations=tables.mutations)
+                    self.verify_simulation(ts, ngens=N)
+                    yield ts
 
     def verify_simulation(self, ts, ngens):
         """
@@ -313,6 +342,24 @@ class TestSimplify(unittest.TestCase):
                 self.assertNotEqual(mrca2, msprime.NULL_NODE)
                 self.assertEqual(node_map[mrca1], mrca2)
 
+    def verify_haplotypes(self, ts, samples):
+        """
+        Check that haplotypes are unchanged by simplify.
+        """
+        sub_ts, node_map = ts.simplify(
+            samples, map_nodes=True, filter_invariant_sites=False)
+        # Sites tables should be equal
+        self.assertEqual(ts.tables.sites, sub_ts.tables.sites)
+        sub_haplotypes = dict(zip(sub_ts.samples(), sub_ts.haplotypes()))
+        all_haplotypes = dict(zip(ts.samples(), ts.haplotypes()))
+        mapped_ids = []
+        for node_id, h in all_haplotypes.items():
+            mapped_node_id = node_map[node_id]
+            if mapped_node_id in sub_haplotypes:
+                self.assertEqual(h, sub_haplotypes[mapped_node_id])
+                mapped_ids.append(mapped_node_id)
+        self.assertEqual(sorted(mapped_ids), sorted(sub_ts.samples()))
+
     def test_simplify(self):
         #  check that simplify(big set) -> simplify(subset) equals simplify(subset)
         seed = 23
@@ -331,6 +378,7 @@ class TestSimplify(unittest.TestCase):
                 small_ts, small_map = ts.simplify(samples=sub_samples, map_nodes=True)
                 self.assertTreeSequencesEqual(small_ts, py_small_ts)
                 self.verify_simplify(ts, small_ts, sub_samples, small_map)
+                self.verify_haplotypes(ts, samples=sub_samples)
 
     def test_simplify_tables(self):
         seed = 71
