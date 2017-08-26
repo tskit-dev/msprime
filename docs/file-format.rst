@@ -52,7 +52,7 @@ node
     long ago the ancestor was born.
 
 samples
-    The tips of the tree, that we have obtained data from.  These are
+    Those nodes in the tree that we have obtained data from.  These are
     distinguished from other nodes by the fact that a tree sequence *must*
     describe the genealogical history of all samples at every point on the
     genome.  These are a special kind of node, having ``flags`` set to 1 (as a
@@ -81,10 +81,14 @@ and for algorithmic reasons:
 
 3. The leftmost endpoint of each chromosome is 0.0.
 4. Node times must be strictly greater than zero.
-5. The set of intervals on which each individual is a parent must be disjoint.
-6. The list of offspring in an edgeset must be sorted.
-7. Edgesets must be sorted in nondecreasing time order.
+5. The list of offspring in an edgeset must be sorted.
+6. Edgesets must be sorted in nondecreasing time order.
+7. The set of intervals on which each individual is a parent must be disjoint.
 8. Each edgeset must contain at least two children.
+
+A set of tables satisfying requirements 1-4 can be transformed into a completely
+valid set of tables by applying first ``sort_tables`` (which ensures 5 and 6)
+and then ``simplify`` (which ensures 7 and 8).
 
 Note that since each node time is equal to the (birth) time of the
 corresponding parent, time is measured in clock time (not meioses).
