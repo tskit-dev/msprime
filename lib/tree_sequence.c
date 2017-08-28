@@ -611,11 +611,6 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
     }
-    if (self->edgesets.num_records > 0 && left != 0) {
-        ret = MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO;
-        goto out;
-    }
-
     /* Check the sites */
     for (j = 0; j < self->sites.num_records; j++) {
         if (self->sites.ancestral_state_length[j] != 1) {
@@ -807,24 +802,44 @@ out:
     return ret;
 }
 
-
-
-/* Initialiases memory associated with the trees.
+/* Initialises memory associated with the trees.
  */
 static int
 tree_sequence_init_trees(tree_sequence_t *self)
 {
 
     int ret = MSP_ERR_GENERIC;
-    size_t j, tree_index;
+    size_t j, k, tree_index;
     site_id_t site;
     double last_x = -1;
     double x;
     node_id_t *I = self->edgesets.indexes.insertion_order;
+    node_id_t *O = self->edgesets.indexes.removal_order;
 
+    /* First compute the number of trees. This is the number of distinct
+     * values in the left and right columns minus 1. We use the indexes
+     * computed for traversal to compute this efficiently. */
     self->num_trees = 0;
+    if (self->edgesets.num_records > 0 && self->edgesets.left[I[0]] != 0.0) {
+        /* If there is a gap at the start of the tree sequence we need an extra
+         * tree for this */
+        self->num_trees = 1;
+    }
+    k = 0;
     for (j = 0; j < self->edgesets.num_records; j++) {
         x = self->edgesets.left[I[j]];
+        /* Any distinct right values that do not appear in left gives rise to
+         * an empty tree */
+        while (self->edgesets.right[O[k]] < x) {
+            if (self->edgesets.right[O[k]] != last_x) {
+                self->num_trees++;
+                last_x = self->edgesets.right[O[k]];
+            }
+            k++;
+        }
+        while (self->edgesets.right[O[k]] == x) {
+            k++;
+        }
         if (x != last_x) {
             self->num_trees++;
             last_x = x;
@@ -3303,15 +3318,20 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     node_id_t out = *out_index + direction_change;
     list_len_t j;
     node_id_t k, u, v, oldest_child;
-    double x = in_breakpoints[in_order[in]];
     double oldest_child_time;
     tree_sequence_t *s = self->tree_sequence;
     node_id_t R = (node_id_t) s->edgesets.num_records;
+    double x;
 
     /* TODO remove the self->time vector here when we are doing the change
      * for following multiple roots. Node time is dealt with in the tree
      * sequence. This is the same for population.
      */
+    if (direction == MSP_DIR_FORWARD) {
+        x = self->right;
+    } else {
+        x = self->left;
+    }
     while (out_breakpoints[out_order[out]] == x) {
         k = out_order[out];
         u = s->edgesets.parent[k];
@@ -3377,10 +3397,18 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
 
     if (direction == MSP_DIR_FORWARD) {
         self->left = x;
-        self->right = out_breakpoints[out_order[out]];
+        self->right = s->sequence_length;
+        if (in < R) {
+            self->right = GSL_MIN(
+                    in_breakpoints[in_order[in]], out_breakpoints[out_order[out]]);
+        }
     } else {
-        self->left = out_breakpoints[out_order[out]];
         self->right = x;
+        self->left = 0;
+        if (in >= 0) {
+            self->left = GSL_MAX(
+                    in_breakpoints[in_order[in]], out_breakpoints[out_order[out]]);
+        }
     }
     self->direction = direction;
     self->index = (size_t) ((int64_t) self->index + direction);
@@ -3413,6 +3441,7 @@ sparse_tree_first(sparse_tree_t *self)
         self->left_index = 0;
         self->right_index = 0;
         self->direction = MSP_DIR_FORWARD;
+        self->right = 0;
 
         ret = sparse_tree_advance(self, MSP_DIR_FORWARD,
                 s->edgesets.right, s->edgesets.indexes.removal_order,
@@ -3442,6 +3471,7 @@ sparse_tree_last(sparse_tree_t *self)
         self->right_index = (node_id_t) s->edgesets.num_records - 1;
         self->direction = MSP_DIR_REVERSE;
         self->index = tree_sequence_get_num_trees(s);
+        self->left = s->sequence_length;
 
         ret = sparse_tree_advance(self, MSP_DIR_REVERSE,
                 s->edgesets.left, s->edgesets.indexes.insertion_order,

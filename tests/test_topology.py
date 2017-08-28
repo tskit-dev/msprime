@@ -177,6 +177,54 @@ class TopologyTestCase(unittest.TestCase):
                 self.assertEqual(u, v)
 
 
+class TestHoleyTreeSequences(TopologyTestCase):
+    """
+    Tests for tree sequences in which we have partial (or no) trees defined
+    over some of the sequence.
+    """
+    def verify_trees(self, ts, expected):
+        observed = []
+        for t in ts.trees():
+            observed.append((t.interval, t.parent_dict))
+        self.assertEqual(expected, observed)
+
+    def test_simple_hole(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           0
+        2   0           1
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        0       1       2       0,1
+        2       3       2       0,1
+        """)
+        ts = msprime.load_text(nodes, edgesets)
+        expected = [
+            ((0, 1), {0: 2, 1: 2}),
+            ((1, 2), {}),
+            ((2, 3), {0: 2, 1: 2})]
+        self.verify_trees(ts, expected)
+
+    def test_initial_gap(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           0
+        2   0           1
+        """)
+        edgesets = six.StringIO("""\
+        left    right   parent  children
+        1       2       2       0,1
+        """)
+        ts = msprime.load_text(nodes, edgesets)
+        expected = [
+            ((0, 1), {}),
+            ((1, 2), {0: 2, 1: 2})]
+        self.verify_trees(ts, expected)
+
+
 class TestRecordSquashing(TopologyTestCase):
     """
     Tests that we correctly squash adjacent equal records together.
