@@ -2557,7 +2557,7 @@ class TestSparseTree(LowLevelTestCase):
         # We should still be able to count the samples, just inefficiently.
         self.assertEqual(st.get_num_samples(0), 1)
         self.assertRaises(_msprime.LibraryError, st.get_num_tracked_samples, 0)
-        self.assertRaises(_msprime.LibraryError, _msprime.LeafListIterator, st, 0)
+        self.assertRaises(_msprime.LibraryError, _msprime.SampleListIterator, st, 0)
         all_flags = [
             0, _msprime.SAMPLE_COUNTS, _msprime.SAMPLE_LISTS,
             _msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS]
@@ -2570,11 +2570,11 @@ class TestSparseTree(LowLevelTestCase):
             else:
                 self.assertRaises(_msprime.LibraryError, st.get_num_tracked_samples, 0)
             if flags & _msprime.SAMPLE_LISTS:
-                samples = list(_msprime.LeafListIterator(st, 0))
+                samples = list(_msprime.SampleListIterator(st, 0))
                 self.assertEqual(samples, [0])
             else:
                 self.assertRaises(
-                    _msprime.LibraryError, _msprime.LeafListIterator, st, 0)
+                    _msprime.LibraryError, _msprime.SampleListIterator, st, 0)
 
     def test_sites(self):
         for ts in self.get_example_tree_sequences():
@@ -2737,7 +2737,7 @@ class TestSparseTree(LowLevelTestCase):
                 self.assertRaises(ValueError, st.get_children, v)
                 self.assertRaises(ValueError, st.get_time, v)
                 self.assertRaises(
-                    ValueError, _msprime.LeafListIterator, st, v)
+                    ValueError, _msprime.SampleListIterator, st, v)
 
     def test_mrca_interface(self):
         for num_loci in range(1, 10):
@@ -3204,25 +3204,25 @@ class TestTablesInterface(LowLevelTestCase):
             list(new_mutations.derived_state), list(mutations.derived_state))
 
 
-class TestLeafListIterator(LowLevelTestCase):
+class TestSampleListIterator(LowLevelTestCase):
     """
     Tests for the low-level sample list iterator.
     """
 
     def test_constructor(self):
-        self.assertRaises(TypeError, _msprime.LeafListIterator)
-        self.assertRaises(TypeError, _msprime.LeafListIterator, None)
+        self.assertRaises(TypeError, _msprime.SampleListIterator)
+        self.assertRaises(TypeError, _msprime.SampleListIterator, None)
         ts = self.get_tree_sequence()
         flags = _msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS
         tree = _msprime.SparseTree(ts, flags=flags)
         for bad_type in [None, "1", []]:
             self.assertRaises(
-                TypeError, _msprime.LeafListIterator, tree, bad_type)
+                TypeError, _msprime.SampleListIterator, tree, bad_type)
         for bad_node in [-1, tree.get_num_nodes() + 1]:
             self.assertRaises(
-                ValueError, _msprime.LeafListIterator, tree, bad_node)
+                ValueError, _msprime.SampleListIterator, tree, bad_node)
         # Do nasty things...
-        iterator = _msprime.LeafListIterator(tree, 1)
+        iterator = _msprime.SampleListIterator(tree, 1)
         del tree
         del ts
         self.assertEqual(list(iterator), [1])
@@ -3232,9 +3232,9 @@ class TestLeafListIterator(LowLevelTestCase):
         flags = _msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS
         tree = _msprime.SparseTree(ts, flags=flags)
         for tree in _msprime.SparseTreeIterator(tree):
-            self.verify_iterator(_msprime.LeafListIterator(tree, 1))
+            self.verify_iterator(_msprime.SampleListIterator(tree, 1))
             self.verify_iterator(
-                _msprime.LeafListIterator(tree, tree.get_root()))
+                _msprime.SampleListIterator(tree, tree.get_root()))
 
     def test_sample_list(self):
         examples = [
@@ -3248,15 +3248,15 @@ class TestLeafListIterator(LowLevelTestCase):
             for t in _msprime.SparseTreeIterator(st):
                 # All sample nodes should have themselves.
                 for j in range(t.get_sample_size()):
-                    samples = list(_msprime.LeafListIterator(t, j))
+                    samples = list(_msprime.SampleListIterator(t, j))
                     self.assertEqual(samples, [j])
                 # All non-tree nodes should have 0
                 for j in range(t.get_num_nodes()):
                     if t.get_parent(j) == 0 and j != t.get_root():
-                        samples = list(_msprime.LeafListIterator(t, j))
+                        samples = list(_msprime.SampleListIterator(t, j))
                         self.assertEqual(len(samples), 0)
                 # The root should have all samples.
-                samples = list(_msprime.LeafListIterator(t, t.get_root()))
+                samples = list(_msprime.SampleListIterator(t, t.get_root()))
                 self.assertEqual(
                     sorted(samples), list(range(t.get_sample_size())))
 

@@ -653,7 +653,7 @@ class SparseTree(object):
     def get_parent(self, u):
         """
         Returns the parent of the specified node. Returns
-        the :const:`.NULL_NODE` -1 if u is the root or is not a node in
+        the :const:`.NULL_NODE` if u is the root or is not a node in
         the current tree.
 
         :param int u: The node of interest.
@@ -669,8 +669,8 @@ class SparseTree(object):
         """
         Returns the children of the specified node as a tuple :math:`(v, w)`.
         For internal nodes, this tuple is always in sorted order such that
-        :math:`v < w`. If u is a sample or is not a node in the current tree,
-        return the tuple (:const:`.NULL_NODE`, :const:`.NULL_NODE`).
+        :math:`v < w`. If u is a leaf or is not a node in the current tree,
+        return the empty tuple.
 
         :param int u: The node of interest.
         :return: The children of u as a pair of integers
@@ -684,7 +684,7 @@ class SparseTree(object):
     def get_time(self, u):
         """
         Returns the time of the specified node in generations. Returns 0 if u
-        is a sample or is not a node in the current tree.
+        is not a node in the current tree.
 
         :param int u: The node of interest.
         :return: The time of u.
@@ -697,9 +697,7 @@ class SparseTree(object):
 
     def get_population(self, u):
         """
-        Returns the population associated with the specified node. For sample
-        nodes this is the population of the sample, and for internal nodes this
-        is the population where the corresponding coalescence occured. If the
+        Returns the population associated with the specified node. If the
         specified node is not a member of this tree or population level
         information was not stored in the tree sequence,
         :const:`.NULL_POPULATION` is returned.
@@ -958,7 +956,7 @@ class SparseTree(object):
         if u is None:
             u = self.root
         if self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_LISTS:
-            return _msprime.LeafListIterator(self._ll_sparse_tree, u)
+            return _msprime.SampleListIterator(self._ll_sparse_tree, u)
         else:
             return self._sample_generator(u)
 
@@ -2311,7 +2309,7 @@ class TreeSequence(object):
         tuples, and these describe the records that must be applied to create
         the tree covering the current interval. These records are returned in
         time-increasing order, such that the records affecting the lowest parts
-        of the tree (i.e., closest to the samples) are returned first.
+        of the tree (i.e., closest to the present day) are returned first.
 
         :return: An iterator over the diffs between adjacent trees in this
             tree sequence.

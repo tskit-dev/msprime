@@ -1094,7 +1094,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 2})
 
     def test_two_reducable_trees(self):
-        # We have n = 4 and two trees, with some unary nodes and non-sample samples
+        # We have n = 4 and two trees, with some unary nodes and non-sample leaves
         nodes = six.StringIO("""\
         id      is_sample   time
         0       1           0
@@ -1105,7 +1105,7 @@ class TestMultipleRoots(TopologyTestCase):
         5       0           1
         6       0           2
         7       0           3
-        8       0           0   # Non sample sample
+        8       0           0   # Non sample leaf
         """)
         edgesets = six.StringIO("""\
         left    right   parent  children
@@ -1177,7 +1177,7 @@ class TestMultipleRoots(TopologyTestCase):
         5       0           1
         6       0           2
         7       0           3
-        8       0           0   # Non sample sample
+        8       0           0   # Non sample leaf
         """)
         edgesets = six.StringIO("""\
         left    right   parent  children
@@ -1357,7 +1357,7 @@ class TestWithVisuals(TopologyTestCase):
         0       1           0
         1       1           0
         2       1           0
-        3       0           0.2  # Non sample sample
+        3       0           0.2  # Non sample leaf
         4       0           0.4
         5       0           0.5
         6       0           0.7
@@ -1415,7 +1415,7 @@ class TestWithVisuals(TopologyTestCase):
         4       0           0.5
         5       0           0.7
         6       0           1.0
-        7       0           0    # Non sample sample
+        7       0           0    # Non sample leaf
         """)
         edgesets = six.StringIO("""\
         left    right   parent  children
@@ -1468,7 +1468,7 @@ class TestWithVisuals(TopologyTestCase):
         0   1           0
         1   1           0
         2   1           0
-        3   0           0       # Non sample sample
+        3   0           0       # Non sample leaf
         4   0           0.4
         5   0           0.5
         6   0           0.7

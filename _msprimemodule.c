@@ -125,7 +125,7 @@ typedef struct {
     node_list_t *head;
     node_list_t *tail;
     node_list_t *next;
-} LeafListIterator;
+} SampleListIterator;
 
 typedef struct {
     PyObject_HEAD
@@ -4834,12 +4834,12 @@ static PyTypeObject TreeDiffIteratorType = {
 };
 
 /*===================================================================
- * LeafListIterator
+ * SampleListIterator
  *===================================================================
  */
 
 static int
-LeafListIterator_check_state(LeafListIterator *self)
+SampleListIterator_check_state(SampleListIterator *self)
 {
     int ret = 0;
     if (self->sparse_tree == NULL) {
@@ -4850,14 +4850,14 @@ LeafListIterator_check_state(LeafListIterator *self)
 }
 
 static void
-LeafListIterator_dealloc(LeafListIterator* self)
+SampleListIterator_dealloc(SampleListIterator* self)
 {
     Py_XDECREF(self->sparse_tree);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static int
-LeafListIterator_init(LeafListIterator *self, PyObject *args, PyObject *kwds)
+SampleListIterator_init(SampleListIterator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
@@ -4891,11 +4891,11 @@ out:
 }
 
 static PyObject *
-LeafListIterator_next(LeafListIterator  *self)
+SampleListIterator_next(SampleListIterator  *self)
 {
     PyObject *ret = NULL;
 
-    if (LeafListIterator_check_state(self) != 0) {
+    if (SampleListIterator_check_state(self) != 0) {
         goto out;
     }
     if (self->next != NULL) {
@@ -4914,20 +4914,20 @@ out:
     return ret;
 }
 
-static PyMemberDef LeafListIterator_members[] = {
+static PyMemberDef SampleListIterator_members[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyMethodDef LeafListIterator_methods[] = {
+static PyMethodDef SampleListIterator_methods[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject LeafListIteratorType = {
+static PyTypeObject SampleListIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.LeafListIterator",             /* tp_name */
-    sizeof(LeafListIterator),             /* tp_basicsize */
+    "_msprime.SampleListIterator",             /* tp_name */
+    sizeof(SampleListIterator),             /* tp_basicsize */
     0,                         /* tp_itemsize */
-    (destructor)LeafListIterator_dealloc, /* tp_dealloc */
+    (destructor)SampleListIterator_dealloc, /* tp_dealloc */
     0,                         /* tp_print */
     0,                         /* tp_getattr */
     0,                         /* tp_setattr */
@@ -4943,22 +4943,22 @@ static PyTypeObject LeafListIteratorType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "LeafListIterator objects",           /* tp_doc */
+    "SampleListIterator objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) LeafListIterator_next, /* tp_iternext */
-    LeafListIterator_methods,             /* tp_methods */
-    LeafListIterator_members,             /* tp_members */
+    (iternextfunc) SampleListIterator_next, /* tp_iternext */
+    SampleListIterator_methods,             /* tp_methods */
+    SampleListIterator_members,             /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    (initproc)LeafListIterator_init,      /* tp_init */
+    (initproc)SampleListIterator_init,      /* tp_init */
 };
 
 
@@ -8016,13 +8016,13 @@ init_msprime(void)
     Py_INCREF(&TreeDiffIteratorType);
     PyModule_AddObject(module, "TreeDiffIterator", (PyObject *) &TreeDiffIteratorType);
 
-    /* LeafListIterator type */
-    LeafListIteratorType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&LeafListIteratorType) < 0) {
+    /* SampleListIterator type */
+    SampleListIteratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&SampleListIteratorType) < 0) {
         INITERROR;
     }
-    Py_INCREF(&LeafListIteratorType);
-    PyModule_AddObject(module, "LeafListIterator", (PyObject *) &LeafListIteratorType);
+    Py_INCREF(&SampleListIteratorType);
+    PyModule_AddObject(module, "SampleListIterator", (PyObject *) &SampleListIteratorType);
 
     /* NewickConverter type */
     NewickConverterType.tp_new = PyType_GenericNew;

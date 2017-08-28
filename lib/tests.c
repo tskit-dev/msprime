@@ -2646,7 +2646,7 @@ test_simplest_unary_records(void)
 }
 
 static void
-test_simplest_non_sample_sample_records(void)
+test_simplest_non_sample_leaf_records(void)
 {
     int ret;
     const char *nodes =
@@ -7268,7 +7268,7 @@ main(int argc, char **argv)
         {"test_simplest_records", test_simplest_records},
         {"test_simplest_nonbinary_records", test_simplest_nonbinary_records},
         {"test_simplest_unary_records", test_simplest_unary_records},
-        {"test_simplest_non_sample_sample_records", test_simplest_non_sample_sample_records},
+        {"test_simplest_non_sample_leaf_records", test_simplest_non_sample_leaf_records},
         {"test_simplest_degenerate_multiple_root_records",
             test_simplest_degenerate_multiple_root_records},
         {"test_simplest_multiple_root_records", test_simplest_multiple_root_records},
