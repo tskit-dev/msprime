@@ -43,8 +43,8 @@
 /* Flags for simplify() */
 #define MSP_FILTER_INVARIANT_SITES 1
 
-#define MSP_LEAF_COUNTS  1
-#define MSP_LEAF_LISTS   2
+#define MSP_SAMPLE_COUNTS  1
+#define MSP_SAMPLE_LISTS   2
 
 #define MSP_DIR_FORWARD 1
 #define MSP_DIR_REVERSE -1
@@ -479,10 +479,10 @@ typedef struct node_record {
     struct node_record *next;
 } node_record_t;
 
-typedef struct leaf_list_node {
+typedef struct _node_list {
     node_id_t node;
-    struct leaf_list_node *next;
-} leaf_list_node_t;
+    struct _node_list *next;
+} node_list_t;
 
 typedef struct {
     size_t sample_size;
@@ -514,19 +514,19 @@ typedef struct {
     node_id_t **children;
     double *time;
     size_t index;
-    /* These are involved in the optional leaf tracking; num_leaves counts
-     * all leaves below a give node, and num_tracked_leaves counts those
+    /* These are involved in the optional sample tracking; num_samples counts
+     * all samples below a give node, and num_tracked_samples counts those
      * from a specific subset. */
-    node_id_t *num_leaves;
-    node_id_t *num_tracked_leaves;
+    node_id_t *num_samples;
+    node_id_t *num_tracked_samples;
     /* All nodes that are marked during a particular transition are marked
      * with a given value. */
     uint8_t *marked;
     uint8_t mark;
-    /* These are for the optional leaf list tracking. */
-    leaf_list_node_t **leaf_list_head;
-    leaf_list_node_t **leaf_list_tail;
-    leaf_list_node_t *leaf_list_node_mem;
+    /* These are for the optional sample list tracking. */
+    node_list_t **sample_list_head;
+    node_list_t **sample_list_tail;
+    node_list_t *sample_list_node_mem;
     /* traversal stacks */
     node_id_t *stack1;
     node_id_t *stack2;
@@ -830,23 +830,24 @@ int sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence,
 int sparse_tree_free(sparse_tree_t *self);
 int sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source);
 int sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other);
-int sparse_tree_set_tracked_leaves(sparse_tree_t *self,
-        size_t num_tracked_leaves, node_id_t *tracked_leaves);
-int sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
-        leaf_list_node_t *head, leaf_list_node_t *tail);
+int sparse_tree_set_tracked_samples(sparse_tree_t *self,
+        size_t num_tracked_samples, node_id_t *tracked_samples);
+int sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
+        node_list_t *head, node_list_t *tail);
 int sparse_tree_get_root(sparse_tree_t *self, node_id_t *root);
+bool sparse_tree_is_sample(sparse_tree_t *self, node_id_t u);
 int sparse_tree_get_parent(sparse_tree_t *self, node_id_t u, node_id_t *parent);
 int sparse_tree_get_children(sparse_tree_t *self, node_id_t u,
         size_t *num_children, node_id_t **children);
 int sparse_tree_get_time(sparse_tree_t *self, node_id_t u, double *t);
 int sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v,
         node_id_t *mrca);
-int sparse_tree_get_num_leaves(sparse_tree_t *self, node_id_t u,
-        size_t *num_leaves);
-int sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, node_id_t u,
-        size_t *num_tracked_leaves);
-int sparse_tree_get_leaf_list(sparse_tree_t *self, node_id_t u,
-        leaf_list_node_t **head, leaf_list_node_t **tail);
+int sparse_tree_get_num_samples(sparse_tree_t *self, node_id_t u,
+        size_t *num_samples);
+int sparse_tree_get_num_tracked_samples(sparse_tree_t *self, node_id_t u,
+        size_t *num_tracked_samples);
+int sparse_tree_get_sample_list(sparse_tree_t *self, node_id_t u,
+        node_list_t **head, node_list_t **tail);
 int sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, list_len_t *sites_length);
 void sparse_tree_print_state(sparse_tree_t *self, FILE *out);
 /* Method for positioning the tree in the sequence. */

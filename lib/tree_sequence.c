@@ -2180,11 +2180,11 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = sparse_tree_alloc(tree, self, MSP_LEAF_COUNTS);
+    ret = sparse_tree_alloc(tree, self, MSP_SAMPLE_COUNTS);
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_set_tracked_leaves(tree, num_samples, samples);
+    ret = sparse_tree_set_tracked_samples(tree, num_samples, samples);
     if (ret != 0) {
         goto out;
     }
@@ -2201,7 +2201,7 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
                 goto out;
             }
             for (k = 0; k < sites[j].mutations_length; k++) {
-                count = (double) tree->num_tracked_leaves[sites[j].mutations[k].node];
+                count = (double) tree->num_tracked_samples[sites[j].mutations[k].node];
                 result += count * (n - count);
             }
         }
@@ -2584,7 +2584,7 @@ sparse_tree_clear(sparse_tree_t *self)
     size_t N = self->num_nodes;
     size_t j;
     node_id_t u;
-    leaf_list_node_t *w;
+    node_list_t *w;
 
     self->left = 0;
     self->right = 0;
@@ -2598,21 +2598,21 @@ sparse_tree_clear(sparse_tree_t *self)
     memset(self->time, 0, N * sizeof(double));
     memset(self->num_children, 0, N * sizeof(node_id_t));
     memset(self->children, 0, N * sizeof(node_id_t *));
-    if (self->flags & MSP_LEAF_COUNTS) {
-        memset(self->num_leaves, 0, N * sizeof(node_id_t));
+    if (self->flags & MSP_SAMPLE_COUNTS) {
+        memset(self->num_samples, 0, N * sizeof(node_id_t));
         memset(self->marked, 0, N * sizeof(uint8_t));
-        /* We can't reset the tracked leaves via memset because we don't
+        /* We can't reset the tracked samples via memset because we don't
          * know where the tracked samples are.
          */
         for (j = 0; j < self->num_nodes; j++) {
             if (! tree_sequence_is_sample(self->tree_sequence, (node_id_t) j)) {
-                self->num_tracked_leaves[j] = 0;
+                self->num_tracked_samples[j] = 0;
             }
         }
     }
-    if (self->flags & MSP_LEAF_LISTS) {
-        memset(self->leaf_list_head, 0, N * sizeof(leaf_list_node_t *));
-        memset(self->leaf_list_tail, 0, N * sizeof(leaf_list_node_t *));
+    if (self->flags & MSP_SAMPLE_LISTS) {
+        memset(self->sample_list_head, 0, N * sizeof(node_list_t *));
+        memset(self->sample_list_tail, 0, N * sizeof(node_list_t *));
     }
     /* Set the sample attributes */
     for (j = 0; j < self->sample_size; j++) {
@@ -2621,15 +2621,15 @@ sparse_tree_clear(sparse_tree_t *self)
         self->time[u] = self->tree_sequence->nodes.time[u];
         self->children[u] = NULL;
         self->num_children[u] = 0;
-        if (self->flags & MSP_LEAF_COUNTS) {
-            self->num_leaves[u] = 1;
+        if (self->flags & MSP_SAMPLE_COUNTS) {
+            self->num_samples[u] = 1;
         }
-        if (self->flags & MSP_LEAF_LISTS) {
-            w = &self->leaf_list_node_mem[j];
+        if (self->flags & MSP_SAMPLE_LISTS) {
+            w = &self->sample_list_node_mem[j];
             w->next = NULL;
             w->node = (node_id_t) u;
-            self->leaf_list_head[u] = w;
-            self->leaf_list_tail[u] = w;
+            self->sample_list_head[u] = w;
+            self->sample_list_tail[u] = w;
         }
     }
     return ret;
@@ -2670,21 +2670,21 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     if (self->stack1 == NULL || self->stack2 == NULL) {
         goto out;
     }
-    if (self->flags & MSP_LEAF_COUNTS) {
-        self->num_leaves = calloc(num_nodes, sizeof(node_id_t));
-        self->num_tracked_leaves = calloc(num_nodes, sizeof(node_id_t));
+    if (self->flags & MSP_SAMPLE_COUNTS) {
+        self->num_samples = calloc(num_nodes, sizeof(node_id_t));
+        self->num_tracked_samples = calloc(num_nodes, sizeof(node_id_t));
         self->marked = calloc(num_nodes, sizeof(uint8_t));
-        if (self->num_leaves == NULL || self->num_tracked_leaves == NULL
+        if (self->num_samples == NULL || self->num_tracked_samples == NULL
                 || self->marked == NULL) {
             goto out;
         }
     }
-    if (self->flags & MSP_LEAF_LISTS) {
-        self->leaf_list_head = calloc(num_nodes, sizeof(leaf_list_node_t *));
-        self->leaf_list_tail = calloc(num_nodes, sizeof(leaf_list_node_t *));
-        self->leaf_list_node_mem = calloc(sample_size, sizeof(leaf_list_node_t));
-        if (self->leaf_list_head == NULL || self->leaf_list_tail == NULL
-                || self->leaf_list_node_mem == NULL) {
+    if (self->flags & MSP_SAMPLE_LISTS) {
+        self->sample_list_head = calloc(num_nodes, sizeof(node_list_t *));
+        self->sample_list_tail = calloc(num_nodes, sizeof(node_list_t *));
+        self->sample_list_node_mem = calloc(sample_size, sizeof(node_list_t));
+        if (self->sample_list_head == NULL || self->sample_list_tail == NULL
+                || self->sample_list_node_mem == NULL) {
             goto out;
         }
     }
@@ -2717,59 +2717,59 @@ sparse_tree_free(sparse_tree_t *self)
     if (self->stack2 != NULL) {
         free(self->stack2);
     }
-    if (self->num_leaves != NULL) {
-        free(self->num_leaves);
+    if (self->num_samples != NULL) {
+        free(self->num_samples);
     }
-    if (self->num_tracked_leaves != NULL) {
-        free(self->num_tracked_leaves);
+    if (self->num_tracked_samples != NULL) {
+        free(self->num_tracked_samples);
     }
     if (self->marked != NULL) {
         free(self->marked);
     }
-    if (self->leaf_list_head != NULL) {
-        free(self->leaf_list_head);
+    if (self->sample_list_head != NULL) {
+        free(self->sample_list_head);
     }
-    if (self->leaf_list_tail != NULL) {
-        free(self->leaf_list_tail);
+    if (self->sample_list_tail != NULL) {
+        free(self->sample_list_tail);
     }
-    if (self->leaf_list_node_mem != NULL) {
-        free(self->leaf_list_node_mem);
+    if (self->sample_list_node_mem != NULL) {
+        free(self->sample_list_node_mem);
     }
     return 0;
 }
 
 static int WARN_UNUSED
-sparse_tree_reset_tracked_leaves(sparse_tree_t *self)
+sparse_tree_reset_tracked_samples(sparse_tree_t *self)
 {
     int ret = 0;
 
-    if (!(self->flags & MSP_LEAF_COUNTS)) {
+    if (!(self->flags & MSP_SAMPLE_COUNTS)) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
-    memset(self->num_tracked_leaves, 0, self->num_nodes * sizeof(node_id_t));
+    memset(self->num_tracked_samples, 0, self->num_nodes * sizeof(node_id_t));
 out:
     return ret;
 }
 
 
 int WARN_UNUSED
-sparse_tree_set_tracked_leaves(sparse_tree_t *self, size_t num_tracked_leaves,
-        node_id_t *tracked_leaves)
+sparse_tree_set_tracked_samples(sparse_tree_t *self, size_t num_tracked_samples,
+        node_id_t *tracked_samples)
 {
     int ret = MSP_ERR_GENERIC;
     size_t j;
     node_id_t u;
 
     /* TODO This is not needed when the sparse tree is new. We should use the
-     * state machine to check and only reset the tracked leaves when needed.
+     * state machine to check and only reset the tracked samples when needed.
      */
-    ret = sparse_tree_reset_tracked_leaves(self);
+    ret = sparse_tree_reset_tracked_samples(self);
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < num_tracked_leaves; j++) {
-        u = tracked_leaves[j];
+    for (j = 0; j < num_tracked_samples; j++) {
+        u = tracked_samples[j];
         if (u < 0 || u >= (node_id_t) self->num_nodes) {
             ret = MSP_ERR_OUT_OF_BOUNDS;
             goto out;
@@ -2778,13 +2778,13 @@ sparse_tree_set_tracked_leaves(sparse_tree_t *self, size_t num_tracked_leaves,
             ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
-        if (self->num_tracked_leaves[u] != 0) {
+        if (self->num_tracked_samples[u] != 0) {
             ret = MSP_ERR_DUPLICATE_SAMPLE;
             goto out;
         }
         /* Propagate this upwards */
         while (u != MSP_NULL_NODE) {
-            self->num_tracked_leaves[u] += 1;
+            self->num_tracked_samples[u] += 1;
             u = self->parent[u];
         }
     }
@@ -2793,11 +2793,11 @@ out:
 }
 
 int WARN_UNUSED
-sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
-        leaf_list_node_t *head, leaf_list_node_t *tail)
+sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
+        node_list_t *head, node_list_t *tail)
 {
     int ret = MSP_ERR_GENERIC;
-    leaf_list_node_t *list_node = head;
+    node_list_t *list_node = head;
     node_id_t u;
     int not_done;
 
@@ -2806,9 +2806,9 @@ sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
         goto out;
     }
     /* TODO This is not needed when the sparse tree is new. We should use the
-     * state machine to check and only reset the tracked leaves when needed.
+     * state machine to check and only reset the tracked samples when needed.
      */
-    ret = sparse_tree_reset_tracked_leaves(self);
+    ret = sparse_tree_reset_tracked_samples(self);
     if (ret != 0) {
         goto out;
     }
@@ -2816,9 +2816,9 @@ sparse_tree_set_tracked_leaves_from_leaf_list(sparse_tree_t *self,
     while (not_done) {
         u = list_node->node;
         /* Propagate this upwards */
-        assert(self->num_tracked_leaves[u] == 0);
+        assert(self->num_tracked_samples[u] == 0);
         while (u != MSP_NULL_NODE) {
-            self->num_tracked_leaves[u] += 1;
+            self->num_tracked_samples[u] += 1;
             u = self->parent[u];
         }
         not_done = list_node != tail;
@@ -2854,14 +2854,14 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
     memcpy(self->time, source->time, N * sizeof(double));
     memcpy(self->num_children, source->num_children, N * sizeof(node_id_t));
     memcpy(self->children, source->children, N * sizeof(node_id_t *));
-    if (self->flags & MSP_LEAF_COUNTS) {
-        if (! (source->flags & MSP_LEAF_COUNTS)) {
+    if (self->flags & MSP_SAMPLE_COUNTS) {
+        if (! (source->flags & MSP_SAMPLE_COUNTS)) {
             ret = MSP_ERR_UNSUPPORTED_OPERATION;
             goto out;
         }
-        memcpy(self->num_leaves, source->num_leaves, N * sizeof(node_id_t));
+        memcpy(self->num_samples, source->num_samples, N * sizeof(node_id_t));
     }
-    if (self->flags & MSP_LEAF_LISTS) {
+    if (self->flags & MSP_SAMPLE_LISTS) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
@@ -2874,7 +2874,7 @@ out:
  * not equal, and < 0 if an error occurs.
  *
  * We only consider topological properties of the tree. Optional
- * counts and leaf lists are not considered for equality.
+ * counts and sample lists are not considered for equality.
  */
 int WARN_UNUSED
 sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
@@ -2965,8 +2965,8 @@ out:
 }
 
 static int
-sparse_tree_get_num_leaves_by_traversal(sparse_tree_t *self, node_id_t u,
-        size_t *num_leaves)
+sparse_tree_get_num_samples_by_traversal(sparse_tree_t *self, node_id_t u,
+        size_t *num_samples)
 {
     int ret = 0;
     node_id_t *stack = self->stack1;
@@ -2987,12 +2987,12 @@ sparse_tree_get_num_leaves_by_traversal(sparse_tree_t *self, node_id_t u,
             stack[stack_top] = self->children[v][c];
         }
     }
-    *num_leaves = count;
+    *num_samples = count;
     return ret;
 }
 
 int WARN_UNUSED
-sparse_tree_get_num_leaves(sparse_tree_t *self, node_id_t u, size_t *num_leaves)
+sparse_tree_get_num_samples(sparse_tree_t *self, node_id_t u, size_t *num_samples)
 {
     int ret = 0;
 
@@ -3001,18 +3001,18 @@ sparse_tree_get_num_leaves(sparse_tree_t *self, node_id_t u, size_t *num_leaves)
         goto out;
     }
 
-    if (self->flags & MSP_LEAF_COUNTS) {
-        *num_leaves = (size_t) self->num_leaves[u];
+    if (self->flags & MSP_SAMPLE_COUNTS) {
+        *num_samples = (size_t) self->num_samples[u];
     } else {
-        ret = sparse_tree_get_num_leaves_by_traversal(self, u, num_leaves);
+        ret = sparse_tree_get_num_samples_by_traversal(self, u, num_samples);
     }
 out:
     return ret;
 }
 
 int WARN_UNUSED
-sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, node_id_t u,
-        size_t *num_tracked_leaves)
+sparse_tree_get_num_tracked_samples(sparse_tree_t *self, node_id_t u,
+        size_t *num_tracked_samples)
 {
     int ret = 0;
 
@@ -3020,18 +3020,18 @@ sparse_tree_get_num_tracked_leaves(sparse_tree_t *self, node_id_t u,
     if (ret != 0) {
         goto out;
     }
-    if (! (self->flags & MSP_LEAF_COUNTS)) {
+    if (! (self->flags & MSP_SAMPLE_COUNTS)) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
-    *num_tracked_leaves = (size_t) self->num_tracked_leaves[u];
+    *num_tracked_samples = (size_t) self->num_tracked_samples[u];
 out:
     return ret;
 }
 
 int WARN_UNUSED
-sparse_tree_get_leaf_list(sparse_tree_t *self, node_id_t u,
-        leaf_list_node_t **head, leaf_list_node_t **tail)
+sparse_tree_get_sample_list(sparse_tree_t *self, node_id_t u,
+        node_list_t **head, node_list_t **tail)
 {
     int ret = 0;
 
@@ -3039,12 +3039,12 @@ sparse_tree_get_leaf_list(sparse_tree_t *self, node_id_t u,
     if (ret != 0) {
         goto out;
     }
-    if (! (self->flags & MSP_LEAF_LISTS)) {
+    if (! (self->flags & MSP_SAMPLE_LISTS)) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
-    *head = self->leaf_list_head[u];
-    *tail = self->leaf_list_tail[u];
+    *head = self->sample_list_head[u];
+    *tail = self->sample_list_tail[u];
 out:
     return ret;
 }
@@ -3056,6 +3056,11 @@ sparse_tree_get_root(sparse_tree_t *self, node_id_t *root)
     return 0;
 }
 
+bool
+sparse_tree_is_sample(sparse_tree_t *self, node_id_t u)
+{
+    return tree_sequence_is_sample(self->tree_sequence, u);
+}
 
 int WARN_UNUSED
 sparse_tree_get_parent(sparse_tree_t *self, node_id_t u, node_id_t *parent)
@@ -3113,7 +3118,7 @@ static void
 sparse_tree_check_state(sparse_tree_t *self)
 {
     node_id_t u, v;
-    size_t j, k, num_leaves;
+    size_t j, k, num_samples;
     int err, found;
     site_t site;
 
@@ -3140,26 +3145,26 @@ sparse_tree_check_state(sparse_tree_t *self)
         assert(site.position < self->right);
     }
 
-    if (self->flags & MSP_LEAF_COUNTS) {
-        assert(self->num_leaves != NULL);
-        assert(self->num_tracked_leaves != NULL);
+    if (self->flags & MSP_SAMPLE_COUNTS) {
+        assert(self->num_samples != NULL);
+        assert(self->num_tracked_samples != NULL);
         for (u = 0; u < (node_id_t) self->num_nodes; u++) {
-            err = sparse_tree_get_num_leaves_by_traversal(self, u, &num_leaves);
+            err = sparse_tree_get_num_samples_by_traversal(self, u, &num_samples);
             assert(err == 0);
-            assert(num_leaves == (size_t) self->num_leaves[u]);
+            assert(num_samples == (size_t) self->num_samples[u]);
         }
     } else {
-        assert(self->num_leaves == NULL);
-        assert(self->num_tracked_leaves == NULL);
+        assert(self->num_samples == NULL);
+        assert(self->num_tracked_samples == NULL);
     }
-    if (self->flags & MSP_LEAF_LISTS) {
-        assert(self->leaf_list_tail != NULL);
-        assert(self->leaf_list_head != NULL);
-        assert(self->leaf_list_node_mem != NULL);
+    if (self->flags & MSP_SAMPLE_LISTS) {
+        assert(self->sample_list_tail != NULL);
+        assert(self->sample_list_head != NULL);
+        assert(self->sample_list_node_mem != NULL);
     } else {
-        assert(self->leaf_list_tail == NULL);
-        assert(self->leaf_list_head == NULL);
-        assert(self->leaf_list_node_mem == NULL);
+        assert(self->sample_list_tail == NULL);
+        assert(self->sample_list_head == NULL);
+        assert(self->sample_list_node_mem == NULL);
     }
 }
 
@@ -3167,7 +3172,7 @@ void
 sparse_tree_print_state(sparse_tree_t *self, FILE *out)
 {
     size_t j, k;
-    leaf_list_node_t *u;
+    node_list_t *u;
     site_t site;
 
     fprintf(out, "Sparse tree state:\n");
@@ -3186,23 +3191,23 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
             }
         }
         fprintf(out, ")");
-        if (self->flags & MSP_LEAF_COUNTS) {
-            fprintf(out, "\t%d\t%d\t%d", (int) self->num_leaves[j],
-                    (int) self->num_tracked_leaves[j], self->marked[j]);
+        if (self->flags & MSP_SAMPLE_COUNTS) {
+            fprintf(out, "\t%d\t%d\t%d", (int) self->num_samples[j],
+                    (int) self->num_tracked_samples[j], self->marked[j]);
         }
-        if (self->flags & MSP_LEAF_LISTS) {
+        if (self->flags & MSP_SAMPLE_LISTS) {
             fprintf(out, "\t[");
-            u = self->leaf_list_head[j];
+            u = self->sample_list_head[j];
             if (u != NULL) {
                 while (1) {
                     fprintf(out, "%d ", (int) u->node);
-                    if (u == self->leaf_list_tail[j]) {
+                    if (u == self->sample_list_tail[j]) {
                         break;
                     }
                     u = u->next;
                 }
             } else {
-                assert(self->leaf_list_tail[j] == NULL);
+                assert(self->sample_list_tail[j] == NULL);
             }
 
             fprintf(out, "]");
@@ -3221,54 +3226,54 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
 /* Methods for positioning the tree along the sequence */
 
 static inline void
-sparse_tree_propagate_leaf_count_loss(sparse_tree_t *self, node_id_t u)
+sparse_tree_propagate_sample_count_loss(sparse_tree_t *self, node_id_t u)
 {
-    const node_id_t all_leaves_diff = self->num_leaves[u];
-    const node_id_t tracked_leaves_diff = self->num_tracked_leaves[u];
+    const node_id_t all_samples_diff = self->num_samples[u];
+    const node_id_t tracked_samples_diff = self->num_tracked_samples[u];
     const uint8_t mark = self->mark;
     node_id_t v = u;
 
     /* propagate this loss up as far as we can */
     while (v != MSP_NULL_NODE) {
-        self->num_leaves[v] -= all_leaves_diff;
-        self->num_tracked_leaves[v] -= tracked_leaves_diff;
+        self->num_samples[v] -= all_samples_diff;
+        self->num_tracked_samples[v] -= tracked_samples_diff;
         self->marked[v] = mark;
         v = self->parent[v];
     }
 }
 
 static inline void
-sparse_tree_propagate_leaf_count_gain(sparse_tree_t *self, node_id_t u)
+sparse_tree_propagate_sample_count_gain(sparse_tree_t *self, node_id_t u)
 {
     list_len_t j, k;
     node_id_t v, *c;
-    node_id_t all_leaves_diff = 0;
-    node_id_t tracked_leaves_diff = 0;
+    node_id_t all_samples_diff = 0;
+    node_id_t tracked_samples_diff = 0;
     const uint8_t mark = self->mark;
 
     c = self->children[u];
     k = self->num_children[u];
     for (j = 0; j < k; j++) {
-        all_leaves_diff += self->num_leaves[c[j]];
-        tracked_leaves_diff += self->num_tracked_leaves[c[j]];
+        all_samples_diff += self->num_samples[c[j]];
+        tracked_samples_diff += self->num_tracked_samples[c[j]];
     }
     /* propogate this gain up as far as we can */
     v = u;
     while (v != MSP_NULL_NODE) {
-        self->num_leaves[v] += all_leaves_diff;
-        self->num_tracked_leaves[v] += tracked_leaves_diff;
+        self->num_samples[v] += all_samples_diff;
+        self->num_tracked_samples[v] += tracked_samples_diff;
         self->marked[v] = mark;
         v = self->parent[v];
     }
 }
 
 static inline void
-sparse_tree_update_leaf_lists(sparse_tree_t *self, node_id_t node)
+sparse_tree_update_sample_lists(sparse_tree_t *self, node_id_t node)
 {
     node_id_t u, v;
     list_len_t c;
-    leaf_list_node_t **head = self->leaf_list_head;
-    leaf_list_node_t **tail = self->leaf_list_tail;
+    node_list_t **head = self->sample_list_head;
+    node_list_t **tail = self->sample_list_tail;
 
     u = node;
     while (u != MSP_NULL_NODE) {
@@ -3331,11 +3336,11 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         if (u == self->root) {
             self->root = oldest_child;
         }
-        if (self->flags & MSP_LEAF_COUNTS) {
-            sparse_tree_propagate_leaf_count_loss(self, u);
+        if (self->flags & MSP_SAMPLE_COUNTS) {
+            sparse_tree_propagate_sample_count_loss(self, u);
         }
-        if (self->flags & MSP_LEAF_LISTS) {
-            sparse_tree_update_leaf_lists(self, u);
+        if (self->flags & MSP_SAMPLE_LISTS) {
+            sparse_tree_update_sample_lists(self, u);
         }
         out += direction;
     }
@@ -3362,11 +3367,11 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         if (self->time[u] > self->time[self->root]) {
             self->root = u;
         }
-        if (self->flags & MSP_LEAF_COUNTS) {
-            sparse_tree_propagate_leaf_count_gain(self, u);
+        if (self->flags & MSP_SAMPLE_COUNTS) {
+            sparse_tree_propagate_sample_count_gain(self, u);
         }
-        if (self->flags & MSP_LEAF_LISTS) {
-            sparse_tree_update_leaf_lists(self, u);
+        if (self->flags & MSP_SAMPLE_LISTS) {
+            sparse_tree_update_sample_lists(self, u);
         }
         in += direction;
     }

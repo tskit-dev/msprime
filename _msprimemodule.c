@@ -122,10 +122,10 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     SparseTree *sparse_tree;
-    leaf_list_node_t *head;
-    leaf_list_node_t *tail;
-    leaf_list_node_t *next;
-} LeafListIterator;
+    node_list_t *head;
+    node_list_t *tail;
+    node_list_t *next;
+} SampleListIterator;
 
 typedef struct {
     PyObject_HEAD
@@ -4163,19 +4163,19 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "flags", "tracked_leaves",
+    static char *kwlist[] = {"tree_sequence", "flags", "tracked_samples",
         NULL};
-    PyObject *py_tracked_leaves = NULL;
+    PyObject *py_tracked_samples = NULL;
     TreeSequence *tree_sequence = NULL;
-    node_id_t *tracked_leaves = NULL;
+    node_id_t *tracked_samples = NULL;
     int flags = 0;
-    uint32_t j, num_tracked_leaves, num_nodes;
+    uint32_t j, num_tracked_samples, num_nodes;
     PyObject *item;
 
     self->sparse_tree = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|iO!", kwlist,
             &TreeSequenceType, &tree_sequence,
-            &flags, &PyList_Type, &py_tracked_leaves)) {
+            &flags, &PyList_Type, &py_tracked_samples)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -4184,29 +4184,29 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     num_nodes = tree_sequence_get_num_nodes(tree_sequence->tree_sequence);
-    num_tracked_leaves = 0;
-    if (py_tracked_leaves != NULL) {
-        if (!flags & MSP_LEAF_COUNTS) {
+    num_tracked_samples = 0;
+    if (py_tracked_samples != NULL) {
+        if (!flags & MSP_SAMPLE_COUNTS) {
             PyErr_SetString(PyExc_ValueError,
-                "Cannot specified tracked_leaves without count_leaves flag");
+                "Cannot specified tracked_samples without count_samples flag");
             goto out;
         }
-        num_tracked_leaves = PyList_Size(py_tracked_leaves);
+        num_tracked_samples = PyList_Size(py_tracked_samples);
     }
-    tracked_leaves = PyMem_Malloc(num_tracked_leaves * sizeof(node_id_t));
-    if (tracked_leaves == NULL) {
+    tracked_samples = PyMem_Malloc(num_tracked_samples * sizeof(node_id_t));
+    if (tracked_samples == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    for (j = 0; j < num_tracked_leaves; j++) {
-        item = PyList_GetItem(py_tracked_leaves, j);
+    for (j = 0; j < num_tracked_samples; j++) {
+        item = PyList_GetItem(py_tracked_samples, j);
         if (!PyNumber_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "leaf must be a number");
+            PyErr_SetString(PyExc_TypeError, "sample must be a number");
             goto out;
         }
-        tracked_leaves[j] = (node_id_t) PyLong_AsLong(item);
-        if (tracked_leaves[j] >= num_nodes) {
-            PyErr_SetString(PyExc_ValueError, "leaves must be valid nodes");
+        tracked_samples[j] = (node_id_t) PyLong_AsLong(item);
+        if (tracked_samples[j] >= num_nodes) {
+            PyErr_SetString(PyExc_ValueError, "samples must be valid nodes");
             goto out;
         }
     }
@@ -4221,9 +4221,9 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
-    if (flags & MSP_LEAF_COUNTS) {
-        err = sparse_tree_set_tracked_leaves(self->sparse_tree, num_tracked_leaves,
-                tracked_leaves);
+    if (flags & MSP_SAMPLE_COUNTS) {
+        err = sparse_tree_set_tracked_samples(self->sparse_tree, num_tracked_samples,
+                tracked_samples);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -4231,8 +4231,8 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     }
     ret = 0;
 out:
-    if (tracked_leaves != NULL) {
-        PyMem_Free(tracked_leaves);
+    if (tracked_samples != NULL) {
+        PyMem_Free(tracked_samples);
     }
     return ret;
 }
@@ -4366,6 +4366,20 @@ out:
 }
 
 static PyObject *
+SparseTree_is_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", sparse_tree_is_sample(self->sparse_tree, (node_id_t) node));
+out:
+    return ret;
+}
+
+static PyObject *
 SparseTree_get_parent(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
@@ -4467,43 +4481,43 @@ out:
 }
 
 static PyObject *
-SparseTree_get_num_leaves(SparseTree *self, PyObject *args)
+SparseTree_get_num_samples(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    size_t num_leaves;
+    size_t num_samples;
     int err, node;
 
     if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    err = sparse_tree_get_num_leaves(self->sparse_tree, (node_id_t) node,
-            &num_leaves);
+    err = sparse_tree_get_num_samples(self->sparse_tree, (node_id_t) node,
+            &num_samples);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = Py_BuildValue("I", (unsigned int) num_leaves);
+    ret = Py_BuildValue("I", (unsigned int) num_samples);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_num_tracked_leaves(SparseTree *self, PyObject *args)
+SparseTree_get_num_tracked_samples(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    size_t num_tracked_leaves;
+    size_t num_tracked_samples;
     int err, node;
 
     if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    err = sparse_tree_get_num_tracked_leaves(self->sparse_tree, (node_id_t) node,
-            &num_tracked_leaves);
+    err = sparse_tree_get_num_tracked_samples(self->sparse_tree, (node_id_t) node,
+            &num_tracked_samples);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = Py_BuildValue("I", (unsigned int) num_tracked_leaves);
+    ret = Py_BuildValue("I", (unsigned int) num_tracked_samples);
 out:
     return ret;
 }
@@ -4560,6 +4574,8 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the value of the flags variable." },
     {"get_num_sites", (PyCFunction) SparseTree_get_num_sites, METH_NOARGS,
             "Returns the number of sites on this tree." },
+    {"is_sample", (PyCFunction) SparseTree_is_sample, METH_VARARGS,
+            "Returns True if the specified node is a sample." },
     {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
             "Returns the parent of node u" },
     {"get_time", (PyCFunction) SparseTree_get_time, METH_VARARGS,
@@ -4570,11 +4586,11 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the children of node u" },
     {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
             "Returns the MRCA of nodes u and v" },
-    {"get_num_leaves", (PyCFunction) SparseTree_get_num_leaves, METH_VARARGS,
-            "Returns the number of leaves below node u." },
-    {"get_num_tracked_leaves", (PyCFunction) SparseTree_get_num_tracked_leaves,
+    {"get_num_samples", (PyCFunction) SparseTree_get_num_samples, METH_VARARGS,
+            "Returns the number of samples below node u." },
+    {"get_num_tracked_samples", (PyCFunction) SparseTree_get_num_tracked_samples,
             METH_VARARGS,
-            "Returns the number of tracked leaves below node u." },
+            "Returns the number of tracked samples below node u." },
     {NULL}  /* Sentinel */
 };
 
@@ -4818,12 +4834,12 @@ static PyTypeObject TreeDiffIteratorType = {
 };
 
 /*===================================================================
- * LeafListIterator
+ * SampleListIterator
  *===================================================================
  */
 
 static int
-LeafListIterator_check_state(LeafListIterator *self)
+SampleListIterator_check_state(SampleListIterator *self)
 {
     int ret = 0;
     if (self->sparse_tree == NULL) {
@@ -4834,14 +4850,14 @@ LeafListIterator_check_state(LeafListIterator *self)
 }
 
 static void
-LeafListIterator_dealloc(LeafListIterator* self)
+SampleListIterator_dealloc(SampleListIterator* self)
 {
     Py_XDECREF(self->sparse_tree);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static int
-LeafListIterator_init(LeafListIterator *self, PyObject *args, PyObject *kwds)
+SampleListIterator_init(SampleListIterator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
@@ -4862,7 +4878,7 @@ LeafListIterator_init(LeafListIterator *self, PyObject *args, PyObject *kwds)
     if (SparseTree_check_bounds(self->sparse_tree, node)) {
         goto out;
     }
-    err = sparse_tree_get_leaf_list(self->sparse_tree->sparse_tree,
+    err = sparse_tree_get_sample_list(self->sparse_tree->sparse_tree,
             (uint32_t) node, &self->head, &self->tail);
     self->next = self->head;
     if (err < 0) {
@@ -4875,11 +4891,11 @@ out:
 }
 
 static PyObject *
-LeafListIterator_next(LeafListIterator  *self)
+SampleListIterator_next(SampleListIterator  *self)
 {
     PyObject *ret = NULL;
 
-    if (LeafListIterator_check_state(self) != 0) {
+    if (SampleListIterator_check_state(self) != 0) {
         goto out;
     }
     if (self->next != NULL) {
@@ -4898,20 +4914,20 @@ out:
     return ret;
 }
 
-static PyMemberDef LeafListIterator_members[] = {
+static PyMemberDef SampleListIterator_members[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyMethodDef LeafListIterator_methods[] = {
+static PyMethodDef SampleListIterator_methods[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject LeafListIteratorType = {
+static PyTypeObject SampleListIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.LeafListIterator",             /* tp_name */
-    sizeof(LeafListIterator),             /* tp_basicsize */
+    "_msprime.SampleListIterator",             /* tp_name */
+    sizeof(SampleListIterator),             /* tp_basicsize */
     0,                         /* tp_itemsize */
-    (destructor)LeafListIterator_dealloc, /* tp_dealloc */
+    (destructor)SampleListIterator_dealloc, /* tp_dealloc */
     0,                         /* tp_print */
     0,                         /* tp_getattr */
     0,                         /* tp_setattr */
@@ -4927,22 +4943,22 @@ static PyTypeObject LeafListIteratorType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "LeafListIterator objects",           /* tp_doc */
+    "SampleListIterator objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) LeafListIterator_next, /* tp_iternext */
-    LeafListIterator_methods,             /* tp_methods */
-    LeafListIterator_members,             /* tp_members */
+    (iternextfunc) SampleListIterator_next, /* tp_iternext */
+    SampleListIterator_methods,             /* tp_methods */
+    SampleListIterator_members,             /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    (initproc)LeafListIterator_init,      /* tp_init */
+    (initproc)SampleListIterator_init,      /* tp_init */
 };
 
 
@@ -8000,13 +8016,13 @@ init_msprime(void)
     Py_INCREF(&TreeDiffIteratorType);
     PyModule_AddObject(module, "TreeDiffIterator", (PyObject *) &TreeDiffIteratorType);
 
-    /* LeafListIterator type */
-    LeafListIteratorType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&LeafListIteratorType) < 0) {
+    /* SampleListIterator type */
+    SampleListIteratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&SampleListIteratorType) < 0) {
         INITERROR;
     }
-    Py_INCREF(&LeafListIteratorType);
-    PyModule_AddObject(module, "LeafListIterator", (PyObject *) &LeafListIteratorType);
+    Py_INCREF(&SampleListIteratorType);
+    PyModule_AddObject(module, "SampleListIterator", (PyObject *) &SampleListIteratorType);
 
     /* NewickConverter type */
     NewickConverterType.tp_new = PyType_GenericNew;
@@ -8061,8 +8077,8 @@ init_msprime(void)
     PyModule_AddIntConstant(module, "NODE_IS_SAMPLE", MSP_NODE_IS_SAMPLE);
 
     /* Tree flags */
-    PyModule_AddIntConstant(module, "LEAF_COUNTS", MSP_LEAF_COUNTS);
-    PyModule_AddIntConstant(module, "LEAF_LISTS", MSP_LEAF_LISTS);
+    PyModule_AddIntConstant(module, "SAMPLE_COUNTS", MSP_SAMPLE_COUNTS);
+    PyModule_AddIntConstant(module, "SAMPLE_LISTS", MSP_SAMPLE_LISTS);
     /* Directions */
     PyModule_AddIntConstant(module, "FORWARD", MSP_DIR_FORWARD);
     PyModule_AddIntConstant(module, "REVERSE", MSP_DIR_REVERSE);

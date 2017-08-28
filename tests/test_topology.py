@@ -137,43 +137,43 @@ class TopologyTestCase(unittest.TestCase):
         v2 = list(ts2.variants(as_bytes=True))
         self.assertEqual(v1, v2)
 
-    def check_num_leaves(self, ts, x):
+    def check_num_samples(self, ts, x):
         """
         Compare against x, a list of tuples of the form
-        `(tree number, parent, number of leaves)`.
+        `(tree number, parent, number of samples)`.
         """
         k = 0
-        tss = ts.trees(leaf_counts=True)
+        tss = ts.trees(sample_counts=True)
         t = next(tss)
         for j, node, nl in x:
             while k < j:
                 t = next(tss)
                 k += 1
-            self.assertEqual(nl, t.num_leaves(node))
+            self.assertEqual(nl, t.num_samples(node))
 
-    def check_num_tracked_leaves(self, ts, tracked_leaves, x):
+    def check_num_tracked_samples(self, ts, tracked_samples, x):
         k = 0
-        tss = ts.trees(leaf_counts=True, tracked_leaves=tracked_leaves)
+        tss = ts.trees(sample_counts=True, tracked_samples=tracked_samples)
         t = next(tss)
         for j, node, nl in x:
             while k < j:
                 t = next(tss)
                 k += 1
-            self.assertEqual(nl, t.num_tracked_leaves(node))
+            self.assertEqual(nl, t.num_tracked_samples(node))
 
-    def check_leaf_iterator(self, ts, x):
+    def check_sample_iterator(self, ts, x):
         """
         Compare against x, a list of tuples of the form
-        `(tree number, node, leaf ID list)`.
+        `(tree number, node, sample ID list)`.
         """
         k = 0
-        tss = ts.trees(leaf_lists=True)
+        tss = ts.trees(sample_lists=True)
         t = next(tss)
-        for j, node, leaves in x:
+        for j, node, samples in x:
             while k < j:
                 t = next(tss)
                 k += 1
-            for u, v in zip(leaves, t.leaves(node)):
+            for u, v in zip(samples, t.samples(node)):
                 self.assertEqual(u, v)
 
 
@@ -493,8 +493,8 @@ class TestGeneralSamples(TopologyTestCase):
             for u1 in t1.nodes():
                 u2 = node_map[u1]
                 self.assertEqual(
-                    sorted([node_map[v] for v in t1.leaves(u1)]),
-                    sorted(list(t2.leaves(u2))))
+                    sorted([node_map[v] for v in t1.samples(u1)]),
+                    sorted(list(t2.samples(u2))))
             j += 1
         self.assertEqual(j, ts.num_trees)
 
@@ -1991,17 +1991,20 @@ class TestWithVisuals(TopologyTestCase):
                     self.assertEqual(a[k], msprime.NULL_NODE)
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
-        self.check_num_leaves(ts,
-                              [(0, 5, 4), (0, 2, 1), (0, 7, 4), (0, 4, 2),
-                               (1, 4, 1), (1, 5, 3), (1, 8, 4), (1, 0, 0),
-                               (2, 5, 4), (2, 1, 1)])
-        self.check_num_tracked_leaves(ts, [1, 2, 5],
-                                      [(0, 5, 3), (0, 2, 1), (0, 7, 3), (0, 4, 1),
-                                       (1, 4, 1), (1, 5, 3), (1, 8, 3), (1, 0, 0),
-                                       (2, 5, 3), (2, 1, 1)])
-        self.check_leaf_iterator(ts,
-                                 [(0, 0, []), (0, 5, [5, 1, 2, 3]), (0, 4, [2, 3]),
-                                  (1, 5, [5, 1, 2]), (2, 4, [2, 3])])
+        self.check_num_samples(
+            ts,
+            [(0, 5, 4), (0, 2, 1), (0, 7, 4), (0, 4, 2),
+             (1, 4, 1), (1, 5, 3), (1, 8, 4), (1, 0, 0),
+             (2, 5, 4), (2, 1, 1)])
+        self.check_num_tracked_samples(
+            ts, [1, 2, 5],
+            [(0, 5, 3), (0, 2, 1), (0, 7, 3), (0, 4, 1),
+             (1, 4, 1), (1, 5, 3), (1, 8, 3), (1, 0, 0),
+             (2, 5, 3), (2, 1, 1)])
+        self.check_sample_iterator(
+            ts,
+            [(0, 0, []), (0, 5, [5, 1, 2, 3]), (0, 4, [2, 3]),
+             (1, 5, [5, 1, 2]), (2, 4, [2, 3])])
         # pedantically check the SparseTree methods on the second tree
         tst = ts.trees()
         t = next(tst)
@@ -2009,12 +2012,16 @@ class TestWithVisuals(TopologyTestCase):
         self.assertEqual(t.branch_length(1), 0.4)
         self.assertEqual(t.is_internal(0), False)
         self.assertEqual(t.is_leaf(0), True)
+        self.assertEqual(t.is_sample(0), False)
         self.assertEqual(t.is_internal(1), False)
         self.assertEqual(t.is_leaf(1), True)
+        self.assertEqual(t.is_sample(1), True)
         self.assertEqual(t.is_internal(5), True)
         self.assertEqual(t.is_leaf(5), False)
+        self.assertEqual(t.is_sample(5), True)
         self.assertEqual(t.is_internal(4), True)
         self.assertEqual(t.is_leaf(4), False)
+        self.assertEqual(t.is_sample(4), False)
         self.assertEqual(t.root, 8)
         self.assertEqual(t.mrca(0, 1), 5)
         self.assertEqual(t.sample_size, 4)
@@ -2322,7 +2329,7 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(ts.num_sites, 1)
         self.assertEqual(ts.num_mutations, 3)
         self.assertEqual(list(ts.haplotypes()), ["0", "1", "0", "0", "1"])
-        # First check if we simplify for all leaves and keep original state.
+        # First check if we simplify for all samples and keep original state.
         tss = self.do_simplify(ts, [0, 1, 2, 3, 4])
         self.assertEqual(tss.sample_size, 5)
         self.assertEqual(tss.num_sites, 1)

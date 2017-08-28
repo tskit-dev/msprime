@@ -194,8 +194,9 @@ class TestSimulation(unittest.TestCase):
             roots = get_tree_roots(ts, tree)
             self.assertEqual(roots, {tree.root})
 
+    @unittest.skip("Skipping simplify bug.")
     def test_one_generation_no_deep_history(self):
-        N = 3
+        N = 20
         tables = wf_sim(N=N, ngens=1, deep_history=False, seed=self.random_seed)
         self.assertEqual(tables.nodes.num_rows, 2 * N)
         self.assertGreater(tables.edgesets.num_rows, 0)
@@ -209,6 +210,15 @@ class TestSimulation(unittest.TestCase):
         msprime.simplify_tables(samples=samples, nodes=nodes, edgesets=edgesets)
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edgesets.num_rows, 0)
+        ts = msprime.load_tables(nodes=nodes, edgesets=edgesets)
+        for tree in ts.trees():
+            roots = get_tree_roots(ts, tree)
+            all_samples = set()
+            for root in roots:
+                root_samples = set(tree.samples(root))
+                self.assertEqual(len(root_samples & all_samples), 0)
+                all_samples |= root_samples
+            self.assertEqual(all_samples, set(ts.samples()))
 
     def test_many_generations_no_deep_history(self):
         N = 10

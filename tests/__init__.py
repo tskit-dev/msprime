@@ -247,20 +247,17 @@ class PythonTreeSequence(object):
         st = PythonSparseTree()
         st.sample_size = self._tree_sequence.get_sample_size()
         st.left = 0
-        st.time = {j: 0 for j in range(st.sample_size)}
         while j < M:
             x = l[I[j]]
             while r[O[k]] == x:
                 h = O[k]
                 del st.children[u[h]]
-                del st.time[u[h]]
                 for q in c[h]:
                     del st.parent[q]
                 k += 1
             while j < M and l[I[j]] == x:
                 h = I[j]
                 st.children[u[h]] = c[h]
-                st.time[u[h]] = t[h]
                 for q in c[h]:
                     st.parent[q] = u[h]
                 j += 1
@@ -275,6 +272,9 @@ class PythonTreeSequence(object):
             # Add in all the sites
             st.site_list = [
                 site for site in self._sites if st.left <= site.position < st.right]
+            st.time = {
+                j: self._tree_sequence.get_node(j)[1] for j in st.parent.keys()}
+            st.time[st.root] = self._tree_sequence.get_node(st.root)[1]
             yield st
 
 

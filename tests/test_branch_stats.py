@@ -188,12 +188,12 @@ def branch_length_f2(ts, A, B, begin=0.0, end=None):
     return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * (len(B) - 1))
 
 
-def branch_stats_node_iter(ts, leaf_sets, weight_fun, method='length'):
+def branch_stats_node_iter(ts, sample_sets, weight_fun, method='length'):
     '''
-    Here leaf_sets is a list of lists of leaves, and weight_fun is a function
-    whose argument is a list of integers of the same length as leaf_sets
+    Here sample_sets is a list of lists of samples, and weight_fun is a function
+    whose argument is a list of integers of the same length as sample_sets
     that returns a number.  Each branch in a tree is weighted by weight_fun(x),
-    where x[i] is the number of leaves in leaf_sets[i] below that
+    where x[i] is the number of samples in sample_sets[i] below that
     branch.  This finds the sum of all counted branches for each tree,
     and averages this across the tree sequence ts, weighted by genomic length.
 
@@ -202,19 +202,20 @@ def branch_stats_node_iter(ts, leaf_sets, weight_fun, method='length'):
 
     This version is inefficient as it iterates over all nodes in each tree.
     '''
-    out = branch_stats_vector_node_iter(ts, leaf_sets, lambda x: [weight_fun(x)], method)
+    out = branch_stats_vector_node_iter(
+        ts, sample_sets, lambda x: [weight_fun(x)], method)
     if len(out) > 1:
         raise ValueError("Expecting output of length 1.")
     return out[0]
 
 
-def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
+def branch_stats_vector_node_iter(ts, sample_sets, weight_fun, method='length'):
     '''
-    Here leaf_sets is a list of lists of leaves, and weight_fun is a function
-    whose argument is a list of integers of the same length as leaf_sets
+    Here sample_sets is a list of lists of samples, and weight_fun is a function
+    whose argument is a list of integers of the same length as sample_sets
     that returns a list of numbers; there will be one output for each element.
     For each value, each branch in a tree is weighted by weight_fun(x),
-    where x[i] is the number of leaves in leaf_sets[i] below that
+    where x[i] is the number of samples in sample_sets[i] below that
     branch.  This finds the sum of all counted branches for each tree,
     and averages this across the tree sequence ts, weighted by genomic length.
 
@@ -223,14 +224,14 @@ def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
 
     This version is inefficient as it iterates over all nodes in each tree.
     '''
-    for U in leaf_sets:
+    for U in sample_sets:
         if max([U.count(x) for x in set(U)]) > 1:
-            raise ValueError("elements of leaf_sets cannot contain repeated elements.")
+            raise ValueError("elements of sample_sets cannot contain repeated elements.")
     tr_its = [ts.trees(
-        tracked_leaves=x,
-        leaf_counts=True,
-        leaf_lists=True) for x in leaf_sets]
-    n_out = len(weight_fun([0 for a in leaf_sets]))
+        tracked_samples=x,
+        sample_counts=True,
+        sample_lists=True) for x in sample_sets]
+    n_out = len(weight_fun([0 for a in sample_sets]))
     S = [0.0 for j in range(n_out)]
     for k in range(ts.num_trees):
         trs = [next(x) for x in tr_its]
@@ -239,13 +240,13 @@ def branch_stats_vector_node_iter(ts, leaf_sets, weight_fun, method='length'):
         if method == 'length':
             for node in trs[0].nodes():
                 if node != root:
-                    x = [tr.num_tracked_leaves(node) for tr in trs]
+                    x = [tr.num_tracked_samples(node) for tr in trs]
                     w = weight_fun(x)
                     for j in range(n_out):
                         S[j] += w[j] * trs[0].branch_length(node) * tr_len
         elif method == 'mutations':
             count_nodes = dict(
-                [(node, weight_fun([tr.num_tracked_leaves(node) for tr in trs]))
+                [(node, weight_fun([tr.num_tracked_samples(node) for tr in trs]))
                     for node in trs[0].nodes() if node != root])
             # print(count_nodes)
             # TODO update this to use sites rather than mutations.
@@ -372,13 +373,13 @@ class BranchStatsTestCase(unittest.TestCase):
                     branch_length_diversity(ts, A[0], A[1]))
 
     def check_tmrca_matrix(self, ts):
-        # nonoverlapping leaves
-        leaves = random.sample(ts.samples(), 6)
-        A = [leaves[0:3], leaves[3:5], leaves[5:6]]
+        # nonoverlapping samples
+        samples = random.sample(ts.samples(), 6)
+        A = [samples[0:3], samples[3:5], samples[5:6]]
         windows = [0.0, ts.sequence_length/2, ts.sequence_length]
         ts_values = ts.mean_pairwise_tmrca(A, windows)
         ts_matrix_values = ts.mean_pairwise_tmrca_matrix(A, windows)
-        self.assertListEqual([len(x) for x in ts_values], [len(leaves), len(leaves)])
+        self.assertListEqual([len(x) for x in ts_values], [len(samples), len(samples)])
         assert(len(A[2]) == 1)
         self.assertListEqual([x[5] for x in ts_values], [np.nan, np.nan])
         self.assertEqual(len(ts_values), len(ts_matrix_values))
@@ -527,7 +528,7 @@ class BranchStatsTestCase(unittest.TestCase):
         self.assertRaises(ValueError,
                           ts.mean_pairwise_tmrca, [[0], [1]], [0.0, 2.0, 1.0,
                                                                ts.sequence_length])
-        # errors for not enough leaf_sets
+        # errors for not enough sample_sets
         self.assertRaises(ValueError,
                           ts.f4, [[0, 1], [2], [3]], [0, ts.sequence_length])
         self.assertRaises(ValueError,
@@ -813,7 +814,7 @@ class BranchStatsTestCase(unittest.TestCase):
         def f(x):
             return [1.0]
 
-        # Duplicated leaves raise an error
+        # Duplicated samples raise an error
         self.assertRaises(ValueError, ts.branch_stats_vector, [[1, 1]], f)
         self.assertRaises(ValueError, ts.branch_stats_vector, [[1], [2, 2]], f)
         # Make sure the basic call doesn't throw an exception

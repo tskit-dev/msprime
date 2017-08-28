@@ -72,12 +72,12 @@ ld_calc_alloc(ld_calc_t *self, tree_sequence_t *tree_sequence)
         goto out;
     }
     ret = sparse_tree_alloc(self->outer_tree, self->tree_sequence,
-            MSP_LEAF_COUNTS|MSP_LEAF_LISTS);
+            MSP_SAMPLE_COUNTS|MSP_SAMPLE_LISTS);
     if (ret != 0) {
         goto out;
     }
     ret = sparse_tree_alloc(self->inner_tree, self->tree_sequence,
-            MSP_LEAF_COUNTS);
+            MSP_SAMPLE_COUNTS);
     if (ret != 0) {
         goto out;
     }
@@ -177,23 +177,23 @@ ld_calc_overlap_within_tree(ld_calc_t *self, site_t sA, site_t sB)
     }
     nAB = 0;
     if (u == v) {
-        nAB = GSL_MIN(t->num_leaves[sA.mutations[0].node], t->num_leaves[sB.mutations[0].node]);
+        nAB = GSL_MIN(t->num_samples[sA.mutations[0].node], t->num_samples[sB.mutations[0].node]);
     }
     return (double) nAB;
 }
 
 static inline int WARN_UNUSED
-ld_calc_set_tracked_leaves(ld_calc_t *self, site_t sA)
+ld_calc_set_tracked_samples(ld_calc_t *self, site_t sA)
 {
     int ret = 0;
-    leaf_list_node_t *head, *tail;
+    node_list_t *head, *tail;
 
     assert(sA.mutations_length == 1);
-    ret = sparse_tree_get_leaf_list(self->outer_tree, sA.mutations[0].node, &head, &tail);
+    ret = sparse_tree_get_sample_list(self->outer_tree, sA.mutations[0].node, &head, &tail);
     if (ret != 0) {
         goto out;
     }
-    ret = sparse_tree_set_tracked_leaves_from_leaf_list(self->inner_tree,
+    ret = sparse_tree_set_tracked_samples_from_sample_list(self->inner_tree,
             head, tail);
 out:
     return ret;
@@ -207,7 +207,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
     int ret = MSP_ERR_GENERIC;
     site_t sA, sB;
     double fA, fB, fAB, D;
-    int tracked_leaves_set = 0;
+    int tracked_samples_set = 0;
     sparse_tree_t *tA, *tB;
     double n = (double) tree_sequence_get_sample_size(self->tree_sequence);
     size_t j;
@@ -221,7 +221,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
     }
     assert(sA.mutations_length == 1);
     assert(tA->parent[sA.mutations[0].node] != MSP_NULL_NODE);
-    fA = ((double) tA->num_leaves[sA.mutations[0].node]) / n;
+    fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
     assert(fA > 0);
     tB->mark = 1;
     for (j = 0; j < max_sites; j++) {
@@ -245,20 +245,20 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
             assert(ret == 1);
         }
         assert(tB->parent[sB.mutations[0].node] != MSP_NULL_NODE);
-        fB = ((double) tB->num_leaves[sB.mutations[0].node]) / n;
+        fB = ((double) tB->num_samples[sB.mutations[0].node]) / n;
         assert(fB > 0);
         if (sB.position < tA->right) {
             nAB = ld_calc_overlap_within_tree(self, sA, sB);
         } else {
-            if (!tracked_leaves_set && tB->marked[sA.mutations[0].node] == 1) {
-                tracked_leaves_set = 1;
-                ret = ld_calc_set_tracked_leaves(self, sA);
+            if (!tracked_samples_set && tB->marked[sA.mutations[0].node] == 1) {
+                tracked_samples_set = 1;
+                ret = ld_calc_set_tracked_samples(self, sA);
                 if (ret != 0) {
                     goto out;
                 }
             }
-            if (tracked_leaves_set) {
-                nAB = (double)tB->num_tracked_leaves[sB.mutations[0].node];
+            if (tracked_samples_set) {
+                nAB = (double)tB->num_tracked_samples[sB.mutations[0].node];
             } else {
                 nAB = ld_calc_overlap_within_tree(self, sA, sB);
             }
@@ -292,7 +292,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
     int ret = MSP_ERR_GENERIC;
     site_t sA, sB;
     double fA, fB, fAB, D;
-    int tracked_leaves_set = 0;
+    int tracked_samples_set = 0;
     sparse_tree_t *tA, *tB;
     double n = (double) tree_sequence_get_sample_size(self->tree_sequence);
     size_t j;
@@ -307,7 +307,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
     }
     assert(sA.mutations_length == 1);
     assert(tA->parent[sA.mutations[0].node] != MSP_NULL_NODE);
-    fA = ((double) tA->num_leaves[sA.mutations[0].node]) / n;
+    fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
     assert(fA > 0);
     tB->mark = 1;
     for (j = 0; j < max_sites; j++) {
@@ -330,20 +330,20 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
             assert(ret == 1);
         }
         assert(tB->parent[sB.mutations[0].node] != MSP_NULL_NODE);
-        fB = ((double) tB->num_leaves[sB.mutations[0].node]) / n;
+        fB = ((double) tB->num_samples[sB.mutations[0].node]) / n;
         assert(fB > 0);
         if (sB.position >= tA->left) {
             nAB = ld_calc_overlap_within_tree(self, sA, sB);
         } else {
-            if (!tracked_leaves_set && tB->marked[sA.mutations[0].node] == 1) {
-                tracked_leaves_set = 1;
-                ret = ld_calc_set_tracked_leaves(self, sA);
+            if (!tracked_samples_set && tB->marked[sA.mutations[0].node] == 1) {
+                tracked_samples_set = 1;
+                ret = ld_calc_set_tracked_samples(self, sA);
                 if (ret != 0) {
                     goto out;
                 }
             }
-            if (tracked_leaves_set) {
-                nAB = (double) tB->num_tracked_leaves[sB.mutations[0].node];
+            if (tracked_samples_set) {
+                nAB = (double) tB->num_tracked_samples[sB.mutations[0].node];
             } else {
                 nAB = ld_calc_overlap_within_tree(self, sA, sB);
             }
@@ -434,9 +434,9 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     }
     assert(sA.mutations_length == 1);
     assert(tA->parent[sA.mutations[0].node] != MSP_NULL_NODE);
-    fA = ((double) tA->num_leaves[sA.mutations[0].node]) / n;
+    fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
     assert(fA > 0);
-    ret = ld_calc_set_tracked_leaves(self, sA);
+    ret = ld_calc_set_tracked_samples(self, sA);
     if (ret != 0) {
         goto out;
     }
@@ -449,9 +449,9 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
         assert(ret == 1);
     }
     assert(tB->parent[sB.mutations[0].node] != MSP_NULL_NODE);
-    fB = ((double) tB->num_leaves[sB.mutations[0].node]) / n;
+    fB = ((double) tB->num_samples[sB.mutations[0].node]) / n;
     assert(fB > 0);
-    nAB = (double) tB->num_tracked_leaves[sB.mutations[0].node];
+    nAB = (double) tB->num_tracked_samples[sB.mutations[0].node];
     fAB = nAB / n;
     D = fAB - fA * fB;
     *r2 = D * D / (fA * fB * (1 - fA) * (1 - fB));

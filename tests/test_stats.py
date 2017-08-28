@@ -43,15 +43,15 @@ def get_r2_matrix(ts):
             assert len(sA.mutations) == 1
             mA = sA.mutations[0]
             A[sA.index, sA.index] = 1
-            fA = t1.get_num_leaves(mA.node) / n
-            leaves = list(t1.leaves(mA.node))
-            for t2 in ts.trees(tracked_leaves=leaves):
+            fA = t1.get_num_samples(mA.node) / n
+            samples = list(t1.samples(mA.node))
+            for t2 in ts.trees(tracked_samples=samples):
                 for sB in t2.sites():
                     assert len(sB.mutations) == 1
                     mB = sB.mutations[0]
                     if sB.position > sA.position:
-                        fB = t2.get_num_leaves(mB.node) / n
-                        fAB = t2.get_num_tracked_leaves(mB.node) / n
+                        fB = t2.get_num_samples(mB.node) / n
+                        fAB = t2.get_num_tracked_samples(mB.node) / n
                         D = fAB - fA * fB
                         r2 = D * D / (fA * fB * (1 - fA) * (1 - fB))
                         A[sA.index, sB.index] = r2
