@@ -294,7 +294,7 @@ in the NodeTable constructed above using ``numpy`` indexing::
 Sorting tables
 ==============
 
-..autofunction:: msprime.sort_tables
+.. autofunction:: msprime.sort_tables(nodes, edgesets[, migrations, sites, mutations])
 
 
 NodeTable

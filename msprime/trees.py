@@ -49,8 +49,6 @@ import msprime.environment
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
 from _msprime import NODE_IS_SAMPLE
-from _msprime import sort_tables  # NOQA
-from _msprime import simplify_tables  # NOQA
 
 NULL_NODE = -1
 
@@ -391,6 +389,20 @@ class MutationTable(_msprime.MutationTable):
             site=self.site, node=self.node, derived_state=self.derived_state,
             derived_state_length=self.derived_state_length)
         return copy
+
+
+def sort_tables(*args, **kwargs):
+    """
+    TODO: document.
+    """
+    return _msprime.sort_tables(*args, **kwargs)
+
+
+def simplify_tables(*args, **kwargs):
+    """
+    TODO: document.
+    """
+    return _msprime.simplify_tables(*args, **kwargs)
 
 
 def pack_strings(strings):
