@@ -49,8 +49,6 @@ import msprime.environment
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
 from _msprime import NODE_IS_SAMPLE
-from _msprime import sort_tables  # NOQA
-from _msprime import simplify_tables  # NOQA
 
 NULL_NODE = -1
 
@@ -226,8 +224,8 @@ class EdgesetTable(_msprime.EdgesetTable):
     It is not required that all records corresponding to the same parent be
     adjacent in the table.
 
-    TODO: `TreeSequence.simplify()` will accept edgesets not satisfying the
-    fourth requirement, producing a `TreeSequence` whose edgesets are of this form.
+    `TreeSequence.simplify()` may be used to convert noncontradictory tables
+    into tables satisfying the full set of requirements.
     """
     def __str__(self):
         left = self.left
@@ -391,6 +389,58 @@ class MutationTable(_msprime.MutationTable):
             site=self.site, node=self.node, derived_state=self.derived_state,
             derived_state_length=self.derived_state_length)
         return copy
+
+
+def sort_tables(*args, **kwargs):
+    """
+    Sorts the given tables in place, as follows:
+
+    Edgesets are ordered by
+
+    - time of parent, then
+    - parent node ID, then
+    - left endpoint.
+
+    For each edgeset, the ``children`` are sorted by increasing node ID.
+
+    Sites are ordered by position, and Mutations are ordered by site.
+
+    .. todo:: Update this documentation to describe the keyword arguments and
+       combinations that are allowed.
+
+    :param NodeTable nodes:
+    :param EdgesetTable edgesets:
+    :param MigrationTable migrations:
+    :param SiteTable sites:
+    :param MutationTable mutations:
+    """
+    return _msprime.sort_tables(*args, **kwargs)
+
+
+def simplify_tables(*args, **kwargs):
+    """
+    Simplifies the tables, in place, to retain only the information necessary
+    to reconstruct the tree sequence describing the given ``samples``.  This
+    will change the ID of the nodes, so that the individual ``samples[k]]``
+    will have ID ``k`` in the result.  The resulting NodeTable will have only
+    the first ``len(samples)`` individuals marked as samples.
+
+    Tables operated on by this function must: be sorted (see ``sort_tables``),
+    have children be born strictly after their parents, and the intervals on
+    which any individual is a child must be disjoint; but other than this the
+    tables need not satisfy remaining requirements to specify a valid tree
+    sequence (but the resulting tables will).
+
+    :param list samples: A list of Node IDs of individuals to retain as samples.
+    :param NodeTable nodes: The NodeTable to be simplified.
+    :param EdgesetTable edgesets: The NodeTable to be simplified.
+    :param MigrationTable migrations: The MigrationTable to be simplified.
+    :param SiteTable sites: The SiteTable to be simplified.
+    :param MutationTable mutations: The MutationTable to be simplified.
+    :param bool filter_invariant_sites: Whether to remove sites that have no
+        mutations from the output.
+    """
+    return _msprime.simplify_tables(*args, **kwargs)
 
 
 def pack_strings(strings):
@@ -743,7 +793,11 @@ class SparseTree(object):
 
     @property
     def num_nodes(self):
-        # TODO documnent
+        """
+        Returns the number of nodes in the sparse tree.
+
+        :rtype: int
+        """
         return self._ll_sparse_tree.get_num_nodes()
 
     @property

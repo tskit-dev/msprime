@@ -49,10 +49,12 @@ node
 
     where ``flags`` records information about the ancestor; ``population`` is
     the integer ID of the ancestor's (birth) population, and ``time`` is how
-    long ago the ancestor was born.
+    long ago the ancestor was born.  Each node also has a unique (integer) ID,
+    but this is *not* recorded explicitly - rather, the individual's ID is
+    given by their position in the tree sequence's node table.
 
 samples
-    The tips of the tree, that we have obtained data from.  These are
+    Those nodes in the tree that we have obtained data from.  These are
     distinguished from other nodes by the fact that a tree sequence *must*
     describe the genealogical history of all samples at every point on the
     genome.  These are a special kind of node, having ``flags`` set to 1 (as a
@@ -81,10 +83,14 @@ and for algorithmic reasons:
 
 3. The leftmost endpoint of each chromosome is 0.0.
 4. Node times must be strictly greater than zero.
-5. The set of intervals on which each individual is a parent must be disjoint.
-6. The list of offspring in an edgeset must be sorted.
-7. Edgesets must be sorted in nondecreasing time order.
+5. The list of offspring in an edgeset must be sorted.
+6. Edgesets must be sorted in nondecreasing time order.
+7. The set of intervals on which each individual is a parent must be disjoint.
 8. Each edgeset must contain at least two children.
+
+A set of tables satisfying requirements 1-4 can be transformed into a completely
+valid set of tables by applying first ``sort_tables`` (which ensures 5 and 6)
+and then ``simplify`` (which ensures 7 and 8).
 
 Note that since each node time is equal to the (birth) time of the
 corresponding parent, time is measured in clock time (not meioses).
@@ -129,8 +135,8 @@ site
         id	position	ancestral_state
         0	0.1	        0
 
-    The ``id`` is not stored directly, but is implied by its index in the site
-    table.
+    As with nodes, the ``id`` is not stored directly, but is implied by its
+    index in the site table.
 
 
 To allow for efficent algorithms, it is required that
@@ -191,7 +197,9 @@ Here is an example.  Consider the following sequence of trees::
 
     position 0.0                  0.2               0.8                1.0
 
-First, we specify the nodes in a ``NodeTable``::
+First, we specify the nodes::
+
+    NodeTable:
 
     id      is_sample    population   time
     0       1            0            0
@@ -202,9 +210,12 @@ First, we specify the nodes in a ``NodeTable``::
     5       0            0            0.7
     6       0            0            1.0
 
-Recall that the first column, ``id``, is not actually recorded, only provided
-for convenience.  This has three samples: nodes 0, 1, and 2, and lists their
-birth times.  Then, we specify the edgesets::
+Importantly, the first column, ``id``, is **not actually recorded**, and is
+only shown when printing out node tables (as here) for convenience. This has
+three samples: nodes 0, 1, and 2, and lists their birth times.  Then, we
+specify the edgesets::
+
+    EdgesetTable:
 
     left    right   parent  children
     0.2     0.8     3       0,2
@@ -227,11 +238,16 @@ mutation occurs at position 0.1 and the mutations in the second tree both
 occurred at the same position, at 0.5 (with a back mutation).  The positions
 are recorded in the sites table::
 
+    SiteTable:
+
     id	position	ancestral_state
     0	0.1     	0
     1	0.5     	0
 
-and the acutal mutations::
+As with node tables, the ``id`` column is **not** actually recorded, but is
+implied by the position in the table.  The acutal mutations are then recorded::
+
+    MutationTable:
 
     site	node	derived_state
     0	    4	    1
@@ -291,10 +307,16 @@ in the NodeTable constructed above using ``numpy`` indexing::
     n.set_columns(flags=fn, population=pn, time=tn)
 
 
-Sorting tables
-==============
+Sorting and simplifying tables
+==============================
 
-..autofunction:: msprime.sort_tables
+Tables that are noncontradictory but do not satisfy all algorithmic requirements
+listed above may be converted to a TreeSequence by first sorting, then simplifying
+them (both operate on the tables **in place**):
+
+.. autofunction:: msprime.sort_tables(nodes, edgesets[, migrations, sites, mutations])
+
+.. autofunction:: msprime.simplify_tables(samples, nodes, edgesets[, migrations, sites, mutations])
 
 
 NodeTable
