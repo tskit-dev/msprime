@@ -307,10 +307,16 @@ in the NodeTable constructed above using ``numpy`` indexing::
     n.set_columns(flags=fn, population=pn, time=tn)
 
 
-Sorting tables
-==============
+Sorting and simplifying tables
+==============================
+
+Tables that are noncontradictory but do not satisfy all algorithmic requirements
+listed above may be converted to a TreeSequence by first sorting, then simplifying
+them (both operate on the tables **in place**):
 
 .. autofunction:: msprime.sort_tables(nodes, edgesets[, migrations, sites, mutations])
+
+.. autofunction:: msprime.simplify_tables(samples, nodes, edgesets[, migrations, sites, mutations])
 
 
 NodeTable
