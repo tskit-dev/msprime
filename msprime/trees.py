@@ -396,12 +396,17 @@ def sort_tables(*args, **kwargs):
     Sorts the given tables in place, as follows:
 
     Edgesets are ordered by
+
     - time of parent, then
-    - left endpoint, then
-    - right endpoint,
-    and for each edgeset, the ``children`` are sorted.
+    - parent node ID, then
+    - left endpoint.
+
+    For each edgeset, the ``children`` are sorted by increasing node ID.
 
     Sites are ordered by position, and Mutations are ordered by site.
+
+    .. todo:: Update this documentation to describe the keyword arguments and
+       combinations that are allowed.
 
     :param NodeTable nodes:
     :param EdgesetTable edgesets:
