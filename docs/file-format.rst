@@ -89,8 +89,8 @@ and for algorithmic reasons:
 8. Each edgeset must contain at least two children.
 
 A set of tables satisfying requirements 1-4 can be transformed into a completely
-valid set of tables by applying first ``sort_tables`` (which ensures 5 and 6)
-and then ``simplify`` (which ensures 7 and 8).
+valid set of tables by applying first ``sort_tables()`` (which ensures 5 and 6)
+and then ``simplify_tables()`` (which ensures 7 and 8).
 
 Note that since each node time is equal to the (birth) time of the
 corresponding parent, time is measured in clock time (not meioses).
@@ -315,6 +315,10 @@ listed above may be converted to a TreeSequence by first sorting, then simplifyi
 them (both operate on the tables **in place**):
 
 .. autofunction:: msprime.sort_tables(nodes, edgesets[, migrations, sites, mutations])
+
+**Note:** the following function is more general than
+``TreeSequence.simplify()``, since it can be applied to tables not satisfying
+all criteria above (and that hence could not be loaded into a TreeSequence).
 
 .. autofunction:: msprime.simplify_tables(samples, nodes, edgesets[, migrations, sites, mutations])
 
