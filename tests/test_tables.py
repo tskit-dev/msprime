@@ -179,7 +179,6 @@ class CommonTestsMixin(object):
         self.assertEqual(table.num_rows, 0)
         self.assertEqual(len(table), 0)
 
-
     def test_defaults(self):
         table = self.table_class()
         self.assertEqual(table.num_rows, 0)
