@@ -224,7 +224,7 @@ class EdgesetTable(_msprime.EdgesetTable):
     It is not required that all records corresponding to the same parent be
     adjacent in the table.
 
-    `TreeSequence.simplify()` may be used to convert noncontradictory tables
+    `simplify_tables()` may be used to convert noncontradictory tables
     into tables satisfying the full set of requirements.
     """
     def __str__(self):
@@ -405,6 +405,10 @@ def sort_tables(*args, **kwargs):
 
     Sites are ordered by position, and Mutations are ordered by site.
 
+    Note: for general edgeset tables this only defines a partial ordering, but
+    for strict tables (namely, those for which edgesets belonging to a given
+    parent do not overlap) this enforces a complete ordering.
+
     .. todo:: Update this documentation to describe the keyword arguments and
        combinations that are allowed.
 
@@ -438,7 +442,7 @@ def simplify_tables(*args, **kwargs):
     :param SiteTable sites: The SiteTable to be simplified.
     :param MutationTable mutations: The MutationTable to be simplified.
     :param bool filter_invariant_sites: Whether to remove sites that have no
-        mutations from the output.
+        mutations from the output (default: True).
     """
     return _msprime.simplify_tables(*args, **kwargs)
 
@@ -3129,6 +3133,21 @@ class TreeSequence(object):
             output.write(record)
 
     def simplify(self, samples=None, filter_root_mutations=True):
+        """
+        Returns a simplified tree sequence, that retains only the history of
+        the nodes given in the list ``samples''.  This will change the ID of
+        the nodes, so that the individual ``samples[k]]`` will have ID ``k`` in
+        the result.  In the resulting TreeSequence, the first ``len(samples)``
+        nodes will be marked as samples.
+
+        If you wish to convert a set of tables that do not satisfy all
+        requirements for building a TreeSequence, then use
+        ``simplify_tables()``.
+
+        :param list samples: The list of nodes for which to retain information.
+        :param bool filter_root_mutations: Whether to remove sites at which there
+            are no mutations.
+        """
         if samples is None:
             samples = self.get_samples()
         ll_ts = _msprime.TreeSequence()
