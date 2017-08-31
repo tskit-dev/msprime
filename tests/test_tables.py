@@ -177,10 +177,13 @@ class CommonTestsMixin(object):
             with self.assertRaises(AttributeError):
                 setattr(table, col.name, np.zeros(5))
         self.assertEqual(table.num_rows, 0)
+        self.assertEqual(len(table), 0)
+
 
     def test_defaults(self):
         table = self.table_class()
         self.assertEqual(table.num_rows, 0)
+        self.assertEqual(len(table), 0)
         for param, default in self.input_parameters:
             self.assertEqual(getattr(table, param), default)
         for col in self.columns:
@@ -204,6 +207,7 @@ class CommonTestsMixin(object):
                     self.assertTrue(np.all(input_array == output_array))
                 table.reset()
                 self.assertEqual(table.num_rows, 0)
+                self.assertEqual(len(table), 0)
                 for colname in input_data.keys():
                     self.assertEqual(list(getattr(table, colname)), [])
 
@@ -224,6 +228,7 @@ class CommonTestsMixin(object):
                     self.assertEqual(input_array.shape, output_array.shape)
                     self.assertTrue(np.array_equal(input_array, output_array))
                 self.assertEqual(table.num_rows, j * num_rows)
+                self.assertEqual(len(table), j * num_rows)
 
     def test_append_columns_max_rows(self):
         for num_rows in [0, 10, 100, 1000]:
@@ -238,6 +243,7 @@ class CommonTestsMixin(object):
                 for j in range(1, 10):
                     table.append_columns(**input_data)
                     self.assertEqual(table.num_rows, j * num_rows)
+                    self.assertEqual(len(table), j * num_rows)
                     self.assertGreater(table.max_rows, table.num_rows)
                     if table.num_rows < max_rows:
                         self.assertEqual(table.max_rows, max_rows)
