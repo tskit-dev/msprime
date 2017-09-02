@@ -1613,6 +1613,69 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
 }
 
 static int WARN_UNUSED
+msp_recombine(msp_t *self, segment_t *x)
+{
+    int ret = 0;
+    int64_t k;
+    size_t segment_id;
+    double mu;
+    node_mapping_t search;
+    segment_t *y, *z *s;
+    segment_t *segs[2];
+    segment_t *seg_tails[2];
+
+    s = msp_alloc_segment(self, -1, -1, -1, -1, NULL, NULL);
+    if (s == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    self->num_re_events++;
+    /* We can't use the GSL integer generator here as the range is too large */
+
+    mu = 1.0 / self->scaled_recombination_rate;
+    k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu);
+
+    //printf( "l = %d, num_links = %d\n", (int)l, (int)num_links);
+    x = y->prev;
+    k = y->right - gap - 1;
+    assert(k >= 0 && k < self->num_loci);
+    if (y->left < k) {
+        z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value,
+                y->population_id, NULL, y->next);
+        if (z == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        if (y->next != NULL) {
+            y->next->prev = z;
+        }
+        y->next = NULL;
+        y->right = (uint32_t) k;
+        fenwick_increment(&self->links, y->id, k - z->right);
+        search.left = (uint32_t) k;
+        if (avl_search(&self->breakpoints, &search) == NULL) {
+            ret = msp_insert_breakpoint(self, (uint32_t) k);
+            if (ret != 0) {
+                goto out;
+            }
+        } else {
+            self->num_multiple_re_events++;
+        }
+    } else {
+        assert(x != NULL);
+        x->next = NULL;
+        y->prev = NULL;
+        z = y;
+        self->num_trapped_re_events++;
+    }
+    fenwick_set_value(&self->links, z->id, z->right - z->left - 1);
+    ret = msp_insert_individual(self, z);
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
 {
     int ret = 0;
