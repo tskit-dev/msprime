@@ -1613,16 +1613,18 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
 }
 
 static int WARN_UNUSED
-msp_recombine(msp_t *self, segment_t *x)
+msp_recombine(msp_t *self, segment_t *x, segment_t *segs)
 {
+    // TODO Best to return segment chains or modify provided array in-place?
     int ret = 0;
+    int ix = 0;
     int64_t k;
     size_t segment_id;
-    double mu;
+    double mu = 1.0 / self->scaled_recombination_rate;
     node_mapping_t search;
     segment_t *y, *z *s;
-    segment_t *segs[2];
-    segment_t *seg_tails[2];
+
+    k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu);
 
     s = msp_alloc_segment(self, -1, -1, -1, -1, NULL, NULL);
     if (s == NULL) {
@@ -1630,47 +1632,67 @@ msp_recombine(msp_t *self, segment_t *x)
         goto out;
     }
 
-    self->num_re_events++;
-    /* We can't use the GSL integer generator here as the range is too large */
+    // Not sure if assignment to pointer is correct here
+    segs[0] = x;
+    segs[1] = s;
+    segment_t *seg_tails[] = {x, s};
 
-    mu = 1.0 / self->scaled_recombination_rate;
-    k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu);
+    while ( x != NULL ) {
+        seg_tails[ix] = x;
+        y = x->next;
 
-    //printf( "l = %d, num_links = %d\n", (int)l, (int)num_links);
-    x = y->prev;
-    k = y->right - gap - 1;
-    assert(k >= 0 && k < self->num_loci);
-    if (y->left < k) {
-        z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value,
-                y->population_id, NULL, y->next);
-        if (z == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        if (y->next != NULL) {
-            y->next->prev = z;
-        }
-        y->next = NULL;
-        y->right = (uint32_t) k;
-        fenwick_increment(&self->links, y->id, k - z->right);
-        search.left = (uint32_t) k;
-        if (avl_search(&self->breakpoints, &search) == NULL) {
-            ret = msp_insert_breakpoint(self, (uint32_t) k);
-            if (ret != 0) {
+        while ( x->right > k ) {
+            self->num_re_events++;
+            ix = (ix + 1) % 2;
+
+            z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value,
+                    x->population_id, seg_tails[ix], x->next);
+            if (z == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
                 goto out;
             }
-        } else {
-            self->num_multiple_re_events++;
+            if (x->next != NULL) {
+                x->next->prev = z;
+            }
+            seg_tails[ix]->next = z;
+            seg_tails[ix] = z;
+            x->next = NULL;
+            x->right = (uint32_t) k;
+            k = (int64_t) x->left +
+                (int64_t) gsl_ran_exponential(self->rng, mu);
+            x = z;
         }
-    } else {
-        assert(x != NULL);
-        x->next = NULL;
-        y->prev = NULL;
-        z = y;
-        self->num_trapped_re_events++;
+        if ( y != NULL && y->left > k ) {
+            // Recombine in gap between segment and the next
+            x->next = NULL;
+            y->prev = NULL;
+            while ( y->left > k ) {
+                self->num_re_events++;
+                is = (ix + 1) % 2;
+                k = (int64_t) x->left +
+                    (int64_t) gsl_ran_exponential(self->rng, mu);
+            }
+            seg_tails[ix].next = y;
+            y->prev = seg_tails[ix];
+            seg_tails[ix] = y;
+        }
+        x = y;
     }
-    fenwick_set_value(&self->links, z->id, z->right - z->left - 1);
-    ret = msp_insert_individual(self, z);
+    // Remove sentinal segment
+    if ( segs[1]->next != NULL ) {
+        segs[1]->next->prev = NULL;
+    }
+    segs[1] = segs[1]->next;
+    msp_free_segment(self, s);
+
+    // Shuffle segments
+    // TODO Make sure this shuffles and doesn't drop segments
+    unsigned long int u = gsl_rng_uniform_int (self->rng, 2);
+    if ( u % 2 == 0 ) {
+        segment_t tmp = segs[0];
+        segs[0] = segs[1];
+        segs[1] = tmp;
+    }
 out:
     return ret;
 }
@@ -2689,30 +2711,25 @@ msp_run_standard_coalescent(msp_t *self, double max_time, unsigned long max_even
     population_id_t ca_pop_id, mig_source_pop, mig_dest_pop;
     unsigned long events = 0;
     sampling_event_t *se;
+    /* pop = &self->populations[source].ancestors; */
+    /* node = pop->head; */
+    /* while (node != NULL) { */
+    /*     next = node->next; */
+    /*     if (gsl_rng_uniform(self->rng) < p) { */
+    /*         ret = msp_move_individual(self, node, pop, dest); */
+    /*         if (ret != 0) { */
+    /*             goto out; */
+    /*         } */
+    /*     } */
+    /*     node = next; */
+    /* } */
 
     while (msp_get_num_ancestors(self) > 0
             && self->time < max_time && events < max_events) {
         events++;
-        num_links = fenwick_get_total(&self->links);
         ret = msp_sanity_check(self, num_links);
         if (ret != 0) {
             goto out;
-        }
-        /* Recombination */
-        lambda = (double) num_links * self->scaled_recombination_rate;
-        re_t_wait = DBL_MAX;
-        if (lambda != 0.0) {
-            re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
-        }
-        /* Common ancestors */
-        ca_t_wait = DBL_MAX;
-        ca_pop_id = 0;
-        for (j = 0; j < self->num_populations; j++) {
-            t_temp = msp_get_common_ancestor_waiting_time(self, j);
-            if (t_temp < ca_t_wait) {
-                ca_t_wait = t_temp;
-                ca_pop_id = (population_id_t) j;
-            }
         }
         /* Migration */
         mig_t_wait = DBL_MAX;
@@ -2738,14 +2755,6 @@ msp_run_standard_coalescent(msp_t *self, double max_time, unsigned long max_even
                 }
             }
         }
-        t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
-        if (self->next_demographic_event == NULL
-                && self->next_sampling_event == self->num_sampling_events
-                && t_wait == DBL_MAX) {
-            ret = MSP_ERR_INFINITE_WAITING_TIME;
-            goto out;
-        }
-        t_temp = self->time + t_wait;
         sampling_event_time = DBL_MAX;
         if (self->next_sampling_event < self->num_sampling_events) {
             sampling_event_time = self->sampling_events[
