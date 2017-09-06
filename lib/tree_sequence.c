@@ -2423,7 +2423,7 @@ tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgese
     edgeset->left = self->edgesets.left[index];
     edgeset->right = self->edgesets.right[index];
     edgeset->parent = self->edgesets.parent[index];
-    edgeset->children_length = (size_t) self->edgesets.children_length[index];
+    edgeset->children_length = self->edgesets.children_length[index];
     edgeset->children = self->edgesets.children[index];
 out:
     return ret;

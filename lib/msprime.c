@@ -1612,90 +1612,86 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
     return 0;
 }
 
-static int WARN_UNUSED
-msp_recombine(msp_t *self, segment_t *x, segment_t *segs)
-{
-    // TODO Best to return segment chains or modify provided array in-place?
-    int ret = 0;
-    int ix = 0;
-    int64_t k;
-    size_t segment_id;
-    double mu = 1.0 / self->scaled_recombination_rate;
-    node_mapping_t search;
-    segment_t *y, *z *s;
-
-    k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu);
-
-    s = msp_alloc_segment(self, -1, -1, -1, -1, NULL, NULL);
-    if (s == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-
-    // Not sure if assignment to pointer is correct here
-    segs[0] = x;
-    segs[1] = s;
-    segment_t *seg_tails[] = {x, s};
-
-    while ( x != NULL ) {
-        seg_tails[ix] = x;
-        y = x->next;
-
-        while ( x->right > k ) {
-            self->num_re_events++;
-            ix = (ix + 1) % 2;
-
-            z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value,
-                    x->population_id, seg_tails[ix], x->next);
-            if (z == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            if (x->next != NULL) {
-                x->next->prev = z;
-            }
-            seg_tails[ix]->next = z;
-            seg_tails[ix] = z;
-            x->next = NULL;
-            x->right = (uint32_t) k;
-            k = (int64_t) x->left +
-                (int64_t) gsl_ran_exponential(self->rng, mu);
-            x = z;
-        }
-        if ( y != NULL && y->left > k ) {
-            // Recombine in gap between segment and the next
-            x->next = NULL;
-            y->prev = NULL;
-            while ( y->left > k ) {
-                self->num_re_events++;
-                is = (ix + 1) % 2;
-                k = (int64_t) x->left +
-                    (int64_t) gsl_ran_exponential(self->rng, mu);
-            }
-            seg_tails[ix].next = y;
-            y->prev = seg_tails[ix];
-            seg_tails[ix] = y;
-        }
-        x = y;
-    }
-    // Remove sentinal segment
-    if ( segs[1]->next != NULL ) {
-        segs[1]->next->prev = NULL;
-    }
-    segs[1] = segs[1]->next;
-    msp_free_segment(self, s);
-
-    // Shuffle segments
-    // TODO Make sure this shuffles and doesn't drop segments
-    unsigned long int u = gsl_rng_uniform_int (self->rng, 2);
-    if ( u % 2 == 0 ) {
-        segment_t tmp = segs[0];
-        segs[0] = segs[1];
-        segs[1] = tmp;
-    }
-out:
-    return ret;
-}
+/* static int WARN_UNUSED */
+/* msp_recombine(msp_t *self, segment_t *x, segment_t *u, segment_t *v) */
+/* { */
+/*     // TODO Provide two pointers to segments rather than a single pointer  */
+/*     int ret = 0; */
+/*     int ix; */
+/*     int64_t k; */
+/*     double mu = 1.0 / self->scaled_recombination_rate; */
+/*     segment_t *y, *z, *s; */
+/*     segment_t *seg_tails[] = {u, v}; */
+/*  */
+/*     if ( gsl_rng_uniform(self->rng) < 0.5 ) */
+/*         ix = 0; */
+/*     else */
+/*         ix = 1; */
+/*     seg_tails[ix]->next = x; */
+/*     seg_tails[ix] = x; */
+/*  */
+/*     k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu); */
+/*  */
+/*     while ( x != NULL ) { */
+/*         seg_tails[ix] = x; */
+/*         y = x->next; */
+/*  */
+/*         if ( x->right > k ) { */
+/*             self->num_re_events++; */
+/*             ix = (ix + 1) % 2; */
+/*             // Make new segment */
+/*             z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value, */
+/*                     x->population_id, seg_tails[ix], x->next); */
+/*             if (z == NULL) { */
+/*                 ret = MSP_ERR_NO_MEMORY; */
+/*                 goto out; */
+/*             } */
+/*             if (x->next != NULL) { */
+/*                 x->next->prev = z; */
+/*             } */
+/*             seg_tails[ix]->next = z; */
+/*             seg_tails[ix] = z; */
+/*             x->next = NULL; */
+/*             x->right = (uint32_t) k; */
+/*             k = (int64_t) x->left + */
+/*                 (int64_t) gsl_ran_exponential(self->rng, mu); */
+/*             x = z; */
+/*         } */
+/*         else if ( x->right < k && y != NULL && y->left > k ) { */
+/*             // Recombine in gap between segment and the next */
+/*             x->next = NULL; */
+/*             y->prev = NULL; */
+/*             while ( y->left > k ) { */
+/*                 self->num_re_events++; */
+/*                 ix = (ix + 1) % 2; */
+/*                 k = (int64_t) x->left + */
+/*                     (int64_t) gsl_ran_exponential(self->rng, mu); */
+/*             } */
+/*             seg_tails[ix]->next = y; */
+/*             y->prev = seg_tails[ix]; */
+/*             seg_tails[ix] = y; */
+/*             x = y; */
+/*         } */
+/*         else */
+/*             x = y; */
+/*     } */
+/*     // Remove sentinal segments */
+/*     if ( u->next != NULL ) { */
+/*         u->next->prev = NULL; */
+/*     } */
+/*     s = u; */
+/*     u = u->next; */
+/*     msp_free_segment(self, s); */
+/*  */
+/*     if ( v->next != NULL ) { */
+/*         v->next->prev = NULL; */
+/*     } */
+/*     s = v; */
+/*     v = v->next; */
+/*     msp_free_segment(self, s); */
+/* out: */
+/*     return ret; */
+/* } */
 
 static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
@@ -2711,25 +2707,30 @@ msp_run_standard_coalescent(msp_t *self, double max_time, unsigned long max_even
     population_id_t ca_pop_id, mig_source_pop, mig_dest_pop;
     unsigned long events = 0;
     sampling_event_t *se;
-    /* pop = &self->populations[source].ancestors; */
-    /* node = pop->head; */
-    /* while (node != NULL) { */
-    /*     next = node->next; */
-    /*     if (gsl_rng_uniform(self->rng) < p) { */
-    /*         ret = msp_move_individual(self, node, pop, dest); */
-    /*         if (ret != 0) { */
-    /*             goto out; */
-    /*         } */
-    /*     } */
-    /*     node = next; */
-    /* } */
 
     while (msp_get_num_ancestors(self) > 0
             && self->time < max_time && events < max_events) {
         events++;
+        num_links = fenwick_get_total(&self->links);
         ret = msp_sanity_check(self, num_links);
         if (ret != 0) {
             goto out;
+        }
+        /* Recombination */
+        lambda = (double) num_links * self->scaled_recombination_rate;
+        re_t_wait = DBL_MAX;
+        if (lambda != 0.0) {
+            re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
+        }
+        /* Common ancestors */
+        ca_t_wait = DBL_MAX;
+        ca_pop_id = 0;
+        for (j = 0; j < self->num_populations; j++) {
+            t_temp = msp_get_common_ancestor_waiting_time(self, j);
+            if (t_temp < ca_t_wait) {
+                ca_t_wait = t_temp;
+                ca_pop_id = (population_id_t) j;
+            }
         }
         /* Migration */
         mig_t_wait = DBL_MAX;
@@ -2755,6 +2756,14 @@ msp_run_standard_coalescent(msp_t *self, double max_time, unsigned long max_even
                 }
             }
         }
+        t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
+        if (self->next_demographic_event == NULL
+                && self->next_sampling_event == self->num_sampling_events
+                && t_wait == DBL_MAX) {
+            ret = MSP_ERR_INFINITE_WAITING_TIME;
+            goto out;
+        }
+        t_temp = self->time + t_wait;
         sampling_event_time = DBL_MAX;
         if (self->next_sampling_event < self->num_sampling_events) {
             sampling_event_time = self->sampling_events[
@@ -2795,6 +2804,130 @@ msp_run_standard_coalescent(msp_t *self, double max_time, unsigned long max_even
 out:
     return ret;
 }
+
+/* The main event loop for the Wright Fisher model.
+ */
+/* static int WARN_UNUSED */
+/* msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events) */
+/* { */
+/*     // TODO Store pointers to ancestors when grouping for merge */
+/*     int ret = 0; */
+/*     #<{(| double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait, |)}># */
+/*            #<{(| sampling_event_time, demographic_event_time; |)}># */
+/*     int64_t num_links = 0; */
+/*     #<{(| uint32_t j, k, n; |)}># */
+/*     uint32_t j, n; */
+/*     #<{(| population_id_t ca_pop_id, mig_source_pop, mig_dest_pop; |)}># */
+/*     unsigned long events = 0; */
+/*     #<{(| sampling_event_t *se; |)}># */
+/*     segment_t *u, *v; */
+/*  */
+/*     u = msp_alloc_segment(self, 0, 0, 0, 0, NULL, NULL); */
+/*     v = msp_alloc_segment(self, 0, 0, 0, 0, NULL, NULL); */
+/*     if (u == NULL || v == NULL) { */
+/*         ret = MSP_ERR_NO_MEMORY; */
+/*         goto out; */
+/*     } */
+/*     while (msp_get_num_ancestors(self) > 0 */
+/*             && self->time < max_time && events < max_events) { */
+/*         events++; */
+/*         self->time++; */
+/*         // NOTE: num_links is never properly set here */
+/*         ret = msp_sanity_check(self, num_links); */
+/*         if (ret != 0) { */
+/*             goto out; */
+/*         } */
+/*         for (j = 0; j < self->num_populations; j++) { */
+/*             n = avl_count(&self->populations[j].ancestors); */
+/*         } */
+/*         ret = msp_recombine(self, u, u, v); */
+/*     } */
+/*  */
+/* #<{(|     #<{(| #<{(| pop = &self->populations[source].ancestors; |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(| node = pop->head; |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(| while (node != NULL) { |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(|     next = node->next; |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(|     if (gsl_rng_uniform(self->rng) < p) { |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(|         ret = msp_move_individual(self, node, pop, dest); |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(|         if (ret != 0) { |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(|             goto out; |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(|         } |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(|     } |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(|     node = next; |)}># |)}># |)}># */
+/* #<{(|     #<{(| #<{(| } |)}># |)}># |)}># */
+/* #<{(|     #<{(|  |)}># |)}># */
+/* #<{(|     #<{(| while (msp_get_num_ancestors(self) > 0 |)}># |)}># */
+/* #<{(|     #<{(|         && self->time < max_time && events < max_events) { |)}># |)}># */
+/* #<{(|     #<{(|     events++; |)}># |)}># */
+/* #<{(|     #<{(|     ret = msp_sanity_check(self, num_links); |)}># |)}># */
+/* #<{(|     #<{(|     if (ret != 0) { |)}># |)}># */
+/* #<{(|     #<{(|         goto out; |)}># |)}># */
+/* #<{(|     #<{(|     } |)}># |)}># */
+/* #<{(|     #<{(|     #<{(| Migration |)}># |)}># |)}># */
+/* #<{(|     #<{(|     // TODO Remove and reimplement |)}># |)}># */
+/* #<{(|     #<{(|     mig_t_wait = DBL_MAX; |)}># |)}># */
+/* #<{(|     #<{(|     mig_source_pop = 0; |)}># |)}># */
+/* #<{(|     #<{(|     mig_dest_pop = 0; |)}># |)}># */
+/* #<{(|     #<{(|     for (j = 0; j < self->num_populations; j++) { |)}># |)}># */
+/* #<{(|     #<{(|         n = avl_count(&self->populations[j].ancestors); |)}># |)}># */
+/* #<{(|     #<{(|         for (k = 0; k < self->num_populations; k++) { |)}># |)}># */
+/* #<{(|     #<{(|             lambda = n * self->migration_matrix[ |)}># |)}># */
+/* #<{(|     #<{(|                 j * self->num_populations + k]; |)}># |)}># */
+/* #<{(|     #<{(|             if (lambda != 0.0) { |)}># |)}># */
+/* #<{(|     #<{(|                 t_temp = gsl_ran_exponential(self->rng, 1.0 / lambda); |)}># |)}># */
+/* #<{(|     #<{(|                 if (t_temp < mig_t_wait) { |)}># |)}># */
+/* #<{(|     #<{(|                     mig_t_wait = t_temp; |)}># |)}># */
+/* #<{(|     #<{(|                     #<{(| m[j, k] is the rate at which migrants move from |)}># |)}># */
+/* #<{(|     #<{(|                      * population k to j forwards in time. Backwards |)}># |)}># */
+/* #<{(|     #<{(|                      * in time, we move the individual from from |)}># |)}># */
+/* #<{(|     #<{(|                      * population j into population k. |)}># |)}># */
+/* #<{(|     #<{(|                      |)}># |)}># |)}># */
+/* #<{(|     #<{(|                     mig_source_pop = (population_id_t) j; |)}># |)}># */
+/* #<{(|     #<{(|                     mig_dest_pop = (population_id_t) k; |)}># |)}># */
+/* #<{(|     #<{(|                 } |)}># |)}># */
+/* #<{(|     #<{(|             } |)}># |)}># */
+/* #<{(|     #<{(|         } |)}># |)}># */
+/* #<{(|     #<{(|     } |)}># |)}># */
+/* #<{(|     #<{(|     sampling_event_time = DBL_MAX; |)}># |)}># */
+/* #<{(|     #<{(|     if (self->next_sampling_event < self->num_sampling_events) { |)}># |)}># */
+/* #<{(|     #<{(|         sampling_event_time = self->sampling_events[ |)}># |)}># */
+/* #<{(|     #<{(|             self->next_sampling_event].time; |)}># |)}># */
+/* #<{(|     #<{(|     } |)}># |)}># */
+/* #<{(|     #<{(|     demographic_event_time = DBL_MAX; |)}># |)}># */
+/* #<{(|     #<{(|     if (self->next_demographic_event != NULL) { |)}># |)}># */
+/* #<{(|     #<{(|         demographic_event_time = self->next_demographic_event->time; |)}># |)}># */
+/* #<{(|     #<{(|     } |)}># |)}># */
+/* #<{(|     #<{(|     if (sampling_event_time < t_temp |)}># |)}># */
+/* #<{(|     #<{(|             && sampling_event_time < demographic_event_time) { |)}># |)}># */
+/* #<{(|     #<{(|         se = &self->sampling_events[self->next_sampling_event]; |)}># |)}># */
+/* #<{(|     #<{(|         self->time = se->time; |)}># |)}># */
+/* #<{(|     #<{(|         ret = msp_insert_sample(self, se->sample, se->population_id); |)}># |)}># */
+/* #<{(|     #<{(|         if (ret != 0) { |)}># |)}># */
+/* #<{(|     #<{(|             goto out; |)}># |)}># */
+/* #<{(|     #<{(|         } |)}># |)}># */
+/* #<{(|     #<{(|         self->next_sampling_event++; |)}># |)}># */
+/* #<{(|     #<{(|     } else if (demographic_event_time < t_temp) { |)}># |)}># */
+/* #<{(|     #<{(|         ret = msp_apply_demographic_events(self); |)}># |)}># */
+/* #<{(|     #<{(|         if (ret != 0) { |)}># |)}># */
+/* #<{(|     #<{(|             goto out; |)}># |)}># */
+/* #<{(|     #<{(|         } |)}># |)}># */
+/* #<{(|     #<{(|     } else { |)}># |)}># */
+/* #<{(|     #<{(|         self->time += t_wait; |)}># |)}># */
+/* #<{(|     #<{(|         if (re_t_wait == t_wait) { |)}># |)}># */
+/* #<{(|     #<{(|             ret = msp_recombination_event(self); |)}># |)}># */
+/* #<{(|     #<{(|         } else if (ca_t_wait == t_wait) { |)}># |)}># */
+/* #<{(|     #<{(|             ret = msp_common_ancestor_event(self, ca_pop_id); |)}># |)}># */
+/* #<{(|     #<{(|         } else { |)}># |)}># */
+/* #<{(|     #<{(|             ret = msp_migration_event(self, mig_source_pop, mig_dest_pop); |)}># |)}># */
+/* #<{(|     #<{(|         } |)}># |)}># */
+/* #<{(|     #<{(|         if (ret != 0) { |)}># |)}># */
+/* #<{(|     #<{(|             goto out; |)}># |)}># */
+/* #<{(|     #<{(|         } |)}># |)}># */
+/* #<{(|     #<{(|     } |)}># |)}># */
+/* #<{(|     #<{(| } |)}># |)}># */
+/* out: */
+/*     return ret; */
+/* } */
 
 /* The main event loop for the Dirac and Beta multiple merger coalescents.
  */
@@ -2875,6 +3008,8 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
     if (model_type == MSP_MODEL_DIRAC || model_type == MSP_MODEL_BETA) {
         ret = msp_run_multiple_mergers_coalescent(self, max_time, max_events);
+    /* } else if (model_type == MSP_MODEL_WF) { */
+    /*     ret = msp_run_wright_fisher(self, max_time, max_events); */
     } else {
         ret = msp_run_standard_coalescent(self, max_time, max_events);
     }

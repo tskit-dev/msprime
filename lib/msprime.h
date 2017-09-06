@@ -59,6 +59,7 @@
 #define MSP_MODEL_SMC_PRIME 2
 #define MSP_MODEL_BETA 3
 #define MSP_MODEL_DIRAC 4
+#define MSP_MODEL_WF 5
 
 #define MSP_NODE_IS_SAMPLE 1
 
