@@ -1647,6 +1647,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t *u, segment_t *v)
         y = x->next;
 
         if ( x->right > k ) {
+            assert(x->left < k);
             printf("Recombining at %lu within segment\n", k);
             self->num_re_events++;
             ix = (ix + 1) % 2;
@@ -1665,10 +1666,9 @@ msp_recombine(msp_t *self, segment_t *x, segment_t *u, segment_t *v)
             x->next = NULL;
             x->right = (uint32_t) k;
             x = z;
-            k = (int64_t) x->left +
-                (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
+            k = k + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
         }
-        else if ( x->right < k && y != NULL && y->left > k ) {
+        else if ( x->right <= k && y != NULL && y->left > k ) {
             printf("Recombining at %lu in gap between segments\n", k);
             // Recombine in gap between segment and the next
             x->next = NULL;
@@ -1676,8 +1676,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t *u, segment_t *v)
             while ( y->left > k ) {
                 self->num_re_events++;
                 ix = (ix + 1) % 2;
-                k = (int64_t) x->left +
-                    (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
+                k = k + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
             }
             seg_tails[ix]->next = y;
             y->prev = seg_tails[ix];
@@ -1693,14 +1692,14 @@ msp_recombine(msp_t *self, segment_t *x, segment_t *u, segment_t *v)
         u->next->prev = NULL;
     }
     s = u;
-    u = u->next;
+    (*u) = (*u->next);
     msp_free_segment(self, s);
 
     if ( v->next != NULL ) {
         v->next->prev = NULL;
     }
     s = v;
-    v = v->next;
+    (*v) = (*v->next);
     msp_free_segment(self, s);
 out:
     return ret;
@@ -2858,8 +2857,8 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
     segment_list_t *s, *next;
 
     avl_node_t *a;
-    avl_node_t *node, *q_node;
-    avl_tree_t Q;
+    avl_node_t *node, *q_node_u, *q_node_v;
+    avl_tree_t Qu, Qv;
 
     printf("Running Wright Fisher\n");
 
@@ -2868,6 +2867,9 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
             && self->time < max_time && events < max_events) {
         events++;
         self->time++;
+        printf("------------------------");
+        printf("Time %d", (int) self->time);
+        printf("------------------------\n");
         // NOTE: num_links is never properly set here
         ret = msp_sanity_check(self, num_links);
         if (ret != 0) {
@@ -2896,12 +2898,10 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
             }
             for ( k = 0; k < N; k++) {
                 printf("------------------------");
-                printf("Offspring of parent %d", k);
-                printf("------------------------\n");
-                avl_init_tree(&Q, cmp_segment_queue, NULL);
-                printf("Created avl_tree\n");
+                printf("Offspring of parent %d\n", k);
+                avl_init_tree(&Qu, cmp_segment_queue, NULL);
+                avl_init_tree(&Qv, cmp_segment_queue, NULL);
                 s = parents[k];
-                printf("Found parent\n");
                 if (s == NULL) {
                     printf("NULL list - no offspring\n");
                     continue;
@@ -2924,26 +2924,36 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
                     if (ret != 0) {
                         goto out;
                     }
+                    msp_print_segment_chain(self, u, stdout);
+                    msp_print_segment_chain(self, v, stdout);
 
                     printf("%d\n", x->value);
                     printf("Unlinking node %d\n", x->value);
                     avl_unlink_node(&pop->ancestors, node);
                     msp_free_avl_node(self, node);
-                    q_node = msp_alloc_avl_node(self);
-                    if (q_node == NULL) {
+                    q_node_u = msp_alloc_avl_node(self);
+                    q_node_v = msp_alloc_avl_node(self);
+                    if (q_node_u == NULL || q_node_v == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
                         goto out;
                     }
-                    printf("Initializing node\n");
-                    avl_init_node(q_node, x);
-                    printf("Inserting node\n");
-                    q_node = avl_insert_node(&Q, q_node);
+                    printf("Initializing nodes\n");
+                    avl_init_node(q_node_u, u);
+                    avl_init_node(q_node_v, v);
+                    printf("Inserting nodes\n");
+                    q_node_u = avl_insert_node(&Qu, q_node_u);
+                    q_node_v = avl_insert_node(&Qv, q_node_v);
                     printf("Done inserting node\n");
-                    assert(q_node != NULL);
+                    assert(q_node_u != NULL && q_node_v != NULL);
                     s = next;
                     printf("Moved to next segment\n");
                 }
-                /* ret = msp_merge_ancestors(self, &Q, (population_id_t) j); */
+                printf("Merging u\n");
+                ret = msp_merge_ancestors(self, &Qu, (population_id_t) j);
+                printf("Merging v\n");
+                ret = msp_merge_ancestors(self, &Qv, (population_id_t) j);
+                
+                printf("Population size: %d\n", (uint32_t) msp_get_population_size(self, pop));
             }
         }
     }
