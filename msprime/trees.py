@@ -1120,16 +1120,15 @@ class SparseTree(object):
                 yield stack.pop()
 
     def _inorder_traversal(self, u):
-        stack = [u]
-        k, j = NULL_NODE, NULL_NODE
-        while stack:
-            v = stack.pop()
-            if self.is_internal(v) and v != k and v != j:
-                children = self.get_children(v)
-                j = stack[-1] if stack else NULL_NODE
-                stack.extend([children[1], v, children[0]])
-            else:
-                k = self.get_parent(v)
+        # TODO add a nonrecursive version of the inorder traversal.
+        children = self.get_children(u)
+        mid = len(children) // 2
+        for c in children[:mid]:
+            for v in self._inorder_traversal(c):
+                yield v
+        yield u
+        for c in children[mid:]:
+            for v in self._inorder_traversal(c):
                 yield v
 
     def _levelorder_traversal(self, u):

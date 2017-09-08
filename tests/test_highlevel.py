@@ -1492,7 +1492,12 @@ class TestSparseTree(HighLevelTestCase):
                 self.assertEqual(t.get_num_samples(u), len(l1))
 
     def test_traversals(self):
-        t1 = self.get_tree()
+        for ts in get_example_tree_sequences():
+            tree = next(ts.trees())
+            self.verify_traversals(tree)
+
+    def verify_traversals(self, tree):
+        t1 = tree
         t2 = tests.PythonSparseTree.from_sparse_tree(t1)
         self.assertEqual(list(t1.nodes()), list(t2.nodes()))
         self.assertEqual(list(t1.nodes()), list(t1.nodes(t1.get_root())))
@@ -1503,6 +1508,9 @@ class TestSparseTree(HighLevelTestCase):
             self.assertEqual(list(t1.nodes(u)), list(t2.nodes(u)))
         orders = ["inorder", "postorder", "levelorder", "breadthfirst"]
         for test_order in orders:
+            self.assertEqual(
+                sorted(list(t1.nodes())),
+                sorted(list(t1.nodes(order=test_order))))
             self.assertEqual(
                 list(t1.nodes(order=test_order)),
                 list(t1.nodes(t1.get_root(), order=test_order)))
