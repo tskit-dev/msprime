@@ -1623,6 +1623,8 @@ msp_recombine(msp_t *self, segment_t *x, segment_t *u, segment_t *v)
     segment_t *y, *z, *s;
     segment_t *seg_tails[] = {u, v};
 
+    printf("Recombining\n");
+
     if ( gsl_rng_uniform(self->rng) < 0.5 )
         ix = 0;
     else
@@ -2823,7 +2825,8 @@ out:
 }
 
 /* List structure for collecting segments by parent */
-typedef struct _segment_list_t {
+// TODO: change back to _segment_list_t?
+typedef struct segment_list_t {
     segment_t *segment;
     struct segment_list_t *next;
 } segment_list_t;
@@ -2840,8 +2843,11 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
     int64_t num_links = 0;
     uint32_t N = 0;
     population_t *pop;
+    avl_node_t *a;
+    uint32_t p;
+    segment_list_t *s;
 
-    segment_list_t **parents = calloc(N, sizeof(segment_list_t *));
+    printf("Running Wright Fisher\n");
 
     u = msp_alloc_segment(self, 0, 0, 0, 0, NULL, NULL);
     v = msp_alloc_segment(self, 0, 0, 0, 0, NULL, NULL);
@@ -2849,6 +2855,7 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    printf("Successful segment allocation\n");
     while (msp_get_num_ancestors(self) > 0
             && self->time < max_time && events < max_events) {
         events++;
@@ -2861,22 +2868,36 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
         for (j = 0; j < self->num_populations; j++) {
             pop = &self->populations[j];
             N = (uint32_t) msp_get_population_size(self, pop);
+            printf("Population size: %d\n", N);
+
+            // Allocate memory for linked list of offspring per parent
+            segment_list_t **parents = calloc(N, sizeof(segment_list_t *));
             parents = calloc(N, sizeof(segment_list_t *));
+
+            // Iterate through ancestors and draw parents
+            for ( a = pop->ancestors.head; a != NULL; a = a->next ) {
+                p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
+
+                // Allocate memory for new link
+                s = malloc(sizeof(segment_list_t *));
+                s->segment = (segment_t *) a->item;
+                s->next = parents[p];
+                parents[p] = s;
+                printf("Ancestor node %d gets parent %d\n", s->segment->value, p);
+            }
+            // Iterate through offspring of parent j
+            for ( j = 0; j < N; j++) {
+                printf("Offspring of parent %d\n", j);
+                s = parents[j];
+                while (s != NULL) {
+                    printf("%d\n", s->segment->value);
+                    s = s-> next;
+                }
+            }
+            if ( N != 0 || parents[0] != 0 )
+                ret = msp_recombine(self, u, u, v);
         }
     }
-
-    /* // Set parent of individual s as j */
-    /* s.next = parent[j]; */
-    /* parent[j] = s; */
-    /*  */
-    /* // Iterate through offspring of parent j */
-    /* s = parent[j]; */
-    /* while (s != NULL) { */
-    /*     s = s-> next; */
-    /* } */
-
-    if ( N == 0 && parents[0] != 0 )
-        ret = msp_recombine(self, u, u, v);
 out:
     return ret;
 }
@@ -2950,6 +2971,9 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     int model_type = self->model.type;
+
+    // TODO Remove hard-coded model choice
+    model_type = MSP_MODEL_WF;
 
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_SIMULATING;
