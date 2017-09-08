@@ -303,7 +303,11 @@ cmp_segment_queue(const void *a, const void *b) {
     const segment_t *ib = (const segment_t *) b;
     int ret = (ia->left > ib->left) - (ia->left < ib->left);
     if (ret == 0)  {
+        printf("Same left endpoint: %d, %d\n", ia->left, ib->left);
         ret = (ia->id > ib->id) - (ia->id < ib->id);
+        if (ret == 0) {
+            printf("Same ID: %lu, %lu\n", ia->id, ib->id);
+        }
     }
     return ret;
 }
@@ -2827,7 +2831,7 @@ out:
 /* List structure for collecting segments by parent */
 // TODO: change back to _segment_list_t?
 typedef struct segment_list_t {
-    segment_t *segment;
+    avl_node_t *node;
     struct segment_list_t *next;
 } segment_list_t;
 
@@ -2837,15 +2841,18 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
 {
     // TODO Store pointers to ancestors when grouping for merge
     int ret = 0;
-    segment_t *u, *v;
+    segment_t *u, *v, *x;
     unsigned long events = 0;
-    uint32_t j;
+    uint32_t j, k;
     int64_t num_links = 0;
     uint32_t N = 0;
     population_t *pop;
-    avl_node_t *a;
     uint32_t p;
-    segment_list_t *s;
+    segment_list_t *s, *next;
+
+    avl_node_t *a;
+    avl_node_t *node, *q_node;
+    avl_tree_t Q;
 
     printf("Running Wright Fisher\n");
 
@@ -2880,19 +2887,49 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
 
                 // Allocate memory for new link
                 s = malloc(sizeof(segment_list_t *));
-                s->segment = (segment_t *) a->item;
+                s->node = a;
                 s->next = parents[p];
                 parents[p] = s;
-                printf("Ancestor node %d gets parent %d\n", s->segment->value, p);
+                x = (segment_t *) s->node->item;
+                printf("Ancestor node %d gets parent %d\n", x->value, p);
             }
-            // Iterate through offspring of parent j
-            for ( j = 0; j < N; j++) {
-                printf("Offspring of parent %d\n", j);
-                s = parents[j];
-                while (s != NULL) {
-                    printf("%d\n", s->segment->value);
-                    s = s-> next;
+            // Iterate through offspring of parent j, adding to avl_tree
+            for ( k = 0; k < N; k++) {
+                printf("------------------------");
+                printf("Offspring of parent %d", k);
+                printf("------------------------\n");
+                avl_init_tree(&Q, cmp_segment_queue, NULL);
+                printf("Created avl_tree\n");
+                s = parents[k];
+                printf("Found parent\n");
+                if (s == NULL) {
+                    printf("NULL list - no offspring\n");
+                    continue;
                 }
+                while (s != NULL) {
+                    printf("Set node\n");
+                    node = s->node;
+                    next = s->next;
+                    x = (segment_t *) node->item;
+                    printf("%d\n", x->value);
+                    printf("Unlinking node %d\n", x->value);
+                    avl_unlink_node(&pop->ancestors, node);
+                    msp_free_avl_node(self, node);
+                    q_node = msp_alloc_avl_node(self);
+                    if (q_node == NULL) {
+                        ret = MSP_ERR_NO_MEMORY;
+                        goto out;
+                    }
+                    printf("Initializing node\n");
+                    avl_init_node(q_node, x);
+                    printf("Inserting node\n");
+                    q_node = avl_insert_node(&Q, q_node);
+                    printf("Done inserting node\n");
+                    assert(q_node != NULL);
+                    s = next;
+                    printf("Moved to next segment\n");
+                }
+                /* ret = msp_merge_ancestors(self, &Q, (population_id_t) j); */
             }
             if ( N != 0 || parents[0] != 0 )
                 ret = msp_recombine(self, u, u, v);
@@ -2901,6 +2938,26 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
 out:
     return ret;
 }
+    /* pop = &self->populations[population_id].ancestors; */
+    /* node = pop->head; */
+    /* while (node != NULL) { */
+    /*     next = node->next; */
+    /*     if (gsl_rng_uniform(self->rng) < p) { */
+    /*         u = (segment_t *) node->item; */
+    /*         avl_unlink_node(pop, node); */
+    /*         msp_free_avl_node(self, node); */
+    /*         q_node = msp_alloc_avl_node(self); */
+    /*         if (q_node == NULL) { */
+    /*             ret = MSP_ERR_NO_MEMORY; */
+    /*             goto out; */
+    /*         } */
+    /*         avl_init_node(q_node, u); */
+    /*         q_node = avl_insert_node(&Q, q_node); */
+    /*         assert(q_node != NULL); */
+    /*     } */
+    /*     node = next; */
+    /* } */
+    /* ret = msp_merge_ancestors(self, &Q, population_id); */
 
 /* The main event loop for the Dirac and Beta multiple merger coalescents.
  */
