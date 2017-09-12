@@ -520,10 +520,23 @@ class TreeDrawer(object):
     """
     A class to draw sparse trees in SVG format.
     """
+
+    discretise_coordinates = False
+
+    def _discretise(self, x):
+        """
+        Discetises the specified value, if necessary.
+        """
+        ret = x
+        if self.discretise_coordinates:
+            ret = int(round(x))
+        return ret
+
     def __init__(
             self, tree, width=200, height=200, show_times=False,
             show_mutation_locations=True, show_mutation_labels=False,
-            show_internal_node_labels=True, show_leaf_node_labels=True):
+            show_internal_node_labels=True, show_leaf_node_labels=True,
+            node_label_text=None, x_padding=0, y_padding=0):
         self._width = width
         self._height = height
         self._show_times = show_times
@@ -533,15 +546,18 @@ class TreeDrawer(object):
         self._show_leaf_node_labels = show_leaf_node_labels
         self._x_scale = width / (tree.get_sample_size() + 2)
         t = tree.get_time(tree.get_root())
-        # Leave a margin of 20px top and bottom
-        y_padding = 20
         self._y_scale = (height - 2 * y_padding) / t
         self._tree = tree
         self._x_coords = {}
         self._y_coords = {}
+        self._node_label_text = {}
         for u in tree.nodes():
             scaled_t = tree.get_time(u) * self._y_scale
-            self._y_coords[u] = height - scaled_t - y_padding
+            self._y_coords[u] = self._discretise(height - scaled_t - y_padding)
+            self._node_label_text[u] = str(u)
+        if node_label_text is not None:
+            for node, label in node_label_text.items():
+                self._node_label_text[node] = label
         self._sample_x = 1
         self._assign_x_coordinates(self._tree.get_root())
         self._mutations = []
@@ -557,8 +573,30 @@ class TreeDrawer(object):
             y2 = self._y_coords[parent]
             chunk = (y2 - y1) / (n + 1)
             for k, mutation in enumerate(mutations):
-                z = x, y1 + (k + 1) * chunk
+                z = x, self._discretise(y1 + (k + 1) * chunk)
                 self._mutations.append((z, mutation))
+
+    def _assign_x_coordinates(self, node):
+        """
+        Assign x coordinates to all nodes underneath this node.
+        """
+        if self._tree.is_internal(node):
+            children = self._tree.get_children(node)
+            for c in children:
+                self._assign_x_coordinates(c)
+            coords = [self._x_coords[c] for c in children]
+            a = min(coords)
+            b = max(coords)
+            self._x_coords[node] = self._discretise(a + (b - a) / 2)
+        else:
+            self._x_coords[node] = self._discretise(self._sample_x * self._x_scale)
+            self._sample_x += 1
+
+
+class SvgTreeDrawer(TreeDrawer):
+    """
+    Draws trees in SVG format using the svgwrite library.
+    """
 
     def draw(self):
         """
@@ -585,7 +623,7 @@ class TreeDrawer(object):
                 (self._tree.is_sample(u) and self._show_leaf_node_labels) or
                 (self._tree.is_internal(u) and self._show_internal_node_labels))
             if condition:
-                labels.add(dwg.text(str(u), x, dx=dx, dy=dy))
+                labels.add(dwg.text(self._node_label_text[u], x, dx=dx, dy=dy))
             if self._show_times and self._tree.is_internal(u):
                 dx[0] += 25
                 labels.add(dwg.text(
@@ -606,93 +644,28 @@ class TreeDrawer(object):
                 labels.add(dwg.text("{}".format(mutation.site), x, dx=dx, dy=dy))
         return dwg.tostring()
 
-    def _assign_x_coordinates(self, node):
-        """
-        Assign x coordinates to all nodes underneath this node.
-        """
-        if self._tree.is_internal(node):
-            children = self._tree.get_children(node)
-            for c in children:
-                self._assign_x_coordinates(c)
-            coords = [self._x_coords[c] for c in children]
-            a = min(coords)
-            b = max(coords)
-            self._x_coords[node] = (a + (b - a) / 2)
-        else:
-            self._x_coords[node] = self._sample_x * self._x_scale
-            self._sample_x += 1
 
-
-class AsciiTreeDrawer(object):
+class AsciiTreeDrawer(TreeDrawer):
     """
     Draws an ASCII rendering of a tree.
     """
-    # TODO this shares much of its functionality with the TreeDrawer above.
-    # Abstract the ideas of x-and-y coordinate finding out into a superclass
-    # and just make these classes responsible for rendering the results on a
-    # particular canvas.
+    discretise_coordinates = True
 
-    def __init__(self, tree):
-        self._tree = tree
-        self._width = len(list(self._tree.leaves()))
-        self._height = 0
-        self._node_height = {}
-        # Note this is inefficient as we're going up to root for every node.
-        for u in self._tree.nodes():
-            path_len = 0
-            v = u
-            while v != msprime.NULL_NODE:
-                path_len += 1
-                v = self._tree.parent(v)
-            self._node_height[u] = path_len
-        self._height = max(self._node_height.values())
-
-        self._x_scale = 4
-        self._y_scale = 4
-
-        self._x_coords = {}
-        self._y_coords = {}
-        for u in tree.nodes():
-            self._y_coords[u] = self._node_height[u] * self._y_scale
-        self._sample_x = 1
-        self._assign_x_coordinates(self._tree.get_root())
-
-    def _assign_x_coordinates(self, node):
-        """
-        Assign x coordinates to all nodes underneath this node.
-        """
-        if self._tree.is_internal(node):
-            children = self._tree.get_children(node)
-            for c in children:
-                self._assign_x_coordinates(c)
-            coords = [self._x_coords[c] for c in children]
-            a = min(coords)
-            b = max(coords)
-            self._x_coords[node] = int(round((a + (b - a) / 2)))
-        else:
-            self._x_coords[node] = self._sample_x * self._x_scale
-            self._sample_x += 1
-
-    def draw(self, labels=None):
-
-        # print(self._width, self._height)
-        w = (self._width + 1) * self._x_scale
-        h = (self._height + 1) * self._y_scale
+    def draw(self):
+        w = self._width
+        h = self._height + 1
 
         # Create a width * height canvas of spaces.
         canvas = bytearray(w * h)
         for row in range(h):
             for col in range(w - 1):
-                canvas[row * w + col] = b' '
-            canvas[row * w + w - 1] = b'\n'
+                canvas[row * w + col] = ord(' ')
+            canvas[row * w + w - 1] = ord('\n')
         for u in self._tree.nodes():
             col = self._x_coords[u]
             row = self._y_coords[u]
             j = row * w + col
-            if labels is None or u not in labels:
-                label = b"{}".format(u)
-            else:
-                label = labels[u]
+            label = self._node_label_text[u].encode()
             n = len(label)
             canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
             if self._tree.is_internal(u):
@@ -701,14 +674,15 @@ class AsciiTreeDrawer(object):
                 left = min(self._x_coords[v] for v in children)
                 right = max(self._x_coords[v] for v in children)
                 for col in range(left, right):
-                    canvas[row * w + col] = b'-'
-                canvas[row * w + self._x_coords[u]] = b'+'
+                    canvas[row * w + col] = ord('-')
+                canvas[row * w + self._x_coords[u]] = ord('+')
                 top = row + 1
                 for v in children:
                     col = self._x_coords[v]
                     for row in range(top, self._y_coords[v] - 1):
-                        canvas[row * w + col] = b'|'
-        return bytes(canvas).encode()
+                        canvas[row * w + col] = ord('|')
+        return str(bytes(canvas).decode())
+
 
 # TODO:
 # - Pickle and copy support
@@ -986,14 +960,11 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_sample_size()
 
-    def draw_ascii(self, labels=None):
-        td = AsciiTreeDrawer(self)
-        return td.draw(labels=labels)
-
     def draw(
             self, path=None, width=200, height=200, times=False,
             mutation_locations=True, mutation_labels=False,
-            internal_node_labels=True, leaf_node_labels=True, show_times=None):
+            internal_node_labels=True, leaf_node_labels=True, show_times=None,
+            node_label_text=None, format=None):
         """
         Returns a representation of this tree in SVG format.
 
@@ -1006,6 +977,11 @@ class SparseTree(object):
         :param bool mutation_labels: If True, show labels for mutations.
         :param bool internal_node_labels: If True, show labels for internal nodes.
         :param bool leaf_node_labels: If True, show labels for leaf nodes.
+        :param map node_label_text: If specified, show custom labels for the nodes
+            that are present in the map. Any nodes not specified in the map will
+            have have their default labels.
+        :param str format: The format of the returned image. Currently supported
+            are 'svg' and 'ascii'.
         :param bool show_times: Deprecated alias for ``times``.
         :return: A representation of this tree in SVG format.
         :rtype: str
@@ -1013,20 +989,38 @@ class SparseTree(object):
         # show_times is a deprecated alias for times.
         if show_times is not None:
             times = show_times
-        if not _svgwrite_imported:
-            raise ImportError(
-                "svgwrite is not installed. try `pip install svgwrite`")
-        td = TreeDrawer(
-                self, width=width, height=height, show_times=times,
-                show_mutation_locations=mutation_locations,
-                show_mutation_labels=mutation_labels,
-                show_internal_node_labels=internal_node_labels,
-                show_leaf_node_labels=leaf_node_labels)
-        svg = td.draw()
+        if format is None:
+            format = "SVG"
+        fmt = format.lower()
+        supported_formats = ["svg", "ascii"]
+        if fmt not in supported_formats:
+            raise ValueError("Unknown format '{}'. Supported formats are {}".format(
+                format, supported_formats))
+        if fmt == "svg":
+            if not _svgwrite_imported:
+                raise ImportError(
+                    "svgwrite is not installed. try `pip install svgwrite`")
+            td = SvgTreeDrawer(
+                    self, width=width, height=height, show_times=times,
+                    show_mutation_locations=mutation_locations,
+                    show_mutation_labels=mutation_labels,
+                    show_internal_node_labels=internal_node_labels,
+                    show_leaf_node_labels=leaf_node_labels,
+                    node_label_text=node_label_text,
+                    y_padding=20, x_padding=0)
+        elif fmt == "ascii":
+            td = AsciiTreeDrawer(
+                    self, width=width, height=height, show_times=times,
+                    show_mutation_locations=mutation_locations,
+                    show_mutation_labels=mutation_labels,
+                    show_internal_node_labels=internal_node_labels,
+                    node_label_text=node_label_text,
+                    show_leaf_node_labels=leaf_node_labels)
+        output = td.draw()
         if path is not None:
             with open(path, "w") as f:
-                f.write(svg)
-        return svg
+                f.write(output)
+        return output
 
     @property
     def num_mutations(self):
