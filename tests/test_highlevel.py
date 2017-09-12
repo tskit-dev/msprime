@@ -48,7 +48,75 @@ import _msprime
 import tests
 
 
+def insert_gap(ts, position, length):
+    """
+    Inserts a gap of the specified size into the specified tree sequence.
+    This involves: (1) breaking all edgesets that intersect with this point;
+    and (2) shifting all coordinates greater than this value up by the
+    gap length.
+    """
+    new_edgesets = []
+    for e in ts.edgesets():
+        if e.left < position < e.right:
+            new_edgesets.append([e.left, position, e.parent, e.children])
+            new_edgesets.append([position, e.right, e.parent, e.children])
+        else:
+            new_edgesets.append([e.left, e.right, e.parent, e.children])
+
+    # Now shift up all coordinates.
+    for e in new_edgesets:
+        # Left coordinates == position get shifted
+        if e[0] >= position:
+            e[0] += length
+        # Right coordinates == position do not get shifted
+        if e[1] > position:
+            e[1] += length
+    tables = ts.dump_tables()
+    edgesets = msprime.EdgesetTable()
+    for left, right, parent, children in new_edgesets:
+        edgesets.add_row(left, right, parent, children)
+    msprime.sort_tables(nodes=tables.nodes, edgesets=edgesets)
+    # Throw in a bunch of mutations over the whole sequence on the samples.
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
+    num_mutations = 100
+    samples = list(ts.samples())
+    L = ts.sequence_length + length
+    for j in range(num_mutations):
+        sites.add_row(position=j * (L / num_mutations), ancestral_state='0')
+        mutations.add_row(
+            site=j, derived_state='1', node=samples[j % len(samples)])
+    return msprime.load_tables(
+            nodes=tables.nodes, edgesets=edgesets, sites=sites,
+            mutations=mutations)
+
+
+def get_gap_examples():
+    """
+    Returns example tree sequences that contain gaps within the list of
+    edgesets.
+    """
+    ts = msprime.simulate(20, random_seed=56, recombination_rate=1)
+
+    assert ts.num_trees > 1
+
+    gap = 0.0125
+    for x in [0, 0.1, 0.5, 0.75]:
+        ts = insert_gap(ts, x, gap)
+        found = False
+        for t in ts.trees():
+            if t.interval[0] == x:
+                assert t.interval[1] == x + gap
+                assert len(t.parent_dict) == 0
+                found = True
+        assert found
+        yield ts
+
+
 def get_internal_samples_examples():
+    """
+    Returns example tree sequences with internal samples.
+    """
     n = 5
     ts = msprime.simulate(n, random_seed=10, mutation_rate=5)
     assert ts.num_mutations > 0
@@ -81,6 +149,8 @@ def get_internal_samples_examples():
 
 
 def get_example_tree_sequences(back_mutations=True):
+    for ts in get_gap_examples():
+        yield ts
     for ts in get_internal_samples_examples():
         yield ts
     for n in [2, 3, 10, 100]:

@@ -2954,7 +2954,8 @@ test_simplest_general_samples(void)
     const char *haplotypes[] = {"01", "10"};
     char *haplotype;
     unsigned int j;
-    node_id_t *samples;
+    node_id_t samples[2] = {0, 2};
+    node_id_t *s;
     int ret;
 
     tree_sequence_t ts, simplified;
@@ -2969,11 +2970,11 @@ test_simplest_general_samples(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
 
-    ret = tree_sequence_get_samples(&ts, &samples);
+    ret = tree_sequence_get_samples(&ts, &s);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_EQUAL(samples[0], 0);
-    CU_ASSERT_EQUAL(samples[1], 2);
+    CU_ASSERT_FATAL(s != NULL);
+    CU_ASSERT_EQUAL(s[0], 0);
+    CU_ASSERT_EQUAL(s[1], 2);
 
     ret = hapgen_alloc(&hapgen, &ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -2996,11 +2997,11 @@ test_simplest_general_samples(void)
     ret = tree_sequence_simplify(&ts, samples, 2, 0, &simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = tree_sequence_get_samples(&simplified, &samples);
+    ret = tree_sequence_get_samples(&simplified, &s);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_EQUAL(samples[0], 0);
-    CU_ASSERT_EQUAL(samples[1], 1);
+    CU_ASSERT_FATAL(s != NULL);
+    CU_ASSERT_EQUAL(s[0], 0);
+    CU_ASSERT_EQUAL(s[1], 1);
 
     ret = hapgen_alloc(&hapgen, &simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3015,6 +3016,96 @@ test_simplest_general_samples(void)
     tree_sequence_free(&simplified);
     tree_sequence_free(&ts);
 }
+
+static void
+test_simplest_holey_tree_sequence(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edgesets =
+        "0  1   2   0,1\n"
+        "2  3   2   0,1\n";
+    const char *sites =
+        "0.5  0\n"
+        "1.5  0\n"
+        "2.5  0\n";
+    const char *mutations =
+        "0    0     1\n"
+        "1    2     1\n"
+        "2    1     1";
+    const char *haplotypes[] = {"110", "011"};
+    char *haplotype;
+    unsigned int j;
+    int ret;
+    tree_sequence_t ts;
+    hapgen_t hapgen;
+
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, sites, mutations, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 3.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 3);
+
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    hapgen_print_state(&hapgen, _devnull);
+    for (j = 0; j < 2; j++) {
+        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_STRING_EQUAL(haplotype, haplotypes[j]);
+    }
+    hapgen_free(&hapgen);
+    tree_sequence_free(&ts);
+}
+
+static void
+test_simplest_initial_gap_tree_sequence(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edgesets =
+        "2  3   2   0,1\n";
+    const char *sites =
+        "0.5  0\n"
+        "1.5  0\n"
+        "2.5  0\n";
+    const char *mutations =
+        "0    0     1\n"
+        "1    1     1\n"
+        "2    2     1";
+    const char *haplotypes[] = {"101", "011"};
+    char *haplotype;
+    unsigned int j;
+    int ret;
+    tree_sequence_t ts;
+    hapgen_t hapgen;
+
+    tree_sequence_from_text(&ts, nodes, edgesets, NULL, sites, mutations, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 3.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 2);
+
+    ret = hapgen_alloc(&hapgen, &ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    hapgen_print_state(&hapgen, _devnull);
+    for (j = 0; j < 2; j++) {
+        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_STRING_EQUAL(haplotype, haplotypes[j]);
+    }
+    hapgen_free(&hapgen);
+    tree_sequence_free(&ts);
+}
+
 
 static void
 test_simplest_bad_records(void)
@@ -3089,16 +3180,6 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_RECORD_INTERVAL);
     tree_sequence_free(&ts);
     edgeset_table.right[0]= 1.0;
-
-    /* Bad left endpoint*/
-    edgeset_table.left[0] = 0.1;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edgeset_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO);
-    tree_sequence_free(&ts);
-    edgeset_table.left[0]= 0.0;
 
     /* Equal nodes in the children */
     edgeset_table.children[0] = 1;
@@ -7275,6 +7356,8 @@ main(int argc, char **argv)
         {"test_simplest_root_mutations", test_simplest_root_mutations},
         {"test_simplest_back_mutations", test_simplest_back_mutations},
         {"test_simplest_general_samples", test_simplest_general_samples},
+        {"test_simplest_holey_tree_sequence", test_simplest_holey_tree_sequence},
+        {"test_simplest_initial_gap_tree_sequence", test_simplest_initial_gap_tree_sequence},
         {"test_simplest_bad_records", test_simplest_bad_records},
         {"test_simplest_overlapping_parents", test_simplest_overlapping_parents},
         {"test_simplest_contradictory_children", test_simplest_contradictory_children},

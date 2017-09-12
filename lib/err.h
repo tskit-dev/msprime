@@ -77,7 +77,6 @@
 #define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
 #define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
 #define MSP_ERR_INSUFFICIENT_SAMPLES                                -49
-#define MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO                         -50
 #define MSP_ERR_COORDINATE_NOT_FOUND                                -51
 #define MSP_ERR_BAD_NODES_ARRAY                                     -52
 #define MSP_ERR_BAD_CHILDREN_ARRAY                                  -53
@@ -94,4 +93,7 @@
 #define MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN                  -64
 #define MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT                      -65
 
+/* reuse code: -50 */
+
 #endif /*__ERR_H__*/
+
