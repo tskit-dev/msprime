@@ -50,6 +50,78 @@ class TestTreeDraw(unittest.TestCase):
                     return t
         assert False
 
+
+class TestFormats(TestTreeDraw):
+    """
+    Tests that formats are recognised correctly.
+    """
+    def test_svg_variants(self):
+        t = self.get_binary_tree()
+        for svg in ["svg", "SVG", "sVg"]:
+            output = t.draw(format=svg)
+            root = xml.etree.ElementTree.fromstring(output)
+            self.assertEqual(root.tag, "{http://www.w3.org/2000/svg}svg")
+
+    def test_default(self):
+        # Default is SVG
+        t = self.get_binary_tree()
+        output = t.draw(format=None)
+        root = xml.etree.ElementTree.fromstring(output)
+        self.assertEqual(root.tag, "{http://www.w3.org/2000/svg}svg")
+        output = t.draw()
+        root = xml.etree.ElementTree.fromstring(output)
+        self.assertEqual(root.tag, "{http://www.w3.org/2000/svg}svg")
+
+    def test_ascii_variants(self):
+        t = self.get_binary_tree()
+        for fmt in ["ascii", "ASCII", "AScii"]:
+            output = t.draw(format=fmt)
+            self.assertRaises(
+                xml.etree.ElementTree.ParseError, xml.etree.ElementTree.fromstring,
+                output)
+
+    def test_bad_formats(self):
+        t = self.get_binary_tree()
+        for bad_format in ["", "ASC", "SV", "jpeg"]:
+            self.assertRaises(ValueError, t.draw, format=bad_format)
+
+
+# TODO we should gather some of these tests into a superclass as they are
+# very similar for SVG and ASCII.
+
+class TestDrawAscii(TestTreeDraw):
+    """
+    Tests the ASCII tree drawing method.
+    """
+    def verify_basic_text(self, text):
+        self.assertTrue(isinstance(text, str))
+        # TODO surely something else we can verify about this...
+
+    def test_draw_defaults(self):
+        t = self.get_binary_tree()
+        text = t.draw(format="ASCII")
+        self.verify_basic_text(text)
+
+    def test_draw_nonbinary(self):
+        t = self.get_nonbinary_tree()
+        text = t.draw(format="ASCII")
+        self.verify_basic_text(text)
+
+    def test_labels(self):
+        t = self.get_binary_tree()
+        labels = {u: "XXX" for u in t.nodes()}
+        text = t.draw(format="ASCII", node_label_text=labels)
+        self.verify_basic_text(text)
+        j = 0
+        for _ in t.nodes():
+            j = text[j:].find("XXX")
+            self.assertNotEqual(j, -1)
+
+
+class TestDrawSvg(TestTreeDraw):
+    """
+    Tests the SVG tree drawing.
+    """
     def verify_basic_svg(self, svg, width=200, height=200):
         root = xml.etree.ElementTree.fromstring(svg)
         self.assertEqual(root.tag, "{http://www.w3.org/2000/svg}svg")
@@ -85,6 +157,16 @@ class TestTreeDraw(unittest.TestCase):
         h = 456
         svg = t.draw(width=w, height=h)
         self.verify_basic_svg(svg, w, h)
+
+    def test_labels(self):
+        t = self.get_binary_tree()
+        labels = {u: "XXX" for u in t.nodes()}
+        svg = t.draw(format="svg", node_label_text=labels)
+        self.verify_basic_svg(svg)
+        j = 0
+        for _ in t.nodes():
+            j = svg[j:].find("XXX")
+            self.assertNotEqual(j, -1)
 
     def test_boolean_flags(self):
         flags = [

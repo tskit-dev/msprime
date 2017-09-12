@@ -102,9 +102,12 @@ class PythonSparseTree(object):
 
     def _inorder_nodes(self, u, l):
         if u in self.children:
-            self._inorder_nodes(self.children[u][0], l)
+            mid = len(self.children[u]) // 2
+            for v in self.children[u][:mid]:
+                self._inorder_nodes(v, l)
             l.append(u)
-            self._inorder_nodes(self.children[u][1], l)
+            for v in self.children[u][mid:]:
+                self._inorder_nodes(v, l)
         else:
             l.append(u)
 
