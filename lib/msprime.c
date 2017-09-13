@@ -1623,8 +1623,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     int ix;
     int64_t k;
     // TODO Fix
-    /* double mu = 1.0 / self->scaled_recombination_rate; */
-    double mu = 0;
+    double mu = 1.0 / self->scaled_recombination_rate;
     segment_t *y, *z;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
@@ -1638,7 +1637,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     seg_tails[ix]->next = x;
     x->prev = seg_tails[ix];
 
-    k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu);
+    k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
 
     while ( x != NULL ) {
         assert(n_recs < 100);
@@ -1647,7 +1646,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
         seg_tails[ix] = x;
         y = x->next;
 
-        if ( x->right > k + 1 ) {
+        if ( x->right > k ) {
             printf("Recombining at %lu within segment\n", k);
             assert(x->left <= k);
             self->num_re_events++;
@@ -1655,6 +1654,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             // Make new segment
             z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value,
                     x->population_id, seg_tails[ix], x->next);
+            assert(z->left < z->right);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -1666,15 +1666,16 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             seg_tails[ix] = z;
             x->next = NULL;
             x->right = (uint32_t) k;
+            assert(x->left < x->right);
             x = z;
             k = k + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
         }
-        else if ( x->right <= k + 1 && y != NULL && y->left > k ) {
+        else if ( x->right <= k && y != NULL && y->left >= k ) {
             printf("Recombining at %lu in gap between segments\n", k);
             // Recombine in gap between segment and the next
             x->next = NULL;
             y->prev = NULL;
-            while ( y->left > k ) {
+            while ( y->left >= k ) {
                 self->num_re_events++;
                 ix = (ix + 1) % 2;
                 k = k + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
