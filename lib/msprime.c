@@ -35,8 +35,6 @@
 #include "fenwick.h"
 #include "msprime.h"
 
-void msp_check_ind_consistency(msp_t*);
-
 #define MSP_HDF5_ERR_MSG_SIZE 1024
 
 /* State machine for the simulator object. */
@@ -1624,32 +1622,34 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     int ret = 0;
     int ix;
     int64_t k;
-    double mu = 1.0 / self->scaled_recombination_rate;
-    segment_t *y, *z, *val;
+    // TODO Fix
+    /* double mu = 1.0 / self->scaled_recombination_rate; */
+    double mu = 0;
+    segment_t *y, *z;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
+    int n_recs = 0;
 
-    printf("Recombining\n");
+    printf("Recombining with recombination rate %f\n", mu);
 
     s1.next = NULL;
-    s1.value = x->value;
     s2.next = NULL;
-    s2.value = x->value;
     ix = (int) gsl_rng_uniform_int(self->rng, 2);
     seg_tails[ix]->next = x;
     x->prev = seg_tails[ix];
-    seg_tails[ix] = x; // TODO Not necessary?
 
-    k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
+    k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu);
 
     while ( x != NULL ) {
+        assert(n_recs < 100);
+        n_recs++;
         printf("\t%d\t%d\t%d\n", x->left, x->right, x->value);
         seg_tails[ix] = x;
         y = x->next;
 
-        if ( x->right > k ) {
-            assert(x->left <= k);
+        if ( x->right > k + 1 ) {
             printf("Recombining at %lu within segment\n", k);
+            assert(x->left <= k);
             self->num_re_events++;
             ix = (ix + 1) % 2;
             // Make new segment
@@ -1669,7 +1669,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             x = z;
             k = k + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
         }
-        else if ( x->right <= k && y != NULL && y->left > k ) {
+        else if ( x->right <= k + 1 && y != NULL && y->left > k ) {
             printf("Recombining at %lu in gap between segments\n", k);
             // Recombine in gap between segment and the next
             x->next = NULL;
@@ -1692,17 +1692,13 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     *u = s1.next;
     *v = s2.next;
 
-    // Validate node assignment
-    for (val = (*u); val != NULL; val = val->next){
-        assert(val->value == s1.value);
-    }
-    for (val = (*v); val != NULL; val = val->next){
-        assert(val->value == s1.value);
-    }
-
     printf("Results of recombination\n");
-    msp_print_segment_chain(self, *u, stdout);
-    msp_print_segment_chain(self, *v, stdout);
+    if (*u != NULL) {
+        msp_print_segment_chain(self, *u, stdout);
+    }
+    if (*v != NULL) {
+        msp_print_segment_chain(self, *v, stdout);
+    }
 out:
     return ret;
 }
@@ -2842,26 +2838,6 @@ typedef struct _segment_list_t {
     struct _segment_list_t *next;
 } segment_list_t;
 
-void msp_check_ind_consistency(msp_t *self)
-{
-    avl_node_t *a;
-    population_t *pop;
-    unsigned int j;
-    segment_t *val;
-
-    printf("\n---Start Validate---\n");
-    for (j = 0; j < self->num_populations; j++) {
-        pop = &self->populations[j];
-        for (a = pop->ancestors.head; a != NULL; a = a->next) {
-            msp_print_segment_chain(self, (segment_t *) a->item, stdout);
-            for (val = a->item; val != NULL; val = val->next){
-                assert(val->value == ((segment_t *) a->item)->value);
-            }
-        }
-    }
-    printf("---End Validate---\n\n");
-}
-
 /* The main event loop for the Wright Fisher model. */
 static int WARN_UNUSED
 msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
@@ -2879,7 +2855,6 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
     size_t segment_mem_offset;
     segment_list_t **parents = NULL;
     segment_list_t *segment_mem = NULL;
-    size_t num_individuals;
 
     avl_node_t *a;
     avl_node_t *node;
@@ -2890,9 +2865,12 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
 
     printf("Running Wright Fisher\n");
 
-    printf("Successful segment allocation\n");
     while (msp_get_num_ancestors(self) > 0
             && self->time < max_time && events < max_events) {
+        printf("Initial population:\n");
+        for (a = (&self->populations[0])->ancestors.head; a != NULL; a = a->next){
+            msp_print_segment_chain(self, a->item, stdout);
+        }
         events++;
         self->time++;
         printf("------------------------");
@@ -2904,31 +2882,31 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
             goto out;
         }
 
-        // Allocate memory for linked list of offspring per parent
-        // TODO Will eventually have to allocate for each population
-        printf("Allocating segment lists for %lu ancestors\n",
-                msp_get_num_ancestors(self));
-        parents = calloc(msp_get_num_ancestors(self), sizeof(segment_list_t *));
-        segment_mem = malloc(msp_get_num_ancestors(self) * sizeof(segment_list_t));
-
         // Initialize segment_mem links
-        for (uint32_t i = 0; i < msp_get_num_ancestors(self); i++){
-            (segment_mem + i)->node = NULL;
-            (segment_mem + i)->next = NULL;
-        }
+        /* for (uint32_t i = 0; i < msp_get_num_ancestors(self); i++){ */
+        /*     (segment_mem + i)->node = NULL; */
+        /*     (segment_mem + i)->next = NULL; */
+        /* } */
         
-        if (parents == NULL || segment_mem == NULL){
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
         segment_mem_offset = 0;
 
         for (j = 0; j < self->num_populations; j++) {
+
             pop = &self->populations[j];
             N = (uint32_t) msp_get_population_size(self, pop);
             printf("Population size: %d\n", N);
             printf("Num ancs: %d\n", (int) msp_get_num_ancestors(self));
 
+            // Allocate memory for linked list of offspring per parent
+            // TODO Will eventually have to allocate for each population
+            printf("Allocating segment lists for %lu ancestors\n",
+                    msp_get_num_ancestors(self));
+            parents = calloc(N, sizeof(segment_list_t *));
+            segment_mem = malloc(msp_get_num_ancestors(self) * sizeof(segment_list_t));
+            if (parents == NULL || segment_mem == NULL){
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
 
             // Iterate through ancestors and draw parents
             for ( a = pop->ancestors.head; a != NULL; a = a->next ) {
@@ -2945,8 +2923,7 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
             }
 
             // Iterate through offspring of each parent
-            num_individuals = msp_get_num_ancestors(self);
-            for ( k = 0; k < num_individuals; k++) {
+            for ( k = 0; k < N; k++) {
                 printf("------------------------");
                 printf("Offspring of parent %d\n", k);
                 if (parents[k] == NULL) {
@@ -2955,7 +2932,6 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
                 // Iterate through offspring of parent k, adding to avl_tree
                 for (s = parents[k]; s != NULL; s = s->next) {
                     printf("----Next offspring\n");
-                    msp_check_ind_consistency(self);
                     for (a = Qu.head; a != NULL; a = a->next) {
                         msp_print_segment_chain(self, a->item, stdout);
                     }
@@ -2976,32 +2952,41 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
                     if (ret != 0) {
                         goto out;
                     }
-                    msp_check_ind_consistency(self);
 
                     // Add to AVLTree for each parental chromosome
-                    ret = msp_priority_queue_insert(self, &Qu, u);
-                    if (ret != 0) {
-                        goto out;
+                    if (u != NULL) {
+                        ret = msp_priority_queue_insert(self, &Qu, u);
+                        if (ret != 0) {
+                            goto out;
+                        }
                     }
-                    ret = msp_priority_queue_insert(self, &Qv, v);
-                    if (ret != 0) {
-                        goto out;
+                    if (v != NULL) {
+                        ret = msp_priority_queue_insert(self, &Qv, v);
+                        if (ret != 0) {
+                            goto out;
+                        }
                     }
-                    if ( s->next == NULL )
-                        printf("Next segment NULL\n");
-                    else
-                        printf("Next segment not NULL\n");
                 }
                 printf("Merging u\n");
                 for (a = Qu.head; a != NULL; a = a->next) {
                     msp_print_segment_chain(self, a->item, stdout);
                 }
                 ret = msp_merge_ancestors(self, &Qu, (population_id_t) j);
+                if (ret != 0) {
+                    goto out;
+                }
                 printf("Merging v\n");
                 for (a = Qv.head; a != NULL; a = a->next) {
                     msp_print_segment_chain(self, a->item, stdout);
                 }
                 ret = msp_merge_ancestors(self, &Qv, (population_id_t) j);
+                if (ret != 0) {
+                    goto out;
+                }
+                printf("Done merge. Population:\n");
+                for (a = pop->ancestors.head; a != NULL; a = a->next){
+                    msp_print_segment_chain(self, a->item, stdout);
+                }
                 
             }
             printf("Freeing parents and segment_mem\n");
@@ -3009,6 +2994,7 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
             free(segment_mem);
             segment_mem = NULL;
             parents = NULL;
+            printf("Memory freed\n");
         }
     }
 out:
