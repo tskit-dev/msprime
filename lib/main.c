@@ -132,6 +132,8 @@ read_model_config(msp_t *msp, config_t *config)
     name = config_setting_get_string(s);
     if (strcmp(name, "hudson") == 0) {
         ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_HUDSON);
+    } else if (strcmp(name, "wright_fisher") == 0) {
+        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_WF);
     } else if (strcmp(name, "smc") == 0) {
         ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_SMC);
     } else if (strcmp(name, "smc_prime") == 0) {

@@ -303,11 +303,7 @@ cmp_segment_queue(const void *a, const void *b) {
     const segment_t *ib = (const segment_t *) b;
     int ret = (ia->left > ib->left) - (ia->left < ib->left);
     if (ret == 0)  {
-        printf("Same left endpoint: %d, %d\n", ia->left, ib->left);
         ret = (ia->id > ib->id) - (ia->id < ib->id);
-        if (ret == 0) {
-            printf("Same ID: %lu, %lu\n", ia->id, ib->id);
-        }
     }
     return ret;
 }
@@ -431,7 +427,8 @@ msp_set_simulation_model_non_parametric(msp_t *self, int model)
     if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
             && model != MSP_MODEL_SMC_PRIME
             && model != MSP_MODEL_DIRAC
-            && model != MSP_MODEL_BETA) {
+            && model != MSP_MODEL_BETA
+            && model != MSP_MODEL_WF) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
@@ -1622,14 +1619,12 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     int ret = 0;
     int ix;
     int64_t k;
-    // TODO Fix
     double mu = 1.0 / self->scaled_recombination_rate;
     segment_t *y, *z;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
-    int n_recs = 0;
 
-    printf("Recombining with recombination rate %f\n", mu);
+    /* printf("Recombining with recombination rate %f\n", mu); */
 
     s1.next = NULL;
     s2.next = NULL;
@@ -1640,14 +1635,12 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
 
     while ( x != NULL ) {
-        assert(n_recs < 100);
-        n_recs++;
-        printf("\t%d\t%d\t%d\n", x->left, x->right, x->value);
+        /* printf("\t%d\t%d\t%d\n", x->left, x->right, x->value); */
         seg_tails[ix] = x;
         y = x->next;
 
         if ( x->right > k ) {
-            printf("Recombining at %lu within segment\n", k);
+            /* printf("Recombining at %lu within segment\n", k); */
             assert(x->left <= k);
             self->num_re_events++;
             ix = (ix + 1) % 2;
@@ -1671,7 +1664,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             k = k + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
         }
         else if ( x->right <= k && y != NULL && y->left >= k ) {
-            printf("Recombining at %lu in gap between segments\n", k);
+            /* printf("Recombining at %lu in gap between segments\n", k); */
             // Recombine in gap between segment and the next
             x->next = NULL;
             y->prev = NULL;
@@ -1685,7 +1678,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             seg_tails[ix] = y;
             x = y;
         } else {
-            printf("Breakpoint %lu in later segment\n", k);
+            /* printf("Breakpoint %lu in later segment\n", k); */
             x = y;
         }
     }
@@ -1693,13 +1686,13 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     *u = s1.next;
     *v = s2.next;
 
-    printf("Results of recombination\n");
-    if (*u != NULL) {
-        msp_print_segment_chain(self, *u, stdout);
-    }
-    if (*v != NULL) {
-        msp_print_segment_chain(self, *v, stdout);
-    }
+    /* printf("Results of recombination\n"); */
+    /* if (*u != NULL) { */
+    /*     msp_print_segment_chain(self, *u, stdout); */
+    /* } */
+    /* if (*v != NULL) { */
+    /*     msp_print_segment_chain(self, *v, stdout); */
+    /* } */
 out:
     return ret;
 }
@@ -2843,20 +2836,17 @@ typedef struct _segment_list_t {
 static int WARN_UNUSED
 msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
 {
-    // TODO Store pointers to ancestors when grouping for merge
     int ret = 0;
     segment_t *u, *v, *x;
     unsigned long events = 0;
-    uint32_t j, k;
-    int64_t num_links = 0;
+    uint32_t j, k, p;
     uint32_t N = 0;
+    int64_t num_links = 0;
     population_t *pop;
-    uint32_t p;
-    segment_list_t *s;
     size_t segment_mem_offset;
-    segment_list_t **parents = NULL;
     segment_list_t *segment_mem = NULL;
-
+    segment_list_t *s;
+    segment_list_t **parents = NULL;
     avl_node_t *a;
     avl_node_t *node;
     avl_tree_t Qu, Qv;
@@ -2868,42 +2858,27 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
 
     while (msp_get_num_ancestors(self) > 0
             && self->time < max_time && events < max_events) {
-        printf("Initial population:\n");
-        for (a = (&self->populations[0])->ancestors.head; a != NULL; a = a->next){
-            msp_print_segment_chain(self, a->item, stdout);
-        }
         events++;
         self->time++;
-        printf("------------------------");
-        printf("Time %d", (int) self->time);
-        printf("------------------------\n");
+        printf("Time %d, ", (int) self->time);
+        printf("Num ancs: %d\n", (int) msp_get_num_ancestors(self));
         // NOTE: num_links is never properly set here
         ret = msp_sanity_check(self, num_links);
         if (ret != 0) {
             goto out;
         }
 
-        // Initialize segment_mem links
-        /* for (uint32_t i = 0; i < msp_get_num_ancestors(self); i++){ */
-        /*     (segment_mem + i)->node = NULL; */
-        /*     (segment_mem + i)->next = NULL; */
-        /* } */
-        
         segment_mem_offset = 0;
 
         for (j = 0; j < self->num_populations; j++) {
 
             pop = &self->populations[j];
             N = (uint32_t) msp_get_population_size(self, pop);
-            printf("Population size: %d\n", N);
-            printf("Num ancs: %d\n", (int) msp_get_num_ancestors(self));
 
             // Allocate memory for linked list of offspring per parent
-            // TODO Will eventually have to allocate for each population
-            printf("Allocating segment lists for %lu ancestors\n",
-                    msp_get_num_ancestors(self));
             parents = calloc(N, sizeof(segment_list_t *));
-            segment_mem = malloc(msp_get_num_ancestors(self) * sizeof(segment_list_t));
+            segment_mem = malloc(msp_get_num_ancestors(self) *
+                                 sizeof(segment_list_t));
             if (parents == NULL || segment_mem == NULL){
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -2913,40 +2888,21 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
             for ( a = pop->ancestors.head; a != NULL; a = a->next ) {
                 s = segment_mem + segment_mem_offset;
                 segment_mem_offset++;
-
                 p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
-
-                s->node = a;
                 s->next = parents[p];
+                s->node = a;
                 parents[p] = s;
                 x = (segment_t *) s->node->item;
-                printf("Ancestor node %d gets parent %d\n", x->value, p);
             }
 
             // Iterate through offspring of each parent
             for ( k = 0; k < N; k++) {
-                printf("------------------------");
-                printf("Offspring of parent %d\n", k);
-                if (parents[k] == NULL) {
-                    printf("NULL list - no offspring\n");
-                }
                 // Iterate through offspring of parent k, adding to avl_tree
                 for (s = parents[k]; s != NULL; s = s->next) {
-                    printf("----Next offspring\n");
-                    for (a = Qu.head; a != NULL; a = a->next) {
-                        msp_print_segment_chain(self, a->item, stdout);
-                    }
-                    for (a = Qv.head; a != NULL; a = a->next) {
-                        msp_print_segment_chain(self, a->item, stdout);
-                    }
                     node = s->node;
                     x = (segment_t *) node->item;
-                    printf("Recombining at %p: ", (void*) x);
-                    msp_print_segment_chain(self, x, stdout);
-
                     avl_unlink_node(&pop->ancestors, node);
                     msp_free_avl_node(self, node);
-                    printf("Num ancs: %d\n", (int) msp_get_num_ancestors(self));
                     
                     // Recombine ancestor
                     ret = msp_recombine(self, x, &u, &v);
@@ -2968,34 +2924,19 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
                         }
                     }
                 }
-                printf("Merging u\n");
-                for (a = Qu.head; a != NULL; a = a->next) {
-                    msp_print_segment_chain(self, a->item, stdout);
-                }
                 ret = msp_merge_ancestors(self, &Qu, (population_id_t) j);
                 if (ret != 0) {
                     goto out;
-                }
-                printf("Merging v\n");
-                for (a = Qv.head; a != NULL; a = a->next) {
-                    msp_print_segment_chain(self, a->item, stdout);
                 }
                 ret = msp_merge_ancestors(self, &Qv, (population_id_t) j);
                 if (ret != 0) {
                     goto out;
                 }
-                printf("Done merge. Population:\n");
-                for (a = pop->ancestors.head; a != NULL; a = a->next){
-                    msp_print_segment_chain(self, a->item, stdout);
-                }
-                
             }
-            printf("Freeing parents and segment_mem\n");
             free(parents);
             free(segment_mem);
             segment_mem = NULL;
             parents = NULL;
-            printf("Memory freed\n");
         }
     }
 out:
@@ -3077,9 +3018,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     int model_type = self->model.type;
-
-    // TODO Remove hard-coded model choice
-    model_type = MSP_MODEL_WF;
 
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_SIMULATING;
@@ -3240,6 +3178,9 @@ msp_get_model_name(msp_t *self)
             break;
         case MSP_MODEL_BETA:
             ret = "beta";
+            break;
+        case MSP_MODEL_WF:
+            ret = "wright_fisher";
             break;
         default:
             ret = "BUG: bad model in simulator!";
