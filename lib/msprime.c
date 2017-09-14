@@ -2940,8 +2940,6 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
             && self->time < max_time && events < max_events) {
         events++;
         self->time++;
-        printf("Time %d, ", (int) self->time);
-        printf("Num ancs: %d\n", (int) msp_get_num_ancestors(self));
         // NOTE: num_links is never properly set here
         ret = msp_sanity_check(self, num_links);
         if (ret != 0) {
