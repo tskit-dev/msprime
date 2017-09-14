@@ -428,7 +428,7 @@ msp_set_simulation_model_non_parametric(msp_t *self, int model)
             && model != MSP_MODEL_SMC_PRIME
             && model != MSP_MODEL_DIRAC
             && model != MSP_MODEL_BETA
-            && model != MSP_MODEL_WF) {
+            && model != MSP_MODEL_DTWF) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
@@ -3035,7 +3035,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
     if (model_type == MSP_MODEL_DIRAC || model_type == MSP_MODEL_BETA) {
         ret = msp_run_multiple_mergers_coalescent(self, max_time, max_events);
-    } else if (model_type == MSP_MODEL_WF) {
+    } else if (model_type == MSP_MODEL_DTWF) {
         ret = msp_run_wright_fisher(self, max_time, max_events);
     } else {
         ret = msp_run_standard_coalescent(self, max_time, max_events);
@@ -3186,8 +3186,8 @@ msp_get_model_name(msp_t *self)
         case MSP_MODEL_BETA:
             ret = "beta";
             break;
-        case MSP_MODEL_WF:
-            ret = "wright_fisher";
+        case MSP_MODEL_DTWF:
+            ret = "dtwf";
             break;
         default:
             ret = "BUG: bad model in simulator!";

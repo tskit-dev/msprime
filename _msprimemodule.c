@@ -5804,10 +5804,11 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *hudson_s = NULL;
     PyObject *smc_s = NULL;
     PyObject *smc_prime_s = NULL;
+    PyObject *dtwf_s = NULL;
     PyObject *dirac_s = NULL;
     PyObject *beta_s = NULL;
     PyObject *value;
-    int is_hudson, is_smc, is_smc_prime, is_dirac, is_beta;
+    int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta;
     double psi, c, alpha, truncation_point;
 
     if (Simulator_check_sim(self) != 0) {
@@ -5815,6 +5816,10 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     }
     hudson_s = Py_BuildValue("s", "hudson");
     if (hudson_s == NULL) {
+        goto out;
+    }
+    dtwf_s = Py_BuildValue("s", "dtwf");
+    if (dtwf_s == NULL) {
         goto out;
     }
     smc_s = Py_BuildValue("s", "smc");
@@ -5848,6 +5853,14 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     }
     if (is_hudson) {
         err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_HUDSON);
+    }
+
+    is_dtwf = PyObject_RichCompareBool(py_name, dtwf_s, Py_EQ);
+    if (is_dtwf == -1) {
+        goto out;
+    }
+    if (is_dtwf) {
+        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_DTWF);
     }
 
     is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
@@ -5911,7 +5924,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         err = msp_set_simulation_model_beta(self->sim, alpha, truncation_point);
     }
 
-    if (! (is_hudson || is_smc || is_smc_prime || is_dirac || is_beta)) {
+    if (! (is_hudson || is_dtwf || is_smc || is_smc_prime || is_dirac || is_beta)) {
         PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
         goto out;
     }
@@ -5922,6 +5935,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     ret = 0;
 out:
     Py_XDECREF(hudson_s);
+    Py_XDECREF(dtwf_s);
     Py_XDECREF(smc_s);
     Py_XDECREF(smc_prime_s);
     Py_XDECREF(beta_s);
