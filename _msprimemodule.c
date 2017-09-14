@@ -4405,7 +4405,8 @@ SparseTree_get_population(SparseTree *self, PyObject *args)
     if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    population = self->sparse_tree->population[node];
+    /* TODO add a sparse_tree_get_population function or a get_tree_sequence */
+    population = self->sparse_tree->tree_sequence->nodes.population[node];
     ret = Py_BuildValue("i", (int) population);
 out:
     return ret;
@@ -4416,12 +4417,16 @@ SparseTree_get_time(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     double time;
-    int node;
+    int node, err;
 
     if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    time = self->sparse_tree->time[node];
+    err = sparse_tree_get_time(self->sparse_tree, node, &time);
+    if (ret != 0) {
+        handle_library_error(err);
+        goto out;
+    }
     ret = Py_BuildValue("d", time);
 out:
     return ret;

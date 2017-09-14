@@ -2594,7 +2594,6 @@ sparse_tree_clear(sparse_tree_t *self)
      * the nodes would be more efficient than multiple memsets.
      */
     memset(self->parent, 0xff, N * sizeof(node_id_t));
-    memset(self->population, 0xff, N * sizeof(population_id_t));
     memset(self->time, 0, N * sizeof(double));
     memset(self->num_children, 0, N * sizeof(node_id_t));
     memset(self->children, 0, N * sizeof(node_id_t *));
@@ -2617,7 +2616,6 @@ sparse_tree_clear(sparse_tree_t *self)
     /* Set the sample attributes */
     for (j = 0; j < self->sample_size; j++) {
         u = self->samples[j];
-        self->population[u] = self->tree_sequence->nodes.population[u];
         self->time[u] = self->tree_sequence->nodes.time[u];
         self->children[u] = NULL;
         self->num_children[u] = 0;
@@ -2655,12 +2653,11 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     self->samples = tree_sequence->samples;
     self->flags = flags;
     self->parent = malloc(num_nodes * sizeof(node_id_t));
-    self->population = malloc(num_nodes * sizeof(population_id_t));
     self->time = malloc(num_nodes * sizeof(double));
     self->num_children = malloc(num_nodes * sizeof(node_id_t));
     self->children = malloc(num_nodes * sizeof(node_id_t *));
     if (self->time == NULL || self->parent == NULL || self->children == NULL
-            || self->num_children == NULL || self->population == NULL) {
+            || self->num_children == NULL) {
         goto out;
     }
     /* the maximum possible height of the tree is num_nodes + 1, including
@@ -2698,9 +2695,6 @@ sparse_tree_free(sparse_tree_t *self)
 {
     if (self->parent != NULL) {
         free(self->parent);
-    }
-    if (self->population != NULL) {
-        free(self->population);
     }
     if (self->time != NULL) {
         free(self->time);
@@ -2850,7 +2844,6 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
     self->sites_length = source->sites_length;
 
     memcpy(self->parent, source->parent, N * sizeof(node_id_t));
-    memcpy(self->population, source->population, N * sizeof(population_id_t));
     memcpy(self->time, source->time, N * sizeof(double));
     memcpy(self->num_children, source->num_children, N * sizeof(node_id_t));
     memcpy(self->children, source->children, N * sizeof(node_id_t *));
@@ -2895,7 +2888,6 @@ sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
         && self->sites_length == other->sites_length
         && self->sites == other->sites
         && memcmp(self->parent, other->parent, N * sizeof(node_id_t)) == 0
-        && memcmp(self->population, other->population, N * sizeof(population_id_t)) == 0
         && memcmp(self->time, other->time, N * sizeof(double)) ==  0
         && memcmp(self->num_children, other->num_children, N * sizeof(node_id_t)) == 0
         && memcmp(self->children, other->children, N * sizeof(node_id_t *)) == 0;
@@ -3085,7 +3077,7 @@ sparse_tree_get_time(sparse_tree_t *self, node_id_t u, double *t)
     if (ret != 0) {
         goto out;
     }
-    *t = self->time[u];
+    *t = self->tree_sequence->nodes.time[u];
 out:
     return ret;
 }
@@ -3182,8 +3174,7 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
     fprintf(out, "root = %d\n", (int) self->root);
     fprintf(out, "index = %d\n", (int) self->index);
     for (j = 0; j < self->num_nodes; j++) {
-        fprintf(out, "\t%d\t%d\t%f\t%d\t(", (int) j, (int) self->parent[j],
-            self->time[j], (int) self->population[j]);
+        fprintf(out, "\t%d\t%d\t%f\t(", (int) j, (int) self->parent[j], self->time[j]);
         for (k = 0; k < (size_t) self->num_children[j]; k++) {
             fprintf(out, "%d", (int) self->children[j][k]);
             if (k < (size_t) self->num_children[j] - 1) {
@@ -3317,6 +3308,10 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     tree_sequence_t *s = self->tree_sequence;
     node_id_t R = (node_id_t) s->edgesets.num_records;
 
+    /* TODO remove the self->time vector here when we are doing the change
+     * for following multiple roots. Node time is dealt with in the tree
+     * sequence. This is the same for population.
+     */
     while (out_breakpoints[out_order[out]] == x) {
         k = out_order[out];
         u = s->edgesets.parent[k];
@@ -3332,7 +3327,6 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         self->num_children[u] = 0;
         self->children[u] = NULL;
         self->time[u] = 0;
-        self->population[u] = MSP_NULL_POPULATION_ID;
         if (u == self->root) {
             self->root = oldest_child;
         }
@@ -3363,7 +3357,6 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         }
         self->children[u] = s->edgesets.children[k];
         self->time[u] = s->nodes.time[u];
-        self->population[u] = s->nodes.population[u];
         if (self->time[u] > self->time[self->root]) {
             self->root = u;
         }
