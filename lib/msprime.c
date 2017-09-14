@@ -2832,29 +2832,109 @@ typedef struct _segment_list_t {
     struct _segment_list_t *next;
 } segment_list_t;
 
-/* The main event loop for the Wright Fisher model. */
+/* Performs a single generation under the Wright Fisher model */
 static int WARN_UNUSED
-msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
+msp_wright_fisher_generation(msp_t *self)
 {
     int ret = 0;
-    segment_t *u, *v, *x;
-    unsigned long events = 0;
-    uint32_t j, k, p;
-    uint32_t N = 0;
-    int64_t num_links = 0;
+    uint32_t N, j, k, p;
+    size_t segment_mem_offset = 0;
     population_t *pop;
-    size_t segment_mem_offset;
+    segment_t *u, *v, *x;
+    segment_list_t **parents = NULL;
     segment_list_t *segment_mem = NULL;
     segment_list_t *s;
-    segment_list_t **parents = NULL;
-    avl_node_t *a;
-    avl_node_t *node;
+    avl_node_t *a, *node;
     avl_tree_t Qu, Qv;
 
     avl_init_tree(&Qu, cmp_segment_queue, NULL);
     avl_init_tree(&Qv, cmp_segment_queue, NULL);
 
-    printf("Running Wright Fisher\n");
+    for (j = 0; j < self->num_populations; j++) {
+
+        pop = &self->populations[j];
+        N = (uint32_t) msp_get_population_size(self, pop);
+
+        // Allocate memory for linked list of offspring per parent
+        parents = calloc(N, sizeof(segment_list_t *));
+        segment_mem = malloc(msp_get_num_ancestors(self) *
+                             sizeof(segment_list_t));
+        if (parents == NULL || segment_mem == NULL){
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+
+        // Iterate through ancestors and draw parents
+        for ( a = pop->ancestors.head; a != NULL; a = a->next ) {
+            s = segment_mem + segment_mem_offset;
+            segment_mem_offset++;
+            p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
+            s->next = parents[p];
+            s->node = a;
+            parents[p] = s;
+            x = (segment_t *) s->node->item;
+        }
+
+        // Iterate through offspring of each parent
+        for ( k = 0; k < N; k++) {
+            // Iterate through offspring of parent k, adding to avl_tree
+            for (s = parents[k]; s != NULL; s = s->next) {
+                node = s->node;
+                x = (segment_t *) node->item;
+                avl_unlink_node(&pop->ancestors, node);
+                msp_free_avl_node(self, node);
+                
+                // Recombine ancestor
+                ret = msp_recombine(self, x, &u, &v);
+                if (ret != 0) {
+                    goto out;
+                }
+
+                // Add to AVLTree for each parental chromosome
+                if (u != NULL) {
+                    ret = msp_priority_queue_insert(self, &Qu, u);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                }
+                if (v != NULL) {
+                    ret = msp_priority_queue_insert(self, &Qv, v);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                }
+            }
+            ret = msp_merge_ancestors(self, &Qu, (population_id_t) j);
+            if (ret != 0) {
+                goto out;
+            }
+            ret = msp_merge_ancestors(self, &Qv, (population_id_t) j);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        free(parents);
+        free(segment_mem);
+        segment_mem = NULL;
+        parents = NULL;
+    }
+out:
+    if (parents != NULL) {
+        free(parents);
+    }
+    if (segment_mem != NULL){
+        free(segment_mem);
+    }
+    return ret;
+}
+
+/* The main event loop for the Wright Fisher model. */
+static int WARN_UNUSED
+msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
+{
+    int ret = 0;
+    unsigned long events = 0;
+    int64_t num_links = 0;
 
     while (msp_get_num_ancestors(self) > 0
             && self->time < max_time && events < max_events) {
@@ -2867,85 +2947,12 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
         if (ret != 0) {
             goto out;
         }
-
-        segment_mem_offset = 0;
-
-        for (j = 0; j < self->num_populations; j++) {
-
-            pop = &self->populations[j];
-            N = (uint32_t) msp_get_population_size(self, pop);
-
-            // Allocate memory for linked list of offspring per parent
-            parents = calloc(N, sizeof(segment_list_t *));
-            segment_mem = malloc(msp_get_num_ancestors(self) *
-                                 sizeof(segment_list_t));
-            if (parents == NULL || segment_mem == NULL){
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-
-            // Iterate through ancestors and draw parents
-            for ( a = pop->ancestors.head; a != NULL; a = a->next ) {
-                s = segment_mem + segment_mem_offset;
-                segment_mem_offset++;
-                p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
-                s->next = parents[p];
-                s->node = a;
-                parents[p] = s;
-                x = (segment_t *) s->node->item;
-            }
-
-            // Iterate through offspring of each parent
-            for ( k = 0; k < N; k++) {
-                // Iterate through offspring of parent k, adding to avl_tree
-                for (s = parents[k]; s != NULL; s = s->next) {
-                    node = s->node;
-                    x = (segment_t *) node->item;
-                    avl_unlink_node(&pop->ancestors, node);
-                    msp_free_avl_node(self, node);
-                    
-                    // Recombine ancestor
-                    ret = msp_recombine(self, x, &u, &v);
-                    if (ret != 0) {
-                        goto out;
-                    }
-
-                    // Add to AVLTree for each parental chromosome
-                    if (u != NULL) {
-                        ret = msp_priority_queue_insert(self, &Qu, u);
-                        if (ret != 0) {
-                            goto out;
-                        }
-                    }
-                    if (v != NULL) {
-                        ret = msp_priority_queue_insert(self, &Qv, v);
-                        if (ret != 0) {
-                            goto out;
-                        }
-                    }
-                }
-                ret = msp_merge_ancestors(self, &Qu, (population_id_t) j);
-                if (ret != 0) {
-                    goto out;
-                }
-                ret = msp_merge_ancestors(self, &Qv, (population_id_t) j);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
-            free(parents);
-            free(segment_mem);
-            segment_mem = NULL;
-            parents = NULL;
+        ret = msp_wright_fisher_generation(self);
+        if (ret != 0) {
+            goto out;
         }
     }
 out:
-    if (parents != NULL) {
-        free(parents);
-    }
-    if (segment_mem != NULL){
-        free(segment_mem);
-    }
     return ret;
 }
 
