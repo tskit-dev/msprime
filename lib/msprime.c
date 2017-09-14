@@ -1618,13 +1618,16 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 {
     int ret = 0;
     int ix;
-    int64_t k;
-    double mu = 1.0 / self->scaled_recombination_rate;
+    double mu, k;
     segment_t *y, *z;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
 
-    /* printf("Recombining with recombination rate %f\n", mu); */
+    if ( self->scaled_recombination_rate > 0 ) {
+        mu = 1.0 / self->scaled_recombination_rate;
+    } else {
+        mu = INFINITY;
+    }
 
     s1.next = NULL;
     s2.next = NULL;
@@ -1632,19 +1635,17 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     seg_tails[ix]->next = x;
     x->prev = seg_tails[ix];
 
-    k = (int64_t) x->left + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
+    k = x->left + gsl_ran_exponential(self->rng, mu) + 1;
 
     while ( x != NULL ) {
-        /* printf("\t%d\t%d\t%d\n", x->left, x->right, x->value); */
         seg_tails[ix] = x;
         y = x->next;
 
         if ( x->right > k ) {
-            /* printf("Recombining at %lu within segment\n", k); */
+            // Make new segment
             assert(x->left <= k);
             self->num_re_events++;
             ix = (ix + 1) % 2;
-            // Make new segment
             z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value,
                     x->population_id, seg_tails[ix], x->next);
             assert(z->left < z->right);
@@ -1661,24 +1662,23 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             x->right = (uint32_t) k;
             assert(x->left < x->right);
             x = z;
-            k = k + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
+            k = k + gsl_ran_exponential(self->rng, mu) + 1;
         }
         else if ( x->right <= k && y != NULL && y->left >= k ) {
-            /* printf("Recombining at %lu in gap between segments\n", k); */
             // Recombine in gap between segment and the next
             x->next = NULL;
             y->prev = NULL;
             while ( y->left >= k ) {
                 self->num_re_events++;
                 ix = (ix + 1) % 2;
-                k = k + (int64_t) gsl_ran_exponential(self->rng, mu) + 1;
+                k = k + gsl_ran_exponential(self->rng, mu) + 1;
             }
             seg_tails[ix]->next = y;
             y->prev = seg_tails[ix];
             seg_tails[ix] = y;
             x = y;
         } else {
-            /* printf("Breakpoint %lu in later segment\n", k); */
+            // Breakpoint in later segment
             x = y;
         }
     }
@@ -1686,13 +1686,6 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     *u = s1.next;
     *v = s2.next;
 
-    /* printf("Results of recombination\n"); */
-    /* if (*u != NULL) { */
-    /*     msp_print_segment_chain(self, *u, stdout); */
-    /* } */
-    /* if (*v != NULL) { */
-    /*     msp_print_segment_chain(self, *v, stdout); */
-    /* } */
 out:
     return ret;
 }
@@ -2837,18 +2830,19 @@ static int WARN_UNUSED
 msp_wright_fisher_generation(msp_t *self)
 {
     int ret = 0;
-    uint32_t N, j, k, p;
+    uint32_t N, i, j, k, p;
     size_t segment_mem_offset = 0;
     population_t *pop;
-    segment_t *u, *v, *x;
+    segment_t *u[2], *x;
     segment_list_t **parents = NULL;
     segment_list_t *segment_mem = NULL;
     segment_list_t *s;
     avl_node_t *a, *node;
-    avl_tree_t Qu, Qv;
+    avl_tree_t Q[2];
 
-    avl_init_tree(&Qu, cmp_segment_queue, NULL);
-    avl_init_tree(&Qv, cmp_segment_queue, NULL);
+    for ( i = 0; i < 2; i++ ) {
+        avl_init_tree(&Q[i], cmp_segment_queue, NULL);
+    }
 
     for (j = 0; j < self->num_populations; j++) {
 
@@ -2863,7 +2857,6 @@ msp_wright_fisher_generation(msp_t *self)
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-
         // Iterate through ancestors and draw parents
         for ( a = pop->ancestors.head; a != NULL; a = a->next ) {
             s = segment_mem + segment_mem_offset;
@@ -2872,12 +2865,10 @@ msp_wright_fisher_generation(msp_t *self)
             s->next = parents[p];
             s->node = a;
             parents[p] = s;
-            x = (segment_t *) s->node->item;
         }
 
-        // Iterate through offspring of each parent
+        // Iterate through offspring of parent k, adding to avl_tree
         for ( k = 0; k < N; k++) {
-            // Iterate through offspring of parent k, adding to avl_tree
             for (s = parents[k]; s != NULL; s = s->next) {
                 node = s->node;
                 x = (segment_t *) node->item;
@@ -2885,32 +2876,26 @@ msp_wright_fisher_generation(msp_t *self)
                 msp_free_avl_node(self, node);
                 
                 // Recombine ancestor
-                ret = msp_recombine(self, x, &u, &v);
+                ret = msp_recombine(self, x, &u[0], &u[1]);
                 if (ret != 0) {
                     goto out;
                 }
-
                 // Add to AVLTree for each parental chromosome
-                if (u != NULL) {
-                    ret = msp_priority_queue_insert(self, &Qu, u);
-                    if (ret != 0) {
-                        goto out;
-                    }
-                }
-                if (v != NULL) {
-                    ret = msp_priority_queue_insert(self, &Qv, v);
-                    if (ret != 0) {
-                        goto out;
+                for ( i = 0; i < 2; i++) {
+                    if (u[i] != NULL) {
+                        ret = msp_priority_queue_insert(self, &Q[i], u[i]);
+                        if (ret != 0) {
+                            goto out;
+                        }
                     }
                 }
             }
-            ret = msp_merge_ancestors(self, &Qu, (population_id_t) j);
-            if (ret != 0) {
-                goto out;
-            }
-            ret = msp_merge_ancestors(self, &Qv, (population_id_t) j);
-            if (ret != 0) {
-                goto out;
+            // Merge segments in each parental chromosome
+            for ( i = 0; i < 2; i ++ ) {
+                ret = msp_merge_ancestors(self, &Q[i], (population_id_t) j);
+                if (ret != 0) {
+                    goto out;
+                }
             }
         }
         free(parents);
