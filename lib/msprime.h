@@ -507,11 +507,11 @@ typedef struct {
     /* Left and right physical coordinates of the tree */
     double left;
     double right;
-    population_id_t *population;
     node_id_t *parent;
     /* TODO Change this to children_length for consistency with the tree sequence */
     list_len_t *num_children;
     node_id_t **children;
+    /* TODO remove this time vector as it is redundant. */
     double *time;
     size_t index;
     /* These are involved in the optional sample tracking; num_samples counts

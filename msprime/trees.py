@@ -813,8 +813,7 @@ class SparseTree(object):
 
     def get_time(self, u):
         """
-        Returns the time of the specified node in generations. Returns 0 if u
-        is not a node in the current tree.
+        Returns the time of the specified node in generations.
 
         :param int u: The node of interest.
         :return: The time of u.

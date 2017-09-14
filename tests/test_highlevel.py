@@ -328,7 +328,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         for j in range(st.get_root()):
             if j not in used_nodes:
                 self.assertEqual(st.get_parent(j), msprime.NULL_NODE)
-                self.assertEqual(st.get_time(j), 0)
                 for c in st.get_children(j):
                     self.assertEqual(c, msprime.NULL_NODE)
         # To a top-down traversal, and make sure we meet all the samples.

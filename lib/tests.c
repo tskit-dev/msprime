@@ -5596,7 +5596,7 @@ verify_tree_diffs(tree_sequence_t *ts)
     node_record_t *record, *records_out, *records_in;
     size_t num_nodes = tree_sequence_get_num_nodes(ts);
     size_t j, k, num_in, num_out, num_trees;
-    double length, t, x;
+    double length, x;
     node_t node;
     node_id_t u;
     node_id_t *pi = malloc(num_nodes * sizeof(node_id_t));
@@ -5660,9 +5660,6 @@ verify_tree_diffs(tree_sequence_t *ts)
             ret = sparse_tree_get_parent(&tree, j, &u);
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT_EQUAL(pi[j], u);
-            ret = sparse_tree_get_time(&tree, j, &t);
-            CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_EQUAL(tau[j], t);
         }
         CU_ASSERT_EQUAL(tree.left, x);
         x += length;
