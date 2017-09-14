@@ -1653,7 +1653,8 @@ class TreeSimulator(object):
         model_map = {
             "hudson": StandardCoalescent(),
             "smc": SmcApproxCoalescent(),
-            "smc_prime": SmcPrimeApproxCoalescent()
+            "smc_prime": SmcPrimeApproxCoalescent(),
+            "dtwf": DiscreteTimeWrightFisher(),
         }
         if model is None:
             model_instance = StandardCoalescent()
@@ -3268,6 +3269,14 @@ class StandardCoalescent(SimulationModel):
     The classical coalescent with recombination model (i.e., Hudson's algorithm).
     """
     name = "hudson"
+
+
+class DiscreteTimeWrightFisher(SimulationModel):
+    """
+    The discrete time Wright-Fisher model. Simulate the history of the population
+    backwards in time generation-by-generation.
+    """
+    name = "dtwf"
 
 
 class SmcApproxCoalescent(SimulationModel):
