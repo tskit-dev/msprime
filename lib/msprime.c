@@ -1618,15 +1618,19 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 {
     int ret = 0;
     int ix;
-    double mu, k;
+    double mu;
+    uint64_t k;
     segment_t *y, *z;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
 
     if ( self->scaled_recombination_rate > 0 ) {
         mu = 1.0 / self->scaled_recombination_rate;
+        k = 1 + (uint64_t) x->left +
+            (uint64_t) gsl_ran_exponential(self->rng, mu);
     } else {
         mu = INFINITY;
+        k = INT64_MAX;
     }
 
     s1.next = NULL;
@@ -1635,7 +1639,6 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     seg_tails[ix]->next = x;
     x->prev = seg_tails[ix];
 
-    k = x->left + gsl_ran_exponential(self->rng, mu) + 1;
 
     while ( x != NULL ) {
         seg_tails[ix] = x;
@@ -1662,7 +1665,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             x->right = (uint32_t) k;
             assert(x->left < x->right);
             x = z;
-            k = k + gsl_ran_exponential(self->rng, mu) + 1;
+            k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
         }
         else if ( x->right <= k && y != NULL && y->left >= k ) {
             // Recombine in gap between segment and the next
@@ -1671,7 +1674,7 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             while ( y->left >= k ) {
                 self->num_re_events++;
                 ix = (ix + 1) % 2;
-                k = k + gsl_ran_exponential(self->rng, mu) + 1;
+                k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
             }
             seg_tails[ix]->next = y;
             y->prev = seg_tails[ix];
