@@ -190,6 +190,23 @@ class NodeTable(_msprime.NodeTable):
     def __len__(self):
         return self.num_rows
 
+    # Pickle support
+    def __getstate__(self):
+        return {
+            "time": self.time,
+            "flags": self.flags,
+            "population": self.population,
+            "name": self.name,
+            "name_length": self.name_length,
+        }
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.__init__()
+        self.set_columns(
+            time=state["time"], flags=state["flags"], population=state["population"],
+            name=state["name"], name_length=state["name_length"])
+
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -259,6 +276,23 @@ class EdgesetTable(_msprime.EdgesetTable):
     def __len__(self):
         return self.num_rows
 
+    # Pickle support
+    def __getstate__(self):
+        return {
+            "left": self.left,
+            "right": self.right,
+            "parent": self.parent,
+            "children": self.children,
+            "children_length": self.children_length,
+        }
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.__init__()
+        self.set_columns(
+            left=state["left"], right=state["right"], parent=state["parent"],
+            children=state["children"], children_length=state["children_length"])
+
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -298,6 +332,24 @@ class MigrationTable(_msprime.MigrationTable):
 
     def __len__(self):
         return self.num_rows
+
+    # Pickle support
+    def __getstate__(self):
+        return {
+            "left": self.left,
+            "right": self.right,
+            "node": self.node,
+            "source": self.source,
+            "dest": self.dest,
+            "time": self.time,
+        }
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.__init__()
+        self.set_columns(
+            left=state["left"], right=state["right"], node=state["node"],
+            source=state["source"], dest=state["dest"], time=state["time"])
 
     def copy(self):
         """
@@ -343,6 +395,21 @@ class SiteTable(_msprime.SiteTable):
 
     def __len__(self):
         return self.num_rows
+
+    # Pickle support
+    def __getstate__(self):
+        return {
+            "position": self.position,
+            "ancestral_state": self.ancestral_state,
+            "ancestral_state_length": self.ancestral_state_length,
+        }
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.__init__()
+        self.set_columns(
+            position=state["position"], ancestral_state=state["ancestral_state"],
+            ancestral_state_length=state["ancestral_state_length"])
 
     def copy(self):
         """
@@ -394,6 +461,23 @@ class MutationTable(_msprime.MutationTable):
 
     def __len__(self):
         return self.num_rows
+
+    # Pickle support
+    def __getstate__(self):
+        return {
+            "site": self.site,
+            "node": self.node,
+            "derived_state": self.derived_state,
+            "derived_state_length": self.derived_state_length,
+        }
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.__init__()
+        self.set_columns(
+            site=state["site"], node=state["node"],
+            derived_state=state["derived_state"],
+            derived_state_length=state["derived_state_length"])
 
     def copy(self):
         """
