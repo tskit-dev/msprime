@@ -78,17 +78,6 @@ class NodeTable(_msprime.NodeTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support. See copyreg registration for this function below.
-    def _pickle(table):
-        state = {
-            "time": table.time,
-            "flags": table.flags,
-            "population": table.population,
-            "name": table.name,
-            "name_length": table.name_length,
-        }
-        return NodeTable, tuple(), state
-
     # Unpickle support
     def __setstate__(self, state):
         self.__init__()
@@ -105,6 +94,18 @@ class NodeTable(_msprime.NodeTable):
             flags=self.flags, time=self.time, population=self.population,
             name=self.name, name_length=self.name_length)
         return copy
+
+
+# Pickle support. See copyreg registration for this function below.
+def _pickle_node_table(table):
+    state = {
+        "time": table.time,
+        "flags": table.flags,
+        "population": table.population,
+        "name": table.name,
+        "name_length": table.name_length,
+    }
+    return NodeTable, tuple(), state
 
 
 class EdgesetTable(_msprime.EdgesetTable):
@@ -165,17 +166,6 @@ class EdgesetTable(_msprime.EdgesetTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support. See copyreg registration for this function below.
-    def _pickle(self):
-        state = {
-            "left": self.left,
-            "right": self.right,
-            "parent": self.parent,
-            "children": self.children,
-            "children_length": self.children_length,
-        }
-        return EdgesetTable, tuple(), state
-
     # Unpickle support
     def __setstate__(self, state):
         self.__init__()
@@ -192,6 +182,18 @@ class EdgesetTable(_msprime.EdgesetTable):
             left=self.left, right=self.right, parent=self.parent,
             children=self.children, children_length=self.children_length)
         return copy
+
+
+# Pickle support. See copyreg registration for this function below.
+def _edgeset_table_pickle(table):
+    state = {
+        "left": table.left,
+        "right": table.right,
+        "parent": table.parent,
+        "children": table.children,
+        "children_length": table.children_length,
+    }
+    return EdgesetTable, tuple(), state
 
 
 class MigrationTable(_msprime.MigrationTable):
@@ -223,18 +225,6 @@ class MigrationTable(_msprime.MigrationTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support. See copyreg registration for this function below.
-    def _pickle(self):
-        state = {
-            "left": self.left,
-            "right": self.right,
-            "node": self.node,
-            "source": self.source,
-            "dest": self.dest,
-            "time": self.time,
-        }
-        return MigrationTable, tuple(), state
-
     # Unpickle support
     def __setstate__(self, state):
         self.__init__()
@@ -251,6 +241,19 @@ class MigrationTable(_msprime.MigrationTable):
             left=self.left, right=self.right, node=self.node, source=self.source,
             dest=self.dest, time=self.time)
         return copy
+
+
+# Pickle support. See copyreg registration for this function below.
+def _migration_table_pickle(table):
+    state = {
+        "left": table.left,
+        "right": table.right,
+        "node": table.node,
+        "source": table.source,
+        "dest": table.dest,
+        "time": table.time,
+    }
+    return MigrationTable, tuple(), state
 
 
 class SiteTable(_msprime.SiteTable):
@@ -287,15 +290,6 @@ class SiteTable(_msprime.SiteTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support. See copyreg registration for this function below.
-    def _pickle(self):
-        state = {
-            "position": self.position,
-            "ancestral_state": self.ancestral_state,
-            "ancestral_state_length": self.ancestral_state_length,
-        }
-        return SiteTable, tuple(), state
-
     # Unpickle support
     def __setstate__(self, state):
         self.__init__()
@@ -312,6 +306,16 @@ class SiteTable(_msprime.SiteTable):
             position=self.position, ancestral_state=self.ancestral_state,
             ancestral_state_length=self.ancestral_state_length)
         return copy
+
+
+# Pickle support. See copyreg registration for this function below.
+def _site_table_pickle(table):
+    state = {
+        "position": table.position,
+        "ancestral_state": table.ancestral_state,
+        "ancestral_state_length": table.ancestral_state_length,
+    }
+    return SiteTable, tuple(), state
 
 
 class MutationTable(_msprime.MutationTable):
@@ -354,16 +358,6 @@ class MutationTable(_msprime.MutationTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support. See copyreg registration for this function below.
-    def _pickle(self):
-        state = {
-            "site": self.site,
-            "node": self.node,
-            "derived_state": self.derived_state,
-            "derived_state_length": self.derived_state_length,
-        }
-        return MutationTable, tuple(), state
-
     # Unpickle support
     def __setstate__(self, state):
         self.__init__()
@@ -383,13 +377,26 @@ class MutationTable(_msprime.MutationTable):
         return copy
 
 
+# Pickle support. See copyreg registration for this function below.
+def _mutation_table_pickle(table):
+    state = {
+        "site": table.site,
+        "node": table.node,
+        "derived_state": table.derived_state,
+        "derived_state_length": table.derived_state_length,
+    }
+    return MutationTable, tuple(), state
+
+
 # Pickle support for the various tables. We are forced to use copyreg.pickle
 # here to support Python 2. For Python 3, we can just use the __setstate__.
-copyreg.pickle(NodeTable, NodeTable._pickle)
-copyreg.pickle(EdgesetTable, EdgesetTable._pickle)
-copyreg.pickle(MigrationTable, MigrationTable._pickle)
-copyreg.pickle(SiteTable, SiteTable._pickle)
-copyreg.pickle(MutationTable, MutationTable._pickle)
+# It would be cleaner to attach the pickle_*_table functions to the classes
+# themselves, but this causes issues with Mocking on readthedocs. Sigh.
+copyreg.pickle(NodeTable, _pickle_node_table)
+copyreg.pickle(EdgesetTable, _edgeset_table_pickle)
+copyreg.pickle(MigrationTable, _migration_table_pickle)
+copyreg.pickle(SiteTable, _site_table_pickle)
+copyreg.pickle(MutationTable, _mutation_table_pickle)
 
 
 #############################################
