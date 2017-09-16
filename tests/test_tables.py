@@ -23,6 +23,7 @@ between simulations and the tree sequence.
 from __future__ import print_function
 from __future__ import division
 
+import pickle
 import random
 import string
 import unittest
@@ -276,6 +277,24 @@ class CommonTestsMixin(object):
                 self.assertIsInstance(copy, self.table_class)
                 self.assertEqual(copy, table)
                 table = copy
+
+    def test_pickle(self):
+        for num_rows in [0, 10, 100]:
+            input_data = {
+                col.name: col.get_input(num_rows) for col in self.columns}
+            for list_col, length_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
+                input_data[length_col.name] = np.ones(num_rows, dtype=np.uint32)
+            table = self.table_class()
+            table.set_columns(**input_data)
+            pkl = pickle.dumps(table)
+            new_table = pickle.loads(pkl)
+            self.assertEqual(table, new_table)
+            for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
+                pkl = pickle.dumps(table, protocol=protocol)
+                new_table = pickle.loads(pkl)
+                self.assertEqual(table, new_table)
 
     def test_equality(self):
         for num_rows in [1, 10, 100]:

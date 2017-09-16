@@ -31,3 +31,4 @@ from msprime.formats import *  # NOQA
 from msprime.trees import *  # NOQA
 from msprime.stats import *  # NOQA
 from msprime.exceptions import *  # NOQA
+from msprime.tables import *  # NOQA
