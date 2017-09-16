@@ -22,6 +22,7 @@ Module responsible to generating and reading tree files.
 from __future__ import division
 from __future__ import print_function
 
+import array
 import collections
 import gzip
 import json
@@ -357,6 +358,48 @@ class AsciiTreeDrawer(TreeDrawer):
                     for row in range(top, self._y_coords[v] - 1):
                         canvas[row * w + col] = ord('|')
         return str(bytes(canvas).decode())
+
+
+class UnicodeTreeDrawer(TreeDrawer):
+    """
+    Draws an Unicode rendering of a tree using box drawing characters.
+    """
+    discretise_coordinates = True
+
+    def draw(self):
+        w = self._width
+        h = self._height + 1
+
+        # Create a width * height canvas of spaces.
+        canvas = array.array('u', " " * (w * h))
+        for row in range(h):
+            canvas[row * w + w - 1] = '\n'
+
+        for u in self._tree.nodes():
+            col = self._x_coords[u]
+            row = self._y_coords[u]
+            j = row * w + col
+            label = array.array('u', self._node_label_text[u])
+            n = len(label)
+            canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
+            if self._tree.is_internal(u):
+                children = self._tree.children(u)
+                row += 1
+                left = min(self._x_coords[v] for v in children)
+                right = max(self._x_coords[v] for v in children)
+                canvas[row * w + left] = "\u250F"
+                canvas[row * w + right] = "\u2513"
+                for col in range(left + 1, right):
+                    canvas[row * w + col] = "\u2501"
+                canvas[row * w + self._x_coords[u]] = "\u2537"
+                top = row + 1
+                for v in children:
+                    col = self._x_coords[v]
+                    for row in range(top, self._y_coords[v] - 1):
+                        canvas[row * w + col] = "\u2503"
+
+        return canvas.tounicode()
+
 
 
 # TODO:
@@ -721,7 +764,7 @@ class SparseTree(object):
             that are present in the map. Any nodes not specified in the map will
             have have their default labels.
         :param str format: The format of the returned image. Currently supported
-            are 'svg' and 'ascii'.
+            are 'svg', 'ascii' and 'unicode'.
         :param bool show_times: Deprecated alias for ``times``.
         :return: A representation of this tree in SVG format.
         :rtype: str
@@ -732,7 +775,7 @@ class SparseTree(object):
         if format is None:
             format = "SVG"
         fmt = format.lower()
-        supported_formats = ["svg", "ascii"]
+        supported_formats = ["svg", "ascii", "unicode"]
         if fmt not in supported_formats:
             raise ValueError("Unknown format '{}'. Supported formats are {}".format(
                 format, supported_formats))
@@ -750,6 +793,14 @@ class SparseTree(object):
                     y_padding=20, x_padding=0)
         elif fmt == "ascii":
             td = AsciiTreeDrawer(
+                    self, width=width, height=height, show_times=times,
+                    show_mutation_locations=mutation_locations,
+                    show_mutation_labels=mutation_labels,
+                    show_internal_node_labels=internal_node_labels,
+                    node_label_text=node_label_text,
+                    show_leaf_node_labels=leaf_node_labels)
+        elif fmt == "unicode":
+            td = UnicodeTreeDrawer(
                     self, width=width, height=height, show_times=times,
                     show_mutation_locations=mutation_locations,
                     show_mutation_labels=mutation_labels,
