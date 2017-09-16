@@ -291,6 +291,10 @@ class CommonTestsMixin(object):
             pkl = pickle.dumps(table)
             new_table = pickle.loads(pkl)
             self.assertEqual(table, new_table)
+            for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
+                pkl = pickle.dumps(table, protocol=protocol)
+                new_table = pickle.loads(pkl)
+                self.assertEqual(table, new_table)
 
     def test_equality(self):
         for num_rows in [1, 10, 100]:
