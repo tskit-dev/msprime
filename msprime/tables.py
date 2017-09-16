@@ -22,6 +22,7 @@ Tree sequence IO via the tables API.
 from __future__ import division
 from __future__ import print_function
 
+from six.moves import copyreg
 
 import _msprime
 
@@ -77,15 +78,16 @@ class NodeTable(_msprime.NodeTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support
-    def __getstate__(self):
-        return {
-            "time": self.time,
-            "flags": self.flags,
-            "population": self.population,
-            "name": self.name,
-            "name_length": self.name_length,
+    # Pickle support. See copyreg registration for this function below.
+    def _pickle(table):
+        state = {
+            "time": table.time,
+            "flags": table.flags,
+            "population": table.population,
+            "name": table.name,
+            "name_length": table.name_length,
         }
+        return NodeTable, tuple(), state
 
     # Unpickle support
     def __setstate__(self, state):
@@ -163,15 +165,16 @@ class EdgesetTable(_msprime.EdgesetTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support
-    def __getstate__(self):
-        return {
+    # Pickle support. See copyreg registration for this function below.
+    def _pickle(self):
+        state = {
             "left": self.left,
             "right": self.right,
             "parent": self.parent,
             "children": self.children,
             "children_length": self.children_length,
         }
+        return EdgesetTable, tuple(), state
 
     # Unpickle support
     def __setstate__(self, state):
@@ -220,9 +223,9 @@ class MigrationTable(_msprime.MigrationTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support
-    def __getstate__(self):
-        return {
+    # Pickle support. See copyreg registration for this function below.
+    def _pickle(self):
+        state = {
             "left": self.left,
             "right": self.right,
             "node": self.node,
@@ -230,6 +233,7 @@ class MigrationTable(_msprime.MigrationTable):
             "dest": self.dest,
             "time": self.time,
         }
+        return MigrationTable, tuple(), state
 
     # Unpickle support
     def __setstate__(self, state):
@@ -283,13 +287,14 @@ class SiteTable(_msprime.SiteTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support
-    def __getstate__(self):
-        return {
+    # Pickle support. See copyreg registration for this function below.
+    def _pickle(self):
+        state = {
             "position": self.position,
             "ancestral_state": self.ancestral_state,
             "ancestral_state_length": self.ancestral_state_length,
         }
+        return SiteTable, tuple(), state
 
     # Unpickle support
     def __setstate__(self, state):
@@ -349,14 +354,15 @@ class MutationTable(_msprime.MutationTable):
     def __len__(self):
         return self.num_rows
 
-    # Pickle support
-    def __getstate__(self):
-        return {
+    # Pickle support. See copyreg registration for this function below.
+    def _pickle(self):
+        state = {
             "site": self.site,
             "node": self.node,
             "derived_state": self.derived_state,
             "derived_state_length": self.derived_state_length,
         }
+        return MutationTable, tuple(), state
 
     # Unpickle support
     def __setstate__(self, state):
@@ -375,6 +381,15 @@ class MutationTable(_msprime.MutationTable):
             site=self.site, node=self.node, derived_state=self.derived_state,
             derived_state_length=self.derived_state_length)
         return copy
+
+
+# Pickle support for the various tables. We are forced to use copyreg.pickle
+# here to support Python 2. For Python 3, we can just use the __setstate__.
+copyreg.pickle(NodeTable, NodeTable._pickle)
+copyreg.pickle(EdgesetTable, EdgesetTable._pickle)
+copyreg.pickle(MigrationTable, MigrationTable._pickle)
+copyreg.pickle(SiteTable, SiteTable._pickle)
+copyreg.pickle(MutationTable, MutationTable._pickle)
 
 
 #############################################
