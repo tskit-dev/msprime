@@ -21,6 +21,7 @@ Module responsible for visualisations.
 """
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import array
 import collections
@@ -255,7 +256,7 @@ class UnicodeTreeDrawer(TreeDrawer):
         h = self._height + 1
 
         # Create a width * height canvas of spaces.
-        canvas = array.array('u', " " * (w * h))
+        canvas = array.array(b'u', " " * (w * h))
         for row in range(h):
             canvas[row * w + w - 1] = '\n'
 
@@ -263,7 +264,7 @@ class UnicodeTreeDrawer(TreeDrawer):
             col = self._x_coords[u]
             row = self._y_coords[u]
             j = row * w + col
-            label = array.array('u', self._node_label_text[u])
+            label = array.array(b'u', self._node_label_text[u])
             n = len(label)
             canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
             if self._tree.is_internal(u):
