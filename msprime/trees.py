@@ -528,7 +528,7 @@ class SparseTree(object):
         return self._ll_sparse_tree.get_sample_size()
 
     def draw(
-            self, path=None, width=200, height=200, times=False,
+            self, path=None, width=None, height=None, times=False,
             mutation_locations=True, mutation_labels=False,
             internal_node_labels=True, leaf_node_labels=True, show_times=None,
             node_label_text=None, format=None):

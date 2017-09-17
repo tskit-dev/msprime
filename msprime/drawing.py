@@ -36,7 +36,7 @@ IS_PY2 = sys.version_info[0] < 3
 
 
 def draw_tree(
-        tree, width=200, height=200, times=False,
+        tree, width=None, height=None, times=False,
         mutation_locations=True, mutation_labels=False,
         internal_node_labels=True, leaf_node_labels=True, show_times=None,
         node_label_text=None, format=None):
@@ -58,8 +58,7 @@ def draw_tree(
                 show_mutation_labels=mutation_labels,
                 show_internal_node_labels=internal_node_labels,
                 show_leaf_node_labels=leaf_node_labels,
-                node_label_text=node_label_text,
-                y_padding=20, x_padding=0)
+                node_label_text=node_label_text)
     elif fmt == "ascii":
         td = AsciiTreeDrawer(
                 tree, width=width, height=height, show_times=times,
@@ -98,41 +97,53 @@ class TreeDrawer(object):
         return ret
 
     def __init__(
-            self, tree, width=200, height=200, show_times=False,
+            self, tree, width=None, height=None, show_times=False,
             show_mutation_locations=True, show_mutation_labels=False,
             show_internal_node_labels=True, show_leaf_node_labels=True,
-            node_label_text=None, x_padding=0, y_padding=0):
-        self._width = width
-        self._height = height
+            node_label_text=None):
+        self._tree = tree
         self._show_times = show_times
         self._show_mutation_locations = show_mutation_locations
         self._show_mutation_labels = show_mutation_labels
         self._show_internal_node_labels = show_internal_node_labels
         self._show_leaf_node_labels = show_leaf_node_labels
-        self._x_scale = width / (tree.get_sample_size() + 2)
-        t = tree.get_time(tree.get_root())
-        self._y_scale = (height - 2 * y_padding) / t
-        self._tree = tree
+        self._num_leaves = len(list(tree.leaves()))
+        self._width = width
+        self._height = height
         self._x_coords = {}
         self._y_coords = {}
         self._node_label_text = {}
         for u in tree.nodes():
-            scaled_t = tree.get_time(u) * self._y_scale
-            self._y_coords[u] = self._discretise(height - scaled_t - y_padding)
             self._node_label_text[u] = str(u)
         if node_label_text is not None:
             for node, label in node_label_text.items():
                 self._node_label_text[node] = label
+        self._assign_coordinates()
+
+class SvgTreeDrawer(TreeDrawer):
+    """
+    Draws trees in SVG format using the svgwrite library.
+    """
+
+    def _assign_coordinates(self):
+        x_padding = 0
+        y_padding = 10
+        t = self._tree.get_time(self._tree.get_root())
+        self._y_scale = (self._height - 2 * y_padding) / t
+        for u in self._tree.nodes():
+            scaled_t = self._tree.get_time(u) * self._y_scale
+            self._y_coords[u] = self._height - scaled_t - y_padding
+        self._x_scale = self._width / (self._num_leaves + 2)
         self._sample_x = 1
         self._assign_x_coordinates(self._tree.get_root())
         self._mutations = []
         node_mutations = collections.defaultdict(list)
-        for site in tree.sites():
+        for site in self._tree.sites():
             for mutation in site.mutations:
                 node_mutations[mutation.node].append(mutation)
         for child, mutations in node_mutations.items():
             n = len(mutations)
-            parent = tree.parent(child)
+            parent = self._tree.parent(child)
             x = self._x_coords[child]
             y1 = self._y_coords[child]
             y2 = self._y_coords[parent]
@@ -156,12 +167,6 @@ class TreeDrawer(object):
         else:
             self._x_coords[node] = self._discretise(self._sample_x * self._x_scale)
             self._sample_x += 1
-
-
-class SvgTreeDrawer(TreeDrawer):
-    """
-    Draws trees in SVG format using the svgwrite library.
-    """
 
     def draw(self):
         """
@@ -232,9 +237,35 @@ class TextTreeDrawer(TreeDrawer):
         """
         raise NotImplementedError()
 
+
+    def _assign_coordinates(self):
+        # Get the depth of every node.
+        for u in self._tree.nodes():
+            v = u
+            depth = 0
+            while v != self._tree.root:
+                v = self._tree.parent(v)
+                depth += 1
+            self._y_coords[u] = 2 * depth
+        self._height = max(self._y_coords.values())
+        # Get the overall width and assign x coordinates.
+        x = 0
+        for u in self._tree.nodes(order="postorder"):
+            if self._tree.is_leaf(u):
+                self._x_coords[u] = x
+                x += len(self._node_label_text[u]) + 1
+            else:
+                coords = [self._x_coords[c] for c in self._tree.children(u)]
+                a = min(coords)
+                b = max(coords)
+                assert b - a > 1
+                self._x_coords[u] = int(round((a + (b - a) / 2)))
+        self._width = max(self._x_coords) + 4
+        print("x = ", self._x_coords)
+
     def _draw(self):
         w = self._width
-        h = self._height + 1
+        h = self._height
 
         # Create a width * height canvas of spaces.
         canvas = array.array(self.array_type, (w * h) * [self.background_char])
@@ -246,7 +277,6 @@ class TextTreeDrawer(TreeDrawer):
             j = row * w + col
             label = self._convert_text(self._node_label_text[u])
             n = len(label)
-            canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
             canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
             if self._tree.is_internal(u):
                 children = self._tree.children(u)
