@@ -52,6 +52,10 @@ def draw_tree(
         if not _svgwrite_imported:
             raise ImportError(
                 "svgwrite is not installed. try `pip install svgwrite`")
+        if width is None:
+            width = 200
+        if height is None:
+            height = 200
         td = SvgTreeDrawer(
                 tree, width=width, height=height, show_times=times,
                 show_mutation_locations=mutation_locations,
@@ -69,7 +73,7 @@ def draw_tree(
                 show_leaf_node_labels=leaf_node_labels)
     elif fmt == "unicode":
         if IS_PY2:
-            raise ValueError("Unicode tree drawing not support on Python 2")
+            raise ValueError("Unicode tree drawing not supported on Python 2")
         td = UnicodeTreeDrawer(
                 tree, width=width, height=height, show_times=times,
                 show_mutation_locations=mutation_locations,
@@ -120,14 +124,14 @@ class TreeDrawer(object):
                 self._node_label_text[node] = label
         self._assign_coordinates()
 
+
 class SvgTreeDrawer(TreeDrawer):
     """
     Draws trees in SVG format using the svgwrite library.
     """
 
     def _assign_coordinates(self):
-        x_padding = 0
-        y_padding = 10
+        y_padding = 20
         t = self._tree.get_time(self._tree.get_root())
         self._y_scale = (self._height - 2 * y_padding) / t
         for u in self._tree.nodes():
@@ -237,7 +241,6 @@ class TextTreeDrawer(TreeDrawer):
         """
         raise NotImplementedError()
 
-
     def _assign_coordinates(self):
         # Get the depth of every node.
         for u in self._tree.nodes():
@@ -247,7 +250,7 @@ class TextTreeDrawer(TreeDrawer):
                 v = self._tree.parent(v)
                 depth += 1
             self._y_coords[u] = 2 * depth
-        self._height = max(self._y_coords.values())
+        self._height = max(self._y_coords.values()) + 1
         # Get the overall width and assign x coordinates.
         x = 0
         for u in self._tree.nodes(order="postorder"):
@@ -260,8 +263,7 @@ class TextTreeDrawer(TreeDrawer):
                 b = max(coords)
                 assert b - a > 1
                 self._x_coords[u] = int(round((a + (b - a) / 2)))
-        self._width = max(self._x_coords) + 4
-        print("x = ", self._x_coords)
+        self._width = x + 1
 
     def _draw(self):
         w = self._width
@@ -269,15 +271,13 @@ class TextTreeDrawer(TreeDrawer):
 
         # Create a width * height canvas of spaces.
         canvas = array.array(self.array_type, (w * h) * [self.background_char])
-        for row in range(h):
-            canvas[row * w + w - 1] = self.eol_char
         for u in self._tree.nodes():
             col = self._x_coords[u]
             row = self._y_coords[u]
             j = row * w + col
             label = self._convert_text(self._node_label_text[u])
             n = len(label)
-            canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
+            canvas[j: j + n] = label
             if self._tree.is_internal(u):
                 children = self._tree.children(u)
                 row += 1
@@ -293,6 +293,9 @@ class TextTreeDrawer(TreeDrawer):
                     col = self._x_coords[v]
                     for row in range(top, self._y_coords[v] - 1):
                         canvas[row * w + col] = self.vertical_line_char
+        # Put in the EOLs last so that if we can't overwrite them.
+        for row in range(h):
+            canvas[row * w + w - 1] = self.eol_char
         return canvas
 
 
@@ -313,7 +316,10 @@ class AsciiTreeDrawer(TextTreeDrawer):
         return array.array(self.array_type, text.encode())
 
     def draw(self):
-        return self._draw().tostring().decode()
+        s = self._draw().tostring()
+        if not IS_PY2:
+            s = s.decode()
+        return s
 
 
 class UnicodeTreeDrawer(TextTreeDrawer):
