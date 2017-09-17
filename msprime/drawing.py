@@ -21,16 +21,18 @@ Module responsible for visualisations.
 """
 from __future__ import division
 from __future__ import print_function
-from __future__ import unicode_literals
 
 import array
 import collections
+import sys
 
 try:
     import svgwrite
     _svgwrite_imported = True
 except ImportError:
     _svgwrite_imported = False
+
+IS_PY2 = sys.version_info[0] < 3
 
 
 def draw_tree(
@@ -67,6 +69,8 @@ def draw_tree(
                 node_label_text=node_label_text,
                 show_leaf_node_labels=leaf_node_labels)
     elif fmt == "unicode":
+        if IS_PY2:
+            raise ValueError("Unicode tree drawing not support on Python 2")
         td = UnicodeTreeDrawer(
                 tree, width=width, height=height, show_times=times,
                 show_mutation_locations=mutation_locations,
@@ -206,81 +210,97 @@ class SvgTreeDrawer(TreeDrawer):
         return dwg.tostring()
 
 
-class AsciiTreeDrawer(TreeDrawer):
+class TextTreeDrawer(TreeDrawer):
+    """
+    Abstract superclass of TreeDrawers that draw trees in a text buffer.
+    """
+    discretise_coordinates = True
+
+    array_type = None  # the type used for the array.array canvas
+    background_char = None  # The fill char
+    eol_char = None  # End of line
+    left_shoulder_char = None  # left corner of a horizontal line
+    right_shoulder_char = None  # right corner of a horizontal line
+    horizontal_line_char = None  # horizontal line fill
+    vertical_line_char = None  # vertial line fill
+    below_node_char = None  # char just below centre of node label
+
+    def _convert_text(self, text):
+        """
+        Converts the specified string into an array representation that can be
+        filled into the text buffer.
+        """
+        raise NotImplementedError()
+
+    def _draw(self):
+        w = self._width
+        h = self._height + 1
+
+        # Create a width * height canvas of spaces.
+        canvas = array.array(self.array_type, (w * h) * [self.background_char])
+        for row in range(h):
+            canvas[row * w + w - 1] = self.eol_char
+        for u in self._tree.nodes():
+            col = self._x_coords[u]
+            row = self._y_coords[u]
+            j = row * w + col
+            label = self._convert_text(self._node_label_text[u])
+            n = len(label)
+            canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
+            canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
+            if self._tree.is_internal(u):
+                children = self._tree.children(u)
+                row += 1
+                left = min(self._x_coords[v] for v in children)
+                right = max(self._x_coords[v] for v in children)
+                canvas[row * w + left] = self.left_shoulder_char
+                canvas[row * w + right] = self.right_shoulder_char
+                for col in range(left + 1, right):
+                    canvas[row * w + col] = self.horizontal_line_char
+                canvas[row * w + self._x_coords[u]] = self.below_node_char
+                top = row + 1
+                for v in children:
+                    col = self._x_coords[v]
+                    for row in range(top, self._y_coords[v] - 1):
+                        canvas[row * w + col] = self.vertical_line_char
+        return canvas
+
+
+class AsciiTreeDrawer(TextTreeDrawer):
     """
     Draws an ASCII rendering of a tree.
     """
-    discretise_coordinates = True
+    array_type = 'b'
+    background_char = ord(' ')
+    eol_char = ord('\n')
+    left_shoulder_char = ord('+')
+    right_shoulder_char = ord('+')
+    horizontal_line_char = ord('-')
+    vertical_line_char = ord('|')
+    below_node_char = ord('+')
+
+    def _convert_text(self, text):
+        return array.array(self.array_type, text.encode())
 
     def draw(self):
-        w = self._width
-        h = self._height + 1
-
-        # Create a width * height canvas of spaces.
-        canvas = bytearray(w * h)
-        for row in range(h):
-            for col in range(w - 1):
-                canvas[row * w + col] = ord(' ')
-            canvas[row * w + w - 1] = ord('\n')
-        for u in self._tree.nodes():
-            col = self._x_coords[u]
-            row = self._y_coords[u]
-            j = row * w + col
-            label = self._node_label_text[u].encode()
-            n = len(label)
-            canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
-            if self._tree.is_internal(u):
-                children = self._tree.children(u)
-                row += 1
-                left = min(self._x_coords[v] for v in children)
-                right = max(self._x_coords[v] for v in children)
-                for col in range(left, right):
-                    canvas[row * w + col] = ord('-')
-                canvas[row * w + self._x_coords[u]] = ord('+')
-                top = row + 1
-                for v in children:
-                    col = self._x_coords[v]
-                    for row in range(top, self._y_coords[v] - 1):
-                        canvas[row * w + col] = ord('|')
-        return str(bytes(canvas).decode())
+        return self._draw().tostring().decode()
 
 
-class UnicodeTreeDrawer(TreeDrawer):
+class UnicodeTreeDrawer(TextTreeDrawer):
     """
     Draws an Unicode rendering of a tree using box drawing characters.
     """
-    discretise_coordinates = True
+    array_type = 'u'
+    background_char = ' '
+    eol_char = '\n'
+    left_shoulder_char = "\u250F"
+    right_shoulder_char = "\u2513"
+    horizontal_line_char = "\u2501"
+    vertical_line_char = "\u2503"
+    below_node_char = "\u2537"
+
+    def _convert_text(self, text):
+        return array.array(self.array_type, text)
 
     def draw(self):
-        w = self._width
-        h = self._height + 1
-
-        # Create a width * height canvas of spaces.
-        canvas = array.array(b'u', " " * (w * h))
-        for row in range(h):
-            canvas[row * w + w - 1] = '\n'
-
-        for u in self._tree.nodes():
-            col = self._x_coords[u]
-            row = self._y_coords[u]
-            j = row * w + col
-            label = array.array(b'u', self._node_label_text[u])
-            n = len(label)
-            canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
-            if self._tree.is_internal(u):
-                children = self._tree.children(u)
-                row += 1
-                left = min(self._x_coords[v] for v in children)
-                right = max(self._x_coords[v] for v in children)
-                canvas[row * w + left] = "\u250F"
-                canvas[row * w + right] = "\u2513"
-                for col in range(left + 1, right):
-                    canvas[row * w + col] = "\u2501"
-                canvas[row * w + self._x_coords[u]] = "\u2537"
-                top = row + 1
-                for v in children:
-                    col = self._x_coords[v]
-                    for row in range(top, self._y_coords[v] - 1):
-                        canvas[row * w + col] = "\u2503"
-
-        return canvas.tounicode()
+        return self._draw().tounicode()
