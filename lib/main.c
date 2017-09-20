@@ -797,14 +797,14 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
     const char *provenance[] = {"main.simulate"};
     node_table_t *nodes = malloc(sizeof(node_table_t));
-    edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
+    edge_table_t *edges = malloc(sizeof(edge_table_t));
     site_table_t *sites = malloc(sizeof(site_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
     migration_table_t *migrations = malloc(sizeof(migration_table_t));
 
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
-            || mutgen == NULL || nodes == NULL || edgesets == NULL
+            || mutgen == NULL || nodes == NULL || edges == NULL
             || sites == NULL || mutations == NULL || migrations == NULL) {
         goto out;
     }
@@ -812,7 +812,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_alloc(edgesets, 0, 0);
+    ret = edge_table_alloc(edges, 0);
     if (ret != 0) {
         goto out;
     }
@@ -869,11 +869,11 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         /* Create the tree_sequence from the state of the simulator.
          * We want to use coalescent time here, so use an Ne of 1/4
          * to cancel scaling factor. */
-        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, migrations);
+        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edges, migrations);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_generate_tables_tmp(mutgen, nodes, edgesets);
+        ret = mutgen_generate_tables_tmp(mutgen, nodes, edges);
         if (ret != 0) {
             goto out;
         }
@@ -881,7 +881,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
+        ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edges, migrations,
                 sites, mutations, 1, (char **) &provenance);
         if (ret != 0) {
             goto out;
@@ -894,7 +894,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         }
         if (verbose >= 1) {
             node_table_print_state(nodes, stdout);
-            edgeset_table_print_state(edgesets, stdout);
+            edge_table_print_state(edges, stdout);
             site_table_print_state(sites, stdout);
             mutation_table_print_state(mutations, stdout);
             migration_table_print_state(migrations, stdout);
@@ -924,9 +924,9 @@ out:
     if (rng != NULL) {
         gsl_rng_free(rng);
     }
-    if (edgesets != NULL) {
-        edgeset_table_free(edgesets);
-        free(edgesets);
+    if (edges != NULL) {
+        edge_table_free(edges);
+        free(edges);
     }
     if (nodes != NULL) {
         node_table_free(nodes);

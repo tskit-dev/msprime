@@ -137,7 +137,7 @@ msp_strerror(int err)
             ret = "At least two samples needed.";
             break;
         case MSP_ERR_BAD_EDGESET:
-            ret = "Bad edgeset in file.";
+            ret = "Bad edge in file.";
         case MSP_ERR_ZERO_RECORDS:
             ret = "At least one record must be supplied";
             break;
@@ -245,14 +245,14 @@ msp_strerror(int err)
             ret = "Mutations must be provided in non-decreasing site order";
             break;
         case MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT:
-            ret = "All edgesets for a given parent must be adjacent.";
+            ret = "All edges for a given parent must be adjacent.";
             break;
         case MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN:
-            ret = "Bad edgesets: contradictory children for a given parent over "
+            ret = "Bad edges: contradictory children for a given parent over "
                 "an interval.";
             break;
         case MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT:
-            ret = "Bad edgesets: multiple definitions of a given parent over an interval";
+            ret = "Bad edges: multiple definitions of a given parent over an interval";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {
@@ -2822,12 +2822,12 @@ out:
 
 int WARN_UNUSED
 msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
-        node_table_t *nodes, edgeset_table_t *edgesets,
+        node_table_t *nodes, edge_table_t *edges,
         migration_table_t *migrations)
 {
     int ret = 0;
     node_id_t last_node;
-    size_t j;
+    size_t j, k;
     double scaled_time;
     double left, right;
     coalescence_record_t *cr;
@@ -2838,7 +2838,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_reset(edgesets);
+    ret = edge_table_reset(edges);
     if (ret != 0) {
         goto out;
     }
@@ -2855,7 +2855,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             goto out;
         }
     }
-    /* Go through the records to add nodes and edgesets */
+    /* Go through the records to add nodes and edges */
     last_node = MSP_NULL_NODE;
     for (j = 0; j < self->num_coalescence_records; j++) {
         cr = &self->coalescence_records[j];
@@ -2874,8 +2874,13 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             left = recomb_map_genetic_to_phys(recomb_map, cr->left);
             right = recomb_map_genetic_to_phys(recomb_map, cr->right);
         }
-        ret = edgeset_table_add_row(edgesets, left, right, cr->node,
-                cr->children, cr->num_children);
+        for (k = 0; k < cr->num_children; k++) {
+            ret = edge_table_add_row(edges, left, right, cr->node, cr->children[k]);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+
     }
     /* Add in the migration records */
     for (j = 0; j < self->num_migrations; j++) {

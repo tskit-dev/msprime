@@ -120,15 +120,11 @@ typedef struct {
     size_t num_rows;
     size_t max_rows;
     size_t max_rows_increment;
-    size_t total_children_length;
-    size_t max_total_children_length;
-    size_t max_total_children_length_increment;
     double *left;
     double *right;
     node_id_t *parent;
-    node_id_t *children;
-    list_len_t *children_length;
-} edgeset_table_t;
+    node_id_t *child;
+} edge_table_t;
 
 typedef struct {
     size_t num_rows;
@@ -376,12 +372,12 @@ typedef struct {
 
 typedef struct {
     node_id_t parent;
-    node_id_t *children;
-    list_len_t children_length;
+    node_id_t child;
     double left;
     double right;
+    /* TODO what is this for? Should be removed. */
     double time;
-} edgeset_t;
+} edge_t;
 
 /* Tree sequences */
 typedef struct {
@@ -409,19 +405,15 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t total_children_length;
-        size_t max_total_children_length;
         double *left;
         double *right;
         node_id_t *parent;
-        list_len_t *children_length;
-        node_id_t **children;
-        node_id_t *children_mem;
+        node_id_t *child;
         struct {
             node_id_t *insertion_order;
             node_id_t *removal_order;
         } indexes;
-    } edgesets;
+    } edges;
 
     struct {
         size_t num_records;
@@ -666,13 +658,13 @@ typedef struct {
     node_table_t input_nodes;
     size_t *node_name_offset;
     size_t num_input_sites;
-    /* Keep a copy of the input edgesets for simplicity. We cannot modify the
-     * edgeset table in place because we may have more output edgesets than input.
+    /* Keep a copy of the input edges for simplicity. We cannot modify the
+     * edge table in place because we may have more output edges than input.
      */
-    edgeset_table_t input_edgesets;
+    edge_table_t input_edges;
     /* Input/output tables. */
     node_table_t *nodes;
-    edgeset_table_t *edgesets;
+    edge_table_t *edges;
     site_table_t *sites;
     mutation_table_t *mutations;
     /* State for topology */
@@ -686,7 +678,7 @@ typedef struct {
     node_id_t *children_buffer;
     size_t segment_buffer_size;
     simplify_segment_t **segment_buffer;
-    edgeset_t last_edgeset;
+    edge_t last_edge;
     /* State for sites/mutations */
     avl_tree_t *mutation_map;
     simplify_mutation_t *mutation_mem;
@@ -732,7 +724,7 @@ int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
 int msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
-        node_table_t *node_table, edgeset_table_t *edgeset_table,
+        node_table_t *node_table, edge_table_t *edge_table,
         migration_table_t *migration_table);
 int msp_reset(msp_t *self);
 int msp_print_state(msp_t *self, FILE *out);
@@ -777,11 +769,11 @@ int tree_sequence_initialise(tree_sequence_t *self);
 /* Marking the x_tables API as tmp until we figure out what to do
  * with provenance. */
 int tree_sequence_load_tables_tmp(tree_sequence_t *self,
-        node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
+        node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations,
         size_t num_provenance_strings, char **provenance_strings);
 int tree_sequence_dump_tables_tmp(tree_sequence_t *self, node_table_t *node_table,
-        edgeset_table_t *edgeset_table, migration_table_t *migration_table,
+        edge_table_t *edge_table, migration_table_t *migration_table,
         site_table_t *sites, mutation_table_t *mutations,
         size_t *num_provenance_strings, char ***provenance_strings);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
@@ -790,7 +782,7 @@ int tree_sequence_free(tree_sequence_t *self);
 
 size_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
-size_t tree_sequence_get_num_edgesets(tree_sequence_t *self);
+size_t tree_sequence_get_num_edges(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
 size_t tree_sequence_get_num_sites(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
@@ -801,7 +793,7 @@ int tree_sequence_get_alphabet(tree_sequence_t *self);
 bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);
 
 int tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node);
-int tree_sequence_get_edgeset(tree_sequence_t *self, size_t index, edgeset_t *edgeset);
+int tree_sequence_get_edge(tree_sequence_t *self, size_t index, edge_t *edge);
 int tree_sequence_get_migration(tree_sequence_t *self, size_t index,
         migration_t *migration);
 int tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *site);
@@ -911,13 +903,13 @@ int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
 int mutgen_free(mutgen_t *self);
 /* TODO finalise this interface */
 int mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
-        edgeset_table_t *edgesets);
+        edge_table_t *edges);
 int mutgen_populate_tables(mutgen_t *self, site_table_t *sites,
         mutation_table_t *mutations);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 /* Tables API */
-int sort_tables(node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
+int sort_tables(node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations);
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
@@ -932,19 +924,16 @@ int node_table_reset(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
 
-int edgeset_table_alloc(edgeset_table_t *self, size_t max_rows_increment,
-        size_t max_total_children_length_increment);
-int edgeset_table_add_row(edgeset_table_t *self, double left, double right,
-        node_id_t parent, node_id_t *children, list_len_t children_length);
-int edgeset_table_set_columns(edgeset_table_t *self, size_t num_rows, double *left,
-        double *right, node_id_t *parent, node_id_t *children,
-        list_len_t *children_length);
-int edgeset_table_append_columns(edgeset_table_t *self, size_t num_rows, double *left,
-        double *right, node_id_t *parent, node_id_t *children,
-        list_len_t *children_length);
-int edgeset_table_reset(edgeset_table_t *self);
-int edgeset_table_free(edgeset_table_t *self);
-void edgeset_table_print_state(edgeset_table_t *self, FILE *out);
+int edge_table_alloc(edge_table_t *self, size_t max_rows_increment);
+int edge_table_add_row(edge_table_t *self, double left, double right, node_id_t parent, 
+        node_id_t child);
+int edge_table_set_columns(edge_table_t *self, size_t num_rows, double *left,
+        double *right, node_id_t *parent, node_id_t *child);
+int edge_table_append_columns(edge_table_t *self, size_t num_rows, double *left,
+        double *right, node_id_t *parent, node_id_t *child);
+int edge_table_reset(edge_table_t *self);
+int edge_table_free(edge_table_t *self);
+void edge_table_print_state(edge_table_t *self, FILE *out);
 
 int site_table_alloc(site_table_t *self, size_t max_rows_increment,
         size_t max_total_ancestral_state_length_increment);
@@ -990,7 +979,7 @@ void migration_table_print_state(migration_table_t *self, FILE *out);
 
 int simplifier_alloc(simplifier_t *self,
         node_id_t *samples, size_t num_samples,
-        node_table_t *nodes, edgeset_table_t *edgesets, migration_table_t *migrations,
+        node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations, int flags);
 int simplifier_free(simplifier_t *self);
 int simplifier_run(simplifier_t *self);
