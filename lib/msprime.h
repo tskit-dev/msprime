@@ -37,7 +37,7 @@
 #define MSP_DUMP_ZLIB_COMPRESSION 1
 #define MSP_LOAD_EXTENDED_CHECKS  1
 
-#define MSP_FILE_FORMAT_VERSION_MAJOR 6
+#define MSP_FILE_FORMAT_VERSION_MAJOR 7
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */
@@ -500,11 +500,8 @@ typedef struct {
     double left;
     double right;
     node_id_t *parent;
-    /* TODO Change this to children_length for consistency with the tree sequence */
-    list_len_t *num_children;
-    node_id_t **children;
-    /* TODO remove this time vector as it is redundant. */
-    double *time;
+    node_id_t *child;
+    node_id_t *sib;
     size_t index;
     /* These are involved in the optional sample tracking; num_samples counts
      * all samples below a give node, and num_tracked_samples counts those
