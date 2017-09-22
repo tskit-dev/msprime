@@ -2405,14 +2405,14 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
     memset(self, 0, sizeof(tree_diff_iterator_t));
     self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->num_nodes = tree_sequence_get_num_nodes(tree_sequence);
-    self->num_records = tree_sequence_get_num_edges(tree_sequence);
+    self->num_edges = tree_sequence_get_num_edges(tree_sequence);
     self->tree_sequence = tree_sequence;
     self->insertion_index = 0;
     self->removal_index = 0;
     self->tree_left = 0;
     self->tree_index = (size_t) -1;
-    self->node_records = malloc(self->num_nodes * sizeof(node_record_t));
-    if (self->node_records == NULL) {
+    self->edge_list_nodes = malloc(self->num_edges * sizeof(edge_list_t));
+    if (self->edge_list_nodes == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -2424,9 +2424,7 @@ int WARN_UNUSED
 tree_diff_iterator_free(tree_diff_iterator_t *self)
 {
     int ret = 0;
-    if (self->node_records != NULL) {
-        free(self->node_records);
-    }
+    msp_safe_free(self->edge_list_nodes);
     return ret;
 }
 
@@ -2434,7 +2432,7 @@ void
 tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out)
 {
     fprintf(out, "tree_diff_iterator state\n");
-    fprintf(out, "num_records = %d\n", (int) self->num_records);
+    fprintf(out, "num_edges = %d\n", (int) self->num_edges);
     fprintf(out, "insertion_index = %d\n", (int) self->insertion_index);
     fprintf(out, "removal_index = %d\n", (int) self->removal_index);
     fprintf(out, "tree_left = %f\n", self->tree_left);
@@ -2443,18 +2441,18 @@ tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out)
 
 int WARN_UNUSED
 tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
-        node_record_t **nodes_out, node_record_t **nodes_in)
+        edge_list_t **edges_out, edge_list_t **edges_in)
 {
     int ret = 0;
     node_id_t k;
     double last_left = self->tree_left;
-    size_t next_node_record = 0;
+    size_t next_edge_list_node = 0;
     tree_sequence_t *s = self->tree_sequence;
-    node_record_t *out_head = NULL;
-    node_record_t *out_tail = NULL;
-    node_record_t *in_head = NULL;
-    node_record_t *in_tail = NULL;
-    node_record_t *w = NULL;
+    edge_list_t *out_head = NULL;
+    edge_list_t *out_tail = NULL;
+    edge_list_t *in_head = NULL;
+    edge_list_t *in_tail = NULL;
+    edge_list_t *w = NULL;
     size_t num_trees = tree_sequence_get_num_trees(s);
 
     assert(s != NULL);
@@ -2465,13 +2463,13 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
                 s->edges.indexes.removal_order[self->removal_index]]
                     == self->tree_left) {
             k = s->edges.indexes.removal_order[self->removal_index];
-            assert(next_node_record < self->num_nodes);
-            w = &self->node_records[next_node_record];
-            next_node_record++;
-            w->node = s->edges.parent[k];
-            w->time = s->nodes.time[w->node];
-            /* w->num_children = (size_t) s->edges.children_length[k]; */
-            /* w->children = s->edges.children[k]; */
+            assert(next_edge_list_node < self->num_edges);
+            w = &self->edge_list_nodes[next_edge_list_node];
+            next_edge_list_node++;
+            w->edge.left = s->edges.left[k];
+            w->edge.right = s->edges.right[k];
+            w->edge.parent = s->edges.parent[k];
+            w->edge.child = s->edges.child[k];
             w->next = NULL;
             if (out_head == NULL) {
                 out_head = w;
@@ -2484,18 +2482,18 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
         }
 
         /* Now insert the new records */
-        while (self->insertion_index < self->num_records &&
+        while (self->insertion_index < self->num_edges &&
                 s->edges.left[
                     s->edges.indexes.insertion_order[self->insertion_index]]
                         == self->tree_left) {
             k = s->edges.indexes.insertion_order[self->insertion_index];
-            assert(next_node_record < self->num_nodes);
-            w = &self->node_records[next_node_record];
-            next_node_record++;
-            w->node = s->edges.parent[k];
-            w->time = s->nodes.time[w->node];
-            /* w->num_children = (size_t) s->edges.children_length[k]; */
-            /* w->children = s->edges.children[k]; */
+            assert(next_edge_list_node < self->num_edges);
+            w = &self->edge_list_nodes[next_edge_list_node];
+            next_edge_list_node++;
+            w->edge.left = s->edges.left[k];
+            w->edge.right = s->edges.right[k];
+            w->edge.parent = s->edges.parent[k];
+            w->edge.child = s->edges.child[k];
             w->next = NULL;
             if (in_head == NULL) {
                 in_head = w;
@@ -2512,8 +2510,8 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
         self->tree_index++;
         ret = 1;
     }
-    *nodes_out = out_head;
-    *nodes_in = in_head;
+    *edges_out = out_head;
+    *edges_in = in_head;
     *length = 0;
     if (num_trees > 0) {
         *length = self->tree_left - last_left;
@@ -2998,21 +2996,6 @@ out:
 }
 
 int WARN_UNUSED
-sparse_tree_get_children(sparse_tree_t *self, node_id_t u,
-        size_t *num_children, node_id_t **children)
-{
-    int ret = 0;
-
-    ret = sparse_tree_check_node(self, u);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = MSP_ERR_UNSUPPORTED_OPERATION;
-out:
-    return ret;
-}
-
-int WARN_UNUSED
 sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, list_len_t *sites_length)
 {
     *sites = self->sites;
@@ -3120,11 +3103,8 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
     for (j = 0; j < self->sites_length; j++) {
         site = self->sites[j];
         fprintf(out, "\t%d\t%f\t%s\n", site.id, site.position, site.ancestral_state);
-
     }
-    printf("starting check state\n");
     sparse_tree_check_state(self);
-    printf("ending check state\n");
 }
 
 /* Methods for positioning the tree along the sequence */
@@ -3157,7 +3137,7 @@ sparse_tree_propagate_sample_count_gain(sparse_tree_t *self, node_id_t parent,
     v = parent;
     while (v != MSP_NULL_NODE) {
         self->num_samples[v] += self->num_samples[child];
-        self->num_tracked_samples[v] += self->num_samples[child];
+        self->num_tracked_samples[v] += self->num_tracked_samples[child];
         self->marked[v] = mark;
         v = self->parent[v];
     }

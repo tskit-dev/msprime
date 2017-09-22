@@ -460,16 +460,10 @@ typedef struct {
     size_t max_num_provenance_strings;
 } tree_sequence_t;
 
-/* TODO rename this struct. This is just used in the tree_diff iterator and
- * can easily be confused with the node_t type.
- */
-typedef struct node_record {
-    node_id_t node;
-    size_t num_children;
-    node_id_t *children;
-    double time;
-    struct node_record *next;
-} node_record_t;
+typedef struct _edge_list_t {
+    edge_t edge;
+    struct _edge_list_t *next;
+} edge_list_t;
 
 typedef struct _node_list {
     node_id_t node;
@@ -480,13 +474,13 @@ typedef struct {
     size_t sample_size;
     double sequence_length;
     size_t num_nodes;
-    size_t num_records;
+    size_t num_edges;
     double tree_left;
     tree_sequence_t *tree_sequence;
     size_t insertion_index;
     size_t removal_index;
     size_t tree_index;
-    node_record_t *node_records;
+    edge_list_t *edge_list_nodes;
 } tree_diff_iterator_t;
 
 typedef struct {
@@ -501,6 +495,8 @@ typedef struct {
     double right;
     node_id_t *parent;
     node_id_t *child;
+    /* TODO actually we need sib_next and sib_prev to keep the trees fully
+     * consistent in constant time. */
     node_id_t *sib;
     size_t index;
     /* These are involved in the optional sample tracking; num_samples counts
@@ -811,7 +807,7 @@ int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence);
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
 int tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
-        node_record_t **nodes_out, node_record_t **nodes_in);
+        edge_list_t **edges_out, edge_list_t **edges_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out);
 
 int sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence,
@@ -826,8 +822,8 @@ int sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
 int sparse_tree_get_root(sparse_tree_t *self, node_id_t *root);
 bool sparse_tree_is_sample(sparse_tree_t *self, node_id_t u);
 int sparse_tree_get_parent(sparse_tree_t *self, node_id_t u, node_id_t *parent);
-int sparse_tree_get_children(sparse_tree_t *self, node_id_t u,
-        size_t *num_children, node_id_t **children);
+/* int sparse_tree_get_children(sparse_tree_t *self, node_id_t u, */
+/*         size_t *num_children, node_id_t **children); */
 int sparse_tree_get_time(sparse_tree_t *self, node_id_t u, double *t);
 int sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v,
         node_id_t *mrca);
@@ -922,7 +918,7 @@ int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
 
 int edge_table_alloc(edge_table_t *self, size_t max_rows_increment);
-int edge_table_add_row(edge_table_t *self, double left, double right, node_id_t parent, 
+int edge_table_add_row(edge_table_t *self, double left, double right, node_id_t parent,
         node_id_t child);
 int edge_table_set_columns(edge_table_t *self, size_t num_rows, double *left,
         double *right, node_id_t *parent, node_id_t *child);

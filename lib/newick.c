@@ -119,311 +119,314 @@ out:
     return ret;
 }
 
-static inline void
-newick_converter_free_avl_node(newick_converter_t *self, avl_node_t *avl_node)
-{
-    object_heap_free_object(&self->avl_node_heap, avl_node);
-}
+/* static inline void */
+/* newick_converter_free_avl_node(newick_converter_t *self, avl_node_t *avl_node) */
+/* { */
+/*     object_heap_free_object(&self->avl_node_heap, avl_node); */
+/* } */
+
+/* static int */
+/* newick_converter_delete_node(newick_converter_t *self, node_id_t node_id) */
+/* { */
+/*     int ret = 0; */
+/*     newick_tree_node_t search, *node; */
+/*     avl_node_t *avl_node; */
+
+/*     search.id = node_id; */
+/*     avl_node = avl_search(&self->tree, &search); */
+/*     assert(avl_node != NULL); */
+/*     node = (newick_tree_node_t *) avl_node->item; */
+/*     /1* If the first child is NULL, we're no longer using this node */
+/*      * and can free it. */
+/*      *1/ */
+/*     if (node->children[0] == NULL) { */
+/*         avl_unlink_node(&self->tree, avl_node); */
+/*         newick_converter_free_avl_node(self, avl_node); */
+/*     } */
+/*     return ret; */
+/* } */
+
+/* /1* Update the node to indicate that it has been removed. This is done */
+/*  * by setting the first child to NULL. If this has not been reset to a */
+/*  * different node after the in records have been applied, we know that */
+/*  * this node can be removed from the tree. */
+/*  *1/ */
+/* static int */
+/* newick_converter_update_out_node(newick_converter_t *self, node_id_t node_id) */
+/* { */
+/*     int ret = 0; */
+/*     newick_tree_node_t search, *node, *u;; */
+/*     avl_node_t *avl_node; */
+/*     unsigned int j; */
+
+/*     search.id = node_id; */
+/*     avl_node = avl_search(&self->tree, &search); */
+/*     assert(avl_node != NULL); */
+/*     node = (newick_tree_node_t *) avl_node->item; */
+/*     for (j = 0; j < 2; j++) { */
+/*         u = node->children[j]; */
+/*         node->children[j] = NULL; */
+/*         /1* Free the subtree and propagate this up the tree *1/ */
+/*         while (u != NULL && u->subtree != NULL) { */
+/*             free(u->subtree); */
+/*             u->subtree = NULL; */
+/*             u = u->parent; */
+/*         } */
+/*     } */
+/*     return ret; */
+/* } */
+
+/* static int */
+/* newick_tree_set_branch_length(newick_converter_t *self, */
+/*         newick_tree_node_t *node, double parent_time) */
+/* { */
+/*     int ret = 0; */
+/*     double length = parent_time - node->time; */
+/*     int r; */
+
+/*     /1* We rescale branch lengths to be in coalescent time units. *1/ */
+/*     length /= 4 * self->Ne; */
+/*     r = snprintf(node->branch_length, MAX_BRANCH_LENGTH_STRING, */
+/*             "%.*f", (int) self->precision, length); */
+/*     if (r >= MAX_BRANCH_LENGTH_STRING) { */
+/*         ret = MSP_ERR_NEWICK_OVERFLOW; */
+/*         goto out; */
+/*     } */
+/* out: */
+/*     return ret; */
+/* } */
+
+/* static int */
+/* newick_converter_insert_node(newick_converter_t *self, node_id_t node_id, */
+/*         node_id_t *children, double time) */
+/* { */
+/*     int ret = 0; */
+/*     unsigned int j; */
+/*     avl_node_t *avl_node; */
+/*     newick_tree_node_t search, *node, *child_node; */
+
+/*     search.id = node_id; */
+/*     avl_node = avl_search(&self->tree, &search); */
+/*     if (avl_node == NULL) { */
+/*         avl_node = newick_converter_alloc_avl_node(self, node_id, time); */
+/*         if (avl_node == NULL) { */
+/*             ret = MSP_ERR_NO_MEMORY; */
+/*             goto out; */
+/*         } */
+/*         avl_node = avl_insert_node(&self->tree, avl_node); */
+/*         assert(avl_node != NULL); */
+/*     } */
+/*     node = (newick_tree_node_t *) avl_node->item; */
+/*     /1* Update the parent pointers for the children *1/ */
+/*     for (j = 0; j < 2; j++) { */
+/*         search.id = children[j]; */
+/*         avl_node = avl_search(&self->tree, &search); */
+/*         assert(avl_node != 0); */
+/*         child_node = (newick_tree_node_t *) avl_node->item; */
+/*         node->children[j] = child_node; */
+/*         child_node->parent = node; */
+/*         ret = newick_tree_set_branch_length(self, child_node, time); */
+/*         if (ret != 0) { */
+/*             goto out; */
+/*         } */
+/*     } */
+/* out: */
+/*     return ret; */
+/* } */
+
+/* static int */
+/* newick_converter_update_root(newick_converter_t *self) */
+/* { */
+/*     avl_node_t *avl_node; */
+/*     newick_tree_node_t *node = NULL; */
+/*     newick_tree_node_t search; */
+
+/*     search.id = 0; */
+/*     while ((avl_node = avl_search(&self->tree, &search)) != NULL) { */
+/*         node = (newick_tree_node_t *) avl_node->item; */
+/*         search.id = node->parent == NULL? MSP_NULL_NODE : node->parent->id; */
+/*     } */
+/*     if (node->parent != NULL) { */
+/*         node->parent = NULL; */
+/*         node->branch_length[0] = '\0'; */
+/*     } */
+/*     self->root = node; */
+/*     return 0; */
+/* } */
+
+/* static int */
+/* newick_converter_generate_subtree(newick_converter_t *self, */
+/*         newick_tree_node_t *node) */
+/* { */
+/*     int ret = 0; */
+/*     size_t size, s1_len, s2_len; */
+/*     const char *leaf_format = "%d:%s"; */
+/*     char sep, *s, *s1, *s2; */
+/*     int label; */
+
+/*     if (node->children[0] == NULL) { */
+/*         /1* leaf node *1/ */
+/*         /1* TODO For ms compatablility we set the ID to 1 here. We should make */
+/*          * this a configurable behaviour. */
+/*          *1/ */
+/*         label = (int) node->id + 1; */
+/*         size = (size_t) snprintf(NULL, 0, leaf_format, label, */
+/*                 node->branch_length); */
+/*         node->subtree = malloc(size + 1); */
+/*         if (node->subtree == NULL) { */
+/*             ret = MSP_ERR_NO_MEMORY; */
+/*             goto out; */
+/*         } */
+/*         sprintf(node->subtree, leaf_format, label, node->branch_length); */
+/*     } else { */
+/*         s1 = node->children[0]->subtree; */
+/*         assert(s1 != NULL); */
+/*         s1_len = strlen(s1); */
+/*         s2 = node->children[1]->subtree; */
+/*         assert(s2 != NULL); */
+/*         s2_len = strlen(s2); */
+/*         size = s1_len + s2_len + 5; */
+/*         sep = ';'; */
+/*         if (node != self->root) { */
+/*             size += strlen(node->branch_length); */
+/*             sep = ':'; */
+/*         } */
+/*         node->subtree = malloc(size); */
+/*         if (node->subtree == NULL) { */
+/*             ret = MSP_ERR_NO_MEMORY; */
+/*             goto out; */
+/*         } */
+/*         s = node->subtree; */
+/*         s[size - 1] = '\0'; */
+/*         *s = '('; */
+/*         s++; */
+/*         strcpy(s, s1); */
+/*         s += s1_len; */
+/*         *s = ','; */
+/*         s++; */
+/*         strcpy(s, s2); */
+/*         s += s2_len; */
+/*         *s = ')'; */
+/*         s++; */
+/*         *s = sep; */
+/*         if (node != self->root) { */
+/*             s++; */
+/*             strcpy(s, node->branch_length); */
+/*         } */
+/*     } */
+/* out: */
+/*     return ret; */
+/* } */
+
+/* static int */
+/* newick_converter_update_subtrees(newick_converter_t *self) */
+/* { */
+/*     int ret = 0; */
+/*     newick_tree_node_t **traversal_stack = NULL; */
+/*     newick_tree_node_t **visit_list = NULL; */
+/*     int traversal_stack_top = 0; */
+/*     int visit_list_top = -1; */
+/*     size_t j; */
+/*     newick_tree_node_t *node; */
+
+/*     /1* We use a two-stack iterative method to perform a post-order */
+/*      * traversal of the nodes which have NULL subtrees. */
+/*      *1/ */
+/*     traversal_stack = malloc(self->sample_size * sizeof(newick_tree_node_t *)); */
+/*     visit_list = malloc(2 * self->sample_size * sizeof(newick_tree_node_t *)); */
+/*     if (traversal_stack == NULL || visit_list == NULL) { */
+/*         ret = MSP_ERR_NO_MEMORY; */
+/*         goto out; */
+/*     } */
+/*     traversal_stack[0] = self->root; */
+/*     while (traversal_stack_top >= 0) { */
+/*         node = traversal_stack[traversal_stack_top]; */
+/*         traversal_stack_top--; */
+/*         if (node->subtree == NULL) { */
+/*             visit_list_top++; */
+/*             visit_list[visit_list_top] = node; */
+/*             for (j = 0; j < 2; j++) { */
+/*                 if (node->children[j] != NULL) { */
+/*                     traversal_stack_top++; */
+/*                     traversal_stack[traversal_stack_top] = node->children[j]; */
+/*                 } */
+/*             } */
+/*         } */
+/*     } */
+/*     while (visit_list_top >= 0) { */
+/*         node = visit_list[visit_list_top]; */
+/*         ret = newick_converter_generate_subtree(self, node); */
+/*         if (ret != 0) { */
+/*             goto out; */
+/*         } */
+/*         visit_list_top--; */
+/*     } */
+/* out: */
+/*     if (traversal_stack != NULL) { */
+/*         free(traversal_stack); */
+/*     } */
+/*     if (visit_list != NULL) { */
+/*         free(visit_list); */
+/*     } */
+/*     return ret; */
+/* } */
 
 static int
-newick_converter_delete_node(newick_converter_t *self, node_id_t node_id)
+newick_converter_process_tree(newick_converter_t *self, edge_list_t *edges_out,
+        edge_list_t *edges_in)
 {
     int ret = 0;
-    newick_tree_node_t search, *node;
-    avl_node_t *avl_node;
+    printf("NEWICK BROKEN\n");
+    ret = -1;
 
-    search.id = node_id;
-    avl_node = avl_search(&self->tree, &search);
-    assert(avl_node != NULL);
-    node = (newick_tree_node_t *) avl_node->item;
-    /* If the first child is NULL, we're no longer using this node
-     * and can free it.
-     */
-    if (node->children[0] == NULL) {
-        avl_unlink_node(&self->tree, avl_node);
-        newick_converter_free_avl_node(self, avl_node);
-    }
-    return ret;
-}
+    /* node_record_t *tree_node; */
 
-/* Update the node to indicate that it has been removed. This is done
- * by setting the first child to NULL. If this has not been reset to a
- * different node after the in records have been applied, we know that
- * this node can be removed from the tree.
- */
-static int
-newick_converter_update_out_node(newick_converter_t *self, node_id_t node_id)
-{
-    int ret = 0;
-    newick_tree_node_t search, *node, *u;;
-    avl_node_t *avl_node;
-    unsigned int j;
-
-    search.id = node_id;
-    avl_node = avl_search(&self->tree, &search);
-    assert(avl_node != NULL);
-    node = (newick_tree_node_t *) avl_node->item;
-    for (j = 0; j < 2; j++) {
-        u = node->children[j];
-        node->children[j] = NULL;
-        /* Free the subtree and propagate this up the tree */
-        while (u != NULL && u->subtree != NULL) {
-            free(u->subtree);
-            u->subtree = NULL;
-            u = u->parent;
-        }
-    }
-    return ret;
-}
-
-static int
-newick_tree_set_branch_length(newick_converter_t *self,
-        newick_tree_node_t *node, double parent_time)
-{
-    int ret = 0;
-    double length = parent_time - node->time;
-    int r;
-
-    /* We rescale branch lengths to be in coalescent time units. */
-    length /= 4 * self->Ne;
-    r = snprintf(node->branch_length, MAX_BRANCH_LENGTH_STRING,
-            "%.*f", (int) self->precision, length);
-    if (r >= MAX_BRANCH_LENGTH_STRING) {
-        ret = MSP_ERR_NEWICK_OVERFLOW;
-        goto out;
-    }
-out:
-    return ret;
-}
-
-static int
-newick_converter_insert_node(newick_converter_t *self, node_id_t node_id,
-        node_id_t *children, double time)
-{
-    int ret = 0;
-    unsigned int j;
-    avl_node_t *avl_node;
-    newick_tree_node_t search, *node, *child_node;
-
-    search.id = node_id;
-    avl_node = avl_search(&self->tree, &search);
-    if (avl_node == NULL) {
-        avl_node = newick_converter_alloc_avl_node(self, node_id, time);
-        if (avl_node == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        avl_node = avl_insert_node(&self->tree, avl_node);
-        assert(avl_node != NULL);
-    }
-    node = (newick_tree_node_t *) avl_node->item;
-    /* Update the parent pointers for the children */
-    for (j = 0; j < 2; j++) {
-        search.id = children[j];
-        avl_node = avl_search(&self->tree, &search);
-        assert(avl_node != 0);
-        child_node = (newick_tree_node_t *) avl_node->item;
-        node->children[j] = child_node;
-        child_node->parent = node;
-        ret = newick_tree_set_branch_length(self, child_node, time);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-out:
-    return ret;
-}
-
-static int
-newick_converter_update_root(newick_converter_t *self)
-{
-    avl_node_t *avl_node;
-    newick_tree_node_t *node = NULL;
-    newick_tree_node_t search;
-
-    search.id = 0;
-    while ((avl_node = avl_search(&self->tree, &search)) != NULL) {
-        node = (newick_tree_node_t *) avl_node->item;
-        search.id = node->parent == NULL? MSP_NULL_NODE : node->parent->id;
-    }
-    if (node->parent != NULL) {
-        node->parent = NULL;
-        node->branch_length[0] = '\0';
-    }
-    self->root = node;
-    return 0;
-}
-
-static int
-newick_converter_generate_subtree(newick_converter_t *self,
-        newick_tree_node_t *node)
-{
-    int ret = 0;
-    size_t size, s1_len, s2_len;
-    const char *leaf_format = "%d:%s";
-    char sep, *s, *s1, *s2;
-    int label;
-
-    if (node->children[0] == NULL) {
-        /* leaf node */
-        /* TODO For ms compatablility we set the ID to 1 here. We should make
-         * this a configurable behaviour.
-         */
-        label = (int) node->id + 1;
-        size = (size_t) snprintf(NULL, 0, leaf_format, label,
-                node->branch_length);
-        node->subtree = malloc(size + 1);
-        if (node->subtree == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        sprintf(node->subtree, leaf_format, label, node->branch_length);
-    } else {
-        s1 = node->children[0]->subtree;
-        assert(s1 != NULL);
-        s1_len = strlen(s1);
-        s2 = node->children[1]->subtree;
-        assert(s2 != NULL);
-        s2_len = strlen(s2);
-        size = s1_len + s2_len + 5;
-        sep = ';';
-        if (node != self->root) {
-            size += strlen(node->branch_length);
-            sep = ':';
-        }
-        node->subtree = malloc(size);
-        if (node->subtree == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        s = node->subtree;
-        s[size - 1] = '\0';
-        *s = '(';
-        s++;
-        strcpy(s, s1);
-        s += s1_len;
-        *s = ',';
-        s++;
-        strcpy(s, s2);
-        s += s2_len;
-        *s = ')';
-        s++;
-        *s = sep;
-        if (node != self->root) {
-            s++;
-            strcpy(s, node->branch_length);
-        }
-    }
-out:
-    return ret;
-}
-
-static int
-newick_converter_update_subtrees(newick_converter_t *self)
-{
-    int ret = 0;
-    newick_tree_node_t **traversal_stack = NULL;
-    newick_tree_node_t **visit_list = NULL;
-    int traversal_stack_top = 0;
-    int visit_list_top = -1;
-    size_t j;
-    newick_tree_node_t *node;
-
-    /* We use a two-stack iterative method to perform a post-order
-     * traversal of the nodes which have NULL subtrees.
-     */
-    traversal_stack = malloc(self->sample_size * sizeof(newick_tree_node_t *));
-    visit_list = malloc(2 * self->sample_size * sizeof(newick_tree_node_t *));
-    if (traversal_stack == NULL || visit_list == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    traversal_stack[0] = self->root;
-    while (traversal_stack_top >= 0) {
-        node = traversal_stack[traversal_stack_top];
-        traversal_stack_top--;
-        if (node->subtree == NULL) {
-            visit_list_top++;
-            visit_list[visit_list_top] = node;
-            for (j = 0; j < 2; j++) {
-                if (node->children[j] != NULL) {
-                    traversal_stack_top++;
-                    traversal_stack[traversal_stack_top] = node->children[j];
-                }
-            }
-        }
-    }
-    while (visit_list_top >= 0) {
-        node = visit_list[visit_list_top];
-        ret = newick_converter_generate_subtree(self, node);
-        if (ret != 0) {
-            goto out;
-        }
-        visit_list_top--;
-    }
-out:
-    if (traversal_stack != NULL) {
-        free(traversal_stack);
-    }
-    if (visit_list != NULL) {
-        free(visit_list);
-    }
-    return ret;
-}
-
-static int
-newick_converter_process_tree(newick_converter_t *self, node_record_t *nodes_out,
-        node_record_t *nodes_in)
-{
-    int ret = 0;
-    node_record_t *tree_node;
-
-    /* mark these nodes as removed. */
-    tree_node = nodes_out;
-    while (tree_node != NULL) {
-        if (tree_node->num_children > 2) {
-            ret = MSP_ERR_NONBINARY_NEWICK;
-            goto out;
-        }
-        ret = newick_converter_update_out_node(self, tree_node->node);
-        if (ret != 0) {
-            goto out;
-        }
-        tree_node = tree_node->next;
-    }
-    /* insert the new records */
-    tree_node = nodes_in;
-    while (tree_node != NULL) {
-        if (tree_node->num_children > 2) {
-            ret = MSP_ERR_NONBINARY_NEWICK;
-            goto out;
-        }
-        ret = newick_converter_insert_node(self, tree_node->node,
-                tree_node->children, tree_node->time);
-        if (ret != 0) {
-            goto out;
-        }
-        tree_node = tree_node->next;
-    }
-    /* now, delete any nodes that we need to clear out of the tree */
-    tree_node = nodes_out;
-    while (tree_node != NULL) {
-        ret = newick_converter_delete_node(self, tree_node->node);
-        if (ret != 0) {
-            goto out;
-        }
-        tree_node = tree_node->next;
-    }
-    /* update the root */
-    ret = newick_converter_update_root(self);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = newick_converter_update_subtrees(self);
-    if (ret != 0) {
-        goto out;
-    }
-out:
+    /* /1* mark these nodes as removed. *1/ */
+    /* tree_node = nodes_out; */
+    /* while (tree_node != NULL) { */
+    /*     if (tree_node->num_children > 2) { */
+    /*         ret = MSP_ERR_NONBINARY_NEWICK; */
+    /*         goto out; */
+    /*     } */
+    /*     ret = newick_converter_update_out_node(self, tree_node->node); */
+    /*     if (ret != 0) { */
+    /*         goto out; */
+    /*     } */
+    /*     tree_node = tree_node->next; */
+    /* } */
+    /* /1* insert the new records *1/ */
+    /* tree_node = nodes_in; */
+    /* while (tree_node != NULL) { */
+    /*     if (tree_node->num_children > 2) { */
+    /*         ret = MSP_ERR_NONBINARY_NEWICK; */
+    /*         goto out; */
+    /*     } */
+    /*     ret = newick_converter_insert_node(self, tree_node->node, */
+    /*             tree_node->children, tree_node->time); */
+    /*     if (ret != 0) { */
+    /*         goto out; */
+    /*     } */
+    /*     tree_node = tree_node->next; */
+    /* } */
+    /* /1* now, delete any nodes that we need to clear out of the tree *1/ */
+    /* tree_node = nodes_out; */
+    /* while (tree_node != NULL) { */
+    /*     ret = newick_converter_delete_node(self, tree_node->node); */
+    /*     if (ret != 0) { */
+    /*         goto out; */
+    /*     } */
+    /*     tree_node = tree_node->next; */
+    /* } */
+    /* /1* update the root *1/ */
+    /* ret = newick_converter_update_root(self); */
+    /* if (ret != 0) { */
+    /*     goto out; */
+    /* } */
+    /* ret = newick_converter_update_subtrees(self); */
+    /* if (ret != 0) { */
+    /*     goto out; */
+    /* } */
+/* out: */
     return ret;
 }
 
@@ -432,15 +435,15 @@ newick_converter_next(newick_converter_t *self, double *length, char **tree)
 {
     int ret = -1;
     int err;
-    node_record_t *nodes_out, *nodes_in;
+    edge_list_t *edges_out, *edges_in;
 
-    ret = tree_diff_iterator_next(&self->diff_iterator, length, &nodes_out,
-            &nodes_in);
+    ret = tree_diff_iterator_next(&self->diff_iterator, length, &edges_out,
+            &edges_in);
     if (ret < 0) {
         goto out;
     }
     if (ret == 1) {
-        err = newick_converter_process_tree(self, nodes_out, nodes_in);
+        err = newick_converter_process_tree(self, edges_out, edges_in);
         if (err != 0) {
             ret = err;
             goto out;

@@ -1541,7 +1541,15 @@ simplifier_record_edgeset(simplifier_t *self, double left, double right,
         node_id_t parent, node_id_t *children, list_len_t children_length)
 {
     int ret = 0;
-    printf("TODO implemenent record edgeset\n");
+    list_len_t k;
+
+    for (k = 0; k < children_length; k++) {
+        ret = edge_table_add_row(self->edges, left, right, parent, children[k]);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
 #if 0
     bool squash;
 
@@ -1584,8 +1592,8 @@ simplifier_record_edgeset(simplifier_t *self, double left, double right,
                     children_length * sizeof(node_id_t));
         }
     }
-out:
 #endif
+out:
     return ret;
 }
 
@@ -1921,7 +1929,6 @@ simplifier_get_children_buffer(simplifier_t *self, size_t num_children)
         if (self->children_buffer == NULL) {
             goto out;
         }
-        printf("BROKEN\n");
         /* Also realloc the buffer for last children */
         /* tmp = realloc(self->last_edge.children, num_children * sizeof(node_id_t)); */
         /* if (tmp == NULL) { */
@@ -2428,7 +2435,6 @@ simplifier_run(simplifier_t *self)
     }
     assert(avl_count(&self->merge_queue) == 0);
 
-    printf("FIXME Simplify flush");
     /* Flush the last edge, if any */
     /* if (self->last_edge.children_length > 0) { */
     /*     ret = edge_table_add_row(self->edges, */

@@ -49,7 +49,7 @@ typedef struct {
 } bottleneck_desc_t;
 
 static int
-cmp_node_id_t(const void *a, const void *b) {
+cmp_node_id(const void *a, const void *b) {
     const node_id_t *ia = (const node_id_t *) a;
     const node_id_t *ib = (const node_id_t *) b;
     return (*ia > *ib) - (*ia < *ib);
@@ -449,44 +449,45 @@ tree_sequence_from_text(tree_sequence_t *ts, const char *nodes, const char *edge
 static void
 unsort_edges(edge_table_t *edges)
 {
-    size_t dest_children_offset, j;
-    double left, right;
-    node_id_t parent, child, *children;
-    uint32_t children_length;
+    printf("BROKEN UNSORT EDGES\n");
+    /* size_t dest_children_offset, j; */
+    /* double left, right; */
+    /* node_id_t parent, child, *children; */
+    /* uint32_t children_length; */
 
-    /* Swap the first two records and reverse their children */
-    if (edges->num_rows >= 2) {
-        left = edges->left[0];
-        right = edges->right[0];
-        parent = edges->parent[0];
-        children_length = edges->children_length[0];
-        children = malloc(children_length * sizeof(node_id_t));
-        CU_ASSERT_FATAL(children != NULL);
-        memcpy(children, edges->children, children_length * sizeof(node_id_t));
-        dest_children_offset = children_length;
-        /* Copy children */
-        for (j = 0; j < edges->children_length[1]; j++) {
-            edges->children[j] = edges->children[dest_children_offset + j];
-        }
-        for (j = 0; j < children_length; j++) {
-            edges->children[edges->children_length[1] + j] = children[j];
-        }
-        free(children);
-        edges->left[0] = edges->left[1];
-        edges->right[0] = edges->right[1];
-        edges->parent[0] = edges->parent[1];
-        edges->children_length[0] = edges->children_length[1];
-        edges->left[1] = left;
-        edges->right[1] = right;
-        edges->parent[1] = parent;
-        edges->children_length[1] = children_length;
-    }
-    /* Swap the first two children for the first edge */
-    CU_ASSERT_FATAL(edges->num_rows > 0);
-    CU_ASSERT_FATAL(edges->children_length[0] > 1);
-    child = edges->children[0];
-    edges->children[0] = edges->children[1];
-    edges->children[1] = child;
+    /* /1* Swap the first two records and reverse their children *1/ */
+    /* if (edges->num_rows >= 2) { */
+    /*     left = edges->left[0]; */
+    /*     right = edges->right[0]; */
+    /*     parent = edges->parent[0]; */
+    /*     children_length = edges->children_length[0]; */
+    /*     children = malloc(children_length * sizeof(node_id_t)); */
+    /*     CU_ASSERT_FATAL(children != NULL); */
+    /*     memcpy(children, edges->children, children_length * sizeof(node_id_t)); */
+    /*     dest_children_offset = children_length; */
+    /*     /1* Copy children *1/ */
+    /*     for (j = 0; j < edges->children_length[1]; j++) { */
+    /*         edges->children[j] = edges->children[dest_children_offset + j]; */
+    /*     } */
+    /*     for (j = 0; j < children_length; j++) { */
+    /*         edges->children[edges->children_length[1] + j] = children[j]; */
+    /*     } */
+    /*     free(children); */
+    /*     edges->left[0] = edges->left[1]; */
+    /*     edges->right[0] = edges->right[1]; */
+    /*     edges->parent[0] = edges->parent[1]; */
+    /*     edges->children_length[0] = edges->children_length[1]; */
+    /*     edges->left[1] = left; */
+    /*     edges->right[1] = right; */
+    /*     edges->parent[1] = parent; */
+    /*     edges->children_length[1] = children_length; */
+    /* } */
+    /* /1* Swap the first two children for the first edge *1/ */
+    /* CU_ASSERT_FATAL(edges->num_rows > 0); */
+    /* CU_ASSERT_FATAL(edges->children_length[0] > 1); */
+    /* child = edges->children[0]; */
+    /* edges->children[0] = edges->children[1]; */
+    /* edges->children[1] = child; */
 }
 
 static void
@@ -540,15 +541,12 @@ verify_nodes_equal(node_t *n1, node_t *n2)
 static void
 verify_edges_equal(edge_t *r1, edge_t *r2, double scale)
 {
-    uint32_t j;
     double eps = 1e-6;
 
     CU_ASSERT_DOUBLE_EQUAL_FATAL(r1->left * scale, r2->left, eps);
     CU_ASSERT_DOUBLE_EQUAL_FATAL(r1->right * scale, r2->right, eps);
-    CU_ASSERT_EQUAL_FATAL(r1->children_length, r2->children_length);
-    for (j = 0; j < r1->children_length; j++) {
-        CU_ASSERT_EQUAL(r1->children[j], r2->children[j]);
-    }
+    CU_ASSERT_EQUAL_FATAL(r1->parent, r2->parent);
+    CU_ASSERT_EQUAL_FATAL(r1->child, r2->child);
 }
 
 static void
@@ -667,7 +665,7 @@ verify_stats(tree_sequence_t *ts)
     for (j = 2; j < sample_size; j++) {
         ret = tree_sequence_get_pairwise_diversity(ts, samples, j, &pi);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_TRUE(pi >= 0);
+        CU_ASSERT_TRUE_FATAL(pi >= 0);
     }
 }
 
@@ -804,48 +802,28 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
 {
     int ret;
     uint32_t sample_size = msp_get_sample_size(msp);
-    edge_t ts_edge, sim_edge;
-    coalescence_record_t *sim_records;
     migration_t *sim_mig_records, ts_mig_record;
     uint32_t j;
-    size_t num_edges, num_migrations;
+    size_t num_migrations;
     node_t node;
     sample_t *samples;
     node_id_t *sample_ids;
 
     CU_ASSERT_EQUAL_FATAL(
-            tree_sequence_get_num_edges(tree_seq),
-            msp_get_num_coalescence_records(msp));
-    CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_sample_size(tree_seq),
             msp_get_sample_size(msp));
+    CU_ASSERT_TRUE(
+            tree_sequence_get_num_edges(tree_seq) > msp_get_num_coalescence_records(msp));
     CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_num_migrations(tree_seq),
             msp_get_num_migrations(msp));
-    CU_ASSERT_FATAL(tree_sequence_get_num_nodes(tree_seq) >= sample_size);
-    ret = msp_get_coalescence_records(msp, &sim_records);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    num_edges = msp_get_num_coalescence_records(msp);
     ret = msp_get_samples(msp, &samples);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    for (j = 0; j < num_edges; j++) {
-        ret = tree_sequence_get_edge(tree_seq, j, &ts_edge);
-        CU_ASSERT_EQUAL(ret, 0);
-        sim_edge.left = sim_records[j].left;
-        sim_edge.right = sim_records[j].right;
-        sim_edge.parent = sim_records[j].node;
-        sim_edge.children_length = sim_records[j].num_children;
-        sim_edge.children = sim_records[j].children;
-        verify_edges_equal(&sim_edge, &ts_edge, scale);
-    }
-    for (j = num_edges; j < num_edges + 10; j++) {
-        ret = tree_sequence_get_edge(tree_seq, j, &ts_edge);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-    }
-
+    CU_ASSERT_FATAL(tree_sequence_get_num_nodes(tree_seq) >= sample_size);
     ret = msp_get_migrations(msp, &sim_mig_records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     num_migrations = msp_get_num_migrations(msp);
+    /* TODO add some tests for the edges */
     for (j = 0; j < num_migrations; j++) {
         ret = tree_sequence_get_migration(tree_seq, j, &ts_mig_record);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1093,10 +1071,10 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
              * traverse down the left-most path to the sample. This means we
              * don't really need a stack at all, but we may extend this to a full
              * traversal in the future. */
-            if (tree.num_children[u] > 0) {
+            if (tree.child[u] != MSP_NULL_NODE) {
                 stack_top++;
-                stack[stack_top] = tree.children[u][0];
-                state[tree.children[u][0]] = state[u];
+                stack[stack_top] = tree.child[u];
+                state[tree.child[u]] = state[u];
             }
         }
         site_id++;
@@ -1127,8 +1105,7 @@ tree_sequence_t *
 make_permuted_nodes_copy(tree_sequence_t *ts)
 {
     int ret;
-    size_t j, k;
-    size_t MAX_CHILDREN = 1024;
+    size_t j;
     tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
     node_table_t nodes;
     edge_table_t edges;
@@ -1138,7 +1115,6 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     node_id_t *node_map;
     node_t node;
     edge_t edge;
-    node_id_t mapped_children[MAX_CHILDREN];
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     size_t num_nodes = tree_sequence_get_num_nodes(ts);
     char **provenance_strings;
@@ -1179,14 +1155,8 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     for (j = 0; j < tree_sequence_get_num_edges(ts); j++) {
         ret = tree_sequence_get_edge(ts, j, &edge);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_FATAL(edge.children_length < MAX_CHILDREN);
-        for (k = 0; k < edge.children_length; k++) {
-            mapped_children[k] = node_map[edge.children[k]];
-        }
-        qsort(mapped_children, edge.children_length, sizeof(node_id_t),
-                cmp_node_id_t);
         ret = edge_table_add_row(&edges, edge.left, edge.right,
-                node_map[edge.parent], mapped_children, edge.children_length);
+                node_map[edge.parent], node_map[edge.child]);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
     for (j = 0; j < mutations.num_rows; j++) {
@@ -3178,37 +3148,39 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     edge_table.right[0]= 1.0;
 
-    /* Equal nodes in the children */
-    edge_table.children[0] = 1;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
-    tree_sequence_free(&ts);
-    edge_table.children[0] = 0;
+    printf("BROKEN node checks\n");
 
-    /* children node == parent */
-    edge_table.children[1] = 2;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING);
-    tree_sequence_free(&ts);
-    edge_table.children[1] = 1;
+/*     /1* Equal nodes in the children *1/ */
+/*     edge_table.children[0] = 1; */
+/*     ret = tree_sequence_initialise(&ts); */
+/*     CU_ASSERT_EQUAL_FATAL(ret, 0); */
+/*     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL, */
+/*             NULL, NULL, 0, NULL); */
+/*     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN); */
+/*     tree_sequence_free(&ts); */
+/*     edge_table.children[0] = 0; */
 
-    /* Unsorted nodes in the children */
-    edge_table.children[0] = 1;
-    edge_table.children[1] = 0;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
-    tree_sequence_free(&ts);
-    edge_table.children[0] = 0;
-    edge_table.children[1] = 1;
+/*     /1* children node == parent *1/ */
+/*     edge_table.children[1] = 2; */
+/*     ret = tree_sequence_initialise(&ts); */
+/*     CU_ASSERT_EQUAL_FATAL(ret, 0); */
+/*     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL, */
+/*             NULL, NULL, 0, NULL); */
+/*     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING); */
+/*     tree_sequence_free(&ts); */
+/*     edge_table.children[1] = 1; */
+
+    /* /1* Unsorted nodes in the children *1/ */
+    /* edge_table.children[0] = 1; */
+    /* edge_table.children[1] = 0; */
+    /* ret = tree_sequence_initialise(&ts); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL, */
+    /*         NULL, NULL, 0, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN); */
+    /* tree_sequence_free(&ts); */
+    /* edge_table.children[0] = 0; */
+    /* edge_table.children[1] = 1; */
 
     /* Null parent */
     edge_table.parent[0] = MSP_NULL_NODE;
@@ -3240,47 +3212,47 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     edge_table.parent[0] = 2;
 
-    /* Null child */
-    edge_table.children[0] = MSP_NULL_NODE;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_NODE_IN_RECORD);
-    tree_sequence_free(&ts);
-    edge_table.children[0] = 0;
+    /* /1* Null child *1/ */
+    /* edge_table.children[0] = MSP_NULL_NODE; */
+    /* ret = tree_sequence_initialise(&ts); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL, */
+    /*         NULL, NULL, 0, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_NODE_IN_RECORD); */
+    /* tree_sequence_free(&ts); */
+    /* edge_table.children[0] = 0; */
 
-    /* child node reference out of bounds */
-    edge_table.children[0] = 3;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
-    tree_sequence_free(&ts);
-    edge_table.children[0] = 0;
+    /* /1* child node reference out of bounds *1/ */
+    /* edge_table.children[0] = 3; */
+    /* ret = tree_sequence_initialise(&ts); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL, */
+    /*         NULL, NULL, 0, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS); */
+    /* tree_sequence_free(&ts); */
+    /* edge_table.children[0] = 0; */
 
-    /* child node reference negative */
-    edge_table.children[0] = -2;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
-    tree_sequence_free(&ts);
-    edge_table.children[0] = 0;
+    /* /1* child node reference negative *1/ */
+    /* edge_table.children[0] = -2; */
+    /* ret = tree_sequence_initialise(&ts); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL, */
+    /*         NULL, NULL, 0, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS); */
+    /* tree_sequence_free(&ts); */
+    /* edge_table.children[0] = 0; */
 
-    /* 0 children */
-    edge_table.total_children_length = 0;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_CHILDREN_ARRAY);
-    tree_sequence_free(&ts);
-    edge_table.total_children_length = 2;
+    /* /1* 0 children *1/ */
+    /* edge_table.total_children_length = 0; */
+    /* ret = tree_sequence_initialise(&ts); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL, */
+    /*         NULL, NULL, 0, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_CHILDREN_ARRAY); */
+    /* tree_sequence_free(&ts); */
+    /* edge_table.total_children_length = 2; */
 
-    /* sample size of 1 */
+    /* /1* sample size of 1 *1/ */
     node_table.flags[0] = 0;
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3452,16 +3424,17 @@ test_simplest_overlapping_edges_simplify(void)
     CU_ASSERT_EQUAL(edge_table.parent[0], 3);
     CU_ASSERT_EQUAL(edge_table.parent[1], 3);
     CU_ASSERT_EQUAL(edge_table.parent[2], 3);
-    CU_ASSERT_EQUAL(edge_table.children_length[0], 2);
-    CU_ASSERT_EQUAL(edge_table.children_length[1], 3);
-    CU_ASSERT_EQUAL(edge_table.children_length[2], 2);
-    CU_ASSERT_EQUAL(edge_table.children[0], 0);
-    CU_ASSERT_EQUAL(edge_table.children[1], 2);
-    CU_ASSERT_EQUAL(edge_table.children[2], 0);
-    CU_ASSERT_EQUAL(edge_table.children[3], 1);
-    CU_ASSERT_EQUAL(edge_table.children[4], 2);
-    CU_ASSERT_EQUAL(edge_table.children[5], 1);
-    CU_ASSERT_EQUAL(edge_table.children[6], 2);
+    printf("BROKEN edge children test 1\n");
+    /* CU_ASSERT_EQUAL(edge_table.children_length[0], 2); */
+    /* CU_ASSERT_EQUAL(edge_table.children_length[1], 3); */
+    /* CU_ASSERT_EQUAL(edge_table.children_length[2], 2); */
+    /* CU_ASSERT_EQUAL(edge_table.children[0], 0); */
+    /* CU_ASSERT_EQUAL(edge_table.children[1], 2); */
+    /* CU_ASSERT_EQUAL(edge_table.children[2], 0); */
+    /* CU_ASSERT_EQUAL(edge_table.children[3], 1); */
+    /* CU_ASSERT_EQUAL(edge_table.children[4], 2); */
+    /* CU_ASSERT_EQUAL(edge_table.children[5], 1); */
+    /* CU_ASSERT_EQUAL(edge_table.children[6], 2); */
 
     node_table_free(&node_table);
     edge_table_free(&edge_table);
@@ -3525,9 +3498,10 @@ test_simplest_overlapping_unary_edges_simplify(void)
     CU_ASSERT_EQUAL(edge_table.left[0], 1);
     CU_ASSERT_EQUAL(edge_table.right[0], 2);
     CU_ASSERT_EQUAL(edge_table.parent[0], 2);
-    CU_ASSERT_EQUAL(edge_table.children_length[0], 2);
-    CU_ASSERT_EQUAL(edge_table.children[0], 0);
-    CU_ASSERT_EQUAL(edge_table.children[1], 1);
+    printf("BROKEN edge children test 2\n");
+    /* CU_ASSERT_EQUAL(edge_table.children_length[0], 2); */
+    /* CU_ASSERT_EQUAL(edge_table.children[0], 0); */
+    /* CU_ASSERT_EQUAL(edge_table.children[1], 1); */
 
     node_table_free(&node_table);
     edge_table_free(&edge_table);
@@ -3599,13 +3573,14 @@ test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
     CU_ASSERT_EQUAL(edge_table.parent[0], 2);
     CU_ASSERT_EQUAL(edge_table.parent[1], 2);
     CU_ASSERT_EQUAL(edge_table.parent[2], 2);
-    CU_ASSERT_EQUAL(edge_table.children_length[0], 1);
-    CU_ASSERT_EQUAL(edge_table.children_length[1], 2);
-    CU_ASSERT_EQUAL(edge_table.children_length[2], 1);
-    CU_ASSERT_EQUAL(edge_table.children[0], 0);
-    CU_ASSERT_EQUAL(edge_table.children[1], 0);
-    CU_ASSERT_EQUAL(edge_table.children[2], 1);
-    CU_ASSERT_EQUAL(edge_table.children[3], 1);
+    printf("BROKEN edge children test 3\n");
+    /* CU_ASSERT_EQUAL(edge_table.children_length[0], 1); */
+    /* CU_ASSERT_EQUAL(edge_table.children_length[1], 2); */
+    /* CU_ASSERT_EQUAL(edge_table.children_length[2], 1); */
+    /* CU_ASSERT_EQUAL(edge_table.children[0], 0); */
+    /* CU_ASSERT_EQUAL(edge_table.children[1], 0); */
+    /* CU_ASSERT_EQUAL(edge_table.children[2], 1); */
+    /* CU_ASSERT_EQUAL(edge_table.children[3], 1); */
 
     node_table_free(&node_table);
     edge_table_free(&edge_table);
@@ -4063,8 +4038,8 @@ test_single_nonbinary_tree_iter(void)
     node_id_t parents[] = {7, 7, 7, 7, 8, 8, 9, 9, 9, MSP_NULL_NODE};
     tree_sequence_t ts;
     sparse_tree_t tree;
-    node_id_t u, v, w, *children;
-    size_t num_samples, num_children;
+    node_id_t u, v, w;
+    size_t num_samples;
     size_t num_nodes = 10;
     size_t total_samples = 7;
 
@@ -4087,44 +4062,35 @@ test_single_nonbinary_tree_iter(void)
         ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(num_samples, 1);
-        ret = sparse_tree_get_children(&tree, u, &num_children, &children);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(children, NULL);
-        CU_ASSERT_EQUAL(num_children, 0);
+        CU_ASSERT_EQUAL(tree.child[u], MSP_NULL_NODE);
     }
 
     u = 7;
     ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(num_samples, 4);
-    ret = sparse_tree_get_children(&tree, u, &num_children, &children);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_children, 4);
-    CU_ASSERT_EQUAL(children[0], 0);
-    CU_ASSERT_EQUAL(children[1], 1);
-    CU_ASSERT_EQUAL(children[2], 2);
-    CU_ASSERT_EQUAL(children[3], 3);
+    CU_ASSERT_EQUAL(tree.child[u], 3);
+    CU_ASSERT_EQUAL(tree.sib[3], 2);
+    CU_ASSERT_EQUAL(tree.sib[2], 1);
+    CU_ASSERT_EQUAL(tree.sib[1], 0);
+    CU_ASSERT_EQUAL(tree.sib[0], MSP_NULL_NODE);
 
     u = 8;
     ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(num_samples, 2);
-    ret = sparse_tree_get_children(&tree, u, &num_children, &children);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_children, 2);
-    CU_ASSERT_EQUAL(children[0], 4);
-    CU_ASSERT_EQUAL(children[1], 5);
+    CU_ASSERT_EQUAL(tree.child[u], 5);
+    CU_ASSERT_EQUAL(tree.sib[5], 4);
+    CU_ASSERT_EQUAL(tree.sib[4], MSP_NULL_NODE);
 
     u = 9;
     ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(num_samples, 7);
-    ret = sparse_tree_get_children(&tree, u, &num_children, &children);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_children, 3);
-    CU_ASSERT_EQUAL(children[0], 6);
-    CU_ASSERT_EQUAL(children[1], 7);
-    CU_ASSERT_EQUAL(children[2], 8);
+    CU_ASSERT_EQUAL(tree.child[u], 8);
+    CU_ASSERT_EQUAL(tree.sib[8], 7);
+    CU_ASSERT_EQUAL(tree.sib[7], 6);
+    CU_ASSERT_EQUAL(tree.sib[6], MSP_NULL_NODE);
 
     ret = sparse_tree_get_root(&tree, &w);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4517,28 +4483,29 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* detect bad children */
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    edges.children[0] = -1;
-    ret = simplifier_alloc(&simplifier, samples, 2,
-            &nodes, &edges, &migrations, &sites, &mutations, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
-    ret = simplifier_free(&simplifier);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    printf("BROKEN edge children test 4\n");
+    /* ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges, */
+    /*         &migrations, &sites, &mutations, &num_provenance_strings, */
+    /*         &provenance_strings); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* edges.children[0] = -1; */
+    /* ret = simplifier_alloc(&simplifier, samples, 2, */
+    /*         &nodes, &edges, &migrations, &sites, &mutations, 0); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS); */
+    /* ret = simplifier_free(&simplifier); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
     /* detect loops */
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    edges.children[0] = edges.parent[0];
-    ret = simplifier_alloc(&simplifier, samples, 2,
-            &nodes, &edges, &migrations, &sites, &mutations, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING);
-    ret = simplifier_free(&simplifier);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges, */
+    /*         &migrations, &sites, &mutations, &num_provenance_strings, */
+    /*         &provenance_strings); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* edges.children[0] = edges.parent[0]; */
+    /* ret = simplifier_alloc(&simplifier, samples, 2, */
+    /*         &nodes, &edges, &migrations, &sites, &mutations, 0); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING); */
+    /* ret = simplifier_free(&simplifier); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
     /* detect bad sites */
     ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
@@ -4857,12 +4824,13 @@ verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
 static void
 verify_trees_consistent(tree_sequence_t *ts)
 {
-    int ret, found;
+    int ret;
     size_t sample_size, num_trees;
-    node_id_t u, v, root, *children;
-    size_t j, k, num_children;
+    node_id_t u, v, w, root;
+    size_t j;
     sparse_tree_t tree;
     node_id_t *samples;
+    bool found;
 
     sample_size = tree_sequence_get_sample_size(ts);
     ret = tree_sequence_get_samples(ts, &samples);
@@ -4871,8 +4839,7 @@ verify_trees_consistent(tree_sequence_t *ts)
     CU_ASSERT_EQUAL(ret, 0);
 
     num_trees = 0;
-    for (ret = sparse_tree_first(&tree); ret == 1;
-            ret = sparse_tree_next(&tree)) {
+    for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
         ret = sparse_tree_get_root(&tree, &root);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(tree.index, num_trees);
@@ -4884,19 +4851,16 @@ verify_trees_consistent(tree_sequence_t *ts)
                 ret = sparse_tree_get_parent(&tree, u, &v);
                 CU_ASSERT_EQUAL(ret, 0);
                 if (v != MSP_NULL_NODE) {
-                    ret = sparse_tree_get_children(&tree, v, &num_children, &children);
-                    CU_ASSERT_EQUAL(ret, 0);
-                    CU_ASSERT(num_children >= 1);
-                    found = 0;
-                    for (k = 0; k < num_children; k++) {
-                        if (children[k] == u) {
-                            found = 1;
+                    found = false;
+                    for (w = tree.child[v]; w != MSP_NULL_NODE; w = tree.sib[w]) {
+                        if (w == u) {
+                            found = true;
                         }
                     }
                     CU_ASSERT(found);
                 }
             }
-            CU_ASSERT_EQUAL(u, root);
+            CU_ASSERT_EQUAL_FATAL(u, root);
         }
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4930,8 +4894,6 @@ test_sparse_tree_errors(void)
     /* Out-of-bounds queries */
     for (j = 0; j < sizeof(bad_nodes) / sizeof(node_id_t); j++) {
         u = bad_nodes[j];
-        ret = sparse_tree_get_children(&t, u, NULL, NULL);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
         ret = sparse_tree_get_parent(&t, u, NULL);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
         ret = sparse_tree_get_time(&t, u, NULL);
@@ -5257,7 +5219,7 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     int ret, stack_top, j;
     node_id_t u, v, n, num_nodes, num_samples;
     size_t tmp;
-    node_id_t *stack, *samples;
+    node_id_t *stack, *samples, *other_samples;
     node_list_t *z, *head, *tail;
     tree_sequence_t *ts = tree->tree_sequence;
 
@@ -5265,10 +5227,12 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     num_nodes = tree_sequence_get_num_nodes(ts);
     stack = malloc(n * sizeof(node_id_t));
     samples = malloc(n * sizeof(node_id_t));
+    other_samples = malloc(n * sizeof(node_id_t));
     CU_ASSERT_FATAL(stack != NULL);
     CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(other_samples != NULL);
     for (u = 0; u < num_nodes; u++) {
-        if (tree->num_children[u] == 0 && !tree_sequence_is_sample(ts, u)) {
+        if (tree->child[u] == MSP_NULL_NODE && !tree_sequence_is_sample(ts, u)) {
             ret = sparse_tree_get_sample_list(tree, u, &head, &tail);
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT_EQUAL(head, NULL);
@@ -5284,21 +5248,22 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
                     samples[num_samples] = v;
                     num_samples++;
                 }
-                for (j = tree->num_children[v] - 1; j >= 0; j--) {
+                for (v = tree->child[v]; v != MSP_NULL_NODE; v = tree->sib[v]) {
                     stack_top++;
-                    stack[stack_top] = tree->children[v][j];
+                    stack[stack_top] = v;
                 }
             }
             ret = sparse_tree_get_num_samples(tree, u, &tmp);
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT_EQUAL(num_samples, tmp);
             ret = sparse_tree_get_sample_list(tree, u, &head, &tail);
+
             CU_ASSERT_EQUAL(ret, 0);
             z = head;
             j = 0;
             while (1) {
-                CU_ASSERT_TRUE_FATAL(j < num_samples);
-                CU_ASSERT_EQUAL(z->node, samples[j]);
+                CU_ASSERT_TRUE_FATAL(j < n);
+                other_samples[j] = z->node;
                 j++;
                 if (z == tail) {
                     break;
@@ -5306,10 +5271,16 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
                 z = z->next;
             }
             CU_ASSERT_EQUAL(j, num_samples);
+            qsort(samples, num_samples, sizeof(node_id_t), cmp_node_id);
+            qsort(other_samples, num_samples, sizeof(node_id_t), cmp_node_id);
+            for (j = 0; j < num_samples; j++) {
+                CU_ASSERT_EQUAL(samples[j], other_samples[j]);
+            }
         }
     }
     free(stack);
     free(samples);
+    free(other_samples);
 }
 
 static void
@@ -5631,27 +5602,28 @@ test_tree_sequence_bad_records(void)
     tree_sequence_free(&ts);
     edge_table.left[0] = 2.0;
 
-    /* Children equal */
-    edge_table.children[7] = 0;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
-    tree_sequence_free(&ts);
-    edge_table.children[7] = 5;
+    printf("BROKEN edge children test 5\n");
+    /* /1* Children equal *1/ */
+    /* edge_table.children[7] = 0; */
+    /* ret = tree_sequence_initialise(&ts); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL, */
+    /*         NULL, NULL, 0, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN); */
+    /* tree_sequence_free(&ts); */
+    /* edge_table.children[7] = 5; */
 
-    /* Children not sorted */
-    edge_table.children[6] = 5;
-    edge_table.children[7] = 0;
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN);
-    tree_sequence_free(&ts);
-    edge_table.children[6] = 0;
-    edge_table.children[7] = 5;
+    /* /1* Children not sorted *1/ */
+    /* edge_table.children[6] = 5; */
+    /* edge_table.children[7] = 0; */
+    /* ret = tree_sequence_initialise(&ts); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL, */
+    /*         NULL, NULL, 0, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_CHILDREN); */
+    /* tree_sequence_free(&ts); */
+    /* edge_table.children[6] = 0; */
+    /* edge_table.children[7] = 5; */
 
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5671,22 +5643,22 @@ verify_tree_diffs(tree_sequence_t *ts)
     int ret;
     tree_diff_iterator_t iter;
     sparse_tree_t tree;
-    node_record_t *record, *records_out, *records_in;
+    edge_list_t *record, *records_out, *records_in;
     size_t num_nodes = tree_sequence_get_num_nodes(ts);
-    size_t j, k, num_in, num_out, num_trees;
+    size_t j, num_trees;
     double length, x;
-    node_t node;
-    node_id_t u;
-    node_id_t *pi = malloc(num_nodes * sizeof(node_id_t));
-    double *tau = malloc(num_nodes * sizeof(double));
+    node_id_t *parent = malloc(num_nodes * sizeof(node_id_t));
+    node_id_t *child = malloc(num_nodes * sizeof(node_id_t));
+    node_id_t *sib = malloc(num_nodes * sizeof(node_id_t));
     node_id_t *samples;
-    int first_tree;
 
-    CU_ASSERT_FATAL(pi != NULL);
-    CU_ASSERT_FATAL(tau != NULL);
+    CU_ASSERT_FATAL(parent != NULL);
+    CU_ASSERT_FATAL(child != NULL);
+    CU_ASSERT_FATAL(sib != NULL);
     for (j = 0; j < num_nodes; j++) {
-        pi[j] = MSP_NULL_NODE;
-        tau[j] = 0.0;
+        parent[j] = MSP_NULL_NODE;
+        child[j] = MSP_NULL_NODE;
+        sib[j] = MSP_NULL_NODE;
     }
     ret = tree_sequence_get_samples(ts, &samples);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5697,61 +5669,32 @@ verify_tree_diffs(tree_sequence_t *ts)
     ret = sparse_tree_first(&tree);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     tree_diff_iterator_print_state(&iter, _devnull);
-    for (j = 0; j < tree_sequence_get_sample_size(ts); j++) {
-        ret = tree_sequence_get_node(ts, samples[j], &node);
-        CU_ASSERT_EQUAL(ret, 0);
-        tau[j] = node.time;
-    }
 
-    first_tree = 1;
     x = 0.0;
     num_trees = 0;
     while ((ret = tree_diff_iterator_next(
                 &iter, &length, &records_out, &records_in)) == 1) {
         tree_diff_iterator_print_state(&iter, _devnull);
         num_trees++;
-        record = records_out;
-        num_out = 0;
-        while (record != NULL) {
-            for (k = 0; k < record->num_children; k++) {
-                pi[record->children[k]] = MSP_NULL_NODE;
-            }
-            tau[record->node] = 0;
-            num_out += record->num_children - 1;
-            record = record->next;
+        for (record = records_out; record != NULL; record = record->next) {
+            parent[record->edge.child] = MSP_NULL_NODE;
         }
-        record = records_in;
-        num_in = 0;
-        while (record != NULL) {
-            for (k = 0; k < record->num_children; k++) {
-                pi[record->children[k]] = record->node;
-            }
-            tau[record->node] = record->time;
-            num_in += record->num_children - 1;
-            record = record->next;
-        }
-        if (!first_tree) {
-            CU_ASSERT_EQUAL(num_in, num_out);
+        for (record = records_in; record != NULL; record = record->next) {
+            parent[record->edge.child] = record->edge.parent;
         }
         /* Now check against the sparse tree iterator. */
         for (j = 0; j < num_nodes; j++) {
-            ret = sparse_tree_get_parent(&tree, j, &u);
-            CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_EQUAL(pi[j], u);
+            CU_ASSERT_EQUAL(parent[j], tree.parent[j]);
         }
         CU_ASSERT_EQUAL(tree.left, x);
         x += length;
         CU_ASSERT_EQUAL(tree.right, x);
-        first_tree = 0;
         ret = sparse_tree_next(&tree);
         if (num_trees < tree_sequence_get_num_trees(ts)) {
             CU_ASSERT_EQUAL(ret, 1);
         } else {
             CU_ASSERT_EQUAL(ret, 0);
         }
-    }
-    if (num_trees != tree_sequence_get_num_trees(ts)) {
-        printf("ERROR: %d %d\n", (int) num_trees, (int) tree_sequence_get_num_trees(ts));
     }
     CU_ASSERT_EQUAL(num_trees, tree_sequence_get_num_trees(ts));
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5762,8 +5705,9 @@ verify_tree_diffs(tree_sequence_t *ts)
     ret = sparse_tree_free(&tree);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    free(pi);
-    free(tau);
+    free(parent);
+    free(child);
+    free(sib);
 }
 
 static void
@@ -6850,117 +6794,112 @@ test_node_table(void)
 static void
 test_edge_table(void)
 {
-    int ret;
-    edge_table_t table;
-    size_t num_rows = 100;
-    size_t max_children = 10;
-    size_t j, k, total_children_length;
-    node_id_t *parent, *children;
-    list_len_t *children_length;
-    double *left, *right;
-    node_id_t c[max_children];
+    printf("BROKEN edge table test\n");
+    /* int ret; */
+    /* edge_table_t table; */
+    /* size_t num_rows = 100; */
+    /* size_t max_children = 10; */
+    /* size_t j, k, total_children_length; */
+    /* node_id_t *parent, *children; */
+    /* list_len_t *children_length; */
+    /* double *left, *right; */
 
-    ret = edge_table_alloc(&table, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    edge_table_print_state(&table, _devnull);
+    /* ret = edge_table_alloc(&table, 1); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* edge_table_print_state(&table, _devnull); */
 
-    /* Adding 0 children is an error */
-    ret = edge_table_add_row(&table, 0, 0, 0, c, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    memset(c, 0, max_children * sizeof(node_id_t));
+    /* total_children_length = 0; */
+    /* for (j = 0; j < num_rows; j++) { */
+    /*     k = GSL_MIN(j + 1, max_children); */
+    /*     total_children_length += k; */
+    /*     ret = edge_table_add_row(&table, j, j, j, c, k); */
+    /*     CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /*     CU_ASSERT_EQUAL(table.left[j], j); */
+    /*     CU_ASSERT_EQUAL(table.right[j], j); */
+    /*     CU_ASSERT_EQUAL(table.parent[j], j); */
+    /*     CU_ASSERT_EQUAL(table.children_length[j], k); */
+    /*     CU_ASSERT_EQUAL(table.num_rows, j + 1); */
+    /*     CU_ASSERT_EQUAL(table.total_children_length, total_children_length); */
+    /* } */
+    /* edge_table_print_state(&table, _devnull); */
 
-    total_children_length = 0;
-    for (j = 0; j < num_rows; j++) {
-        k = GSL_MIN(j + 1, max_children);
-        total_children_length += k;
-        ret = edge_table_add_row(&table, j, j, j, c, k);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL(table.left[j], j);
-        CU_ASSERT_EQUAL(table.right[j], j);
-        CU_ASSERT_EQUAL(table.parent[j], j);
-        CU_ASSERT_EQUAL(table.children_length[j], k);
-        CU_ASSERT_EQUAL(table.num_rows, j + 1);
-        CU_ASSERT_EQUAL(table.total_children_length, total_children_length);
-    }
-    edge_table_print_state(&table, _devnull);
+    /* num_rows *= 2; */
+    /* left = malloc(num_rows * sizeof(double)); */
+    /* CU_ASSERT_FATAL(left != NULL); */
+    /* memset(left, 0, num_rows * sizeof(double)); */
+    /* right = malloc(num_rows * sizeof(double)); */
+    /* CU_ASSERT_FATAL(right != NULL); */
+    /* memset(right, 0, num_rows * sizeof(double)); */
+    /* parent = malloc(num_rows * sizeof(node_id_t)); */
+    /* CU_ASSERT_FATAL(parent != NULL); */
+    /* memset(parent, 1, num_rows * sizeof(node_id_t)); */
+    /* children = malloc(2 * num_rows * sizeof(node_id_t)); */
+    /* children_length = malloc(num_rows * sizeof(list_len_t)); */
+    /* CU_ASSERT_FATAL(children_length != NULL); */
+    /* for (j = 0; j < num_rows; j++) { */
+    /*     children[2 * j] = j; */
+    /*     children[2 * j + 1] = j + 1; */
+    /*     children_length[j] = 2; */
+    /* } */
 
-    num_rows *= 2;
-    left = malloc(num_rows * sizeof(double));
-    CU_ASSERT_FATAL(left != NULL);
-    memset(left, 0, num_rows * sizeof(double));
-    right = malloc(num_rows * sizeof(double));
-    CU_ASSERT_FATAL(right != NULL);
-    memset(right, 0, num_rows * sizeof(double));
-    parent = malloc(num_rows * sizeof(node_id_t));
-    CU_ASSERT_FATAL(parent != NULL);
-    memset(parent, 1, num_rows * sizeof(node_id_t));
-    children = malloc(2 * num_rows * sizeof(node_id_t));
-    children_length = malloc(num_rows * sizeof(list_len_t));
-    CU_ASSERT_FATAL(children_length != NULL);
-    for (j = 0; j < num_rows; j++) {
-        children[2 * j] = j;
-        children[2 * j + 1] = j + 1;
-        children_length[j] = 2;
-    }
+    /* ret = edge_table_set_columns(&table, num_rows, left, right, parent, */
+    /*         children, children_length); */
+    /* CU_ASSERT_EQUAL(ret, 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(node_id_t)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.children, children, 2 * num_rows * sizeof(node_id_t)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.children_length, children_length, */
+    /*             num_rows * sizeof(list_len_t)), 0); */
+    /* CU_ASSERT_EQUAL(table.num_rows, num_rows); */
+    /* CU_ASSERT_EQUAL(table.total_children_length, 2 * num_rows); */
+    /* /1* Append another num_rows to the end. *1/ */
+    /* ret = edge_table_append_columns(&table, num_rows, left, right, parent, */
+    /*         children, children_length); */
+    /* CU_ASSERT_EQUAL(ret, 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.left + num_rows, left, num_rows * sizeof(double)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.right + num_rows, right, num_rows * sizeof(double)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(node_id_t)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.parent + num_rows, parent, num_rows * sizeof(node_id_t)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.children, children, 2 * num_rows * sizeof(node_id_t)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.children + 2 * num_rows, children, */
+    /*             2 * num_rows * sizeof(node_id_t)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.children_length, children_length, */
+    /*             num_rows * sizeof(list_len_t)), 0); */
+    /* CU_ASSERT_EQUAL(memcmp(table.children_length + num_rows, children_length, */
+    /*             num_rows * sizeof(list_len_t)), 0); */
+    /* CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows); */
+    /* CU_ASSERT_EQUAL(table.total_children_length, 4 * num_rows); */
 
-    ret = edge_table_set_columns(&table, num_rows, left, right, parent,
-            children, children_length);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(node_id_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.children, children, 2 * num_rows * sizeof(node_id_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.children_length, children_length,
-                num_rows * sizeof(list_len_t)), 0);
-    CU_ASSERT_EQUAL(table.num_rows, num_rows);
-    CU_ASSERT_EQUAL(table.total_children_length, 2 * num_rows);
-    /* Append another num_rows to the end. */
-    ret = edge_table_append_columns(&table, num_rows, left, right, parent,
-            children, children_length);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.left + num_rows, left, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.right + num_rows, right, num_rows * sizeof(double)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(node_id_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.parent + num_rows, parent, num_rows * sizeof(node_id_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.children, children, 2 * num_rows * sizeof(node_id_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.children + 2 * num_rows, children,
-                2 * num_rows * sizeof(node_id_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.children_length, children_length,
-                num_rows * sizeof(list_len_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.children_length + num_rows, children_length,
-                num_rows * sizeof(list_len_t)), 0);
-    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
-    CU_ASSERT_EQUAL(table.total_children_length, 4 * num_rows);
+    /* /1* Inputs cannot be NULL *1/ */
+    /* ret = edge_table_set_columns(&table, num_rows, NULL, right, parent, */
+    /*         children, children_length); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE); */
+    /* ret = edge_table_set_columns(&table, num_rows, left, NULL, parent, */
+    /*         children, children_length); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE); */
+    /* ret = edge_table_set_columns(&table, num_rows, left, right, NULL, */
+    /*         children, children_length); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE); */
+    /* ret = edge_table_set_columns(&table, num_rows, left, right, parent, */
+    /*         NULL, children_length); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE); */
+    /* ret = edge_table_set_columns(&table, num_rows, left, right, parent, */
+    /*         children, NULL); */
+    /* CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE); */
 
-    /* Inputs cannot be NULL */
-    ret = edge_table_set_columns(&table, num_rows, NULL, right, parent,
-            children, children_length);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = edge_table_set_columns(&table, num_rows, left, NULL, parent,
-            children, children_length);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = edge_table_set_columns(&table, num_rows, left, right, NULL,
-            children, children_length);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = edge_table_set_columns(&table, num_rows, left, right, parent,
-            NULL, children_length);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = edge_table_set_columns(&table, num_rows, left, right, parent,
-            children, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    /* edge_table_reset(&table); */
+    /* CU_ASSERT_EQUAL(table.num_rows, 0); */
+    /* CU_ASSERT_EQUAL(table.total_children_length, 0); */
 
-    edge_table_reset(&table);
-    CU_ASSERT_EQUAL(table.num_rows, 0);
-    CU_ASSERT_EQUAL(table.total_children_length, 0);
-
-    edge_table_free(&table);
-    free(left);
-    free(right);
-    free(parent);
-    free(children);
-    free(children_length);
+    /* edge_table_free(&table); */
+    /* free(left); */
+    /* free(right); */
+    /* free(parent); */
+    /* free(children); */
+    /* free(children_length); */
 }
 
 static void
