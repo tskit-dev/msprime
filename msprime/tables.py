@@ -108,9 +108,12 @@ def _pickle_node_table(table):
     return NodeTable, tuple(), state
 
 
-class EdgesetTable(_msprime.EdgesetTable):
+class EdgeTable(_msprime.EdgeTable):
     """
-    Class for tables describing all edgesets in a tree sequence, of the form
+    TODO Update docs to relfect EDGES.
+
+
+    Class for tables describing all edges in a tree sequence, of the form
         left	right	parent	children
         0.0     0.4     3       0,2
         0.4     1.0     3       0,1,2
@@ -118,16 +121,16 @@ class EdgesetTable(_msprime.EdgesetTable):
     These describe the half-open genomic interval affected: `[left, right)`,
     the `parent` and the `children` on that interval.
 
-    Requirements: to describe a valid tree sequence, a `EdgesetTable` (and
+    Requirements: to describe a valid tree sequence, a `EdgeTable` (and
     corresponding `NodeTable`, to provide birth times) must satisfy:
         1. each list of children must be in sorted order,
-        2. any two edgesets that share a child must be nonoverlapping, and
-        3. the birth times of the `parent` in an edgeset must be strictly
-            greater than the birth times of the `children` in that edgeset.
+        2. any two edges that share a child must be nonoverlapping, and
+        3. the birth times of the `parent` in an edge must be strictly
+            greater than the birth times of the `children` in that edge.
     Furthermore, for algorithmic requirements
         4. the smallest `left` coordinate must be 0.0,
         5. the the table must be sorted by birth time of the `parent`, and
-        6. any two edgesets corresponding to the same `parent` must be nonoverlapping.
+        6. any two edges corresponding to the same `parent` must be nonoverlapping.
     It is an additional requirement that the complete ancestry of each sample
     must be specified, but this is harder to verify.
 
@@ -141,15 +144,11 @@ class EdgesetTable(_msprime.EdgesetTable):
         left = self.left
         right = self.right
         parent = self.parent
-        children = self.children
-        children_length = self.children_length
-        ret = "id\tleft\t\tright\t\tparent\tchildren\n"
-        offset = 0
+        child = self.child
+        ret = "id\tleft\t\tright\t\tparent\tchild\n"
         for j in range(self.num_rows):
-            row_children = children[offset: offset + children_length[j]]
-            offset += children_length[j]
             ret += "{}\t{:.8f}\t{:.8f}\t{}\t{}\n".format(
-                j, left[j], right[j], parent[j], ",".join(map(str, row_children)))
+                j, left[j], right[j], parent[j], child[j])
         return ret[:-1]
 
     def __eq__(self, other):
@@ -159,8 +158,7 @@ class EdgesetTable(_msprime.EdgesetTable):
                 np.array_equal(self.left, other.left) and
                 np.array_equal(self.right, other.right) and
                 np.array_equal(self.parent, other.parent) and
-                np.array_equal(self.children, other.children) and
-                np.array_equal(self.children_length, other.children_length))
+                np.array_equal(self.child, other.child))
         return ret
 
     def __len__(self):
@@ -171,29 +169,27 @@ class EdgesetTable(_msprime.EdgesetTable):
         self.__init__()
         self.set_columns(
             left=state["left"], right=state["right"], parent=state["parent"],
-            children=state["children"], children_length=state["children_length"])
+            child=state["child"])
 
     def copy(self):
         """
         Returns a deep copy of this table.
         """
-        copy = EdgesetTable()
+        copy = EdgeTable()
         copy.set_columns(
-            left=self.left, right=self.right, parent=self.parent,
-            children=self.children, children_length=self.children_length)
+            left=self.left, right=self.right, parent=self.parent, child=self.child)
         return copy
 
 
 # Pickle support. See copyreg registration for this function below.
-def _edgeset_table_pickle(table):
+def _edge_table_pickle(table):
     state = {
         "left": table.left,
         "right": table.right,
         "parent": table.parent,
-        "children": table.children,
-        "children_length": table.children_length,
+        "child": table.child,
     }
-    return EdgesetTable, tuple(), state
+    return EdgeTable, tuple(), state
 
 
 class MigrationTable(_msprime.MigrationTable):
@@ -393,7 +389,7 @@ def _mutation_table_pickle(table):
 # It would be cleaner to attach the pickle_*_table functions to the classes
 # themselves, but this causes issues with Mocking on readthedocs. Sigh.
 copyreg.pickle(NodeTable, _pickle_node_table)
-copyreg.pickle(EdgesetTable, _edgeset_table_pickle)
+copyreg.pickle(EdgeTable, _edge_table_pickle)
 copyreg.pickle(MigrationTable, _migration_table_pickle)
 copyreg.pickle(SiteTable, _site_table_pickle)
 copyreg.pickle(MutationTable, _mutation_table_pickle)
@@ -408,25 +404,25 @@ def sort_tables(*args, **kwargs):
     """
     Sorts the given tables in place, as follows:
 
-    Edgesets are ordered by
+    Edges are ordered by
 
     - time of parent, then
     - parent node ID, then
     - left endpoint.
 
-    For each edgeset, the ``children`` are sorted by increasing node ID.
+    For each edge, the ``children`` are sorted by increasing node ID.
 
     Sites are ordered by position, and Mutations are ordered by site.
 
-    Note: for general edgeset tables this only defines a partial ordering, but
-    for strict tables (namely, those for which edgesets belonging to a given
+    Note: for general edge tables this only defines a partial ordering, but
+    for strict tables (namely, those for which edges belonging to a given
     parent do not overlap) this enforces a complete ordering.
 
     .. todo:: Update this documentation to describe the keyword arguments and
        combinations that are allowed.
 
     :param NodeTable nodes:
-    :param EdgesetTable edgesets:
+    :param EdgeTable edges:
     :param MigrationTable migrations:
     :param SiteTable sites:
     :param MutationTable mutations:
@@ -450,7 +446,7 @@ def simplify_tables(*args, **kwargs):
 
     :param list samples: A list of Node IDs of individuals to retain as samples.
     :param NodeTable nodes: The NodeTable to be simplified.
-    :param EdgesetTable edgesets: The NodeTable to be simplified.
+    :param EdgeTable edges: The NodeTable to be simplified.
     :param MigrationTable migrations: The MigrationTable to be simplified.
     :param SiteTable sites: The SiteTable to be simplified.
     :param MutationTable mutations: The MutationTable to be simplified.
