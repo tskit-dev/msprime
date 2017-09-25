@@ -376,8 +376,7 @@ newick_converter_process_tree(newick_converter_t *self, edge_list_t *edges_out,
         edge_list_t *edges_in)
 {
     int ret = 0;
-    printf("NEWICK BROKEN\n");
-    ret = -1;
+    ret = MSP_ERR_UNSUPPORTED_OPERATION;
 
     /* node_record_t *tree_node; */
 
