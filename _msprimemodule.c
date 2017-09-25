@@ -4267,7 +4267,7 @@ out:
 }
 
 static PyObject *
-SparseTree_get_child(SparseTree *self, PyObject *args)
+SparseTree_get_left_child(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     node_id_t child;
@@ -4276,11 +4276,96 @@ SparseTree_get_child(SparseTree *self, PyObject *args)
     if (SparseTree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    child = self->sparse_tree->child[node];
+    child = self->sparse_tree->left_child[node];
     ret = Py_BuildValue("i", (int) child);
 out:
     return ret;
 }
+
+static PyObject *
+SparseTree_get_right_child(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t child;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    child = self->sparse_tree->right_child[node];
+    ret = Py_BuildValue("i", (int) child);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_left_sib(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t sib;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    sib = self->sparse_tree->left_sib[node];
+    ret = Py_BuildValue("i", (int) sib);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_right_sib(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t sib;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    sib = self->sparse_tree->right_sib[node];
+    ret = Py_BuildValue("i", (int) sib);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_children(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int node;
+    node_id_t u;
+    size_t j, num_children;
+    node_id_t *children = NULL;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    num_children = 0;
+    for (u = self->sparse_tree->left_child[node]; u != MSP_NULL_NODE;
+            u = self->sparse_tree->right_sib[u]) {
+        num_children++;
+    }
+    children = PyMem_Malloc(num_children * sizeof(node_id_t));
+    if (children == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    j = 0;
+    for (u = self->sparse_tree->left_child[node]; u != MSP_NULL_NODE;
+            u = self->sparse_tree->right_sib[u]) {
+        children[j] = u;
+        j++;
+    }
+    ret = convert_node_id_list(children, num_children);
+out:
+    if (children != NULL) {
+        PyMem_Free(children);
+    }
+    return ret;
+}
+
 
 static PyObject *
 SparseTree_get_mrca(SparseTree *self, PyObject *args)
@@ -4415,8 +4500,16 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the time of node u" },
     {"get_population", (PyCFunction) SparseTree_get_population, METH_VARARGS,
             "Returns the population of node u" },
-    {"get_child", (PyCFunction) SparseTree_get_child, METH_VARARGS,
+    {"get_left_child", (PyCFunction) SparseTree_get_left_child, METH_VARARGS,
             "Returns the left-most child of node u" },
+    {"get_right_child", (PyCFunction) SparseTree_get_right_child, METH_VARARGS,
+            "Returns the right-most child of node u" },
+    {"get_left_sib", (PyCFunction) SparseTree_get_left_sib, METH_VARARGS,
+            "Returns the left-most sib of node u" },
+    {"get_right_sib", (PyCFunction) SparseTree_get_right_sib, METH_VARARGS,
+            "Returns the right-most sib of node u" },
+    {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
+            "Returns the children of u in left-right order." },
     {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
             "Returns the MRCA of nodes u and v" },
     {"get_num_samples", (PyCFunction) SparseTree_get_num_samples, METH_VARARGS,

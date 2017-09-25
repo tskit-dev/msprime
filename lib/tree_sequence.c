@@ -3029,37 +3029,33 @@ sparse_tree_check_state(sparse_tree_t *self)
 {
     node_id_t u, v;
     size_t j, num_samples;
-    int err;
+    int err, c;
     site_t site;
-    bool found;
+    node_id_t *children = malloc(self->num_nodes * sizeof(node_id_t));
+
+    assert(children != NULL);
 
     for (j = 0; j < self->sample_size; j++) {
         u = self->samples[j];
         while (self->parent[u] != MSP_NULL_NODE) {
-            v = self->left_child[self->parent[u]];
-            found = false;
-            while (v != MSP_NULL_NODE) {
-                assert(self->parent[u] == self->parent[v]);
-                if (v == u) {
-                    found = true;
-                }
-                v = self->right_sib[v];
-            }
-            assert(found);
-            v = self->right_child[self->parent[u]];
-            found = false;
-            while (v != MSP_NULL_NODE) {
-                assert(self->parent[u] == self->parent[v]);
-                if (v == u) {
-                    found = true;
-                }
-                v = self->left_sib[v];
-            }
-            assert(found);
             u = self->parent[u];
         }
         assert(u == self->root);
     }
+    for (u = 0; u < (node_id_t) self->num_nodes; u++) {
+        c = 0;
+        for (v = self->left_child[u]; v != MSP_NULL_NODE; v = self->right_sib[v]) {
+            assert(self->parent[v] == u);
+            children[c] = v;
+            c++;
+        }
+        for (v = self->right_child[u]; v != MSP_NULL_NODE; v = self->left_sib[v]) {
+            assert(c > 0);
+            c--;
+            assert(v == children[c]);
+        }
+    }
+
     for (j = 0; j < self->sites_length; j++) {
         site = self->sites[j];
         assert(self->left <= site.position);
@@ -3087,6 +3083,8 @@ sparse_tree_check_state(sparse_tree_t *self)
         assert(self->sample_list_head == NULL);
         assert(self->sample_list_node_mem == NULL);
     }
+
+    free(children);
 }
 
 void

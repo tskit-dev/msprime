@@ -4807,43 +4807,17 @@ static void
 verify_trees_consistent(tree_sequence_t *ts)
 {
     int ret;
-    size_t sample_size, num_trees;
-    node_id_t u, v, w, root;
-    size_t j;
+    size_t num_trees;
     sparse_tree_t tree;
-    node_id_t *samples;
-    bool found;
 
-    sample_size = tree_sequence_get_sample_size(ts);
-    ret = tree_sequence_get_samples(ts, &samples);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = sparse_tree_alloc(&tree, ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
 
     num_trees = 0;
     for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
-        ret = sparse_tree_get_root(&tree, &root);
-        CU_ASSERT_EQUAL(ret, 0);
+        sparse_tree_print_state(&tree, _devnull);
         CU_ASSERT_EQUAL(tree.index, num_trees);
         num_trees++;
-        for (j = 0; j < sample_size; j++) {
-            v = samples[j];
-            while (v != MSP_NULL_NODE) {
-                u = v;
-                ret = sparse_tree_get_parent(&tree, u, &v);
-                CU_ASSERT_EQUAL(ret, 0);
-                if (v != MSP_NULL_NODE) {
-                    found = false;
-                    for (w = tree.left_child[v]; w != MSP_NULL_NODE; w = tree.right_sib[w]) {
-                        if (w == u) {
-                            found = true;
-                        }
-                    }
-                    CU_ASSERT(found);
-                }
-            }
-            CU_ASSERT_EQUAL_FATAL(u, root);
-        }
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(ts), num_trees);
