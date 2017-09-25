@@ -1058,7 +1058,6 @@ typedef struct {
     migration_table_t *migrations;
     /* sorting edges */
     edge_sort_t *sorted_edges;
-    node_id_t *children_mem;
     /* sorting sites */
     site_id_t *site_id_map;
     site_t *sorted_sites;
@@ -1095,6 +1094,10 @@ cmp_edge(const void *a, const void *b) {
         /* If the nodes are equal, sort by the left coordinate. */
         if (ret == 0) {
             ret = (ca->left > cb->left) - (ca->left < cb->left);
+            /* If the left coordinate is equal, sort by the child ID. */
+            if (ret == 0) {
+                ret = (ca->child > cb->child) - (ca->child < cb->child);
+            }
         }
     }
     return ret;
@@ -1160,6 +1163,10 @@ table_sorter_sort_edges(table_sorter_t *self)
         e->right = self->edges->right[j];
         e->parent = self->edges->parent[j];
         e->child = self->edges->child[j];
+        if (e->parent >= (node_id_t) self->nodes->num_rows) {
+            ret = MSP_ERR_OUT_OF_BOUNDS;
+            goto out;
+        }
         e->time = self->nodes->time[e->parent];
     }
     qsort(self->sorted_edges, self->edges->num_rows, sizeof(edge_sort_t), cmp_edge);
@@ -1171,6 +1178,7 @@ table_sorter_sort_edges(table_sorter_t *self)
         self->edges->parent[j] = e->parent;
         self->edges->child[j] = e->child;
     }
+out:
     return ret;
 }
 
@@ -1281,7 +1289,6 @@ out:
 static void
 table_sorter_free(table_sorter_t *self)
 {
-    msp_safe_free(self->children_mem);
     msp_safe_free(self->sorted_edges);
     msp_safe_free(self->sorted_sites);
     msp_safe_free(self->site_id_map);
@@ -1678,7 +1685,7 @@ simplifier_check_input(simplifier_t *self)
     site_id_t num_sites;
     double *time = self->nodes->time;
     char *node_seen = NULL;
-    node_id_t last_parent, parent;
+    node_id_t last_parent, parent, child;
     size_t j;
 
     node_seen = calloc((size_t) num_nodes, sizeof(char));
@@ -1706,22 +1713,17 @@ simplifier_check_input(simplifier_t *self)
             }
             last_parent = parent;
         }
-#if 0
         /* Check the children */
-        children = self->edges->children + offset;
-        for (k = 0; k < self->edges->children_length[j]; k++) {
-            if (children[k] < 0 || children[k] >= num_nodes) {
-                ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-                goto out;
-            }
-            /* time[child] must be < time[parent] */
-            if (time[children[k]] >= time[parent]) {
-                ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
-                goto out;
-            }
+        child = self->edges->child[j];
+        if (child < 0 || child >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
         }
-        offset += self->edges->children_length[j];
-#endif
+        /* time[child] must be < time[parent] */
+        if (time[child] >= time[parent]) {
+            ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
+            goto out;
+        }
     }
     /* Check the samples */
     for (j = 0; j < self->num_samples; j++) {

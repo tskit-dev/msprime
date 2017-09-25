@@ -519,7 +519,7 @@ static int
 tree_sequence_check(tree_sequence_t *self)
 {
     int ret = MSP_ERR_BAD_EDGESET;
-    node_id_t child, node;
+    node_id_t child, parent;
     size_t j;
     double left;
 
@@ -532,25 +532,35 @@ tree_sequence_check(tree_sequence_t *self)
     }
     left = DBL_MAX;
     for (j = 0; j < self->edges.num_records; j++) {
-        node = self->edges.parent[j];
-        if (node == MSP_NULL_NODE) {
+        parent = self->edges.parent[j];
+        child = self->edges.child[j];
+        left = GSL_MIN(left, self->edges.left[j]);
+        if (parent == MSP_NULL_NODE) {
             ret = MSP_ERR_NULL_NODE_IN_RECORD;
             goto out;
         }
-        if (node < 0 || node >= (node_id_t) self->nodes.num_records) {
+        if (parent < 0 || parent >= (node_id_t) self->nodes.num_records) {
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
         }
         if (j > 0) {
             /* Input data must be time sorted. */
-            if (self->nodes.time[node]
+            if (self->nodes.time[parent]
                     < self->nodes.time[self->edges.parent[j - 1]]) {
                 ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
                 goto out;
             }
+            /* Disabling checks on sortedness of children until definitive order
+             * worked out.*/
+            /* if (parent == self->edges.parent[j - 1] */
+            /*         && left == self->edges.left[j - 1] */
+            /*         && child < self->edges.child[j - 1]) { */
+            /*     printf("ERROR at %d\n", (int) j); */
+            /*     tree_sequence_print_state(self, stdout); */
+            /*     ret = MSP_ERR_UNSORTED_CHILDREN; */
+            /*     goto out; */
+            /* } */
         }
-        left = GSL_MIN(left, self->edges.left[j]);
-        child = self->edges.child[j];
         if (child == MSP_NULL_NODE) {
             ret = MSP_ERR_NULL_NODE_IN_RECORD;
             goto out;
@@ -560,7 +570,7 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
         /* time[child] must be < time[parent] */
-        if (self->nodes.time[child] >= self->nodes.time[node]) {
+        if (self->nodes.time[child] >= self->nodes.time[parent]) {
             ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
             goto out;
         }
@@ -607,8 +617,8 @@ tree_sequence_check(tree_sequence_t *self)
                 /* Also relaxing this assumption because it's too difficult to
                  * enforce after simplify() has been called.
                  */
-                /* t1 = self->nodes.time[self->mutations.node[j - 1]]; */
-                /* t2 = self->nodes.time[self->mutations.node[j]]; */
+                /* t1 = self->nodes.time[self->mutations.parent[j - 1]]; */
+                /* t2 = self->nodes.time[self->mutations.parent[j]]; */
                 /* if (t1 < t2) { */
                 /*     ret = MSP_ERR_UNSORTED_MUTATION_NODES; */
                 /*     goto out; */
@@ -618,7 +628,7 @@ tree_sequence_check(tree_sequence_t *self)
                  * can't easily derive the correct mutations when there are
                  * lots of them along a path. */
                 /* Within a site, nodes must be unique */
-                /* if (self->mutations.node[j - 1] == self->mutations.node[j]) { */
+                /* if (self->mutations.parent[j - 1] == self->mutations.parent[j]) { */
                 /*     ret = MSP_ERR_DUPLICATE_MUTATION_NODES; */
                 /*     goto out; */
                 /* } */
