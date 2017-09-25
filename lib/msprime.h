@@ -493,11 +493,11 @@ typedef struct {
     /* Left and right physical coordinates of the tree */
     double left;
     double right;
-    node_id_t *parent;
-    node_id_t *child;
-    /* TODO actually we need sib_next and sib_prev to keep the trees fully
-     * consistent in constant time. */
-    node_id_t *sib;
+    node_id_t *parent;          /* parent of node u */
+    node_id_t *left_child;      /* leftmost child of node u */
+    node_id_t *right_child;     /* rightmost child of node u */
+    node_id_t *left_sib;        /* sibling to right of node u */
+    node_id_t *right_sib;       /* sibling to the left of node u */
     size_t index;
     /* These are involved in the optional sample tracking; num_samples counts
      * all samples below a give node, and num_tracked_samples counts those

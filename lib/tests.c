@@ -1071,10 +1071,10 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
              * traverse down the left-most path to the sample. This means we
              * don't really need a stack at all, but we may extend this to a full
              * traversal in the future. */
-            if (tree.child[u] != MSP_NULL_NODE) {
+            if (tree.left_child[u] != MSP_NULL_NODE) {
                 stack_top++;
-                stack[stack_top] = tree.child[u];
-                state[tree.child[u]] = state[u];
+                stack[stack_top] = tree.left_child[u];
+                state[tree.left_child[u]] = state[u];
             }
         }
         site_id++;
@@ -4062,35 +4062,35 @@ test_single_nonbinary_tree_iter(void)
         ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(num_samples, 1);
-        CU_ASSERT_EQUAL(tree.child[u], MSP_NULL_NODE);
+        CU_ASSERT_EQUAL(tree.left_child[u], MSP_NULL_NODE);
     }
 
     u = 7;
     ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(num_samples, 4);
-    CU_ASSERT_EQUAL(tree.child[u], 3);
-    CU_ASSERT_EQUAL(tree.sib[3], 2);
-    CU_ASSERT_EQUAL(tree.sib[2], 1);
-    CU_ASSERT_EQUAL(tree.sib[1], 0);
-    CU_ASSERT_EQUAL(tree.sib[0], MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(tree.left_child[u], 3);
+    CU_ASSERT_EQUAL(tree.right_sib[3], 2);
+    CU_ASSERT_EQUAL(tree.right_sib[2], 1);
+    CU_ASSERT_EQUAL(tree.right_sib[1], 0);
+    CU_ASSERT_EQUAL(tree.right_sib[0], MSP_NULL_NODE);
 
     u = 8;
     ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(num_samples, 2);
-    CU_ASSERT_EQUAL(tree.child[u], 5);
-    CU_ASSERT_EQUAL(tree.sib[5], 4);
-    CU_ASSERT_EQUAL(tree.sib[4], MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(tree.left_child[u], 5);
+    CU_ASSERT_EQUAL(tree.right_sib[5], 4);
+    CU_ASSERT_EQUAL(tree.right_sib[4], MSP_NULL_NODE);
 
     u = 9;
     ret = sparse_tree_get_num_samples(&tree, u, &num_samples);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(num_samples, 7);
-    CU_ASSERT_EQUAL(tree.child[u], 8);
-    CU_ASSERT_EQUAL(tree.sib[8], 7);
-    CU_ASSERT_EQUAL(tree.sib[7], 6);
-    CU_ASSERT_EQUAL(tree.sib[6], MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(tree.left_child[u], 8);
+    CU_ASSERT_EQUAL(tree.right_sib[8], 7);
+    CU_ASSERT_EQUAL(tree.right_sib[7], 6);
+    CU_ASSERT_EQUAL(tree.right_sib[6], MSP_NULL_NODE);
 
     ret = sparse_tree_get_root(&tree, &w);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4852,7 +4852,7 @@ verify_trees_consistent(tree_sequence_t *ts)
                 CU_ASSERT_EQUAL(ret, 0);
                 if (v != MSP_NULL_NODE) {
                     found = false;
-                    for (w = tree.child[v]; w != MSP_NULL_NODE; w = tree.sib[w]) {
+                    for (w = tree.left_child[v]; w != MSP_NULL_NODE; w = tree.right_sib[w]) {
                         if (w == u) {
                             found = true;
                         }
@@ -5232,7 +5232,7 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(other_samples != NULL);
     for (u = 0; u < num_nodes; u++) {
-        if (tree->child[u] == MSP_NULL_NODE && !tree_sequence_is_sample(ts, u)) {
+        if (tree->left_child[u] == MSP_NULL_NODE && !tree_sequence_is_sample(ts, u)) {
             ret = sparse_tree_get_sample_list(tree, u, &head, &tail);
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT_EQUAL(head, NULL);
@@ -5248,7 +5248,7 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
                     samples[num_samples] = v;
                     num_samples++;
                 }
-                for (v = tree->child[v]; v != MSP_NULL_NODE; v = tree->sib[v]) {
+                for (v = tree->left_child[v]; v != MSP_NULL_NODE; v = tree->right_sib[v]) {
                     stack_top++;
                     stack[stack_top] = v;
                 }
