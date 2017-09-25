@@ -1238,16 +1238,16 @@ def parse_edges(source):
     Parse the specified file-like object and return a EdgeTable instance.
     The object must contain text with whitespace delimited columns, which are
     labeled with headers and contain columns ``left``, ``right``, ``parent``,
-    and ``children``.  The ``children`` field is a comma-separated list of base
-    10 integer values.  Further requirements are described in
-    :class:`EdgeTable`.
+    and ``child``. Several edges may specified at the same time using a single
+    line by making the ``child`` field a comma-separated list. Further
+    requirements are described in :class:`EdgeTable`.
     """
     table = tables.EdgeTable()
     header = source.readline().split()
     left_index = header.index("left")
     right_index = header.index("right")
     parent_index = header.index("parent")
-    children_index = header.index("children")
+    children_index = header.index("child")
     table = tables.EdgeTable()
     for line in source:
         tokens = line.split()
@@ -1256,8 +1256,8 @@ def parse_edges(source):
             right = float(tokens[right_index])
             parent = int(tokens[parent_index])
             children = tuple(map(int, tokens[children_index].split(",")))
-            table.add_row(
-                left=left, right=right, parent=parent, children=children)
+            for child in children:
+                table.add_row(left=left, right=right, parent=parent, child=child)
     return table
 
 
@@ -1895,16 +1895,15 @@ class TreeSequence(object):
                 print(row, file=nodes)
 
         if edges is not None:
-            print("left", "right", "parent", "children", sep="\t", file=edges)
+            print("left", "right", "parent", "child", sep="\t", file=edges)
             for edge in self.edges():
-                children = ",".join(str(u) for u in edge.children)
                 row = (
                     "{left:.{precision}f}\t"
                     "{right:.{precision}f}\t"
                     "{parent:d}\t"
-                    "{children}").format(
+                    "{child:d}").format(
                         precision=precision, left=edge.left, right=edge.right,
-                        parent=edge.parent, children=children)
+                        parent=edge.parent, child=edge.child)
                 print(row, file=edges)
 
         if sites is not None:

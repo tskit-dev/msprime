@@ -192,7 +192,7 @@ class PythonTreeSequence(object):
                 mutations=[_Mutation(*mut) for mut in mutations]))
 
     def _diffs(self):
-        M = self._tree_sequence.get_num_edgesets()
+        M = self._tree_sequence.get_num_edges()
         records = [self._tree_sequence.get_record(j) for j in range(M)]
         l = [record[0] for record in records]
         r = [record[1] for record in records]
@@ -236,7 +236,7 @@ class PythonTreeSequence(object):
             return self._diffs()
 
     def trees(self):
-        M = self._tree_sequence.get_num_edgesets()
+        M = self._tree_sequence.get_num_edges()
         records = [self._tree_sequence.get_record(j) for j in range(M)]
         l = [record[0] for record in records]
         r = [record[1] for record in records]
@@ -542,10 +542,10 @@ class Simplifier(object):
         self.A = {}
         # Output tables
         self.node_table = msprime.NodeTable(ts.num_nodes)
-        self.edgeset_table = msprime.EdgesetTable(ts.num_edgesets)
+        self.edge_table = msprime.EdgeTable(ts.num_edges)
         self.site_table = msprime.SiteTable(max(1, ts.num_sites))
         self.mutation_table = msprime.MutationTable(max(1, ts.num_mutations))
-        self.last_edgeset = None
+        self.last_edge = None
         self.num_output_nodes = 0
         self.output_sites = {}
         # Keep track of then number of segments we alloc and free to ensure we
@@ -610,29 +610,29 @@ class Simplifier(object):
         self.node_id_map[input_id] = self.num_output_nodes
         self.num_output_nodes += 1
 
-    def record_edgeset(self, left, right, parent, children):
+    def record_edge(self, left, right, parent, children):
         """
-        Adds an edgeset to the output list. This method used the ``last_edgeset``
+        Adds an edge to the output list. This method used the ``last_edge``
         variable to check for adjacent records that may be squashed. Thus, the
-        last edgeset will not be entered in the table, which must be done manually.
+        last edge will not be entered in the table, which must be done manually.
         """
         sorted_children = tuple(sorted(children))
-        if self.last_edgeset is None:
-            self.last_edgeset = left, right, parent, sorted_children
+        if self.last_edge is None:
+            self.last_edge = left, right, parent, sorted_children
         else:
-            last_left, last_right, last_parent, last_children = self.last_edgeset
+            last_left, last_right, last_parent, last_children = self.last_edge
             squash_condition = (
                 last_parent == parent and
                 last_children == sorted_children and
                 last_right == left)
             if squash_condition:
-                self.last_edgeset = last_left, right, parent, sorted_children
+                self.last_edge = last_left, right, parent, sorted_children
             else:
-                # Flush the last edgeset
-                self.edgeset_table.add_row(
+                # Flush the last edge
+                self.edge_table.add_row(
                     left=last_left, right=last_right, parent=last_parent,
                     children=last_children)
-                self.last_edgeset = left, right, parent, sorted_children
+                self.last_edge = left, right, parent, sorted_children
 
     def segment_chain_str(self, segment):
         u = segment
@@ -668,8 +668,8 @@ class Simplifier(object):
             print("\t", input_id, "->", self.node_id_map[input_id])
         print("Output nodes:")
         print(self.node_table)
-        print("Output Edgesets: ")
-        print(self.edgeset_table)
+        print("Output Edges: ")
+        print(self.edge_table)
 
     def simplify(self):
         the_parents = [
@@ -678,23 +678,23 @@ class Simplifier(object):
         the_parents.sort()
         for time, input_id in the_parents:
             # inefficent way to pull all edges corresponding to a given parent
-            edgesets = [x for x in self.ts.edgesets() if x.parent == input_id]
-            for edgeset in edgesets:
+            edges = [x for x in self.ts.edges() if x.parent == input_id]
+            for edge in edges:
                 H = []
-                for edgeset in edgesets:
-                    for child in edgeset.children:
+                for edge in edges:
+                    for child in edge.children:
                         if child in self.A:
-                            self.remove_ancestry(edgeset.left, edgeset.right, child, H)
+                            self.remove_ancestry(edge.left, edge.right, child, H)
                             self.check_state()
                 # print("merging for ", input_id)
                 # self.print_heaps(H)
                 # self.print_state()
                 self.merge_labeled_ancestors(H, input_id)
                 self.check_state()
-        # Flush the last edgeset to the table and create the new tree sequence.
-        if self.last_edgeset is not None:
-            left, right, parent, children = self.last_edgeset
-            self.edgeset_table.add_row(
+        # Flush the last edge to the table and create the new tree sequence.
+        if self.last_edge is not None:
+            left, right, parent, children = self.last_edge
+            self.edge_table.add_row(
                 left=left, right=right, parent=parent, children=children)
         # print("DONE")
         # self.print_state()
@@ -736,7 +736,7 @@ class Simplifier(object):
         # print("DONE")
         # self.print_state()
         return msprime.load_tables(
-            nodes=self.node_table, edgesets=self.edgeset_table,
+            nodes=self.node_table, edges=self.edge_table,
             sites=self.site_table, mutations=self.mutation_table)
 
     def record_mutation(self, node, mutation):
@@ -848,7 +848,7 @@ class Simplifier(object):
                 if input_id in self.node_id_map:
                     u = self.node_id_map[input_id]
                     if self.is_sample(u):
-                        self.record_edgeset(alpha.left, alpha.right, u, [alpha.node])
+                        self.record_edge(alpha.left, alpha.right, u, [alpha.node])
                         alpha.node = u
             else:
                 if not coalescence:
@@ -870,7 +870,7 @@ class Simplifier(object):
                     elif x.right > r:
                         x.left = r
                         heapq.heappush(H, (x.left, x))
-                self.record_edgeset(l, r, u, children)
+                self.record_edge(l, r, u, children)
 
             # loop tail; update alpha and integrate it into the state.
             if z is None:
@@ -910,6 +910,6 @@ if __name__ == "__main__":
     tables = tss.dump_tables()
     print("Output:")
     print(tables.nodes)
-    print(tables.edgesets)
+    print(tables.edges)
     print(tables.sites)
     print(tables.mutations)
