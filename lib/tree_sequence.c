@@ -894,6 +894,10 @@ tree_sequence_build_indexes(tree_sequence_t *self)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    /* FIXME: Need to update and clarify the sorting order here. The approach
+     * here is confusing and we should make it explicit what we're sorting
+     * on (left, parent, child). */
+
     /* sort by left and increasing time to give us the order in which
      * records should be inserted */
     for (j = 0; j < self->edges.num_records; j++) {
@@ -3055,7 +3059,6 @@ sparse_tree_check_state(sparse_tree_t *self)
             assert(v == children[c]);
         }
     }
-
     for (j = 0; j < self->sites_length; j++) {
         site = self->sites[j];
         assert(self->left <= site.position);

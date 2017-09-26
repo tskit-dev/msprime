@@ -2082,8 +2082,26 @@ class TreeSequence(object):
             the coalescence records in this tree sequence.
         :rtype: iter
         """
-        for j in range(self.get_num_records()):
-            yield CoalescenceRecord(*self._ll_tree_sequence.get_record(j))
+        # Note this is very inefficient and does not work when the the edges are
+        # chopped in less aligned ways.
+        edges = list(self.edges())
+        t = [node.time for node in self.nodes()]
+        pop = [node.population for node in self.nodes()]
+        edges.sort(key=lambda e: (t[e.parent], e.parent, e.left, e.right, e.child))
+        parent = edges[0].parent
+        left = edges[0].left
+        right = edges[0].right
+        children = [edges[0].child]
+        for e in edges[1:]:
+            if e.parent != parent or e.left != left or e.right != right:
+                yield CoalescenceRecord(
+                    left, right, parent, children, t[parent], pop[parent])
+                left = e.left
+                right = e.right
+                parent = e.parent
+                children = []
+            children.append(e.child)
+        yield CoalescenceRecord(left, right, parent, children, t[parent], pop[parent])
 
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
