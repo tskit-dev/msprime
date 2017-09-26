@@ -545,7 +545,6 @@ class Simplifier(object):
         self.edge_table = msprime.EdgeTable(ts.num_edges)
         self.site_table = msprime.SiteTable(max(1, ts.num_sites))
         self.mutation_table = msprime.MutationTable(max(1, ts.num_mutations))
-        self.last_edge = None
         self.num_output_nodes = 0
         self.output_sites = {}
         # Keep track of then number of segments we alloc and free to ensure we
@@ -610,29 +609,11 @@ class Simplifier(object):
         self.node_id_map[input_id] = self.num_output_nodes
         self.num_output_nodes += 1
 
-    def record_edge(self, left, right, parent, children):
+    def record_edge(self, left, right, parent, child):
         """
-        Adds an edge to the output list. This method used the ``last_edge``
-        variable to check for adjacent records that may be squashed. Thus, the
-        last edge will not be entered in the table, which must be done manually.
+        Adds an edge to the output list.
         """
-        sorted_children = tuple(sorted(children))
-        if self.last_edge is None:
-            self.last_edge = left, right, parent, sorted_children
-        else:
-            last_left, last_right, last_parent, last_children = self.last_edge
-            squash_condition = (
-                last_parent == parent and
-                last_children == sorted_children and
-                last_right == left)
-            if squash_condition:
-                self.last_edge = last_left, right, parent, sorted_children
-            else:
-                # Flush the last edge
-                self.edge_table.add_row(
-                    left=last_left, right=last_right, parent=last_parent,
-                    children=last_children)
-                self.last_edge = left, right, parent, sorted_children
+        self.edge_table.add_row(left=left, right=right, parent=parent, child=child)
 
     def segment_chain_str(self, segment):
         u = segment
@@ -682,20 +663,14 @@ class Simplifier(object):
             for edge in edges:
                 H = []
                 for edge in edges:
-                    for child in edge.children:
-                        if child in self.A:
-                            self.remove_ancestry(edge.left, edge.right, child, H)
-                            self.check_state()
+                    if edge.child in self.A:
+                        self.remove_ancestry(edge.left, edge.right, edge.child, H)
+                        self.check_state()
                 # print("merging for ", input_id)
                 # self.print_heaps(H)
                 # self.print_state()
                 self.merge_labeled_ancestors(H, input_id)
                 self.check_state()
-        # Flush the last edge to the table and create the new tree sequence.
-        if self.last_edge is not None:
-            left, right, parent, children = self.last_edge
-            self.edge_table.add_row(
-                left=left, right=right, parent=parent, children=children)
         # print("DONE")
         # self.print_state()
         # The extant segments are the roots for each interval. For every root
@@ -848,7 +823,7 @@ class Simplifier(object):
                 if input_id in self.node_id_map:
                     u = self.node_id_map[input_id]
                     if self.is_sample(u):
-                        self.record_edge(alpha.left, alpha.right, u, [alpha.node])
+                        self.record_edge(alpha.left, alpha.right, u, alpha.node)
                         alpha.node = u
             else:
                 if not coalescence:
@@ -858,10 +833,9 @@ class Simplifier(object):
                 # output node ID
                 u = self.node_id_map[input_id]
                 alpha = self.alloc_segment(l, r, u)
-                # Update the heaps and make the record.
-                children = []
+                # Update the heaps and add edges
                 for x in X:
-                    children.append(x.node)
+                    self.record_edge(l, r, u, x.node)
                     if x.right == r:
                         self.free_segment(x)
                         if x.next is not None:
@@ -870,7 +844,6 @@ class Simplifier(object):
                     elif x.right > r:
                         x.left = r
                         heapq.heappush(H, (x.left, x))
-                self.record_edge(l, r, u, children)
 
             # loop tail; update alpha and integrate it into the state.
             if z is None:

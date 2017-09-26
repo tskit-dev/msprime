@@ -504,9 +504,7 @@ class TestSortTables(unittest.TestCase):
         random.shuffle(randomised_edges)
         new_edges = msprime.EdgeTable()
         for e in randomised_edges:
-            randomised_children = list(e.children)
-            random.shuffle(randomised_children)
-            new_edges.add_row(e.left, e.right, e.parent, tuple(randomised_children))
+            new_edges.add_row(e.left, e.right, e.parent, e.child)
         # Verify that import fails for randomised edges
         self.assertRaises(
             _msprime.LibraryError, ts.load_tables, nodes=nodes, edges=new_edges)
@@ -534,9 +532,7 @@ class TestSortTables(unittest.TestCase):
         self.assertEqual(list(edges.left), list(new_edges.left))
         self.assertEqual(list(edges.right), list(new_edges.right))
         self.assertEqual(list(edges.parent), list(new_edges.parent))
-        self.assertEqual(list(edges.children), list(new_edges.children))
-        self.assertEqual(
-            list(edges.children_length), list(new_edges.children_length))
+        self.assertEqual(list(edges.child), list(new_edges.child))
         # sites
         self.assertEqual(list(sites.position), list(new_sites.position))
         self.assertEqual(list(sites.ancestral_state), list(new_sites.ancestral_state))
@@ -589,9 +585,13 @@ class TestSortTables(unittest.TestCase):
                 msprime.SimpleBottleneck(time=0.5, proportion=1)])
         # Make sure this really has some non-binary nodes
         found = False
-        for r in ts.edges():
-            if len(r.children) > 2:
-                found = True
+        for t in ts.trees():
+            for u in t.nodes():
+                if len(t.children(u)) > 2:
+                    found = True
+                    break
+            if found:
+                break
         self.assertTrue(found)
         return ts
 
@@ -780,8 +780,7 @@ class TestSimplifyTables(unittest.TestCase):
         # Reversing the edges violates the ordering constraints.
         edges.set_columns(
             left=edges.left[::-1], right=edges.right[::-1],
-            parent=edges.parent[::-1], children=edges.children[::-1],
-            children_length=edges.children_length[::-1])
+            parent=edges.parent[::-1], child=edges.child[::-1])
         self.assertRaises(
             _msprime.LibraryError, msprime.simplify_tables,
             samples=[0, 1], nodes=tables.nodes, edges=edges)
@@ -795,30 +794,27 @@ class TestSimplifyTables(unittest.TestCase):
             parent = edges.parent
             parent[0] = bad_node
             edges.set_columns(
-                left=edges.left, right=edges.right, parent=parent,
-                children=edges.children, children_length=edges.children_length)
+                left=edges.left, right=edges.right, parent=parent, child=edges.child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
                 samples=[0, 1], nodes=tables.nodes, edges=edges)
             # Bad child node
             tables = ts.dump_tables()
             edges = tables.edges
-            children = edges.children
-            children[0] = bad_node
+            child = edges.child
+            child[0] = bad_node
             edges.set_columns(
-                left=edges.left, right=edges.right, parent=edges.parent,
-                children=children, children_length=edges.children_length)
+                left=edges.left, right=edges.right, parent=edges.parent, child=child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
                 samples=[0, 1], nodes=tables.nodes, edges=edges)
             # child == parent
             tables = ts.dump_tables()
             edges = tables.edges
-            children = edges.children
-            children[0] = edges.parent[0]
+            child = edges.child
+            child[0] = edges.parent[0]
             edges.set_columns(
-                left=edges.left, right=edges.right, parent=edges.parent,
-                children=children, children_length=edges.children_length)
+                left=edges.left, right=edges.right, parent=edges.parent, child=child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
                 samples=[0, 1], nodes=tables.nodes, edges=edges)
@@ -828,8 +824,7 @@ class TestSimplifyTables(unittest.TestCase):
             left = edges.left
             left[0] = edges.right[0]
             edges.set_columns(
-                left=left, right=edges.right, parent=edges.parent,
-                children=edges.children, children_length=edges.children_length)
+                left=left, right=edges.right, parent=edges.parent, child=edges.child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
                 samples=[0, 1], nodes=tables.nodes, edges=edges)
@@ -839,8 +834,7 @@ class TestSimplifyTables(unittest.TestCase):
             left = edges.left
             left[0] = edges.right[0] + 1
             edges.set_columns(
-                left=left, right=edges.right, parent=edges.parent,
-                children=edges.children, children_length=edges.children_length)
+                left=left, right=edges.right, parent=edges.parent, child=edges.child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
                 samples=[0, 1], nodes=tables.nodes, edges=edges)
