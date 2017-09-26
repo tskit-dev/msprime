@@ -184,8 +184,8 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
         fprintf(out, "tree %d\t%d sites\n", (int) j, self->sites.tree_sites_length[j]);
         for (k = 0; k < self->sites.tree_sites_length[j]; k++) {
             site = self->sites.tree_sites[j][k];
-            fprintf(out, "\tsite %d ancestral state = %s, %d mutations\n",
-                    site.id, site.ancestral_state, site.mutations_length);
+            fprintf(out, "\tsite %d pos = %f ancestral state = %s, %d mutations\n",
+                    site.id, site.position, site.ancestral_state, site.mutations_length);
             for (l = 0; l < site.mutations_length; l++) {
                 fprintf(out, "\t\tmutation %d node = %d derived_state = %s\n",
                         site.mutations[l].id, site.mutations[l].node,
@@ -771,8 +771,7 @@ tree_sequence_init_trees(tree_sequence_t *self)
     int ret = MSP_ERR_GENERIC;
     size_t j, k, tree_index;
     site_id_t site;
-    double last_x = -1;
-    double x;
+    double tree_left, tree_right, x, last_x;
     node_id_t *I = self->edges.indexes.insertion_order;
     node_id_t *O = self->edges.indexes.removal_order;
 
@@ -786,6 +785,7 @@ tree_sequence_init_trees(tree_sequence_t *self)
         self->num_trees = 1;
     }
     k = 0;
+    last_x = -1;
     for (j = 0; j < self->edges.num_records; j++) {
         x = self->edges.left[I[j]];
         /* Any distinct right values that do not appear in left gives rise to
@@ -820,29 +820,34 @@ tree_sequence_init_trees(tree_sequence_t *self)
         }
         memset(self->sites.tree_sites_length, 0, self->num_trees * sizeof(list_len_t));
         memset(self->sites.tree_sites, 0, self->num_trees * sizeof(site_t *));
+
+        tree_left = 0;
         tree_index = 0;
-        last_x = 0;
         site = 0;
-        for (j = 0; j < self->edges.num_records; j++) {
-            x = self->edges.left[I[j]];
-            if (x != last_x) {
-                self->sites.tree_sites[tree_index] = self->sites.tree_sites_mem + site;
-                last_x = x;
-                while (site < (site_id_t) self->sites.num_records
-                        && self->sites.position[site] < x) {
-                    self->sites.tree_sites_length[tree_index]++;
-                    site++;
-                }
-                tree_index++;
+        j = 0;
+        k = 0;
+        while (j < self->edges.num_records) {
+            while (self->edges.right[O[k]] == tree_left) {
+                k++;
             }
-        }
-        self->sites.tree_sites[tree_index] = self->sites.tree_sites_mem + site;
-        while (site < (site_id_t) self->sites.num_records
-                && self->sites.position[site] < self->sequence_length) {
-            self->sites.tree_sites_length[tree_index]++;
-            site++;
+            while (j < self->edges.num_records && self->edges.left[I[j]] == tree_left) {
+                j++;
+            }
+            tree_right = self->sequence_length;
+            if (j < self->edges.num_records) {
+                tree_right = GSL_MIN(self->edges.left[I[j]], self->edges.right[O[k]]);
+            }
+            self->sites.tree_sites[tree_index] = self->sites.tree_sites_mem + site;
+            while (site < (site_id_t) self->sites.num_records
+                    && self->sites.position[site] < tree_right) {
+                self->sites.tree_sites_length[tree_index]++;
+                site++;
+            }
+            tree_left = tree_right;
+            tree_index++;
         }
         assert(site == (site_id_t) self->sites.num_records);
+        assert(tree_index == self->num_trees);
     }
     ret = 0;
 out:
@@ -3044,7 +3049,7 @@ sparse_tree_check_state(sparse_tree_t *self)
         while (self->parent[u] != MSP_NULL_NODE) {
             u = self->parent[u];
         }
-        assert(u == self->root);
+        /* assert(u == self->root); */
     }
     for (u = 0; u < (node_id_t) self->num_nodes; u++) {
         c = 0;

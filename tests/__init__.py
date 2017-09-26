@@ -263,8 +263,7 @@ class PythonTreeSequence(object):
         st.sample_size = self._tree_sequence.get_sample_size()
         st.left = 0
         while j < M:
-            x = l[I[j]]
-            while r[O[k]] == x:
+            while r[O[k]] == st.left:
                 parent = p[O[k]]
                 child = c[O[k]]
                 lsib = st.left_sib[child]
@@ -281,7 +280,7 @@ class PythonTreeSequence(object):
                 st.left_sib[child] = msprime.NULL_NODE
                 st.right_sib[child] = msprime.NULL_NODE
                 k += 1
-            while j < M and l[I[j]] == x:
+            while j < M and l[I[j]] == st.left:
                 parent = p[I[j]]
                 child = c[I[j]]
                 u = st.right_child[parent]
@@ -293,8 +292,9 @@ class PythonTreeSequence(object):
                 st.right_child[parent] = child
                 st.parent[child] = parent
                 j += 1
-            st.left = x
             st.right = r[O[k]]
+            if j < M:
+                st.right = min(r[O[k]], l[I[j]])
             # Insert the root
             root = 0
             while st.parent[root] != msprime.NULL_NODE:
@@ -305,6 +305,7 @@ class PythonTreeSequence(object):
             st.site_list = [
                 site for site in self._sites if st.left <= site.position < st.right]
             yield st
+            st.left = st.right
 
 
 class PythonRecombinationMap(object):

@@ -148,9 +148,8 @@ def get_internal_samples_examples():
 
 
 def get_example_tree_sequences(back_mutations=True):
-    print("FIXME gap examples disabled")
-    # for ts in get_gap_examples():
-    #     yield ts
+    for ts in get_gap_examples():
+        yield ts
     for ts in get_internal_samples_examples():
         yield ts
     for n in [2, 3, 10, 100]:
@@ -504,8 +503,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             for mutation in tree_mutations:
                 left, right = st.get_interval()
                 self.assertTrue(left <= mutation.position < right)
-                self.assertNotEqual(
-                    st.get_parent(mutation.node), msprime.NULL_NODE)
                 self.assertEqual(mutation.index, j)
                 j += 1
         self.assertEqual(all_tree_mutations, all_mutations)
@@ -965,6 +962,11 @@ class TestTreeSequence(HighLevelTestCase):
         samples = list(ts.samples())
         tracked_samples = samples[:2]
         for tree in ts.trees(tracked_samples):
+            if len(tree.parent_dict) == 0:
+                # This is a crude way of checking if we have multiple roots.
+                # We'll need to fix this code up properly when we support multiple
+                # roots and remove this check
+                break
             nu = [0 for j in range(ts.get_num_nodes())]
             self.assertEqual(tree.get_num_tracked_samples(), len(tracked_samples))
             for j in tracked_samples:
@@ -1105,7 +1107,10 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_samples(msprime.NULL_POPULATION), [])
             self.assertEqual(ts.get_samples(1), [])
             for t in ts.trees():
-                self.assertEqual(sorted(list(t.samples(t.root))), samples)
+                # This a crude workaround for working with trees with multiple
+                # roots. We need to fix this when updating for multiple roots.
+                if len(t.parent_dict) > 0:
+                    self.assertEqual(sorted(list(t.samples(t.root))), samples)
 
     def test_write_vcf_interface(self):
         for ts in get_example_tree_sequences():

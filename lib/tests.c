@@ -2982,9 +2982,9 @@ test_simplest_holey_tree_sequence(void)
         "2.5  0\n";
     const char *mutations =
         "0    0     1\n"
-        "1    2     1\n"
-        "2    1     1";
-    const char *haplotypes[] = {"110", "011"};
+        "1    1     1\n"
+        "2    2     1";
+    const char *haplotypes[] = {"101", "011"};
     char *haplotype;
     unsigned int j;
     int ret;
