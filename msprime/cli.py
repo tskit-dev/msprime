@@ -792,9 +792,9 @@ def run_dump_nodes(args):
     tree_sequence.dump_text(nodes=sys.stdout, precision=args.precision)
 
 
-def run_dump_edgesets(args):
+def run_dump_edges(args):
     tree_sequence = msprime.load(args.history_file)
-    tree_sequence.dump_text(edgesets=sys.stdout, precision=args.precision)
+    tree_sequence.dump_text(edges=sys.stdout, precision=args.precision)
 
 
 def run_dump_sites(args):
@@ -891,11 +891,11 @@ def get_msp_parser():
     parser.set_defaults(runner=run_dump_nodes)
 
     parser = subparsers.add_parser(
-        "edgesets",
-        help="Dump edgesets in tabular format.")
+        "edges",
+        help="Dump edges in tabular format.")
     add_history_file_argument(parser)
     add_precision_argument(parser)
-    parser.set_defaults(runner=run_dump_edgesets)
+    parser.set_defaults(runner=run_dump_edges)
 
     parser = subparsers.add_parser(
         "sites",
