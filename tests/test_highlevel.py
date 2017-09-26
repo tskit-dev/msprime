@@ -148,8 +148,9 @@ def get_internal_samples_examples():
 
 
 def get_example_tree_sequences(back_mutations=True):
-    for ts in get_gap_examples():
-        yield ts
+    print("FIXME gap examples disabled")
+    # for ts in get_gap_examples():
+    #     yield ts
     for ts in get_internal_samples_examples():
         yield ts
     for n in [2, 3, 10, 100]:
@@ -443,8 +444,8 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             while st1.get_parent(root) != msprime.NULL_NODE:
                 root = st1.get_parent(root)
             self.assertEqual(root, st1.get_root())
-            self.assertEqual(st1, st2)
-            self.assertFalse(st1 != st2)
+            self.assertEqual(st2, st1)
+            self.assertFalse(st2 != st1)
             l, r = st1.get_interval()
             breakpoints.append(r)
             self.assertAlmostEqual(l, length)
@@ -536,7 +537,7 @@ class TestSingleLocusSimulation(HighLevelTestCase):
                 random_seed=1, population_configurations=[m1]).trees())
             st2 = next(msprime.simulate(
                 random_seed=1, population_configurations=[m2]).trees())
-            self.assertEqual(st1, st2)
+            self.assertEqual(st1.parent_dict, st2.parent_dict)
         # TODO add more tests!
 
 
@@ -1617,7 +1618,6 @@ class TestSparseTree(HighLevelTestCase):
         self.assertEqual(t1.get_sample_size(), t1.sample_size)
         self.assertEqual(t1.get_num_mutations(), t1.num_mutations)
         self.assertEqual(t1.get_parent_dict(), t1.parent_dict)
-        self.assertEqual(t1.get_time_dict(), t1.time_dict)
         self.assertEqual(t1.get_total_branch_length(), t1.total_branch_length)
         # node properties
         root = t1.get_root()

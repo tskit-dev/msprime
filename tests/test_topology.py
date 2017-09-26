@@ -995,14 +995,12 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assertEqual(ts.num_mutations, 4)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 2, 1: 2, 3: 2, 4: 2})
-        self.assertEqual(t.time_dict, {0: 0, 1: 0, 3: 0, 4: 0, 2: 1})
         self.assertEqual(t.root, 2)
         ts_simplified = ts.simplify()
         self.assertEqual(ts_simplified.num_nodes, 3)
         self.assertEqual(ts_simplified.num_trees, 1)
         t = next(ts_simplified.trees())
         self.assertEqual(t.parent_dict, {0: 2, 1: 2})
-        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 1})
         self.assertEqual(t.root, 2)
         # We should have removed the two non-sample mutations.
         self.assertEqual([s.position for s in t.sites()], [0.1, 0.2])
@@ -1072,7 +1070,6 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts.num_mutations, 2)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 2, 1: 3})
-        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 1, 3: 1})
         self.assertEqual(list(ts.haplotypes()), ["10", "01"])
         self.assertEqual(
             [v.genotypes for v in ts.variants(as_bytes=True)], [b"10", b"01"])
@@ -1116,7 +1113,6 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts.num_mutations, 4)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
-        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 2})
         self.assertEqual(list(ts.haplotypes()), ["1000", "0100", "0010", "0001"])
         self.assertEqual(
             [v.genotypes for v in ts.variants(as_bytes=True)],
@@ -1134,7 +1130,6 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts_simplified.num_mutations, 4)
         t = next(ts_simplified.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
-        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 2})
 
     def test_two_reducable_trees(self):
         # We have n = 4 and two trees, with some unary nodes and non-sample leaves
@@ -1181,8 +1176,6 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts.num_mutations, 5)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 5, 2: 7, 3: 7, 4: 6, 5: 6, 8: 7})
-        self.assertEqual(
-            t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1, 6: 2, 7: 3, 8: 0})
         self.assertEqual(list(ts.haplotypes()), ["10000", "01000", "00100", "00010"])
         self.assertEqual(
             [v.genotypes for v in ts.variants(as_bytes=True)],
@@ -1206,7 +1199,6 @@ class TestMultipleRoots(TopologyTestCase):
         sites = list(t.sites())
         self.assertEqual(sites[-1].position, 0.4)
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
-        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 2, 5: 3})
 
     def test_one_reducable_tree(self):
         # We have n = 4 and two trees. One tree is reducable and the other isn't.
@@ -1234,8 +1226,6 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts.num_trees, 1)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 5, 2: 7, 3: 7, 4: 6, 5: 6, 8: 7})
-        self.assertEqual(
-            t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 1, 5: 1, 6: 2, 7: 3, 8: 0})
         self.assertEqual(t.mrca(0, 1), 6)
         self.assertEqual(t.mrca(2, 3), 7)
         self.assertEqual(t.mrca(2, 8), 7)
@@ -1247,7 +1237,6 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts_simplified.num_trees, 1)
         t = next(ts_simplified.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
-        self.assertEqual(t.time_dict, {0: 0, 1: 0, 2: 0, 3: 0, 4: 2, 5: 3})
 
     @unittest.skip("Simplify with root mutations")
     # NOTE: This test has not been checked since updating to the text representation

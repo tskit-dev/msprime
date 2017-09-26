@@ -444,6 +444,18 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_parent(u)
 
+    def left_child(self, u):
+        return self._ll_sparse_tree.get_left_child(u)
+
+    def right_child(self, u):
+        return self._ll_sparse_tree.get_right_child(u)
+
+    def left_sib(self, u):
+        return self._ll_sparse_tree.get_left_sib(u)
+
+    def right_sib(self, u):
+        return self._ll_sparse_tree.get_right_sib(u)
+
     def children(self, u):
         return self.get_children(u)
 
@@ -911,32 +923,8 @@ class SparseTree(object):
             if self.parent(u) != NULL_NODE}
         return pi
 
-    @property
-    def time_dict(self):
-        return self.get_time_dict()
-
-    def get_time_dict(self):
-        return {
-            u: self.time(u) for u in range(self.num_nodes)
-            if len(self.children(u)) != 0 or self.parent(u) != NULL_NODE}
-
     def __str__(self):
         return str(self.get_parent_dict())
-
-    def __eq__(self, other):
-        # TODO this should really use the semantics of the C-level equality definition.
-        # This is currently only really used for testing AFAIK.
-        return (
-            self.get_sample_size() == other.get_sample_size() and
-            self.get_parent_dict() == other.get_parent_dict() and
-            self.get_time_dict() == other.get_time_dict() and
-            self.get_interval() == other.get_interval() and
-            self.get_root() == other.get_root() and
-            self.get_index() == other.get_index() and
-            list(self.sites()) == list(other.sites()))
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
 
 
 def _get_random_seed():

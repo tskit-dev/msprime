@@ -46,16 +46,18 @@ class MsprimeTestCase(unittest.TestCase):
 
 
 class PythonSparseTree(object):
-
     """
     Presents the same interface as the SparseTree object for testing. This
     is tightly coupled with the PythonTreeSequence object below which updates
     the internal structures during iteration.
     """
-    def __init__(self):
-        self.parent = {}
-        self.children = {}
-        self.time = {}
+    def __init__(self, num_nodes):
+        self.num_nodes = num_nodes
+        self.parent = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.left_child = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.right_child = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.left_sib = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.right_sib = [msprime.NULL_NODE for _ in range(num_nodes)]
         self.left = 0
         self.right = 0
         self.root = 0
@@ -65,57 +67,56 @@ class PythonSparseTree(object):
         self.site_list = []
 
     @classmethod
-    def from_sparse_tree(self, sparse_tree):
-        ret = PythonSparseTree()
+    def from_sparse_tree(cls, sparse_tree):
+        ret = PythonSparseTree(sparse_tree.num_nodes)
         ret.root = sparse_tree.get_root()
         ret.sample_size = sparse_tree.get_sample_size()
         ret.left, ret.right = sparse_tree.get_interval()
         ret.site_list = list(sparse_tree.sites())
         ret.index = sparse_tree.get_index()
-        # Traverse the tree and update the details as we go
-        # We don't use the traversal method here because this
-        # is used to test them.
-        stack = [sparse_tree.get_root()]
-        while len(stack) > 0:
-            u = stack.pop()
-            ret.time[u] = sparse_tree.get_time(u)
-            if sparse_tree.is_internal(u):
-                c = sparse_tree.get_children(u)
-                stack.extend(c)
-                for child in c:
-                    ret.parent[child] = u
-                ret.children[u] = c
+        for u in range(ret.num_nodes):
+            ret.parent[u] = sparse_tree.parent(u)
+            ret.left_child[u] = sparse_tree.left_child(u)
+            ret.right_child[u] = sparse_tree.right_child(u)
+            ret.left_sib[u] = sparse_tree.left_sib(u)
+            ret.right_sib[u] = sparse_tree.right_sib(u)
         assert ret == sparse_tree
+        return ret
+
+    def children(self, u):
+        v = self.left_child[u]
+        ret = []
+        while v != msprime.NULL_NODE:
+            ret.append(v)
+            v = self.right_sib[v]
         return ret
 
     def _preorder_nodes(self, u, l):
         l.append(u)
-        if u in self.children:
-            for c in self.children[u]:
-                self._preorder_nodes(c, l)
+        for c in self.children(u):
+            self._preorder_nodes(c, l)
 
     def _postorder_nodes(self, u, l):
-        if u in self.children:
-            for c in self.children[u]:
-                self._postorder_nodes(c, l)
+        for c in self.children(u):
+            self._postorder_nodes(c, l)
         l.append(u)
 
     def _inorder_nodes(self, u, l):
-        if u in self.children:
-            mid = len(self.children[u]) // 2
-            for v in self.children[u][:mid]:
+        children = self.children(u)
+        if len(children) > 0:
+            mid = len(children) // 2
+            for v in children[:mid]:
                 self._inorder_nodes(v, l)
             l.append(u)
-            for v in self.children[u][mid:]:
+            for v in children[mid:]:
                 self._inorder_nodes(v, l)
         else:
             l.append(u)
 
     def _levelorder_nodes(self, u, l, level):
         l[level].append(u) if level < len(l) else l.append([u])
-        if u in self.children:
-            for c in self.children[u]:
-                self._levelorder_nodes(c, l, level + 1)
+        for c in self.children(u):
+            self._levelorder_nodes(c, l, level + 1)
 
     def nodes(self, root=None, order="preorder"):
         u = root
@@ -151,9 +152,6 @@ class PythonSparseTree(object):
     def get_children(self, node):
         return self.children[node]
 
-    def get_time(self, node):
-        return self.time[node]
-
     def get_root(self):
         return self.root
 
@@ -161,13 +159,25 @@ class PythonSparseTree(object):
         return self.index
 
     def get_parent_dict(self):
-        return self.parent
-
-    def get_time_dict(self):
-        return self.time
+        d = {
+            u: self.parent[u] for u in range(self.num_nodes)
+            if self.parent[u] != msprime.NULL_NODE}
+        return d
 
     def sites(self):
         return iter(self.site_list)
+
+    def __eq__(self, other):
+        return (
+            self.get_sample_size() == other.get_sample_size() and
+            self.get_parent_dict() == other.get_parent_dict() and
+            self.get_interval() == other.get_interval() and
+            self.get_root() == other.get_root() and
+            self.get_index() == other.get_index() and
+            list(self.sites()) == list(other.sites()))
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class PythonTreeSequence(object):
@@ -237,47 +247,63 @@ class PythonTreeSequence(object):
 
     def trees(self):
         M = self._tree_sequence.get_num_edges()
-        records = [self._tree_sequence.get_record(j) for j in range(M)]
-        l = [record[0] for record in records]
-        r = [record[1] for record in records]
-        u = [record[2] for record in records]
-        c = [record[3] for record in records]
-        t = [record[4] for record in records]
-        I = sorted(range(M), key=lambda j: (l[j], t[j]))
-        O = sorted(range(M), key=lambda j: (r[j], -t[j]))
+        edges = [self._tree_sequence.get_edge(j) for j in range(M)]
+        t = [
+            self._tree_sequence.get_node(j)[1]
+            for j in range(self._tree_sequence.get_num_nodes())]
+        l = [edge[0] for edge in edges]
+        r = [edge[1] for edge in edges]
+        p = [edge[2] for edge in edges]
+        c = [edge[3] for edge in edges]
+        I = sorted(range(M), key=lambda j: (l[j], t[p[j]], p[j], c[j]))
+        O = sorted(range(M), key=lambda j: (r[j], -t[p[j]], -p[j], -c[j]))
         j = 0
         k = 0
-        st = PythonSparseTree()
+        st = PythonSparseTree(self._tree_sequence.get_num_nodes())
         st.sample_size = self._tree_sequence.get_sample_size()
         st.left = 0
         while j < M:
             x = l[I[j]]
             while r[O[k]] == x:
-                h = O[k]
-                del st.children[u[h]]
-                for q in c[h]:
-                    del st.parent[q]
+                parent = p[O[k]]
+                child = c[O[k]]
+                lsib = st.left_sib[child]
+                rsib = st.right_sib[child]
+                if lsib == msprime.NULL_NODE:
+                    st.left_child[parent] = rsib
+                else:
+                    st.right_sib[lsib] = rsib
+                if rsib == msprime.NULL_NODE:
+                    st.right_child[parent] = lsib
+                else:
+                    st.left_sib[rsib] = lsib
+                st.parent[child] = msprime.NULL_NODE
+                st.left_sib[child] = msprime.NULL_NODE
+                st.right_sib[child] = msprime.NULL_NODE
                 k += 1
             while j < M and l[I[j]] == x:
-                h = I[j]
-                st.children[u[h]] = c[h]
-                for q in c[h]:
-                    st.parent[q] = u[h]
+                parent = p[I[j]]
+                child = c[I[j]]
+                u = st.right_child[parent]
+                if u == msprime.NULL_NODE:
+                    st.left_child[parent] = c
+                else:
+                    st.right_sib[u] = child
+                    st.left_sib[child] = u
+                st.right_child[parent] = child
+                st.parent[child] = parent
                 j += 1
             st.left = x
             st.right = r[O[k]]
             # Insert the root
             root = 0
-            while root in st.parent:
+            while st.parent[root] != msprime.NULL_NODE:
                 root = st.parent[root]
             st.root = root
             st.index += 1
             # Add in all the sites
             st.site_list = [
                 site for site in self._sites if st.left <= site.position < st.right]
-            st.time = {
-                j: self._tree_sequence.get_node(j)[1] for j in st.parent.keys()}
-            st.time[st.root] = self._tree_sequence.get_node(st.root)[1]
             yield st
 
 
