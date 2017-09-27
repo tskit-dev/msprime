@@ -1449,6 +1449,12 @@ simplifier_print_state(simplifier_t *self, FILE *out)
         print_segment_chain(u, out);
         fprintf(out, "\n");
     }
+    fprintf(out, "===\nbuffered edges\n==\n");
+    for (j = 0; j < self->num_buffered_edges; j++) {
+        fprintf(out, "%f\t%f\t%d\t%d\n", self->edge_buffer[j].left,
+                self->edge_buffer[j].right, self->edge_buffer[j].parent,
+                self->edge_buffer[j].child);
+    }
     fprintf(out, "===\nmutation map\n==\n");
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         if (avl_count(&self->mutation_map[j]) > 0) {
@@ -1542,64 +1548,58 @@ out:
     return ret;
 }
 
-/* Records the specified edge in the output table */
 static int
-simplifier_record_edgeset(simplifier_t *self, double left, double right,
-        node_id_t parent, node_id_t *children, list_len_t children_length)
+simplifier_flush_edges(simplifier_t *self)
 {
     int ret = 0;
-    list_len_t k;
+    size_t j, num_output_edges;
+    edge_t e;
 
-    for (k = 0; k < children_length; k++) {
-        ret = edge_table_add_row(self->edges, left, right, parent, children[k]);
+    if (self->num_buffered_edges > 0) {
+        ret = squash_edges(self->edge_buffer, self->num_buffered_edges, &num_output_edges);
         if (ret != 0) {
             goto out;
         }
-    }
-
-#if 0
-    bool squash;
-
-    qsort(children, children_length, sizeof(node_id_t), cmp_node_id);
-    if (self->last_edge.children_length == 0) {
-        /* First edge */
-        self->last_edge.left = left;
-        self->last_edge.right = right;
-        self->last_edge.parent = parent;
-        self->last_edge.children_length = children_length;
-        memcpy(self->last_edge.children, children,
-                children_length * sizeof(node_id_t));
-    } else {
-        squash = false;
-        if (self->last_edge.children_length == children_length) {
-            squash =
-                left == self->last_edge.right &&
-                parent == self->last_edge.parent &&
-                memcmp(children, self->last_edge.children,
-                        children_length * sizeof(node_id_t)) == 0;
-        }
-        if (squash) {
-            self->last_edge.right = right;
-        } else {
-            /* Flush the last edge */
-            ret = edge_table_add_row(self->edges,
-                    self->last_edge.left,
-                    self->last_edge.right,
-                    self->last_edge.parent,
-                    self->last_edge.children,
-                    self->last_edge.children_length);
+        /* Flush these edges to the table */
+        for (j = 0; j < num_output_edges; j++) {
+            e = self->edge_buffer[j];
+            ret = edge_table_add_row(self->edges, e.left, e.right, e.parent, e.child);
             if (ret != 0) {
                 goto out;
             }
-            self->last_edge.left = left;
-            self->last_edge.right = right;
-            self->last_edge.parent = parent;
-            self->last_edge.children_length = children_length;
-            memcpy(self->last_edge.children, children,
-                    children_length * sizeof(node_id_t));
         }
     }
-#endif
+    self->num_buffered_edges = 0;
+out:
+    return ret;
+}
+
+/* Records the specified edge in the output table */
+static int
+simplifier_record_edge(simplifier_t *self, double left, double right, node_id_t parent,
+        node_id_t child)
+{
+    int ret = 0;
+    edge_t *e;
+
+    if (self->num_buffered_edges == self->max_buffered_edges - 1) {
+        /* Grow the array. Use a doubling strategy here as we expect this
+         * to usually be reasonably small */
+        self->max_buffered_edges *= 2;
+        e = realloc(self->edge_buffer, self->max_buffered_edges * sizeof(edge_t));
+        if (e == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        self->edge_buffer = e;
+    }
+    assert(self->num_buffered_edges < self->max_buffered_edges);
+    e = self->edge_buffer + self->num_buffered_edges;
+    e->left = left;
+    e->right = right;
+    e->parent = parent;
+    e->child = child;
+    self->num_buffered_edges++;
 out:
     return ret;
 }
@@ -1801,6 +1801,7 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
+
     /* Make a copy of the input nodes and clear the table ready for output */
     ret = node_table_alloc(&self->input_nodes, nodes->num_rows, nodes->total_name_length);
     if (ret != 0) {
@@ -1826,6 +1827,7 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         self->node_name_offset[j] = offset;
         offset += self->input_nodes.name_length[j];
     }
+
     /* Make a copy of the input edges and clear the input table, ready for output. */
     ret = edge_table_alloc(&self->input_edges, edges->num_rows);
     if (ret != 0) {
@@ -1840,6 +1842,13 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
+    self->max_buffered_edges = 1024;
+    self->num_buffered_edges = 0;
+    self->edge_buffer = malloc(self->max_buffered_edges * sizeof(edge_t));
+    if (self->edge_buffer == NULL) {
+        goto out;
+    }
+
     /* Allocate the heaps used for small objects. */
     /* TODO assuming that the number of edges is a good guess here. */
     ret = object_heap_init(&self->segment_heap, sizeof(simplify_segment_t),
@@ -1882,13 +1891,10 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     }
     avl_init_tree(&self->merge_queue, cmp_segment_queue, NULL);
 
-    /* Allocate the children and segment buffers */
-    self->children_buffer_size = 2;
-    self->children_buffer = malloc(self->children_buffer_size * sizeof(node_id_t));
-    /* self->last_edge.children = malloc(self->children_buffer_size * sizeof(node_id_t)); */
+    /* Allocate the segment buffers */
     self->segment_buffer_size = 64;
     self->segment_buffer = malloc(self->segment_buffer_size * sizeof(simplify_segment_t *));
-    if (self->children_buffer == NULL || self->segment_buffer == NULL) {
+    if (self->segment_buffer == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -1908,39 +1914,14 @@ simplifier_free(simplifier_t *self)
     msp_safe_free(self->ancestor_map);
     msp_safe_free(self->node_id_map);
     msp_safe_free(self->root_map);
-    msp_safe_free(self->children_buffer);
     msp_safe_free(self->segment_buffer);
+    msp_safe_free(self->edge_buffer);
     msp_safe_free(self->mutation_map);
     msp_safe_free(self->mutation_mem);
     msp_safe_free(self->output_sites);
     msp_safe_free(self->ancestral_state_mem);
     msp_safe_free(self->derived_state_mem);
     return 0;
-}
-
-static node_id_t *
-simplifier_get_children_buffer(simplifier_t *self, size_t num_children)
-{
-    node_id_t *ret = NULL;
-    /* node_id_t *tmp; */
-
-    if (self->children_buffer_size < num_children) {
-        self->children_buffer_size = num_children;
-        msp_safe_free(self->children_buffer);
-        self->children_buffer = malloc(self->children_buffer_size * sizeof(node_id_t));
-        if (self->children_buffer == NULL) {
-            goto out;
-        }
-        /* Also realloc the buffer for last children */
-        /* tmp = realloc(self->last_edge.children, num_children * sizeof(node_id_t)); */
-        /* if (tmp == NULL) { */
-        /*     goto out; */
-        /* } */
-        /* self->last_edge.children = tmp; */
-    }
-    ret = self->children_buffer;
-out:
-    return ret;
 }
 
 static simplify_segment_t **
@@ -2121,7 +2102,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
     int ret = MSP_ERR_GENERIC;
     bool coalescence = false;
     bool defrag_required = 0;
-    node_id_t v, *children;
+    node_id_t v;
     double l, r, next_l;
     uint32_t j, h;
     avl_node_t *node;
@@ -2177,14 +2158,8 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             if (v >= 0 && v < (node_id_t) self->num_samples) {
                 /* If we have a mapped node over an interval with no other segments,
                  * then we must record this edge as it joins internal samples */
-                children = simplifier_get_children_buffer(self, 1);
-                if (children == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
-                children[0] = alpha->node;
-                ret = simplifier_record_edgeset(self, alpha->left, alpha->right,
-                        v, children, 1);
+                ret = simplifier_record_edge(self, alpha->left, alpha->right, v,
+                        alpha->node);
                 if (ret != 0) {
                     goto out;
                 }
@@ -2209,14 +2184,12 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
                 goto out;
             }
             /* Create the record and update the priority queue */
-            children = simplifier_get_children_buffer(self, h);
-            if (children == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
             for (j = 0; j < h; j++) {
                 x = H[j];
-                children[j] = x->node;
+                ret = simplifier_record_edge(self, l, r, v, x->node);
+                if (ret != 0) {
+                    goto out;
+                }
                 if (x->right == r) {
                     simplifier_free_segment(self, x);
                     x = x->next;
@@ -2229,10 +2202,6 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
                         goto out;
                     }
                 }
-            }
-            ret = simplifier_record_edgeset(self, l, r, v, children, h);
-            if (ret != 0) {
-                goto out;
             }
         }
         /* Loop tail; integrate alpha into the global state */
@@ -2264,7 +2233,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             goto out;
         }
     }
-    ret = 0;
+    ret = simplifier_flush_edges(self);
 out:
     return ret;
 }
@@ -2436,19 +2405,6 @@ simplifier_run(simplifier_t *self)
         goto out;
     }
     assert(avl_count(&self->merge_queue) == 0);
-
-    /* Flush the last edge, if any */
-    /* if (self->last_edge.children_length > 0) { */
-    /*     ret = edge_table_add_row(self->edges, */
-    /*             self->last_edge.left, */
-    /*             self->last_edge.right, */
-    /*             self->last_edge.parent, */
-    /*             self->last_edge.children, */
-    /*             self->last_edge.children_length); */
-    /* } */
-    /* if (ret != 0) { */
-    /*     goto out; */
-    /* } */
     ret = simplifier_output_sites(self);
 out:
     return ret;

@@ -636,10 +636,11 @@ typedef struct {
     node_table_t input_nodes;
     size_t *node_name_offset;
     size_t num_input_sites;
-    /* Keep a copy of the input edges for simplicity. We cannot modify the
-     * edge table in place because we may have more output edges than input.
-     */
+    /* Also keep a copy of the input edges and a buffer to store unsorted edges */
     edge_table_t input_edges;
+    edge_t *edge_buffer;
+    size_t num_buffered_edges;
+    size_t max_buffered_edges;
     /* Input/output tables. */
     node_table_t *nodes;
     edge_table_t *edges;
@@ -652,11 +653,8 @@ typedef struct {
     avl_tree_t merge_queue;
     object_heap_t segment_heap;
     object_heap_t avl_node_heap;
-    size_t children_buffer_size;
-    node_id_t *children_buffer;
     size_t segment_buffer_size;
     simplify_segment_t **segment_buffer;
-    edge_t last_edge;
     /* State for sites/mutations */
     avl_tree_t *mutation_map;
     simplify_mutation_t *mutation_mem;
