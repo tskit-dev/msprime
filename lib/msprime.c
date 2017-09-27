@@ -289,16 +289,16 @@ __msp_safe_free(void **ptr) {
     }
 }
 
-/* static int */
-/* cmp_edge_cl(const void *a, const void *b) { */
-/*     const edge_t *ia = (const edge_t *) a; */
-/*     const edge_t *ib = (const edge_t *) b; */
-/*     int ret = (ia->child > ib->child) - (ia->child < ib->child); */
-/*     if (ret == 0)  { */
-/*         ret = (ia->left > ib->left) - (ia->left < ib->left); */
-/*     } */
-/*     return ret; */
-/* } */
+static int
+cmp_edge_cl(const void *a, const void *b) {
+    const edge_t *ia = (const edge_t *) a;
+    const edge_t *ib = (const edge_t *) b;
+    int ret = (ia->child > ib->child) - (ia->child < ib->child);
+    if (ret == 0)  {
+        ret = (ia->left > ib->left) - (ia->left < ib->left);
+    }
+    return ret;
+}
 
 /* Squash the edges in the specified array in place. The output edges will
  * be sorted by (child_id, left).
@@ -306,30 +306,28 @@ __msp_safe_free(void **ptr) {
 int WARN_UNUSED
 squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges)
 {
-    /* int ret = 0; */
-    /* size_t j, k, l; */
-    /* edge_t e; */
+    int ret = 0;
+    size_t j, k, l;
+    edge_t e;
 
-    /* qsort(edges, num_edges, sizeof(edge_t), cmp_edge_cl); */
-    /* j = 0; */
-    /* l = 0; */
-    /* for (k = 1; k < num_edges; k++) { */
-    /*     assert(edges[k - 1].parent == edges[k].parent); */
-    /*     if (edges[k - 1].right != edges[k].left || edges[j].child != edges[k].child) { */
-    /*         e = edges[j]; */
-    /*         e.right = edges[k - 1].right; */
-    /*         edges[l] = e; */
-    /*         j = k; */
-    /*         l++; */
-    /*     } */
-    /* } */
-    /* e = edges[j]; */
-    /* e.right = edges[k - 1].right; */
-    /* edges[l] = e; */
-    /* *num_output_edges = l + 1; */
-    /* return ret; */
-    *num_output_edges = num_edges;
-    return 0;
+    qsort(edges, num_edges, sizeof(edge_t), cmp_edge_cl);
+    j = 0;
+    l = 0;
+    for (k = 1; k < num_edges; k++) {
+        assert(edges[k - 1].parent == edges[k].parent);
+        if (edges[k - 1].right != edges[k].left || edges[j].child != edges[k].child) {
+            e = edges[j];
+            e.right = edges[k - 1].right;
+            edges[l] = e;
+            j = k;
+            l++;
+        }
+    }
+    e = edges[j];
+    e.right = edges[k - 1].right;
+    edges[l] = e;
+    *num_output_edges = l + 1;
+    return ret;
 }
 
 static int
@@ -1532,6 +1530,7 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     node->flags = flags;
     node->population = population_id;
     node->time = time;
+    node->name = NULL;
     self->num_nodes++;
     /* Check for overflow */
     assert(self->num_nodes < INT32_MAX);
@@ -2806,6 +2805,10 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     if (ret != 0) {
         goto out;
     }
+    ret = msp_flush_edges(self);
+    if (ret != 0) {
+        goto out;
+    }
     if (msp_get_num_ancestors(self) != 0) {
         ret = 1;
         if (self->time >= max_time) {
@@ -2827,11 +2830,6 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     edge_t *edge;
     node_t *node;
     migration_t *migration;
-
-    ret = msp_flush_edges(self);
-    if (ret != 0) {
-        goto out;
-    }
 
     /* Add the nodes */
     ret = node_table_reset(nodes);

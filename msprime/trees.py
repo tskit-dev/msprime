@@ -1419,7 +1419,8 @@ class TreeSimulator(object):
         self._segment_block_size = max(block_size, self._sample_size)
         self._avl_node_block_size = block_size
         self._node_mapping_block_size = block_size
-        self._coalescence_record_block_size = block_size
+        self._node_block_size = block_size
+        self._edge_block_size = block_size
         self._migration_block_size = block_size
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
@@ -1515,8 +1516,11 @@ class TreeSimulator(object):
     def get_avl_node_block_size(self):
         return self._avl_node_block_size
 
-    def get_coalescence_record_block_size(self):
-        return self._coalescence_record_block_size
+    def get_node_block_size(self):
+        return self._node_block_size
+
+    def get_edge_block_size(self):
+        return self._edge_block_size
 
     def get_node_mapping_block_size(self):
         return self._node_mapping_block_size
@@ -1527,8 +1531,11 @@ class TreeSimulator(object):
     def get_num_avl_node_blocks(self):
         return self._ll_sim.get_num_avl_node_blocks()
 
-    def get_num_coalescence_record_blocks(self):
-        return self._ll_sim.get_num_coalescence_record_blocks()
+    def get_num_node_blocks(self):
+        return self._ll_sim.get_num_node_blocks()
+
+    def get_num_edge_blocks(self):
+        return self._ll_sim.get_num_edge_blocks()
 
     def get_num_node_mapping_blocks(self):
         return self._ll_sim.get_num_node_mapping_blocks()
@@ -1655,8 +1662,11 @@ class TreeSimulator(object):
     def set_node_mapping_block_size(self, node_mapping_block_size):
         self._node_mapping_block_size = node_mapping_block_size
 
-    def set_coalescence_record_block_size(self, coalescence_record_block_size):
-        self._coalescence_record_block_size = coalescence_record_block_size
+    def set_node_block_size(self, node_block_size):
+        self._node_block_size = node_block_size
+
+    def set_edge_block_size(self, edge_block_size):
+        self._edge_block_size = edge_block_size
 
     def create_ll_instance(self):
         # Now, convert the high-level values into their low-level
@@ -1692,7 +1702,8 @@ class TreeSimulator(object):
             segment_block_size=self._segment_block_size,
             avl_node_block_size=self._avl_node_block_size,
             node_mapping_block_size=self._node_mapping_block_size,
-            coalescence_record_block_size=self._coalescence_record_block_size,
+            node_block_size=self._node_block_size,
+            edge_block_size=self._edge_block_size,
             migration_block_size=self._migration_block_size)
         return ll_sim
 

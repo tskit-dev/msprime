@@ -5255,7 +5255,7 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
             }
             ret = sparse_tree_get_num_samples(tree, u, &tmp);
             CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_EQUAL(num_samples, tmp);
+            CU_ASSERT_EQUAL_FATAL(num_samples, tmp);
             ret = sparse_tree_get_sample_list(tree, u, &head, &tail);
 
             CU_ASSERT_EQUAL(ret, 0);

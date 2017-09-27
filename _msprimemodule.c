@@ -466,24 +466,6 @@ out:
 }
 
 static PyObject *
-make_coalescence_record(coalescence_record_t *cr)
-{
-    PyObject *children = NULL;
-    PyObject *ret = NULL;
-
-    children = convert_node_id_list(cr->children, cr->num_children);
-    if (children == NULL) {
-        goto out;
-    }
-    ret = Py_BuildValue("ddiOdi",
-            cr->left, cr->right, (int) cr->node, children, cr->time,
-            (int) cr->population_id);
-out:
-    Py_XDECREF(children);
-    return ret;
-}
-
-static PyObject *
 make_mutation(mutation_t *mutation)
 {
     PyObject *ret = NULL;
@@ -6291,7 +6273,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "num_loci", "scaled_recombination_rate",
         "population_configuration", "migration_matrix", "demographic_events",
         "model", "max_memory", "avl_node_block_size", "segment_block_size",
-        "node_mapping_block_size", "coalescence_record_block_size",
+        "node_mapping_block_size", "node_block_size", "edge_block_size",
         "migration_block_size", "store_migrations", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
@@ -6308,13 +6290,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
-    Py_ssize_t coalescence_record_block_size = 10;
+    Py_ssize_t node_block_size = 10;
+    Py_ssize_t edge_block_size = 10;
     Py_ssize_t migration_block_size = 10;
     int store_migrations = 0;
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnnnni", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnnnnni", kwlist,
             &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
             &num_loci, &scaled_recombination_rate,
@@ -6323,7 +6306,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
             &max_memory, &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size, &coalescence_record_block_size,
+            &node_mapping_block_size, &node_block_size, &edge_block_size,
             &migration_block_size, &store_migrations)) {
         goto out;
     }
@@ -6390,8 +6373,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
-    sim_ret = msp_set_coalescence_record_block_size(self->sim,
-            (size_t) coalescence_record_block_size);
+    sim_ret = msp_set_node_block_size(self->sim, (size_t) node_block_size);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_edge_block_size(self->sim, (size_t) edge_block_size);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -6616,14 +6603,25 @@ out:
 }
 
 static PyObject *
-Simulator_get_coalescence_record_block_size(Simulator  *self)
+Simulator_get_edge_block_size(Simulator  *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-            (Py_ssize_t) self->sim->coalescence_record_block_size);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->edge_block_size);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_node_block_size(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->node_block_size);
 out:
     return ret;
 }
@@ -6786,14 +6784,25 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_coalescence_record_blocks(Simulator  *self)
+Simulator_get_num_edge_blocks(Simulator  *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-            (Py_ssize_t) msp_get_num_coalescence_record_blocks(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_edge_blocks(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_num_node_blocks(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_node_blocks(self->sim));
 out:
     return ret;
 }
@@ -6837,14 +6846,25 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_coalescence_records(Simulator  *self)
+Simulator_get_num_edges(Simulator  *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-            (Py_ssize_t) msp_get_num_coalescence_records(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_edges(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_num_nodes(Simulator  *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_nodes(self->sim));
 out:
     return ret;
 }
@@ -7004,32 +7024,68 @@ out:
 }
 
 static PyObject *
-Simulator_get_coalescence_records(Simulator *self)
+Simulator_get_edges(Simulator *self)
 {
     PyObject *ret = NULL;
     PyObject *l = NULL;
     PyObject *py_cr = NULL;
-    coalescence_record_t *coalescence_records = NULL;
-    coalescence_record_t *cr;
-    size_t num_coalescence_records, j;
+    edge_t *edges = NULL;
+    edge_t *cr;
+    size_t num_edges, j;
     int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    num_coalescence_records = msp_get_num_coalescence_records(self->sim);
-    err = msp_get_coalescence_records(self->sim, &coalescence_records);
+    num_edges = msp_get_num_edges(self->sim);
+    err = msp_get_edges(self->sim, &edges);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    l = PyList_New(num_coalescence_records);
+    l = PyList_New(num_edges);
     if (l == NULL) {
         goto out;
     }
-    for (j = 0; j < num_coalescence_records; j++) {
-        cr = &coalescence_records[j];
-        py_cr = make_coalescence_record(cr);
+    for (j = 0; j < num_edges; j++) {
+        cr = &edges[j];
+        py_cr = make_edge(cr);
+        if (py_cr == NULL) {
+            Py_DECREF(l);
+            goto out;
+        }
+        PyList_SET_ITEM(l, j, py_cr);
+    }
+    ret = l;
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_nodes(Simulator *self)
+{
+    PyObject *ret = NULL;
+    PyObject *l = NULL;
+    PyObject *py_cr = NULL;
+    node_t *nodes = NULL;
+    size_t num_nodes, j;
+    int err;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    num_nodes = msp_get_num_nodes(self->sim);
+    err = msp_get_nodes(self->sim, &nodes);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    l = PyList_New(num_nodes);
+    if (l == NULL) {
+        goto out;
+    }
+    for (j = 0; j < num_nodes; j++) {
+        py_cr = make_node(&nodes[j]);
         if (py_cr == NULL) {
             Py_DECREF(l);
             goto out;
@@ -7339,8 +7395,11 @@ static PyMethodDef Simulator_methods[] = {
     {"get_node_mapping_block_size",
             (PyCFunction) Simulator_get_node_mapping_block_size, METH_NOARGS,
             "Returns node_mapping block size" },
-    {"get_coalescence_record_block_size",
-            (PyCFunction) Simulator_get_coalescence_record_block_size,
+    {"get_node_block_size",
+            (PyCFunction) Simulator_get_node_block_size,
+            METH_NOARGS, "Returns the coalescent record block size" },
+    {"get_edge_block_size",
+            (PyCFunction) Simulator_get_edge_block_size,
             METH_NOARGS, "Returns the coalescent record block size" },
     {"get_migration_block_size",
             (PyCFunction) Simulator_get_migration_block_size,
@@ -7375,16 +7434,22 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_segment_blocks",
             (PyCFunction) Simulator_get_num_segment_blocks, METH_NOARGS,
             "Returns the number of segment memory blocks"},
-    {"get_num_coalescence_record_blocks",
-            (PyCFunction) Simulator_get_num_coalescence_record_blocks, METH_NOARGS,
+    {"get_num_node_blocks",
+            (PyCFunction) Simulator_get_num_node_blocks, METH_NOARGS,
+            "Returns the number of coalescence record memory blocks"},
+    {"get_num_edge_blocks",
+            (PyCFunction) Simulator_get_num_edge_blocks, METH_NOARGS,
             "Returns the number of coalescence record memory blocks"},
     {"get_num_migration_blocks",
             (PyCFunction) Simulator_get_num_migration_blocks, METH_NOARGS,
             "Returns the number of coalescence record memory blocks"},
     {"get_num_breakpoints", (PyCFunction) Simulator_get_num_breakpoints,
             METH_NOARGS, "Returns the number of recombination breakpoints" },
-    {"get_num_coalescence_records",
-            (PyCFunction) Simulator_get_num_coalescence_records,
+    {"get_num_nodes",
+            (PyCFunction) Simulator_get_num_nodes,
+            METH_NOARGS, "Returns the number of coalescence records" },
+    {"get_num_edges",
+            (PyCFunction) Simulator_get_num_edges,
             METH_NOARGS, "Returns the number of coalescence records" },
     {"get_num_migrations",
             (PyCFunction) Simulator_get_num_migrations,
@@ -7397,7 +7462,9 @@ static PyMethodDef Simulator_methods[] = {
             METH_NOARGS, "Returns the list of breakpoints." },
     {"get_migration_matrix", (PyCFunction) Simulator_get_migration_matrix,
             METH_NOARGS, "Returns the migration matrix." },
-    {"get_coalescence_records", (PyCFunction) Simulator_get_coalescence_records,
+    {"get_nodes", (PyCFunction) Simulator_get_nodes,
+            METH_NOARGS, "Returns the coalescence records." },
+    {"get_edges", (PyCFunction) Simulator_get_edges,
             METH_NOARGS, "Returns the coalescence records." },
     {"get_migrations", (PyCFunction) Simulator_get_migrations,
             METH_NOARGS, "Returns the migration records." },
