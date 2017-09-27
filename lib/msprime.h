@@ -150,21 +150,38 @@ typedef struct segment_t_t {
 } segment_t;
 
 typedef struct {
-    population_id_t population_id;
-    uint32_t num_children;
-    /* After simulation, all coordinates are converted to physical coordinates
-     * using a genetic map */
-    node_id_t node;
+    uint32_t flags;
+    double time;
+    population_id_t population;
+    char *name;
+} node_t;
+
+typedef struct {
+    node_id_t parent;
+    node_id_t child;
     double left;
     double right;
-    double time;
-    node_id_t *children;
-} coalescence_record_t;
+} edge_t;
 
-/* TODO remove migration record --- this is identical to the migration_t type.
- * Need to update the simulator code to use the new types and remove the
- * *_record types completely
- */
+typedef struct {
+    mutation_id_t id;
+    site_id_t site;
+    node_id_t node;
+    const char *derived_state;
+    list_len_t derived_state_length;
+    // TODO remove this and change to ID?
+    size_t index;
+} mutation_t;
+
+typedef struct {
+    site_id_t id;
+    double position;
+    const char *ancestral_state;
+    list_len_t ancestral_state_length;
+    mutation_t *mutations;
+    list_len_t mutations_length;
+} site_t;
+
 typedef struct {
     population_id_t source;
     population_id_t dest;
@@ -264,7 +281,6 @@ typedef struct {
     int state;
     size_t used_memory;
     double time;
-    node_id_t next_node;
     double *migration_matrix;
     population_t *populations;
     avl_tree_t breakpoints;
@@ -274,13 +290,18 @@ typedef struct {
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
     object_heap_t node_mapping_heap;
-    object_heap_t binary_children_heap;
-    /* coalescence records are stored in a flat array */
-    coalescence_record_t *coalescence_records;
-    size_t num_coalescence_records;
-    size_t max_coalescence_records;
-    size_t coalescence_record_block_size;
-    size_t num_coalescence_record_blocks;
+    /* nodes are stored in a flat array */
+    node_t *nodes;
+    size_t num_nodes;
+    size_t max_nodes;
+    size_t node_block_size;
+    size_t num_node_blocks;
+    /* edges are stored in a flat array */
+    edge_t *edges;
+    size_t num_edges;
+    size_t max_edges;
+    size_t edge_block_size;
+    size_t num_edge_blocks;
     /* migration records are stored in a flat array */
     migration_t *migrations;
     size_t num_migrations;
@@ -341,43 +362,6 @@ typedef struct {
     double *positions;
     double *rates;
 } recomb_map_t;
-
-/* Record definitions for tree sequence types. */
-
-typedef struct {
-    uint32_t flags;
-    double time;
-    population_id_t population;
-    char *name;
-} node_t;
-
-typedef struct {
-    mutation_id_t id;
-    site_id_t site;
-    node_id_t node;
-    const char *derived_state;
-    list_len_t derived_state_length;
-    // TODO remove this and change to ID?
-    size_t index;
-} mutation_t;
-
-typedef struct {
-    site_id_t id;
-    double position;
-    const char *ancestral_state;
-    list_len_t ancestral_state_length;
-    mutation_t *mutations;
-    list_len_t mutations_length;
-} site_t;
-
-typedef struct {
-    node_id_t parent;
-    node_id_t child;
-    double left;
-    double right;
-    /* TODO what is this for? Should be removed. */
-    double time;
-} edge_t;
 
 /* Tree sequences */
 typedef struct {
@@ -693,7 +677,8 @@ int msp_set_max_memory(msp_t *self, size_t max_memory);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
-int msp_set_coalescence_record_block_size(msp_t *self, size_t block_size);
+int msp_set_node_block_size(msp_t *self, size_t block_size);
+int msp_set_edge_block_size(msp_t *self, size_t block_size);
 int msp_set_migration_block_size(msp_t *self, size_t block_size);
 int msp_set_sample_configuration(msp_t *self, size_t num_populations,
         size_t *sample_configuration);
@@ -728,8 +713,9 @@ int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
-int msp_get_coalescence_records(msp_t *self, coalescence_record_t **records);
-int msp_get_migrations(msp_t *self, migration_t **records);
+int msp_get_nodes(msp_t *self, node_t **nodes);
+int msp_get_edges(msp_t *self, edge_t **edges);
+int msp_get_migrations(msp_t *self, migration_t **migrations);
 int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         double *initial_size, double *growth_rate);
@@ -745,12 +731,14 @@ size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
-size_t msp_get_num_coalescence_records(msp_t *self);
+size_t msp_get_num_nodes(msp_t *self);
+size_t msp_get_num_edges(msp_t *self);
 size_t msp_get_num_migrations(msp_t *self);
 size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
-size_t msp_get_num_coalescence_record_blocks(msp_t *self);
+size_t msp_get_num_node_blocks(msp_t *self);
+size_t msp_get_num_edge_blocks(msp_t *self);
 size_t msp_get_num_migration_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);

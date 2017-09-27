@@ -507,11 +507,19 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    if (config_lookup_int(config, "coalescence_record_block_size", &int_tmp)
+    if (config_lookup_int(config, "node_block_size", &int_tmp)
             == CONFIG_FALSE) {
-        fatal_error("coalescence_record_block_size is a required parameter");
+        fatal_error("node_block_size is a required parameter");
     }
-    ret = msp_set_coalescence_record_block_size(msp, (size_t) int_tmp);
+    ret = msp_set_node_block_size(msp, (size_t) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+    if (config_lookup_int(config, "edge_block_size", &int_tmp)
+            == CONFIG_FALSE) {
+        fatal_error("edge_block_size is a required parameter");
+    }
+    ret = msp_set_edge_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
