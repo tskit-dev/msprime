@@ -99,7 +99,7 @@ sequence in newick format.
     :nodefault:
 
 .. todo::
-    Document the nodes, edgesets, sites and mutations commands.
+    Document the nodes, edges, sites and mutations commands.
 
 .. _sec-mspms:
 
