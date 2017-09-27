@@ -289,6 +289,49 @@ __msp_safe_free(void **ptr) {
     }
 }
 
+/* static int */
+/* cmp_edge_cl(const void *a, const void *b) { */
+/*     const edge_t *ia = (const edge_t *) a; */
+/*     const edge_t *ib = (const edge_t *) b; */
+/*     int ret = (ia->child > ib->child) - (ia->child < ib->child); */
+/*     if (ret == 0)  { */
+/*         ret = (ia->left > ib->left) - (ia->left < ib->left); */
+/*     } */
+/*     return ret; */
+/* } */
+
+/* Squash the edges in the specified array in place. The output edges will
+ * be sorted by (child_id, left).
+ */
+int WARN_UNUSED
+squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges)
+{
+    /* int ret = 0; */
+    /* size_t j, k, l; */
+    /* edge_t e; */
+
+    /* qsort(edges, num_edges, sizeof(edge_t), cmp_edge_cl); */
+    /* j = 0; */
+    /* l = 0; */
+    /* for (k = 1; k < num_edges; k++) { */
+    /*     assert(edges[k - 1].parent == edges[k].parent); */
+    /*     if (edges[k - 1].right != edges[k].left || edges[j].child != edges[k].child) { */
+    /*         e = edges[j]; */
+    /*         e.right = edges[k - 1].right; */
+    /*         edges[l] = e; */
+    /*         j = k; */
+    /*         l++; */
+    /*     } */
+    /* } */
+    /* e = edges[j]; */
+    /* e.right = edges[k - 1].right; */
+    /* edges[l] = e; */
+    /* *num_output_edges = l + 1; */
+    /* return ret; */
+    *num_output_edges = num_edges;
+    return 0;
+}
+
 static int
 cmp_individual(const void *a, const void *b) {
     const segment_t *ia = (const segment_t *) a;
@@ -1260,6 +1303,9 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "Edges = %ld\n", (long) self->num_edges);
     for (j = 0; j < self->num_edges; j++) {
+        if (j == self->edge_buffer_start) {
+            fprintf(out, "*");
+        }
         edge = &self->edges[j];
         fprintf(out, "\t%f\t%f\t%d\t%d\n", edge->left, edge->right, edge->parent,
                 edge->child);
@@ -1419,7 +1465,54 @@ msp_copy_overlap_count(msp_t *self, uint32_t k)
 }
 
 static int WARN_UNUSED
-msp_store_node(msp_t *self, uint32_t flags, population_id_t population_id)
+msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id_t child)
+{
+    int ret = 0;
+    edge_t *edge;
+
+    assert(parent > child);
+    if (self->num_edges == self->max_edges - 1) {
+        /* Grow the array */
+        self->max_edges += self->edge_block_size;
+        edge = realloc(self->edges, self->max_edges * sizeof(edge_t));
+        if (edge == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        self->edges = edge;
+        self->num_edge_blocks++;
+    }
+    edge = self->edges + self->num_edges;
+    edge->left = left;
+    edge->right = right;
+    edge->parent = parent;
+    edge->child = child;
+    self->num_edges++;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+msp_flush_edges(msp_t *self)
+{
+    int ret = 0;
+    size_t num_output_edges;
+
+    if (self->edge_buffer_start < self->num_edges) {
+        ret = squash_edges(self->edges + self->edge_buffer_start,
+                self->num_edges - self->edge_buffer_start, &num_output_edges);
+        if (ret != 0) {
+            goto out;
+        }
+        self->num_edges = self->edge_buffer_start + num_output_edges;
+    }
+    self->edge_buffer_start = self->num_edges;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t population_id)
 {
     int ret = 0;
     node_t *node;
@@ -1438,37 +1531,10 @@ msp_store_node(msp_t *self, uint32_t flags, population_id_t population_id)
     node = self->nodes + self->num_nodes;
     node->flags = flags;
     node->population = population_id;
-    node->time = self->time;
+    node->time = time;
     self->num_nodes++;
     /* Check for overflow */
     assert(self->num_nodes < INT32_MAX);
-out:
-    return ret;
-}
-
-static int WARN_UNUSED
-msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id_t child)
-{
-    int ret = 0;
-    edge_t *edge;
-
-    if (self->num_edges == self->max_edges - 1) {
-        /* Grow the array */
-        self->max_edges += self->edge_block_size;
-        edge = realloc(self->edges, self->max_edges * sizeof(edge_t));
-        if (edge == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        self->edges = edge;
-        self->num_edge_blocks++;
-    }
-    edge = self->edges + self->num_edges;
-    edge->left = left;
-    edge->right = right;
-    edge->parent = parent;
-    edge->child = child;
-    self->num_edges++;
 out:
     return ret;
 }
@@ -1692,7 +1758,11 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, segment_t *a
                 if (!coalescence) {
                     coalescence = 1;
                     l_min = l;
-                    ret = msp_store_node(self, 0, population_id);
+                    ret = msp_flush_edges(self);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                    ret = msp_store_node(self, 0, self->time, population_id);
                     if (ret != 0) {
                         goto out;
                     }
@@ -1741,6 +1811,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, segment_t *a
                         goto out;
                     }
                 }
+                assert(v != x->value);
                 ret = msp_store_edge(self, l, r, v, x->value);
                 if (ret != 0) {
                     goto out;
@@ -1888,7 +1959,11 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id)
             if (!coalescence) {
                 coalescence = 1;
                 l_min = l;
-                ret = msp_store_node(self, 0, population_id);
+                ret = msp_flush_edges(self);
+                if (ret != 0) {
+                    goto out;
+                }
+                ret = msp_store_node(self, 0, self->time, population_id);
                 if (ret != 0) {
                     goto out;
                 }
@@ -2316,10 +2391,6 @@ msp_insert_sample(msp_t *self, node_id_t sample, population_id_t population)
         goto out;
     }
     fenwick_set_value(&self->links, u->id, self->num_loci - 1);
-    ret = msp_store_node(self, MSP_NODE_IS_SAMPLE, population);
-    if (ret != 0) {
-        goto out;
-    }
 out:
     return ret;
 }
@@ -2351,12 +2422,18 @@ msp_reset(msp_t *self)
     self->num_nodes = 0;
     self->time = 0.0;
     self->num_edges = 0;
+    self->edge_buffer_start = 0;
     for (j = 0; j < (node_id_t) self->sample_size; j++) {
         if (self->samples[j].time == 0.0) {
             ret = msp_insert_sample(self, j, self->samples[j].population_id);
             if (ret != 0) {
                 goto out;
             }
+        }
+        ret = msp_store_node(self, MSP_NODE_IS_SAMPLE, self->samples[j].time,
+                self->samples[j].population_id);
+        if (ret != 0) {
+            goto out;
         }
     }
     self->next_demographic_event = self->demographic_events_head;
@@ -2751,20 +2828,16 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     node_t *node;
     migration_t *migration;
 
-    /* first reset the tables */
+    ret = msp_flush_edges(self);
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* Add the nodes */
     ret = node_table_reset(nodes);
     if (ret != 0) {
         goto out;
     }
-    ret = edge_table_reset(edges);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = migration_table_reset(migrations);
-    if (ret != 0) {
-        goto out;
-    }
-    /* Add the nodes */
     for (j = 0; j < self->num_nodes; j++) {
         node = self->nodes + j;
         scaled_time = node->time * 4 * Ne;
@@ -2773,7 +2846,12 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             goto out;
         }
     }
+
     /* Add the edges */
+    ret = edge_table_reset(edges);
+    if (ret != 0) {
+        goto out;
+    }
     for (j = 0; j < self->num_edges; j++) {
         edge = self->edges + j;
         left = edge->left;
@@ -2787,7 +2865,12 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             goto out;
         }
     }
-    /* Add in the migration records */
+
+    /* Add in the migrations */
+    ret = migration_table_reset(migrations);
+    if (ret != 0) {
+        goto out;
+    }
     for (j = 0; j < self->num_migrations; j++) {
         migration = &self->migrations[j];
         left = migration->left;

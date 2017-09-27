@@ -1480,6 +1480,7 @@ test_single_locus_two_populations(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = {{0, 0.0}, {0, 0.0}, {1, 40.0}};
     edge_t *edges;
+    node_t *nodes;
     migration_t *migrations;
     size_t num_edges, num_migrations;
     uint32_t n = 3;
@@ -1509,17 +1510,30 @@ test_single_locus_two_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(&msp);
     msp_print_state(&msp, _devnull);
+
+    CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 5);
+    ret = msp_get_nodes(&msp, &nodes);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(nodes[0].time, 0);
+    CU_ASSERT_EQUAL(nodes[0].population, 0);
+    CU_ASSERT_EQUAL(nodes[1].time, 0);
+    CU_ASSERT_EQUAL(nodes[1].population, 0);
+    CU_ASSERT_EQUAL(nodes[2].time, 40.0);
+    CU_ASSERT_EQUAL(nodes[2].population, 1);
+    CU_ASSERT_TRUE(nodes[3].time < 40);
+    CU_ASSERT_TRUE(nodes[3].population == 0);
+    CU_ASSERT_TRUE(nodes[4].time > 40.5);
+    CU_ASSERT_TRUE(nodes[4].population == 0);
+
     num_edges = msp_get_num_edges(&msp);
-    CU_ASSERT_EQUAL_FATAL(num_edges, 2);
+    CU_ASSERT_EQUAL_FATAL(num_edges, 4);
     ret = msp_get_edges(&msp, &edges);
     CU_ASSERT_EQUAL(ret, 0);
-    printf("\n\nBROKEN simulation test\n");
-    /* CU_ASSERT_EQUAL(edges[0].node, 3); */
-    /* CU_ASSERT_TRUE(edges[0].time < 40.0); */
-    /* CU_ASSERT_EQUAL(edges[0].population_id, 0); */
-    /* CU_ASSERT_EQUAL(edges[1].node, 4); */
-    /* CU_ASSERT_TRUE(edges[1].time > 40.5); */
-    /* CU_ASSERT_EQUAL(edges[1].population_id, 0); */
+    CU_ASSERT_EQUAL(edges[0].parent, 3);
+    CU_ASSERT_EQUAL(edges[1].parent, 3);
+    CU_ASSERT_EQUAL(edges[2].parent, 4);
+    CU_ASSERT_EQUAL(edges[3].parent, 4);
+
     num_migrations = msp_get_num_migrations(&msp);
     CU_ASSERT_EQUAL_FATAL(num_migrations, 3);
     ret = msp_get_migrations(&msp, &migrations);
@@ -1546,8 +1560,8 @@ test_single_locus_many_populations(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     uint32_t num_populations = 500;
     sample_t samples[] = {{0, 0.0}, {num_populations - 1, 0.0}};
-    edge_t *records;
-    size_t num_records;
+    edge_t *edges;
+    node_t *nodes;
     uint32_t n = 2;
 
     CU_ASSERT_FATAL(rng != NULL);
@@ -1566,14 +1580,16 @@ test_single_locus_many_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(&msp);
     msp_print_state(&msp, _devnull);
-    num_records = msp_get_num_edges(&msp);
-    CU_ASSERT_EQUAL_FATAL(num_records, 1);
-    ret = msp_get_edges(&msp, &records);
+    CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
+    CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
+    ret = msp_get_edges(&msp, &edges);
     CU_ASSERT_EQUAL(ret, 0);
-    printf("\n\nBROKEN simulation test\n");
-    /* CU_ASSERT_EQUAL(records[0].node, 2); */
-    /* CU_ASSERT_TRUE(records[0].time > 30.0); */
-    /* CU_ASSERT_EQUAL(records[0].population_id, num_populations - 1); */
+    CU_ASSERT_EQUAL(edges[0].parent, 2);
+    CU_ASSERT_EQUAL(edges[1].parent, 2);
+    ret = msp_get_nodes(&msp, &nodes);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_TRUE(nodes[2].time > 30.0);
+    CU_ASSERT_EQUAL(nodes[2].population, num_populations - 1);
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1587,8 +1603,8 @@ test_single_locus_historical_sample(void)
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = {{0, 0.0}, {0, 10.0}};
-    /* edge_t *record; */
-    size_t num_records;
+    edge_t *edges;
+    node_t *nodes;
     uint32_t n = 2;
 
     CU_ASSERT_FATAL(rng != NULL);
@@ -1603,15 +1619,23 @@ test_single_locus_historical_sample(void)
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(&msp);
     msp_print_state(&msp, _devnull);
-    num_records = msp_get_num_edges(&msp);
-    CU_ASSERT_EQUAL_FATAL(num_records, 1);
-    printf("\n\nBROKEN simulation test\n");
-    /* ret = msp_get_edges(&msp, &record); */
-    /* CU_ASSERT_EQUAL(ret, 0); */
-    /* CU_ASSERT_EQUAL(record->left, 0); */
-    /* CU_ASSERT_EQUAL(record->right, 1); */
-    /* CU_ASSERT_EQUAL(record->node, 2); */
-    /* CU_ASSERT_TRUE(record->time > 10.0); */
+
+    CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
+    ret = msp_get_nodes(&msp, &nodes);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(nodes[0].time, 0);
+    CU_ASSERT_EQUAL(nodes[1].time, 10);
+    CU_ASSERT_TRUE(nodes[2].time > 10);
+
+    CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
+    ret = msp_get_edges(&msp, &edges);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(edges[0].left, 0);
+    CU_ASSERT_EQUAL(edges[0].right, 1);
+    CU_ASSERT_EQUAL(edges[0].parent, 2);
+    CU_ASSERT_EQUAL(edges[1].left, 0);
+    CU_ASSERT_EQUAL(edges[1].right, 1);
+    CU_ASSERT_EQUAL(edges[1].parent, 2);
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1735,6 +1759,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_get_num_node_mapping_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_segment_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_edge_blocks(&msp), 1);
+    CU_ASSERT_EQUAL(msp_get_num_node_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_migration_blocks(&msp), 1);
     CU_ASSERT(msp_get_used_memory(&msp) > 0);
     CU_ASSERT_EQUAL(msp_get_num_populations(&msp), 2);
@@ -7310,9 +7335,9 @@ main(int argc, char **argv)
         {"test_sort_tables", test_sort_tables},
         {"test_dump_tables_hdf5", test_dump_tables_hdf5},
         {"test_single_locus_two_populations", test_single_locus_two_populations},
-        {"test_many_populations", test_single_locus_many_populations},
-        {"test_historical_samples", test_single_locus_historical_sample},
-        {"test_simulator_getters/setters", test_simulator_getters_setters},
+        {"test_single_locus_many_populations", test_single_locus_many_populations},
+        {"test_single_locus_historical_sample", test_single_locus_historical_sample},
+        {"test_simulator_getters_setters", test_simulator_getters_setters},
         {"test_model_errors", test_simulator_model_errors},
         {"test_demographic_events", test_simulator_demographic_events},
         {"test_single_locus_simulation", test_single_locus_simulation},

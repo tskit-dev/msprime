@@ -302,6 +302,7 @@ typedef struct {
     size_t max_edges;
     size_t edge_block_size;
     size_t num_edge_blocks;
+    size_t edge_buffer_start;
     /* migration records are stored in a flat array */
     migration_t *migrations;
     size_t num_migrations;
@@ -890,6 +891,7 @@ int mutgen_populate_tables(mutgen_t *self, site_table_t *sites,
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 /* Tables API */
+
 int sort_tables(node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations);
 
@@ -966,6 +968,7 @@ int simplifier_free(simplifier_t *self);
 int simplifier_run(simplifier_t *self);
 void simplifier_print_state(simplifier_t *self, FILE *out);
 
+int squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges);
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 
