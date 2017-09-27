@@ -257,6 +257,7 @@ class Simulator(object):
         # The output tree sequence.
         self.nodes = msprime.NodeTable()
         self.edges = msprime.EdgeTable()
+        self.edge_buffer = []
         for pop_index in range(N):
             sample_size = sample_configuration[pop_index]
             self.P[pop_index].set_start_size(population_sizes[pop_index])
@@ -326,16 +327,43 @@ class Simulator(object):
         self.L.set_value(u.index, 0)
         self.segment_stack.append(u)
 
+    def store_node(self, population):
+        self.flush_edges()
+        self.nodes.add_row(time=self.t, population=population)
+
+    def flush_edges(self):
+        """
+        Flushes the edges in the edge buffer to the table, squashing any adjacent edges.
+        """
+        if len(self.edge_buffer) > 0:
+            parent = len(self.nodes) - 1
+            self.edge_buffer.sort(key=lambda e: (e.child, e.left))
+            left = self.edge_buffer[0].left
+            right = self.edge_buffer[0].right
+            child = self.edge_buffer[0].child
+            assert self.edge_buffer[0].parent == parent
+            for e in self.edge_buffer[1:]:
+                assert e.parent == parent
+                if e.left != right or e.child != child:
+                    self.edges.add_row(left, right, parent, child)
+                    left = e.left
+                    child = e.child
+                right = e.right
+            self.edges.add_row(left, right, parent, child)
+            self.edge_buffer = []
+
     def store_edge(self, left, right, parent, child):
         """
         Stores the specified edge to the output tree sequence.
         """
-        self.edges.add_row(left, right, parent, child)
+        self.edge_buffer.append(
+            msprime.Edge(left=left, right=right, parent=parent, child=child))
 
     def finalise(self):
         """
         Finalises the simulation returns an msprime tree sequence object.
         """
+        self.flush_edges()
         return msprime.load_tables(nodes=self.nodes, edges=self.edges)
 
     def simulate(self):
@@ -490,7 +518,7 @@ class Simulator(object):
             else:
                 if not coalescence:
                     coalescence = True
-                    self.nodes.add_row(time=self.t, population=pop_id)
+                    self.store_node(pop_id)
                 u = len(self.nodes) - 1
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
@@ -603,7 +631,7 @@ class Simulator(object):
                 else:
                     if not coalescence:
                         coalescence = True
-                        self.nodes.add_row(time=self.t, population=population_index)
+                        self.store_node(population_index)
                     u = len(self.nodes) - 1
                     # Put in breakpoints for the outer edges of the coalesced
                     # segment

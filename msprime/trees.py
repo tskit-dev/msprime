@@ -110,6 +110,7 @@ TableTuple = collections.namedtuple(
     ["nodes", "edges", "migrations", "sites", "mutations"])
 
 
+# TODO this interface is rubbish. Should have much better printing options.
 class SimpleContainer(object):
 
     def __eq__(self, other):
@@ -134,6 +135,8 @@ class Node(SimpleContainer):
 
 
 class Edge(SimpleContainer):
+
+    # TODO this is mad. We should have left, right, parent, child
     def __init__(self, parent, child, left=0, right=1):
         self.left = left
         self.right = right
