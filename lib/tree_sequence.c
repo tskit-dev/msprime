@@ -3147,10 +3147,11 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
 /* Methods for positioning the tree along the sequence */
 
 static inline void
-sparse_tree_propagate_sample_count_loss(sparse_tree_t *self, node_id_t parent)
+sparse_tree_propagate_sample_count_loss(sparse_tree_t *self, node_id_t parent,
+        node_id_t child)
 {
-    const node_id_t all_samples_diff = self->num_samples[parent];
-    const node_id_t tracked_samples_diff = self->num_tracked_samples[parent];
+    const node_id_t all_samples_diff = self->num_samples[child];
+    const node_id_t tracked_samples_diff = self->num_tracked_samples[child];
     const uint8_t mark = self->mark;
     node_id_t v = parent;
 
@@ -3168,13 +3169,15 @@ sparse_tree_propagate_sample_count_gain(sparse_tree_t *self, node_id_t parent,
         node_id_t child)
 {
     node_id_t v;
+    const node_id_t all_samples_diff = self->num_samples[child];
+    const node_id_t tracked_samples_diff = self->num_tracked_samples[child];
     const uint8_t mark = self->mark;
 
     /* propogate this gain up as far as we can */
     v = parent;
     while (v != MSP_NULL_NODE) {
-        self->num_samples[v] += self->num_samples[child];
-        self->num_tracked_samples[v] += self->num_tracked_samples[child];
+        self->num_samples[v] += all_samples_diff;
+        self->num_tracked_samples[v] += tracked_samples_diff;
         self->marked[v] = mark;
         v = self->parent[v];
     }
@@ -3253,7 +3256,7 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         self->left_sib[c] = MSP_NULL_NODE;
         self->right_sib[c] = MSP_NULL_NODE;
         if (self->flags & MSP_SAMPLE_COUNTS) {
-            sparse_tree_propagate_sample_count_loss(self, p);
+            sparse_tree_propagate_sample_count_loss(self, p, c);
         }
         if (self->flags & MSP_SAMPLE_LISTS) {
             sparse_tree_update_sample_lists(self, p);

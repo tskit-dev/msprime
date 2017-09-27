@@ -48,13 +48,6 @@ typedef struct {
     double parameter;
 } bottleneck_desc_t;
 
-static int
-cmp_node_id(const void *a, const void *b) {
-    const node_id_t *ia = (const node_id_t *) a;
-    const node_id_t *ib = (const node_id_t *) b;
-    return (*ia > *ib) - (*ia < *ib);
-}
-
 /* Example tree sequences used in some of the tests. */
 
 
@@ -5219,7 +5212,7 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     int ret, stack_top, j;
     node_id_t u, v, n, num_nodes, num_samples;
     size_t tmp;
-    node_id_t *stack, *samples, *other_samples;
+    node_id_t *stack, *samples;
     node_list_t *z, *head, *tail;
     tree_sequence_t *ts = tree->tree_sequence;
 
@@ -5227,10 +5220,8 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     num_nodes = tree_sequence_get_num_nodes(ts);
     stack = malloc(n * sizeof(node_id_t));
     samples = malloc(n * sizeof(node_id_t));
-    other_samples = malloc(n * sizeof(node_id_t));
     CU_ASSERT_FATAL(stack != NULL);
     CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(other_samples != NULL);
     for (u = 0; u < num_nodes; u++) {
         if (tree->left_child[u] == MSP_NULL_NODE && !tree_sequence_is_sample(ts, u)) {
             ret = sparse_tree_get_sample_list(tree, u, &head, &tail);
@@ -5248,7 +5239,7 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
                     samples[num_samples] = v;
                     num_samples++;
                 }
-                for (v = tree->left_child[v]; v != MSP_NULL_NODE; v = tree->right_sib[v]) {
+                for (v = tree->right_child[v]; v != MSP_NULL_NODE; v = tree->left_sib[v]) {
                     stack_top++;
                     stack[stack_top] = v;
                 }
@@ -5263,7 +5254,7 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
             j = 0;
             while (1) {
                 CU_ASSERT_TRUE_FATAL(j < n);
-                other_samples[j] = z->node;
+                CU_ASSERT_EQUAL_FATAL(samples[j], z->node);
                 j++;
                 if (z == tail) {
                     break;
@@ -5271,16 +5262,10 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
                 z = z->next;
             }
             CU_ASSERT_EQUAL(j, num_samples);
-            qsort(samples, num_samples, sizeof(node_id_t), cmp_node_id);
-            qsort(other_samples, num_samples, sizeof(node_id_t), cmp_node_id);
-            for (j = 0; j < num_samples; j++) {
-                CU_ASSERT_EQUAL(samples[j], other_samples[j]);
-            }
         }
     }
     free(stack);
     free(samples);
-    free(other_samples);
 }
 
 static void

@@ -2087,7 +2087,7 @@ class TestTreeSequence(LowLevelTestCase):
                 r[-1] for r in sim.get_migrations()]
             for j in range(tree_sequence.get_num_migrations()):
                 generation = tree_sequence.get_migration(j)[-1]
-                self.assertAlmostEqual(generation, sim_times[j])
+                self.assertAlmostEqual(generation, sim_times[j] * 4 * Ne)
 
     def test_pairwise_diversity(self):
         for ts in self.get_example_tree_sequences():
