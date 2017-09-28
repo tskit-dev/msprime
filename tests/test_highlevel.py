@@ -2164,6 +2164,7 @@ class TestNodeOrdering(HighLevelTestCase):
             edge_table.add_row(
                 left=e.left, right=e.right, parent=node_map[e.parent],
                 child=node_map[e.child])
+        msprime.sort_tables(nodes=node_table, edges=edge_table)
         other_ts = msprime.load_tables(nodes=node_table, edges=edge_table)
 
         self.assertEqual(ts.get_num_trees(), other_ts.get_num_trees())

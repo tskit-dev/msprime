@@ -157,6 +157,7 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
         provenance.append(
             _get_v2_provenance("generate_mutations", mutations_group.attrs))
     provenance.append(_get_upgrade_provenance(root))
+    msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
     return msprime.load_tables(
         nodes=nodes, edges=edges, sites=sites, mutations=mutations,
         provenance_strings=provenance)
@@ -209,6 +210,7 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
     if "provenance" in root:
         provenance = list(root["provenance"])
     provenance.append(_get_upgrade_provenance(root))
+    msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
     return msprime.load_tables(
         nodes=nodes, edges=edges, sites=sites, mutations=mutations,
         provenance_strings=provenance)

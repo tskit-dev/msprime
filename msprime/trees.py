@@ -1384,9 +1384,10 @@ def load_text(nodes, edges, sites=None, mutations=None):
         site_table = parse_sites(sites)
     if mutations is not None:
         mutation_table = parse_mutations(mutations)
+    tables.sort_tables(
+        nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
     return load_tables(
-        nodes=node_table, edges=edge_table, sites=site_table,
-        mutations=mutation_table)
+        nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
 
 
 class TreeSimulator(object):
