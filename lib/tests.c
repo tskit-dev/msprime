@@ -125,11 +125,13 @@ const char *nonbinary_ex_nodes =
 const char *nonbinary_ex_edges =
     "0	100	8	0,1,2,3\n"
     "0	100	9	6,8\n"
-    "0	17	10	4,5,7\n"
-    "17	100	10	4,7\n"
+    "0  100 10  4\n"
+    "0  17  10  5\n"
+    "0  100 10  7\n"
     "17	100	11	5,9\n"
-    "0	17	12	9,10\n"
-    "17	100	12	10,11";
+    "0	17	12	9\n"
+    "0  100 12  10\n"
+    "17	100	12	11";
 const char *nonbinary_ex_sites =
         "1  0\n"
         "18 0\n";
@@ -151,13 +153,16 @@ const char *unary_ex_nodes =
     "0  0.253   0\n";
 const char *unary_ex_edges =
     "2 10 4 2,3\n"
-    "0 2  5 1,3\n"
-    "2 10 5 1,4\n"
+    "0 10 5 1\n"
+    "0 2  5 3\n"
+    "2 10 5 4\n"
     "0 7  6 0,5\n"
-    "7 10 7 0,5\n"
+    "7 10 7 0\n"
     "0 2  7 2\n"
-    "0 2  8 6,7\n"
-    "2 7  8 6\n";
+    "7 10 7 5\n"
+    "0 7  8 6\n"
+    "0 2  8 7\n";
+
 /* We make one mutation for each tree, over unary nodes if this exist */
 const char *unary_ex_sites =
     "1.0    0\n"
@@ -181,9 +186,10 @@ const char *internal_sample_ex_nodes =
     "0  1.0   0\n"
     "0  1.2   0\n";
 const char *internal_sample_ex_edges =
-    "0 2  4 2,3\n"
-    "2 8  4 0,2\n"
-    "8 10 4 2,3\n"
+    "2 8  4 0\n"
+    "0 10 4 2\n"
+    "0 2  4 3\n"
+    "8 10 4 3\n"
     "0 10 5 1,4\n"
     "8 10 6 0,5\n"
     "0 2  7 0,5\n"
