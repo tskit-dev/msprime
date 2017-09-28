@@ -39,6 +39,7 @@ typedef struct {
     double first;
     double second;
     node_id_t third;
+    node_id_t fourth;
 } index_sort_t;
 
 static int
@@ -50,6 +51,9 @@ cmp_index_sort(const void *a, const void *b) {
         ret = (ca->second > cb->second) - (ca->second < cb->second);
         if (ret == 0) {
             ret = (ca->third > cb->third) - (ca->third < cb->third);
+            if (ret == 0) {
+                ret = (ca->fourth > cb->fourth) - (ca->fourth < cb->fourth);
+            }
         }
     }
     return ret;
@@ -911,7 +915,8 @@ tree_sequence_build_indexes(tree_sequence_t *self)
         sort_buff[j].index = (node_id_t ) j;
         sort_buff[j].first = self->edges.left[j];
         sort_buff[j].second = time[self->edges.parent[j]];
-        sort_buff[j].third = self->edges.child[j];
+        sort_buff[j].third = self->edges.parent[j];
+        sort_buff[j].fourth = self->edges.child[j];
     }
     qsort(sort_buff, self->edges.num_records, sizeof(index_sort_t), cmp_index_sort);
     for (j = 0; j < self->edges.num_records; j++) {
@@ -923,7 +928,8 @@ tree_sequence_build_indexes(tree_sequence_t *self)
         sort_buff[j].index = (node_id_t ) j;
         sort_buff[j].first = self->edges.right[j];
         sort_buff[j].second = -time[self->edges.parent[j]];
-        sort_buff[j].third = -self->edges.child[j];
+        sort_buff[j].third = -self->edges.parent[j];
+        sort_buff[j].fourth = -self->edges.child[j];
     }
     qsort(sort_buff, self->edges.num_records, sizeof(index_sort_t), cmp_index_sort);
     for (j = 0; j < self->edges.num_records; j++) {
@@ -2822,11 +2828,12 @@ sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
         && self->root == other->root
         && self->sites_length == other->sites_length
         && self->sites == other->sites
-        && memcmp(self->parent, other->parent, N * sizeof(node_id_t)) == 0
-        && memcmp(self->left_child, other->left_child, N * sizeof(node_id_t)) == 0
-        && memcmp(self->right_child, other->right_child, N * sizeof(node_id_t)) == 0
-        && memcmp(self->left_sib, other->left_sib, N * sizeof(node_id_t)) == 0
-        && memcmp(self->right_sib, other->right_sib, N * sizeof(node_id_t)) == 0;
+        && memcmp(self->parent, other->parent, N * sizeof(node_id_t)) == 0;
+    /* We do not check the children for equality here because
+     * the ordering of the children within a parent are essentially irrelevant
+     * in terms of topology. Depending on the way in which we approach a given
+     * tree we can get different orderings within the children, and so the
+     * same tree would not be equal to itself. */
     if (condition) {
         ret = 0;
     }
