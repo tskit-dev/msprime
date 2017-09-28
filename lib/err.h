@@ -55,7 +55,6 @@
 #define MSP_ERR_ASSERTION_FAILED                                    -24
 #define MSP_ERR_SOURCE_DEST_EQUAL                                   -25
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
-#define MSP_ERR_BAD_EDGESET                                         -27
 #define MSP_ERR_BAD_SAMPLES                                         -28
 #define MSP_ERR_NONBINARY_NEWICK                                    -29
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
@@ -93,7 +92,7 @@
 #define MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN                  -64
 #define MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT                      -65
 
-/* reuse code: -50 */
+/* reuse code: -50, -27 */
 
 #endif /*__ERR_H__*/
 

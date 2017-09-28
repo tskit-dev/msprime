@@ -574,6 +574,7 @@ class Simplifier(object):
         self.mutation_table = msprime.MutationTable(max(1, ts.num_mutations))
         self.num_output_nodes = 0
         self.output_sites = {}
+        self.edge_buffer = []
         # Keep track of then number of segments we alloc and free to ensure we
         # don't leak.
         self.num_used_segments = 0
@@ -636,11 +637,33 @@ class Simplifier(object):
         self.node_id_map[input_id] = self.num_output_nodes
         self.num_output_nodes += 1
 
+    def flush_edges(self):
+        """
+        Flush the edges to the output table after sorting and squashing
+        any redundant records.
+        """
+        if len(self.edge_buffer) > 0:
+            self.edge_buffer.sort(key=lambda e: (e.child, e.left))
+            parent = self.edge_buffer[0].parent
+            left = self.edge_buffer[0].left
+            right = self.edge_buffer[0].right
+            child = self.edge_buffer[0].child
+            for e in self.edge_buffer[1:]:
+                assert e.parent == parent
+                if e.left != right or e.child != child:
+                    self.edge_table.add_row(left, right, parent, child)
+                    left = e.left
+                    child = e.child
+                right = e.right
+            self.edge_table.add_row(left, right, parent, child)
+            self.edge_buffer = []
+
     def record_edge(self, left, right, parent, child):
         """
         Adds an edge to the output list.
         """
-        self.edge_table.add_row(left=left, right=right, parent=parent, child=child)
+        self.edge_buffer.append(
+            msprime.Edge(left=left, right=right, parent=parent, child=child))
 
     def segment_chain_str(self, segment):
         u = segment
@@ -680,6 +703,8 @@ class Simplifier(object):
         print(self.edge_table)
 
     def simplify(self):
+        # TODO change this to split the edges more efficiently using the natural
+        # ordering.
         the_parents = [
             (node.time, input_id) for input_id, node in enumerate(self.ts.nodes())]
         # need to deal with parents in order by birth time-ago
@@ -687,17 +712,16 @@ class Simplifier(object):
         for time, input_id in the_parents:
             # inefficent way to pull all edges corresponding to a given parent
             edges = [x for x in self.ts.edges() if x.parent == input_id]
+            H = []
             for edge in edges:
-                H = []
-                for edge in edges:
-                    if edge.child in self.A:
-                        self.remove_ancestry(edge.left, edge.right, edge.child, H)
-                        self.check_state()
-                # print("merging for ", input_id)
-                # self.print_heaps(H)
-                # self.print_state()
-                self.merge_labeled_ancestors(H, input_id)
-                self.check_state()
+                if edge.child in self.A:
+                    self.remove_ancestry(edge.left, edge.right, edge.child, H)
+                    # self.check_state()
+            # print("merging for ", input_id)
+            # self.print_heaps(H)
+            # self.print_state()
+            self.merge_labeled_ancestors(H, input_id)
+            # self.check_state()
         # print("DONE")
         # self.print_state()
         # The extant segments are the roots for each interval. For every root
@@ -888,6 +912,7 @@ class Simplifier(object):
             else:
                 z.next = alpha
             z = alpha
+        self.flush_edges()
 
     def check_state(self):
         # print("CHECK_STATE")

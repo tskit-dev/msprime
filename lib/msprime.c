@@ -136,8 +136,6 @@ msp_strerror(int err)
         case MSP_ERR_INSUFFICIENT_SAMPLES:
             ret = "At least two samples needed.";
             break;
-        case MSP_ERR_BAD_EDGESET:
-            ret = "Bad edge in file.";
         case MSP_ERR_ZERO_RECORDS:
             ret = "At least one record must be supplied";
             break;

@@ -1229,7 +1229,6 @@ class TestTreeSequence(HighLevelTestCase):
                     self.verify_simplify_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
-    @unittest.skip("simplify ordering not right")
     def test_simplify_bugs(self):
         prefix = "tests/data/simplify-bugs/"
         j = 1
@@ -1246,7 +1245,6 @@ class TestTreeSequence(HighLevelTestCase):
                     open(mutations_file) as mutations:
                 ts = msprime.load_text(
                     nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-            # print("nodes_file = ", nodes_file)
             samples = list(ts.samples())
             self.verify_simplify_equality(ts, samples)
             j += 1

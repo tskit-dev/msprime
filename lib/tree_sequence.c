@@ -518,8 +518,8 @@ tree_sequence_get_provenance_strings(tree_sequence_t *self,
 static int
 tree_sequence_check(tree_sequence_t *self)
 {
-    int ret = MSP_ERR_BAD_EDGESET;
-    node_id_t child, parent;
+    int ret = MSP_ERR_GENERIC;
+    node_id_t child, parent, last_parent;
     size_t j;
     double left;
 
@@ -544,12 +544,21 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
         if (j > 0) {
+            last_parent = self->edges.parent[j - 1];
             /* Input data must be time sorted. */
-            if (self->nodes.time[parent]
-                    < self->nodes.time[self->edges.parent[j - 1]]) {
+            if (self->nodes.time[parent] < self->nodes.time[last_parent]) {
                 ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
                 goto out;
             }
+            /* TODO Need to fixup all these error codes. */
+
+            /* if (self->nodes.time[parent] == self->nodes.time[last_parent]) { */
+            /*     if (parent > last_parent) { */
+            /*         ret = MSP_ERR_RECORDS_NOT_TIME_SORTED; */
+            /*         goto out; */
+
+            /*     } */
+            /* } */
             /* Disabling checks on sortedness of children until definitive order
              * worked out.*/
             /* if (parent == self->edges.parent[j - 1] */
