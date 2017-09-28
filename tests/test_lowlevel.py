@@ -418,17 +418,14 @@ class LowLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests for the low-level interface.
     """
-    def verify_sparse_tree_dict(self, n, pi, tau):
+    def verify_sparse_tree_dict(self, n, pi):
         """
         Verifies that the specified sparse tree in dict format is a
         consistent coalescent history for a sample of size n.
         """
-        self.assertEqual(set(pi.keys()), set(tau.keys()))
         self.assertLessEqual(len(pi), 2 * n - 1)
-        self.assertEqual(len(tau), len(pi))
         # NULL_NODE should not be a node
         self.assertNotIn(NULL_NODE, pi)
-        self.assertNotIn(NULL_NODE, tau)
         # verify the root is equal for all samples
         root = 0
         while pi[root] != NULL_NODE:
@@ -438,38 +435,20 @@ class LowLevelTestCase(tests.MsprimeTestCase):
             while pi[k] != NULL_NODE:
                 k = pi[k]
             self.assertEqual(k, root)
-        self.assertIn(root, tau)
         # 0 to n - 1 inclusive should always be nodes
         for j in range(n):
             self.assertIn(j, pi)
-            self.assertIn(j, tau)
         num_children = collections.defaultdict(int)
         for j in pi.keys():
             num_children[pi[j]] += 1
         # nodes 0 to n are samples.
         for j in range(n):
             self.assertNotEqual(pi[j], 0)
-            self.assertEqual(tau[j], 0)
             self.assertEqual(num_children[j], 0)
-        # All non-sample nodes should be binary with non-zero times.
-        taup = {}
+        # All non-sample nodes should be binary
         for j in pi.keys():
             if j > n:
                 self.assertGreaterEqual(num_children[j], 2)
-                self.assertGreater(tau[j], 0.0)
-                taup[j] = tau[j]
-        # times of non samples should be distinct
-        self.assertEqual(len(set(taup)), len(taup))
-        # Times of samples should be zero, and increasing up the tree
-        for j in range(n):
-            self.assertEqual(tau[j], 0.0)
-            last_time = -1
-            k = j
-            while k in pi:
-                self.assertNotEqual(k, pi[k])
-                self.assertGreater(tau[k], last_time)
-                last_time = tau[k]
-                k = pi[k]
 
     def get_tree_sequence(
             self, sample_size=10, num_loci=100, mutation_rate=10,
@@ -618,13 +597,13 @@ class TestSimulationState(LowLevelTestCase):
                 while breakpoints[j] < r:
                     segments_am[j] += 1
                     j += 1
-        # TODO need to reason about this some more. Not quite right for the new
-        # edge rather than coalescence records case.
         records_am = [0 for b in breakpoints[:-1]]
-        for l, r, p, c in edges:
+        for l, r, _, _ in edges:
             j = breakpoints.index(l)
             while breakpoints[j] < r:
-                records_am[j] += 1
+                # We are assuming a binary coalescent here. We would need to
+                # do something more complicated for more general models.
+                records_am[j] += 0.5
                 j += 1
         for segment_am, record_am in zip(segments_am, records_am):
             if segment_am == 0:
@@ -637,25 +616,19 @@ class TestSimulationState(LowLevelTestCase):
             self.assertGreaterEqual(
                 sim.get_num_migrations(), sum(sim.get_num_migration_events()))
 
-    def verify_trees_equal(self, n, pi, tau, pop, sparse_tree):
+    def verify_trees_equal(self, n, pi, sparse_tree):
         """
-        Verifies that the specified maps are equivalent to the specified
+        Verifies that the specified parent map is equivalent to the specified
         sparse tree object.
         """
         self.assertEqual(n, sparse_tree.get_sample_size())
         pi_p = {}
-        tau_p = {}
-        pop_p = {}
         for j in range(n):
             u = j
             while u != NULL_NODE and u not in pi_p:
-                pop_p[u] = sparse_tree.get_population(u)
                 pi_p[u] = sparse_tree.get_parent(u)
-                tau_p[u] = sparse_tree.get_time(u)
                 u = pi_p[u]
         self.assertEqual(pi_p, pi)
-        self.assertEqual(pop_p, pop)
-        self.assertEqual(tau_p, tau)
         self.assertEqual(pi_p[sparse_tree.get_root()], NULL_NODE)
 
     def verify_mrcas(self, sparse_tree):
@@ -670,9 +643,9 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(
                 mrca_calc.get_mrca(u, v), sparse_tree.get_mrca(u, v))
 
-    def verify_trees(self, sim, sorted_records):
+    def verify_trees(self, sim, sorted_edges):
         """
-        Verifies that the specified set of sorted coalescence records
+        Verifies that the specified set of (left, parent) sorted edges
         corresponds to correct trees for the specified simulation.
         """
         ts = populate_tree_sequence(sim)
@@ -680,19 +653,12 @@ class TestSimulationState(LowLevelTestCase):
         st_iter = _msprime.SparseTreeIterator(st)
         n = sim.get_sample_size()
         pi = {}
-        tau = {j: 0 for j in range(n)}
-        pops = {j: 0 for j in range(n)}
-        # We only support single population here; tests for population
-        # assignment are done in the demography tests.
-        self.assertEqual(sim.get_num_populations(), 1)
         last_l = 0
-        last_t = 0
         num_trees = 0
         live_segments = []
-        for l, r, node, children, t, pop in sorted_records:
+        for l, r, parent, child in sorted_edges:
             if last_l != l:
                 last_l = l
-                last_t = 0
                 for j in range(n):
                     assert j in pi
                 # insert the root
@@ -700,29 +666,19 @@ class TestSimulationState(LowLevelTestCase):
                 while v in pi:
                     v = pi[v]
                 pi[v] = -1
-                self.verify_sparse_tree_dict(n, pi, tau)
+                self.verify_sparse_tree_dict(n, pi)
                 # Make sure this is equal to the sparse tree we get from
                 # the iterator.
                 st = next(st_iter)
-                self.verify_trees_equal(n, pi, tau, pops, st)
+                self.verify_trees_equal(n, pi, st)
                 self.verify_mrcas(st)
                 del pi[v]
                 num_trees += 1
-            else:
-                last_t = t
-            heapq.heappush(live_segments, (r, (children, node)))
+            heapq.heappush(live_segments, (r, (child, parent)))
             while live_segments[0][0] <= l:
-                x, (other_children, p) = heapq.heappop(live_segments)
-                for c in other_children:
-                    del pi[c]
-                del tau[p]
-                del pops[p]
-            for c in children:
-                pi[c] = node
-            tau[node] = t
-            pops[node] = pop
-            # Ensure that records are sorted by time within a block
-            self.assertLessEqual(last_t, t)
+                x, (other_child, p) = heapq.heappop(live_segments)
+                del pi[other_child]
+            pi[child] = parent
         for j in range(n):
             assert j in pi
         # Insert the root branch.
@@ -730,25 +686,24 @@ class TestSimulationState(LowLevelTestCase):
         while v in pi:
             v = pi[v]
         pi[v] = -1
-        self.verify_sparse_tree_dict(n, pi, tau)
+        self.verify_sparse_tree_dict(n, pi)
         st = next(st_iter)
-        self.verify_trees_equal(n, pi, tau, pops, st)
+        self.verify_trees_equal(n, pi, st)
         num_trees += 1
         self.assertEqual(ts.get_num_trees(), num_trees)
         self.assertLessEqual(num_trees, sim.get_num_breakpoints() + 2)
         self.assertRaises(StopIteration, next, st_iter)
 
-    def verify_squashed_records(self, sorted_records):
+    def verify_squashed_edges(self, sorted_edges):
         """
-        Checks to see if there were any unsquashed records in the specified
-        set of time sorted records.
+        Checks to see if there were any unsquashed edges in the specified
+        set of time sorted edges.
         """
-        u = sorted_records[0]
-        for v in sorted_records[1:]:
-            # An unsquashed record would be two adjacent records with the
-            # same c1, c2, p and t values.
-            self.assertFalse(all(u[j] == v[j] for j in range(1, 5)))
-            u = v
+        _, last_r, last_p, last_c = sorted_edges[0]
+        for l, r, p, c in sorted_edges[1:]:
+            if p == last_p and c == last_c:
+                self.assertNotEqual(last_r, l)
+            last_r, last_p, last_c = r, p, c
 
     def verify_completed_simulation(self, sim):
         """
@@ -776,33 +731,33 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_num_migration_blocks(), 0)
         self.assertGreater(sim.get_used_memory(), 0)
 
-        edges = sim.get_coalescence_records()
+        edges = sim.get_edges()
         self.assertGreater(len(edges), 0)
         self.assertEqual(len(edges), sim.get_num_edges())
         # Edges should be returned in canonical order
         self.assertEqual(
             edges,
             sorted(edges, key=lambda (l, r, p, c): (p, c, l)))
-        # Records should be in nondecreasing time order
-        times = [t for l, r, node, children, t, pop in records]
+        # Nodes should be in nondecreasing time order
+        times = [node[1] for node in sim.get_nodes()]
         self.assertEqual(times, sorted(times))
         self.assertEqual(times[-1], sim.get_time())
-        self.verify_squashed_records(records)
-        left_sorted_records = sorted(records, key=lambda r: (r[0], r[-2]))
-        self.verify_trees(sim, left_sorted_records)
-        # Check the TreeSequence. Ensure we get the records back in the
+        self.verify_squashed_edges(edges)
+
+        left_sorted_edges = sorted(edges, key=lambda r: (r[0], r[2]))
+        self.verify_trees(sim, left_sorted_edges)
+        # Check the TreeSequence. Ensure we get the edges back in the
         # correct orders.
         ts = populate_tree_sequence(sim)
         ts_edges = [ts.get_edge(j) for j in range(ts.get_num_edges())]
         j = 0
-        for record in records:
-            left, right, parent, children, _, _ = record
-            for c in children:
-                self.assertEqual(left, ts_edges[j][0])
-                self.assertEqual(right, ts_edges[j][1])
-                self.assertEqual(parent, ts_edges[j][2])
-                self.assertEqual(c, ts_edges[j][3])
-                j += 1
+        for edge in edges:
+            left, right, parent, child = edge
+            self.assertEqual(left, ts_edges[j][0])
+            self.assertEqual(right, ts_edges[j][1])
+            self.assertEqual(parent, ts_edges[j][2])
+            self.assertEqual(child, ts_edges[j][3])
+            j += 1
         assert j == len(ts_edges)
 
     def verify_random_parameters(self):
@@ -992,7 +947,6 @@ class TestSimulationState(LowLevelTestCase):
         for j in range(num_random_sims):
             self.verify_random_parameters()
 
-    @unittest.skip("Update simulation tests to remove coalescence records")
     def test_small_sims(self):
         self.verify_simulation(3, 1, 0.0)
         self.verify_simulation(3, 100, 0.0)
@@ -1163,8 +1117,8 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(_msprime.InputError, f, avl_node_block_size=0)
         self.assertRaises(_msprime.InputError, f, segment_block_size=0)
         self.assertRaises(_msprime.InputError, f, node_mapping_block_size=0)
-        self.assertRaises( _msprime.InputError, f, node_block_size=0)
-        self.assertRaises( _msprime.InputError, f, edge_block_size=0)
+        self.assertRaises(_msprime.InputError, f, node_block_size=0)
+        self.assertRaises(_msprime.InputError, f, edge_block_size=0)
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, max_memory=2**65)
 
