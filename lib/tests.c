@@ -90,8 +90,10 @@ const char *paper_ex_nodes =
     "0  0.253   0\n";
 const char *paper_ex_edges =
     "2 10 4 2,3\n"
-    "0 2  5 1,3\n"
-    "2 10 5 1,4\n"
+    "0 2  5 1\n"
+    "2 10 5 1\n"
+    "0 2  5 3\n"
+    "2 10 5 4\n"
     "0 7  6 0,5\n"
     "7 10 7 0,5\n"
     "0 2  8 2,6\n";
@@ -937,6 +939,8 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edges, migrations,
             sites, mutations, 1, provenance);
+    /* edge_table_print_state(edges, stdout); */
+    /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_simulator_tree_sequence_equality(msp, tree_seq, mutgen,
             sequence_length / num_loci);
@@ -1138,7 +1142,7 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     for (j = 0; j < mutations.num_rows; j++) {
         mutations.node[j] = node_map[mutations.node[j]];
     }
-
+    ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -2998,8 +3002,10 @@ test_simplest_holey_tree_sequence(void)
         "1  0   0\n"
         "0  1   0";
     const char *edges =
-        "0  1   2   0,1\n"
-        "2  3   2   0,1\n";
+        "0  1   2   0\n"
+        "2  3   2   0\n"
+        "0  1   2   1\n"
+        "2  3   2   1\n";
     const char *sites =
         "0.5  0\n"
         "1.5  0\n"
@@ -3150,7 +3156,7 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
             NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_RECORD_INTERVAL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGE_INTERVAL);
     tree_sequence_free(&ts);
     edge_table.right[0]= 1.0;
 
@@ -3194,7 +3200,7 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
             NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_NODE_IN_RECORD);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_PARENT);
     tree_sequence_free(&ts);
     edge_table.parent[0] = 2;
 
@@ -4486,7 +4492,7 @@ test_single_tree_simplify(void)
     unsort_edges(&edges);
     ret = simplifier_alloc(&simplifier, samples, 2,
             &nodes, &edges, &migrations, &sites, &mutations, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_RECORDS_NOT_TIME_SORTED);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -5573,7 +5579,8 @@ test_tree_sequence_bad_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
             NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ts.num_trees, 3);
     verify_trees(&ts, num_trees, parents);
     tree_sequence_free(&ts);
 
@@ -5583,7 +5590,7 @@ test_tree_sequence_bad_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(&ts, &node_table, &edge_table, NULL,
             NULL, NULL, 0, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_RECORD_INTERVAL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGE_INTERVAL);
     tree_sequence_free(&ts);
     edge_table.left[0] = 2.0;
 
@@ -6349,10 +6356,6 @@ test_sort_tables(void)
     CU_ASSERT_FATAL(examples != NULL);
 
     for (j = 0; examples[j] != NULL; j++) {
-        if (j == 5) {
-            printf("FIXME\n\n Skipping problematic ts for child sorting\n");
-            continue;
-        }
         ts1 = examples[j];
 
         ret = tree_sequence_dump_tables_tmp(ts1, &nodes, &edges,

@@ -1091,12 +1091,12 @@ cmp_edge(const void *a, const void *b) {
     /* If time values are equal, sort by the parent node */
     if (ret == 0) {
         ret = (ca->parent > cb->parent) - (ca->parent < cb->parent);
-        /* If the nodes are equal, sort by the left coordinate. */
+        /* If the parent nodes are equal, sort by the child ID. */
         if (ret == 0) {
-            ret = (ca->left > cb->left) - (ca->left < cb->left);
-            /* If the left coordinate is equal, sort by the child ID. */
+            ret = (ca->child > cb->child) - (ca->child < cb->child);
+            /* If the child nodes are equal, sort by the left coordinate. */
             if (ret == 0) {
-                ret = (ca->child > cb->child) - (ca->child < cb->child);
+                ret = (ca->left > cb->left) - (ca->left < cb->left);
             }
         }
     }
@@ -1693,7 +1693,7 @@ simplifier_check_input(simplifier_t *self)
     last_parent = self->edges->parent[0];
     for (j = 0; j < self->edges->num_rows; j++) {
         if (self->edges->left[j] >= self->edges->right[j]) {
-            ret = MSP_ERR_BAD_RECORD_INTERVAL;
+            ret = MSP_ERR_BAD_EDGE_INTERVAL;
             goto out;
         }
         parent = self->edges->parent[j];
@@ -1704,11 +1704,11 @@ simplifier_check_input(simplifier_t *self)
         if (parent != last_parent) {
             node_seen[last_parent] = 1;
             if (node_seen[parent] != 0) {
-                ret = MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT;
+                ret = MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME;
                 goto out;
             }
             if (time[last_parent] > time[parent]) {
-                ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
+                ret = MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME;
                 goto out;
             }
             last_parent = parent;

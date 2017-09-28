@@ -139,29 +139,36 @@ msp_strerror(int err)
         case MSP_ERR_ZERO_RECORDS:
             ret = "At least one record must be supplied";
             break;
-        case MSP_ERR_ZERO_CHILDREN:
-            ret = "Zero children in coalescence record.";
+        case MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME:
+            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+                " time[parent] order violated";
             break;
-        case MSP_ERR_UNSORTED_CHILDREN:
-            ret = "Unsorted children in coalescence record.";
+        case MSP_ERR_EDGES_NOT_SORTED_PARENT:
+            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+                " parent order violated";
             break;
-        case MSP_ERR_NULL_NODE_IN_RECORD:
-            ret = "Null node in coalescence record.";
+        case MSP_ERR_EDGES_NOT_SORTED_CHILD:
+            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+                " child order violated";
+            break;
+        case MSP_ERR_EDGES_NOT_SORTED_LEFT:
+            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+                " left order violated";
+            break;
+        case MSP_ERR_NULL_PARENT:
+            ret = "Edge in parent is null.";
+            break;
+        case MSP_ERR_NULL_CHILD:
+            ret = "Edge in parent is null.";
             break;
         case MSP_ERR_BAD_NODE_TIME_ORDERING:
-            ret = "Node times must be strictly increasing within a tree.";
+            ret = "time[parent] must be greater than time[child]";
             break;
-        case MSP_ERR_RECORDS_NOT_TIME_SORTED:
-            ret = "Records must be sorted in non-decreasing time order.";
+        case MSP_ERR_BAD_EDGE_INTERVAL:
+            ret = "Bad edge interval where right <= left";
             break;
-        case MSP_ERR_INCONSISTENT_NODE_TIMES:
-            ret = "Times associated with nodes not consistent between records";
-            break;
-        case MSP_ERR_INCONSISTENT_POPULATION_IDS:
-            ret = "Population associated with nodes not consistent between records";
-            break;
-        case MSP_ERR_BAD_RECORD_INTERVAL:
-            ret = "Bad record interval where right <= left";
+        case MSP_ERR_DUPLICATE_EDGES:
+            ret = "Duplicate edges provided.";
             break;
         case MSP_ERR_CANNOT_SIMPLIFY:
             ret = "Cannot simplify the tree sequence; no output records.";

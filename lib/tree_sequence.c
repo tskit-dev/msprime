@@ -34,18 +34,23 @@
 #define MSP_DIR_REVERSE -1
 
 typedef struct {
-    double value;
     node_id_t index;
-    int64_t time;
+    /* These are the sort keys in order */
+    double first;
+    double second;
+    node_id_t third;
 } index_sort_t;
 
 static int
 cmp_index_sort(const void *a, const void *b) {
     const index_sort_t *ca = (const index_sort_t *) a;
     const index_sort_t *cb = (const index_sort_t *) b;
-    int ret = (ca->value > cb->value) - (ca->value < cb->value);
+    int ret = (ca->first > cb->first) - (ca->first < cb->first);
     if (ret == 0) {
-        ret = (ca->time > cb->time) - (ca->time < cb->time);
+        ret = (ca->second > cb->second) - (ca->second < cb->second);
+        if (ret == 0) {
+            ret = (ca->third > cb->third) - (ca->third < cb->third);
+        }
     }
     return ret;
 }
@@ -519,9 +524,9 @@ static int
 tree_sequence_check(tree_sequence_t *self)
 {
     int ret = MSP_ERR_GENERIC;
-    node_id_t child, parent, last_parent;
+    node_id_t child, parent, last_parent, last_child;
     size_t j;
-    double left;
+    double left, last_left;
 
     /* TODO there is no deep reason why we have to have at least two samples,
      * but parts of the code do assume this at the moment. If we relax this
@@ -530,13 +535,12 @@ tree_sequence_check(tree_sequence_t *self)
         ret = MSP_ERR_INSUFFICIENT_SAMPLES;
         goto out;
     }
-    left = DBL_MAX;
     for (j = 0; j < self->edges.num_records; j++) {
         parent = self->edges.parent[j];
         child = self->edges.child[j];
-        left = GSL_MIN(left, self->edges.left[j]);
+        left = self->edges.left[j];
         if (parent == MSP_NULL_NODE) {
-            ret = MSP_ERR_NULL_NODE_IN_RECORD;
+            ret = MSP_ERR_NULL_PARENT;
             goto out;
         }
         if (parent < 0 || parent >= (node_id_t) self->nodes.num_records) {
@@ -545,33 +549,37 @@ tree_sequence_check(tree_sequence_t *self)
         }
         if (j > 0) {
             last_parent = self->edges.parent[j - 1];
-            /* Input data must be time sorted. */
+            last_child = self->edges.child[j - 1];
+            last_left = self->edges.left[j - 1];
+            /* Input data must sorted by (time[parent], parent, child, left). */
             if (self->nodes.time[parent] < self->nodes.time[last_parent]) {
-                ret = MSP_ERR_RECORDS_NOT_TIME_SORTED;
+                ret = MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME;
                 goto out;
             }
-            /* TODO Need to fixup all these error codes. */
-
-            /* if (self->nodes.time[parent] == self->nodes.time[last_parent]) { */
-            /*     if (parent > last_parent) { */
-            /*         ret = MSP_ERR_RECORDS_NOT_TIME_SORTED; */
-            /*         goto out; */
-
-            /*     } */
-            /* } */
-            /* Disabling checks on sortedness of children until definitive order
-             * worked out.*/
-            /* if (parent == self->edges.parent[j - 1] */
-            /*         && left == self->edges.left[j - 1] */
-            /*         && child < self->edges.child[j - 1]) { */
-            /*     printf("ERROR at %d\n", (int) j); */
-            /*     tree_sequence_print_state(self, stdout); */
-            /*     ret = MSP_ERR_UNSORTED_CHILDREN; */
-            /*     goto out; */
-            /* } */
+            if (self->nodes.time[parent] == self->nodes.time[last_parent]) {
+                if (parent < last_parent) {
+                    ret = MSP_ERR_EDGES_NOT_SORTED_PARENT;
+                    goto out;
+                }
+                if (parent == last_parent) {
+                    if (child < last_child) {
+                        ret = MSP_ERR_EDGES_NOT_SORTED_CHILD;
+                        goto out;
+                    }
+                    if (child == last_child) {
+                        if (left == last_left) {
+                            ret = MSP_ERR_DUPLICATE_EDGES;
+                            goto out;
+                        } else if (left < last_left) {
+                            ret = MSP_ERR_EDGES_NOT_SORTED_LEFT;
+                            goto out;
+                        }
+                    }
+                }
+            }
         }
         if (child == MSP_NULL_NODE) {
-            ret = MSP_ERR_NULL_NODE_IN_RECORD;
+            ret = MSP_ERR_NULL_CHILD;
             goto out;
         }
         if (child < 0 || child >= (node_id_t) self->nodes.num_records) {
@@ -584,7 +592,7 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
         if (self->edges.left[j] >= self->edges.right[j]) {
-            ret = MSP_ERR_BAD_RECORD_INTERVAL;
+            ret = MSP_ERR_BAD_EDGE_INTERVAL;
             goto out;
         }
     }
@@ -776,44 +784,32 @@ out:
 static int
 tree_sequence_init_trees(tree_sequence_t *self)
 {
-
     int ret = MSP_ERR_GENERIC;
     size_t j, k, tree_index;
     site_id_t site;
-    double tree_left, tree_right, x, last_x;
+    double tree_left, tree_right;
     node_id_t *I = self->edges.indexes.insertion_order;
     node_id_t *O = self->edges.indexes.removal_order;
 
-    /* First compute the number of trees. This is the number of distinct
-     * values in the left and right columns minus 1. We use the indexes
-     * computed for traversal to compute this efficiently. */
+    tree_left = 0;
     self->num_trees = 0;
-    if (self->edges.num_records > 0 && self->edges.left[I[0]] != 0.0) {
-        /* If there is a gap at the start of the tree sequence we need an extra
-         * tree for this */
-        self->num_trees = 1;
-    }
+    j = 0;
     k = 0;
-    last_x = -1;
-    for (j = 0; j < self->edges.num_records; j++) {
-        x = self->edges.left[I[j]];
-        /* Any distinct right values that do not appear in left gives rise to
-         * an empty tree */
-        while (self->edges.right[O[k]] < x) {
-            if (self->edges.right[O[k]] != last_x) {
-                self->num_trees++;
-                last_x = self->edges.right[O[k]];
-            }
+    while (j < self->edges.num_records) {
+        while (self->edges.right[O[k]] == tree_left) {
             k++;
         }
-        while (self->edges.right[O[k]] == x) {
-            k++;
+        while (j < self->edges.num_records && self->edges.left[I[j]] == tree_left) {
+            j++;
         }
-        if (x != last_x) {
-            self->num_trees++;
-            last_x = x;
+        tree_right = self->sequence_length;
+        if (j < self->edges.num_records) {
+            tree_right = GSL_MIN(self->edges.left[I[j]], self->edges.right[O[k]]);
         }
+        tree_left = tree_right;
+        self->num_trees++;
     }
+
     if (self->num_trees > 0) {
         /* TODO this is an ugly departure from the other patterns of
          * mallocing and using high-water mark memory semantics. Do we really need
@@ -900,7 +896,7 @@ tree_sequence_build_indexes(tree_sequence_t *self)
 {
     int ret = MSP_ERR_GENERIC;
     size_t j;
-    double x;
+    double *time = self->nodes.time;
     index_sort_t *sort_buff = NULL;
 
     sort_buff = malloc(self->edges.num_records * sizeof(index_sort_t));
@@ -908,37 +904,26 @@ tree_sequence_build_indexes(tree_sequence_t *self)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    /* FIXME: Need to update and clarify the sorting order here. The approach
-     * here is confusing and we should make it explicit what we're sorting
-     * on (left, parent, child). */
 
     /* sort by left and increasing time to give us the order in which
      * records should be inserted */
     for (j = 0; j < self->edges.num_records; j++) {
         sort_buff[j].index = (node_id_t ) j;
-        x = self->edges.left[j];
-        sort_buff[j].value = x;
-        /* When comparing equal left values, we sort by time. Since we require
-         * that records are provided in sorted order, the index can be
-         * taken as a proxy for time. This avoids issues unstable sort
-         * algorithms when multiple events occur at the same time. We are
-         * actually making the stronger requirement that records must be
-         * provided *in the order they happened*, not just in increasing
-         * time. See also the removal order index below.
-         */
-        sort_buff[j].time = (int64_t ) j;
+        sort_buff[j].first = self->edges.left[j];
+        sort_buff[j].second = time[self->edges.parent[j]];
+        sort_buff[j].third = self->edges.child[j];
     }
     qsort(sort_buff, self->edges.num_records, sizeof(index_sort_t), cmp_index_sort);
     for (j = 0; j < self->edges.num_records; j++) {
         self->edges.indexes.insertion_order[j] = sort_buff[j].index;
     }
-    /* sort by right and decreasing time to give us the order in which
+    /* sort by right and decreasing parent time to give us the order in which
      * records should be removed. */
     for (j = 0; j < self->edges.num_records; j++) {
         sort_buff[j].index = (node_id_t ) j;
-        x = self->edges.right[j];
-        sort_buff[j].value = x;
-        sort_buff[j].time = -1 * (int64_t ) j;
+        sort_buff[j].first = self->edges.right[j];
+        sort_buff[j].second = -time[self->edges.parent[j]];
+        sort_buff[j].third = -self->edges.child[j];
     }
     qsort(sort_buff, self->edges.num_records, sizeof(index_sort_t), cmp_index_sort);
     for (j = 0; j < self->edges.num_records; j++) {
@@ -3246,6 +3231,7 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         x = self->left;
     }
     while (out_breakpoints[out_order[out]] == x) {
+        assert(out < R);
         k = out_order[out];
         p = s->edges.parent[k];
         c = s->edges.child[k];
