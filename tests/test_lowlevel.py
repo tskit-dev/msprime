@@ -735,9 +735,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(len(edges), 0)
         self.assertEqual(len(edges), sim.get_num_edges())
         # Edges should be returned in canonical order
-        self.assertEqual(
-            edges,
-            sorted(edges, key=lambda (l, r, p, c): (p, c, l)))
+        self.assertEqual(edges, sorted(edges, key=lambda e: (e[2], e[3], e[0])))
         # Nodes should be in nondecreasing time order
         times = [node[1] for node in sim.get_nodes()]
         self.assertEqual(times, sorted(times))
