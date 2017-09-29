@@ -650,6 +650,8 @@ typedef struct {
     simplify_segment_t **ancestor_map;
     simplify_segment_t **root_map;
     node_id_t *node_id_map;
+    bool *unmapped_sample;
+    bool *is_sample;
     avl_tree_t merge_queue;
     object_heap_t segment_heap;
     object_heap_t avl_node_heap;
@@ -786,7 +788,8 @@ int tree_sequence_get_sample_index_map(tree_sequence_t *self,
 int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);
 int tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
-        size_t sample_size, int flags, tree_sequence_t *output);
+        size_t num_samples, int flags, tree_sequence_t *output,
+        node_id_t *sample_map);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     node_id_t *samples, size_t num_samples, double *pi);
 
@@ -963,7 +966,7 @@ int simplifier_alloc(simplifier_t *self,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations, int flags);
 int simplifier_free(simplifier_t *self);
-int simplifier_run(simplifier_t *self);
+int simplifier_run(simplifier_t *self, node_id_t *sample_map);
 void simplifier_print_state(simplifier_t *self, FILE *out);
 
 int squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges);

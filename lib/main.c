@@ -1045,8 +1045,8 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
         bool filter_invariant_sites, int verbose)
 {
     tree_sequence_t ts, subset;
-    size_t j;
     node_id_t *samples;
+    node_id_t *sample_map;
     int flags = 0;
     int ret;
 
@@ -1064,18 +1064,19 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
     } else {
         num_samples = GSL_MIN(num_samples, tree_sequence_get_sample_size(&ts));
     }
-    samples = malloc(num_samples * sizeof(node_id_t));
-    if (samples == NULL) {
-        fatal_error("out of memory");
+    ret = tree_sequence_get_samples(&ts, &samples);
+    if (ret != 0) {
+        fatal_library_error(ret, "get_samples");
     }
-    for (j = 0; j < num_samples; j++) {
-        samples[j] = (node_id_t) j;
+    sample_map = malloc(num_samples * sizeof(node_id_t));
+    if (sample_map == NULL) {
+        fatal_error("malloc sample map");
     }
     ret = tree_sequence_initialise(&subset);
     if (ret != 0) {
         fatal_library_error(ret, "init error");
     }
-    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset);
+    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset, sample_map);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
     }
@@ -1089,7 +1090,7 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
     }
     tree_sequence_free(&ts);
     tree_sequence_free(&subset);
-    free(samples);
+    free(sample_map);
 }
 
 int

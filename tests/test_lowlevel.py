@@ -2059,28 +2059,6 @@ class TestTreeSequence(LowLevelTestCase):
             pi1 = ts.get_pairwise_diversity(samples)
             self.assertGreaterEqual(pi1, 0)
 
-    def test_simplify(self):
-        out = _msprime.TreeSequence()
-        for ts in self.get_example_tree_sequences():
-            for bad_type in ["", None, {}]:
-                self.assertRaises(TypeError, ts.simplify)
-                self.assertRaises(TypeError, ts.simplify, out, bad_type)
-            self.assertRaises(ValueError, ts.simplify, out, [])
-            self.assertRaises(ValueError, ts.simplify, out, [0])
-            self.assertRaises(ValueError, ts.simplify, out, [0, ts.get_sample_size()])
-            self.assertRaises(ValueError, ts.simplify, out, [0, -1])
-            self.assertRaises(ValueError, ts.simplify, out, [0, ts.get_num_nodes()])
-            self.assertRaises(_msprime.LibraryError, ts.simplify, out, [0, 0])
-            s1 = _msprime.TreeSequence()
-            ts.simplify(s1, [0, 1])
-            s2 = _msprime.TreeSequence()
-            ts.simplify(s2, [1, 0])
-            self.assertEqual(ts.get_sequence_length(), s1.get_sequence_length())
-            self.assertEqual(s1.get_sample_size(), s2.get_sample_size())
-            self.assertEqual(s1.get_num_edges(), s2.get_num_edges())
-            self.assertEqual(s1.get_num_mutations(), s2.get_num_mutations())
-            self.assertEqual(s1.get_num_trees(), s2.get_num_trees())
-
     def test_provenance_strings_populate(self):
         rng = _msprime.RandomGenerator(1)
         sim = _msprime.Simulator(get_samples(10), rng)

@@ -29,6 +29,7 @@ import unittest
 import numpy as np
 
 import msprime
+# import tests
 
 
 def random_breakpoint():
@@ -324,7 +325,7 @@ class TestSimplify(unittest.TestCase):
                 tmrca2 = new_tree.get_time(mrca2)
                 self.assertEqual(tmrca1, tmrca2)
 
-    @unittest.skip("BUG simplify not sorting edges correctly")
+    @unittest.skip("TODO Finish writing this test.")
     def test_simplify(self):
         #  check that simplify(big set) -> simplify(subset) equals simplify(subset)
         seed = 23
@@ -333,35 +334,49 @@ class TestSimplify(unittest.TestCase):
             ts = msprime.load_tables(
                 nodes=tables.nodes, edges=tables.edges,
                 sites=tables.sites, mutations=tables.mutations)
+            # s = tests.Simplifier(ts, ts.samples())
+            # py_full_ts = s.simplify()
+            # full_ts = ts.simplify(ts.samples())
+
             for nsamples in [2, 5, 10]:
+                sub_samples = random.sample(ts.samples(), min(nsamples, ts.sample_size))
+                # s = tests.Simplifier(ts, sub_samples)
+                # py_sub_ts = s.simplify()
                 big_ts = ts.simplify(samples=ts.samples())
-                sub_samples = random.sample(
-                        big_ts.samples(), min(nsamples, len(big_ts.samples())))
-                small_ts = ts.simplify(samples=[ts.samples()[k] for k in sub_samples])
+                small_ts = ts.simplify(samples=sub_samples)
                 self.verify_simplify(big_ts, small_ts, samples=sub_samples)
 
-    @unittest.skip("BUG simplify not sorting edges correctly")
+    @unittest.skip("TODO Finish writing this test.")
     def test_simplify_tables(self):
         seed = 23
         for tables in self.get_wf_sims(seed=seed):
-            ts = msprime.load_tables(
-                nodes=tables.nodes, edges=tables.edges,
-                sites=tables.sites, mutations=tables.mutations)
-            for nsamples in [2, 5, 10]:
-                nodes = tables.nodes.copy()
-                edges = tables.edges.copy()
-                sites = tables.sites.copy()
-                mutations = tables.mutations.copy()
-                msprime.simplify_tables(
-                    samples=ts.samples(), nodes=nodes, edges=edges,
-                    sites=sites, mutations=mutations)
-                big_ts = msprime.load_tables(
-                    nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-                sub_samples = random.sample(
-                    big_ts.samples(), min(nsamples, len(big_ts.samples())))
-                msprime.simplify_tables(
-                    samples=sub_samples, nodes=nodes, edges=edges,
-                    sites=sites, mutations=mutations)
-                small_ts = msprime.load_tables(
-                    nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-                self.verify_simplify(big_ts, small_ts, samples=sub_samples)
+            # Keep flake8 happy.
+
+            self.assertTrue(tables is not None)
+            # ts = msprime.load_tables(
+            #     nodes=tables.nodes, edges=tables.edges,
+            #     sites=tables.sites, mutations=tables.mutations)
+            # for nsamples in [2, 5, 10]:
+            #     nodes = tables.nodes.copy()
+            #     edges = tables.edges.copy()
+            #     sites = tables.sites.copy()
+            #     mutations = tables.mutations.copy()
+            #     msprime.simplify_tables(
+            #         samples=ts.samples(), nodes=nodes, edges=edges,
+            #         sites=sites, mutations=mutations)
+            #     big_ts = msprime.load_tables(
+            #         nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+            #     sub_samples = random.sample(
+            #         big_ts.samples(), min(nsamples, len(big_ts.samples())))
+
+            #     big_ts.dump("wf.hdf5")
+            #     print("samples = ", sub_samples)
+            #     s = tests.Simplifier(big_ts, sub_samples)
+            #     small_ts = s.simplify()
+
+            #     msprime.simplify_tables(
+            #         samples=sub_samples, nodes=nodes, edges=edges,
+            #         sites=sites, mutations=mutations)
+            #     small_ts = msprime.load_tables(
+            #         nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+            #     self.verify_simplify(big_ts, small_ts, samples=sub_samples)

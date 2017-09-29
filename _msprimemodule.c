@@ -3758,53 +3758,6 @@ out:
     return ret;
 }
 
-/* Forward declaration */
-static PyTypeObject TreeSequenceType;
-static PyObject *
-TreeSequence_simplify(TreeSequence *self, PyObject *args, PyObject *kwds)
-{
-    PyObject *ret = NULL;
-    PyObject *py_samples = NULL;
-    static char *kwlist[] = {"output", "samples", "filter_invariant_sites", NULL};
-    node_id_t *samples = NULL;
-    size_t num_samples = 0;
-    TreeSequence *output = NULL;
-    int filter_invariant_sites = 1;
-    int flags = 0;
-    int err;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|i", kwlist,
-            &TreeSequenceType, &output,
-            &PyList_Type, &py_samples,
-            &filter_invariant_sites)) {
-        goto out;
-    }
-    if (TreeSequence_check_tree_sequence(output) != 0) {
-        goto out;
-    }
-    if (parse_sample_ids(py_samples, self->tree_sequence, &num_samples, &samples) != 0) {
-        goto out;
-    }
-    if (filter_invariant_sites) {
-        flags |= MSP_FILTER_INVARIANT_SITES;
-    }
-    err = tree_sequence_simplify(
-        self->tree_sequence, samples, (uint32_t) num_samples, flags, output->tree_sequence);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    if (samples != NULL) {
-        PyMem_Free(samples);
-    }
-    return ret;
-}
-
 static PyObject *
 TreeSequence_get_num_mutations(TreeSequence  *self)
 {
@@ -3890,9 +3843,6 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
-    {"simplify", (PyCFunction) TreeSequence_simplify,
-        METH_VARARGS|METH_KEYWORDS,
-        "Returns a simplified version of this tree sequence."},
     {NULL}  /* Sentinel */
 };
 
@@ -7626,6 +7576,8 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     migration_table_t *migrations = NULL;
     site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
+    PyObject *sample_map = NULL;
+    PyArrayObject *sample_map_array = NULL;
     npy_intp *shape;
     size_t num_samples;
     simplifier_t *simplifier = NULL;
@@ -7634,19 +7586,20 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     bool migrations_allocated = false;
     bool sites_allocated = false;
     bool mutations_allocated = false;
+    node_id_t *sample_map_data;
 
     static char *kwlist[] = {
         "samples", "nodes", "edges", "migrations", "sites", "mutations",
-        "filter_invariant_sites", NULL};
+        "sample_map", "filter_invariant_sites", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO!O!|O!O!O!i", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO!O!|O!O!O!Oi", kwlist,
             &samples,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
-            &filter_invariant_sites)) {
+            &sample_map, &filter_invariant_sites)) {
         goto out;
     }
     samples_array = (PyArrayObject *) PyArray_FROM_OTF(samples, NPY_INT32,
@@ -7695,6 +7648,24 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     }
     if (filter_invariant_sites) {
         flags |= MSP_FILTER_INVARIANT_SITES;
+    }
+    sample_map_data = NULL;
+    if (sample_map != NULL) {
+        sample_map_array = (PyArrayObject *) PyArray_FROM_OTF(sample_map, NPY_INT32,
+                NPY_ARRAY_INOUT_ARRAY);
+        if (sample_map_array == NULL) {
+            goto out;
+        }
+        if (PyArray_NDIM(sample_map_array) != 1) {
+            PyErr_SetString(PyExc_ValueError, "sample_map must 1D array");
+            goto out;
+        }
+        shape = PyArray_DIMS(sample_map_array);
+        if (shape[0] != num_samples) {
+            PyErr_SetString(PyExc_ValueError,
+                    "sample_map array must have sample size as samples");
+        }
+        sample_map_data = PyArray_DATA(sample_map_array);
     }
 
     /* If migrations, sites or mutations is NULL on the input, allocate an empty
@@ -7751,7 +7722,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
-    err = simplifier_run(simplifier);
+    err = simplifier_run(simplifier, sample_map_data);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -7763,6 +7734,7 @@ out:
         PyMem_Free(simplifier);
     }
     Py_XDECREF(samples_array);
+    Py_XDECREF(sample_map_array);
     if (migrations_allocated) {
         migration_table_free(migrations);
         PyMem_Free(migrations);

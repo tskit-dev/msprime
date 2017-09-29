@@ -147,11 +147,13 @@ def get_internal_samples_examples():
     yield ts
 
 
-def get_example_tree_sequences(back_mutations=True):
-    for ts in get_gap_examples():
-        yield ts
-    for ts in get_internal_samples_examples():
-        yield ts
+def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=True):
+    if gaps:
+        for ts in get_gap_examples():
+            yield ts
+    if internal_samples:
+        for ts in get_internal_samples_examples():
+            yield ts
     for n in [2, 3, 10, 100]:
         for m in [1, 2, 32]:
             for rho in [0, 0.1, 0.5]:
@@ -1123,8 +1125,12 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertRaises(ValueError, ts.write_vcf, self.temp_file, bad_ploidy)
 
     def verify_simplify_topology(self, ts, sample):
-        new_ts = ts.simplify(sample)
-        sample_map = {k: j for j, k in enumerate(sample)}
+        new_ts, sample_map = ts.simplify(sample)
+        for old_id, new_id in sample_map.items():
+            old_node = ts.node(old_id)
+            new_node = new_ts.node(new_id)
+            self.assertEqual(old_node.time, new_node.time)
+            self.assertEqual(old_node.population, new_node.population)
         old_trees = ts.trees()
         old_tree = next(old_trees)
         self.assertGreaterEqual(ts.get_num_trees(), new_ts.get_num_trees())
@@ -1140,6 +1146,7 @@ class TestTreeSequence(HighLevelTestCase):
             pairs = itertools.islice(itertools.combinations(sample, 2), 500)
             for pair in pairs:
                 mapped_pair = [sample_map[u] for u in pair]
+                # print("pair", pair, "->", mapped_pair)
                 mrca1 = old_tree.get_mrca(*pair)
                 mrca2 = new_tree.get_mrca(*mapped_pair)
                 self.assertEqual(old_tree.get_time(mrca1), new_tree.get_time(mrca2))
@@ -1149,7 +1156,7 @@ class TestTreeSequence(HighLevelTestCase):
     def verify_simplify_mutations(self, ts, sample):
         # Get the allele counts within the subset.
         allele_counts = {mut.position: 0 for mut in ts.mutations()}
-        sample_map = {k: j for j, k in enumerate(sample)}
+        new_ts, sample_map = ts.simplify(sample)
         samples = {mut.position: [] for mut in ts.mutations()}
         for tree in ts.trees(tracked_samples=sample):
             for site in tree.sites():
@@ -1159,7 +1166,6 @@ class TestTreeSequence(HighLevelTestCase):
                     for u in tree.samples(mut.node):
                         if u in sample_map:
                             samples[site.position].append(sample_map[u])
-        new_ts = ts.simplify(sample)
         self.assertLessEqual(new_ts.get_num_sites(), ts.get_num_sites())
         self.assertLessEqual(new_ts.get_num_mutations(), ts.get_num_mutations())
         for tree in new_ts.trees():
@@ -1173,10 +1179,11 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(sample_count, allele_counts[site.position])
 
     def verify_simplify_equality(self, ts, sample):
-        s1 = ts.simplify(sample)
+        s1, sample_map1 = ts.simplify(sample)
         t1 = s1.dump_tables()
-        s2 = simplify_tree_sequence(ts, sample)
+        s2, sample_map2 = simplify_tree_sequence(ts, sample)
         t2 = s2.dump_tables()
+        self.assertEqual(sample_map1, sample_map2)
         self.assertEqual(t1.nodes, t2.nodes)
         self.assertEqual(t1.edges, t2.edges)
         self.assertEqual(t1.migrations, t2.migrations)
@@ -1184,7 +1191,7 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertEqual(t1.mutations, t2.mutations)
 
     def verify_simplify_variants(self, ts, sample):
-        subset = ts.simplify(sample)
+        subset, sample_map = ts.simplify(sample)
         s = np.array(sample)
         full_genotypes = np.empty((ts.num_sites, ts.sample_size))
         full_positions = np.empty(ts.num_sites)
@@ -1212,11 +1219,12 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertIn(unique[0], [0, 1])
             j += 1
 
-    @unittest.skip("Skip simplify with internal sample examples")
+    # @unittest.skip("Skip simplify with internal sample examples")
     def test_simplify(self):
         num_mutations = 0
         # TODO When back-mutations are implemented correctly, enable this test fully
-        for ts in get_example_tree_sequences(back_mutations=False):
+        for ts in get_example_tree_sequences(
+                back_mutations=False, gaps=False, internal_samples=False):
             n = ts.get_sample_size()
             num_mutations += ts.get_num_mutations()
             if n > 2:

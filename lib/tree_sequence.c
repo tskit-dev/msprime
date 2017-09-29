@@ -2294,8 +2294,8 @@ tree_sequence_get_sample_index_map(tree_sequence_t *self, node_id_t **sample_ind
 }
 
 int WARN_UNUSED
-tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
-        size_t num_samples, int flags, tree_sequence_t *output)
+tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples, size_t num_samples,
+        int flags, tree_sequence_t *output, node_id_t *sample_map)
 {
     int ret = 0;
     simplifier_t *simplifier = NULL;
@@ -2370,7 +2370,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
     if (ret != 0) {
         goto out;
     }
-    ret = simplifier_run(simplifier);
+    ret = simplifier_run(simplifier, sample_map);
     if (ret != 0) {
         goto out;
     }

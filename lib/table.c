@@ -1384,9 +1384,7 @@ simplifier_check_state(simplifier_t *self)
             total_segments++;
         }
     }
-    /* FIXME !! Disabled this because of weird stuff happening with internal
-     * samples. Fix and reenable.  */
-    /* assert(total_segments == object_heap_get_num_allocated(&self->segment_heap)); */
+    assert(total_segments == object_heap_get_num_allocated(&self->segment_heap));
     assert(total_avl_nodes == object_heap_get_num_allocated(&self->avl_node_heap));
 }
 
@@ -1763,6 +1761,26 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+simplifier_insert_sample(simplifier_t *self, node_id_t sample_id)
+{
+    int ret = 0;
+
+    assert(self->ancestor_map[sample_id] == NULL);
+    self->ancestor_map[sample_id] = simplifier_alloc_segment(self, 0,
+            self->sequence_length, (node_id_t) self->nodes->num_rows, NULL);
+    if (self->ancestor_map[sample_id] == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = simplifier_record_node(self, sample_id);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
 int
 simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
@@ -1770,7 +1788,6 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
 {
     int ret = 0;
     size_t j, offset;
-    node_id_t input_node;
 
     memset(self, 0, sizeof(simplifier_t));
     self->samples = samples;
@@ -1846,6 +1863,7 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     self->num_buffered_edges = 0;
     self->edge_buffer = malloc(self->max_buffered_edges * sizeof(edge_t));
     if (self->edge_buffer == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
 
@@ -1865,31 +1883,43 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     self->ancestor_map = calloc(self->input_nodes.num_rows, sizeof(simplify_segment_t *));
     self->root_map = calloc(self->input_nodes.num_rows, sizeof(simplify_segment_t *));
     self->node_id_map = malloc(self->input_nodes.num_rows * sizeof(node_id_t));
+    self->unmapped_sample = calloc(self->input_nodes.num_rows, sizeof(bool));
+    self->is_sample = calloc(self->input_nodes.num_rows, sizeof(bool));
     if (self->ancestor_map == NULL || self->root_map == NULL
-            || self->node_id_map == NULL) {
+            || self->node_id_map == NULL || self->unmapped_sample == NULL
+            || self->is_sample == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     memset(self->node_id_map, 0xff, self->input_nodes.num_rows * sizeof(node_id_t));
     self->nodes->num_rows = 0;
+    avl_init_tree(&self->merge_queue, cmp_segment_queue, NULL);
+
+    /* Go through the samples to check for errors. */
     for (j = 0; j < self->num_samples; j++) {
-        input_node = samples[j];
-        if (self->ancestor_map[samples[j]] != NULL) {
+        if (samples[j] < 0 || samples[j] > (node_id_t) self->input_nodes.num_rows) {
+            ret = MSP_ERR_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (self->is_sample[samples[j]]) {
             ret = MSP_ERR_DUPLICATE_SAMPLE;
             goto out;
         }
-        self->ancestor_map[samples[j]] = simplifier_alloc_segment(self, 0,
-                self->sequence_length, (node_id_t) self->nodes->num_rows, NULL);
-        if (self->ancestor_map[samples[j]] == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        ret = simplifier_record_node(self, input_node);
-        if (ret != 0) {
-            goto out;
+        self->is_sample[samples[j]] = true;
+    }
+
+    /* Now set up the time-zero samples. */
+    memset(self->unmapped_sample, 0, self->input_nodes.num_rows * sizeof(bool));
+    for (j = 0; j < self->num_samples; j++) {
+        if (self->input_nodes.time[samples[j]] == 0.0) {
+            ret = simplifier_insert_sample(self, samples[j]);
+            if (ret != 0) {
+                goto out;
+            }
+        } else {
+            self->unmapped_sample[samples[j]] = true;
         }
     }
-    avl_init_tree(&self->merge_queue, cmp_segment_queue, NULL);
 
     /* Allocate the segment buffers */
     self->segment_buffer_size = 64;
@@ -1916,6 +1946,8 @@ simplifier_free(simplifier_t *self)
     msp_safe_free(self->root_map);
     msp_safe_free(self->segment_buffer);
     msp_safe_free(self->edge_buffer);
+    msp_safe_free(self->unmapped_sample);
+    msp_safe_free(self->is_sample);
     msp_safe_free(self->mutation_map);
     msp_safe_free(self->mutation_mem);
     msp_safe_free(self->output_sites);
@@ -2155,7 +2187,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
                 }
             }
             v = self->node_id_map[input_id];
-            if (v >= 0 && v < (node_id_t) self->num_samples) {
+            if (v >= 0 && self->is_sample[input_id]) {
                 /* If we have a mapped node over an interval with no other segments,
                  * then we must record this edge as it joins internal samples */
                 ret = simplifier_record_edge(self, alpha->left, alpha->right, v,
@@ -2368,7 +2400,7 @@ out:
 }
 
 int WARN_UNUSED
-simplifier_run(simplifier_t *self)
+simplifier_run(simplifier_t *self, node_id_t *sample_map)
 {
     int ret = 0;
     size_t j;
@@ -2389,6 +2421,20 @@ simplifier_run(simplifier_t *self)
             assert(avl_count(&self->merge_queue) == 0);
             current_parent = parent;
         }
+        if (self->unmapped_sample[child]) {
+            self->unmapped_sample[child] = false;
+            ret = simplifier_insert_sample(self, child);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        if (self->unmapped_sample[parent]) {
+            self->unmapped_sample[parent] = false;
+            ret = simplifier_insert_sample(self, parent);
+            if (ret != 0) {
+                goto out;
+            }
+        }
         if (self->ancestor_map[child] != NULL) {
             ret = simplifier_record_mutations(self, child);
             if (ret != 0) {
@@ -2406,6 +2452,15 @@ simplifier_run(simplifier_t *self)
     }
     assert(avl_count(&self->merge_queue) == 0);
     ret = simplifier_output_sites(self);
+    if (ret != 0) {
+        goto out;
+    }
+    if (sample_map != NULL) {
+        /* Finally, output the new IDs for the samples, if required. */
+        for (j = 0; j < self->num_samples; j++) {
+            sample_map[j] = self->node_id_map[self->samples[j]];
+        }
+    }
 out:
     return ret;
 }

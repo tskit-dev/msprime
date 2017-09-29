@@ -575,24 +575,21 @@ class Simplifier(object):
         self.num_output_nodes = 0
         self.output_sites = {}
         self.edge_buffer = []
-        # Keep track of then number of segments we alloc and free to ensure we
-        # don't leak.
-        self.num_used_segments = 0
         self.node_id_map = {}
-        for j, sample_id in enumerate(sample):
-            # segment label (j) is the output node ID
-            x = self.alloc_segment(0, self.m, j)
-            # and the label in A is the input node ID
-            self.A[sample_id] = x
-            self.record_node(sample_id)
+        # Map all samples at time 0 to new nodes. Keep all internal samples in
+        # a list so that we can map them later as we encounter them.
+        self.unmapped_samples = set()
+        self.samples = set(sample)
+        for sample_id in sample:
+            if ts.node(sample_id).time == 0:
+                self.insert_sample(sample_id)
+            else:
+                self.unmapped_samples.add(sample_id)
         # We keep a sorted map of mutations for each input node.
         self.mutation_map = [SortedMap() for _ in range(ts.num_nodes)]
         for site in self.ts.sites():
             for mut in site.mutations:
                 self.mutation_map[mut.node][site.position] = mut
-
-    def is_sample(self, output_id):
-        return output_id < self.n
 
     def get_mutations(self, input_id, left, right):
         """
@@ -614,7 +611,6 @@ class Simplifier(object):
         Allocates a new segment with the specified values.
         """
         s = Segment(left, right, node, next)
-        self.num_used_segments += 1
         return s
 
     def free_segment(self, u):
@@ -624,7 +620,6 @@ class Simplifier(object):
         Note: this method is only here to ensure that we are not leaking segments
         in the C implementation.
         """
-        self.num_used_segments -= 1
 
     def record_node(self, input_id):
         """
@@ -702,28 +697,57 @@ class Simplifier(object):
         print("Output Edges: ")
         print(self.edge_table)
 
+    def insert_sample(self, sample_id):
+        """
+        Inserts the specified sample ID into the algorithm state.
+        """
+        # print("INSERTING SAMPLE", sample_id)
+        self.record_node(sample_id)
+        x = self.alloc_segment(0, self.m, self.node_id_map[sample_id])
+        self.A[sample_id] = x
+
+    def process_parent_edges(self, edges):
+        """
+        Process all of the edges for a given parent.
+        """
+        assert len(set(e.parent for e in edges)) == 1
+        parent = edges[0].parent
+        # print("====================")
+        # print("Process parent edges", parent, edges)
+        # print("====================")
+        H = []
+        for edge in edges:
+            if edge.child in self.unmapped_samples:
+                self.unmapped_samples.remove(edge.child)
+                self.insert_sample(edge.child)
+            if edge.parent in self.unmapped_samples:
+                self.unmapped_samples.remove(edge.parent)
+                self.insert_sample(edge.parent)
+            if edge.child in self.A:
+                # print("Remove", edge.left, edge.right, edge.child, sep="\t")
+                self.remove_ancestry(edge.left, edge.right, edge.child, H)
+                self.check_state()
+        # print("merging for ", parent)
+        # self.print_state()
+        # self.print_heaps(H)
+        self.merge_labeled_ancestors(H, parent)
+        # self.print_state()
+        self.check_state()
+
     def simplify(self):
-        # TODO change this to split the edges more efficiently using the natural
-        # ordering.
-        the_parents = [
-            (node.time, input_id) for input_id, node in enumerate(self.ts.nodes())]
-        # need to deal with parents in order by birth time-ago
-        the_parents.sort()
-        for time, input_id in the_parents:
-            # inefficent way to pull all edges corresponding to a given parent
-            edges = [x for x in self.ts.edges() if x.parent == input_id]
-            H = []
-            for edge in edges:
-                if edge.child in self.A:
-                    self.remove_ancestry(edge.left, edge.right, edge.child, H)
-                    # self.check_state()
-            # print("merging for ", input_id)
-            # self.print_heaps(H)
-            # self.print_state()
-            self.merge_labeled_ancestors(H, input_id)
-            # self.check_state()
+        # print("START")
+        # self.print_state()
+        all_edges = list(self.ts.edges())
+        edges = all_edges[:1]
+        for e in all_edges[1:]:
+            if e.parent != edges[0].parent:
+                self.process_parent_edges(edges)
+                edges = []
+            edges.append(e)
+        self.process_parent_edges(edges)
         # print("DONE")
         # self.print_state()
+
         # The extant segments are the roots for each interval. For every root
         # node, store the intervals over which it applies.
         roots = collections.defaultdict(list)
@@ -761,9 +785,11 @@ class Simplifier(object):
                 output_site_id += 1
         # print("DONE")
         # self.print_state()
-        return msprime.load_tables(
+        sample_map = {u: self.node_id_map[u] for u in self.samples}
+        ts = msprime.load_tables(
             nodes=self.node_table, edges=self.edge_table,
             sites=self.site_table, mutations=self.mutation_table)
+        return ts, sample_map
 
     def record_mutation(self, node, mutation):
         position = self.input_sites[mutation.site].position
@@ -775,6 +801,9 @@ class Simplifier(object):
             site = self.output_sites[position]
         site.mutations.append(
             msprime.Mutation(site=None, node=node, derived_state=mutation.derived_state))
+
+    def is_sample(self, input_id):
+        return input_id in self.samples
 
     def remove_ancestry(self, left, right, input_id, H):
         """
@@ -859,6 +888,7 @@ class Simplifier(object):
                 r = min(r, x.right)
             if len(H) > 0:
                 r = min(r, H[0][0])
+
             if len(X) == 1:
                 x = X[0]
                 if len(H) > 0 and H[0][0] < x.right:
@@ -873,7 +903,7 @@ class Simplifier(object):
                     alpha.next = None
                 if input_id in self.node_id_map:
                     u = self.node_id_map[input_id]
-                    if self.is_sample(u):
+                    if self.is_sample(input_id):
                         self.record_edge(alpha.left, alpha.right, u, alpha.node)
                         alpha.node = u
             else:
@@ -899,15 +929,8 @@ class Simplifier(object):
             # loop tail; update alpha and integrate it into the state.
             if z is None:
                 if input_id in self.A:
-                    # If ancestry already exists for this input_id, we must replace
-                    # the corresponding chunk and update
-                    # print("mapping for input_id", input_id)
-                    # print(self.A[input_id])
-                    # print(alpha)
                     assert alpha.node == self.A[input_id].node
-                    # self.insert_into_chain(input_id, alpha)
                 else:
-                    # Otherwise, alpha is the head of the chain.
                     self.A[input_id] = alpha
             else:
                 z.next = alpha

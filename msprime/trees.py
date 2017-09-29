@@ -2451,34 +2451,47 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def simplify(self, samples=None, filter_root_mutations=True):
+    def simplify(self, samples=None, filter_invariant_sites=True):
         """
-        Returns a simplified tree sequence, that retains only the history of
-        the nodes given in the list ``samples''.  This will change the ID of
-        the nodes, so that the individual ``samples[k]]`` will have ID ``k`` in
-        the result.  In the resulting TreeSequence, the first ``len(samples)``
-        nodes will be marked as samples.
+        Returns a simplified tree sequence that retains only the history of
+        the nodes given in the list ``samples'' and a dictionary mapping the
+        sample node IDs in the this tree sequence to their equivlalent IDs
+        in the simplified tree sequence.
+
+        **TODO** Document the details of how node IDs are transformed.
 
         If you wish to convert a set of tables that do not satisfy all
         requirements for building a TreeSequence, then use
         ``simplify_tables()``.
 
         :param list samples: The list of nodes for which to retain information.
-        :param bool filter_root_mutations: Whether to remove sites at which there
-            are no mutations.
+        :param bool filter_invariant_sites: If True, remove any sites that have
+            no mutations in the simplified tree sequence.
+        :return: The simplified tree sequence and a dictionary mapping source
+            sample IDs to their corresponding IDs in the new tree sequence.
+        :rtype: (.TreeSequence, dict)
         """
+        check_numpy()
+        t = self.dump_tables()
         if samples is None:
             samples = self.get_samples()
-        ll_ts = _msprime.TreeSequence()
-        self._ll_tree_sequence.simplify(ll_ts, samples, filter_root_mutations)
-        new_ts = msprime.TreeSequence(ll_ts)
+        sample_map = np.empty(len(samples), dtype=np.int32)
+        tables.simplify_tables(
+            samples=samples, nodes=t.nodes, edges=t.edges,
+            sites=t.sites, mutations=t.mutations, sample_map=sample_map)
+        new_ts = load_tables(
+            nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
+            mutations=t.mutations)
         # FIXME provenance
         # for provenance in self.get_provenance():
         #     new_ts.add_provenance(provenance)
         # parameters = {"TODO": "encode subset parameters"}
         # new_ts_provenance = get_provenance_dict("simplify", parameters)
         # new_ts.add_provenance(json.dumps(new_ts_provenance))
-        return new_ts
+
+        # Return a dictionary mapping the original sample IDs into the
+        # samples IDs of the new tree sequence.
+        return new_ts, {samples[j]: sample_map[j] for j in range(len(samples))}
 
 
 class HaplotypeGenerator(object):
