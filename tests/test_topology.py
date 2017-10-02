@@ -431,7 +431,6 @@ class TestUnaryNodes(TopologyTestCase):
             20, recombination_rate=5, mutation_rate=5, random_seed=self.random_seed)
         self.verify_unary_tree_sequence(ts)
 
-    @unittest.skip("Diffs broken")
     def test_nonbinary_tree_sequence_unary_nodes(self):
         demographic_events = [
             msprime.SimpleBottleneck(time=1.0, proportion=0.95)]
@@ -439,7 +438,7 @@ class TestUnaryNodes(TopologyTestCase):
             20, recombination_rate=10, mutation_rate=5,
             demographic_events=demographic_events, random_seed=self.random_seed)
         found = False
-        for r in ts.records():
+        for r in ts.edgesets():
             if len(r.children) > 2:
                 found = True
         self.assertTrue(found)
@@ -571,7 +570,6 @@ class TestGeneralSamples(TopologyTestCase):
             20, recombination_rate=5, mutation_rate=5, random_seed=self.random_seed)
         self.verify_permuted_nodes(ts)
 
-    @unittest.skip("Diffs broken")
     def test_nonbinary_tree_sequence_permuted_nodes(self):
         demographic_events = [
             msprime.SimpleBottleneck(time=1.0, proportion=0.95)]
@@ -579,9 +577,8 @@ class TestGeneralSamples(TopologyTestCase):
             20, recombination_rate=10, mutation_rate=5,
             demographic_events=demographic_events, random_seed=self.random_seed)
         found = False
-        # TODO Use the edgesets() here.
-        for r in ts.records():
-            if len(r.children) > 2:
+        for e in ts.edgesets():
+            if len(e.children) > 2:
                 found = True
         self.assertTrue(found)
         self.verify_permuted_nodes(ts)

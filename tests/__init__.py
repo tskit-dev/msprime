@@ -261,17 +261,19 @@ class PythonTreeSequence(object):
         while j < M:
             e_out = []
             e_in = []
-            x = l[I[j]]
-            while r[O[k]] == x:
+            while r[O[k]] == left:
                 h = O[k]
                 e_out.append(msprime.Edge(l[h], r[h], p[h], c[h]))
                 k += 1
-            while j < M and l[I[j]] == x:
+            while j < M and l[I[j]] == left:
                 h = I[j]
                 e_in.append(msprime.Edge(l[h], r[h], p[h], c[h]))
                 j += 1
-            yield (left, r[O[k]]), e_out, e_in
-            left = r[O[k]]
+            right = self._tree_sequence.get_sequence_length()
+            if j < M:
+                right = min(r[O[k]], l[I[j]])
+            yield (left, right), e_out, e_in
+            left = right
 
     def trees(self):
         M = self._tree_sequence.get_num_edges()

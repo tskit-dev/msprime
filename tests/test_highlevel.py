@@ -975,8 +975,7 @@ class TestTreeSequence(HighLevelTestCase):
                     self.assertEqual(children[u], set(tree.children(u)))
 
     def test_edge_diffs(self):
-        # TODO diffs don't work properly for in either the Python or C versions.
-        for ts in get_example_tree_sequences(gaps=False):
+        for ts in get_example_tree_sequences():
             self.verify_edge_diffs(ts)
 
     def verify_edgesets(self, ts):
@@ -1011,7 +1010,7 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertEqual(edges, squashed)
 
     def test_edgesets(self):
-        for ts in get_example_tree_sequences(gaps=False):
+        for ts in get_example_tree_sequences():
             self.verify_edgesets(ts)
 
     def verify_tracked_samples(self, ts):

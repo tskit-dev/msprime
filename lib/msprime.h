@@ -456,8 +456,6 @@ typedef struct _node_list {
 } node_list_t;
 
 typedef struct {
-    size_t sample_size;
-    double sequence_length;
     size_t num_nodes;
     size_t num_edges;
     double tree_left;

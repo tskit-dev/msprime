@@ -2422,7 +2422,6 @@ tree_diff_iterator_alloc(tree_diff_iterator_t *self,
 
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(tree_diff_iterator_t));
-    self->sample_size = tree_sequence_get_sample_size(tree_sequence);
     self->num_nodes = tree_sequence_get_num_nodes(tree_sequence);
     self->num_edges = tree_sequence_get_num_edges(tree_sequence);
     self->tree_sequence = tree_sequence;
@@ -2459,12 +2458,13 @@ tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out)
 }
 
 int WARN_UNUSED
-tree_diff_iterator_next(tree_diff_iterator_t *self, double *left, double *right,
+tree_diff_iterator_next(tree_diff_iterator_t *self, double *ret_left, double *ret_right,
         edge_list_t **edges_out, edge_list_t **edges_in)
 {
     int ret = 0;
     node_id_t k;
-    double last_left = self->tree_left;
+    double left = self->tree_left;
+    double right = self->tree_sequence->sequence_length;
     size_t next_edge_list_node = 0;
     tree_sequence_t *s = self->tree_sequence;
     edge_list_t *out_head = NULL;
@@ -2478,9 +2478,8 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *left, double *right,
 
     if (self->tree_index + 1 < num_trees) {
         /* First we remove the stale records */
-        while (s->edges.right[
-                s->edges.indexes.removal_order[self->removal_index]]
-                    == self->tree_left) {
+        while (left == s->edges.right[
+                s->edges.indexes.removal_order[self->removal_index]]) {
             k = s->edges.indexes.removal_order[self->removal_index];
             assert(next_edge_list_node < self->num_edges);
             w = &self->edge_list_nodes[next_edge_list_node];
@@ -2502,9 +2501,8 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *left, double *right,
 
         /* Now insert the new records */
         while (self->insertion_index < self->num_edges &&
-                s->edges.left[
-                    s->edges.indexes.insertion_order[self->insertion_index]]
-                        == self->tree_left) {
+                left == s->edges.left[
+                    s->edges.indexes.insertion_order[self->insertion_index]]) {
             k = s->edges.indexes.insertion_order[self->insertion_index];
             assert(next_edge_list_node < self->num_edges);
             w = &self->edge_list_nodes[next_edge_list_node];
@@ -2523,16 +2521,20 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *left, double *right,
             }
             self->insertion_index++;
         }
-        /* Update the left coordinate */
-        self->tree_left = s->edges.right[
-            s->edges.indexes.removal_order[self->removal_index]];
+        if (self->insertion_index < self->num_edges) {
+            right = GSL_MIN(
+                s->edges.left[s->edges.indexes.insertion_order[self->insertion_index]],
+                s->edges.right[s->edges.indexes.removal_order[self->removal_index]]);
+        }
         self->tree_index++;
         ret = 1;
     }
     *edges_out = out_head;
     *edges_in = in_head;
-    *left = last_left;
-    *right = self->tree_left;
+    *ret_left = left;
+    *ret_right = right;
+    /* Set the left coordinate for the next tree */
+    self->tree_left = right;
     return ret;
 }
 
@@ -3303,12 +3305,15 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
             self->right = GSL_MIN(
                     in_breakpoints[in_order[in]], out_breakpoints[out_order[out]]);
         }
+        /* if (out < R) { */
+        /*     self->right = out_breakpoints[out_order[out]]; */
+        /* } */
     } else {
         self->right = x;
         self->left = 0;
-        if (in >= 0) {
-            self->left = GSL_MAX(
-                    in_breakpoints[in_order[in]], out_breakpoints[out_order[out]]);
+        if (out < R) {
+            /* TODO Don't think this is fully correct. */
+            self->left = out_breakpoints[out_order[out]];
         }
     }
     self->direction = direction;
