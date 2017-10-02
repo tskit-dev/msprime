@@ -25,6 +25,7 @@ from __future__ import print_function
 import collections
 import gzip
 import json
+import itertools
 import math
 import random
 import sys
@@ -116,6 +117,9 @@ class SimpleContainer(object):
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
 
+    def __ne__(self, other):
+        return not (self == other)
+
     def __repr__(self):
         return repr(self.__dict__)
 
@@ -135,13 +139,27 @@ class Node(SimpleContainer):
 
 
 class Edge(SimpleContainer):
-
-    # TODO this is mad. We should have left, right, parent, child
-    def __init__(self, parent, child, left=0, right=1):
+    def __init__(self, left, right, parent, child):
         self.left = left
         self.right = right
         self.parent = parent
         self.child = child
+
+    def __repr__(self):
+        return "{{left={:.3f}, right={:.3f}, parent={}, child={}}}".format(
+            self.left, self.right, self.parent, self.child)
+
+
+class Edgeset(SimpleContainer):
+    def __init__(self, left, right, parent, children):
+        self.left = left
+        self.right = right
+        self.parent = parent
+        self.children = children
+
+    def __repr__(self):
+        return "{{left={:.3f}, right={:.3f}, parent={}, children={}}}".format(
+            self.left, self.right, self.parent, self.children)
 
 
 def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
@@ -2085,26 +2103,11 @@ class TreeSequence(object):
             the coalescence records in this tree sequence.
         :rtype: iter
         """
-        # Note this is very inefficient and does not work when the the edges are
-        # chopped in less aligned ways.
-        edges = list(self.edges())
         t = [node.time for node in self.nodes()]
         pop = [node.population for node in self.nodes()]
-        edges.sort(key=lambda e: (t[e.parent], e.parent, e.left, e.right, e.child))
-        parent = edges[0].parent
-        left = edges[0].left
-        right = edges[0].right
-        children = [edges[0].child]
-        for e in edges[1:]:
-            if e.parent != parent or e.left != left or e.right != right:
-                yield CoalescenceRecord(
-                    left, right, parent, children, t[parent], pop[parent])
-                left = e.left
-                right = e.right
-                parent = e.parent
-                children = []
-            children.append(e.child)
-        yield CoalescenceRecord(left, right, parent, children, t[parent], pop[parent])
+        for e in self.edgesets():
+            yield CoalescenceRecord(
+                e.left, e.right, e.parent, e.children, t[e.parent], pop[e.parent])
 
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
@@ -2118,6 +2121,37 @@ class TreeSequence(object):
         for j in range(self.num_edges):
             left, right, parent, child = self._ll_tree_sequence.get_edge(j)
             yield Edge(left=left, right=right, parent=parent, child=child)
+
+    def edgesets(self):
+        # TODO the order that these records are returned in is not well specified.
+        # Hopefully this does not matter, and we can just state that the ordering
+        # should not be depended on.
+        children = collections.defaultdict(set)
+        active_edgesets = {}
+        for (left, right), edges_out, edges_in in self.edge_diffs():
+            # Complete and return any edgesets that are affected by this tree
+            # transition
+            parents = iter(edge.parent for edge in itertools.chain(edges_out, edges_in))
+            for parent in parents:
+                if parent in active_edgesets:
+                    edgeset = active_edgesets.pop(parent)
+                    edgeset.right = left
+                    edgeset.children = sorted(children[parent])
+                    yield edgeset
+            for edge in edges_out:
+                children[edge.parent].remove(edge.child)
+            for edge in edges_in:
+                children[edge.parent].add(edge.child)
+            # Update the active edgesets
+            for edge in itertools.chain(edges_out, edges_in):
+                if len(children[edge.parent]) > 0 and edge.parent not in active_edgesets:
+                    active_edgesets[edge.parent] = Edgeset(left, right, edge.parent, [])
+
+        for parent in active_edgesets.keys():
+            edgeset = active_edgesets[parent]
+            edgeset.right = self.sequence_length
+            edgeset.children = sorted(children[edgeset.parent])
+            yield edgeset
 
     def diffs(self):
         """
@@ -2143,7 +2177,15 @@ class TreeSequence(object):
             tree sequence.
         :rtype: iter
         """
-        return _msprime.TreeDiffIterator(self._ll_tree_sequence)
+        raise ValueError("diffs not implemented")
+        # return _msprime.TreeDiffIterator(self._ll_tree_sequence)
+
+    def edge_diffs(self):
+        iterator = _msprime.TreeDiffIterator(self._ll_tree_sequence)
+        for interval, edge_tuples_out, edge_tuples_in in iterator:
+            edges_out = [Edge(*e) for e in edge_tuples_out]
+            edges_in = [Edge(*e) for e in edge_tuples_in]
+            yield interval, edges_out, edges_in
 
     def sites(self):
         for j in range(self.num_sites):

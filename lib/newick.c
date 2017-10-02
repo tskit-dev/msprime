@@ -435,8 +435,9 @@ newick_converter_next(newick_converter_t *self, double *length, char **tree)
     int ret = -1;
     int err;
     edge_list_t *edges_out, *edges_in;
+    double left, right;
 
-    ret = tree_diff_iterator_next(&self->diff_iterator, length, &edges_out,
+    ret = tree_diff_iterator_next(&self->diff_iterator, &left, &right, &edges_out,
             &edges_in);
     if (ret < 0) {
         goto out;
@@ -450,6 +451,7 @@ newick_converter_next(newick_converter_t *self, double *length, char **tree)
         assert(self->root->subtree != NULL);
         assert(avl_count(&self->tree) == 2 * self->sample_size - 1);
         *tree = self->root->subtree;
+        *length = right - left;
     }
 out:
     return ret;

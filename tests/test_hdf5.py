@@ -187,14 +187,12 @@ class TestLoadLegacyExamples(TestHdf5):
         self.verify_tree_sequence(ts)
 
 
-@unittest.skip("Diffs broken")
 class TestRoundTrip(TestHdf5):
     """
     Tests if we can round trip convert a tree sequence in memory
     through a V2 file format and a V3 format.
     """
     def verify_tree_sequences_equal(self, ts, tsp):
-        self.assertEqual(ts.num_edges, tsp.num_edges)
         self.assertEqual(ts.get_sample_size(), tsp.get_sample_size())
         self.assertEqual(ts.get_sequence_length(), tsp.get_sequence_length())
         self.assertEqual(ts.get_num_mutations(), tsp.get_num_mutations())
@@ -202,7 +200,7 @@ class TestRoundTrip(TestHdf5):
         self.assertEqual(ts.get_num_trees(), tsp.get_num_trees())
         self.assertEqual(list(ts.sites()), list(tsp.sites()))
         self.assertEqual(list(ts.nodes()), list(tsp.nodes()))
-        self.assertEqual(list(ts.edges()), list(tsp.edges()))
+        self.assertEqual(list(ts.edgesets()), list(tsp.edgesets()))
         self.assertEqual(ts.get_num_nodes(), tsp.get_num_nodes())
         num_trees = 0
         for t1, t2 in zip(ts.trees(), tsp.trees()):

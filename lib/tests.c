@@ -5655,7 +5655,7 @@ verify_tree_diffs(tree_sequence_t *ts)
     edge_list_t *record, *records_out, *records_in;
     size_t num_nodes = tree_sequence_get_num_nodes(ts);
     size_t j, num_trees;
-    double length, x;
+    double left, right;
     node_id_t *parent = malloc(num_nodes * sizeof(node_id_t));
     node_id_t *child = malloc(num_nodes * sizeof(node_id_t));
     node_id_t *sib = malloc(num_nodes * sizeof(node_id_t));
@@ -5679,10 +5679,9 @@ verify_tree_diffs(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     tree_diff_iterator_print_state(&iter, _devnull);
 
-    x = 0.0;
     num_trees = 0;
     while ((ret = tree_diff_iterator_next(
-                &iter, &length, &records_out, &records_in)) == 1) {
+                &iter, &left, &right, &records_out, &records_in)) == 1) {
         tree_diff_iterator_print_state(&iter, _devnull);
         num_trees++;
         for (record = records_out; record != NULL; record = record->next) {
@@ -5695,9 +5694,8 @@ verify_tree_diffs(tree_sequence_t *ts)
         for (j = 0; j < num_nodes; j++) {
             CU_ASSERT_EQUAL(parent[j], tree.parent[j]);
         }
-        CU_ASSERT_EQUAL(tree.left, x);
-        x += length;
-        CU_ASSERT_EQUAL(tree.right, x);
+        CU_ASSERT_EQUAL(tree.left, left);
+        CU_ASSERT_EQUAL(tree.right, right);
         ret = sparse_tree_next(&tree);
         if (num_trees < tree_sequence_get_num_trees(ts)) {
             CU_ASSERT_EQUAL(ret, 1);

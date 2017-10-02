@@ -29,6 +29,7 @@ except ImportError:
     # This fails for Python 3.x, but that's fine.
     pass
 
+import collections
 import gzip
 import itertools
 import json
@@ -36,8 +37,8 @@ import math
 import os
 import random
 import shutil
-import sys
 import six
+import sys
 import tempfile
 import unittest
 
@@ -945,19 +946,73 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences(back_mutations=False):
             self.verify_mutations(ts)
 
-    def verify_tree_diffs(self, ts):
+    def verify_edge_diffs(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
-        iter1 = ts.diffs()
-        iter2 = pts.diffs()
-        for t1, t2 in zip(iter1, iter2):
-            self.assertEqual(t1, t2)
-        self.assertRaises(StopIteration, next, iter1)
-        self.assertRaises(StopIteration, next, iter2)
+        d1 = list(ts.edge_diffs())
+        d2 = list(pts.edge_diffs())
+        self.assertEqual(d1, d2)
 
-    @unittest.skip("diffs broken")
-    def test_tree_diffs(self):
-        for ts in get_example_tree_sequences():
-            self.verify_tree_diffs(ts)
+        # check that we have the correct set of children at all nodes.
+        children = collections.defaultdict(set)
+        trees = iter(ts.trees())
+        tree = next(trees)
+        last_right = 0
+        for (left, right), edges_out, edges_in in ts.edge_diffs():
+            assert left == last_right
+            last_right = right
+            for edge in edges_out:
+                children[edge.parent].remove(edge.child)
+            for edge in edges_in:
+                children[edge.parent].add(edge.child)
+            while tree.interval[1] <= left:
+                tree = next(trees)
+            # print(left, right, tree.interval)
+            self.assertTrue(left >= tree.interval[0])
+            self.assertTrue(right <= tree.interval[1])
+            for u in tree.nodes():
+                if tree.is_internal(u):
+                    self.assertIn(u, children)
+                    self.assertEqual(children[u], set(tree.children(u)))
+
+    def test_edge_diffs(self):
+        # TODO diffs don't work properly for in either the Python or C versions.
+        for ts in get_example_tree_sequences(gaps=False):
+            self.verify_edge_diffs(ts)
+
+    def verify_edgesets(self, ts):
+        """
+        Verifies that the edgesets we return are equivalent to the original edges.
+        """
+        new_edges = []
+        for edgeset in ts.edgesets():
+            self.assertEqual(edgeset.children, sorted(edgeset.children))
+            self.assertGreater(len(edgeset.children), 0)
+            for child in edgeset.children:
+                new_edges.append(msprime.Edge(
+                    edgeset.left, edgeset.right, edgeset.parent, child))
+        # squash the edges.
+        t = ts.dump_tables().nodes.time
+        new_edges.sort(key=lambda e: (t[e.parent], e.parent, e.child, e.left))
+
+        squashed = []
+        last_e = new_edges[0]
+        for e in new_edges[1:]:
+            condition = (
+                e.parent != last_e.parent or
+                e.child != last_e.child or
+                e.left != last_e.right)
+            if condition:
+                squashed.append(last_e)
+                last_e = e
+            last_e.right = e.right
+        squashed.append(last_e)
+        edges = list(ts.edges())
+        self.assertEqual(len(squashed), len(edges))
+        self.assertEqual(edges, squashed)
+
+    def test_edgesets(self):
+        for ts in get_example_tree_sequences(gaps=False):
+            self.verify_edgesets(ts)
 
     def verify_tracked_samples(self, ts):
         # Should be empty list by default.

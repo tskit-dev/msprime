@@ -2459,7 +2459,7 @@ tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out)
 }
 
 int WARN_UNUSED
-tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
+tree_diff_iterator_next(tree_diff_iterator_t *self, double *left, double *right,
         edge_list_t **edges_out, edge_list_t **edges_in)
 {
     int ret = 0;
@@ -2531,10 +2531,8 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
     }
     *edges_out = out_head;
     *edges_in = in_head;
-    *length = 0;
-    if (num_trees > 0) {
-        *length = self->tree_left - last_left;
-    }
+    *left = last_left;
+    *right = self->tree_left;
     return ret;
 }
 

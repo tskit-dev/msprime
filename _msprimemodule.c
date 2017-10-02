@@ -4565,14 +4565,14 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
     PyObject *in_list = NULL;
     PyObject *value = NULL;
     int err;
-    double length;
+    double left, right;
     size_t list_size, j;
     edge_list_t *records_out, *records_in, *record;
 
     if (TreeDiffIterator_check_state(self) != 0) {
         goto out;
     }
-    err = tree_diff_iterator_next(self->tree_diff_iterator, &length,
+    err = tree_diff_iterator_next(self->tree_diff_iterator, &left, &right,
             &records_out, &records_in);
     if (err < 0) {
         handle_library_error(err);
@@ -4625,7 +4625,7 @@ TreeDiffIterator_next(TreeDiffIterator  *self)
             record = record->next;
             j++;
         }
-        ret = Py_BuildValue("dOO", length, out_list, in_list);
+        ret = Py_BuildValue("(dd)OO", left, right, out_list, in_list);
     }
 out:
     Py_XDECREF(out_list);

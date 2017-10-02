@@ -857,43 +857,47 @@ class TestSimulationState(LowLevelTestCase):
             sim.reset()
 
     def verify_tree_diffs(self, tree_sequence):
-        print("Skipping verify_diffs")
-        # n = tree_sequence.get_sample_size()
-        # L = tree_sequence.get_sequence_length()
-        # # Check some basic properties of the diffs.
-        # diffs = list(_msprime.TreeDiffIterator(tree_sequence))
-        # length, edges_out, edges_in = diffs[0]
-        # self.assertGreaterEqual(length, 0)
-        # self.assertEqual(len(edges_out), 0)
-        # edges_in = len(edges_in)
-        # self.assertEqual(edges_in, n - 1)
-        # # Make sure in records are in increasing time order.
-        # for l, records_out, records_in in diffs[1:]:
-        #     self.assertGreaterEqual(l, 0)
-        #     self.assertGreaterEqual(l, 0)
-        #     nodes_out = 0
-        #     for _, children, _ in records_out:
-        #         nodes_out += len(children) - 1
-        #     nodes_in = 0
-        #     for _, children, _ in records_in:
-        #         nodes_in += len(children) - 1
-        #     self.assertEqual(nodes_out, nodes_in)
-        #     for node, children, time in records_out + records_in:
-        #         for c in children:
-        #             self.assertGreaterEqual(c, 0)
-        #             self.assertGreater(node, c)
-        #             self.assertGreater(time, 0.0)
-        #     # Make sure in records are in increasing time order.
-        #     time_sorted = sorted(records_in, key=lambda x: x[2])
-        #     self.assertEqual(time_sorted, records_in)
-        #     # Make sure out records are in decreasing time order.
-        #     time_sorted = sorted(records_out, key=lambda x: -x[2])
-        #     self.assertEqual(time_sorted, records_out)
-        # # Compare with the Python implementation.
-        # pts = tests.PythonTreeSequence(tree_sequence)
-        # python_diffs = list(pts.diffs())
-        # self.assertGreaterEqual(len(python_diffs), 0)
-        # self.assertEqual(diffs, python_diffs)
+        n = tree_sequence.get_sample_size()
+        L = tree_sequence.get_sequence_length()
+        t = [tree_sequence.get_node(u)[1] for u in range(tree_sequence.get_num_nodes())]
+        # Check some basic properties of the diffs.
+        diffs = list(_msprime.TreeDiffIterator(tree_sequence))
+        (left, right), edges_out, edges_in = diffs[0]
+        self.assertEqual(left, 0)
+        self.assertGreater(right, 0)
+        self.assertEqual(len(edges_out), 0)
+        self.assertLessEqual(len(edges_in), 2 * n - 2)
+        last_right = right
+        for (left, right), edges_out, edges_in in diffs[1:]:
+            self.assertEqual(last_right, left)
+            last_right = right
+            self.assertGreater(right, left)
+            self.assertLessEqual(right, L)
+            for l, r, p, c in edges_in:
+                self.assertEqual(l, left)
+            for l, r, p, c in edges_out:
+                self.assertEqual(r, left)
+            # Make sure in edges are in increasing time order.
+            time_sorted = sorted(edges_in, key=lambda x: t[x[2]])
+            self.assertEqual(time_sorted, edges_in)
+            # Make sure out edges are in decreasing time order.
+            time_sorted = sorted(edges_out, key=lambda x: -t[x[2]])
+            self.assertEqual(time_sorted, edges_out)
+        # Compare with the Python implementation.
+        pts = tests.PythonTreeSequence(tree_sequence)
+        python_diffs = list(pts.edge_diffs())
+        self.assertGreaterEqual(len(python_diffs), 0)
+        self.assertEqual(len(diffs), len(python_diffs))
+        for diff, py_diff in zip(diffs, python_diffs):
+            self.assertEqual(diff[0], py_diff[0])
+            self.assertEqual(len(diff[1]), len(py_diff[1]))
+            self.assertEqual(len(diff[2]), len(py_diff[2]))
+            for edge, py_edge in zip(diff[1], py_diff[1]):
+                self.assertEqual(
+                    edge, (py_edge.left, py_edge.right, py_edge.parent, py_edge.child))
+            for edge, py_edge in zip(diff[2], py_diff[2]):
+                self.assertEqual(
+                    edge, (py_edge.left, py_edge.right, py_edge.parent, py_edge.child))
 
     def verify_sample_counts(self, tree_sequence):
         st = _msprime.SparseTree(

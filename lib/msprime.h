@@ -796,7 +796,8 @@ int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence);
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
-int tree_diff_iterator_next(tree_diff_iterator_t *self, double *length,
+int tree_diff_iterator_next(tree_diff_iterator_t *self,
+        double *left, double *right,
         edge_list_t **edges_out, edge_list_t **edges_in);
 void tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out);
 
@@ -812,8 +813,6 @@ int sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
 int sparse_tree_get_root(sparse_tree_t *self, node_id_t *root);
 bool sparse_tree_is_sample(sparse_tree_t *self, node_id_t u);
 int sparse_tree_get_parent(sparse_tree_t *self, node_id_t u, node_id_t *parent);
-/* int sparse_tree_get_children(sparse_tree_t *self, node_id_t u, */
-/*         size_t *num_children, node_id_t **children); */
 int sparse_tree_get_time(sparse_tree_t *self, node_id_t u, double *t);
 int sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v,
         node_id_t *mrca);

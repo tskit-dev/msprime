@@ -245,6 +245,34 @@ class PythonTreeSequence(object):
         else:
             return self._diffs()
 
+    def edge_diffs(self):
+        M = self._tree_sequence.get_num_edges()
+        edges = [self._tree_sequence.get_edge(j) for j in range(M)]
+        l = [edge[0] for edge in edges]
+        r = [edge[1] for edge in edges]
+        p = [edge[2] for edge in edges]
+        c = [edge[3] for edge in edges]
+        t = [self._tree_sequence.get_node(edge[2])[1] for edge in edges]
+        I = sorted(range(M), key=lambda j: (l[j], t[j], p[j], c[j]))
+        O = sorted(range(M), key=lambda j: (r[j], -t[j], -p[j], -c[j]))
+        j = 0
+        k = 0
+        left = 0
+        while j < M:
+            e_out = []
+            e_in = []
+            x = l[I[j]]
+            while r[O[k]] == x:
+                h = O[k]
+                e_out.append(msprime.Edge(l[h], r[h], p[h], c[h]))
+                k += 1
+            while j < M and l[I[j]] == x:
+                h = I[j]
+                e_in.append(msprime.Edge(l[h], r[h], p[h], c[h]))
+                j += 1
+            yield (left, r[O[k]]), e_out, e_in
+            left = r[O[k]]
+
     def trees(self):
         M = self._tree_sequence.get_num_edges()
         edges = [self._tree_sequence.get_edge(j) for j in range(M)]

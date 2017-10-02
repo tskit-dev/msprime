@@ -346,7 +346,7 @@ class TestUnaryNodes(TopologyTestCase):
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_sites, 5)
         self.assertEqual(ts.num_mutations, 5)
-        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
+        self.assertEqual(len(list(ts.edge_diffs())), ts.num_trees)
         t = next(ts.trees())
         self.assertEqual(
             t.parent_dict, {0: 2, 1: 3, 2: 4, 3: 4, 4: 5})
@@ -424,7 +424,7 @@ class TestUnaryNodes(TopologyTestCase):
         self.assertEqual(list(ts_simplified.records()), list(ts.records()))
         self.assert_haplotypes_equal(ts, ts_simplified)
         self.assert_variants_equal(ts, ts_simplified)
-        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
+        self.assertEqual(len(list(ts.edge_diffs())), ts.num_trees)
 
     def test_binary_tree_sequence_unary_nodes(self):
         ts = msprime.simulate(
@@ -489,7 +489,7 @@ class TestGeneralSamples(TopologyTestCase):
         self.assertEqual(ts.num_nodes, 5)
         self.assertEqual(ts.num_sites, 4)
         self.assertEqual(ts.num_mutations, 4)
-        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
+        self.assertEqual(len(list(ts.edge_diffs())), ts.num_trees)
         t = next(ts.trees())
         self.assertEqual(t.root, 0)
         self.assertEqual(t.parent_dict, {1: 0, 2: 1, 3: 1, 4: 0})
@@ -508,7 +508,7 @@ class TestGeneralSamples(TopologyTestCase):
         self.assertEqual(tss.num_trees, 1)
         self.assertEqual(tss.num_sites, 4)
         self.assertEqual(tss.num_mutations, 4)
-        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
+        self.assertEqual(len(list(ts.edge_diffs())), ts.num_trees)
         t = next(tss.trees())
         self.assertEqual(t.root, 4)
         self.assertEqual(t.parent_dict, {0: 3, 1: 3, 2: 4, 3: 4})
@@ -1673,7 +1673,7 @@ class TestWithVisuals(TopologyTestCase):
         self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, len(true_trees))
         self.assertEqual(ts.num_nodes, 11)
-        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
+        self.assertEqual(len(list(ts.edge_diffs())), ts.num_trees)
         # check topologies agree:
         for a, t in zip(true_trees, tree_dicts):
             for k in a.keys():
@@ -1756,7 +1756,7 @@ class TestWithVisuals(TopologyTestCase):
         self.assertEqual(ts.sample_size, 6)
         self.assertEqual(ts.num_trees, len(true_trees))
         self.assertEqual(ts.num_nodes, 13)
-        self.assertEqual(len(list(ts.diffs())), ts.num_trees)
+        self.assertEqual(len(list(ts.edge_diffs())), ts.num_trees)
         # check topologies agree:
         for a, t in zip(true_trees, tree_dicts):
             for k in a.keys():
