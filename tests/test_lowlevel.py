@@ -3482,10 +3482,10 @@ class TestLdCalculator(LowLevelTestCase):
         self.assertGreater(ts.get_num_mutations(), 3)
         m = ts.get_num_mutations()
         buff = self.get_buffer(m)
-        start_positions = [
-            random.randint(0, m) for _ in range(num_start_positions)]
+        rng = random.Random(6)
+        start_positions = [rng.randint(0, m - 1) for _ in range(num_start_positions)]
         directions = [
-            random.choice([_msprime.FORWARD, _msprime.REVERSE])
+            rng.choice([_msprime.FORWARD, _msprime.REVERSE])
             for _ in range(num_start_positions)]
         results = [[] for j in range(num_start_positions)]
         ldc = _msprime.LdCalculator(ts)
