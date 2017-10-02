@@ -357,7 +357,6 @@ def tupleize(f):
     return tf
 
 
-@unittest.skip("diffs() not supported yet")
 class BranchStatsTestCase(unittest.TestCase):
     """
     Tests of branch statistic computation.
@@ -401,9 +400,9 @@ class BranchStatsTestCase(unittest.TestCase):
                 tsc_vector_vals = tsc_vector_fn([leaf_sets[i[0]] for i in indices],
                                                 windows)
             self.assertEqual(len(tsc_vector_vals), len(windows)-1)
-            print("vector:")
-            print(tsc_vector_vals)
-            print(tree_vals)
+            # print("vector:")
+            # print(tsc_vector_vals)
+            # print(tree_vals)
             for x in tsc_vector_vals:
                 self.assertEqual(len(x), len(indices))
             for i in range(len(windows)-1):
@@ -413,9 +412,9 @@ class BranchStatsTestCase(unittest.TestCase):
             tsc_vals_orig = [tsc_fn(*([ls] + [windows])) for ls in leafset_args]
             tsc_vals = [[x[k][0] for x in tsc_vals_orig] for k in range(len(windows)-1)]
             self.assertEqual(len(tsc_vals), len(windows)-1)
-            print("not:")
-            print(tsc_vals)
-            print(tree_vals)
+            # print("not:")
+            # print(tsc_vals)
+            # print(tree_vals)
             for x in tsc_vals:
                 self.assertAlmostEqual(len(x), len(indices))
             for i in range(len(windows)-1):
@@ -724,8 +723,8 @@ class BranchStatsTestCase(unittest.TestCase):
         5       0           0.7
         6       0           1.0
         """)
-        edgesets = six.StringIO("""\
-        left    right   parent  children
+        edges = six.StringIO("""\
+        left    right   parent  child
         0.2     0.8     3       0,2
         0.0     0.2     4       1,2
         0.2     0.8     4       1,3
@@ -760,7 +759,7 @@ class BranchStatsTestCase(unittest.TestCase):
         9       2       1
         """)
         ts = msprime.load_text(
-            nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations)
         tsc = msprime.TreeStatCalculator(ts)
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
@@ -869,8 +868,8 @@ class BranchStatsTestCase(unittest.TestCase):
         0       1.000000        0
         0       1.000000        0
         """)
-        edgesets = six.StringIO("""\
-        left    right   parent  children
+        edges = six.StringIO("""\
+        left    right   parent  child
         0.500000        1.000000        10      1
         0.000000        0.400000        10      2
         0.600000        1.000000        9       0
@@ -890,7 +889,7 @@ class BranchStatsTestCase(unittest.TestCase):
         0.100000        0.900000        3       4,5
         0.000000        0.100000        3       4,5,7
         """)
-        ts = msprime.load_text(nodes=nodes, edgesets=edgesets)
+        ts = msprime.load_text(nodes=nodes, edges=edges)
         tsc = msprime.TreeStatCalculator(ts)
 
         self.check_pairwise_diversity(ts)
