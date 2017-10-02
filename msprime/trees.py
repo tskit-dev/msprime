@@ -2454,7 +2454,7 @@ class TreeSequence(object):
     def simplify(self, samples=None, filter_invariant_sites=True):
         """
         Returns a simplified tree sequence that retains only the history of
-        the nodes given in the list ``samples'' and a dictionary mapping the
+        the nodes given in the list ``samples`` and a dictionary mapping the
         sample node IDs in the this tree sequence to their equivlalent IDs
         in the simplified tree sequence.
 
