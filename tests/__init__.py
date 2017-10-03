@@ -179,6 +179,22 @@ class PythonSparseTree(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def newick(self, precision=0, time_scale=0):
+        # We only support 0 branch lengths here because this information isn't
+        # immediately available.
+        assert time_scale == 0 and precision == 0
+        return self._build_newick(self.root) + ";"
+
+    def _build_newick(self, node):
+        if self.left_child[node] == msprime.NULL_NODE:
+            s = "{0}".format(node + 1)
+        else:
+            s = "("
+            for child in self.children(node):
+                s += self._build_newick(child) + ":0,"
+            s = s[:-1] + ")"
+        return s
+
 
 class PythonTreeSequence(object):
     """

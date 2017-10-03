@@ -2086,86 +2086,6 @@ class TestTreeSequence(LowLevelTestCase):
             self.assertEqual(ts2.get_provenance_strings(), strings)
 
 
-@unittest.skip("Newick conversion disabled")
-class TestNewickConverter(LowLevelTestCase):
-    """
-    Tests for the low-level newick converter.
-    """
-    def test_empty_tree_sequence(self):
-        ts = _msprime.TreeSequence()
-        conv = _msprime.NewickConverter(ts)
-        self.assertEqual(list(conv), [])
-
-    def test_constructor(self):
-        self.assertRaises(TypeError, _msprime.NewickConverter)
-        self.assertRaises(TypeError, _msprime.NewickConverter, None)
-        sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
-        sim.run()
-        ts = populate_tree_sequence(sim)
-        for bad_type in [None, "", [], {}]:
-            self.assertRaises(
-                TypeError, _msprime.NewickConverter, ts, precision=bad_type)
-            self.assertRaises(
-                TypeError, _msprime.NewickConverter, ts, Ne=bad_type)
-        before = list(_msprime.NewickConverter(ts))
-        self.assertGreater(len(before), 0)
-        iterator = _msprime.NewickConverter(ts)
-        del ts
-        # We should keep a reference to the tree sequence.
-        after = list(iterator)
-        self.assertEqual(before, after)
-        # make sure the basic form of the output is correct.
-        for length, tree in before:
-            self.assertIsInstance(length, float)
-            self.assertIsInstance(tree, str)
-
-    def test_iterator(self):
-        ts = self.get_tree_sequence()
-        ncs = [
-            _msprime.NewickConverter(ts), _msprime.NewickConverter(ts, 1),
-            _msprime.NewickConverter(ts, 0)]
-        for nc in ncs:
-            self.verify_iterator(nc)
-
-    def get_times(self, tree):
-        """
-        Returns the time strings from the specified newick tree.
-        """
-        ret = []
-        current_time = None
-        for c in tree:
-            if c == ":":
-                current_time = ""
-            elif c in [",", ")"]:
-                ret.append(current_time)
-                current_time = None
-            elif current_time is not None:
-                current_time += c
-        return ret
-
-    def test_precision(self):
-        ts = self.get_tree_sequence()
-        self.assertRaises(ValueError, _msprime.NewickConverter, ts, -1)
-        self.assertRaises(ValueError, _msprime.NewickConverter, ts, 17)
-        self.assertRaises(ValueError, _msprime.NewickConverter, ts, 100)
-        for precision in range(17):
-            for l, tree in _msprime.NewickConverter(ts, precision=precision):
-                times = self.get_times(tree)
-                for t in times:
-                    if precision == 0:
-                        self.assertNotIn(".", t)
-                    else:
-                        point = t.find(".")
-                        self.assertEqual(precision, len(t) - point - 1)
-
-    def test_nonbinary_trees(self):
-        ts = self.get_nonbinary_tree_sequence()
-
-        def f():
-            return list(_msprime.NewickConverter(ts))
-        self.assertRaises(_msprime.LibraryError, f)
-
-
 class TestVcfConverter(LowLevelTestCase):
     """
     Tests for the low-level vcf converter.
@@ -2689,6 +2609,53 @@ class TestSparseTree(LowLevelTestCase):
                 # All the mrcas for an uninitialised tree should be NULL_NODE
                 for u, v in itertools.combinations(range(num_nodes), 2):
                     self.assertEqual(st.get_mrca(u, v), NULL_NODE)
+
+    def test_newick_precision(self):
+
+        def get_times(tree):
+            """
+            Returns the time strings from the specified newick tree.
+            """
+            ret = []
+            current_time = None
+            for c in tree:
+                if c == ":":
+                    current_time = ""
+                elif c in [",", ")"]:
+                    ret.append(current_time)
+                    current_time = None
+                elif current_time is not None:
+                    current_time += c
+            return ret
+
+        ts = self.get_tree_sequence(sample_size=10, num_loci=5)
+        st = _msprime.SparseTree(ts)
+        for st in _msprime.SparseTreeIterator(st):
+            self.assertRaises(ValueError, st.get_newick, precision=-1)
+            self.assertRaises(ValueError, st.get_newick, precision=17)
+            self.assertRaises(ValueError, st.get_newick, precision=100)
+            for precision in range(17):
+                tree = st.get_newick(precision=precision)
+                times = get_times(tree)
+                self.assertGreater(len(times), ts.get_sample_size())
+                for t in times:
+                    if precision == 0:
+                        self.assertNotIn(".", t)
+                    else:
+                        point = t.find(".")
+                        self.assertEqual(precision, len(t) - point - 1)
+
+    def test_newick_interface(self):
+        ts = self.get_tree_sequence(num_loci=10, sample_size=10)
+        st = _msprime.SparseTree(ts)
+        # TODO this will break when we correctly handle multiple roots.
+        self.assertEqual(st.get_newick(), b"1;")
+        for bad_type in [None, "", [], {}]:
+            self.assertRaises(TypeError, st.get_newick, precision=bad_type)
+            self.assertRaises(TypeError, st.get_newick, ts, time_scale=bad_type)
+        for st in _msprime.SparseTreeIterator(st):
+            newick = st.get_newick()
+            self.assertTrue(newick.endswith(b";"))
 
     def test_index(self):
         for num_loci in [1, 100]:

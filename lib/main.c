@@ -743,24 +743,32 @@ static void
 print_newick_trees(tree_sequence_t *ts)
 {
     int ret = 0;
-    newick_converter_t nc;
-    double length;
-    char *tree;
+    char *newick = NULL;
+    size_t precision = 8;
+    size_t newick_buffer_size = (precision + 3) * tree_sequence_get_num_nodes(ts);
+    sparse_tree_t tree;
 
-    printf("converting newick trees\n");
-    /* We're using an Ne of 0.25 here throughout to cancel 4Ne conversions */
-    ret = newick_converter_alloc(&nc, ts, 4, 0.25);
+    newick = malloc(newick_buffer_size);
+    if (newick == NULL) {
+        fatal_error("No memory\n");
+    }
+
+    ret = sparse_tree_alloc(&tree, ts, 0);
     if (ret != 0) {
-        fatal_library_error(ret, "newick alloc");
+        fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
-    while ((ret = newick_converter_next(&nc, &length, &tree)) == 1) {
-        printf("Tree: %f: %s\n", length, tree);
-        newick_converter_print_state(&nc, stdout);
+    for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
+        ret = sparse_tree_get_newick(&tree, precision, 1, 0, newick_buffer_size, newick);
+        if (ret != 0) {
+            fatal_library_error(ret ,"newick");
+        }
+        printf("%d:\t%s\n", (int) tree.index, newick);
     }
-    if (ret != 0) {
-        fatal_library_error(ret, "newick next");
+    if (ret < 0) {
+        fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
-    newick_converter_free(&nc);
+    sparse_tree_free(&tree);
+    free(newick);
 }
 
 static void

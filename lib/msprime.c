@@ -79,8 +79,8 @@ msp_strerror(int err)
         case MSP_ERR_BAD_STATE:
             ret = "Bad simulator state. Initialise or reset must be called.";
             break;
-        case MSP_ERR_NEWICK_OVERFLOW:
-            ret = "Newick string generation overflow.";
+        case MSP_ERR_BUFFER_OVERFLOW:
+            ret = "Supplied buffer if too small";
             break;
         case MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS:
             ret = "Demographic events must be time sorted.";
@@ -175,9 +175,6 @@ msp_strerror(int err)
             break;
         case MSP_ERR_BAD_SAMPLES:
             ret = "Bad sample configuration provided.";
-            break;
-        case MSP_ERR_NONBINARY_NEWICK:
-            ret = "Newick export not supported for non binary trees.";
             break;
         case MSP_ERR_FILE_VERSION_TOO_OLD:
             ret = "HDF5 file version too old. Please upgrade using the "

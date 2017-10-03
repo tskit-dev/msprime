@@ -507,24 +507,12 @@ typedef struct {
     node_id_t right_index;
 } sparse_tree_t;
 
-typedef struct newick_tree_node {
-    node_id_t id;
-    double time;
-    struct newick_tree_node *parent;
-    struct newick_tree_node *children[2];
-    char branch_length[MAX_BRANCH_LENGTH_STRING];
-    char *subtree;
-} newick_tree_node_t;
-
 typedef struct {
-    size_t sample_size;
-    double sequence_length;
     size_t precision;
-    double Ne;
-    newick_tree_node_t *root;
-    tree_diff_iterator_t diff_iterator;
-    avl_tree_t tree;
-    object_heap_t avl_node_heap;
+    double time_scale;
+    int flags;
+    char *newick;
+    sparse_tree_t *tree;
 } newick_converter_t;
 
 typedef struct {
@@ -812,15 +800,15 @@ int sparse_tree_get_root(sparse_tree_t *self, node_id_t *root);
 bool sparse_tree_is_sample(sparse_tree_t *self, node_id_t u);
 int sparse_tree_get_parent(sparse_tree_t *self, node_id_t u, node_id_t *parent);
 int sparse_tree_get_time(sparse_tree_t *self, node_id_t u, double *t);
-int sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v,
-        node_id_t *mrca);
-int sparse_tree_get_num_samples(sparse_tree_t *self, node_id_t u,
-        size_t *num_samples);
+int sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v, node_id_t *mrca);
+int sparse_tree_get_num_samples(sparse_tree_t *self, node_id_t u, size_t *num_samples);
 int sparse_tree_get_num_tracked_samples(sparse_tree_t *self, node_id_t u,
         size_t *num_tracked_samples);
 int sparse_tree_get_sample_list(sparse_tree_t *self, node_id_t u,
         node_list_t **head, node_list_t **tail);
 int sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, list_len_t *sites_length);
+int sparse_tree_get_newick(sparse_tree_t *self, size_t precision, double time_scale,
+        int flags, size_t buffer_size, char *newick_buffer);
 void sparse_tree_print_state(sparse_tree_t *self, FILE *out);
 /* Method for positioning the tree in the sequence. */
 int sparse_tree_first(sparse_tree_t *self);
@@ -828,12 +816,11 @@ int sparse_tree_last(sparse_tree_t *self);
 int sparse_tree_next(sparse_tree_t *self);
 int sparse_tree_prev(sparse_tree_t *self);
 
+/* TODO remove this from the public API. */
 int newick_converter_alloc(newick_converter_t *self,
-        tree_sequence_t *tree_sequence, size_t precision, double Ne);
-int newick_converter_next(newick_converter_t *self, double *length,
-        char **tree);
+        sparse_tree_t *tree, size_t precision, double time_scale, int flags);
+int newick_converter_run(newick_converter_t *self, size_t buffer_size, char *buffer);
 int newick_converter_free(newick_converter_t *self);
-void newick_converter_print_state(newick_converter_t *self, FILE *out);
 
 int vcf_converter_alloc(vcf_converter_t *self,
         tree_sequence_t *tree_sequence, unsigned int ploidy, const char *chrom);

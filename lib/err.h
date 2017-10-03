@@ -37,7 +37,7 @@
 #define MSP_ERR_BAD_STATE                                           -6
 #define MSP_ERR_BAD_PARAM_VALUE                                     -7
 #define MSP_ERR_OUT_OF_BOUNDS                                       -8
-#define MSP_ERR_NEWICK_OVERFLOW                                     -9
+#define MSP_ERR_BUFFER_OVERFLOW                                     -9
 #define MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS                         -10
 #define MSP_ERR_POPULATION_OVERFLOW                                 -11
 #define MSP_ERR_LINKS_OVERFLOW                                      -12
@@ -56,7 +56,6 @@
 #define MSP_ERR_SOURCE_DEST_EQUAL                                   -25
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
 #define MSP_ERR_BAD_SAMPLES                                         -28
-#define MSP_ERR_NONBINARY_NEWICK                                    -29
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
 #define MSP_ERR_CANNOT_SIMPLIFY                                     -32
@@ -93,7 +92,7 @@
 #define MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN                  -64
 #define MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT                      -65
 
-/* reuse code: -50, -27 */
+/* reuse code: -29 -50, -27 */
 
 #endif /*__ERR_H__*/
 

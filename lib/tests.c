@@ -3227,7 +3227,6 @@ test_simplest_general_samples(void)
 
     tree_sequence_t ts, simplified;
     hapgen_t hapgen;
-    newick_converter_t nc;
 
     tree_sequence_from_text(&ts, nodes, edges, NULL, sites, mutations, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
@@ -3252,12 +3251,6 @@ test_simplest_general_samples(void)
         CU_ASSERT_STRING_EQUAL(haplotype, haplotypes[j]);
     }
     hapgen_free(&hapgen);
-
-    /* For now, all these methods fail when we have non 0...n - 1 samples.
-     * They are not difficult to fix though. */
-    ret = newick_converter_alloc(&nc, &ts, 1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-    newick_converter_free(&nc);
 
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6183,58 +6176,60 @@ test_simplify_from_examples(void)
 }
 
 static void
-verify_newick(tree_sequence_t *ts, bool should_fail)
+verify_newick(tree_sequence_t *ts)
 {
-    newick_converter_t nc;
-    double length;
-    char *tree;
-    int ret;
+    int ret, err;
+    sparse_tree_t t;
+    size_t precision = 4;
+    size_t buffer_size = 1024 * 1024;
+    char *newick = malloc(buffer_size);
+    size_t j, size;
 
-    ret = newick_converter_alloc(&nc, ts, 1, 1);
+    CU_ASSERT_FATAL(newick != NULL);
+
+    ret = sparse_tree_alloc(&t, ts, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = sparse_tree_first(&t);
+    CU_ASSERT_FATAL(ret == 1);
+    err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
+    CU_ASSERT_EQUAL_FATAL(err, 0);
+    size = strlen(newick);
+    CU_ASSERT_TRUE(size > 0);
+    CU_ASSERT_TRUE(size < buffer_size);
+    for (j = 0; j <= size; j++) {
+        err = sparse_tree_get_newick(&t, precision, 1.0, 0, j, newick);
+        CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BUFFER_OVERFLOW);
+    }
+    err = sparse_tree_get_newick(&t, precision, 1.0, 0, size + 1, newick);
+    CU_ASSERT_EQUAL_FATAL(err, 0);
+
+    for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
+        err = sparse_tree_get_newick(&t, precision, 1.0, 0, 0, NULL);
+        CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BAD_PARAM_VALUE);
+        err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
+        CU_ASSERT_EQUAL_FATAL(err, 0);
+        size = strlen(newick);
+        CU_ASSERT_EQUAL(newick[size - 1], ';');
+    }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    while ((ret = newick_converter_next(&nc, &length, &tree)) == 1) {
-        CU_ASSERT(length > 0);
-        newick_converter_print_state(&nc, _devnull);
-        CU_ASSERT_FATAL(tree != NULL);
-        CU_ASSERT(strlen(tree) > 0);
-    }
-    if (should_fail) {
-        CU_ASSERT_EQUAL(ret, MSP_ERR_NONBINARY_NEWICK);
-    } else {
-        CU_ASSERT_EQUAL(ret, 0);
-    }
-    newick_converter_free(&nc);
+    sparse_tree_free(&t);
+    free(newick);
 }
 
 static void
 test_newick_from_examples(void)
 {
-    tree_sequence_t **examples = get_example_tree_sequences(0);
+    tree_sequence_t **examples = get_example_tree_sequences(1);
     uint32_t j;
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (true) {
-            printf("\nFIXME newick generation broken\n");
-        } else if (j == 5) {
-            printf("\nFIXME arbitrary sample newick\n");
-        } else {
-            verify_newick(examples[j], false);
-        }
+        verify_newick(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
     free(examples);
-
-
-    /* examples = get_example_nonbinary_tree_sequences(); */
-    /* for (j = 0; examples[j] != NULL; j++) { */
-    /*     verify_newick(examples[j], true); */
-    /*     tree_sequence_free(examples[j]); */
-    /*     free(examples[j]); */
-    /* } */
-    /* free(examples); */
 }
 
 static void
@@ -6371,7 +6366,6 @@ verify_empty_tree_sequence(tree_sequence_t *ts)
     verify_stats(ts);
     verify_hapgen(ts);
     verify_vargen(ts);
-    verify_newick(ts, false);
     verify_vcf_converter(ts, 1);
 }
 

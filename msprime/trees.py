@@ -934,6 +934,10 @@ class SparseTree(object):
             raise ValueError(
                 "Traversal ordering '{}' not supported".format(order))
 
+    def newick(self, precision=14, time_scale=1):
+        return self._ll_sparse_tree.get_newick(
+            precision=precision, time_scale=time_scale)
+
     @property
     def parent_dict(self):
         return self.get_parent_dict()

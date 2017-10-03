@@ -233,40 +233,6 @@ def get_pairwise_diversity(tree_sequence, samples=None):
     return pi
 
 
-def sparse_tree_to_newick(st, precision, Ne):
-    """
-    Converts the specified sparse tree to an ms-compatible Newick tree.
-    """
-    branch_lengths = {}
-    root = st.get_root()
-    stack = [root]
-    while len(stack) > 0:
-        node = stack.pop()
-        if st.is_internal(node):
-            for child in st.get_children(node):
-                stack.append(child)
-                length = (st.get_time(node) - st.get_time(child)) / (4 * Ne)
-                s = "{0:.{1}f}".format(length, precision)
-                branch_lengths[child] = s
-    return _build_newick(root, root, st, branch_lengths)
-
-
-def _build_newick(node, root, tree, branch_lengths):
-    if tree.is_leaf(node):
-        s = "{0}:{1}".format(node + 1, branch_lengths[node])
-    else:
-        c1, c2 = tree.get_children(node)
-        s1 = _build_newick(c1, root, tree, branch_lengths)
-        s2 = _build_newick(c2, root, tree, branch_lengths)
-        if node == root:
-            # The root node is treated differently
-            s = "({0},{1});".format(s1, s2)
-        else:
-            s = "({0},{1}):{2}".format(
-                s1, s2, branch_lengths[node])
-    return s
-
-
 def simplify_tree_sequence(ts, samples):
     """
     Simple tree-by-tree algorithm to get a simplify of a tree sequence.
@@ -835,100 +801,6 @@ class TestHaplotypeGenerator(HighLevelTestCase):
     def test_back_mutations(self):
         for ts in get_back_mutation_examples():
             self.verify_tree_sequence(ts)
-
-
-@unittest.skip("Newick disabled")
-class TestNewickConversion(HighLevelTestCase):
-    """
-    Test the newick tree generation code.
-    """
-    def verify_trees(self, tree_sequence, breakpoints, Ne):
-        """
-        Verifies that the specified tree is converted to Newick correctly.
-        """
-        def strip_tree(newick):
-            """
-            Strips all time information out of the specified newick tree.
-            """
-            s = newick.replace(":0", "")
-            s = s.replace(":1", "")
-            return s
-        # We set the precision to 0 here to avoid problems that occur when
-        # Python and C using different rounding strategies. This allows us
-        # to remove the times completely, so we're just comparing the
-        # structure of the trees.
-        precision = 0
-        old_trees = [
-            (st.get_length(), sparse_tree_to_newick(st, precision, Ne))
-            for st in tree_sequence.trees()]
-        new_trees = list(tree_sequence.newick_trees(precision, Ne=Ne))
-        self.assertEqual(len(new_trees), len(old_trees))
-        for (l1, t1), (l2, t2) in zip(new_trees, old_trees):
-            self.assertEqual(l1, l2)
-            self.assertEqual(strip_tree(t1), strip_tree(t2))
-        # TODO test the form of the trees when we're using breakpoints.
-
-    def verify_all_breakpoints(self, tree_sequence, breakpoints):
-        """
-        Verifies that we get the correct list of trees when we use
-        the all_breakpoints option for newick generation.
-        """
-        trees = list(tree_sequence.newick_trees(2, breakpoints))
-        bp = [0] + breakpoints + [tree_sequence.get_sequence_length()]
-        self.assertEqual(len(trees), len(bp) - 1)
-        j = 0
-        s = 0
-        for length, _ in trees:
-            self.assertGreater(length, 0)
-            self.assertEqual(s, bp[j])
-            s += length
-            j += 1
-        self.assertEqual(s, tree_sequence.get_sequence_length())
-        pts = tests.PythonTreeSequence(
-            tree_sequence.get_ll_tree_sequence(), bp)
-        diffs = list(pts.diffs(all_breaks=True))
-        self.assertEqual(len(diffs), len(trees))
-        for j in range(1, len(diffs)):
-            if len(diffs[j][1]) == 0:
-                # If the list of diffs is empty, we should have the
-                # same tree as the last one.
-                self.assertEqual(trees[j][1], trees[j - 1][1])
-
-    def test_simple_cases(self):
-        cases = [
-            (2, 1, 0, 0.25),
-            (2, 10, 0.1, 1),
-            (4, 10, 0.1, 100),
-            (10, 10, 0.1,  10),
-            (20, 1, 0, 1025),
-            (20, 10, 0.1, 100),
-            (10, 50, 1.0, 1e6),
-        ]
-        for n, m, r, Ne in cases:
-            recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-            sim = msprime.simulator_factory(
-                n, Ne=Ne, recombination_map=recomb_map)
-            sim.run()
-            tree_sequence = sim.get_tree_sequence()
-            breakpoints = sim.get_breakpoints()
-            self.verify_trees(tree_sequence, breakpoints, Ne)
-            self.verify_all_breakpoints(tree_sequence, breakpoints)
-
-    def test_random_parameters(self):
-        num_random_sims = 10
-        for j in range(num_random_sims):
-            n = random.randint(2, 100)
-            m = random.randint(10, 100)
-            r = random.random()
-            Ne = random.uniform(1, 20)
-            recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-            ts = msprime.simulator_factory(
-                n, Ne=Ne, recombination_map=recomb_map)
-            ts.run()
-            tree_sequence = ts.get_tree_sequence()
-            breakpoints = ts.get_breakpoints()
-            self.verify_trees(tree_sequence, breakpoints, Ne)
-            self.verify_all_breakpoints(tree_sequence, breakpoints)
 
 
 class TestTreeSequence(HighLevelTestCase):
@@ -1631,6 +1503,20 @@ class TestSparseTree(HighLevelTestCase):
                 l2 = list(test_func(t, u))
                 self.assertEqual(l1, l2)
                 self.assertEqual(t.get_num_samples(u), len(l1))
+
+    def verify_newick(self, tree):
+        """
+        Verifies that we output the newick tree as expected.
+        """
+        py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
+        newick1 = tree.newick(precision=0, time_scale=0)
+        newick2 = py_tree.newick(precision=0, time_scale=0)
+        self.assertEqual(newick1, newick2)
+
+    def test_newick(self):
+        for ts in get_example_tree_sequences():
+            for tree in ts.trees():
+                self.verify_newick(tree)
 
     def test_traversals(self):
         for ts in get_example_tree_sequences():
