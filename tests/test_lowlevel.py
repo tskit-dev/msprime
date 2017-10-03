@@ -2635,7 +2635,7 @@ class TestSparseTree(LowLevelTestCase):
             self.assertRaises(ValueError, st.get_newick, precision=17)
             self.assertRaises(ValueError, st.get_newick, precision=100)
             for precision in range(17):
-                tree = st.get_newick(precision=precision)
+                tree = st.get_newick(precision=precision).decode()
                 times = get_times(tree)
                 self.assertGreater(len(times), ts.get_sample_size())
                 for t in times:
