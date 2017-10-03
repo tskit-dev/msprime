@@ -936,7 +936,7 @@ class SparseTree(object):
 
     def newick(self, precision=14, time_scale=1):
         return self._ll_sparse_tree.get_newick(
-            precision=precision, time_scale=time_scale)
+            precision=precision, time_scale=time_scale).decode()
 
     @property
     def parent_dict(self):

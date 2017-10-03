@@ -33,18 +33,13 @@ import unittest
 import msprime
 import msprime.cli as cli
 
+import newick
+
 _h5py_available = True
 try:
     import h5py
 except ImportError:
     _h5py_available = False
-
-# We're forced to do this because dendropy doesn't support Python 3.
-_dendropy_available = True
-try:
-    import dendropy
-except ImportError:
-    _dendropy_available = False
 
 
 def div4(matrix):
@@ -908,14 +903,11 @@ class TestMspmsOutput(TestCli):
         Verifies that the specified string is a valid newick tree.
         """
         self.assertEqual(tree[-1], ";")
-        if _dendropy_available:
-            parsed_tree = dendropy.Tree.get_from_string(tree, schema="newick")
-            leaf_labels = set(
-                int(ts.label) for ts in parsed_tree.taxon_namespace)
-            self.assertEqual(leaf_labels, set(range(1, sample_size + 1)))
-            if precision > 0:
-                self.assertGreater(parsed_tree.length(), 0)
-        # TODO test the branch length precision output.
+        newick_tree = newick.loads(tree)[0]
+        leaf_names = newick_tree.get_leaf_names()
+        self.assertEqual(
+            sorted(leaf_names),
+            sorted([str(u + 1) for u in range(sample_size)]))
 
     def verify_output(
             self, sample_size=2, num_loci=1, recombination_rate=0,
