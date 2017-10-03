@@ -1,4 +1,3 @@
-newick
 numpy
 nose
 hdf5
