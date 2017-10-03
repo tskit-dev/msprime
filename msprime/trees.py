@@ -56,6 +56,8 @@ NULL_NODE = -1
 
 NULL_POPULATION = -1
 
+IS_PY2 = sys.version_info[0] < 3
+
 
 def check_numpy():
     if not _numpy_imported:
@@ -935,8 +937,10 @@ class SparseTree(object):
                 "Traversal ordering '{}' not supported".format(order))
 
     def newick(self, precision=14, time_scale=1):
-        return self._ll_sparse_tree.get_newick(
-            precision=precision, time_scale=time_scale).decode()
+        s = self._ll_sparse_tree.get_newick(precision=precision, time_scale=time_scale)
+        if not IS_PY2:
+            s = s.decode()
+        return s
 
     @property
     def parent_dict(self):
