@@ -1269,6 +1269,11 @@ class TestTreeSequence(HighLevelTestCase):
                         position=site.position, node=mut.node, index=site.index))
             self.assertEqual(mutations, other_mutations)
 
+    def test_removed_methods(self):
+        ts = next(get_example_tree_sequences())
+        self.assertRaises(NotImplementedError, ts.diffs)
+        self.assertRaises(NotImplementedError, ts.newick_trees)
+
 
 class TestTreeSequenceTextIO(HighLevelTestCase):
     """

@@ -898,7 +898,6 @@ class TestMspmsArgsFromFileErrors(TestCli):
         self.assert_parser_error("10 1 -f /does/not/exist")
 
 
-@unittest.skip("Skipping newick trees")
 class TestMspmsOutput(TestCli):
     """
     Tests the output of the ms compatible CLI.
@@ -1485,16 +1484,14 @@ class TestMspConversionOutput(unittest.TestCase):
         self.verify_variants(output_variants)
 
     def verify_newick(self, output_newick):
-        newick = list(self._tree_sequence.newick_trees())
+        newick = list(tree.newick(precision=3) for tree in self._tree_sequence.trees())
         self.assertEqual(len(newick), len(output_newick))
-        for (l, tree), line in zip(newick, output_newick):
+        for tree, line in zip(newick, output_newick):
             self.assertEqual(tree, line)
 
-    @unittest.skip("Newick")
     def test_newick(self):
         cmd = "newick"
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._history_file])
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._history_file])
         self.assertEqual(len(stderr), 0)
         output_newick = stdout.splitlines()
         self.verify_newick(output_newick)

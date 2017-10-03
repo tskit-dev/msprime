@@ -496,7 +496,6 @@ class TestGeneralSamples(TopologyTestCase):
         self.assertEqual(H[0], "1001")
         self.assertEqual(H[1], "0101")
         self.assertEqual(H[2], "0010")
-        self.assertRaises(_msprime.LibraryError, list, ts.newick_trees())
 
         tss, sample_map = ts.simplify()
         self.assertEqual(sample_map, {2: 0, 3: 1, 4: 2})

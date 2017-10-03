@@ -1828,25 +1828,6 @@ class TreeSequence(object):
     def get_provenance(self):
         return self._ll_tree_sequence.get_provenance_strings()
 
-    def newick_trees(self, precision=3, breakpoints=None, Ne=1):
-        # TODO document this method.
-        iterator = _msprime.NewickConverter(
-            self._ll_tree_sequence, precision, Ne)
-        if breakpoints is None:
-            for length, tree in iterator:
-                yield length, tree
-        else:
-            trees_covered = 0
-            j = 0
-            # TODO this is ugly. Update the alg so we don't need this
-            # bracketing.
-            bp = [0] + breakpoints + [self.get_sequence_length()]
-            for length, tree in iterator:
-                trees_covered += length
-                while bp[j] < trees_covered:
-                    j += 1
-                    yield bp[j] - bp[j - 1], tree
-
     def dump(self, path, zlib_compression=False):
         """
         Writes the tree sequence to the specified file path.
@@ -2156,33 +2137,6 @@ class TreeSequence(object):
             edgeset.right = self.sequence_length
             edgeset.children = sorted(children[edgeset.parent])
             yield edgeset
-
-    def diffs(self):
-        """
-        Returns an iterator over the differences between adjacent trees in this
-        tree sequence. Each diff returned by this method is a tuple of the form
-        `(length, records_out, records_in)`. The `length` is the length of the
-        genomic interval covered by the current tree, and is equivalent to the
-        value returned by :meth:`msprime.SparseTree.get_length`. The
-        `records_out` value is list of :math:`(u, c, t)` tuples, and
-        corresponds to the coalescence records that have been invalidated by
-        moving to the current tree.  As in the :meth:`.records` method,
-        :math:`u` is a tree node, :math:`c` is a tuple containing its children,
-        and :math:`t` is the time the event occurred.  These records are
-        returned in time-decreasing order, such that the record affecting the
-        highest parts of the tree (i.e., closest to the root) are returned
-        first.  The `records_in` value is also a list of :math:`(u, c, t)`
-        tuples, and these describe the records that must be applied to create
-        the tree covering the current interval. These records are returned in
-        time-increasing order, such that the records affecting the lowest parts
-        of the tree (i.e., closest to the present day) are returned first.
-
-        :return: An iterator over the diffs between adjacent trees in this
-            tree sequence.
-        :rtype: iter
-        """
-        raise ValueError("diffs not implemented")
-        # return _msprime.TreeDiffIterator(self._ll_tree_sequence)
 
     def edge_diffs(self):
         iterator = _msprime.TreeDiffIterator(self._ll_tree_sequence)
@@ -2538,6 +2492,17 @@ class TreeSequence(object):
         # Return a dictionary mapping the original sample IDs into the
         # samples IDs of the new tree sequence.
         return new_ts, {samples[j]: sample_map[j] for j in range(len(samples))}
+
+    # Unsupported old methods.
+    def diffs(self):
+        raise NotImplementedError(
+            "This method is no longer supported. Please use the "
+            "TreeSequence.edge_diffs() method instead")
+
+    def newick_trees(self, precision=3, breakpoints=None, Ne=1):
+        raise NotImplementedError(
+            "This method is no longer supported. Please use the SparseTree.newick"
+            " method instead")
 
 
 class HaplotypeGenerator(object):
