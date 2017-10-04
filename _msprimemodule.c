@@ -7616,7 +7616,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     }
     err = simplifier_alloc(simplifier,
             (node_id_t *) PyArray_DATA(samples_array), num_samples,
-            nodes, edges, migrations, sites, mutations, flags);
+            nodes, edges, migrations, sites, mutations, 0, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;

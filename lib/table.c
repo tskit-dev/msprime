@@ -1784,7 +1784,8 @@ out:
 int
 simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
-        site_table_t *sites, mutation_table_t *mutations, int flags)
+        site_table_t *sites, mutation_table_t *mutations,
+        size_t max_buffered_edges, int flags)
 {
     int ret = 0;
     size_t j, offset;
@@ -1859,7 +1860,10 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
-    self->max_buffered_edges = 1024;
+    if (max_buffered_edges == 0) {
+        max_buffered_edges = 1024;
+    }
+    self->max_buffered_edges = max_buffered_edges;
     self->num_buffered_edges = 0;
     self->edge_buffer = malloc(self->max_buffered_edges * sizeof(edge_t));
     if (self->edge_buffer == NULL) {

@@ -948,7 +948,8 @@ void migration_table_print_state(migration_table_t *self, FILE *out);
 int simplifier_alloc(simplifier_t *self,
         node_id_t *samples, size_t num_samples,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
-        site_table_t *sites, mutation_table_t *mutations, int flags);
+        site_table_t *sites, mutation_table_t *mutations,
+        size_t max_buffered_edges, int flags);
 int simplifier_free(simplifier_t *self);
 int simplifier_run(simplifier_t *self, node_id_t *sample_map);
 void simplifier_print_state(simplifier_t *self, FILE *out);

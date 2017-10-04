@@ -2366,7 +2366,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples, size_t num_sam
         goto out;
     }
     ret = simplifier_alloc(simplifier, samples, num_samples,
-            nodes, edges, migrations, sites, mutations, flags);
+            nodes, edges, migrations, sites, mutations, 0, flags);
     if (ret != 0) {
         goto out;
     }
