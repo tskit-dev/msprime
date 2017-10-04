@@ -7402,15 +7402,18 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     migration_table_t *migrations = NULL;
     site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
+    Py_ssize_t edge_start = 0;
 
-    static char *kwlist[] = {"nodes", "edges", "migrations", "sites", "mutations", NULL};
+    static char *kwlist[] = {"nodes", "edges", "migrations", "sites", "mutations",
+        "edge_start", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!n", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations)) {
+            &MutationTableType, &py_mutations,
+            &edge_start)) {
         goto out;
     }
     if (NodeTable_check_state(py_nodes) != 0) {
@@ -7443,7 +7446,11 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
         goto out;
     }
-    err = sort_tables(nodes, edges, migrations, sites, mutations);
+    if (edge_start < 0 || edge_start > py_edges->edge_table->num_rows) {
+        PyErr_SetString(PyExc_ValueError,
+                "edge_start must be between 0 and len(edges) - 1");
+    }
+    err = sort_tables(nodes, edges, migrations, sites, mutations, (size_t) edge_start);
     if (err != 0) {
         handle_library_error(err);
         goto out;

@@ -1151,32 +1151,35 @@ out:
 }
 
 static int
-table_sorter_sort_edges(table_sorter_t *self)
+table_sorter_sort_edges(table_sorter_t *self, size_t start)
 {
     int ret = 0;
     edge_sort_t *e;
-    size_t j;
+    size_t j, k;
+    size_t n = self->edges->num_rows - start;
 
-    for (j = 0; j < self->edges->num_rows; j++) {
+    for (j = 0; j < n; j++) {
         e = self->sorted_edges + j;
-        e->left = self->edges->left[j];
-        e->right = self->edges->right[j];
-        e->parent = self->edges->parent[j];
-        e->child = self->edges->child[j];
+        k = start + j;
+        e->left = self->edges->left[k];
+        e->right = self->edges->right[k];
+        e->parent = self->edges->parent[k];
+        e->child = self->edges->child[k];
         if (e->parent >= (node_id_t) self->nodes->num_rows) {
             ret = MSP_ERR_OUT_OF_BOUNDS;
             goto out;
         }
         e->time = self->nodes->time[e->parent];
     }
-    qsort(self->sorted_edges, self->edges->num_rows, sizeof(edge_sort_t), cmp_edge);
+    qsort(self->sorted_edges, n, sizeof(edge_sort_t), cmp_edge);
     /* Copy the edges back into the table. */
-    for (j = 0; j < self->edges->num_rows; j++) {
+    for (j = 0; j < n; j++) {
         e = self->sorted_edges + j;
-        self->edges->left[j] = e->left;
-        self->edges->right[j] = e->right;
-        self->edges->parent[j] = e->parent;
-        self->edges->child[j] = e->child;
+        k = start + j;
+        self->edges->left[k] = e->left;
+        self->edges->right[k] = e->right;
+        self->edges->parent[k] = e->parent;
+        self->edges->child[k] = e->child;
     }
 out:
     return ret;
@@ -1262,13 +1265,16 @@ out:
     return ret;
 }
 
-
 static int
-table_sorter_run(table_sorter_t *self)
+table_sorter_run(table_sorter_t *self, size_t edge_start)
 {
     int ret = 0;
 
-    ret = table_sorter_sort_edges(self);
+    if (edge_start > self->edges->num_rows) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    ret = table_sorter_sort_edges(self, edge_start);
     if (ret != 0) {
         goto out;
     }
@@ -1299,7 +1305,7 @@ table_sorter_free(table_sorter_t *self)
 
 int
 sort_tables(node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
-        site_table_t *sites, mutation_table_t *mutations)
+        site_table_t *sites, mutation_table_t *mutations, size_t edge_start)
 {
     int ret = 0;
     table_sorter_t *sorter = NULL;
@@ -1313,7 +1319,7 @@ sort_tables(node_table_t *nodes, edge_table_t *edges, migration_table_t *migrati
     if (ret != 0) {
         goto out;
     }
-    ret = table_sorter_run(sorter);
+    ret = table_sorter_run(sorter, edge_start);
 out:
     if (sorter != NULL) {
         table_sorter_free(sorter);
